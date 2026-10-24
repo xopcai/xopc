@@ -53,6 +53,20 @@ function issuedTicket(overrides: Partial<RealtimeTicket['realtime']> = {}): Real
 }
 
 describe('RealtimeClient', () => {
+  it('forwards a device connection proof in browser hello without putting it in the URL', async () => {
+    const socket = new FakeSocket();
+    const client = new RealtimeClient({ clientId: 'browser', clientKind: 'browser_extension',
+      getWebSocketUrl: () => 'ws://gateway/api/realtime/v1/ws',
+      issueTicket: async () => ({ ...issuedTicket(), connectionProof: 'device-proof' }),
+      createWebSocket: url => { expect(url).toBe('ws://gateway/api/realtime/v1/ws'); return socket; },
+    });
+    client.connect();
+    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
+    socket.open();
+    expect(JSON.parse(socket.sent[0]!)).toMatchObject({ kind: 'realtime.hello', payload: { connectionProof: 'device-proof' } });
+    client.disconnect();
+  });
+
   it('opens only one connection when connect is called repeatedly', async () => {
     let resolveTicket: ((ticket: RealtimeTicket) => void) | undefined;
     const issueTicket = vi.fn(() => new Promise<RealtimeTicket>((resolve) => {

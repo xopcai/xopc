@@ -1,3 +1,4 @@
+import { BrowserSetupService } from '../browser/setup/service.js';
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { PhoneStreamGateway } from '../phone/stream-gateway.js';
 import { configureGatewayHttpProxy } from '../infra/http-proxy-env.js';
@@ -29,7 +30,7 @@ import { buildVoicePersonaContext } from '../voice/realtime/persona-context.js';
 import { voiceMemoryBudget, voicePersonaBudget } from '../voice/realtime/conversation-context.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { notifyUserContextChange } from '../user-context/changes.js';
-import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
+import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { listAgentEntries, resolveDefaultAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
 import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
@@ -297,6 +298,34 @@ export class GatewayService {
 
   getModelCatalogSync(): ModelCatalogSyncService {
     return this.modelCatalogSync;
+  }
+
+  private _browserSetup?: BrowserSetupService;
+  get browserSetup(): BrowserSetupService {
+    return this._browserSetup ??= new BrowserSetupService({
+      getConfig: () => this.currentConfig,
+      saveConfig: (next, expected) => this.saveConfig(next, expected),
+      endpoints: this.endpointTools,
+      canSwitchDriver: conversationId => !this._agentService?.hasBrowserSessions()
+        && !this.agentRunner.listActiveRuns().some(run => run.conversationId !== conversationId),
+      policyRevision: agentId => {
+        const effective = resolveEffectiveAgentConfigForAgent(agentId).config;
+        return crypto.createHash('sha256').update(JSON.stringify({ policy: effective.tools.browser_use, allowlist: effective.toolAllowlist })).digest('hex');
+      },
+      canUseBrowser: agentId => {
+        const effective = resolveEffectiveAgentConfigForAgent(agentId).config;
+        return effective.tools.browser_use?.mode !== 'deny' && (!effective.toolAllowlist || effective.toolAllowlist.includes('browser_use'));
+      },
+      release: async (endpointId, sessionId) => (await new RealtimeExtensionBrowserProvider(this.endpointTools).send({ action: 'close', sessionId, target: { kind: 'endpoint', endpointId } })).result,
+      doctor: async () => (await import('../browser/providers/browser-ext-install.js')).browserExtDoctor(),
+      prepare: async () => {
+        const installer = await import('../browser/providers/browser-ext-install.js');
+        const files = await installer.ensureBrowserExtensionArtifacts();
+        const nativeHost = await installer.installBrowserNativeMessagingHost({ configPath: this.getHealth().configPath });
+        return { files, nativeHost };
+      },
+      open: async action => (await import('../browser/providers/browser-ext-install.js')).openBrowserExtensionInstallUi({ action }),
+    });
   }
 
   get browserAutomations(): BrowserAutomationService {
@@ -741,6 +770,7 @@ export class GatewayService {
       endpointTools: this.endpointTools,
       getAutomationService: () => this.automationService,
       getBrowserAutomationService: () => this.browserAutomations,
+      getBrowserSetupService: () => this.browserSetup,
       emitBrowserEvent: (type, payload) => this.emit(type, payload),
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,

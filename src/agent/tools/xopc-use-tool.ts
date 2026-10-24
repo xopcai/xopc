@@ -79,6 +79,7 @@ const XopcUseToolSchema = Type.Object({
     Type.Literal('chat_preview'),
     Type.Literal('agent'),
     Type.Literal('settings'),
+    Type.Literal('browser_setup'),
   ]),
   command: Type.String({
     description:
@@ -96,7 +97,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings';
+export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings' | 'browser_setup';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -106,6 +107,7 @@ export interface XopcUseToolInput {
 }
 
 export interface XopcUseToolDeps {
+  getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   authorizeCapability?: CapabilityContext['authorize'];
   getWorkspace?: () => string;
   getConfig?: () => Config | undefined;
@@ -1278,7 +1280,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {title:"Short task name", objective:"One-sentence outcome", body:"Full Markdown task brief", createMode:"start", agentId:"researcher"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. Inspect an existing Task and its run before creating another Task for the same objective. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Use mode browser_setup for inspect/preview/start/get/advance/recheck/request_interaction/begin_verification/verification_report/cancel of local Chrome setup. Load configure-xopc for guided setup; writes require product-owner approval. Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {title:"Short task name", objective:"One-sentence outcome", body:"Full Markdown task brief", createMode:"start", agentId:"researcher"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. Inspect an existing Task and its run before creating another Task for the same objective. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -1291,6 +1293,16 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       const args = ensureArgs(input);
       const details: XopcUseDetails = { mode, command, dryRun };
       if (!command) return errorText('command is required', details);
+      if (mode === 'browser_setup') {
+        const service = deps.getBrowserSetupService?.();
+        const conversationId = deps.getCurrentConversationId?.();
+        const agentId = deps.getCurrentAgentId?.();
+        if (!service || !conversationId || !agentId) return errorText('Browser setup requires a Gateway conversation. Open Settings → Browser.', details);
+        if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.browser_setup.${command}`, args)) return errorText('Browser setup access denied', details);
+        try {
+          return okText({ ...details, result: await service.command(command, args, { conversationId, agentId }, dryRun) });
+        } catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
+      }
       if (mode === 'local_app' && (command === 'capabilities' || command === 'invoke')) {
         const apps = deps.getLocalAppService?.();
         if (!apps) return errorText('Local app service is unavailable', details);

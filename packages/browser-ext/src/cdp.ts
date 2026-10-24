@@ -9,6 +9,22 @@ import { createLogger } from './logger';
 
 const log = createLogger('CDP');
 const attached = new Set<number>();
+export const CONTROL_PAUSED_KEY = 'xopc.browser.control-paused';
+let controlPaused = false;
+let pausePersistence: Promise<void> = Promise.resolve();
+
+export async function isControlPaused(): Promise<boolean> {
+  await pausePersistence;
+  const stored = await chrome.storage.local.get(CONTROL_PAUSED_KEY);
+  return controlPaused || stored[CONTROL_PAUSED_KEY] === true;
+}
+
+/** Called only by the extension's explicit user control. */
+export async function resumeControl(): Promise<void> {
+  await pausePersistence;
+  await chrome.storage.local.remove(CONTROL_PAUSED_KEY);
+  controlPaused = false;
+}
 
 /** Check if a URL can be attached via CDP. */
 export function isDebuggableUrl(url?: string): boolean {
@@ -23,6 +39,7 @@ export function isDebuggableUrl(url?: string): boolean {
 
 /** Ensure chrome.debugger is attached to the given tab. */
 export async function ensureAttached(tabId: number): Promise<void> {
+  if (await isControlPaused()) throw new Error('BROWSER_CONTROL_REVOKED: You stopped Chrome control. Resume browser control in the xopc extension before retrying.');
   try {
     const tab = await chrome.tabs.get(tabId);
     if (!isDebuggableUrl(tab.url)) {
@@ -53,10 +70,7 @@ export async function ensureAttached(tabId: number): Promise<void> {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      try {
-        await chrome.debugger.detach({ tabId });
-      } catch { /* not attached */ }
-
+      if (await isControlPaused()) throw new Error('BROWSER_CONTROL_REVOKED: Resume browser control in the xopc extension.');
       await chrome.debugger.attach({ tabId }, '1.3');
       attached.add(tabId);
 
@@ -66,6 +80,7 @@ export async function ensureAttached(tabId: number): Promise<void> {
       log.debug('Attached to tab', { tabId, attempt });
       return;
     } catch (e) {
+      if (await isControlPaused()) throw new Error('BROWSER_CONTROL_REVOKED: Resume browser control in the xopc extension.');
       lastError = e instanceof Error ? e.message : String(e);
       if (attempt < MAX_RETRIES) {
         await new Promise(r => setTimeout(r, RETRY_DELAY));
@@ -152,6 +167,10 @@ export async function dispatchInput(
 }
 
 /** Listen for detach events. */
-chrome.debugger.onDetach.addListener((source) => {
-  if (source.tabId) attached.delete(source.tabId);
+chrome.debugger.onDetach.addListener((source, reason) => {
+  if (source.tabId !== undefined) attached.delete(source.tabId);
+  if (reason === 'canceled_by_user') {
+    controlPaused = true;
+    pausePersistence = chrome.storage.local.set({ [CONTROL_PAUSED_KEY]: true }).catch(error => { log.warn('Could not persist Chrome control stop', { error: String(error) }); });
+  }
 });

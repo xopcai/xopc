@@ -6,6 +6,8 @@ import { getXopcToolMetadata, setXopcToolMetadata } from '../embedded/tool-metad
 const EAGER_CORE_TOOLS = new Set([
   'read_file', 'write_file', 'apply_patch', 'grep', 'find', 'list_dir', 'exec_command',
   'review_workspace',
+  // Instruction readers bootstrap task-specific discovery without loading every tool schema.
+  'skill_view', 'skills_list', 'tool_manual',
   'publish_artifacts', 'task_collaboration', 'publish_task_result',
 ]);
 

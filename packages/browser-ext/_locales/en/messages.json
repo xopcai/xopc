@@ -285,5 +285,8 @@
   "clarifyApprove": { "message": "Approve once" },
   "clarifyCompose": { "message": "Select and add details" },
   "clarifyClear": { "message": "Clear selection" },
-  "clarifyRecommended": { "message": "Recommended" }
+  "clarifyRecommended": { "message": "Recommended" },
+  "browserControlStopped": { "message": "You stopped Chrome control. Page operations stay paused until you choose to resume. Return to the original chat to retry the test." },
+  "browserControlResume": { "message": "Resume browser control" },
+  "errorLocalHostBlockedHelp": { "message": "The local connection program could not start. Return to the original chat to check and repair installation, then retry. If your system shows a security prompt, review it yourself; do not disable system protection." }
 }

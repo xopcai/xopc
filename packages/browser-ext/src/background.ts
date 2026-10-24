@@ -13,12 +13,14 @@ import type { EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 
+import { isControlPaused, resumeControl } from './cdp';
 import { executeBrowserCommand } from './controller';
 import { t } from './i18n';
 import { createLogger } from './logger';
 import { fitBrowserControlResultToFrame } from './result-budget';
 import {
   createBrowserEndpointHello,
+  createBrowserRequestProof,
   gatewayFetch,
   getAccessProfile,
   readProfile,
@@ -106,7 +108,8 @@ async function connect(generation: number): Promise<void> {
       });
       const body = await response.json() as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } } };
       if (!response.ok || !body.payload?.ticket || !body.payload.realtime) throw new Error(`Realtime ticket failed (${response.status})`);
-      return { ticket: body.payload.ticket, realtime: body.payload.realtime };
+      return { ticket: body.payload.ticket, realtime: body.payload.realtime,
+        connectionProof: await createBrowserRequestProof(profile, new Request(`${profile.gatewayUrl}/api/realtime/v1/ws`), body.payload.ticket, 'CONNECT') };
     },
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state, error) => {
@@ -179,9 +182,12 @@ chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, se
     if (!sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`) || sender.tab) { sendResponse({ ok: false, error: 'Invalid recording control source.' }); return true; }
     void recordingCommand(message.operation ?? 'status', message.tabId).then((value) => sendResponse({ ok: true, value })).catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) }));
   } else if (message.type === 'browser/get-status') {
-    sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError });
+    void isControlPaused().then(controlPaused => sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError, controlPaused }));
   } else if (message.type === 'browser/get-endpoint-claim') {
     sendResponse({ claim: endpointClaim, error: lastConnectionError });
+  } else if (message.type === 'browser/resume-control') {
+    if (sender.url?.split('?')[0] !== chrome.runtime.getURL('dist/sidepanel.html')) { sendResponse({ ok: false, error: 'Use the extension control to resume.' }); return true; }
+    void resumeControl().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false, error: 'Control could not be resumed.' }));
   } else if (message.type === 'browser/reconnect') {
     disconnect();
     connectWithLogging();

@@ -1,3 +1,4 @@
+import { BrowserSetupPanel } from '@/features/settings/browser/browser-setup-panel';
 import { chatVirtualScroll, pauseChatTailFollowing } from '@/features/chat/scroll/chat-virtual-scroll';
 import * as Dialog from '@radix-ui/react-dialog';
 import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
@@ -210,6 +211,11 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const latestBrowserSetup = latestMessage?.role === 'assistant'
     ? findLatestBrowserSetupRequired(latestMessage.content)
     : null;
+  const browserSetupRequested = searchParams.get('scene') === 'configure-xopc'
+    || msgSlice.items.some(message => message.role === 'assistant' && message.content.some(block => {
+      if (block.type !== 'tool_use' || block.name !== 'xopc_use' || !block.details || typeof block.details !== 'object') return false;
+      return (block.details as Record<string, unknown>).mode === 'browser_setup';
+    }));
   const showBrowserSetupPrompt = !embedded
     && !stream.streaming
     && !stream.sending
@@ -1204,8 +1210,11 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                         ? handleForkAssistantTurn
                         : undefined
                     }
-                    trailingContent={latestBrowserSetup?.driver === 'extension' ? (
-                      <BrowserExtensionNudge enabled={showBrowserSetupPrompt} />
+                    trailingContent={browserSetupRequested && session.conversationId ? (
+                      <BrowserSetupPanel conversationId={session.conversationId} requested disabled={stream.streaming || stream.sending}
+                        onContinue={prompt => { void handleComposerSend(prompt); }} />
+                    ) : latestBrowserSetup?.driver === 'extension' ? (
+                      <BrowserExtensionNudge enabled={showBrowserSetupPrompt} onConfigure={() => { void handleComposerSend('Use configure-xopc to configure and verify Browser Use for this conversation, then continue my original request if verification succeeds.'); }} />
                     ) : showBrowserSetupPrompt && latestBrowserSetup ? (
                       <BrowserSetupRequiredCard payload={latestBrowserSetup} />
                     ) : showPersonalCalibration ? (

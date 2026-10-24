@@ -162,6 +162,7 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getBrowserAutomationService?: () => BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: enables the `xopc_use` product-object tool. */
@@ -315,6 +316,8 @@ export class AgentToolsFactory {
           return createBrowserDriver(config.browser, this.deps.endpointTools);
         },
         allowedUploadRoots: [this.deps.workspace],
+        canRestoreSetupSession: (taskKey, sessionId) => this.deps.getBrowserSetupService?.()?.canRestoreSession(taskKey, sessionId) === true,
+        isTrustedSetupUrl: (taskKey, url) => this.deps.getBrowserSetupService?.()?.allowsVerificationUrl(taskKey, url) === true,
         emit: this.deps.emitBrowserEvent,
         resolveTarget: (conversationId) => {
           const binding = getBrowserTabBinding(conversationId);
@@ -341,6 +344,8 @@ export class AgentToolsFactory {
       return context?.conversationId === owner && context.origin.type === 'endpoint' ? context.origin.endpointId : undefined;
     });
   }
+
+  hasBrowserSessions(): boolean { return this.browserRuntime?.hasSessions() ?? false; }
 
   /** Close Playwright and all pages (gateway stop, agent manager dispose, or config hot-reload). */
   async shutdownBrowser(): Promise<void> {
@@ -465,6 +470,7 @@ export class AgentToolsFactory {
       getWorkDiscovery: this.deps.getWorkDiscovery,
       getLocalAppService: this.deps.getLocalAppService,
       getChatPreviewService: this.deps.getChatPreviewService,
+      getBrowserSetupService: this.deps.getBrowserSetupService,
       dispatchTaskEvents: this.deps.dispatchTaskEvents,
       dispatchTaskRuns: this.deps.dispatchTaskRuns,
       onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
@@ -698,7 +704,8 @@ export class AgentToolsFactory {
       ...(browserEnabled && this.deps.getBrowserAutomationService
         ? [createBrowserAutomationTool({ getBrowserAutomationService: this.deps.getBrowserAutomationService })]
         : []),
-      ...(this.deps.getAutomationService
+      ...(this.deps.getBrowserSetupService
+        || this.deps.getAutomationService
         || this.deps.getProjectService
         || this.deps.getNotesService
         || this.deps.getLocalAppService
@@ -740,6 +747,8 @@ export class AgentToolsFactory {
         ? [
             createBrowserUseTool({
               getRuntime: () => this.ensureBrowserRuntime(),
+              getSetupService: this.deps.getBrowserSetupService,
+              getAgentId: () => resolvedAgentId,
               getTaskId: () => options?.conversationId ?? this.deps.getCurrentContext()?.conversationId ?? 'default',
               getReadiness: () => this.checkBrowserReadinessCached(),
             }),

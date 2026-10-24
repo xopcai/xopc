@@ -193,6 +193,7 @@ export interface AgentManagerConfig {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: exposes AutomationService for the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  getBrowserSetupService?: () => import('../browser/setup/service.js').BrowserSetupService | undefined;
   getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
@@ -233,6 +234,7 @@ export interface AgentInstance {
   interactionStateVersion?: number;
   userContextAccessVersion: string;
   executionToolPolicyVersion: string;
+  toolAvailabilityVersion: string;
   pluginRuntimeAccessVersion?: string;
 
   /** Declared env var names from skill_view; exec_command reads values from process.env at spawn time. */
@@ -489,6 +491,7 @@ export class AgentManager implements AgentInstanceGateway {
       gatewayClarify: this.config.gatewayClarify,
       getAutomationService: this.config.getAutomationService,
       getBrowserAutomationService: this.config.getBrowserAutomationService,
+      getBrowserSetupService: this.config.getBrowserSetupService,
       emitBrowserEvent: this.config.emitBrowserEvent,
       getNotesService: this.config.getNotesService,
       getProjectService: this.config.getProjectService,
@@ -1106,10 +1109,12 @@ export class AgentManager implements AgentInstanceGateway {
     const existing = this.agents.get(conversationId);
     const pluginRuntimeAccessVersion = pluginRuntimeAccessKey(new AgentPluginStore(), targetPath, resolveEffectiveAgentProfileForSession(conversationId).agentId);
     const executionToolPolicyVersion = JSON.stringify(resolveExecutionToolPolicy(conversationId));
+    const toolAvailabilityVersion = JSON.stringify([this.config.config?.browser.enabled, this.config.config?.computer.enabled, this.config.config?.phone.enabled]);
     if (existing) {
       const currentConfig = resolveEffectiveAgentProfileForSession(conversationId).config;
       if (!existing.agent.state.isStreaming && (
-        existing.executionToolPolicyVersion !== executionToolPolicyVersion
+        existing.toolAvailabilityVersion !== toolAvailabilityVersion
+        || existing.executionToolPolicyVersion !== executionToolPolicyVersion
         || existing.pluginRuntimeAccessVersion !== pluginRuntimeAccessVersion
         || existing.resolvedWorkspacePath !== targetPath
         || JSON.stringify(existing.effectiveProfile.config) !== JSON.stringify(currentConfig)
@@ -1166,6 +1171,7 @@ export class AgentManager implements AgentInstanceGateway {
       interactionStateVersion: this.getInteractionStateVersion(conversationId),
       userContextAccessVersion: this.getUserContextAccessVersion(conversationId),
       executionToolPolicyVersion,
+      toolAvailabilityVersion,
       pluginRuntimeAccessVersion,
       skillEnvPassthroughKeys: new Set<string>(),
     });
@@ -1216,6 +1222,8 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Get all active session keys
    */
+  hasBrowserSessions(): boolean { return this.toolsFactory.hasBrowserSessions(); }
+
   getActiveSessions(): string[] {
     return Array.from(this.agents.keys());
   }

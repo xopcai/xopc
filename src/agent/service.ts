@@ -127,6 +127,8 @@ function assistantMessageText(message: AgentMessage): string {
 }
 
 export class AgentService {
+  hasBrowserSessions(): boolean { return this.agentManager.hasBrowserSessions(); }
+
   /**
    * Persistent transcript + session-metadata store. Public so the gateway/TUI
    * can read sessions, delete them, etc. without forcing every CRUD-style
@@ -289,6 +291,7 @@ export class AgentService {
       gatewayClarify: config.gatewayClarify,
       getAutomationService: config.getAutomationService,
       getBrowserAutomationService: config.getBrowserAutomationService,
+      getBrowserSetupService: config.getBrowserSetupService,
       emitBrowserEvent: config.emitBrowserEvent,
       getNotesService: config.getNotesService,
       getProjectService: config.getProjectService,

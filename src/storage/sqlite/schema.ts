@@ -9,7 +9,7 @@ import { upgradeXopcDatabase, XOPC_DB_MINIMUM_SCHEMA_VERSION } from './schema-up
 
 export { SCHEMA_META_SCHEMA_VERSION_KEY, readSchemaVersionForTest, readSchemaVersion, setSchemaVersion, ensureSchemaMetaTable } from './schema-version.js';
 
-export const XOPC_DB_SCHEMA_VERSION = 259;
+export const XOPC_DB_SCHEMA_VERSION = 260;
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = XOPC_DB_SCHEMA_VERSION;
 export { XOPC_DB_MINIMUM_SCHEMA_VERSION } from './schema-upgrade.js';
 

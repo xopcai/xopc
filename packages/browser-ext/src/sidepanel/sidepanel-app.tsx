@@ -48,6 +48,7 @@ function pairingErrorMessage(cause: unknown): string {
   if (message.startsWith('PAIRING_ROUTE_PERMISSION_REQUIRED:')) {
     return t('errorNextRoutePermission');
   }
+  if (/Failed to start native messaging host|Access to the specified native messaging host is forbidden/i.test(message)) return t('errorLocalHostBlockedHelp');
   return message;
 }
 
@@ -57,6 +58,12 @@ interface SidePanelAppProps {
 }
 
 export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps) {
+  const [controlPaused, setControlPaused] = useState(false);
+  useEffect(() => {
+    const refresh = () => { void chrome.runtime.sendMessage({ type: 'browser/get-status' }).then(status => setControlPaused(status?.controlPaused === true)).catch(() => {}); };
+    refresh(); const timer = setInterval(refresh, 1500);
+    return () => clearInterval(timer);
+  }, []);
   const [profile, setProfile] = useState<BrowserGatewayProfile>();
   const [invitation, setInvitation] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
@@ -190,7 +197,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
       setLocalInvitation(local.invitation);
       await connect(local.invitation);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(pairingErrorMessage(cause));
       setState('unpaired');
     }
   }
@@ -205,7 +212,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
       setConfirmationCode('');
       setState('unpaired');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(pairingErrorMessage(cause));
       setState('unpaired');
     }
   }
@@ -272,6 +279,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
           ) : null}
         </div>
       </header>
+      {controlPaused && <section className="card" role="alert"><p>{t('browserControlStopped')}</p><button className="primary" onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/resume-control' }).then(result => { if (result?.ok) setControlPaused(false); }); }}>{t('browserControlResume')}</button></section>}
       {state !== 'online' ? <section className="center">
         {state === 'loading' ? <div className="muted">{t('loading')}</div> : null}
         {(state === 'unpaired' || state === 'pairing') ? (

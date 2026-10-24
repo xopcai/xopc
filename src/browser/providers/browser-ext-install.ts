@@ -4,6 +4,8 @@
  */
 
 import {
+  accessSync,
+  constants,
   existsSync,
   chmodSync,
   mkdirSync,
@@ -541,6 +543,7 @@ export function browserNativeHostDoctor(
           path?: unknown;
           allowed_origins?: unknown;
         };
+        if (typeof manifest.path === 'string' && platform !== 'win32') accessSync(manifest.path, constants.X_OK);
         return manifest.name === BROWSER_NATIVE_HOST_NAME
           && typeof manifest.path === 'string'
           && existsSync(manifest.path)

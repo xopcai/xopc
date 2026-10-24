@@ -285,5 +285,8 @@
   "clarifyApprove": { "message": "批准本次操作" },
   "clarifyCompose": { "message": "选择并补充" },
   "clarifyClear": { "message": "清除选择" },
-  "clarifyRecommended": { "message": "推荐" }
+  "clarifyRecommended": { "message": "推荐" },
+  "browserControlStopped": { "message": "你已停止 Chrome 控制。网页操作将保持暂停，直到你主动恢复。恢复后请返回原对话重新验收。" },
+  "browserControlResume": { "message": "恢复网页控制" },
+  "errorLocalHostBlockedHelp": { "message": "本机连接程序启动被阻止。请返回原对话检查并修复安装，再重试连接。若系统显示安全提示，请自行审阅决定，不要关闭系统保护。" }
 }

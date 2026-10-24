@@ -1,9 +1,25 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatBrowserPairingInvitation } from '@xopcai/gateway-contract';
 
 import { gatewayFetch, parseBrowserPairingInvitation, readProfile } from './auth';
 
+let deviceKeys: CryptoKeyPair;
+beforeEach(async () => {
+  deviceKeys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']);
+  vi.stubGlobal('indexedDB', { open: () => {
+    const opening: Record<string, unknown> = {};
+    queueMicrotask(() => {
+      opening.result = { close() {}, transaction: () => ({ objectStore: () => ({ get: () => {
+        const reading: Record<string, unknown> = {};
+        queueMicrotask(() => { reading.result = deviceKeys; (reading.onsuccess as () => void)(); });
+        return reading;
+      } }) }) };
+      (opening.onsuccess as () => void)();
+    });
+    return opening;
+  } });
+});
 afterEach(() => vi.unstubAllGlobals());
 
 function invitation(overrides: Record<string, unknown> = {}): string {

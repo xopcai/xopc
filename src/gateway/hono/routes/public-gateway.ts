@@ -20,6 +20,9 @@ import type { GatewayService } from '../../service.js';
 import { serveStaticFile } from '../lib/static-ui.js';
 
 const PUBLIC_UI_ROOT_ASSETS = [
+  // Credential-free demo resources; setup and evidence APIs remain authenticated.
+  'browser-setup-test.html',
+  'browser-setup-test.js',
   'apple-touch-icon.png',
   'favicon-16x16.png',
   'favicon-32x32.png',
