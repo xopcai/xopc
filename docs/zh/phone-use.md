@@ -98,9 +98,9 @@ AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重�
 
 所有已提供条件都必须满足。应选择稳定的页面身份和与目标直接相关的证据，不额外要求无关条目同时可见。`textAny` 支持界面语言别名，`textAll` 要求每条文本都出现；`field: { "resourceId": "package:id/query", "value": "coffee" }` 要求可编辑字段准确匹配。旧 `expectText` 继续兼容，与组合条件同时生效。验证检查全部已采集原生节点，不受显示事实的 60 条上限影响。`requireChange` 仅表示本次执行观察到了 UI 变化，不能证明具体业务结果；完成条件必须在连续两次新观察中成立，期间仍检查取消、控制权与授权变更；模型自行结束仍未验证。
 
-复验脚本、模拟回放对比和真实模拟器证据见[优化报告](../design/technical/phone-use-reliability-optimization-2026-10-24.md)。
+复验脚本、模拟回放对比和真实模拟器证据见[优化报告](https://github.com/xopcai/xopc/blob/main/docs/design/technical/phone-use-reliability-optimization-2026-10-24.md)。
 
-真实 App 续轮评测及未采纳方案见[真实 App 优化报告](../design/technical/phone-use-real-app-optimization-2026-10-24.md)。
+真实 App 续轮评测及未采纳方案见[真实 App 优化报告](https://github.com/xopcai/xopc/blob/main/docs/design/technical/phone-use-real-app-optimization-2026-10-24.md)。
 
 ### 实验性语义执行与分层规划
 
@@ -112,4 +112,4 @@ AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重�
 
 停止状态的 Clock 风格键盘还支持 `HHh MMm SSs` 规范时长。只有完整识别的直接设置命令、明确的目标包名及匹配时长、完整唯一的原生键盘同时成立，才逐键执行。解释、引用、未知附加条件等目标仍交给普通模型；完成条件本身不会授权写入。每个按键都需新观察确认显示值，再继续下一个按键；反馈不符会暂停，不会自动启动计时器。该能力不等于通用自然语言数值输入。
 
-生成动作共享原有动作数、模型请求数与时间预算，最终任务验证独立于阶段推进。计划和待输入意图仅在一次 `run` 或 `step` 内存活，不持久化。两项功能仍默认关闭。四组真实 App 对比及独立留出任务结果见[语义执行与分层规划评测报告](../design/technical/phone-use-semantic-planning-benchmark-2026-10-24.md)。
+生成动作共享原有动作数、模型请求数与时间预算，最终任务验证独立于阶段推进。计划和待输入意图仅在一次 `run` 或 `step` 内存活，不持久化。两项功能仍默认关闭。四组真实 App 对比及独立留出任务结果见[语义执行与分层规划评测报告](https://github.com/xopcai/xopc/blob/main/docs/design/technical/phone-use-semantic-planning-benchmark-2026-10-24.md)。

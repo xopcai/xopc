@@ -47,7 +47,9 @@
 - [缺失值折线图截图](../chat-charts-matrix-results/qwen-token-plan-cn--qwen3.8-flash--line-gaps/chart.png)
 - [负数与零值柱状图截图](../chat-charts-matrix-results/minimax-cn--MiniMax-M2.7--bar-negative/chart.png)
 - [多序列分组柱状图截图](../chat-charts-matrix-results/deepseek--deepseek-v4-pro--bar-multi-series/chart.png)
-- 总报告同目录下，每个用例均保存原始 `answer.md`、`result.json`，作图用例另有 `chart.png`。
+- 总报告同目录下，每个用例保留 `result.json`，作图用例另有 `chart.png`。
+
+逐用例生成的回答 Markdown 已清理；其中的 chart 数据与汇总报告中的 `cases[].charts` 一致。全部缺失用例的无图结果与检查结论也保留在汇总报告中。复验脚本仍可在指定输出目录生成完整回答。
 
 ```bash
 node --import tsx/esm scripts/verify-chat-charts-matrix.mjs
