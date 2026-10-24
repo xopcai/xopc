@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { tasks, CLOCK, FILES, SETTINGS, SETTINGS_SEARCH, NOTE_FILE, FILE_QUERY } from '../../../scripts/phone-apps-live/tasks.js';
+import { tasks, CLOCK, FILES, SETTINGS, SETTINGS_SEARCH, NOTE_FILE, FILE_QUERY, CONTACTS, HOLDOUT_QUERY } from '../../../scripts/phone-apps-live/tasks.js';
 import type { PhoneElement, PhoneObservation } from '../contracts.js';
 
 function node(text: string, resourceId = '', extra: Partial<PhoneElement> = {}): PhoneElement {
@@ -48,4 +48,39 @@ describe('independent real-app evaluation oracles', () => {
     expect(passes('files-search', screen(FILES, [...rows, node('xopc_real_bench_plan_20261024.txt')]))).toBe(false);
     expect(passes('files-search', screen(SETTINGS_SEARCH, rows))).toBe(false);
   });
+  it('holds out four task IDs and validates the new Contacts query and page identities', () => {
+    expect(tasks.filter(task => task.split === 'heldout').map(task => task.id)).toEqual(['settings-storage', 'clock-clock-tab', 'contacts-search', 'contacts-organize']);
+    const search = [node(HOLDOUT_QUERY, `${CONTACTS}:id/open_search_view_edit_text`, { editable: true }), node('', `${CONTACTS}:id/open_search_view_clear_button`, { description: 'Clear text' })];
+    expect(passes('contacts-search', screen(CONTACTS, search))).toBe(true);
+    expect(passes('contacts-search', screen(CONTACTS, search.map(item => item.text === HOLDOUT_QUERY ? { ...item, text: 'other' } : item)))).toBe(false);
+    const organize = [node('Organize', `${CONTACTS}:id/navigation_bar_item_large_label_view`), node('Manage SIM'), node('Blocked numbers')];
+    expect(passes('contacts-organize', screen(CONTACTS, organize))).toBe(true);
+    expect(passes('contacts-organize', screen(CONTACTS, organize.map(item => item.text === 'Organize' ? { ...item, resourceId: 'tab-unselected' } : item)))).toBe(false);
+    expect(passes('contacts-organize', screen(SETTINGS, organize))).toBe(false);
+  });
+
+  it('requires the heldout Storage categories and world-clock page action', () => {
+    expect(passes('settings-storage', screen(SETTINGS, [node('', `${SETTINGS}:id/collapsing_toolbar`, { description: 'Storage' }), node('Apps'), node('System')]))).toBe(true);
+    expect(passes('settings-storage', screen(SETTINGS, [node('Storage'), node('Apps')]))).toBe(false);
+    const world = [node('Clock', `${CLOCK}:id/action_bar_title`), node('', `${CLOCK}:id/fab`, { description: 'Add city' })];
+    expect(passes('clock-clock-tab', screen(CLOCK, world))).toBe(true);
+    expect(passes('clock-clock-tab', screen(CLOCK, [world[0], node('', `${CLOCK}:id/fab`, { description: 'Start' })]))).toBe(false);
+  });
+
+  it('keeps both transfer durations distinct from the development timer target', () => {
+    const transfer = tasks.filter(task => task.split === 'transfer' && task.app === CLOCK);
+    expect(transfer.map(task => task.id)).toEqual(['clock-timer-transfer-0845', 'clock-timer-transfer-010509']);
+    for (const task of transfer) {
+      const target = task.completion('15').textAll![0];
+      const rows = [node('Timer', `${CLOCK}:id/action_bar_title`), node(target, `${CLOCK}:id/timer_setup_time`), node('0', `${CLOCK}:id/timer_setup_digit_0`)];
+      expect(passes(task.id, screen(CLOCK, rows))).toBe(true);
+      expect(passes(task.id, screen(CLOCK, rows.map(item => item.resourceId.endsWith('timer_setup_time') ? { ...item, text: '00h 02m 30s' } : item)))).toBe(false);
+      expect(passes(task.id, screen(CLOCK, rows.slice(0, 2)))).toBe(false);
+    }
+  });
+
+  it('rejects a Settings root list containing Storage, Apps and System without the Storage toolbar', () => {
+    expect(passes('settings-storage', screen(SETTINGS, [node('Storage', 'android:id/title'), node('Apps'), node('System')]))).toBe(false);
+  });
+
 });

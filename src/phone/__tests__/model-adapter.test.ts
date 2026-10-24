@@ -91,11 +91,63 @@ describe('phone model context and protocol', () => {
     expect(body.frequency_penalty).toBeUndefined();
   });
 
+  it.each([
+    { semanticControls: true }, { hierarchicalPlanning: true }, { semanticControls: true, hierarchicalPlanning: true },
+  ])('keeps AutoGLM input unchanged for host controllers %j', async enhancements => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ choices: [{ message: { content: 'do(action="Tap", element=[200,300])' }, finish_reason: 'stop' }] }));
+    vi.stubGlobal('fetch', fetch);
+    const adapter = await createPhoneModel('test/autoglm', {} as Config, 'main');
+    const input = prediction(); input.observation.elements = [element()];
+    await adapter.predict(input, new AbortController().signal);
+    await adapter.predict({ ...input, enhancements, planning: { steps: [{ goal: 'Inspect Search', textAll: ['Search'] }], currentStep: 0, verifiedSteps: 0 } }, new AbortController().signal);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][1]!.body).toBe(fetch.mock.calls[0][1]!.body);
+  });
+
+  it('offers explicit native selectors to a structured model when semantic execution is enabled', async () => {
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'structured', provider: 'test', api: 'openai-completions', input: ['image'],
+      baseUrl: 'https://phone.example/v1', phoneUse: { profile: 'structured-phone-v1' }, maxTokens: 4000 } as any);
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ choices: [{ message: { content: JSON.stringify({
+      kind: 'action', action: { type: 'tapElement', frameId: 'one', selector: { resourceId: 'app:id/search' } },
+    }) }, finish_reason: 'stop' }] }));
+    vi.stubGlobal('fetch', fetch);
+    const adapter = await createPhoneModel('test/structured', {} as Config, 'main');
+    const input = prediction(); input.observation.elements = [element()]; input.enhancements = { semanticControls: true };
+    expect(await adapter.predict(input, new AbortController().signal)).toMatchObject({ action: { type: 'tapElement' } });
+    const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
+    expect(body.messages[0].content).toContain('Semantic controls are enabled');
+    expect(JSON.parse(body.messages[1].content[0].text).nativeControls).toHaveLength(1);
+  });
+
   it.each([['length', 'PHONE_MODEL_TRUNCATED'], ['content_filter', 'PHONE_MODEL_PROTOCOL']])('refuses noncompleted output (%s) even when its prefix looks executable', async (finishReason, code) => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ choices: [{ message: { content: 'do(action="Back")' }, finish_reason: finishReason }] }));
     vi.stubGlobal('fetch', fetch);
     const adapter = await createPhoneModel('test/autoglm', {} as Config, 'main');
     await expect(adapter.predict(prediction(), new AbortController().signal)).rejects.toMatchObject({ code });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('obtains a bounded plan and semantic action in the same counted model request', async () => {
+    const plan = { steps: [{ goal: 'Focus search', appPackage: 'com.example.app', textAll: ['Search'] }] };
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ choices: [{ message: {
+      content: `<plan>${JSON.stringify(plan)}</plan>do(action="TapElement", frameId="one", resourceId="app:id/search", text="Search")`,
+    }, finish_reason: 'stop' }] }));
+    vi.stubGlobal('fetch', fetch);
+    const adapter = await createPhoneModel('test/autoglm', {} as Config, 'main');
+    const value = prediction(); value.enhancements = { semanticControls: true, hierarchicalPlanning: true }; value.observation.elements = [element()];
+    expect(await adapter.predict(value, new AbortController().signal)).toMatchObject({ kind: 'action', action: { type: 'tapElement', frameId: 'one' }, plan });
+    expect(fetch).toHaveBeenCalledOnce();
+    const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
+    expect(body.messages[0].content).not.toContain('Completion-derived hierarchical execution is enabled');
+    expect(body.messages[0].content).not.toContain('Semantic controls are enabled');
+  });
+
+  it('uses the normal first-action protocol with hierarchical execution and no hidden planner requests', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ choices: [{ message: { content: 'do(action="Back")' }, finish_reason: 'stop' }] }));
+    vi.stubGlobal('fetch', fetch);
+    const adapter = await createPhoneModel('test/autoglm', {} as Config, 'main');
+    await expect(adapter.predict({ ...prediction(), enhancements: { hierarchicalPlanning: true } }, new AbortController().signal))
+      .resolves.toEqual({ kind: 'action', action: { type: 'back' } });
     expect(fetch).toHaveBeenCalledOnce();
   });
 });

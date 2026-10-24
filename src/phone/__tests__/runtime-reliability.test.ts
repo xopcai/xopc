@@ -20,7 +20,7 @@ function observation(elements: PhoneElement[], app = 'com.test.editor'): PhoneOb
   return { frameId: randomUUID(), capturedAt: Date.now(), width: 1000, height: 1000, rotation: 0,
     package: app, frame: Buffer.from('synthetic-pixels'), elements };
 }
-function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests?: number } = {}) {
+function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests?: number; semanticControls?: boolean; hierarchicalPlanning?: boolean } = {}) {
   const repository = new PhoneRepository();
   const device = repository.save({ serial: 'reliability-editor', name: 'Synthetic editor', enabled: true, allowedApps: ['com.test.editor', 'com.test.other'] });
   repository.setDefault(device.id);
@@ -32,13 +32,94 @@ function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests
   };
   const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict }));
   runtimes.push(runtime);
-  const context = { config: ConfigSchema.parse({ phone: { enabled: true, maxModelRequests: options.modelRequests ?? 10 } }), agentId: 'main', modelRef: 'test/reliability' };
+  const context = { config: ConfigSchema.parse({ phone: { enabled: true, maxModelRequests: options.modelRequests ?? 10,
+    semanticControls: options.semanticControls, hierarchicalPlanning: options.hierarchicalPlanning } }), agentId: 'main', modelRef: 'test/reliability' };
   return { repository, runtime, driver, context, set: (next: PhoneObservation) => { current = next; },
     open: () => runtime.execute('reliability', { op: 'open', mode: 'control' }, context),
   };
 }
 
 describe('phone runtime reliability integration', () => {
+  it('resolves a semantic target through the fresh observation before dispatch and independent completion', async () => {
+    const f = fixture(async input => ({ kind: 'action', action: { type: 'tapElement', frameId: input.observation.frameId,
+      selector: { text: 'Initial' } } }), { semanticControls: true });
+    vi.mocked(f.driver.execute).mockImplementation(async () => { f.set(observation([element('Done')])); });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Open Done', expectText: 'Done' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ verified: true, actions: 1, modelRequests: 1, diagnostics: { semanticActions: 1 } });
+    expect(vi.mocked(f.driver.execute).mock.calls[0][1]).toEqual({ type: 'tap', point: [200, 300] });
+  });
+
+  it('grounds a standard coordinate action without requiring a new model action format', async () => {
+    const f = fixture(async () => ({ kind: 'action', action: { type: 'tap', point: [110, 220] } }), { semanticControls: true });
+    vi.mocked(f.driver.execute).mockImplementation(async () => { f.set(observation([element('Done')])); });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Open Done', expectText: 'Done' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ verified: true, actions: 1, modelRequests: 1, diagnostics: { semanticActions: 1 } });
+    expect(vi.mocked(f.driver.execute).mock.calls[0][1]).toEqual({ type: 'tap', point: [200, 300] });
+  });
+
+  it('rejects an ambiguous semantic action without dispatch, then uses a new prediction', async () => {
+    const f = fixture(async input => input.protocolFeedback || input.recoveryHint
+      ? { kind: 'action', action: { type: 'tap', point: [200, 300] } }
+      : { kind: 'action', action: { type: 'tapElement', frameId: input.observation.frameId, selector: { text: 'Initial' } } },
+    { semanticControls: true });
+    f.set(observation([element('Initial'), { ...element('Initial'), bounds: [500, 200, 700, 400] }]));
+    vi.mocked(f.driver.execute).mockImplementation(async () => { f.set(observation([element('Done')])); });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Open Done', expectText: 'Done' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ verified: true, actions: 1, modelRequests: 2, diagnostics: { semanticRejections: 1 } });
+    expect(f.driver.execute).toHaveBeenCalledOnce();
+  });
+
+  it('blocks semantic actions when the feature is disabled', async () => {
+    const f = fixture(async input => ({ kind: 'action', action: { type: 'tapElement', frameId: input.observation.frameId,
+      selector: { text: 'Initial' } } }));
+    await f.open();
+    await expect(f.runtime.execute('reliability', { op: 'run', goal: 'Open Done' }, f.context))
+      .rejects.toMatchObject({ code: 'PHONE_SEMANTIC_DISABLED' });
+    expect(f.driver.execute).not.toHaveBeenCalled();
+  });
+
+  it('passes an evidence-advanced plan to the next prediction without treating it as final success', async () => {
+    const inputs: PhonePrediction[] = [];
+    const f = fixture(async input => {
+      inputs.push(structuredClone(input));
+      return inputs.length === 1 ? { kind: 'action', action: { type: 'tap', point: [200, 300] } }
+        : { kind: 'complete', summary: 'Still unfinished' };
+    }, { hierarchicalPlanning: true });
+    vi.mocked(f.driver.execute).mockImplementation(async () => { f.set(observation([element('Intermediate')])); });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Open Done',
+      completion: { textAny: ['Intermediate'], textAll: ['Done'] } }, f.context) as PhoneReport;
+    expect(inputs[1].planning).toMatchObject({ currentStep: 1, verifiedSteps: 1 });
+    expect(result).toMatchObject({ verified: false, diagnostics: { plannedSubgoals: 2, completedSubgoals: 1 } });
+    expect(inputs[0].planning).toMatchObject({ currentStep: 0, verifiedSteps: 0 });
+    expect(JSON.stringify(f.repository.history())).not.toContain('planning');
+  });
+
+  it('combines native tap grounding with focus, entry and final inspection phases in the existing request budget', async () => {
+    const phases: number[] = [];
+    const f = fixture(async input => {
+      phases.push(input.planning!.currentStep);
+      return phases.length === 1 ? { kind: 'action', action: { type: 'tap', point: [110, 220] } }
+        : { kind: 'action', action: { type: 'typeText', text: 'query', mode: 'replace' } };
+    }, { semanticControls: true, hierarchicalPlanning: true, modelRequests: 2 });
+    const field = (value: string, focused: boolean) => ({ ...element(value, 'query'), editable: true, focused });
+    f.set(observation([field('', false)]));
+    vi.mocked(f.driver.execute).mockImplementation(async (_serial, action) => {
+      f.set(observation([field(action.type === 'typeText' ? action.text : '', true),
+        ...(action.type === 'typeText' ? [element('Result', 'result')] : [])]));
+    });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Search query', completion: {
+      appPackage: 'com.test.editor', field: { resourceId: 'query', value: 'query' }, textAll: ['Result'],
+    } }, f.context) as PhoneReport;
+    expect(phases).toEqual([0, 1]);
+    expect(result).toMatchObject({ verified: true, modelRequests: 2, actions: 2,
+      diagnostics: { semanticActions: 1, plannedSubgoals: 3, completedSubgoals: 3 } });
+  });
+
   it('passes dispatched parameters and observed effects to the next prediction without persisting input or page text', async () => {
     const inputs: Array<Pick<PhonePrediction, 'trajectory' | 'recoveryHint'>> = [];
     const predict = vi.fn<PhoneModelAdapter['predict']>(async input => {

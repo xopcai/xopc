@@ -221,6 +221,7 @@ export class AdbPhoneDriver implements PhoneDriver {
     const point = ([x, y]: number[]) => [String(Math.min(observation.width - 1, Math.round(x * observation.width / 1000))), String(Math.min(observation.height - 1, Math.round(y * observation.height / 1000)))];
     const input = (args: string[]) => this.shell(serial, ['input', ...args], signal);
     switch (action.type) {
+      case 'tapElement': throw new PhoneError('PHONE_SEMANTIC_UNRESOLVED', 'Resolve the native element against a fresh observation before dispatch', 409);
       case 'launch': {
         const result = await this.shell(serial, ['cmd', 'package', 'resolve-activity', '--brief', action.package], signal);
         const component = result.trim().split(/\r?\n/).find(line => /^[\w.]+\/[\w.$]+$/.test(line));

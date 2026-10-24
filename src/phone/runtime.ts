@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { phoneAllowsApp, phoneAppAccess } from './app-access.js';
 import { PhoneFrameCache, PhoneOperationBudget } from './live-state.js';
 import { PhoneInteractiveSession } from './interactive-session.js';
@@ -11,9 +12,13 @@ import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js';
 import { CloudPhones } from './cloud-phones.js';
 import { AdbPhoneDriver, resolveAdbPath, type PhoneDriver } from './adb-driver.js';
-import { createPhoneModel, isAboutScreen, type PhoneModelAdapter, type PhoneTrajectoryEntry } from './model-adapter.js';
+import { createPhoneModel, isAboutScreen, type PhoneModelAdapter, type PhoneModelDecision, type PhoneTrajectoryEntry } from './model-adapter.js';
 import { PhoneRepository } from './repository.js';
 import { canDispatchPhoneAction, observationSignature, phoneCompletionSatisfied } from './reliability.js';
+import { groundPhoneCoordinateAction, resolvePhoneSemanticAction } from './semantic-controls.js';
+import { advancePhonePlan, buildPhonePlan, createPhonePlanState, type PhonePlanState } from './planning.js';
+import { confirmPhoneFocusRecovery, phoneBackRecovery, phoneUnfocusedTypingHint, preparePhoneFocusRecovery, type PhoneFocusRecovery } from './recovery.js';
+import { createPhoneNumericEntry, nextPhoneNumericEntry, type PhoneNumericEntryIntent, type PhoneNumericEntryStep } from './numeric-entry.js';
 import {
   MOCK_PHONE_MODEL, PhoneError, PhoneInputSchema, type PhoneAction, type PhoneDevice, type PhoneInput,
   type PhoneApplication, type PhoneObservation, type PhoneReport,
@@ -214,7 +219,23 @@ export class PhoneRuntime {
       let repairs = 0;
       let completionCorrections = 0;
       let recoveryHint: string | undefined;
+      const enhancements = { semanticControls: context.config.phone.semanticControls,
+        hierarchicalPlanning: context.config.phone.hierarchicalPlanning };
+      const derivedPlan = enhancements.hierarchicalPlanning ? buildPhonePlan(input.goal, completion) : undefined;
+      let planning: PhonePlanState | undefined = derivedPlan ? createPhonePlanState(derivedPlan) : undefined;
+      if (enhancements.hierarchicalPlanning) {
+        session.report.diagnostics!.plannedSubgoals = planning?.steps.length ?? 0;
+        session.report.diagnostics!.completedSubgoals = 0;
+      }
       let changed = false;
+      const entryObservation = { ...observation, frame: Buffer.alloc(0), elements: structuredClone(observation.elements) };
+      const trajectoryStart = session.trajectoryCount;
+      let pendingFocus: PhoneFocusRecovery | undefined;
+      let numericIntent: PhoneNumericEntryIntent | undefined;
+      let numericPending: PhoneNumericEntryStep | undefined;
+      const focusedIntents = new Set<string>();
+      let backReplans = 0;
+      let focusReplans = 0;
       let previousSignature = observationSignature(observation);
       let controlEpoch = session.report.controlEpoch;
       const attempts = new Map<string, number>();
@@ -224,12 +245,43 @@ export class PhoneRuntime {
         const epoch = session.report.controlEpoch;
         if (controlEpoch !== epoch) {
           attempts.clear(); recoveryHint = 'The user handed back control. Re-evaluate the fresh screen before continuing.';
+          pendingFocus = undefined; numericIntent = undefined; numericPending = undefined;
           controlEpoch = epoch;
         }
         const signature = observationSignature(observation);
         if (signature !== previousSignature) changed = true;
         previousSignature = signature;
         this.recordObservation(session, observation);
+        if (planning) {
+          planning = advancePhonePlan(planning, observation);
+          session.report.diagnostics!.completedSubgoals = planning.verifiedSteps;
+        }
+        let numericStep: PhoneNumericEntryStep | undefined;
+        if (enhancements.hierarchicalPlanning) {
+          numericIntent ??= createPhoneNumericEntry(input.goal, completion, observation);
+          if (numericIntent) {
+            let next = nextPhoneNumericEntry(numericIntent, observation, numericPending);
+            for (let poll = 0; numericPending && next.kind === 'blocked' && poll < 2; poll++) {
+              await delay(150, undefined, { signal });
+              observation.frame.fill(0); observation = await this.observe(session, signal);
+              this.guard(session, context); this.allowedScreen(session, observation);
+              if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') break;
+              next = nextPhoneNumericEntry(numericIntent, observation, numericPending);
+            }
+            if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') continue;
+            this.recordObservation(session, observation);
+            if (next.kind === 'blocked') {
+              session.report.diagnostics!.numericMismatches = (session.report.diagnostics!.numericMismatches ?? 0) + 1;
+              session.report.status = 'paused'; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+              session.report.stopReason = 'numeric_state_mismatch';
+              session.report.message = 'Numeric input was not confirmed. Inspect the displayed value before continuing; no key was retried.';
+              session.budget?.pause(); await session.stream?.revoke(); return this.publish(session);
+            }
+            if (numericPending) session.report.diagnostics!.numericConfirmedSteps = (session.report.diagnostics!.numericConfirmedSteps ?? 0) + 1;
+            numericPending = undefined;
+            if (next.kind === 'action') numericStep = next.step;
+          }
+        }
         const satisfied = session.report.mock ? isAboutScreen(observation)
           : Boolean(completion && phoneCompletionSatisfied(completion, observation, changed));
         if (satisfied) {
@@ -243,39 +295,57 @@ export class PhoneRuntime {
               observation.frame.fill(0); observation = confirmation; continue;
             }
             this.recordObservation(session, confirmation);
+            if (planning) {
+              planning = advancePhonePlan(planning, confirmation);
+              session.report.diagnostics!.completedSubgoals = planning.verifiedSteps;
+            }
             session.report.verified = true; session.report.verificationLevel = 'ui'; session.report.status = 'completed';
             session.report.stopReason = actions ? 'condition_satisfied' : 'condition_present'; return this.publish(session);
           } finally { if (observation !== confirmation) confirmation.frame.fill(0); }
         }
         if (actions >= maxActions) { session.report.status = 'ready'; session.report.stopReason = 'action_limit'; return this.publish(session); }
-        if (session.report.modelRequests >= context.config.phone.maxModelRequests) throw new PhoneError('PHONE_MODEL_LIMIT', 'Phone model request limit reached');
-        session.report.modelRequests++; session.report.currentAction = undefined; this.publish(session);
-        session.prediction = new AbortController();
-        let decision;
-        try {
-          decision = await session.adapter.predict({ goal: input.goal, observation, completion, allowedApps: session.device.allowedApps, appAccess: phoneAppAccess(session.device),
-            applications: session.applications.filter(app => phoneAllowsApp(session.device, app.packageName)),
-            history: session.report.steps.map(step => step.action), trajectory: session.trajectory,
-            progressSummary: JSON.stringify({ dispatched: session.trajectoryCount,
-              earlier: [...session.trajectorySummary, ...session.trajectory.slice(0, -8).map(entry => JSON.stringify({ action: entry.action, effect: entry.effect, afterApp: entry.afterApp }).slice(0, 250))].slice(-12) }).slice(-1500),
-            recoveryHint, protocolFeedback, scenario: input.scenario }, AbortSignal.any([signal, session.prediction.signal]));
-        } catch (error) {
-          if (!signal.aborted && epoch !== session.report.controlEpoch) {
-            await this.waitForAgent(session, signal); observation.frame.fill(0); observation = await this.observe(session, signal); continue;
-          }
-          if (!signal.aborted && error instanceof PhoneError && ['PHONE_MODEL_PROTOCOL', 'PHONE_MODEL_TRUNCATED'].includes(error.code)
-            && repairs < 1 && session.report.modelRequests < context.config.phone.maxModelRequests) {
-            repairs++; session.report.diagnostics!.protocolRepairs++;
-            protocolFeedback = 'Your previous output was invalid or truncated. Return exactly one complete action in the specified format with no extra prose.';
-            observation.frame.fill(0); observation = await this.observe(session, signal); continue;
-          }
-          throw error;
-        } finally { session.prediction = undefined; }
+        let decision: PhoneModelDecision | undefined = numericStep ? { kind: 'action', action: numericStep.action } : undefined;
+        let resumedText = false;
+        if (!decision && pendingFocus) {
+          const pending = pendingFocus; pendingFocus = undefined;
+          const intended = confirmPhoneFocusRecovery(pending, observation);
+          if (intended) { decision = { kind: 'action', action: intended }; resumedText = true; }
+          else recoveryHint = 'The focus transition was not confirmed. No text was sent. Reinspect the intended editable field before another action.';
+        }
+        if (!decision) {
+          if (session.report.modelRequests >= context.config.phone.maxModelRequests) throw new PhoneError('PHONE_MODEL_LIMIT', 'Phone model request limit reached');
+          session.report.modelRequests++; session.report.currentAction = undefined; this.publish(session);
+          session.prediction = new AbortController();
+          try {
+            decision = await session.adapter.predict({ goal: input.goal, observation, completion, allowedApps: session.device.allowedApps, appAccess: phoneAppAccess(session.device),
+              applications: session.applications.filter(app => phoneAllowsApp(session.device, app.packageName)),
+              history: session.report.steps.map(step => step.action), trajectory: session.trajectory,
+              progressSummary: JSON.stringify({ dispatched: session.trajectoryCount,
+                earlier: [...session.trajectorySummary, ...session.trajectory.slice(0, -8).map(entry => JSON.stringify({ action: entry.action, effect: entry.effect, afterApp: entry.afterApp }).slice(0, 250))].slice(-12) }).slice(-1500),
+              recoveryHint, protocolFeedback, scenario: input.scenario, enhancements, planning }, AbortSignal.any([signal, session.prediction.signal]));
+          } catch (error) {
+            if (!signal.aborted && epoch !== session.report.controlEpoch) {
+              await this.waitForAgent(session, signal); observation.frame.fill(0); observation = await this.observe(session, signal); continue;
+            }
+            if (!signal.aborted && error instanceof PhoneError && ['PHONE_MODEL_PROTOCOL', 'PHONE_MODEL_TRUNCATED'].includes(error.code)
+              && repairs < 1 && session.report.modelRequests < context.config.phone.maxModelRequests) {
+              repairs++; session.report.diagnostics!.protocolRepairs++;
+              protocolFeedback = 'Your previous output was invalid or truncated. Return exactly one complete action in the specified format with no extra prose.';
+              observation.frame.fill(0); observation = await this.observe(session, signal); continue;
+            }
+            throw error;
+          } finally { session.prediction = undefined; }
+        }
         signal.throwIfAborted(); this.guard(session, context);
         if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') {
           await this.waitForAgent(session, signal); observation.frame.fill(0); observation = await this.observe(session, signal); continue;
         }
         protocolFeedback = undefined;
+        if (enhancements.hierarchicalPlanning && !planning && decision.plan) {
+          planning = advancePhonePlan(createPhonePlanState(decision.plan), observation);
+          session.report.diagnostics!.plannedSubgoals = planning.steps.length;
+          session.report.diagnostics!.completedSubgoals = planning.verifiedSteps;
+        }
         if (decision.kind !== 'action') {
           if (decision.kind === 'complete' && !session.report.mock && (input.completion || input.expectText)
             && completionCorrections < 1 && session.report.modelRequests < context.config.phone.maxModelRequests) {
@@ -292,26 +362,80 @@ export class PhoneRuntime {
           }
           return this.publish(session);
         }
+        let preparedFocus: PhoneFocusRecovery | undefined;
+        if (enhancements.hierarchicalPlanning) {
+          const operationActions = session.trajectoryCount - trajectoryStart;
+          const back = phoneBackRecovery({ action: decision.action, observation, entryObservation, completion,
+            trajectory: operationActions ? session.trajectory.slice(-operationActions) : [] });
+          if (back) {
+            session.report.diagnostics!.backReplans = (session.report.diagnostics!.backReplans ?? 0) + 1;
+            if (backReplans++ >= 2) {
+              session.report.status = 'paused'; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+              session.report.stopReason = 'back_boundary'; session.report.message = back.hint;
+              session.budget?.pause(); await session.stream?.revoke(); return this.publish(session);
+            }
+            recoveryHint = back.hint;
+            observation.frame.fill(0); observation = await this.observe(session, signal); continue;
+          }
+          const focusHint = phoneUnfocusedTypingHint(decision.action, observation, completion);
+          if (focusHint) {
+            const key = JSON.stringify(decision.action);
+            preparedFocus = !focusedIntents.has(key) ? preparePhoneFocusRecovery(decision.action, observation, completion) : undefined;
+            if (preparedFocus) decision = { kind: 'action', action: preparedFocus.focusAction };
+            else {
+              session.report.diagnostics!.focusReplans = (session.report.diagnostics!.focusReplans ?? 0) + 1;
+              if (focusReplans++ >= 2) throw new PhoneError('PHONE_INPUT_NOT_FOCUSED', 'The requested editable field could not be focused; inspect before typing', 409);
+              recoveryHint = focusHint;
+              observation.frame.fill(0); observation = await this.observe(session, signal); continue;
+            }
+          }
+        }
         // Re-observe immediately before input. Layout drift discards the proposed coordinates.
         const fresh = await this.observe(session, signal);
         try {
           this.allowedScreen(session, fresh);
-          if (!canDispatchPhoneAction(decision.action, observation, fresh)) {
+          if (decision.action.type !== 'tapElement' && !canDispatchPhoneAction(decision.action, observation, fresh)) {
+            session.report.diagnostics!.stalePredictions++;
+            recoveryHint = 'The proposed action was not dispatched because its target changed. Locate it again on the fresh screen.';
+            observation.frame.fill(0); observation = fresh; continue;
+          }
+          let action = enhancements.semanticControls ? groundPhoneCoordinateAction(decision.action, observation) : decision.action;
+          const semanticAction = action.type === 'tapElement';
+          if (action.type === 'tapElement') {
+            if (!enhancements.semanticControls && !preparedFocus) throw new PhoneError('PHONE_SEMANTIC_DISABLED', 'Semantic controls are disabled');
+            try { action = resolvePhoneSemanticAction(action, observation, fresh); }
+            catch (error) {
+              if (!(error instanceof PhoneError) || !error.code.startsWith('PHONE_SEMANTIC_')) throw error;
+              session.report.diagnostics!.semanticRejections = (session.report.diagnostics!.semanticRejections ?? 0) + 1;
+              recoveryHint = 'The semantic target was not dispatched: select one unique fully visible non-password control from the fresh native UI.';
+              observation.frame.fill(0); observation = fresh; continue;
+            }
+          }
+          if (!canDispatchPhoneAction(action, observation, fresh)) {
             session.report.diagnostics!.stalePredictions++;
             recoveryHint = 'The proposed action was not dispatched because its target changed. Locate it again on the fresh screen.';
             observation.frame.fill(0); observation = fresh; continue;
           }
           if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') continue;
-          const attemptKey = `${observationSignature(fresh)}:${JSON.stringify(decision.action)}`;
+          const attemptKey = `${observationSignature(fresh)}:${JSON.stringify(action)}`;
           const repetitions = attempts.get(attemptKey) ?? 0;
-          if (repetitions >= (decision.action.type === 'wait' ? 3 : 2)) {
+          if (repetitions >= (action.type === 'wait' ? 3 : 2)) {
             session.report.status = 'paused'; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
             session.report.stopReason = 'no_progress';
             session.report.message = 'Repeated actions made no progress. Inspect the phone and hand back before continuing.';
             session.budget?.pause(); await session.stream?.revoke(); return this.publish(session);
           }
           attempts.set(attemptKey, repetitions + 1);
-          if (await this.dispatch(session, decision.action, fresh, context, signal, epoch)) actions++;
+          if (await this.dispatch(session, action, fresh, context, signal, epoch)) {
+            actions++;
+            if (semanticAction && enhancements.semanticControls) session.report.diagnostics!.semanticActions = (session.report.diagnostics!.semanticActions ?? 0) + 1;
+            if (preparedFocus) {
+              pendingFocus = preparedFocus; focusedIntents.add(JSON.stringify(preparedFocus.intendedAction));
+              session.report.diagnostics!.focusRecoveries = (session.report.diagnostics!.focusRecoveries ?? 0) + 1;
+            }
+            if (resumedText) session.report.diagnostics!.resumedTextInputs = (session.report.diagnostics!.resumedTextInputs ?? 0) + 1;
+            if (numericStep) { numericPending = numericStep; session.report.diagnostics!.numericActions = (session.report.diagnostics!.numericActions ?? 0) + 1; }
+          }
         } finally { if (observation !== fresh) fresh.frame.fill(0); }
         const beforeSignature = observationSignature(observation);
         observation.frame.fill(0); observation = await this.observe(session, signal);
@@ -666,7 +790,7 @@ export class PhoneRuntime {
         const video = input.geometry !== undefined && session.stream?.verifyGeometry(input.geometry);
         if (!video && (!frame || Date.now() - frame.capturedAt > 5000)) throw new PhoneError('PHONE_FRAME_STALE', 'Wait for a fresh phone image before interacting', 409);
         if (video && input.action?.type !== 'typeText' && input.action?.type !== 'back') throw new PhoneError('PHONE_INVALID_INPUT', 'Use the continuous input channel for video gestures', 409);
-        if (!input.action || input.action.type === 'launch' || input.action.type === 'home' || input.action.type === 'wait') throw new PhoneError('PHONE_INVALID_INPUT', 'Unsupported manual input');
+        if (!input.action || input.action.type === 'launch' || input.action.type === 'home' || input.action.type === 'wait' || input.action.type === 'tapElement') throw new PhoneError('PHONE_INVALID_INPUT', 'Unsupported manual input');
         const observation = input.action.type === 'typeText' ? await this.observe(session, session.controller.signal, true) : await this.capture(session, session.controller.signal);
         try {
           if (input.epoch !== session.report.controlEpoch || session.human !== client || Date.now() > (session.humanExpiresAt ?? 0)) throw new PhoneError('PHONE_CONTROL_CHANGED', 'Manual control expired while observing the phone', 409);

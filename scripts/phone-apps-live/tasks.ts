@@ -6,6 +6,9 @@ import { texts, visibleNode } from './support.js';
 export const NOTE_FILE = 'xopc_real_bench_note_20261024.txt';
 export const PLAN_FILE = 'xopc_real_bench_plan_20261024.txt';
 export const FILE_QUERY = 'xopc_real_bench_note_20261024';
+export const CONTACTS = 'com.google.android.contacts';
+export const HOLDOUT_QUERY = 'xopc_holdout_20261024';
+export const FOCUS_QUERY = 'xopc_focus_transfer_20261024';
 export const CLOCK = 'com.google.android.deskclock';
 export const FILES = 'com.google.android.documentsui';
 export const SETTINGS = 'com.android.settings';
@@ -18,8 +21,10 @@ export type TaskDevice = {
   forceStop(app: string): Promise<void>;
   tap(label: string, options?: { resourceId?: string; preferDescription?: boolean }): Promise<void>;
   pressBack(): Promise<void>;
+  pressTab(): Promise<void>;
 };
 export type Task = {
+  split?: 'development' | 'heldout' | 'transfer';
   id: string; app: string; allowedApps: string[]; goal: string;
   completion(version: string): PhoneCompletion;
   prepare(device: TaskDevice): Promise<void>;
@@ -59,6 +64,41 @@ async function filesRoot(device: TaskDevice, label: string) {
   }
   await device.tap('Show roots', { preferDescription: true });
   await device.tap(label, { resourceId: 'android:id/title' });
+}
+
+async function contactsRoot(device: TaskDevice) {
+  await device.forceStop(CONTACTS); await device.start(CONTACTS);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const screen = await device.observe();
+    let home = false; let closeSearch = false; let wrongApp = false;
+    try {
+      wrongApp = screen.package !== CONTACTS;
+      if (!wrongApp) {
+        home = screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.resourceId === `${CONTACTS}:id/contacts` && candidate.description === 'Contacts');
+        closeSearch = !home && screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.editable && candidate.resourceId === `${CONTACTS}:id/open_search_view_edit_text`)
+          && screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.clickable && candidate.description === 'Back');
+      }
+    } finally { screen.frame.fill(0); }
+    if (home) { await device.tap('Contacts', { resourceId: `${CONTACTS}:id/contacts`, preferDescription: true }); return; }
+    if (wrongApp || attempt === 3) await device.start(CONTACTS);
+    else if (closeSearch) {
+      try { await device.tap('Back', { preferDescription: true }); }
+      catch (error) { if (!(error instanceof Error) || !error.message.startsWith('Setup cannot find Back')) throw error; }
+    }
+  }
+  assert.fail('Contacts home navigation did not become ready after bounded explicit reset');
+}
+
+async function contactsUnfocusedSearch(device: TaskDevice) {
+  await contactsRoot(device);
+  await device.tap('Search contacts', { resourceId: `${CONTACTS}:id/open_search_bar` });
+  await device.pressTab();
+  const screen = await device.observe();
+  try {
+    const field = screen.elements.filter(candidate => visibleNode(candidate, screen) && candidate.editable && candidate.resourceId === `${CONTACTS}:id/open_search_view_edit_text`);
+    assert(field.length === 1 && !field[0].focused, 'Focus stress setup needs one visible, unfocused query field');
+    assert(screen.elements.some(candidate => candidate.focused && !candidate.editable), 'Tab must focus a non-editor without activating it');
+  } finally { screen.frame.fill(0); }
 }
 
 export const tasks: Task[] = [
@@ -111,4 +151,36 @@ export const tasks: Task[] = [
     evidence: screen => ({ packageAllowed: screen.package === FILES,
       queryCorrect: screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.editable && candidate.resourceId === `${FILES}:id/search_src_text` && candidate.text === FILE_QUERY),
       resultVisible: exact(screen, NOTE_FILE), unrelatedFixtureAbsent: !exact(screen, PLAN_FILE) }) },
+  { id: 'settings-storage', split: 'heldout', app: SETTINGS, allowedApps: [SETTINGS],
+    goal: 'Open Storage in Android Settings and show the storage categories Apps and System. Do not change settings or delete anything.',
+    completion: () => ({ appPackage: SETTINGS, textAll: ['Storage', 'Apps', 'System'] }), prepare: settings,
+    evidence: screen => ({ packageAllowed: screen.package === SETTINGS, storagePage: screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.resourceId === `${SETTINGS}:id/collapsing_toolbar` && candidate.description === 'Storage'), appsCategory: exact(screen, 'Apps'), systemCategory: exact(screen, 'System') }) },
+  { id: 'clock-clock-tab', split: 'heldout', app: CLOCK, allowedApps: [CLOCK],
+    goal: 'Open the Clock tab in the Clock app. Leave the world clock page visible without adding any city or changing any alarm.',
+    completion: () => ({ appPackage: CLOCK, textAll: ['Clock', 'Add city'] }), prepare: clockAlarm,
+    evidence: screen => ({ packageAllowed: screen.package === CLOCK, correctTab: node(screen, `${CLOCK}:id/action_bar_title`, 'Clock'), addCityVisible: screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.resourceId === `${CLOCK}:id/fab` && candidate.description === 'Add city') }) },
+  { id: 'contacts-search', split: 'heldout', app: CONTACTS, allowedApps: [CONTACTS],
+    goal: `In Contacts, search for exactly ${HOLDOUT_QUERY}. Leave that query visible in the search field. Do not add, edit, import, delete or call any contact.`,
+    completion: () => ({ appPackage: CONTACTS, field: { resourceId: `${CONTACTS}:id/open_search_view_edit_text`, value: HOLDOUT_QUERY } }), prepare: contactsRoot,
+    evidence: screen => ({ packageAllowed: screen.package === CONTACTS, exactQuery: screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.editable && candidate.resourceId === `${CONTACTS}:id/open_search_view_edit_text` && candidate.text === HOLDOUT_QUERY), clearControlVisible: screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.resourceId === `${CONTACTS}:id/open_search_view_clear_button` && candidate.description === 'Clear text') }) },
+  { id: 'contacts-organize', split: 'heldout', app: CONTACTS, allowedApps: [CONTACTS],
+    goal: 'In Contacts, open the Organize tab and show Manage SIM and Blocked numbers. Stay on that page without opening a management action or changing contacts.',
+    completion: () => ({ appPackage: CONTACTS, textAll: ['Organize', 'Manage SIM', 'Blocked numbers'] }), prepare: contactsRoot,
+    evidence: screen => ({ packageAllowed: screen.package === CONTACTS, organizeSelected: node(screen, `${CONTACTS}:id/navigation_bar_item_large_label_view`, 'Organize'), manageSimVisible: exact(screen, 'Manage SIM'), blockedVisible: exact(screen, 'Blocked numbers') }) },
+
+  ...([['clock-timer-transfer-0845', '00h 08m 45s'], ['clock-timer-transfer-010509', '01h 05m 09s']] as const).map(([id, duration]): Task => ({
+    id, split: 'transfer', app: CLOCK, allowedApps: [CLOCK],
+    goal: `Configure the stopped Timer in Clock to exactly ${duration}. Leave that duration configured without starting the timer. Do not change alarms.`,
+    completion: () => ({ appPackage: CLOCK, textAll: [duration] }), prepare: clockAlarm,
+    evidence: screen => ({ packageAllowed: screen.package === CLOCK,
+      correctTab: node(screen, `${CLOCK}:id/action_bar_title`, 'Timer'),
+      durationCorrect: node(screen, `${CLOCK}:id/timer_setup_time`, duration),
+      stillSetup: node(screen, `${CLOCK}:id/timer_setup_digit_0`) }),
+  })),
+  { id: 'contacts-search-unfocused', split: 'transfer', app: CONTACTS, allowedApps: [CONTACTS],
+    goal: `In the open Contacts search page, enter exactly ${FOCUS_QUERY} in the search field and leave that query visible. Do not add, edit, import, delete or call any contact.`,
+    completion: () => ({ appPackage: CONTACTS, field: { resourceId: `${CONTACTS}:id/open_search_view_edit_text`, value: FOCUS_QUERY } }), prepare: contactsUnfocusedSearch,
+    evidence: screen => ({ packageAllowed: screen.package === CONTACTS,
+      exactQuery: screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.editable && candidate.resourceId === `${CONTACTS}:id/open_search_view_edit_text` && candidate.text === FOCUS_QUERY),
+      clearControlVisible: screen.elements.some(candidate => visibleNode(candidate, screen) && candidate.resourceId === `${CONTACTS}:id/open_search_view_clear_button` && candidate.description === 'Clear text') }) },
 ];
