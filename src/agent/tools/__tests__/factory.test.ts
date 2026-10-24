@@ -30,10 +30,10 @@ describe('AgentToolsFactory', () => {
   it('keeps core execution eager and preserves specialized capabilities through native discovery', () => {
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });
     const tools = factory.createAllTools();
-    for (const name of ['read_file', 'write_file', 'exec_command', 'review_workspace']) {
+    for (const name of ['read_file', 'write_file', 'exec_command', 'review_workspace', 'tool_manual']) {
       expect(getXopcToolMetadata(tools.find(tool => tool.name === name)!)?.exposure).not.toBe('deferred');
     }
-    for (const name of ['browser_use', 'web_search', 'send_message', 'knowledge_write', 'data_batch', 'clarify', 'update_plan', 'tool_manual', 'session_status']) {
+    for (const name of ['browser_use', 'web_search', 'send_message', 'knowledge_write', 'data_batch', 'clarify', 'update_plan', 'session_status']) {
       expect(getXopcToolMetadata(tools.find(tool => tool.name === name)!)?.exposure).toBe('deferred');
     }
     const all = tools.reduce((sum, tool) => sum + JSON.stringify(tool.parameters).length, 0);
