@@ -18,6 +18,8 @@ The Gateway host must have Android SDK Platform Tools. The runner searches `ANDR
 
 ## Configure a phone model
 
+After connecting to XOPC Cloud, an unset global phone model defaults to `xopc-cloud/phone`, using your existing Cloud authorization. It routes to hosted AutoGLM Phone; no separate BigModel key is needed on the client. Existing phone selections and Agent overrides are preserved. Cloud availability and account quotas apply.
+
 Select a supported phone model in Phone Use and save it. The page shows its provider and credential status. Add or edit providers, API keys, model IDs and Phone Use action profiles centrally under **Intelligence → Models**.
 
 For BigModel, configure Zhipu GLM China with model ID `autoglm-phone`, image input and the AutoGLM Phone action profile. Vision support alone does not qualify a model for Phone Use. The phone model selection is separate from the chat model. The local emulator mock needs no key.
@@ -105,3 +107,14 @@ All supplied conditions must hold. Choose stable page identity and task-relevant
 For regression comparison, run `pnpm exec tsx scripts/benchmark-phone-reliability.mts --baseline <commit> --repeats 3 --output /tmp/phone-reliability.json`. This uses simulated devices and a scripted policy, comparing the old runtime with current orchestration; it does not measure real-model success. The opt-in `scripts/benchmark-phone-reliability-live.mts` performs bounded, paid AutoGLM calls on a local test emulator only. See the [optimization report](design/technical/phone-use-reliability-optimization-2026-10-24.md) for evidence and limitations.
 
 Real-app follow-up results and rejected experiments are documented in the [real-app optimization report](design/technical/phone-use-real-app-optimization-2026-10-24.md).
+
+### Cloud and independent-model device acceptance
+
+With a registered Aliyun test phone and an exported `ZHIPU_API_KEY`, run
+`XOPC_PHONE_REAL_MODEL=1 node --import tsx scripts/verify-phone-cloud-e2e.mts`.
+This operates the selected cloud phone's Settings app through an isolated,
+authenticated Gateway and checks Cloud → independent BigModel → Cloud switching.
+The default device name is `阿里云测试手机`; override it with
+`XOPC_PHONE_DEVICE_NAME`. It uses existing Cloud credentials, makes real model
+requests, and saves test-only screenshots and metadata under
+`/tmp/xopc-phone-cloud-e2e-evidence`.

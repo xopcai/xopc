@@ -1,5 +1,6 @@
 import { voiceSupportsMode, type VoiceModeCapability } from '@xopcai/realtime-protocol/voice';
 
+import { phoneModelProfile } from '../phone/model-adapter.js';
 import { isComputerModel, isDedicatedComputerProfile } from '../computer/model-policy.js';
 import { ConfigSchema, type Config } from '../config/schema.js';
 import { DEFAULT_AGENT_MODEL_REF, type AgentDefaults } from '../agent-config/index.js';
@@ -33,7 +34,7 @@ export type ApplyXopcCloudCapabilitySetupResult =
   | { configured: false; error: string; missing?: CloudCapability[] };
 
 function supportsCapability(model: CatalogModel, capability: CloudCapability): boolean {
-  if (model.availability !== 'available' || isDedicatedComputerProfile(model.computerUse?.profile)) return false;
+  if (model.availability !== 'available' || model.phoneUse || isDedicatedComputerProfile(model.computerUse?.profile)) return false;
   if (capability === 'chat') {
     return model.kind === 'language'
       && (model.operations.includes('chat.completions') || model.operations.includes('responses'));
@@ -142,6 +143,10 @@ export function completeXopcCloudModelRoutes(models: AgentDefaults['models'], so
     && isComputerModel({ ...model, provider: source.providerId, api: source.api }))
     .sort((left, right) => compareCatalogModels(left, right))[0];
   if (computer) next.computerUse ??= route(computer);
+  const phone = source.models.filter(model => model.availability === 'available'
+    && phoneModelProfile({ ...model, api: source.api }))
+    .sort((left, right) => compareCatalogModels(left, right, 'phone'))[0];
+  if (phone) next.phoneUse ??= route(phone);
   return next;
 }
 

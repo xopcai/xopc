@@ -21,7 +21,7 @@ export async function loadProviderSetupSnapshot(provider: string, config?: Confi
 
 export function readProviderSetupSnapshot(provider: string, configured: boolean, config?: Config): SetupSnapshot {
   const languageProvider = getAllProviders().includes(provider);
-  const models = (languageProvider ? getModelsByProvider(provider) : []).filter(model => !('computerUse' in model && model.computerUse));
+  const models = (languageProvider ? getModelsByProvider(provider) : []).filter(model => !('computerUse' in model && model.computerUse) && !('phoneUse' in model && model.phoneUse));
   const recommended = new Set((languageProvider ? getRecommendedModelsForProvider(provider) : []).map(model => model.ref));
   const source = getModelCatalogStore().getSource(provider);
   const image = getImageGenerationProvider(provider);
