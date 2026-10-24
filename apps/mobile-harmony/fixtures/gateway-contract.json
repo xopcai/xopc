@@ -271,6 +271,11 @@
                   "minLength": 32,
                   "maxLength": 512
                 },
+                "connectionProof": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
                 "clientId": {
                   "type": "string",
                   "minLength": 1,
