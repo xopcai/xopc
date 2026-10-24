@@ -41,7 +41,7 @@ try {
   if (provision.type !== 'debug' || provision['bundle-info']?.['bundle-name'] !== 'ai.xopc.xopc') {
     throw new Error('Only ai.xopc.xopc debug profiles are permitted by this testing workflow.');
   }
-  const profileCertificate = provision['bundle-info']?.['distribution-certificate'];
+  const profileCertificate = provision['bundle-info']?.['development-certificate'];
   const certificateData = readFileSync(material.certpath);
   const pemCertificates = certificateData.toString('utf8').match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
   const signingCertificates = (pemCertificates ?? [certificateData]).map((cert) => new X509Certificate(cert));
