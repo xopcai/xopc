@@ -144,6 +144,10 @@ export class CloudAdbConnection {
       // Management metadata must not abort a concurrent control connection.
       const listing = new CloudAdbConnection(this.endpoint, Buffer.from(this.key));
       try { return await listing.applications(signal); } finally { listing.dispose(); }
+    }, async (text, signal) => {
+      const { CloudScrcpyProvider } = await import('./cloud-scrcpy.js');
+      const provider = new CloudScrcpyProvider(this.endpoint, Buffer.from(this.key), () => {}, undefined, true);
+      try { await provider.pasteText(text, signal); } finally { await provider.close(); }
     });
   }
 }

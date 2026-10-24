@@ -71,6 +71,10 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     const applications = await runtime.applications({ deviceId: c.req.param('id') }, service.currentConfig, c.req.raw.signal);
     c.header('Cache-Control', 'no-store'); return c.json({ ok: true, payload: { applications } });
   });
+  app.get('/api/phone/devices/:id/input-status', async c => {
+    const payload = await runtime.textInputStatus(c.req.param('id'), service.currentConfig, c.req.raw.signal);
+    c.header('Cache-Control', 'no-store'); return c.json({ ok: true, payload });
+  });
   app.post('/api/phone/devices', strictRateLimitMiddleware, async c => {
     const input = deviceInput.parse(await c.req.json());
     const discovered = await runtime.discover(service.currentConfig, c.req.raw.signal);

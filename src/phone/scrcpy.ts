@@ -7,6 +7,7 @@ import { h264ParseConfiguration } from '@yume-chan/scrcpy';
 
 import { spawnPhoneCommand } from '../process/phone-process.js';
 import { readScrcpyServer, scrcpyServerPath, SCRCPY_VERSION } from './scrcpy-assets.js';
+import { ScrcpyTextChannel } from './scrcpy-text.js';
 import { AdbPhoneDriver, runAdb } from './adb-driver.js';
 import { PhoneError } from './contracts.js';
 import type { PhoneInteractiveProvider, PhonePointer, PhoneVideoGeometry, PhoneVideoPacket } from './live-provider.js';
@@ -53,6 +54,7 @@ export abstract class ScrcpyProvider implements PhoneInteractiveProvider {
   readonly descriptor = { kind: 'scrcpy-h264', protocolVersion: 1, continuousTouch: true, maxPointers: 1 } as const;
   geometry: PhoneVideoGeometry = { width: 0, height: 0, version: 0, codec: '' };
   protected closing = false;
+  protected textChannel = new ScrcpyTextChannel(bytes => this.write(bytes));
   private touch?: { x: number; y: number };
   private listeners = new Set<(packet: PhoneVideoPacket) => void>();
   private config?: PhoneVideoPacket;
@@ -64,6 +66,16 @@ export abstract class ScrcpyProvider implements PhoneInteractiveProvider {
   protected abstract startTransport(): Promise<void>;
   protected abstract write(buffer: Buffer): Promise<void>;
   protected abstract cleanup(): Promise<void>;
+  async pasteText(text: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    const deadline = AbortSignal.any([signal, AbortSignal.timeout(25_000)]);
+    const abort = () => { void this.close(); }; deadline.addEventListener('abort', abort, { once: true });
+    try {
+      try { await this.start(); deadline.throwIfAborted(); }
+      catch { throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'Automatic text input is unavailable. Check Phone settings or take over and type with the phone keyboard.', 409); }
+      await this.textChannel.paste(text, deadline);
+    } finally { deadline.removeEventListener('abort', abort); }
+  }
   start(): Promise<void> {
     if (this.closing) return Promise.reject(new PhoneError('PHONE_VIDEO_ENDED', 'Phone video ended', 409));
     if (!this.startResult) {
@@ -103,6 +115,7 @@ export abstract class ScrcpyProvider implements PhoneInteractiveProvider {
   refresh(): void { if (this.geometry.version) void this.write(Buffer.from([17])).catch(() => this.fail()); }
   close(): Promise<void> {
     this.closing = true;
+    this.textChannel.close();
     return this.closeResult ??= (async () => {
       await this.opening?.catch(() => {});
       try { await this.cleanup(); } finally { this.listeners.clear(); this.config = undefined; }
@@ -114,7 +127,7 @@ export class LocalScrcpyProvider extends ScrcpyProvider {
   private process?: ChildProcess; private video?: Socket; private control?: Socket; private port?: string;
   private remote = ''; private scid = '';
   constructor(private adb: string, private serial: string, onFailure: () => void,
-    private tuning = { maxSize: 960, bitRate: 2_000_000 }) { super(onFailure); }
+    private tuning = { maxSize: 960, bitRate: 2_000_000 }, private textOnly = false) { super(onFailure); }
   foreground(signal: AbortSignal): Promise<string> { return new AdbPhoneDriver(this.adb).foreground(this.serial, signal); }
   protected async startTransport(): Promise<void> {
     await readScrcpyServer();
@@ -131,7 +144,7 @@ export class LocalScrcpyProvider extends ScrcpyProvider {
       this.process = spawnPhoneCommand(this.adb, ['-s', this.serial, 'shell', `CLASSPATH=${this.remote}`, 'app_process', '/', 'com.genymobile.scrcpy.Server', SCRCPY_VERSION,
         `scid=${scid.toString(16)}`, 'tunnel_forward=true', 'audio=false', 'control=true', 'cleanup=false', `max_size=${this.tuning.maxSize}`,
         'max_fps=30', `video_bit_rate=${this.tuning.bitRate}`, 'video_codec=h264', 'video_codec_options=i-frame-interval=1',
-        'send_dummy_byte=true', 'send_device_meta=false', 'send_codec_meta=true', 'send_frame_meta=true', 'clipboard_autosync=false']);
+        'send_dummy_byte=true', 'send_device_meta=false', 'send_codec_meta=true', 'send_frame_meta=true', 'clipboard_autosync=false', ...(this.textOnly ? ['video=false', 'power_on=false'] : [])]);
       this.process.once('error', () => this.fail()); this.process.once('exit', () => this.fail());
       // The first connection has a dummy byte; retry until Android is listening.
       for (let attempt = 0; attempt < 60; attempt++) {
@@ -147,13 +160,19 @@ export class LocalScrcpyProvider extends ScrcpyProvider {
         socket.destroy(); await delay(50);
       }
       if (!this.video) throw new Error('Scrcpy connection timed out');
+      if (this.textOnly) {
+        this.control = this.video; this.video = undefined;
+        this.control.setNoDelay(true); this.control.on('error', () => this.fail()); this.control.on('end', () => this.fail());
+        this.control.on('data', data => { try { this.textChannel.receive(Buffer.from(data)); } catch { this.fail(); } });
+        return;
+      }
       const parser = new ScrcpyVideoParser();
       this.video.on('data', data => { try { parser.push(Buffer.from(data), packet => this.packet(packet)); } catch { this.fail(); } });
       this.video.on('error', () => this.fail()); this.video.on('end', () => this.fail());
       this.control = connect({ host: '127.0.0.1', port: Number(this.port) });
       this.control.setNoDelay(true); this.control.on('error', () => this.fail()); this.control.on('end', () => this.fail());
       // Drain device messages; clipboard synchronization is deliberately disabled.
-      this.control.on('data', () => {});
+      this.control.on('data', data => { try { this.textChannel.receive(Buffer.from(data)); } catch { this.fail(); } });
       await new Promise<void>((resolve, reject) => { this.control!.once('connect', resolve); this.control!.once('error', reject); });
     } catch (error) { throw error; }
   }

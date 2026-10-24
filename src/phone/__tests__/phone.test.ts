@@ -6,7 +6,7 @@ import { AgentDefaultsSchema, resolveEffectiveAgentConfig } from '../../agent-co
 import { openXopcDatabase, closeXopcDatabase } from '../../storage/sqlite/connection.js';
 import { validateModelsConfig } from '../../config/models-json.js';
 import { parseAdbDevices, parseAndroidLayout, parsePhoneUi, type PhoneDriver } from '../adb-driver.js';
-import { MOCK_PHONE_MODEL, PhoneActionSchema, type PhoneObservation, type PhoneDecision } from '../contracts.js';
+import { MOCK_PHONE_MODEL, PhoneActionSchema, PhoneError, type PhoneObservation, type PhoneDecision } from '../contracts.js';
 import { MockPhoneModel, parseAutoGlmResponse, phoneModelProfile, type PhoneModelAdapter } from '../model-adapter.js';
 import { PhoneRepository } from '../repository.js';
 import { PhoneRuntime } from '../runtime.js';
@@ -568,4 +568,34 @@ it('permits Home and cross-app observation only for all-app devices', async () =
     await f.runtime.execute('selected-apps', { op: 'open', mode: 'control' }, f.context);
     await expect(f.runtime.previewSession('selected-apps', f.context, new AbortController().signal)).rejects.toMatchObject({ code: 'PHONE_APP_DENIED' });
   } finally { await f.runtime.shutdown(); }
+});
+
+for (const code of ['PHONE_TEXT_INPUT_UNAVAILABLE', 'PHONE_TEXT_INPUT_UNCONFIRMED']) it(`pauses recoverably on ${code} without repeating text`, async () => {
+  const f = fixture({predict: async () => ({kind:'action',action:{type:'typeText',text:'高德地图'}})}); f.context.modelRef = 'test/unicode';
+  vi.mocked(f.driver.observe).mockImplementation(async () => ({...screen(),elements:[{text:'',description:'',resourceId:'input',bounds:[0,0,200,100],clickable:true,focused:true,password:false,editable:true}]}));
+  vi.mocked(f.driver.execute).mockRejectedValue(new PhoneError(code,'Take over and inspect the input',409));
+  await f.runtime.execute('text-recovery',{op:'open',mode:'control'},f.context);
+  const result = await f.runtime.execute('text-recovery',{op:'run',goal:'输入高德地图',maxActions:2},f.context);
+  expect(result).toMatchObject({status:'needs_user',controlOwner:'none',errorCode:code,stopReason:code === 'PHONE_TEXT_INPUT_UNAVAILABLE'?'text_input_required':'text_input_unconfirmed'});
+  expect(f.driver.execute).toHaveBeenCalledOnce();
+  await f.runtime.stop('text-recovery','close');
+});
+it('honors manual-only text input before dispatch and preserves the session for takeover', async () => {
+  const f=fixture({predict:async()=>({kind:'action',action:{type:'typeText',text:'hello'}})}); f.context.modelRef = 'test/unicode';
+  f.repository.save({...f.device,textInput:'manual'},f.device.id);
+  await f.runtime.execute('manual-text',{op:'open',mode:'control'},f.context);
+  const result=await f.runtime.execute('manual-text',{op:'run',goal:'输入 hello',maxActions:1},f.context);
+  expect(result).toMatchObject({status:'needs_user',controlOwner:'none',stopReason:'text_input_required',actions:0});
+  expect(f.driver.execute).not.toHaveBeenCalled(); await f.runtime.stop('manual-text','close');
+});
+it('keeps manual takeover usable after an unconfirmed text paste and does not retry it', async () => {
+ const f=fixture(); f.driver.capture=vi.fn(async()=>screen([]));
+ vi.mocked(f.driver.observe).mockImplementation(async()=>({...screen([]),elements:[{text:'',description:'',resourceId:'field',bounds:[0,0,100,100],clickable:true,focused:true,editable:true,password:false}]}));
+ await f.runtime.execute('manual-inspect',{op:'open',mode:'control'},f.context);const id=f.runtime.status('manual-inspect')!.sessionId;
+ await f.runtime.liveControl('manual-inspect',id,f.context,'browser',{op:'takeover',epoch:1,operationId:randomUUID()});
+ const frame=await f.runtime.liveFrame('manual-inspect',id,f.context,new AbortController().signal);
+ vi.mocked(f.driver.execute).mockRejectedValueOnce(new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED','Inspect the field',409));
+ await expect(f.runtime.liveControl('manual-inspect',id,f.context,'browser',{op:'input',epoch:2,operationId:randomUUID(),frameSeq:frame.seq,action:{type:'typeText',text:'高德地图'}})).rejects.toMatchObject({code:'PHONE_TEXT_INPUT_UNCONFIRMED'});
+ expect(f.runtime.liveStatus('manual-inspect',id,f.context,'browser')).toMatchObject({ownControl:true,report:{status:'paused',controlOwner:'human',stopReason:'text_input_unconfirmed'}});
+ expect(f.driver.execute).toHaveBeenCalledOnce();frame.frame.fill(0);await f.runtime.shutdown();
 });

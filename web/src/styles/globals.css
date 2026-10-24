@@ -27,6 +27,10 @@
   --color-surface-inset: #f1f3f6;
   /* Terminal canvas stays neutral across application color schemes. */
   --color-surface-terminal: #ffffff;
+  /* Device hardware stays distinct from both the stage and streamed pixels. */
+  --color-phone-shell: #303743;
+  --color-phone-rim: #68758a;
+  --shadow-phone-device: 0 12px 28px rgb(17 24 39 / 0.16), 0 2px 4px rgb(17 24 39 / 0.12);
   --color-surface-hover: #e8ecf1;
   --color-surface-active: #dfe5ec;
 
@@ -113,6 +117,9 @@ html.dark {
   --color-surface-overlay: #20252d;
   --color-surface-inset: #171b21;
   --color-surface-terminal: #181818;
+  --color-phone-shell: #252d39;
+  --color-phone-rim: #7b899e;
+  --shadow-phone-device: 0 6px 16px rgb(0 0 0 / 0.24);
   --color-surface-hover: #242933;
   --color-surface-active: #2e3440;
 

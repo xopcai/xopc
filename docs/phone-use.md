@@ -40,7 +40,7 @@ The Agent tool is `phone_use`: `discover` → `open` (`observe` or `control`, op
 
 - Device control is exclusive within the Gateway's SQLite state. Use one Gateway/runner for a phone; separate Gateway state directories are not coordinated.
 - App permissions are enforced before model requests and before dispatch. An app can still transition after a check; this is not an OS sandbox or a guarantee against all UI races.
-- Unicode text requires a user-installed and enabled ADB Keyboard. The original input method is restored after the operation; password fields are not typed into automatically.
+- Unicode text on Android 7+ uses a control-only scrcpy clipboard paste channel, without installing or switching input methods. Supplied text may remain on the phone clipboard; existing clipboard contents are never read or synced. Receipt ACKs are followed by native UI verification. Missing dependencies or unconfirmed insertion pauses for manual inspection; no automatic retry or APK installation occurs. Device settings can disable automatic text input. Password fields remain protected.
 - Arbitrary shell, APK installation, file extraction, cloud provisioning, vendor cloud SDKs, HDC and iOS control are outside this version.
 - Screenshots are not stored in chat transcripts, attachments, durable reports or ordinary logs. UI facts are transient, and only bounded operational metadata is stored. Screenshots go to the selected phone model; returned UI text can also reach the main Agent model.
 - Active sessions do not automatically resume after a process restart. Reopen and observe before continuing.
@@ -60,7 +60,7 @@ For browser verification after `pnpm run build:web`, set `XOPC_PHONE_BROWSER=1`.
 
 Chat sessions expose a Phone button and a conversation-scoped workspace tab. Wide layouts can open it automatically; narrow layouts use the full workspace with Back to chat.
 
-Install the official pinned video server once with `pnpm exec tsx scripts/setup-phone-video.mts`. The chat panel then uses scrcpy H.264 video and WebCodecs; unsupported browsers explicitly fall back to snapshots. The Settings preview modal remains read-only snapshots. View only never injects input. Take over waits for outstanding device input before granting this browser exclusive control. Continuous single-pointer DOWN/MOVE/UP supports click, held drag and long press through a persistent connection. Back and non-password text remain within the app scope. Unicode requires a user-enabled ADB Keyboard.
+Install the official pinned video server once with `pnpm exec tsx scripts/setup-phone-video.mts`. The chat panel then uses scrcpy H.264 video and WebCodecs; unsupported browsers explicitly fall back to snapshots. The Settings preview modal remains read-only snapshots. View only never injects input. Take over waits for outstanding device input before granting this browser exclusive control. Continuous single-pointer DOWN/MOVE/UP supports click, held drag and long press through a persistent connection. Back and non-password text remain within the app scope. Unicode uses the independent control-only clipboard channel, even when video falls back to snapshots.
 
 Release keeps the task paused. Hand back re-observes the phone and continues the pending tool. If the Agent has already ended its reply, a deduplicated continuation input resumes the original conversation objective. Closing or hiding the phone tab releases human control; disconnect timeout keeps the task paused. Stop cancels execution and releases the phone.
 

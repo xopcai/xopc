@@ -24,7 +24,7 @@ The existing `PhoneInteractiveSession`, video-ticket endpoint and WebSocket prot
 
 The initial Alibaba adapter targets already-running Android instances with a reachable ADB endpoint and bound RSA 2048 key. `PhoneInteractiveProvider` remains the media/input boundary for future cloud SDK adapters. A different vendor can supply media, versioned geometry, input and confirmed revocation without changing Agent control ownership or phone-model configuration. Vendor SDK renderers and instance/account lifecycle management are separate work.
 
-Snapshots remain available when scrcpy or WebCodecs is unavailable. The Settings preview modal and connection-test preview remain read-only snapshots. Unicode text still requires the user-enabled ADB Keyboard path; ASCII text can use the standard Android input path. Foreground sampling is not device-side per-app capture isolation.
+Snapshots remain available when scrcpy or WebCodecs is unavailable. The Settings preview modal and connection-test preview remain read-only snapshots. Unicode text uses a separate control-only scrcpy clipboard channel; ASCII text uses the standard Android input path. See [Unicode input](phone-unicode-input.md). Foreground sampling is not device-side per-app capture isolation.
 
 ## Acceptance
 

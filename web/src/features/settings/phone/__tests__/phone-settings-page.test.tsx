@@ -126,7 +126,7 @@ it('replaces package editing with a native app picker and saves explicit all-app
   await act(async () => (dialog.querySelector('input[type="radio"][value="all"]') as HTMLInputElement).click());
   expect(dialog.querySelector('input[aria-label="设置"]')).toBeNull();
   await act(async () => [...dialog.querySelectorAll('button')].find(b => b.textContent === '保存手机')!.click());
-  expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one', { name: 'Local emulator', appAccess: 'all', allowedApps: [], enabled: true }, 'PATCH');
+  expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one', { name: 'Local emulator', appAccess: 'all', allowedApps: [], textInput: 'auto', enabled: true }, 'PATCH');
 });
 
 it('saves selected applications by their native labels without editing package names', async () => {
@@ -138,5 +138,5 @@ it('saves selected applications by their native labels without editing package n
   await act(async () => { clock.click(); settings.click(); });
   expect(dialog.querySelector('[role="status"]')?.textContent).toContain('1');
   await act(async () => [...dialog.querySelectorAll('button')].find(b => b.textContent === '保存手机')!.click());
-  expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one', { name: 'Local emulator', appAccess: 'selected', allowedApps: ['com.android.deskclock'], enabled: true }, 'PATCH');
+  expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one', { name: 'Local emulator', appAccess: 'selected', allowedApps: ['com.android.deskclock'], textInput: 'auto', enabled: true }, 'PATCH');
 });

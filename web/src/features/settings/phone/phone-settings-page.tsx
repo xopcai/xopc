@@ -16,6 +16,7 @@ import { PhoneDependenciesCard } from '@/features/settings/runtime-tools/phone-d
 import { AddPhoneDialog } from './add-phone-dialog';
 import { PhoneScreenDialog } from './phone-screen-dialog';
 import { PhoneAppPicker } from './phone-app-picker';
+import { PhoneTextInput } from './phone-text-input';
 import { PhoneModelConnection } from './phone-model-connection';
 import { MOCK_GOAL, MOCK_MODEL, fetchPhoneDevices, fetchPhoneSettings, phoneRequest, type PhoneDevice, type PhoneReport } from './phone-api';
 
@@ -29,13 +30,14 @@ function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
   const [displayName, setDisplayName] = useState(device?.name ?? name);
   const [appAccess, setAppAccess] = useState<'all' | 'selected'>(device?.appAccess ?? (device?.allowedApps.length ? 'selected' : 'all'));
   const [apps, setApps] = useState<string[]>(device?.allowedApps ?? []);
+  const [textInput, setTextInput] = useState<'auto' | 'manual'>(device?.textInput ?? 'auto');
   const [enabled, setEnabled] = useState(device?.enabled ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async () => {
     setBusy(true); setError('');
     try {
-      const input = { name: displayName, appAccess, allowedApps: appAccess === 'all' ? [] : apps, enabled };
+      const input = { name: displayName, appAccess, allowedApps: appAccess === 'all' ? [] : apps, textInput, enabled };
       await phoneRequest(device ? `/devices/${device.id}` : '/devices', device ? input : { ...input, serial }, device ? 'PATCH' : 'POST');
       await onSave(); onClose();
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
@@ -53,6 +55,7 @@ function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
           <label className="block space-y-1.5 text-sm">{zh ? '名称' : 'Name'}<input className={fieldClass} value={displayName} maxLength={100} required onChange={event => setDisplayName(event.target.value)} /></label>
           <p className="break-all text-xs text-fg-muted">ADB: {serial}</p><p className="text-xs text-fg-muted">{zh ? '已启用 phone_use 工具的 Agent 可使用这台手机。' : 'Agents with the phone_use tool can use this phone.'}</p>
           <PhoneAppPicker deviceId={device?.id} serial={serial} mode={appAccess} selected={apps} onModeChange={setAppAccess} onSelectedChange={setApps} zh={zh} disabled={busy} />
+          <PhoneTextInput deviceId={device?.id} value={textInput} onChange={setTextInput} disabled={busy} zh={zh} />
           <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} />{zh ? '允许访问这台手机' : 'Enable access to this phone'}</label>
           {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         </div>

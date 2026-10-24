@@ -9,24 +9,24 @@ vi.mock('../scrcpy.js', async importOriginal => ({ ...await importOriginal<typeo
 
 const providers: CloudScrcpyProvider[] = [];
 afterEach(async () => { for (const provider of providers.splice(0)) await provider.close(); vi.restoreAllMocks(); });
-function fixture() {
+function fixture(textOnly = false) {
   const writes: Buffer[] = [];
   const services: string[] = [];
   const channels: { close: ReturnType<typeof vi.fn> }[] = [];
   const createSocket = vi.fn(async (service: string) => {
     services.push(service);
-    let end!: () => void;
-    const readable = new ReadableStream<Uint8Array>({ start(controller) { end = () => controller.close(); } });
+    let end!: () => void; let emit!: (bytes: Uint8Array) => void;
+    const readable = new ReadableStream<Uint8Array>({ start(controller) { end = () => controller.close(); emit = bytes => controller.enqueue(bytes); } });
     const close = vi.fn(async () => { end(); });
     channels.push({ close });
-    return { readable, writable: new WritableStream<Uint8Array>({ write(bytes) { writes.push(Buffer.from(bytes)); } }), close };
+    return { readable, writable: new WritableStream<Uint8Array>({ write(bytes) { writes.push(Buffer.from(bytes)); if (bytes[0] === 9) { const ack = Buffer.alloc(9); ack[0] = 1; Buffer.from(bytes).copy(ack, 1, 1, 9); emit(ack); } } }), close };
   });
   const sync = { write: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
   const connection = { client: vi.fn(async () => ({ sync: async () => sync, createSocket })),
     command: vi.fn(async () => Buffer.alloc(0)), close: vi.fn(), dispose: vi.fn(),
     driver: () => ({ foreground: vi.fn(async () => 'com.android.settings') }) };
   const failed = vi.fn();
-  const provider = new CloudScrcpyProvider('cloud.example:10001', Buffer.alloc(0), failed, () => connection as unknown as CloudAdbConnection);
+  const provider = new CloudScrcpyProvider('cloud.example:10001', Buffer.alloc(0), failed, () => connection as unknown as CloudAdbConnection, textOnly);
   providers.push(provider);
   return { provider, connection, sync, channels, services, writes, failed };
 }
@@ -63,4 +63,12 @@ it('waits for an in-flight upload to settle before completing a cancelled startu
   await vi.waitFor(() => expect(f.sync.write).toHaveBeenCalledOnce());
   const closing = f.provider.close(); finish(); await rejected; await closing;
   expect(f.services).toEqual([]); expect(f.connection.dispose).toHaveBeenCalledOnce();
+});
+
+it('pastes Unicode on a control-only transport with autosync disabled and no video socket', async () => {
+ const f=fixture(true); await f.provider.pasteText('高德地图😀',new AbortController().signal);
+ expect(f.services[0]).toContain('video=false power_on=false'); expect(f.services[0]).toContain('clipboard_autosync=false');
+ expect(f.services.filter(service=>service.startsWith('localabstract:'))).toHaveLength(1);
+ expect(f.writes).toHaveLength(1); expect(f.writes[0][0]).toBe(9); expect(f.writes[0].subarray(14).toString()).toBe('高德地图😀');
+ await f.provider.close(); expect(f.failed).not.toHaveBeenCalled(); expect(f.connection.dispose).toHaveBeenCalledOnce();
 });

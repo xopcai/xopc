@@ -18,7 +18,7 @@ export class CloudScrcpyProvider extends ScrcpyProvider {
   private remote = '';
   private scid = '';
   constructor(private endpoint: string, key: Buffer, onFailure: () => void,
-    connect = (address: string, credential: Buffer) => new CloudAdbConnection(address, credential)) {
+    connect = (address: string, credential: Buffer) => new CloudAdbConnection(address, credential), private textOnly = false) {
     super(onFailure); this.connection = connect(endpoint, key);
   }
   foreground(signal: AbortSignal): Promise<string> { return this.connection.driver().foreground(this.endpoint, signal); }
@@ -37,7 +37,7 @@ export class CloudScrcpyProvider extends ScrcpyProvider {
           file: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(binary); controller.close(); } }) });
       } finally { await sync.dispose(); }
       if (this.closing) throw new Error('Video closed');
-      this.process = await adb.createSocket(`exec:CLASSPATH=${this.remote} app_process / com.genymobile.scrcpy.Server ${SCRCPY_VERSION} scid=${this.scid} tunnel_forward=true audio=false control=true cleanup=false max_size=960 max_fps=30 video_bit_rate=2000000 video_codec=h264 video_codec_options=i-frame-interval=1 send_dummy_byte=false send_device_meta=false send_codec_meta=true send_frame_meta=true clipboard_autosync=false`);
+      this.process = await adb.createSocket(`exec:CLASSPATH=${this.remote} app_process / com.genymobile.scrcpy.Server ${SCRCPY_VERSION} scid=${this.scid} tunnel_forward=true audio=false control=true cleanup=false max_size=960 max_fps=30 video_bit_rate=2000000 video_codec=h264 video_codec_options=i-frame-interval=1 send_dummy_byte=false send_device_meta=false send_codec_meta=true send_frame_meta=true clipboard_autosync=false${this.textOnly ? ' video=false power_on=false' : ''}`);
       void this.drain(this.process);
       for (let attempt = 0; attempt < 60; attempt++) {
         if (this.closing) throw new Error('Video closed');
@@ -45,9 +45,13 @@ export class CloudScrcpyProvider extends ScrcpyProvider {
         catch { await delay(50); }
       }
       if (!this.video) throw new Error('Scrcpy connection timed out');
+      if (this.textOnly) {
+        this.control = this.video; this.video = undefined;
+        this.writer = this.control.writable.getWriter(); void this.readControl(this.control); return;
+      }
       this.control = await adb.createSocket(`localabstract:${socketName}`);
       this.writer = this.control.writable.getWriter();
-      void this.drain(this.control);
+      void this.readControl(this.control);
       void this.readVideo(this.video);
     } finally { clearTimeout(timer); }
   }
@@ -60,6 +64,11 @@ export class CloudScrcpyProvider extends ScrcpyProvider {
     const parser = new ScrcpyVideoParser();
     try { for await (const chunk of socket.readable) parser.push(Buffer.from(chunk), packet => this.packet(packet)); }
     catch { /* EOF and malformed packets both fail closed. */ }
+    if (!this.closing) this.fail();
+  }
+  private async readControl(socket: AdbSocket): Promise<void> {
+    try { for await (const chunk of socket.readable) this.textChannel.receive(Buffer.from(chunk)); }
+    catch { /* A closed channel must not acknowledge pending text. */ }
     if (!this.closing) this.fail();
   }
   protected async write(buffer: Buffer): Promise<void> {

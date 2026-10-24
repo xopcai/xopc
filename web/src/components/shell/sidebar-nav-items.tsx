@@ -8,27 +8,24 @@ import {
   Puzzle,
   Zap,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import useSWR from 'swr';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
+import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
 import { personalUnreadLabel, usePersonalUnread } from '@/features/personal-agent/use-personal-unread';
-import { PersonalAvatar, type PersonalAppearance } from '@/features/personal-agent/personal-avatar';
+import { PersonalAvatar } from '@/features/personal-agent/personal-avatar';
 import { resolveLucideIcon, type LucideIcon } from '@/features/extensions/extension-nav-icon';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { fetchJson } from '@/lib/fetch';
 import { preloadRouteForPath } from '@/lib/route-preload';
-import { apiUrl } from '@/lib/url';
 import {
   PRODUCT_DOMAINS,
   productDomainAtPath,
   type ProductDomainId,
 } from '@/navigation/product-navigation';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useGatewayStore } from '@/stores/gateway-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
 const DEFAULT_VISIBLE_ITEMS = 3;
@@ -47,12 +44,6 @@ type MenuItem = {
   to: string;
   Icon: LucideIcon;
   active: boolean;
-};
-
-type PersonalNavProfile = {
-  agentId: string;
-  displayName: string;
-  appearance: PersonalAppearance;
 };
 
 function rowClass(collapsed: boolean, active: boolean, popover = false): string {
@@ -87,24 +78,7 @@ export function SidebarNavItems({
   const copy = m.productNavigation;
   const activeDomain = productDomainAtPath(pathname);
   const uiExtensions = useUiExtensions();
-  const browserSession = useGatewayStore((state) => state.conversationId);
-  const { data: personal, mutate: refreshPersonal } = useSWR(
-    browserSession ? ['personal-agent-nav', browserSession] : null,
-    () => fetchJson<{ ok: boolean; payload: PersonalNavProfile | null }>(apiUrl('/api/personal-agent')),
-    { revalidateOnFocus: false },
-  );
-  useEffect(() => {
-    const onProfileUpdated = (event: Event) => {
-      const profile = (event as CustomEvent<PersonalNavProfile | null>).detail;
-      if (profile === undefined) {
-        void refreshPersonal();
-      } else {
-        void refreshPersonal({ ok: true, payload: profile }, { revalidate: false });
-      }
-    };
-    window.addEventListener('personal-agent-updated', onProfileUpdated);
-    return () => window.removeEventListener('personal-agent-updated', onProfileUpdated);
-  }, [refreshPersonal]);
+  const { profile, displayName } = usePersonalProfile();
   const personalUnreadCount = usePersonalUnread();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const builtins: MenuItem[] = SIDEBAR_DOMAIN_IDS.map((domainId) => {
@@ -164,7 +138,7 @@ export function SidebarNavItems({
         to="/personal"
         aria-current={pathname === '/personal' ? 'page' : undefined}
         className={cn('relative', rowClass(collapsed, pathname === '/personal'))}
-        title={personal?.payload?.displayName || 'Ada'}
+        title={displayName}
         onMouseEnter={() => preloadRouteForPath('/personal')}
         onFocus={() => preloadRouteForPath('/personal')}
         onClick={() => {
@@ -173,9 +147,9 @@ export function SidebarNavItems({
         }}
       >
         <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
-          <PersonalAvatar appearance={personal?.payload?.appearance ?? 'loopi'} agentId={personal?.payload?.agentId} className="size-5" />
+          <PersonalAvatar appearance={profile?.appearance ?? 'loopi'} agentId={profile?.agentId} className="size-5" />
         </span>
-        {!collapsed && <span className="min-w-0 flex-1 truncate">{personal?.payload?.displayName || 'Ada'}</span>}
+        {!collapsed && <span className="min-w-0 flex-1 truncate">{displayName}</span>}
         {personalUnreadCount > 0 && <span
           aria-label={language === 'zh' ? `${personalUnreadCount} 条未读消息` : `${personalUnreadCount} unread messages`}
           className={cn('shrink-0 rounded-full bg-accent/15 px-1.5 text-center text-[10px] font-semibold leading-5 tabular-nums text-accent',
