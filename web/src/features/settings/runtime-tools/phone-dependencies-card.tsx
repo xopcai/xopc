@@ -1,4 +1,4 @@
-import { Download, RefreshCw } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Download, RefreshCw, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import useSWR from 'swr';
 
@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
 import { installPhoneDependency, loadPhoneDependencies, phoneDependenciesKey, selectExistingPhoneAdb, type PhoneDependencyKind, type PhoneDependencyProgress } from './phone-dependencies-api';
 
-export function PhoneDependenciesCard({ cloudOnly = false, onChanged }: { cloudOnly?: boolean; onChanged?(): void }) {
+export function PhoneDependenciesCard({ cloudOnly = false, onChanged, expanded = true, onExpandedChange }: { cloudOnly?: boolean; onChanged?(): void; expanded?: boolean; onExpandedChange?(expanded: boolean): void }) {
   const zh = useLocaleStore(s => s.language) === 'zh';
   const [busy, setBusy] = useState<PhoneDependencyKind>();
   const [showLocal, setShowLocal] = useState(false);
@@ -31,9 +31,16 @@ export function PhoneDependenciesCard({ cloudOnly = false, onChanged }: { cloudO
     } catch (cause) { setFailed(true); setFeedback(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(undefined); setProgress(undefined); }
   }
-  return <section className="space-y-4 rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5" aria-label={zh ? '手机依赖状态' : 'Phone dependencies'}>
-    <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold">{zh ? '手机依赖状态' : 'Phone dependencies'}</h2><Button variant="ghost" aria-label={zh ? '刷新手机依赖状态' : 'Refresh phone dependencies'} disabled={Boolean(busy)} onClick={() => void mutate()}><RefreshCw className="size-4" aria-hidden /></Button></div>
-    <p className="text-xs text-fg-muted">{zh ? '检测和安装发生在 Gateway 所在机器。Electron 内置 Gateway 时安装在当前电脑，无需全局安装。' : 'Checks and installation run on the Gateway host, or this computer for Electron’s embedded Gateway. No global installation is needed.'}</p>
+  const relevant = data?.statuses.filter(item => !cloudOnly || item.kind !== 'adb');
+  const ready = Boolean(relevant?.length && relevant.every(item => item.state === 'ready'));
+  const summary = error ? (zh ? '检测失败' : 'Check failed') : !data ? (zh ? '检测中' : 'Checking') : ready ? (zh ? '已就绪' : 'Ready') : (zh ? '需要配置' : 'Setup needed');
+  return <details open={expanded} onToggle={event => { if (event.currentTarget.open !== expanded) onExpandedChange?.(event.currentTarget.open); }} className="group rounded-2xl border border-edge bg-surface-panel" aria-label={zh ? '手机依赖状态' : 'Phone dependencies'}>
+    <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-5 [&::-webkit-details-marker]:hidden">
+      <Wrench className="size-5 shrink-0 text-fg-muted" aria-hidden /><h2 className="text-sm font-semibold">{zh ? '连接组件' : 'Connection components'}</h2>
+      <span className={`ml-auto flex items-center gap-1.5 text-xs ${error ? 'text-danger' : 'text-fg-muted'}`}>{ready && <CheckCircle2 className="size-3.5" aria-hidden />}{summary}</span><ChevronDown className="size-4 shrink-0 text-fg-muted group-open:rotate-180" aria-hidden />
+    </summary>
+    <div className="space-y-4 border-t border-edge-subtle p-4 sm:p-5">
+    <div className="flex items-center justify-between gap-3"><p className="text-xs text-fg-muted">{zh ? '安装在 Gateway 电脑上，无需全局安装。' : 'Installed on your Gateway computer. No global installation needed.'}</p><Button variant="ghost" aria-label={zh ? '刷新手机依赖状态' : 'Refresh phone dependencies'} disabled={Boolean(busy)} onClick={() => void mutate()}><RefreshCw className="size-4" aria-hidden /></Button></div>
     {data?.installationEnabled === false ? <p className="text-xs text-fg-muted">{zh ? '托管安装已禁用，可在运行环境中启用；已有 ADB 仍可使用。' : 'Managed installation is disabled. Enable it in Runtime Tools, or use an existing ADB installation.'}</p> : null}
     {cloudOnly ? <div className="space-y-2 text-xs text-fg-muted"><p>{zh ? '阿里云连接无需本机 ADB；实时视频、持续触控和中文输入需要 scrcpy server。' : 'Alibaba Cloud connections need no local ADB. Live video, continuous touch and Unicode input require scrcpy server.'}</p><button className="text-accent-fg hover:underline" aria-expanded={showLocal} onClick={() => setShowLocal(value => !value)}>{showLocal ? (zh ? '收起本机连接依赖' : 'Hide local connection dependencies') : (zh ? '连接本机手机？查看 ADB 依赖' : 'Connecting a local phone? Show ADB dependencies')}</button></div> : null}
     {error ? <p role="alert" className="text-sm text-danger">{zh ? '无法读取依赖状态，请刷新重试。' : 'Could not load dependency status. Refresh to retry.'}</p> : !data ? <Skeleton className="h-28 rounded-xl" /> : data.statuses.filter(item => !cloudOnly || showLocal || item.kind !== 'adb').map(item => {
@@ -54,5 +61,6 @@ export function PhoneDependenciesCard({ cloudOnly = false, onChanged }: { cloudO
     })}
     <div className="min-h-5 text-xs" aria-live="polite">{progress ? <p role="status" className="text-fg-muted">{phases[progress.phase] ?? progress.phase}{progress.downloadedBytes && progress.totalBytes ? ` · ${Math.min(100, Math.round(progress.downloadedBytes / progress.totalBytes * 100))}%` : ''}</p> : feedback ? <p role={failed ? 'alert' : 'status'} className={failed ? 'text-danger' : 'text-fg-muted'}>{feedback}</p> : null}</div>
     <a href="#/settings/runtimes" className="text-xs text-accent-fg hover:underline">{zh ? '管理下载代理与离线包' : 'Manage download proxy and offline packages'}</a>
-  </section>;
+    </div>
+  </details>;
 }

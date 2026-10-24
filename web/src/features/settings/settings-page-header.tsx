@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
 
+import { SettingsAiSetupAction, type SettingsAiSetupTarget } from './settings-ai-setup-action';
+
 export function SettingsPageHeader({
   title,
   subtitle,
@@ -10,6 +12,7 @@ export function SettingsPageHeader({
   docsLabel,
   meta,
   actions,
+  aiSetup,
   className,
 }: {
   title: ReactNode;
@@ -18,12 +21,15 @@ export function SettingsPageHeader({
   docsLabel?: ReactNode;
   meta?: ReactNode;
   actions?: ReactNode;
+  aiSetup?: SettingsAiSetupTarget;
   className?: string;
 }) {
   return (
     <header
       className={cn(
-        'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between',
+        aiSetup
+          ? 'grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3'
+          : 'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between',
         className,
       )}
     >
@@ -47,9 +53,10 @@ export function SettingsPageHeader({
         ) : null}
         {meta}
       </div>
-      {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center justify-start gap-2 sm:justify-end">
+      {actions || aiSetup ? (
+        <div className={cn('flex shrink-0 items-center gap-2', aiSetup ? 'min-w-0 max-w-[50vw] flex-col items-end sm:flex-row sm:justify-end' : 'flex-wrap justify-start sm:justify-end')}>
           {actions}
+          {aiSetup && <SettingsAiSetupAction target={aiSetup} />}
         </div>
       ) : null}
     </header>

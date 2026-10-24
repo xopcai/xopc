@@ -37,7 +37,7 @@ it('offers one model picker, connection status and the central management link',
   await render('phone-provider/autoglm-phone');
   expect(container.querySelectorAll('select')).toHaveLength(1);
   expect(container.querySelector('input')).toBeNull();
-  expect(container.textContent).toContain('服务商：My provider · 凭据已配置');
+  expect(container.textContent).toContain('My provider · 凭据就绪');
   expect(container.querySelector('a')?.getAttribute('href')).toBe('/settings/capabilities/models');
   expect(container.textContent).not.toContain('动作协议');
 });

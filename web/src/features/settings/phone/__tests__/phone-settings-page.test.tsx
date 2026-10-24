@@ -47,6 +47,8 @@ async function click(label: string) { await act(async () => [...container.queryS
 
 it('shows model, device and test setup without triggering input actions on load', async () => {
   await render();
+  expect(container.querySelector('header a')?.textContent).toBe('AI 配置');
+  expect(container.querySelectorAll('a[href*="skill=configure-xopc"]')).toHaveLength(1);
   expect(container.textContent).toContain('手机管理'); expect(container.textContent).toContain('Local emulator');
   expect(container.textContent).not.toContain('运行模拟测试');
   expect(container.textContent).toContain('本次授权的小目标');
@@ -111,11 +113,13 @@ it('updates diagnostics in the reserved device row without inserting a page bann
   const row = container.querySelector('[aria-label="手机管理"] [role="status"]')!;
   expect(row.textContent).toBe(''); expect(row.className).toContain('h-5');
   vi.mocked(phoneRequest).mockResolvedValueOnce({ state: 'device' });
-  await click('诊断');
+  await act(async () => { container.querySelector('[aria-haspopup="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+  await act(async () => { (document.body.querySelector('[role="menuitem"]') as HTMLElement).click(); });
   expect(row.textContent).toContain('已连接');
   expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
   vi.mocked(phoneRequest).mockRejectedValueOnce(new Error('ADB unavailable'));
-  await click('诊断');
+  await act(async () => { container.querySelector('[aria-haspopup="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+  await act(async () => { (document.body.querySelector('[role="menuitem"]') as HTMLElement).click(); });
   expect(row.textContent).toBe('ADB unavailable');
   expect(row.className).toContain('h-5');
   expect(container.querySelector('[role="alert"]')).toBeNull();
