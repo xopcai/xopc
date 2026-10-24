@@ -19,9 +19,10 @@ import {
   Search,
 } from 'lucide-react';
 
+import { Loopi } from '@/components/brand/loopi';
 import type { Tab } from '@/i18n/messages';
 
-const TAB_ICONS: Record<Tab, LucideIcon> = {
+const TAB_ICONS: Record<Exclude<Tab, 'settingsPersonal'>, LucideIcon> = {
   sessions: FolderOpen,
   usage: ChartNoAxesColumn,
   tracing: Activity,
@@ -32,7 +33,6 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsSearch: Search,
   settingsAppearance: Palette,
   settingsKeyboardShortcuts: Keyboard,
-  settingsPersonal: Radio,
   settingsSystem: Shield,
   settingsDesktopPet: PawPrint,
   settingsDesktopApp: Package,
@@ -48,6 +48,8 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
 };
 
 export function TabIcon({ tab, className }: { tab: Tab; className?: string }) {
+  if (tab === 'settingsPersonal') return <span className={className} aria-hidden><Loopi variant="avatar" className="size-full" /></span>;
+
   const Icon = TAB_ICONS[tab];
   return <Icon className={className} strokeWidth={1.75} aria-hidden />;
 }
