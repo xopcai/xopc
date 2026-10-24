@@ -43,20 +43,26 @@ function detailRow(label: string, value: unknown): string {
 
 function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record<string, string> {
   if (lang === 'en') {
+    const schemaTooOld = failure.kind === 'database_schema_too_old';
+    const migrationFailed = failure.kind === 'database_migration_failed';
     const schemaTooNew = failure.kind === 'database_schema_too_new';
     const migrationGap = failure.kind === 'database_migration_gap';
     const portInUse = failure.kind === 'port_in_use';
     const incompatible = failure.kind === 'gateway_protocol_incompatible';
     return {
       eyebrow: 'Startup recovery',
-      title: incompatible ? 'Desktop and Gateway versions are incompatible' : schemaTooNew
+      title: schemaTooOld ? 'This database needs an earlier upgrade path' : migrationFailed ? 'The database upgrade could not finish' : incompatible ? 'Desktop and Gateway versions are incompatible' : schemaTooNew
         ? 'Update xopc to open your local data'
         : migrationGap
           ? 'This build is missing a database migration'
           : portInUse
             ? 'The local service port is already in use'
             : 'xopc could not start',
-      body: incompatible
+      body: schemaTooOld
+        ? 'This database predates the supported upgrade range. Keep your data folder and use a release that supports this database, or contact support for an upgrade path.'
+        : migrationFailed
+        ? 'The database upgrade was rolled back. Keep the original database and the pre-upgrade backup, and copy the diagnostic report for support.'
+        : incompatible
         ? 'A running Gateway uses a different desktop protocol. Update the desktop and Gateway to the same build, restart the Gateway, then retry. xopc has not stopped the existing service.'
         : schemaTooNew
         ? 'Your local database was created by a newer xopc version. To protect your data, this app stopped before opening it.'
@@ -68,11 +74,12 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
       kindLabel: 'Reason',
       dbVersionLabel: 'Database version',
       appVersionLabel: 'App schema version',
+      minimumVersionLabel: 'Minimum supported upgrade version',
       portLabel: 'Local service port',
       dbPathLabel: 'Database path',
       configPathLabel: 'Config path',
       updateGuidance: 'Install the latest xopc version before retrying. A newer release may already include a fix for this startup issue.',
-      safetyNote: incompatible ? 'Do not delete your data, reset device identity, or change model keys. For a packaged install, stop the separately running Gateway so xopc can start its bundled service.' : schemaTooNew
+      safetyNote: schemaTooOld || migrationFailed ? 'Do not delete xopc.db, change its schema version, or separate it from its WAL/SHM files. Back up the entire data folder before recovery.' : incompatible ? 'Do not delete your data, reset device identity, or change model keys. For a packaged install, stop the separately running Gateway so xopc can start its bundled service.' : schemaTooNew
         ? 'Your data has not been downgraded or modified. Update xopc, then retry opening it.'
         : migrationGap
           ? 'Your data has not been modified. Install a build that includes the missing migration, then retry.'
@@ -103,20 +110,26 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
     };
   }
 
+  const schemaTooOld = failure.kind === 'database_schema_too_old';
+  const migrationFailed = failure.kind === 'database_migration_failed';
   const schemaTooNew = failure.kind === 'database_schema_too_new';
   const migrationGap = failure.kind === 'database_migration_gap';
   const portInUse = failure.kind === 'port_in_use';
   const incompatible = failure.kind === 'gateway_protocol_incompatible';
   return {
     eyebrow: '启动恢复',
-    title: incompatible ? '桌面端与 Gateway 版本不兼容' : schemaTooNew
+    title: schemaTooOld ? '数据库需要更早版本的升级路径' : migrationFailed ? '数据库升级未能完成' : incompatible ? '桌面端与 Gateway 版本不兼容' : schemaTooNew
       ? '升级 xopc 后才能打开本地数据'
       : migrationGap
         ? '当前构建缺少数据库迁移'
         : portInUse
           ? '本地服务端口已被占用'
           : 'xopc 未能启动',
-    body: incompatible
+    body: schemaTooOld
+      ? '数据库早于当前支持的升级范围。请保留数据目录，使用支持该数据库版本的应用，或联系支持获取升级方案。'
+      : migrationFailed
+      ? '数据库升级已回滚。请保留原数据库和升级前备份，复制诊断报告以便排查。'
+      : incompatible
       ? '正在运行的 Gateway 使用了不同的桌面协议。请将桌面端与 Gateway 更新至同一构建，重启 Gateway 后重试。xopc 没有结束现有服务。'
       : schemaTooNew
       ? '你的本地数据库由更新版本的 xopc 创建。为了避免损坏数据，当前应用已停止打开它。'
@@ -128,11 +141,12 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
     kindLabel: '原因',
     dbVersionLabel: '数据库版本',
     appVersionLabel: '应用支持版本',
+    minimumVersionLabel: '最低可升级版本',
     portLabel: '本地服务端口',
     dbPathLabel: '数据库路径',
     configPathLabel: '配置路径',
     updateGuidance: '请先安装最新版本的 xopc 再重试，新版本可能已经修复了此次启动问题。',
-    safetyNote: incompatible ? '无需删除数据、重置设备身份或更换模型 Key。正式安装时，可先停止独立运行的 Gateway，再重试，让 xopc 启动随应用附带的服务。' : schemaTooNew
+    safetyNote: schemaTooOld || migrationFailed ? '请勿删除 xopc.db、修改数据库版本号，或将其与 WAL/SHM 文件拆开。恢复前请备份整个数据目录。' : incompatible ? '无需删除数据、重置设备身份或更换模型 Key。正式安装时，可先停止独立运行的 Gateway，再重试，让 xopc 启动随应用附带的服务。' : schemaTooNew
       ? '你的数据没有被降级或修改。升级 xopc 后重试即可继续打开。'
       : migrationGap
         ? '你的数据没有被修改。请安装包含缺失迁移的构建，然后重试。'
@@ -338,6 +352,7 @@ export function getStartupRecoveryPageDataUrl(
       ${detailRow(copy.kindLabel, failure.kind)}
       ${detailRow(copy.dbVersionLabel, valueOrDash(failure.dbVersion))}
       ${detailRow(copy.appVersionLabel, valueOrDash(failure.appVersion))}
+      ${failure.minimumVersion === undefined ? '' : detailRow(copy.minimumVersionLabel, failure.minimumVersion)}
       ${detailRow(copy.portLabel, valueOrDash(failure.port))}
       ${detailRow(copy.dbPathLabel, failure.dbPath)}
       ${detailRow(copy.configPathLabel, failure.configPath)}

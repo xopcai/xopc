@@ -1,0 +1,2637 @@
+{
+  "benchmark": "phone-apps-live",
+  "testedAt": "2026-10-24T04:51:34.904Z",
+  "localEmulator": "emulator-5554",
+  "avd": "XOPC_Android_Test_API_35",
+  "androidVersion": "15",
+  "model": "phone-apps-benchmark/autoglm-phone",
+  "packageVersions": {
+    "com.android.settings": {
+      "versionName": "15",
+      "versionCode": "35"
+    },
+    "com.google.android.settings.intelligence": {
+      "versionName": "1.1.0.638941663.sr",
+      "versionCode": "1000230943"
+    },
+    "com.google.android.deskclock": {
+      "versionName": "7.5",
+      "versionCode": "76002074"
+    },
+    "com.google.android.documentsui": {
+      "versionName": "15",
+      "versionCode": "350820300"
+    }
+  },
+  "harnessSourceSha256": {
+    "scripts/benchmark-phone-apps-live.mts": "f18cbf1fe8988ef4b950ded40d736398f781d662de35a0c10dfdb49c22606a4a",
+    "scripts/phone-apps-live/tasks.ts": "53af3cc33146babc77c417f2fae79e627020136e32075099d14804428b3a75f3",
+    "scripts/phone-apps-live/support.ts": "85207634d776214cf84bc52910d6b4e37dc68e32fcd999a1731890f351d63c18"
+  },
+  "baseline": {
+    "sourceSha256": {
+      "runtime.ts": "a4d377b56edf2628c6e7b39cf8a8eea9f984647841117e000eef876c75c9ce28",
+      "model-adapter.ts": "673084c957be756681e09d3ed9d8fa66b473b154134ca93fa3c2ca2fc96be36b",
+      "adb-driver.ts": "a2bd7843d1b55f2ae6e5d1b0a265052d732c84ab5a05f8a353993efdd3343f31",
+      "contracts.ts": "b8095dc3a9ce0cb385ae6bf3418c756deeea167e9d6b76c665261e7d3cf823c6",
+      "reliability.ts": "7c8c2417ee820b4756d660974854a00644a4d6374a577e81e10e433a01c394f5"
+    },
+    "canonicalContractsWhenIdentical": true
+  },
+  "optimized": {
+    "sourceSha256": {
+      "runtime.ts": "a4d377b56edf2628c6e7b39cf8a8eea9f984647841117e000eef876c75c9ce28",
+      "model-adapter.ts": "9bc229930667be917245e37055495c172199f648f494e385f56d983559f76e92",
+      "adb-driver.ts": "a2bd7843d1b55f2ae6e5d1b0a265052d732c84ab5a05f8a353993efdd3343f31",
+      "contracts.ts": "b8095dc3a9ce0cb385ae6bf3418c756deeea167e9d6b76c665261e7d3cf823c6",
+      "reliability.ts": "7c8c2417ee820b4756d660974854a00644a4d6374a577e81e10e433a01c394f5"
+    }
+  },
+  "budget": {
+    "repeats": 3,
+    "actionsPerTrial": 12,
+    "requestsPerTrial": 8,
+    "trialMs": 90000,
+    "requestCap": 300,
+    "suiteMs": 1800000
+  },
+  "selectedTasks": [
+    {
+      "id": "settings-about-version",
+      "app": "com.android.settings",
+      "goal": "Open About emulated device or About phone in Android Settings, scroll as necessary, and show the Android version row together with its actual version value fully on screen. Stay on About phone; do not change any setting.",
+      "completion": {
+        "appPackage": "com.android.settings",
+        "textAny": [
+          "About emulated device",
+          "About phone"
+        ],
+        "textAll": [
+          "Android version",
+          "15"
+        ]
+      }
+    },
+    {
+      "id": "settings-display",
+      "app": "com.android.settings",
+      "goal": "Open the Display settings page and show Brightness level. Do not change brightness or any other setting.",
+      "completion": {
+        "appPackage": "com.android.settings",
+        "textAny": [
+          "Display",
+          "Display & touch"
+        ],
+        "textAll": [
+          "Brightness level"
+        ]
+      }
+    },
+    {
+      "id": "settings-search-display",
+      "app": "com.android.settings",
+      "goal": "Use Android Settings search to search for display. Leave the search query display in the search field and show the Display or Display & touch result. Do not open a result or change a setting.",
+      "completion": {
+        "appPackage": "com.google.android.settings.intelligence",
+        "textAny": [
+          "Display",
+          "Display & touch"
+        ],
+        "field": {
+          "resourceId": "com.google.android.settings.intelligence:id/open_search_view_edit_text",
+          "value": "display"
+        }
+      }
+    },
+    {
+      "id": "clock-stopwatch",
+      "app": "com.google.android.deskclock",
+      "goal": "Open the Stopwatch tab in Clock, showing a stopped stopwatch at zero. Do not start, lap or reset any running stopwatch; do not create an alarm.",
+      "completion": {
+        "appPackage": "com.google.android.deskclock",
+        "textAll": [
+          "Stopwatch",
+          "00",
+          "Start"
+        ]
+      }
+    },
+    {
+      "id": "clock-timer-configure",
+      "app": "com.google.android.deskclock",
+      "goal": "Open Timer in Clock and enter a duration of exactly 2 minutes 30 seconds (00h 02m 30s). Leave the duration configured without starting the timer. Do not change alarms.",
+      "completion": {
+        "appPackage": "com.google.android.deskclock",
+        "textAll": [
+          "00h 02m 30s"
+        ]
+      }
+    },
+    {
+      "id": "files-downloads",
+      "app": "com.google.android.documentsui",
+      "goal": "In Files, navigate from Recent to Downloads and locate xopc_real_bench_note_20261024.txt. Leave its filename visible; do not open, rename or delete a file.",
+      "completion": {
+        "appPackage": "com.google.android.documentsui",
+        "textAll": [
+          "Files in Downloads",
+          "xopc_real_bench_note_20261024.txt"
+        ]
+      }
+    },
+    {
+      "id": "files-search",
+      "app": "com.google.android.documentsui",
+      "goal": "In Files Downloads, use Search to search for xopc_real_bench_note_20261024. Keep that query in the search field and show xopc_real_bench_note_20261024.txt as a result. Do not open or modify a file.",
+      "completion": {
+        "appPackage": "com.google.android.documentsui",
+        "textAll": [
+          "xopc_real_bench_note_20261024.txt"
+        ],
+        "field": {
+          "resourceId": "com.google.android.documentsui:id/search_src_text",
+          "value": "xopc_real_bench_note_20261024"
+        }
+      }
+    }
+  ],
+  "plannedTrials": 42,
+  "finishedTrials": 42,
+  "actualModelRequests": 154,
+  "setupOnly": false,
+  "setupResults": [],
+  "pairedInitialStates": [
+    {
+      "task": "settings-about-version",
+      "repeat": 1,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "settings-about-version",
+      "repeat": 2,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "settings-about-version",
+      "repeat": 3,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "settings-display",
+      "repeat": 1,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "settings-display",
+      "repeat": 2,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "settings-display",
+      "repeat": 3,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "settings-search-display",
+      "repeat": 1,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "settings-search-display",
+      "repeat": 2,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "settings-search-display",
+      "repeat": 3,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "clock-stopwatch",
+      "repeat": 1,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "clock-stopwatch",
+      "repeat": 2,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "clock-stopwatch",
+      "repeat": 3,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "clock-timer-configure",
+      "repeat": 1,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "clock-timer-configure",
+      "repeat": 2,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "clock-timer-configure",
+      "repeat": 3,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "files-downloads",
+      "repeat": 1,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "files-downloads",
+      "repeat": 2,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "files-downloads",
+      "repeat": 3,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "files-search",
+      "repeat": 1,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "files-search",
+      "repeat": 2,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    },
+    {
+      "task": "files-search",
+      "repeat": 3,
+      "bothArmsRun": true,
+      "identicalNativeUi": true
+    }
+  ],
+  "pairedOutcomes": [
+    {
+      "task": "settings-about-version",
+      "repeat": 1,
+      "baselineCompleted": true,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "settings-about-version",
+      "repeat": 2,
+      "baselineCompleted": true,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "settings-about-version",
+      "repeat": 3,
+      "baselineCompleted": true,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "settings-display",
+      "repeat": 1,
+      "baselineCompleted": true,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "settings-display",
+      "repeat": 2,
+      "baselineCompleted": true,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "settings-display",
+      "repeat": 3,
+      "baselineCompleted": true,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "settings-search-display",
+      "repeat": 1,
+      "baselineCompleted": true,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "settings-search-display",
+      "repeat": 2,
+      "baselineCompleted": true,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "settings-search-display",
+      "repeat": 3,
+      "baselineCompleted": true,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "clock-stopwatch",
+      "repeat": 1,
+      "baselineCompleted": true,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "clock-stopwatch",
+      "repeat": 2,
+      "baselineCompleted": true,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "clock-stopwatch",
+      "repeat": 3,
+      "baselineCompleted": true,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "clock-timer-configure",
+      "repeat": 1,
+      "baselineCompleted": false,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "clock-timer-configure",
+      "repeat": 2,
+      "baselineCompleted": false,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "clock-timer-configure",
+      "repeat": 3,
+      "baselineCompleted": false,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "files-downloads",
+      "repeat": 1,
+      "baselineCompleted": false,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "files-downloads",
+      "repeat": 2,
+      "baselineCompleted": true,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "files-downloads",
+      "repeat": 3,
+      "baselineCompleted": false,
+      "optimizedCompleted": true
+    },
+    {
+      "task": "files-search",
+      "repeat": 1,
+      "baselineCompleted": true,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "files-search",
+      "repeat": 2,
+      "baselineCompleted": true,
+      "optimizedCompleted": false
+    },
+    {
+      "task": "files-search",
+      "repeat": 3,
+      "baselineCompleted": false,
+      "optimizedCompleted": false
+    }
+  ],
+  "matchedPairEfficacy": [
+    {
+      "arm": "baseline",
+      "completed": 15,
+      "total": 21,
+      "falseVerified": 0,
+      "actualModelRequests": 67
+    },
+    {
+      "arm": "optimized",
+      "completed": 9,
+      "total": 21,
+      "falseVerified": 0,
+      "actualModelRequests": 87
+    }
+  ],
+  "arms": [
+    {
+      "arm": "baseline",
+      "completed": 15,
+      "total": 21,
+      "falseVerified": 0,
+      "actualModelRequests": 67,
+      "durationMs": 615749
+    },
+    {
+      "arm": "optimized",
+      "completed": 9,
+      "total": 21,
+      "falseVerified": 0,
+      "actualModelRequests": 87,
+      "durationMs": 914036
+    }
+  ],
+  "results": [
+    {
+      "trialId": "settings-about-version-1-baseline",
+      "task": "settings-about-version",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "aboutPage": false,
+        "versionRowFullyVisible": false,
+        "versionValueVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 5,
+      "modelRequests": 5,
+      "actualModelRequests": 5,
+      "observationCount": 12,
+      "durationMs": 34684,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-about-version-1-baseline.json"
+    },
+    {
+      "trialId": "settings-about-version-1-optimized",
+      "task": "settings-about-version",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "aboutPage": false,
+        "versionRowFullyVisible": false,
+        "versionValueVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 4,
+      "modelRequests": 5,
+      "actualModelRequests": 5,
+      "observationCount": 11,
+      "durationMs": 28472,
+      "diagnostics": {
+        "stalePredictions": 1,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-about-version-1-optimized.json"
+    },
+    {
+      "trialId": "settings-display-1-optimized",
+      "task": "settings-display",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "displayPage": false,
+        "brightnessRow": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        },
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 7,
+      "durationMs": 43268,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-display-1-optimized.json"
+    },
+    {
+      "trialId": "settings-display-1-baseline",
+      "task": "settings-display",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "displayPage": false,
+        "brightnessRow": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        },
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 2,
+      "actualModelRequests": 2,
+      "observationCount": 6,
+      "durationMs": 14066,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-display-1-baseline.json"
+    },
+    {
+      "trialId": "settings-search-display-1-baseline",
+      "task": "settings-search-display",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": false,
+        "queryCorrect": false,
+        "resultVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 4,
+      "actualModelRequests": 4,
+      "observationCount": 8,
+      "durationMs": 50220,
+      "diagnostics": {
+        "stalePredictions": 1,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-search-display-1-baseline.json"
+    },
+    {
+      "trialId": "settings-search-display-1-optimized",
+      "task": "settings-search-display",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": false,
+        "queryCorrect": false,
+        "resultVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_LIMIT",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 6,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "observationCount": 15,
+      "durationMs": 71697,
+      "diagnostics": {
+        "stalePredictions": 1,
+        "protocolRepairs": 1,
+        "unchangedActions": 2,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-search-display-1-optimized.json"
+    },
+    {
+      "trialId": "clock-stopwatch-1-optimized",
+      "task": "clock-stopwatch",
+      "app": "com.google.android.deskclock",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "zeroSeconds": false,
+        "zeroHundredths": false,
+        "notRunning": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 4,
+      "durationMs": 11182,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-stopwatch-1-optimized.json"
+    },
+    {
+      "trialId": "clock-stopwatch-1-baseline",
+      "task": "clock-stopwatch",
+      "app": "com.google.android.deskclock",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "zeroSeconds": false,
+        "zeroHundredths": false,
+        "notRunning": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 4,
+      "durationMs": 8639,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-stopwatch-1-baseline.json"
+    },
+    {
+      "trialId": "clock-timer-configure-1-baseline",
+      "task": "clock-timer-configure",
+      "app": "com.google.android.deskclock",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "durationCorrect": false,
+        "stillSetup": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_TRUNCATED",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 7,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "observationCount": 15,
+      "durationMs": 78118,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 1,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-timer-configure-1-baseline.json"
+    },
+    {
+      "trialId": "clock-timer-configure-1-optimized",
+      "task": "clock-timer-configure",
+      "app": "com.google.android.deskclock",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "durationCorrect": false,
+        "stillSetup": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_LIMIT",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 8,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "observationCount": 17,
+      "durationMs": 67088,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-timer-configure-1-optimized.json"
+    },
+    {
+      "trialId": "files-downloads-1-optimized",
+      "task": "files-downloads",
+      "app": "com.google.android.documentsui",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32",
+      "initialAttempts": [
+        "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "downloadsFolder": false,
+        "fixtureVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": false,
+          "downloadsFolder": false,
+          "fixtureVisible": false
+        },
+        {
+          "packageAllowed": false,
+          "downloadsFolder": false,
+          "fixtureVisible": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_APP_DENIED",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 3,
+      "durationMs": 9743,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-downloads-1-optimized.json"
+    },
+    {
+      "trialId": "files-downloads-1-baseline",
+      "task": "files-downloads",
+      "app": "com.google.android.documentsui",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32",
+      "initialAttempts": [
+        "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "downloadsFolder": false,
+        "fixtureVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": false,
+          "downloadsFolder": false,
+          "fixtureVisible": false
+        },
+        {
+          "packageAllowed": false,
+          "downloadsFolder": false,
+          "fixtureVisible": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_APP_DENIED",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 3,
+      "durationMs": 9409,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-downloads-1-baseline.json"
+    },
+    {
+      "trialId": "files-search-1-baseline",
+      "task": "files-search",
+      "app": "com.google.android.documentsui",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69",
+      "initialAttempts": [
+        "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "queryCorrect": false,
+        "resultVisible": true,
+        "unrelatedFixtureAbsent": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true,
+          "unrelatedFixtureAbsent": true
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true,
+          "unrelatedFixtureAbsent": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 7,
+      "durationMs": 51550,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-search-1-baseline.json"
+    },
+    {
+      "trialId": "files-search-1-optimized",
+      "task": "files-search",
+      "app": "com.google.android.documentsui",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69",
+      "initialAttempts": [
+        "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "queryCorrect": false,
+        "resultVisible": true,
+        "unrelatedFixtureAbsent": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false,
+          "unrelatedFixtureAbsent": true
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false,
+          "unrelatedFixtureAbsent": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_PROTOCOL",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 4,
+      "durationMs": 45142,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-search-1-optimized.json"
+    },
+    {
+      "trialId": "settings-about-version-2-optimized",
+      "task": "settings-about-version",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 2,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "aboutPage": false,
+        "versionRowFullyVisible": false,
+        "versionValueVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 4,
+      "modelRequests": 5,
+      "actualModelRequests": 5,
+      "observationCount": 11,
+      "durationMs": 31038,
+      "diagnostics": {
+        "stalePredictions": 1,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-about-version-2-optimized.json"
+    },
+    {
+      "trialId": "settings-about-version-2-baseline",
+      "task": "settings-about-version",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 2,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "aboutPage": false,
+        "versionRowFullyVisible": false,
+        "versionValueVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 5,
+      "modelRequests": 5,
+      "actualModelRequests": 5,
+      "observationCount": 12,
+      "durationMs": 34266,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-about-version-2-baseline.json"
+    },
+    {
+      "trialId": "settings-display-2-baseline",
+      "task": "settings-display",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 2,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "displayPage": false,
+        "brightnessRow": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        },
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 2,
+      "actualModelRequests": 2,
+      "observationCount": 6,
+      "durationMs": 13753,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-display-2-baseline.json"
+    },
+    {
+      "trialId": "settings-display-2-optimized",
+      "task": "settings-display",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 2,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "displayPage": false,
+        "brightnessRow": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        },
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 7,
+      "durationMs": 41239,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-display-2-optimized.json"
+    },
+    {
+      "trialId": "settings-search-display-2-optimized",
+      "task": "settings-search-display",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 2,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": false,
+        "queryCorrect": false,
+        "resultVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_TRUNCATED",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 4,
+      "durationMs": 65817,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-search-display-2-optimized.json"
+    },
+    {
+      "trialId": "settings-search-display-2-baseline",
+      "task": "settings-search-display",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 2,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": false,
+        "queryCorrect": false,
+        "resultVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 7,
+      "durationMs": 19815,
+      "diagnostics": {
+        "stalePredictions": 1,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-search-display-2-baseline.json"
+    },
+    {
+      "trialId": "clock-stopwatch-2-baseline",
+      "task": "clock-stopwatch",
+      "app": "com.google.android.deskclock",
+      "arm": "baseline",
+      "repeat": 2,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "zeroSeconds": false,
+        "zeroHundredths": false,
+        "notRunning": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 4,
+      "durationMs": 9206,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-stopwatch-2-baseline.json"
+    },
+    {
+      "trialId": "clock-stopwatch-2-optimized",
+      "task": "clock-stopwatch",
+      "app": "com.google.android.deskclock",
+      "arm": "optimized",
+      "repeat": 2,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "zeroSeconds": false,
+        "zeroHundredths": false,
+        "notRunning": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 4,
+      "durationMs": 10080,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-stopwatch-2-optimized.json"
+    },
+    {
+      "trialId": "clock-timer-configure-2-optimized",
+      "task": "clock-timer-configure",
+      "app": "com.google.android.deskclock",
+      "arm": "optimized",
+      "repeat": 2,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "durationCorrect": false,
+        "stillSetup": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_LIMIT",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 6,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "observationCount": 15,
+      "durationMs": 73131,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 1,
+        "completionCorrections": 1
+      },
+      "traceFile": "clock-timer-configure-2-optimized.json"
+    },
+    {
+      "trialId": "clock-timer-configure-2-baseline",
+      "task": "clock-timer-configure",
+      "app": "com.google.android.deskclock",
+      "arm": "baseline",
+      "repeat": 2,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "durationCorrect": false,
+        "stillSetup": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_LIMIT",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 7,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "observationCount": 16,
+      "durationMs": 77086,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-timer-configure-2-baseline.json"
+    },
+    {
+      "trialId": "files-downloads-2-baseline",
+      "task": "files-downloads",
+      "app": "com.google.android.documentsui",
+      "arm": "baseline",
+      "repeat": 2,
+      "initialFingerprint": "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32",
+      "initialAttempts": [
+        "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "downloadsFolder": false,
+        "fixtureVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "downloadsFolder": true,
+          "fixtureVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "downloadsFolder": true,
+          "fixtureVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 2,
+      "actualModelRequests": 2,
+      "observationCount": 6,
+      "durationMs": 15077,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-downloads-2-baseline.json"
+    },
+    {
+      "trialId": "files-downloads-2-optimized",
+      "task": "files-downloads",
+      "app": "com.google.android.documentsui",
+      "arm": "optimized",
+      "repeat": 2,
+      "initialFingerprint": "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32",
+      "initialAttempts": [
+        "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "downloadsFolder": false,
+        "fixtureVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "downloadsFolder": false,
+          "fixtureVisible": false
+        },
+        {
+          "packageAllowed": true,
+          "downloadsFolder": false,
+          "fixtureVisible": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_LIMIT",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 8,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "observationCount": 17,
+      "durationMs": 43668,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-downloads-2-optimized.json"
+    },
+    {
+      "trialId": "files-search-2-optimized",
+      "task": "files-search",
+      "app": "com.google.android.documentsui",
+      "arm": "optimized",
+      "repeat": 2,
+      "initialFingerprint": "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69",
+      "initialAttempts": [
+        "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "queryCorrect": false,
+        "resultVisible": true,
+        "unrelatedFixtureAbsent": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false,
+          "unrelatedFixtureAbsent": true
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false,
+          "unrelatedFixtureAbsent": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "paused",
+      "stopReason": "no_progress",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 5,
+      "modelRequests": 7,
+      "actualModelRequests": 7,
+      "observationCount": 13,
+      "durationMs": 82929,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 2,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-search-2-optimized.json"
+    },
+    {
+      "trialId": "files-search-2-baseline",
+      "task": "files-search",
+      "app": "com.google.android.documentsui",
+      "arm": "baseline",
+      "repeat": 2,
+      "initialFingerprint": "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69",
+      "initialAttempts": [
+        "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "queryCorrect": false,
+        "resultVisible": true,
+        "unrelatedFixtureAbsent": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true,
+          "unrelatedFixtureAbsent": true
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true,
+          "unrelatedFixtureAbsent": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 7,
+      "durationMs": 28650,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 1
+      },
+      "traceFile": "files-search-2-baseline.json"
+    },
+    {
+      "trialId": "settings-about-version-3-baseline",
+      "task": "settings-about-version",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 3,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "aboutPage": false,
+        "versionRowFullyVisible": false,
+        "versionValueVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "aboutPage": true,
+          "versionRowFullyVisible": true,
+          "versionValueVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 5,
+      "modelRequests": 5,
+      "actualModelRequests": 5,
+      "observationCount": 12,
+      "durationMs": 29933,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-about-version-3-baseline.json"
+    },
+    {
+      "trialId": "settings-about-version-3-optimized",
+      "task": "settings-about-version",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 3,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "aboutPage": false,
+        "versionRowFullyVisible": false,
+        "versionValueVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "aboutPage": false,
+          "versionRowFullyVisible": false,
+          "versionValueVisible": false
+        },
+        {
+          "packageAllowed": true,
+          "aboutPage": false,
+          "versionRowFullyVisible": false,
+          "versionValueVisible": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_TRUNCATED",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 0,
+      "modelRequests": 2,
+      "actualModelRequests": 2,
+      "observationCount": 2,
+      "durationMs": 56211,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-about-version-3-optimized.json"
+    },
+    {
+      "trialId": "settings-display-3-optimized",
+      "task": "settings-display",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 3,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "displayPage": false,
+        "brightnessRow": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        },
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 7,
+      "durationMs": 41810,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-display-3-optimized.json"
+    },
+    {
+      "trialId": "settings-display-3-baseline",
+      "task": "settings-display",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 3,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "displayPage": false,
+        "brightnessRow": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        },
+        {
+          "packageAllowed": true,
+          "displayPage": true,
+          "brightnessRow": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 2,
+      "actualModelRequests": 2,
+      "observationCount": 6,
+      "durationMs": 13342,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-display-3-baseline.json"
+    },
+    {
+      "trialId": "settings-search-display-3-baseline",
+      "task": "settings-search-display",
+      "app": "com.android.settings",
+      "arm": "baseline",
+      "repeat": 3,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": false,
+        "queryCorrect": false,
+        "resultVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": true,
+          "resultVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 7,
+      "durationMs": 20236,
+      "diagnostics": {
+        "stalePredictions": 1,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-search-display-3-baseline.json"
+    },
+    {
+      "trialId": "settings-search-display-3-optimized",
+      "task": "settings-search-display",
+      "app": "com.android.settings",
+      "arm": "optimized",
+      "repeat": 3,
+      "initialFingerprint": "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce",
+      "initialAttempts": [
+        "64e530d2d5afa81f648b6d84fe8849996d87f63fcf970ec77e747b70c13f16ce"
+      ],
+      "initialOracle": {
+        "packageAllowed": false,
+        "queryCorrect": false,
+        "resultVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_TRUNCATED",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 4,
+      "actualModelRequests": 4,
+      "observationCount": 5,
+      "durationMs": 73148,
+      "diagnostics": {
+        "stalePredictions": 1,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "settings-search-display-3-optimized.json"
+    },
+    {
+      "trialId": "clock-stopwatch-3-optimized",
+      "task": "clock-stopwatch",
+      "app": "com.google.android.deskclock",
+      "arm": "optimized",
+      "repeat": 3,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "zeroSeconds": false,
+        "zeroHundredths": false,
+        "notRunning": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 4,
+      "durationMs": 9693,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-stopwatch-3-optimized.json"
+    },
+    {
+      "trialId": "clock-stopwatch-3-baseline",
+      "task": "clock-stopwatch",
+      "app": "com.google.android.deskclock",
+      "arm": "baseline",
+      "repeat": 3,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "zeroSeconds": false,
+        "zeroHundredths": false,
+        "notRunning": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "zeroSeconds": true,
+          "zeroHundredths": true,
+          "notRunning": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 4,
+      "durationMs": 8517,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-stopwatch-3-baseline.json"
+    },
+    {
+      "trialId": "clock-timer-configure-3-baseline",
+      "task": "clock-timer-configure",
+      "app": "com.google.android.deskclock",
+      "arm": "baseline",
+      "repeat": 3,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "durationCorrect": false,
+        "stillSetup": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_TRUNCATED",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 4,
+      "actualModelRequests": 4,
+      "observationCount": 6,
+      "durationMs": 65159,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-timer-configure-3-baseline.json"
+    },
+    {
+      "trialId": "clock-timer-configure-3-optimized",
+      "task": "clock-timer-configure",
+      "app": "com.google.android.deskclock",
+      "arm": "optimized",
+      "repeat": 3,
+      "initialFingerprint": "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b",
+      "initialAttempts": [
+        "844dde7ce5161f7f100ccec83696ae979cea313d8e4a929aeb7c017c0aad800b"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "correctTab": false,
+        "durationCorrect": false,
+        "stillSetup": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        },
+        {
+          "packageAllowed": true,
+          "correctTab": true,
+          "durationCorrect": false,
+          "stillSetup": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "paused",
+      "stopReason": "no_progress",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 7,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "observationCount": 16,
+      "durationMs": 47812,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 3,
+        "completionCorrections": 0
+      },
+      "traceFile": "clock-timer-configure-3-optimized.json"
+    },
+    {
+      "trialId": "files-downloads-3-optimized",
+      "task": "files-downloads",
+      "app": "com.google.android.documentsui",
+      "arm": "optimized",
+      "repeat": 3,
+      "initialFingerprint": "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32",
+      "initialAttempts": [
+        "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "downloadsFolder": false,
+        "fixtureVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": true,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "downloadsFolder": true,
+          "fixtureVisible": true
+        },
+        {
+          "packageAllowed": true,
+          "downloadsFolder": true,
+          "fixtureVisible": true
+        }
+      ],
+      "runtimeVerified": true,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 2,
+      "modelRequests": 2,
+      "actualModelRequests": 2,
+      "observationCount": 6,
+      "durationMs": 14411,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-downloads-3-optimized.json"
+    },
+    {
+      "trialId": "files-downloads-3-baseline",
+      "task": "files-downloads",
+      "app": "com.google.android.documentsui",
+      "arm": "baseline",
+      "repeat": 3,
+      "initialFingerprint": "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32",
+      "initialAttempts": [
+        "40ae80374c6078623d8c3b3a823b03506cac7f8db12f35488a5325b3b5f4db32"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "downloadsFolder": false,
+        "fixtureVisible": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": false,
+          "downloadsFolder": false,
+          "fixtureVisible": false
+        },
+        {
+          "packageAllowed": false,
+          "downloadsFolder": false,
+          "fixtureVisible": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_APP_DENIED",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "observationCount": 3,
+      "durationMs": 12441,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-downloads-3-baseline.json"
+    },
+    {
+      "trialId": "files-search-3-baseline",
+      "task": "files-search",
+      "app": "com.google.android.documentsui",
+      "arm": "baseline",
+      "repeat": 3,
+      "initialFingerprint": "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69",
+      "initialAttempts": [
+        "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "queryCorrect": false,
+        "resultVisible": true,
+        "unrelatedFixtureAbsent": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false,
+          "unrelatedFixtureAbsent": true
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": false,
+          "unrelatedFixtureAbsent": true
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "failed",
+      "stopReason": "operation_failed",
+      "errorCode": "PHONE_MODEL_PROTOCOL",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 1,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 4,
+      "durationMs": 21582,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      },
+      "traceFile": "files-search-3-baseline.json"
+    },
+    {
+      "trialId": "files-search-3-optimized",
+      "task": "files-search",
+      "app": "com.google.android.documentsui",
+      "arm": "optimized",
+      "repeat": 3,
+      "initialFingerprint": "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69",
+      "initialAttempts": [
+        "81c36ecc67548754eeb84a07e9d9a6229f1790a6202160594fb86582abe8ca69"
+      ],
+      "initialOracle": {
+        "packageAllowed": true,
+        "queryCorrect": false,
+        "resultVisible": true,
+        "unrelatedFixtureAbsent": false
+      },
+      "setupMismatch": false,
+      "independentlyCompleted": false,
+      "independentEvidence": [
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": true,
+          "unrelatedFixtureAbsent": false
+        },
+        {
+          "packageAllowed": true,
+          "queryCorrect": false,
+          "resultVisible": true,
+          "unrelatedFixtureAbsent": false
+        }
+      ],
+      "runtimeVerified": false,
+      "falseVerified": false,
+      "status": "completed",
+      "stopReason": "model_finished_unverified",
+      "scopeViolation": false,
+      "settingsUnchanged": true,
+      "filesUnchanged": true,
+      "actions": 0,
+      "modelRequests": 3,
+      "actualModelRequests": 3,
+      "observationCount": 3,
+      "durationMs": 46457,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 1,
+        "unchangedActions": 0,
+        "completionCorrections": 1
+      },
+      "traceFile": "files-search-3-optimized.json"
+    }
+  ],
+  "limitations": [
+    "Dedicated emulator, three system apps and scratch files; no claims about third-party apps, production accounts or transactions.",
+    "Independent completion requires two final native observations; runtime status alone is not success.",
+    "Obvious Clock Start/Add alarm/Save/Add and seeded-file point actions are blocked equally because task goals forbid those effects.",
+    "Task setup and manual oracle demonstrations are excluded from live model completion counts; initial-state mismatches remain in raw rows but are excluded from matched-pair efficacy.",
+    "Settings brightness/mode/timeout/font-scale and two scratch-file checksums are checked; other negative constraints are not exhaustively verified.",
+    "Observation counts include runtime-facing observe calls, not driver-internal retries.",
+    "A small paired sample measures these fixed tasks only and does not establish general success-rate gains."
+  ],
+  "archives": {
+    "source": {
+      "file": "phone-real-app-v1-source-2026-10-24.tar.gz",
+      "sha256": "79913bf683c6c1e4ec16e85cd589bc5b533a4f3529b60deb5bfcc6d461f114e6"
+    },
+    "traces": {
+      "file": "phone-real-app-v1-traces-2026-10-24.tar.gz",
+      "sha256": "20a65f33717c8c5bff7beed55e5e3f7895311ebccf8fd286af1bed708d41ce68"
+    }
+  }
+}

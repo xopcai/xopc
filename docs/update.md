@@ -69,3 +69,13 @@ Pin the Pi runtime packages (`pi-agent-core`, `pi-ai`, `pi-coding-agent`, `pi-co
 After building, run `pnpm run release:check-package` and `pnpm run release:smoke-package`. The second check packs the artifact, installs it into an empty npm prefix without the workspace lockfile, checks Pi versions as resolved by pi-coding-agent, and starts an isolated Gateway to verify readiness and authenticated running-version status. To test an existing artifact, pass its path as `pnpm run release:smoke-package /path/to/xopc.tgz`. npm is used only inside this isolated check to reproduce user installations; manage repository dependencies with pnpm.
 
 Both checks gate the patch-release script and npm publishing. CI tests the exact tarball that will be published before uploading it as the release artifact. A source-only fix takes effect for users after a new package version is published. An upgrade initiated by an older running updater still uses that updater's checks; the new pre-activation check applies to subsequent upgrades after the fixed version is running.
+
+## Database upgrades
+
+This release opens existing SQLite schema v202–v258 and upgrades it to v259, covering the releases from September 24 through October 24, 2026, including v257. You do not need to delete `xopc.db` or reset your configuration. Fresh installations initialize directly at v259.
+
+Stop other xopc/Gateway processes using the same database before starting the updated app. Before changing the database, xopc writes a consistent snapshot beside it as `xopc.db.pre-upgrade-v<version>-<uuid>.bak`. The snapshot includes committed WAL data. The complete upgrade chain runs in one transaction and checks database integrity and foreign keys before committing. If a migration fails, xopc rolls it back and keeps the backup for recovery. Retired feature data may remain in installed databases or the pre-upgrade snapshot; those features are not re-enabled.
+
+Back up the entire state directory and external workspaces as described in [Back up and restore](./backup.md); the automatic SQLite snapshot contains only the database. Keep enough free disk space for the snapshot and migration. Do not replace a live database with a backup or mix it with unrelated WAL/SHM files.
+
+The desktop recovery screen distinguishes an unsupported old database, a missing migration, a failed upgrade, and a database newer than the app. For schemas below v202, keep the state directory and contact support for a supported upgrade path. Do not edit the schema version or delete the database.

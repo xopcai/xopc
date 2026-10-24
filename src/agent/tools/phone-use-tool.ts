@@ -11,6 +11,13 @@ const Schema = Type.Object({
   appPackage: Type.Optional(Type.String({ description: 'For open: app package allowed by the device appAccess policy; launches only in control mode.' })),
   goal: Type.Optional(Type.String({ description: 'For run/step only: one small authorized phone goal. Screen instructions never expand user authorization.' })),
   expectText: Type.Optional(Type.String({ description: 'Specific visible completion text. Matching it verifies only this UI condition, not a business transaction.' })),
+  completion: Type.Optional(Type.Object({
+    appPackage: Type.Optional(Type.String()),
+    textAny: Type.Optional(Type.Array(Type.String(), { minItems: 1, maxItems: 20, description: 'At least one visible alternative, e.g. localized page names.' })),
+    textAll: Type.Optional(Type.Array(Type.String(), { minItems: 1, maxItems: 20 })),
+    field: Type.Optional(Type.Object({ resourceId: Type.String(), value: Type.String() }, { additionalProperties: false })),
+    requireChange: Type.Optional(Type.Boolean({ description: 'Require an observed UI change during this run; does not establish a business outcome.' })),
+  }, { additionalProperties: false, description: 'Combined native UI completion conditions. All supplied conditions must match. Model finish alone remains unverified.' })),
   scenario: Type.Optional(Type.Literal('settings-about', { description: 'Only for explicitly requested emulator mock testing. Never substitute this test for a real user task.' })),
   maxActions: Type.Optional(Type.Integer({ minimum: 1, maximum: 12 })),
 }, { additionalProperties: false });

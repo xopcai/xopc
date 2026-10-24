@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "registeredAt": "2026-10-24T04:13:30.440309+00:00",
+  "scope": "Personal v7 submission and foreground acknowledgement latency with full mixed delivery protection",
+  "problem": "Prior submit25167ms, acknowledgement9992ms, ping5666ms exceed20000/5000/5000ms gates.",
+  "hypothesis": "Put the required command first; prioritize in-flight instruct/answer over completed-only revise with exact baselines. Add state-specific guidance to persisted receipts and revision reads; shorten redundant tool prose while preserving full constraints. This may reduce coordination recovery and foreground prefill; no assumed provider SLA improvement.",
+  "jobs": [
+    {
+      "id": "personal",
+      "kind": "personal",
+      "expected": 1
+    }
+  ],
+  "budget": {
+    "maxRequests": 80,
+    "maxWallMs": 900000
+  },
+  "gate": {
+    "submitHostMs": 250,
+    "requestToSubmitMs": 20000,
+    "acknowledgementMs": 5000,
+    "pingMs": 5000,
+    "totalMs": 600000,
+    "quality": "All original v7 assertions, real router, correct downloads, research negative review, requirement adoption and file-loss recovery; no threshold relaxed"
+  },
+  "candidateSourceHashes": {
+    "src/agent/tools/personal-task-tool.ts": "ba4c4cb5f1b8311aa6d2618cb9f29cb916f5683599bdc52f9c87d70564c05bcc",
+    "src/personal-agent/prompts.ts": "3f8bd11006a21d95d9b241552cd2645a62b837cde3ffd94e992d56d268184a76",
+    "src/agent/prompt/system-prompt.ts": "def0c7a466d9cf05c736fec5054663b9b911d4311bb3df3529ff9b4f51503178",
+    "scripts/personal-repair-live-smoke-v2.mts": "277a89c45b5215fb7964724fb658dc30fbd0ffeda13aa441f2c4b89a05777477",
+    "scripts/personal-repair-live-benchmark.mts": "4a0b297c4171773e5a2088a03166c8ee8c69131aa890c13650b2350b9a88ec60"
+  },
+  "modelSelection": "Existing configured Personal/router/worker/review; no model/thinking setting changes",
+  "independence": "Disclosed mixed regression; no unseen family claim. Another preregistered validation required before general SLA claims.",
+  "protection": [
+    "Original requests forwarded verbatim only from active conversation input",
+    "No deterministic echo shortcut for ping",
+    "Safety, permissions, sourceRefs, full tool schemas preserved",
+    "Every failure retained; no original record overwritten"
+  ],
+  "previousRejectedImprovement": "1f7404fc-bfb3-40c3-8ad7-ef0034987cee",
+  "developmentObservation": "Raw v3 command=revise was present. The running Task had no completed baseline; the model omitted baseline fields then fabricated placeholders. Earlier prose describing this as missing command was inaccurate; original rejection and evidence remain unchanged.",
+  "previousCandidate": "personal-latency-v7-20261024-v3",
+  "candidateLimit": "One new frozen v4 candidate and one full mixed v7 trial for this iteration; no unchanged rerun to search for a passing sample.",
+  "priorEvidenceHash": "f7397837235116011b2dc3b8e1c7051720de9be2cc15d30d67421e7e2c74f409"
+}

@@ -1,0 +1,149 @@
+{
+  "benchmark": "phone-reliability-live",
+  "testedAt": "2026-10-24T03:56:55.035Z",
+  "baselineRevision": "c433069cd0a7231b5f5aa07bb1c78f99b95a1f82",
+  "model": "phone-benchmark/autoglm-phone",
+  "localEmulator": "emulator-5554",
+  "repeats": 1,
+  "maxActionsPerRun": 8,
+  "maxModelRequestsPerRun": 8,
+  "actualModelRequests": 18,
+  "baselineScope": "Original runtime and adapter; shared current ADB driver; reversible Settings navigation only",
+  "limitations": [
+    "Two tasks and one repeat per arm do not establish general task completion-rate gains.",
+    "No transaction, Unicode replacement, CAPTCHA, cloud phone or human takeover was exercised.",
+    "Both arms receive the same goal, expectText and completion input; the original runtime ignores the new completion predicate."
+  ],
+  "pairedInitialStates": [
+    {
+      "task": "about-to-main",
+      "identicalNativeUi": true
+    },
+    {
+      "task": "main-to-about",
+      "identicalNativeUi": true
+    }
+  ],
+  "arms": [
+    {
+      "arm": "baseline",
+      "completed": 1,
+      "total": 2,
+      "actualModelRequests": 9,
+      "durationMs": 55277
+    },
+    {
+      "arm": "optimized",
+      "completed": 1,
+      "total": 2,
+      "actualModelRequests": 9,
+      "durationMs": 63961
+    }
+  ],
+  "results": [
+    {
+      "task": "about-to-main",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "3739da46f2633086c138a1eb8ae59889f79960b601740c53067829fc304bc086",
+      "independentlyCompleted": true,
+      "independentEvidence": {
+        "packageAllowed": true,
+        "targetTextVisible": true,
+        "aboutIdentityVisible": false
+      },
+      "runtimeVerified": true,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "durationMs": 6592
+    },
+    {
+      "task": "about-to-main",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "3739da46f2633086c138a1eb8ae59889f79960b601740c53067829fc304bc086",
+      "independentlyCompleted": true,
+      "independentEvidence": {
+        "packageAllowed": true,
+        "targetTextVisible": true,
+        "aboutIdentityVisible": false
+      },
+      "runtimeVerified": true,
+      "status": "completed",
+      "stopReason": "condition_satisfied",
+      "actions": 1,
+      "modelRequests": 1,
+      "actualModelRequests": 1,
+      "durationMs": 8105,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 0
+      }
+    },
+    {
+      "task": "main-to-about",
+      "arm": "baseline",
+      "repeat": 1,
+      "initialFingerprint": "7c5a66122a3f59937af73edaf7a71bc9728fa223f39761caaf95bfc6334062e8",
+      "independentlyCompleted": false,
+      "independentEvidence": {
+        "packageAllowed": true,
+        "targetTextVisible": false,
+        "aboutIdentityVisible": true
+      },
+      "runtimeVerified": false,
+      "status": "completed",
+      "stopReason": "model_finished_unverified",
+      "actions": 7,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "durationMs": 48685
+    },
+    {
+      "task": "main-to-about",
+      "arm": "optimized",
+      "repeat": 1,
+      "initialFingerprint": "7c5a66122a3f59937af73edaf7a71bc9728fa223f39761caaf95bfc6334062e8",
+      "independentlyCompleted": false,
+      "independentEvidence": {
+        "packageAllowed": true,
+        "targetTextVisible": false,
+        "aboutIdentityVisible": false
+      },
+      "runtimeVerified": false,
+      "status": "paused",
+      "stopReason": "operation_timeout",
+      "errorCode": "PHONE_OPERATION_TIMEOUT",
+      "actions": 6,
+      "modelRequests": 8,
+      "actualModelRequests": 8,
+      "durationMs": 55856,
+      "diagnostics": {
+        "stalePredictions": 0,
+        "protocolRepairs": 0,
+        "unchangedActions": 0,
+        "completionCorrections": 1
+      }
+    }
+  ],
+  "optimizedSourceSha256": {
+    "runtime.ts": "a4d377b56edf2628c6e7b39cf8a8eea9f984647841117e000eef876c75c9ce28",
+    "model-adapter.ts": "673084c957be756681e09d3ed9d8fa66b473b154134ca93fa3c2ca2fc96be36b",
+    "adb-driver.ts": "a2bd7843d1b55f2ae6e5d1b0a265052d732c84ab5a05f8a353993efdd3343f31",
+    "contracts.ts": "b8095dc3a9ce0cb385ae6bf3418c756deeea167e9d6b76c665261e7d3cf823c6",
+    "reliability.ts": "7c8c2417ee820b4756d660974854a00644a4d6374a577e81e10e433a01c394f5"
+  },
+  "developmentApiCallsTotal": 50,
+  "developmentApiCallsBreakdown": {
+    "setupFailure": 2,
+    "beforeConfirmation": 9,
+    "afterConfirmation": 9,
+    "beforeCriteriaContext": 12,
+    "final": 18
+  }
+}

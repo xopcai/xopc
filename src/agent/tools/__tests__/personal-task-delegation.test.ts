@@ -65,6 +65,14 @@ describe('Personal AI durable delegation', () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0].body).toContain(content);
     expect(getTaskHandoff(tasks[0].id)?.originalRequest).toBe(content);
+    const state = await tool.execute('revision-state', {command:'get',taskId:tasks[0].id,section:'revision'});
+    const stateText = (state.content[0] as {text:string}).text;
+    expect(JSON.parse(stateText).revisionBaseline).toBeUndefined();
+    expect(stateText).toContain('never invent baseline fields');
+    const direction = await tool.execute('new-direction', {command:'instruct',taskId:tasks[0].id,instruction:'Also retain the original units.'});
+    expect((direction.content[0] as {text:string}).text).toContain('instruction');
+    expect(new TaskRepository().list()).toHaveLength(1);
+
   });
   it('rejects original-input mode without an active input rather than guessing from history', async () => {
     const agentId = personalAgentId('local-owner');

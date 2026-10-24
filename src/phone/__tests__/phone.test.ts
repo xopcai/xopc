@@ -54,7 +54,7 @@ describe('phone model contracts', () => {
   });
   it('parses literal AutoGLM actions and rejects code, extra actions and malformed coordinates', () => {
     expect(parseAutoGlmResponse('<think>ignored</think><answer>do(action="Tap", element=[100, 200])</answer>', [])).toEqual({ kind: 'action', action: { type: 'tap', point: [100, 200] } });
-    expect(parseAutoGlmResponse('do(action="Type", text="hello\\nworld")', [])).toEqual({ kind: 'action', action: { type: 'typeText', text: 'hello\nworld' } });
+    expect(parseAutoGlmResponse('do(action="Type", text="hello\\nworld")', [])).toEqual({ kind: 'action', action: { type: 'typeText', text: 'hello\nworld', mode: 'replace' } });
     expect(parseAutoGlmResponse("do(action='Launch', app='设置')", ['com.android.settings'])).toMatchObject({ action: { package: 'com.android.settings' } });
     for (const raw of ['do(action="Tap", element=[-1,5])', 'do(action="Tap", element=[1])', 'do(action="Tap", element=__import__("os"))', 'do(action="Back"); do(action="Home")', 'garbage', 'do(action="Shell", text="echo nope")']) expect(() => parseAutoGlmResponse(raw, [])).toThrow();
     expect(() => parseAutoGlmResponse('do(action="Launch", app="com.other.app")', ['com.android.settings'])).toThrow();

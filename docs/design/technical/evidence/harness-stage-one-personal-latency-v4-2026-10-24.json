@@ -1,0 +1,382 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-24",
+  "scope": "One new frozen Personal v4 candidate; original full v7 and latency gates, existing model configuration",
+  "phaseOneComplete": false,
+  "improvementId": "2cc95494-da4f-4950-8285-96f6b3189370",
+  "promotion": "rejected",
+  "fullV7Passed": false,
+  "originalFailure": "Main submission acknowledgement exceeded the 5s smoke budget",
+  "latency": {
+    "requestToSubmit": 10289,
+    "initialReplyAfterSubmit": 6591,
+    "pingResponse": 6254,
+    "total": 272844
+  },
+  "thresholds": {
+    "requestToSubmit": 20000,
+    "initialReplyAfterSubmit": 5000,
+    "pingResponse": 5000,
+    "total": 600000
+  },
+  "decisionReasons": [
+    "Latency failed: initialReplyAfterSubmit (6591/5000 ms)",
+    "Latency failed: pingResponse (6254/5000 ms)",
+    "Full v7 acceptance failed: Main submission acknowledgement exceeded the 5s smoke budget"
+  ],
+  "diagnosisCorrection": {
+    "previous": "v3 direction forwarding described as missing command",
+    "observed": "command=revise existed; missing completed-result baselines, then fabricated none-yet/placeholder on running work",
+    "immutablePreviousDecisionsUnchanged": true
+  },
+  "coordination": {
+    "mainToolErrors": [],
+    "calls": [
+      {
+        "toolCallId": "call_fa7e9b1aff5e4150a071a4fb",
+        "command": "submit",
+        "taskId": null,
+        "section": null,
+        "hasInstruction": false,
+        "hasBaselineResultId": false,
+        "hasBaselineVersion": false
+      },
+      {
+        "toolCallId": "call_c797cd3619404c1ba553d42f",
+        "command": "instruct",
+        "taskId": "0b451940-cc50-4cb4-8a29-ffa28737e71e",
+        "section": null,
+        "hasInstruction": true,
+        "hasBaselineResultId": false,
+        "hasBaselineVersion": false
+      }
+    ]
+  },
+  "foregroundCalls": [
+    {
+      "id": "359340ac-1ad9-4642-93ae-6c0fcd465ef9",
+      "operation": "agent.answer",
+      "status": "succeeded",
+      "totalMs": 9831,
+      "httpMs": 8537,
+      "preTransportMs": 1288,
+      "outputTokens": 106
+    },
+    {
+      "id": "81395c97-1289-44f0-95aa-e9f31b3722f2",
+      "operation": "agent.continue_after_tool",
+      "status": "succeeded",
+      "totalMs": 6533,
+      "httpMs": 6522,
+      "preTransportMs": 5,
+      "outputTokens": 43
+    },
+    {
+      "id": "313548b2-8de4-4e3f-b49a-1c5967d0ec14",
+      "operation": "agent.answer",
+      "status": "succeeded",
+      "totalMs": 5848,
+      "httpMs": 5840,
+      "preTransportMs": 6,
+      "outputTokens": 20
+    },
+    {
+      "id": "01fef5d7-d2b0-4b4c-9f62-1239439bb8a0",
+      "operation": "agent.answer",
+      "status": "succeeded",
+      "totalMs": 6735,
+      "httpMs": 6730,
+      "preTransportMs": 4,
+      "outputTokens": 135
+    },
+    {
+      "id": "1371aa24-9452-4c41-a1ba-020534240751",
+      "operation": "agent.continue_after_tool",
+      "status": "succeeded",
+      "totalMs": 5982,
+      "httpMs": 5971,
+      "preTransportMs": 9,
+      "outputTokens": 47
+    },
+    {
+      "id": "fe92c05c-5803-4e76-b37d-8f48a2c9cb7e",
+      "operation": "agent.answer",
+      "status": "succeeded",
+      "totalMs": 6402,
+      "httpMs": 6394,
+      "preTransportMs": 5,
+      "outputTokens": 37
+    },
+    {
+      "id": "3f62e320-c15c-4481-9f43-5e4fe735f57b",
+      "operation": "personal.reply_composition",
+      "status": "aborted",
+      "totalMs": 7163,
+      "httpMs": 7160,
+      "preTransportMs": 2,
+      "outputTokens": 262
+    }
+  ],
+  "requests": {
+    "physical": 36,
+    "runtime": 36,
+    "observedTokens": 758118,
+    "knownFinalUsage": 36,
+    "unknownFinalUsage": 0,
+    "perRequestMatched": true,
+    "usageMatched": true,
+    "nonDispatched": [],
+    "actualCharge": null
+  },
+  "originalProtocol": {
+    "version": 7,
+    "sourceChangedDuringRun": false,
+    "sourceHashes": {
+      "src/agent/tools/personal-task-tool.ts": "ba4c4cb5f1b8311aa6d2618cb9f29cb916f5683599bdc52f9c87d70564c05bcc",
+      "src/personal-agent/prompts.ts": "3f8bd11006a21d95d9b241552cd2645a62b837cde3ffd94e992d56d268184a76",
+      "src/agent/prompt/system-prompt.ts": "def0c7a466d9cf05c736fec5054663b9b911d4311bb3df3529ff9b4f51503178",
+      "src/personal-agent/reply-style.ts": "e8b1ae2e7397ac297645e0084d59e8f6e516ad9e6a45fec600a7214e9702687d",
+      "src/personal-agent/reply-composer.ts": "dfb998e4e2a6c2590692b85a59c1899efa0b2312112233f5f78f08a0576d1175",
+      "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838",
+      "src/tasks/task-result-delivery-repository.ts": "5b2cbf1382ac44d817ca301ba6cecba7096f3ac0b8cf07f80e9410c0953ddf26",
+      "src/tasks/task-result-delivery-service.ts": "ec0ba70c13d54dad78b8a74a910f955ef9352151aa19e52e74836712ee0da8f6",
+      "src/tasks/task-allocation-service.ts": "6d05a8d274824377ca3cf7240dabe74c5a7cc48f2f0672fe3ef052879c4af958",
+      "src/tasks/task-research-result.ts": "d2f6055f9ab2eee3e62bd075cbbac99622622bb9d4d1aea90419f3fc3c4b935a",
+      "src/tasks/task-run-coordinator.ts": "9786b75a3b5e33c49edcae1f99a17ca76a3342153ca9856ba0cf6971ab97c875",
+      "src/tasks/task-contract-planner.ts": "d05515b0e48aa278716758cf537a4b5f5c3ceb4665800258191cf306db644bb3",
+      "src/agent/tools/task-result-tool.ts": "d529174bf448391f9980ab334a9afb117c0013e611b3521e4207cf82082837d0",
+      "src/agent/tools/factory.ts": "42e37b4a229cba75912bb84ddbbb0620777ae5038f369a9de9de8738f928a2ff",
+      "packages/gateway-contract/src/task-research-result.ts": "c23ee2b7a6716e770b9bca76aaafb43a0b64852dcfddb4e56de24c699c985b1d",
+      "scripts/personal-repair-live-smoke-v2.mts": "277a89c45b5215fb7964724fb658dc30fbd0ffeda13aa441f2c4b89a05777477",
+      "src/tasks/task-research-repair.ts": "41ba88470a72570a33714f47dc380a8abd978f46d8abc082e4dc57d185e75cdb",
+      "src/tasks/task-run-repository.ts": "a47884382d0f1aab0ca8cd658b44b262e32669ec31d56ab97f9e0b15c6b6c1f5",
+      "src/agent/tasks/task-judge-service.ts": "d5ef17567d4ba716c35c3b94c547db6537a531fd07196264c364f6193f60fbcd",
+      "src/tasks/task-continuation.ts": "f0181c063b7a1b1a0d666e6abbd7c58cac0c664a593c71512ce1eaba5ad10c00",
+      "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+      "src/agent/embedded/run-for-session.ts": "c4224e741e8f047aa4a053bc048ff582cc6213053659d658b9743705db4b82b6",
+      "src/agent/embedded/run-turn.ts": "5236cedc854a53be264fedac3a2064c30277c18f3e591b2dc05cb98189c0e053",
+      "src/agent/embedded/types.ts": "df538b23b697849dced1dbefd1e76788a3e16210e741c500c1b234df5295836d",
+      "src/agent/tools/web.ts": "3939e7a93119543f3ad6ed1074ebceea995855d6bd00db4c4e930dfced2fe36c",
+      "src/usage/cloud-wire.ts": "e1400c34529bad5781463872841c6aa485a7796d98493ea04ffaf2eec14bfec3",
+      "src/usage/recorder.ts": "2b565502a38e39bd191a8a1b6afed463a798e3b561c65f7e810b3424108b788b",
+      "src/providers/model-call.ts": "15160060ce1700c8733cded818c8251d9b7fe9a07ddbfbf18a2ea02bb42e299c",
+      "src/providers/extension-stream-bridge.ts": "d80042843fd2c14508205a690e8c1adc3b98c982f55eb97bfdc9c312e2780efe",
+      "pnpm-lock.yaml": "6f7caa86319bca16cda59ccbcf9af49d7890259592be8151f3ea9df1ce43ba7e"
+    },
+    "modelSelection": {
+      "personal": "xopc-cloud/auto",
+      "global": "xopc-cloud/auto"
+    },
+    "downloads": [
+      {
+        "title": "monthly_summary.csv",
+        "sha256": "1232c64c577c47cd0721df0acd39b7d8261bd1e1edf1b1a86a108d56bc49dcc0",
+        "sizeBytes": 64
+      },
+      {
+        "title": "report.md",
+        "sha256": "0e26ff7c2326072610f140c0a42d2658468ffc6b129652f4a2fbcc632606783a",
+        "sizeBytes": 4551
+      },
+      {
+        "title": "reproduce.mjs",
+        "sha256": "d6aa90f6c9eb168b2d8ab00f85a1bcf84da3091005750eed9304fd4d6a8326b0",
+        "sizeBytes": 1921
+      },
+      {
+        "title": "change_notes.md",
+        "sha256": "324f808afaedbed90e442ba4e63d7852509a3303f4cc3b6e70c951feb6d13369",
+        "sizeBytes": 430
+      }
+    ],
+    "negativePriceRejected": true,
+    "researchChecks": [
+      {
+        "criterion": "monthly_summary.csv 包含各月总销售额及相邻月份环比，数值由实际运行 reproduce.mjs 计算，且与脚本运行结果一致",
+        "status": "passed"
+      },
+      {
+        "criterion": "reproduce.mjs 存在于执行者工作区且可实际运行，重新运行可复现 monthly_summary.csv 中的数值",
+        "status": "passed"
+      },
+      {
+        "criterion": "report.md 说明统计口径（如按月汇总、环比计算公式、对缺失或异常数据的处理方式）",
+        "status": "passed"
+      },
+      {
+        "criterion": "report.md 仅基于 pricing-sources.md 对比 A/B 的 ASR 每小时价格及换算后的每分钟价格，结论逐条引用 pricing-sources.md 中的来源",
+        "status": "passed"
+      },
+      {
+        "criterion": "report.md 如实标注 TTS 未公开报价，未补造完整通话成本，未引入互联网补充报价",
+        "status": "passed"
+      },
+      {
+        "criterion": "report.md 包含 HTTP 404 的含义及它不能单独证明永久删除的结论，并附本次 web_fetch 实际读取的来源 URL 与访问时间",
+        "status": "passed"
+      },
+      {
+        "criterion": "report.md 读取 conflicting-note.md，明确指出其与 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 官方说明的冲突，并以本次实际读取的官方说明为判断依据，未将两者平均或视为一致",
+        "status": "passed"
+      },
+      {
+        "criterion": "sales.csv 的原始字节保持不变",
+        "status": "passed"
+      }
+    ],
+    "injections": [
+      {
+        "kind": "user_requirement_changed_via_main_input",
+        "entryId": "adbf3e91-41b1-4997-b04b-9976f6309567",
+        "at": 1792815395276
+      },
+      {
+        "kind": "published_file_deleted",
+        "artifactId": "report---ebf74fac-357a-42f1-9ce3-ead030d7cc59.md",
+        "at": 1792815446499
+      }
+    ]
+  },
+  "retention": {
+    "copiedAt": "2026-10-24T04:18:43.208Z",
+    "originalState": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-allocation-live-3lXc83",
+    "files": [
+      "xopc.db",
+      "logs",
+      "media",
+      "shared",
+      "workspace-data-analyst",
+      "workspace-personal-f815d4b478fa",
+      "workspace-main",
+      "workspace-creative",
+      "workspace-conductor",
+      "workspace-writer",
+      "workspace-researcher",
+      "workspace-task-router",
+      "workspace-coder"
+    ],
+    "databaseSha256": "fa3b137f8adcd1e3fdadba8a96e117346ef4bfa231a239a5e87ca356d7dbe57a",
+    "originalUnchanged": true,
+    "configAndCredentialsExcluded": true
+  },
+  "decisionPath": "/Users/micjoyce/develop/github/xopc/.xopc-evals/control/personal-latency-v7-20261024-v4/verification.json",
+  "decisionSha256": "9b271b4e04dedc5d2edea8a49670a59d8dc98bfe489d1b7989dc998167517d0f",
+  "retainedDatabaseReadOnlyVerified": true,
+  "validation": {
+    "runtimeFiles": 3,
+    "runtimeTests": 63,
+    "coderFiles": 27,
+    "coderTests": 85,
+    "rootTypecheck": "passed",
+    "logs": [
+      {
+        "path": ".xopc-evals/control/personal-latency-v4-unit-20261024.log",
+        "sha256": "1e8214d864c18b4835de305560e9adeff216d4a83d539760008a0c565e80f3f8"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v4-unit-fixed-20261024.log",
+        "sha256": "3e847c45fd7b6cfa15fa3a97e6f8c7dc3ab2a2c5671d260ed36e0c2ff38fb72c"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v4-coder-20261024.log",
+        "sha256": "17937210a2e706520d51b28c5a98fad96173349537acb3856066ef3673042fde"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v4-typecheck-final-20261024.log",
+        "sha256": "70685b4df7789c854b9e1ceab7d78a6d0f9a0831c11eb0010b7b5fdbe0e50c39"
+      }
+    ],
+    "dashboardBrowserVerified": true,
+    "dashboardUrl": "http://127.0.0.1:4310/#improvements/2cc95494-da4f-4950-8285-96f6b3189370",
+    "sourceFilesMatchFrozenCandidate": true,
+    "artifacts": [
+      {
+        "path": ".xopc-evals/control/personal-latency-v4-dashboard-20261024.png",
+        "sha256": "8278be70f4cbf500735e535ce40a2cfdd17d9fbcef02091b38d6545dbbe72fca"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v4-export-20261024.json",
+        "sha256": "006be9847c62ac4d60a35794dfa78e4bab251703735cab3e5b6fdf2b1ca9339f"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v7-20261024-v4/post-failure-independent-checks.json",
+        "sha256": "4162cb158537885ee1bccc4bf1b4727513739359d574b13ca802e72758701f6a"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v7-20261024-v4/personal/summary.json",
+        "sha256": "5f1d17e38f68dbded11cf1fbe5ef336a12a19e169135dca62b71f3a4afca207f"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v7-20261024-v4/personal/mixed-round-1.json",
+        "sha256": "62c50954f5fb0c03bf7b30c4561f69f699701cd8f5805541b4c8ca7dbf4c4cb1"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v7-20261024-v4/personal-model-requests.jsonl",
+        "sha256": "5163a035f80c6adda4026d32a66a4e9e91e66fed5d784368d83f927cf0936709"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-v7-20261024-v4/personal/runtime-usage.json",
+        "sha256": "3bfbb5d2bc950d82fefc92d5a39b582c0fb3c9a4f8c423444c2172088152e378"
+      }
+    ]
+  },
+  "limitations": [
+    "One disclosed mixed regression; no unseen holdout or general SLA claim",
+    "Existing model/thinking unchanged; no literal echo bypass",
+    "Full response completion latency retained; no replacement by first-token latency",
+    "All failed records retained; no unchanged rerun; actual charge unknown"
+  ],
+  "postFailureIndependentChecks": {
+    "scope": "Read-only post-failure checks, including assertions after v7 latency short-circuit; not a replacement full v7 verdict or unseen holdout",
+    "checks": [
+      {
+        "name": "Four authenticated-download byte hashes match retained media",
+        "passed": true
+      },
+      {
+        "name": "Deleted report replaced by a different available publication",
+        "passed": true
+      },
+      {
+        "name": "Revised downloaded content retains marker, four rows and both months",
+        "passed": true
+      },
+      {
+        "name": "Latest instruction has adoption evidence",
+        "passed": true
+      },
+      {
+        "name": "Real MDN fetch happened during trial",
+        "passed": true
+      },
+      {
+        "name": "Report retains 404 permanent-deletion limit",
+        "passed": true
+      },
+      {
+        "name": "Conflicting source and explanation retained",
+        "passed": true
+      },
+      {
+        "name": "One Task and one TaskRun retained",
+        "passed": true
+      },
+      {
+        "name": "Real wrong-price reviewer rejects price and criterion",
+        "passed": true
+      }
+    ],
+    "passed": 9,
+    "expected": 9,
+    "databaseUnchanged": true,
+    "databaseSha256": "fa3b137f8adcd1e3fdadba8a96e117346ef4bfa231a239a5e87ca356d7dbe57a",
+    "fullV7StillFailed": true
+  },
+  "compositionFallbackEvents": [
+    {
+      "reason": "Durable final delivery superseded composition",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "taskRunId": "0ff83a89-0adc-4ba1-a91d-ddf55891b078"
+    }
+  ]
+}

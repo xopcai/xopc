@@ -1,8 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { ensureXopcDatabaseSchema, readSchemaVersion, setSchemaVersion, ensureSchemaMetaTable, XOPC_DB_SCHEMA_VERSION } from '../schema.js';
+import { ensureXopcDatabaseSchema, readSchemaVersion, setSchemaVersion, ensureSchemaMetaTable, XOPC_DB_SCHEMA_VERSION, XOPC_DB_MINIMUM_SCHEMA_VERSION } from '../schema.js';
 
-describe('current-only SQLite schema', () => {
+describe('SQLite schema initialization and supported upgrade boundary', () => {
   it('initializes the complete current schema without historical upgrade steps', () => {
     const db = new DatabaseSync(':memory:');
     try {
@@ -17,9 +17,9 @@ describe('current-only SQLite schema', () => {
   it('rejects older versions without modifying their schema or version', () => {
     const db = new DatabaseSync(':memory:');
     try {
-      ensureSchemaMetaTable(db); setSchemaVersion(db, XOPC_DB_SCHEMA_VERSION - 1);
+      ensureSchemaMetaTable(db); setSchemaVersion(db, XOPC_DB_MINIMUM_SCHEMA_VERSION - 1);
       expect(() => ensureXopcDatabaseSchema(db)).toThrow('older than');
-      expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION - 1);
+      expect(readSchemaVersion(db)).toBe(XOPC_DB_MINIMUM_SCHEMA_VERSION - 1);
       expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).toHaveLength(1);
     } finally { db.close(); }
   });

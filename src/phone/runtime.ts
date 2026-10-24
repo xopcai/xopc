@@ -11,8 +11,9 @@ import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js';
 import { CloudPhones } from './cloud-phones.js';
 import { AdbPhoneDriver, resolveAdbPath, type PhoneDriver } from './adb-driver.js';
-import { createPhoneModel, isAboutScreen, type PhoneModelAdapter } from './model-adapter.js';
+import { createPhoneModel, isAboutScreen, type PhoneModelAdapter, type PhoneTrajectoryEntry } from './model-adapter.js';
 import { PhoneRepository } from './repository.js';
+import { canDispatchPhoneAction, observationSignature, phoneCompletionSatisfied } from './reliability.js';
 import {
   MOCK_PHONE_MODEL, PhoneError, PhoneInputSchema, type PhoneAction, type PhoneDevice, type PhoneInput,
   type PhoneApplication, type PhoneObservation, type PhoneReport,
@@ -27,6 +28,9 @@ type Session = {
   human?: string; humanExpiresAt?: number; viewedAt: number; preview?: Promise<void>;
   commands: Promise<unknown>; receipts: Map<string, { hash: string; result: Promise<unknown> }>;
   applications: PhoneApplication[];
+  trajectory: PhoneTrajectoryEntry[];
+  trajectoryCount: number;
+  trajectorySummary: string[];
   stream?: PhoneInteractiveSession;
   streamOpening?: Promise<PhoneInteractiveSession>;
 
@@ -150,11 +154,11 @@ export class PhoneRuntime {
           }
           const now = Date.now();
           const session: Session = { device, driver, adapter, lease, controller: new AbortController(), createdAt: now, modelRef, adbPath,
-            context, applications, frames: new PhoneFrameCache(), io: Promise.resolve(), ioBusy: false, wake: new Set(), viewedAt: 0,
+            context, applications, trajectory: [], trajectoryCount: 0, trajectorySummary: [], frames: new PhoneFrameCache(), io: Promise.resolve(), ioBusy: false, wake: new Set(), viewedAt: 0,
             commands: Promise.resolve(), receipts: new Map(),
             report: { sessionId: randomUUID(), deviceId: device.id, deviceName: device.name, owner, agentId: context.agentId, modelRef,
               mock: modelRef === MOCK_PHONE_MODEL, mode: input.mode, status: 'ready', actions: 0, modelRequests: 0, controlOwner: 'agent', controlEpoch: 1, handoff: 'idle',
-              createdAt: now, updatedAt: now, verified: false, verificationLevel: 'none', steps: [] } };
+              createdAt: now, updatedAt: now, verified: false, verificationLevel: 'none', steps: [], diagnostics: { stalePredictions: 0, protocolRepairs: 0, unchangedActions: 0, completionCorrections: 0 } } };
           this.sessions.set(owner, session);
           if (input.appPackage) {
             if (input.mode !== 'control' || !phoneAllowsApp(device, input.appPackage)) throw new PhoneError('PHONE_APP_DENIED', 'Launching requires control mode and an allowed application');
@@ -187,7 +191,8 @@ export class PhoneRuntime {
     let observation: PhoneObservation | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     const startedAt = Date.now();
-    session.report.errorCode = undefined; session.report.verified = false;
+    session.report.errorCode = undefined; session.report.verified = false; session.report.verificationLevel = 'none';
+    session.report.stopReason = undefined; session.report.message = undefined;
     try {
       await this.waitForAgent(session, signal); session.report.status = 'running';
       this.publish(session);
@@ -202,17 +207,45 @@ export class PhoneRuntime {
       if (session.report.mode !== 'control') throw new PhoneError('PHONE_OBSERVE_ONLY', 'Reopen the phone in control mode to execute actions');
       if (session.report.mock && input.scenario !== 'settings-about') throw new PhoneError('PHONE_MOCK_SCENARIO_REQUIRED', 'Mock mode only supports the explicit settings-about scenario');
       const maxActions = input.op === 'step' ? 1 : input.maxActions;
+      const requiredTexts = [...(input.completion?.textAll ?? []), ...(input.expectText ? [input.expectText] : [])];
+      const completion = input.completion || input.expectText ? { ...input.completion, textAll: requiredTexts.length ? requiredTexts : undefined } : undefined;
       let actions = 0;
+      let protocolFeedback: string | undefined;
+      let repairs = 0;
+      let completionCorrections = 0;
+      let recoveryHint: string | undefined;
+      let changed = false;
+      let previousSignature = observationSignature(observation);
+      let controlEpoch = session.report.controlEpoch;
+      const attempts = new Map<string, number>();
       while (true) {
         if (await this.waitForAgent(session, signal)) { observation.frame.fill(0); observation = await this.observe(session, signal); }
         signal.throwIfAborted(); this.guard(session, context); this.allowedScreen(session, observation);
         const epoch = session.report.controlEpoch;
+        if (controlEpoch !== epoch) {
+          attempts.clear(); recoveryHint = 'The user handed back control. Re-evaluate the fresh screen before continuing.';
+          controlEpoch = epoch;
+        }
+        const signature = observationSignature(observation);
+        if (signature !== previousSignature) changed = true;
+        previousSignature = signature;
         this.recordObservation(session, observation);
         const satisfied = session.report.mock ? isAboutScreen(observation)
-          : Boolean(input.expectText && session.report.facts?.some(text => text.includes(input.expectText!)));
+          : Boolean(completion && phoneCompletionSatisfied(completion, observation, changed));
         if (satisfied) {
-          session.report.verified = true; session.report.verificationLevel = 'ui'; session.report.status = 'completed';
-          session.report.stopReason = actions ? 'condition_satisfied' : 'condition_present'; return this.publish(session);
+          const confirmation = await this.observe(session, signal);
+          try {
+            signal.throwIfAborted(); this.guard(session, context);
+            this.allowedScreen(session, confirmation);
+            const confirmed = session.report.mock ? isAboutScreen(confirmation)
+              : Boolean(completion && phoneCompletionSatisfied(completion, confirmation, changed));
+            if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent' || !confirmed) {
+              observation.frame.fill(0); observation = confirmation; continue;
+            }
+            this.recordObservation(session, confirmation);
+            session.report.verified = true; session.report.verificationLevel = 'ui'; session.report.status = 'completed';
+            session.report.stopReason = actions ? 'condition_satisfied' : 'condition_present'; return this.publish(session);
+          } finally { if (observation !== confirmation) confirmation.frame.fill(0); }
         }
         if (actions >= maxActions) { session.report.status = 'ready'; session.report.stopReason = 'action_limit'; return this.publish(session); }
         if (session.report.modelRequests >= context.config.phone.maxModelRequests) throw new PhoneError('PHONE_MODEL_LIMIT', 'Phone model request limit reached');
@@ -220,12 +253,21 @@ export class PhoneRuntime {
         session.prediction = new AbortController();
         let decision;
         try {
-          decision = await session.adapter.predict({ goal: input.goal, observation, allowedApps: session.device.allowedApps, appAccess: phoneAppAccess(session.device),
+          decision = await session.adapter.predict({ goal: input.goal, observation, completion, allowedApps: session.device.allowedApps, appAccess: phoneAppAccess(session.device),
             applications: session.applications.filter(app => phoneAllowsApp(session.device, app.packageName)),
-            history: session.report.steps.map(step => step.action), scenario: input.scenario }, AbortSignal.any([signal, session.prediction.signal]));
+            history: session.report.steps.map(step => step.action), trajectory: session.trajectory,
+            progressSummary: JSON.stringify({ dispatched: session.trajectoryCount,
+              earlier: [...session.trajectorySummary, ...session.trajectory.slice(0, -8).map(entry => JSON.stringify({ action: entry.action, effect: entry.effect, afterApp: entry.afterApp }).slice(0, 250))].slice(-12) }).slice(-1500),
+            recoveryHint, protocolFeedback, scenario: input.scenario }, AbortSignal.any([signal, session.prediction.signal]));
         } catch (error) {
           if (!signal.aborted && epoch !== session.report.controlEpoch) {
             await this.waitForAgent(session, signal); observation.frame.fill(0); observation = await this.observe(session, signal); continue;
+          }
+          if (!signal.aborted && error instanceof PhoneError && ['PHONE_MODEL_PROTOCOL', 'PHONE_MODEL_TRUNCATED'].includes(error.code)
+            && repairs < 1 && session.report.modelRequests < context.config.phone.maxModelRequests) {
+            repairs++; session.report.diagnostics!.protocolRepairs++;
+            protocolFeedback = 'Your previous output was invalid or truncated. Return exactly one complete action in the specified format with no extra prose.';
+            observation.frame.fill(0); observation = await this.observe(session, signal); continue;
           }
           throw error;
         } finally { session.prediction = undefined; }
@@ -233,9 +275,16 @@ export class PhoneRuntime {
         if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') {
           await this.waitForAgent(session, signal); observation.frame.fill(0); observation = await this.observe(session, signal); continue;
         }
+        protocolFeedback = undefined;
         if (decision.kind !== 'action') {
+          if (decision.kind === 'complete' && !session.report.mock && (input.completion || input.expectText)
+            && completionCorrections < 1 && session.report.modelRequests < context.config.phone.maxModelRequests) {
+            completionCorrections++; session.report.diagnostics!.completionCorrections++;
+            recoveryHint = `Your completion claim is not verified. These required native UI conditions are not all satisfied: ${JSON.stringify({ expectText: input.expectText, ...input.completion })}. Recheck the fresh screen, preserve user constraints, and continue if a safe authorized action can satisfy the goal; otherwise report unfinished.`;
+            observation.frame.fill(0); observation = await this.observe(session, signal); continue;
+          }
           session.report.status = decision.kind === 'needsUser' ? 'needs_user' : 'completed';
-          session.report.message = decision.kind === 'needsUser' ? decision.reason : undefined;
+          session.report.message = decision.kind === 'needsUser' ? decision.reason : decision.summary;
           session.report.stopReason = decision.kind === 'needsUser' ? 'user_takeover' : 'model_finished_unverified';
           if (decision.kind === 'needsUser' && !session.report.mock) {
             session.report.controlOwner = 'none'; session.report.controlEpoch!++; session.budget?.pause(); this.publish(session);
@@ -247,14 +296,35 @@ export class PhoneRuntime {
         const fresh = await this.observe(session, signal);
         try {
           this.allowedScreen(session, fresh);
-          if (fresh.package !== observation.package || fresh.width !== observation.width || fresh.height !== observation.height || fresh.rotation !== observation.rotation
-            || JSON.stringify(fresh.elements) !== JSON.stringify(observation.elements) || (!fresh.elements.length && !fresh.frame.equals(observation.frame))) {
+          if (!canDispatchPhoneAction(decision.action, observation, fresh)) {
+            session.report.diagnostics!.stalePredictions++;
+            recoveryHint = 'The proposed action was not dispatched because its target changed. Locate it again on the fresh screen.';
             observation.frame.fill(0); observation = fresh; continue;
           }
           if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') continue;
+          const attemptKey = `${observationSignature(fresh)}:${JSON.stringify(decision.action)}`;
+          const repetitions = attempts.get(attemptKey) ?? 0;
+          if (repetitions >= (decision.action.type === 'wait' ? 3 : 2)) {
+            session.report.status = 'paused'; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+            session.report.stopReason = 'no_progress';
+            session.report.message = 'Repeated actions made no progress. Inspect the phone and hand back before continuing.';
+            session.budget?.pause(); await session.stream?.revoke(); return this.publish(session);
+          }
+          attempts.set(attemptKey, repetitions + 1);
           if (await this.dispatch(session, decision.action, fresh, context, signal, epoch)) actions++;
         } finally { if (observation !== fresh) fresh.frame.fill(0); }
+        const beforeSignature = observationSignature(observation);
         observation.frame.fill(0); observation = await this.observe(session, signal);
+        const entry = session.trajectory.at(-1);
+        if (entry && entry.actor === 'agent' && epoch === session.report.controlEpoch) {
+          const unchanged = beforeSignature === observationSignature(observation);
+          entry.afterApp = observation.package; entry.effect = unchanged ? 'unchanged' : 'changed';
+          entry.facts = observation.elements.filter(node => !node.password).flatMap(node => [node.text, node.description]).filter(Boolean).slice(0, 12).map(text => text.slice(0, 160));
+          if (unchanged) session.report.diagnostics!.unchangedActions++;
+          recoveryHint = unchanged
+            ? 'The last dispatched action produced no observable change. Wait if loading, otherwise try a different target or route; do not repeat an uncertain input.'
+            : undefined;
+        }
       }
     } catch (error) {
       const failure = signal.aborted && signal.reason instanceof PhoneError ? signal.reason : error;
@@ -295,7 +365,7 @@ export class PhoneRuntime {
       if (heartbeat) clearInterval(heartbeat); observation?.frame.fill(0);
       log.info({ sessionId: session.report.sessionId, conversationId: session.report.owner, phase: 'goal_end',
         durationMs: Date.now() - startedAt, status: session.report.status, stopReason: session.report.stopReason,
-        actions: session.report.actions, modelRequests: session.report.modelRequests }, 'Phone goal finished');
+        actions: session.report.actions, modelRequests: session.report.modelRequests, diagnostics: session.report.diagnostics }, 'Phone goal finished');
     }
   }
   private recordObservation(session: Session, observation: PhoneObservation): void {
@@ -320,11 +390,18 @@ export class PhoneRuntime {
       session.report.steps.push(step); session.report.actions++;
       if (session.human) { session.report.humanActions = (session.report.humanActions ?? 0) + 1; session.report.steps = session.report.steps.slice(-200); }
       this.publish(session);
-      try { await session.driver.execute(session.device.serial, action, observation, signal, session.human ? { settleMs: 0, ...(resetTask ? { resetTask: true } : {}) } : undefined); step.dispatch = 'completed'; }
+      const entry: PhoneTrajectoryEntry = { action: structuredClone(action), dispatch: 'unknown', actor: step.actor, beforeApp: observation.package, effect: 'unknown' };
+      session.trajectory.push(entry); session.trajectoryCount++;
+      if (session.trajectory.length > 24) {
+        const earlier = session.trajectory.shift()!;
+        session.trajectorySummary.push(JSON.stringify({ action: earlier.action, effect: earlier.effect, afterApp: earlier.afterApp }).slice(0, 250));
+        session.trajectorySummary = session.trajectorySummary.slice(-12);
+      }
+      try { await session.driver.execute(session.device.serial, action, observation, signal, session.human ? { settleMs: 0, ...(resetTask ? { resetTask: true } : {}) } : undefined); step.dispatch = 'completed'; entry.dispatch = 'completed'; }
       catch (error) {
         const textFailure = error instanceof PhoneError && ['PHONE_TEXT_INPUT_UNAVAILABLE', 'PHONE_TEXT_INPUT_UNCONFIRMED'].includes(error.code);
         if (textFailure && error.code === 'PHONE_TEXT_INPUT_UNAVAILABLE') {
-          session.report.steps.pop(); session.report.actions--; if (session.human) session.report.humanActions!--;
+          session.report.steps.pop(); session.report.actions--; session.trajectory.pop(); session.trajectoryCount--; if (session.human) session.report.humanActions!--;
         } else session.report.status = 'outcome_unknown';
         if (textFailure && session.human) {
           session.report.status = 'paused'; session.report.errorCode = error.code; session.report.message = error.message;
@@ -348,7 +425,7 @@ export class PhoneRuntime {
     session.report.status = op === 'pause' ? 'paused' : op === 'cancel' ? 'cancelled' : 'closed';
     session.report.stopReason = op; if (op !== 'close') session.report.verified = false;
     if (op !== 'pause') {
-      session.report.facts = undefined; session.report.message = undefined; session.frames.clear();
+      session.report.facts = undefined; session.report.message = undefined; session.trajectory = []; session.trajectorySummary = []; session.frames.clear();
       session.adapter = { predict: async () => { throw new PhoneError('PHONE_OPEN_REQUIRED', 'Reopen the phone session'); } };
     }
     this.publish(session);
