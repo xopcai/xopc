@@ -36,16 +36,33 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
-it('retains remote connection credentials and authorization controls in simple mode', async () => {
+it('keeps credentials visible and expands advanced groups independently without changing configuration', async () => {
   await act(async () => root.render(<MemoryRouter><AgentBrowserSettingsPage /></MemoryRouter>));
   expect(container.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe('saved-key');
-  expect(container.textContent).toContain('File uploads');
-  expect(container.textContent).toContain('Consequential actions');
+  expect(container.textContent).not.toContain('File uploads');
+  expect(container.textContent).not.toContain('Consequential actions');
   expect(container.querySelector('input[type="number"]')).toBeNull();
   expect(fixture.update).not.toHaveBeenCalled();
-  const reveal = [...container.querySelectorAll('button')].find(button => button.textContent === 'Show advanced settings')!;
+  const reveal = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Observation & execution'))!;
   await act(async () => reveal.click());
   expect(container.querySelector('input[type="number"]')).not.toBeNull();
+  expect(useSettingsModeStore.getState().mode).toBe('simple');
+  const access = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Access policies'))!;
+  await act(async () => access.click());
+  expect(container.textContent).toContain('File uploads');
+  expect(container.textContent).toContain('Consequential actions');
+  await act(async () => reveal.click());
+  expect(container.querySelector('input[type="number"]')).toBeNull();
   expect(container.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe('saved-key');
+  expect(fixture.update).not.toHaveBeenCalled();
+});
+
+
+it('restores a linked access panel without changing values or revealing unrelated groups', async () => {
+  useSettingsModeStore.setState({ mode: 'advanced' });
+  await act(async () => root.render(<MemoryRouter initialEntries={['/?browser-access=1&browser-private-hosts=1&conversationId=existing']}><AgentBrowserSettingsPage /></MemoryRouter>));
+  expect(container.querySelector('textarea')?.value).toBe('intranet.example');
+  expect(container.textContent).toContain('File uploads');
+  expect(container.querySelector('input[type="number"]')).toBeNull();
   expect(fixture.update).not.toHaveBeenCalled();
 });

@@ -25,6 +25,7 @@ import {
   type BrowserExtensionStatus,
   type PlaywrightDoctorStatus,
 } from './browser-control-api';
+import { BrowserSettingsDisclosure } from './browser-settings-disclosure';
 import { usePlaywrightInstall } from './use-playwright-install';
 
 const driverNames: Record<BrowserDriverKind, string> = {
@@ -78,7 +79,7 @@ export function BrowserStatusPanel(props: {
 
   const payload = status.data?.payload;
   const isCurrent = payload?.driverKind === driverKind;
-  const effectiveState = !enabled ? 'disabled' : configPending || !isCurrent ? 'syncing' : payload?.state;
+  const effectiveState = !enabled ? 'disabled' : status.error ? 'needs_attention' : configPending || !isCurrent ? 'syncing' : payload?.state;
   const stateCopy = effectiveState === 'ready'
     ? (zh ? '已就绪' : 'Ready')
     : effectiveState === 'disabled'
@@ -89,22 +90,22 @@ export function BrowserStatusPanel(props: {
   const StateIcon = effectiveState === 'ready' ? CheckCircle2 : effectiveState === 'syncing' ? Loader2 : AlertTriangle;
 
   return (
-    <section className="rounded-xl bg-surface-hover/20 p-5">
+    <section className="overflow-hidden rounded-2xl border border-edge bg-surface-panel">
+      <div className="p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <StateIcon className={`size-4 shrink-0 ${effectiveState === 'ready' ? 'text-success' : effectiveState === 'syncing' ? 'animate-spin text-fg-muted' : effectiveState === 'disabled' ? 'text-fg-subtle' : 'text-warning'}`} />
-            <h2 className="text-sm font-semibold text-fg">{zh ? '浏览器就绪状态' : 'Browser readiness'}</h2>
+            <StateIcon aria-hidden className={`size-4 shrink-0 ${effectiveState === 'ready' ? 'text-success' : effectiveState === 'syncing' ? 'animate-spin text-fg-muted' : effectiveState === 'disabled' ? 'text-fg-subtle' : 'text-warning'}`} />
+            <h2 className="text-sm font-semibold text-fg">{zh ? '连接状态' : 'Connection status'}</h2>
             <span className={`rounded-full px-2 py-0.5 text-xs ${effectiveState === 'ready' ? 'bg-success-soft text-success' : effectiveState === 'disabled' ? 'bg-surface-hover text-fg-muted' : 'bg-warning-soft text-warning'}`}>{stateCopy}</span>
           </div>
-          <p className="mt-2 text-sm text-fg-muted">
+          <p className="mt-2 text-xs text-fg-muted">
             {driverNames[driverKind]}
-            {payload?.detail && isCurrent ? ` · ${payload.detail}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="ghost" className="h-9" onClick={() => void status.mutate()} disabled={status.isValidating}>
-            <RefreshCw className={`size-3.5 ${status.isValidating ? 'animate-spin' : ''}`} />
+            <RefreshCw aria-hidden className={`size-3.5 ${status.isValidating ? 'animate-spin' : ''}`} />
             {zh ? '刷新' : 'Refresh'}
           </Button>
           <Button
@@ -124,6 +125,9 @@ export function BrowserStatusPanel(props: {
       {operationError || playwrightInstall.error ? <Message tone="error">{operationError ?? playwrightInstall.error}</Message> : null}
       {success ? <Message tone="success">{success}</Message> : null}
 
+      </div>
+      {enabled && <BrowserSettingsDisclosure name="status" title={zh ? '安装与连接详情' : 'Installation & connection details'} inset>
+      {payload?.detail && isCurrent && <p className="text-xs leading-5 text-fg-muted">{payload.detail}</p>}
       {enabled && driverKind === 'extension' && isCurrent ? (
         <ExtensionSetup
           status={payload?.driverStatus as BrowserExtensionStatus | undefined}
@@ -150,6 +154,7 @@ export function BrowserStatusPanel(props: {
           {zh ? '连接测试会在服务商侧创建一个临时浏览器会话，并在测试结束后立即关闭。' : 'The connection test creates a temporary provider session and closes it immediately after the test.'}
         </p>
       ) : null}
+      </BrowserSettingsDisclosure>}
     </section>
   );
 }
@@ -164,7 +169,7 @@ function ExtensionSetup(props: {
   const { status, zh, busy, run, onConnectRemote } = props;
   const artifacts = status?.artifacts;
   return (
-    <div className="mt-4 rounded-xl bg-surface-base/45 p-4">
+    <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <StatusItem label={zh ? '扩展文件' : 'Extension files'} ok={artifacts?.installed === true} value={artifacts?.installed ? (zh ? '已安装' : 'Installed') : (zh ? '未安装或需更新' : 'Install or update required')} />
         <StatusItem label={zh ? '本机自动发现' : 'Local auto-discovery'} ok={artifacts?.nativeHost?.installed === true} value={artifacts?.nativeHost?.installed ? (zh ? '已就绪' : 'Ready') : (artifacts?.nativeHost?.reason ?? (zh ? '需要修复' : 'Repair required'))} />
@@ -199,7 +204,7 @@ function PlaywrightSetup(props: {
 }) {
   const { status, zh, installer } = props;
   return (
-    <div className="mt-4 rounded-xl bg-surface-base/45 p-4">
+    <div className="space-y-3">
       <StatusItem label="Chromium" ok={status?.installed === true} value={status?.installed ? (zh ? '已安装' : 'Installed') : (status?.reason ?? (zh ? '未安装' : 'Not installed'))} />
       {status?.executablePath ? <p className="mt-2 break-all text-xs text-fg-subtle">{status.executablePath}</p> : null}
       {installer.progress ? (

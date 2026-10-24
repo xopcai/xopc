@@ -22,7 +22,7 @@ beforeEach(() => { vi.clearAllMocks(); useLocaleStore.setState({ language: 'zh' 
 afterEach(async () => { await act(async () => root.unmount()); node.remove(); });
 const render = async (cloudOnly = false) => act(async () => root.render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><PhoneDependenciesCard cloudOnly={cloudOnly} /></SWRConfig>));
 it('shows host installation and existing path options without provisioning on load', async () => {
-  await render(); expect(node.textContent).toContain('Gateway 所在机器'); expect(node.textContent).toContain('使用已有 ADB');
+  await render(); expect(node.textContent).toContain('Gateway 电脑'); expect(node.textContent).toContain('使用已有 ADB');
   expect(installPhoneDependency).not.toHaveBeenCalled();
   await act(async () => [...node.querySelectorAll('button')].find(button => button.textContent === '安装')!.click());
   expect(installPhoneDependency).toHaveBeenCalledWith('scrcpy', 'install', expect.any(Function), undefined);
