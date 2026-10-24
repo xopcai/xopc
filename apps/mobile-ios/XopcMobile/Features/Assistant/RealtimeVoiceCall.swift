@@ -326,8 +326,7 @@ final class RealtimeVoiceCall {
 
 extension RealtimeVoiceCall {
     func submitClarification(action: String, submission: ClarificationSubmission? = nil) async {
-        guard let clarification, let gateway, !respondingToIntervention else { return }
-        guard !clarification.isExpired else { return }
+        guard let clarification, let gateway, !respondingToIntervention, !clarification.isExpired else { return }
         let previous = clarificationAttempt
         let candidate = ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
                                                      expectedVersion: clarification.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())

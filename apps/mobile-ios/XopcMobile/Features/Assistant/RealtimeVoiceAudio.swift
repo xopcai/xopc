@@ -117,8 +117,8 @@ final class RealtimeVoiceAudio {
 
     func enqueue(responseID: String, pcm: Data) throws {
         guard let player, let format = playbackFormat else { throw RealtimeVoiceAudioError.notStarted }
-        guard pcm.count == 960 else { throw RealtimeVoiceAudioError.invalidOutputFrame }
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480),
+        guard pcm.count == 960,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480),
               let samples = buffer.int16ChannelData?[0]
         else { throw RealtimeVoiceAudioError.invalidOutputFrame }
         buffer.frameLength = 480

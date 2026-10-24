@@ -22,8 +22,7 @@ struct PersonalAgentAvatar: View {
         }
         .task(id: AvatarLoadKey(configuration: configuration, agentID: agent?.agentId, appearance: agent?.appearance, revision: agent?.revision)) {
             picture = nil
-            guard let agent, agent.appearance == "custom", !agent.agentId.isEmpty else { return }
-            guard let encodedID = agent.agentId.addingPercentEncoding(
+            guard let agent, agent.appearance == "custom", !agent.agentId.isEmpty, let encodedID = agent.agentId.addingPercentEncoding(
                 withAllowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
             ) else { return }
             do {

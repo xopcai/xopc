@@ -118,8 +118,8 @@ struct ChatImageGalleryView: View {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let info = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = info[kCGImagePropertyPixelWidth] as? Int,
-              let height = info[kCGImagePropertyPixelHeight] as? Int else { return nil }
-        guard width > 0, height > 0 else { return nil }
+              let height = info[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0 else { return nil }
         let scale = min(1, 4096 / CGFloat(max(width, height)), sqrt(8_000_000 / (CGFloat(width) * CGFloat(height))))
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
