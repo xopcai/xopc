@@ -65,4 +65,8 @@ it('nests model configuration inside an invoking modal without aria-hiding the c
   expect(editor.closest('[aria-hidden="true"]')).toBeNull();
   expect(document.querySelector('[data-testid="invoking"]')?.contains(editor)).toBe(true);
   expect(document.querySelector('textarea')?.value).toBe('Keep this draft');
+  const back = [...document.querySelectorAll('button')].find(button => ['返回自动化', 'Back to automation'].includes(button.textContent ?? ''))!;
+  await act(async () => back.click());
+  expect(document.querySelector('textarea')?.value).toBe('Keep this draft');
+  expect(opener.closest('[aria-hidden="true"]')).toBeNull();
 });

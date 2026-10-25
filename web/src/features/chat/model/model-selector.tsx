@@ -2,7 +2,7 @@ import { openCapabilitySettings } from '@/features/settings/models-hub/open-capa
 import { modelDisplayName } from '@/lib/model-display-name';
 import * as Popover from '@radix-ui/react-popover';
 import { Check, ChevronsUpDown, Settings2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -283,6 +283,11 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
   const language = useLocaleStore((s) => s.language);
   const [query, setQuery] = useState('');
   const filtered = modelsMatchingQuery(models, showSearch ? query : '');
+  const selectedOption = useRef<HTMLButtonElement>(null);
+  const hasSelectedOption = filtered.some(model => model.id === value);
+  useLayoutEffect(() => {
+    if (!query) selectedOption.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [value, query, hasSelectedOption]);
   const groups = new Map<string, ConfiguredModel[]>();
   for (const model of models) {
     const key = groupByProvider ? model.provider : '';
@@ -294,7 +299,6 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
       {showSearch && <input type="search" aria-label={searchPlaceholder} placeholder={searchPlaceholder}
         value={query} onChange={(event) => setQuery(event.target.value)}
         className={cn('mx-1 mb-2 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg', formControlBorderFocusClass)} />}
-      <p className="px-3 py-2 text-xs leading-5 text-fg-muted">{language === 'zh' ? '不确定时可保留当前默认模型。能力来自服务声明；速度和费用取决于实际服务与用量。' : 'Keep the current default if unsure. Capabilities are service-declared; speed and cost depend on the service and usage.'}</p>
       <div data-select-scroll-region className={cn(selectPopoverScrollAreaClass, groupByProvider && 'scroll-pt-8')}>
         {filtered.length === 0 && <p className="px-3 py-4 text-sm text-fg-muted">{noMatches}</p>}
         {[...groups].filter(([, entries]) => entries.length > 0).map(([provider, entries]) => <div key={provider} role={groupByProvider ? 'group' : undefined} aria-label={groupByProvider ? provider : undefined}
@@ -302,13 +306,13 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
           {groupByProvider && <p className="sticky top-0 z-10 bg-surface-overlay px-3 pb-1 pt-3 text-xs font-medium text-fg-muted">{provider}</p>}
           {entries.map((model) => (
           <button key={model.id} type="button" disabled={disabled} title={model.id}
+            ref={model.id === value ? selectedOption : undefined}
             aria-pressed={model.id === value}
             style={models.length > 50 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 60px' } : undefined}
             className={cn('flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-fg hover:bg-surface-hover disabled:opacity-50', interaction.focusRingPanel, model.id === value && 'bg-surface-hover')}
             onClick={() => onChange(model.id)}>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{modelDisplayName(model, language)}</span>
-              <span className="block text-xs text-fg-muted">{model.phoneUse ? (language === 'zh' ? '手机操作模型 · 用于手机控制' : 'Phone control model') : model.computerUse?.dedicated ? (language === 'zh' ? '电脑操作专用模型' : 'Dedicated computer control model') : model.reasoning ? (language === 'zh' ? '支持推理 · 可用于需多步分析的任务' : 'Reasoning available for multi-step analysis') : (language === 'zh' ? '对话与日常任务' : 'Chat and everyday tasks')}</span>
+              <span className="flex items-center gap-2"><span className="truncate font-medium">{modelDisplayName(model, language)}</span>{(model.phoneUse || model.computerUse?.dedicated || model.reasoning) && <span className="shrink-0 text-xs text-fg-muted">{model.phoneUse ? (language === 'zh' ? '手机控制' : 'Phone control') : model.computerUse?.dedicated ? (language === 'zh' ? '电脑控制' : 'Computer control') : (language === 'zh' ? '推理' : 'Reasoning')}</span>}</span>
               {!groupByProvider && <span className="block truncate text-xs text-fg-muted">{model.provider}</span>}
               {outOfFilterNote && !model.vision && model.id === value && <span className="block text-xs text-fg-muted">{outOfFilterNote}</span>}
             </span>

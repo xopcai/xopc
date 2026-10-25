@@ -2,6 +2,7 @@
 
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -86,9 +87,10 @@ describe('quiet project understanding controls', () => {
   });
 
   it('does not offer project analysis without a bound folder', async () => {
-    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><ProjectUnderstandingPanel projectId="no-folder" hasProjectFolder={false} /></SWRConfig>));
+    await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map() }}><ProjectUnderstandingPanel projectId="no-folder" hasProjectFolder={false} /></SWRConfig></MemoryRouter>));
     expect(container.textContent).toContain('Link a folder');
     expect(container.querySelector('button')).toBeNull();
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/projects/no-folder/settings');
     expect(startProjectUnderstanding).not.toHaveBeenCalled();
   });
 

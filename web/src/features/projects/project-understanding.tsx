@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -59,7 +60,7 @@ export function ProjectUnderstandingAction({ projectId, hasProjectFolder, onStar
       onStarted?.();
     } catch { setError(true); } finally { setBusy(false); }
   };
-  if (!hasProjectFolder) return <ProjectFolderRequired />;
+  if (!hasProjectFolder) return <ProjectFolderRequired projectId={projectId} />;
   return <div>
     <button type="button" className={className ?? 'text-xs text-fg-muted hover:text-fg disabled:opacity-50'} disabled={busy || running}
       onClick={() => void start()}>
@@ -85,7 +86,7 @@ export function ProjectUnderstandingPanel({ projectId, hasProjectFolder }: { pro
       setEditing(false);
     } catch { setSaveError(true); } finally { setSaving(false); }
   };
-  if (!hasProjectFolder) return <section className="rounded-xl border border-edge p-4"><ProjectFolderRequired /></section>;
+  if (!hasProjectFolder) return <section className="rounded-xl border border-edge p-4"><ProjectFolderRequired projectId={projectId} /></section>;
   if (isLoading) return <Skeleton className="h-12 w-full rounded-xl" />;
   return <section className="rounded-xl border border-edge bg-surface-panel px-5 py-3">
     <div className="flex items-center justify-between gap-3 text-xs text-fg-subtle">
@@ -106,7 +107,7 @@ export function ProjectUnderstandingPanel({ projectId, hasProjectFolder }: { pro
   </section>;
 }
 
-function ProjectFolderRequired() {
+function ProjectFolderRequired({ projectId }: { projectId: string }) {
   const zh = useLocaleStore(state => state.language) === 'zh';
-  return <p className="text-xs leading-5 text-fg-muted">{zh ? '先在项目设置中绑定文件夹，再了解该目录中的资料。当前项目仍可组织对话和任务。' : 'Link a folder in project settings before learning from its materials. You can still organize conversations and tasks.'}</p>;
+  return <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5"><span className="text-fg-muted">{zh ? '未绑定项目文件夹' : 'No project folder linked'}</span><Link className="text-accent-fg hover:underline" to={`/projects/${encodeURIComponent(projectId)}/settings`}>{zh ? '绑定文件夹' : 'Link a folder'}</Link></div>;
 }
