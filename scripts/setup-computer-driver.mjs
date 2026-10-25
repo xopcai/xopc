@@ -49,14 +49,18 @@ if (createHash('sha256').update(bytes).digest('hex') !== target.sha256) throw ne
 const temp = await mkdtemp(join(tmpdir(), 'xopc-cua-'));
 const archive = join(temp, target.archive);
 await writeFile(archive, bytes, { mode: 0o600 });
-const entries = execFileSync('tar', ['-tf', archive], { encoding: 'utf8' }).trim().split(/\r?\n/);
+// Git Bash's GNU tar treats drive letters as remote hosts and cannot read ZIPs.
+const tar = process.platform === 'win32'
+  ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe')
+  : 'tar';
+const entries = execFileSync(tar, ['-tf', archive], { encoding: 'utf8' }).trim().split(/\r?\n/);
 const selected = Object.keys(target.files).map(name => {
   const matches = entries.filter(entry => entry === name || entry.endsWith(`/${name}`));
   const entry = matches[0];
   if (matches.length !== 1 || entry.startsWith('/') || entry.includes('\\') || entry.split('/').includes('..') || entry.includes(':')) throw new Error('Unexpected driver archive');
   return { name, entry };
 });
-execFileSync('tar', ['-xf', archive, '-C', temp, ...selected.map(file => file.entry)]);
+execFileSync(tar, ['-xf', archive, '-C', temp, ...selected.map(file => file.entry)]);
 for (const { name, entry } of selected) {
   const extracted = await readFile(join(temp, entry));
   if (createHash('sha256').update(extracted).digest('hex') !== target.files[name]) throw new Error(`Driver binary checksum mismatch: ${name}`);
