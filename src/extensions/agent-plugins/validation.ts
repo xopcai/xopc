@@ -3,13 +3,17 @@ import { pluginAuthorizations, safeAuthorizationUrl } from './setup-contract.js'
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { validateHeaderName, validateHeaderValue } from 'node:http';
-import { isAbsolute, join, relative, resolve, dirname } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import yaml from 'js-yaml';
 import { normalizePluginMcpServer } from './mcp-format.js';
 import { McpOAuthConfigSchema } from '../../config/schema.js';
 import { pluginResources } from './resources.js';
 import { readPluginLayout, collectPluginSkillFiles, type PluginLayout } from './formats.js';
 import { z } from 'zod';
+
+import { containedPath } from './contained-path.js';
+
+export { containedPath } from './contained-path.js';
 
 export const PLUGIN_SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
 export const MCP_SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json';
@@ -38,33 +42,6 @@ export interface PluginInspection {
   servers: Record<string, PluginServer>;
   capabilities: string[];
   diagnostics: PluginDiagnostic[];
-}
-
-export function containedPath(root: string, path: string): string {
-  const base = resolve(root);
-  const target = resolve(path);
-  const rel = relative(base, target);
-  if (rel === '..' || rel.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) || isAbsolute(rel)) {
-    throw new Error('Path escapes package boundary');
-  }
-  // Resolve existing ancestors as well as leaves: PLUGIN_DATA may not exist yet.
-  let ancestor = target;
-  while (!existsSync(ancestor)) {
-    try { lstatSync(ancestor); throw new Error('Broken package symlink'); } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-    if (dirname(ancestor) === ancestor) break;
-    ancestor = dirname(ancestor);
-  }
-  let baseAncestor = base;
-  while (!existsSync(baseAncestor)) baseAncestor = dirname(baseAncestor);
-  const canonicalBase = resolve(realpathSync(baseAncestor), relative(baseAncestor, base));
-  const canonicalTarget = resolve(realpathSync(ancestor), relative(ancestor, target));
-  const resolvedRelative = relative(canonicalBase, canonicalTarget);
-  if (resolvedRelative === '..' || resolvedRelative.startsWith('../') || resolvedRelative.startsWith('..\\') || isAbsolute(resolvedRelative)) {
-    throw new Error('Resolved path escapes package boundary');
-  }
-  return canonicalTarget;
 }
 
 function readPackageFile(root: string, path: string): string {

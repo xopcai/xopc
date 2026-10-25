@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { z } from 'zod';
 
 import { projectUnadmittedForgottenFields } from './forgotten-history.js';
 import { createLogger } from '../utils/logger.js';
@@ -8,17 +7,11 @@ import { writeKnowledgeItem, listKnowledgeItems } from '../knowledge-memory/inde
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
 import type { CaptureEvidence } from '../user-model/capture/semantic.js';
 
-const log = createLogger('MemoryLearning:Admission');
+import type { WorkCandidate } from './work-candidate.js';
 
-export const WorkCandidateSchema = z.object({
-  kind: z.enum(['work_thread', 'project_fact', 'workspace_fact', 'decision', 'task_lesson', 'commitment', 'open_question', 'episode', 'note']),
-  topicKey: z.string().min(1).max(160), predicate: z.string().regex(/^[a-z][a-z0-9_.-]{2,119}$/),
-  statement: z.string().min(4).max(1200),
-  scope: z.enum(['project', 'workspace', 'session']),
-  confidence: z.number().min(0).max(1), importance: z.number().min(0).max(1),
-  evidence: z.array(z.object({ ref: z.string(), quote: z.string().min(1) }).strict()).min(1).max(8),
-}).strict();
-export type WorkCandidate = z.infer<typeof WorkCandidateSchema>;
+export { WorkCandidateSchema, type WorkCandidate } from './work-candidate.js';
+
+const log = createLogger('MemoryLearning:Admission');
 
 export function applyWorkCandidates(input: {
   candidates: WorkCandidate[]; evidence: CaptureEvidence[]; conversationId: string; agentId: string;

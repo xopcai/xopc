@@ -54,7 +54,9 @@ it('runs the evaluator through the real Gateway with a local scripted model serv
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }],
   } } }));
   let logs = '';
-  const child = spawn(process.execPath, ['--import', 'tsx', 'src/cli/bin.ts', 'gateway', '--port', String(port), '--bind', 'loopback', '--no-hot-reload'], {
+  // Windows source-loader startup can exceed the readiness budget; test the packaged Gateway there.
+  const entry = process.platform === 'win32' ? ['out/server/index.js'] : ['--import', 'tsx', 'src/cli/bin.ts'];
+  const child = spawn(process.execPath, [...entry, 'gateway', '--port', String(port), '--bind', 'loopback', '--no-hot-reload'], {
     cwd: repo, env: { ...process.env, XOPC_CONFIG: configPath, XOPC_CONFIG_PATH: configPath,
       XOPC_STATE_DIR: root, XOPC_HOME: root, XOPC_WORKSPACE: workspace, XOPC_MODELS_JSON: modelsPath,
       XOPC_SKIP_CHANNELS: '1', XOPC_NO_RESPAWN: '1', XOPC_LOG_FILE: 'false', XOPC_LOG_LEVEL: 'info' },

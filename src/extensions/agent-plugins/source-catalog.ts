@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { runExec } from '../../infra/exec.js';
 import { PLUGIN_MANIFEST_PATHS } from './formats.js';
-import { containedPath } from './validation.js';
+import { containedPath } from './contained-path.js';
 
 export interface PluginCandidate { name: string; source: string; description?: string }
 export class PluginSourceRedirect extends Error { constructor(readonly source: string) { super('Resolve marketplace plugin source'); } }

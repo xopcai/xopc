@@ -42,6 +42,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Let jsdom supply browser storage instead of Node's file-backed globals.
+    execArgv: ['--no-experimental-webstorage'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',

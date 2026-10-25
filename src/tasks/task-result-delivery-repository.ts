@@ -10,7 +10,7 @@ import { createLogger } from '../utils/logger.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { hasPersonalResultFileLinks, sanitizePersonalResultFileLinks } from '../personal-agent/result-file-links.js';
 import { TaskRepository } from './task-repository.js';
-import { taskInstructionSequence } from './task-research-result.js';
+import { taskInstructionSequence } from './task-instruction-sequence.js';
 
 const log = createLogger('TaskResultDelivery');
 

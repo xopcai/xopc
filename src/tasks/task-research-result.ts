@@ -19,6 +19,10 @@ import { TaskResultDeliveryRepository } from './task-result-delivery-repository.
 import { defineTaskContract } from './task-contract-definition.js';
 import { observedEvidenceExcerpt, suggestedEvidenceRanges } from './task-evidence-ranges.js';
 
+import { taskInstructionSequence } from './task-instruction-sequence.js';
+
+export { taskInstructionSequence } from './task-instruction-sequence.js';
+
 const log = createLogger('TaskResearchResult');
 const text = z.string().trim().min(1);
 export const TaskResearchSubmissionSchema = z.object({
@@ -168,11 +172,6 @@ export const reviewResearchResult: ResearchReviewer = async (input, signal) => {
   }
   throw new Error('Research review unavailable');
 };
-
-export function taskInstructionSequence(taskId: string): number {
-  return new TaskCollaborationRepository().coordination(taskId)
-    .filter(entry => ['main_agent', 'user'].includes(entry.authorKind) && ['answer', 'instruction'].includes(entry.kind)).at(-1)?.sequence ?? 0;
-}
 
 export function currentTaskResearchResult(runId: string): TaskResearchResult | undefined {
   if (!isXopcDatabaseOpen()) return undefined;

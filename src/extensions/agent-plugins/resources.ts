@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 
 import { z } from 'zod';
 
-import { containedPath } from './validation.js';
+import { containedPath } from './contained-path.js';
 import { createPluginSourceFetch } from './source-http-fetch.js';
 import type { AgentPluginStore, InstalledAgentPlugin } from './store.js';
 

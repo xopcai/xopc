@@ -8,7 +8,8 @@ import { h264ParseConfiguration } from '@yume-chan/scrcpy';
 import { spawnPhoneCommand } from '../process/phone-process.js';
 import { readScrcpyServer, scrcpyServerPath, SCRCPY_VERSION } from './scrcpy-assets.js';
 import { ScrcpyTextChannel } from './scrcpy-text.js';
-import { AdbPhoneDriver, runAdb } from './adb-driver.js';
+import { runAdb } from './adb-command.js';
+import { readPhoneForeground } from './foreground.js';
 import { PhoneError } from './contracts.js';
 import type { PhoneInteractiveProvider, PhonePointer, PhoneVideoGeometry, PhoneVideoPacket } from './live-provider.js';
 
@@ -128,7 +129,7 @@ export class LocalScrcpyProvider extends ScrcpyProvider {
   private remote = ''; private scid = '';
   constructor(private adb: string, private serial: string, onFailure: () => void,
     private tuning = { maxSize: 960, bitRate: 2_000_000 }, private textOnly = false) { super(onFailure); }
-  foreground(signal: AbortSignal): Promise<string> { return new AdbPhoneDriver(this.adb).foreground(this.serial, signal); }
+  foreground(signal: AbortSignal): Promise<string> { return readPhoneForeground(runAdb, this.adb, this.serial, signal); }
   protected async startTransport(): Promise<void> {
     await readScrcpyServer();
     const scid = randomBytes(4).readUInt32BE() & 0x7fffffff;

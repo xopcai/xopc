@@ -10,7 +10,7 @@ import {
 } from '../agent-config/index.js';
 import { DEFAULT_AGENT_ID, normalizeAgentId } from './id.js';
 import { BindingsSchema, type BindingRule } from '../routing/binding-schema.js';
-import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/index.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import type {
   AgentCatalogSettings,
   AgentCatalogSnapshot,

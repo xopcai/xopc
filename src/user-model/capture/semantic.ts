@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { WorkCandidateSchema, type WorkCandidate } from '../../memory-learning/work-capture.js';
+import { WorkCandidateSchema, type WorkCandidate } from '../../memory-learning/work-candidate.js';
 
 import type { AssertionCandidate, AssertionAuthority } from '../domain.js';
 

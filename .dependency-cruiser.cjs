@@ -42,7 +42,8 @@ module.exports = {
         // minimax/openai extensions. Tracked as accepted tech debt.
         pathNot: '^src/agent/image/generation/(provider-registry|types)\\.ts$',
       },
-      to: { circular: true },
+      // Type-only edges are erased and cannot create runtime import-order cycles.
+      to: { circular: true, viaOnly: { dependencyTypesNot: ['type-only'] } },
     },
 
     {

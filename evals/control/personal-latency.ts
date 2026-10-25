@@ -1,5 +1,5 @@
 import {existsSync,readFileSync} from 'node:fs';
-import {join,resolve} from 'node:path';
+import {join,resolve,sep} from 'node:path';
 import {hash} from './evidence.js';
 import {reconcileJob} from './reconciliation.js';
 import {array,record} from './types.js';
@@ -15,7 +15,7 @@ export function assessPersonalLatency(directory:string,registrationPath:string,c
  if(!Object.keys(sourceHashes).length)reasons.push('Candidate hashes missing');
  for(const [path,digest] of Object.entries(sourceHashes)){
   const target=resolve(candidateRoot,path);
-  if(!target.startsWith(resolve(candidateRoot)+'/')||!existsSync(target)||hash(readFileSync(target))!==digest)reasons.push(`Candidate hash mismatch: ${path}`);
+  if(!target.startsWith(resolve(candidateRoot)+sep)||!existsSync(target)||hash(readFileSync(target))!==digest)reasons.push(`Candidate hash mismatch: ${path}`);
  }
  const summaryPath=join(directory,'personal/summary.json');
  const summary=existsSync(summaryPath)?read(summaryPath):{};

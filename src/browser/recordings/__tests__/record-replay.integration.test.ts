@@ -57,7 +57,7 @@ describe('real browser recording and replay', () => {
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.goto(base);
-    const source = stripTypeScriptTypes(readFileSync(resolve('packages/browser-ext/src/recording/store.ts'), 'utf8'), { mode: 'transform' });
+    const source = stripTypeScriptTypes(readFileSync(resolve('packages/browser-ext/src/recording/store.ts'), 'utf8'), { mode: 'strip' });
     const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
     const id = randomUUID();
     const loadStore = async () => {

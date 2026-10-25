@@ -3,7 +3,6 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ControlStore } from '../../control/store.js';
@@ -64,7 +63,7 @@ describe('developer HTTP surface', () => {
     cleanups.push(() => new Promise<void>(resolve => { otherPool.close(); other.server.closeAllConnections(); other.server.close(() => resolve()); }));
     cleanups.push(() => new Promise<void>(resolve => { pool.close(); broker.server.closeAllConnections(); broker.server.close(() => resolve()); }));
     const run = async (endpoint: {url: string; token: string}) => new Promise<void>((resolve, reject) => {
-      const child = spawn(process.execPath, ['--import', fileURLToPath(new URL('../../control/request-preload.mjs', import.meta.url)), '--input-type=module', '-e',
+      const child = spawn(process.execPath, ['--import', new URL('../../control/request-preload.mjs', import.meta.url).href, '--input-type=module', '-e',
         `await Promise.all(Array.from({length:4}, async()=>{const r=await fetch(${JSON.stringify(origin)}+'/v1/chat/completions', {method: 'POST', body: JSON.stringify({model:'test'})});const text=await r.text();if(!text.includes('done'))throw Error('incomplete')}));`], {
         env: { ...process.env, XOPC_EVAL_POOL_URL: endpoint.url, XOPC_EVAL_POOL_TOKEN: endpoint.token, XOPC_EVAL_MODEL_ORIGINS: JSON.stringify([origin]) }, stdio: 'pipe',
       });
@@ -99,7 +98,7 @@ describe('developer HTTP surface', () => {
     const provider=createServer((_req,res)=>{res.writeHead(200,{'Content-Type':'text/event-stream'});res.write('data: partial\n\n');});
     const origin=await listen(provider),pool=new RequestPool({generation:1},1),broker=await startPool(pool);
     cleanups.push(()=>new Promise<void>(resolve=>{broker.server.closeAllConnections();broker.server.close(()=>resolve());}));
-    const child=spawn(process.execPath,['--import',fileURLToPath(new URL('../../control/request-preload.mjs',import.meta.url)),'--input-type=module','-e',
+    const child=spawn(process.execPath,['--import',new URL('../../control/request-preload.mjs',import.meta.url).href,'--input-type=module','-e',
       `const r=await fetch(${JSON.stringify(origin)}+'/chat/completions',{method:'POST',body:JSON.stringify({model:'test'})});await r.body.getReader().read();process.exit(0);`],
       {env:{...process.env,XOPC_EVAL_POOL_URL:broker.url,XOPC_EVAL_POOL_TOKEN:broker.token,XOPC_EVAL_MODEL_ORIGINS:JSON.stringify([origin]),XOPC_EVAL_AUDIT_PATH:audit},stdio:'ignore'});
     await new Promise<void>((resolve,reject)=>{child.once('error',reject);child.once('close',code=>code===0?resolve():reject(Error('child failed')));});
