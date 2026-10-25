@@ -128,6 +128,7 @@ export function stageComputerDriver(repoRoot, packDirPath, target, thinBinary = 
   const computerDriverDir = join(packDirPath, '_pack-resources', 'computer-driver');
   mkdirSync(computerDriverDir, { recursive: true });
   if (target.platform === 'win32') {
+    if (target.arch !== 'x64') return;
     const release = computerDriverRelease(target.platform, target.arch);
     for (const [name, digest] of Object.entries(release.files)) {
       const source = join(repoRoot, '.cache', 'computer-driver', COMPUTER_DRIVER_VERSION, release.cacheDirectory, name);

@@ -9,7 +9,7 @@ export const CUA_MAC_NATIVE_FILES = ['libcua_driver_sdk.dylib', 'cua_driver_node
 /** Keep only the target Mach-O slice in the isolated macOS packaging tree. */
 export function prepareCuaSdkRuntime(packDir, target, runLipo = spawnSync) {
   if (target.platform === 'win32') {
-    if (target.arch !== 'x64') throw new Error(`Unsupported Windows CUA SDK architecture: ${target.arch}`);
+    if (target.arch !== 'x64') return;
     const packageDir = join(packDir, 'node_modules', '@trycua', 'cua-driver-win32-x64-msvc');
     const metadata = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
     if (metadata.version !== COMPUTER_DRIVER_VERSION) throw new Error('Windows CUA SDK version mismatch');
