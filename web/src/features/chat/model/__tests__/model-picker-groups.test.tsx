@@ -37,6 +37,19 @@ it('selects the exact model ID even when names match across providers',async()=>
   await render();await act(async()=>container.querySelector<HTMLButtonElement>('[title="bailian/beta"]')!.click());
   expect(change).toHaveBeenCalledExactlyOnceWith('bailian/beta');
 });
+it('reveals the selected option on opening without changing the model',async()=>{
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+  const scroll = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+  try {
+    await render();
+    expect(scroll.mock.contexts).toContain(container.querySelector('[title="cloud/beta"]'));
+    expect(change).not.toHaveBeenCalled();
+  } finally {
+    if (descriptor) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', descriptor);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+  }
+});
 it('keeps form selectors flat unless provider grouping is requested',async()=>{
-  await render(false);expect(groups()).toEqual([]);expect(container.querySelector('[title="cloud/alpha"]')?.textContent).toBe('AlphaChat and everyday taskscloud');
+  await render(false);expect(groups()).toEqual([]);expect(container.querySelector('[title="cloud/alpha"]')?.textContent).toBe('Alphacloud');
 });

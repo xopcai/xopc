@@ -13,7 +13,7 @@ export function TaskResultStatus({ detail, language }: { detail: TaskDetail; lan
     <p>{receiptLabel}{detail.task.phase !== 'closed' ? (zh ? '；任务仍未关闭' : '; task remains open') : ''}</p>
     <p>{zh ? `验收：${result.verified}/${result.criteria} 项通过` : `Acceptance: ${result.verified}/${result.criteria} criteria passed`}{result.criteria === 0 ? (zh ? '，尚未定义验收标准' : '; criteria not defined') : ''}</p>
     <p>{result.deliverables > 0
-      ? (zh ? `已关联交付物：${result.deliverables} 项（不代表已验收）` : `Linked deliverables: ${result.deliverables} (acceptance is separate)`)
-      : (zh ? '尚未关联正式交付物。对话中的文件或执行产物仍需检查并关联。' : 'No formal deliverables linked. Files in the conversation or run still need review and linking.')}</p>
+      ? (zh ? `已关联交付物：${result.deliverables} 项` : `Linked deliverables: ${result.deliverables}`)
+      : (zh ? '尚无正式交付物' : 'No formal deliverables linked')}</p>
   </div>;
 }

@@ -60,7 +60,7 @@ describe('tracing records navigation', () => {
     loadState.lastError = 'Trace worker stopped';
     act(() => root.render(<TracingSettingsPage />));
     act(() => button('Capture settings').click());
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Existing task results are separate');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Trace recording is unavailable');
     const diagnostic = [...container.querySelectorAll('details')].find(item => item.textContent?.includes('Trace worker stopped'))!;
     expect(diagnostic.open).toBe(false);
     act(() => button('Refresh recording status').click());
@@ -69,7 +69,7 @@ describe('tracing records navigation', () => {
   it('explains a failed load without calling it an empty result and retries the same list', () => {
     loadState.failed = true;
     act(() => root.render(<TracingSettingsPage />));
-    expect(results().textContent).toContain('This does not mean there are no records');
+    expect(results().textContent).toContain('Unable to load execution records');
     expect(results().textContent).not.toContain('Tracing service unavailable');
     expect(results().textContent).not.toContain('No traces in this range');
     act(() => button('Retry loading records').click());
@@ -198,7 +198,7 @@ describe('Langfuse key viewing and copying', () => {
 it('shows pending cost as the primary state while preserving a confirmed zero', () => {
   const rows = results().querySelectorAll('button');
   expect(rows[0].textContent).toContain('Cost pending');
-  expect(rows[0].textContent).toContain('known portion $0.0000');
+  expect(rows[0].textContent).not.toContain('$0.0000');
   expect(rows[1].textContent).toContain('$0.0000');
   expect(rows[1].textContent).not.toContain('Cost pending');
 });
