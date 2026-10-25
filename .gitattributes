@@ -1,3 +1,6 @@
 /evals export-ignore
 /.xopc-evals export-ignore
 /.agent-evals export-ignore
+
+# Shell scripts must remain executable in Bash on Windows.
+*.sh text eol=lf
