@@ -13,7 +13,11 @@ describe('buildRouteSeeds', () => {
     expect(computer).toBeDefined();
     expect(computer?.keywords).toContain('电脑控制');
   });
-  it.each(['win32', 'linux', undefined])('hides computer use search on %s', (platform) => {
+  it('finds computer use settings on Windows', () => {
+    window.electronAPI = { platform: 'win32' } as Window['electronAPI'];
+    expect(buildRouteSeeds('zh').find(seed => seed.path === '/settings/computer-use')).toBeDefined();
+  });
+  it.each(['linux', undefined])('hides computer use search on %s', (platform) => {
     window.electronAPI = platform ? { platform } as Window['electronAPI'] : undefined;
     const seeds = buildRouteSeeds('zh');
     expect(seeds.find(seed => seed.path === '/settings/computer-use')).toBeUndefined();
