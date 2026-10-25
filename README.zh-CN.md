@@ -98,7 +98,7 @@ xopc onboard --quick
 xopc
 ```
 
-已具备 Node.js **22.22.3+** 时，也可执行 `pnpm add -g @xopcai/xopc`。[终端快速开始](https://xopcai.github.io/xopc/zh/first-5-minutes)包含镜像与排障说明。
+已具备 Node.js **26.12.1+** 时，也可执行 `pnpm add -g @xopcai/xopc`。[终端快速开始](https://xopcai.github.io/xopc/zh/first-5-minutes)包含镜像与排障说明。
 
 ### 在手机上继续
 
@@ -184,7 +184,7 @@ pnpm run build && pnpm run test:all && pnpm run lint
 
 **反馈：** [Bug 反馈](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) · [功能建议](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) · [Q&A 讨论](https://github.com/xopcai/xopc/discussions/categories/q-a) · [安全漏洞反馈](https://github.com/xopcai/xopc/security/advisories/new)（请勿公开发布漏洞细节）
 
-**技术栈：** TypeScript、Node.js ≥ 22.22.3、pnpm workspace。内置 LLM 层 `@earendil-works/pi-ai`，React 网关控制台，Electron 桌面端。
+**技术栈：** TypeScript、Node.js ≥ 26.12.1、pnpm workspace。内置 LLM 层 `@earendil-works/pi-ai`，React 网关控制台，Electron 桌面端。
 
 ## 致谢
 

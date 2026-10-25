@@ -86,7 +86,7 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 26.12.1
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 

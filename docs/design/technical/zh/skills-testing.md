@@ -359,7 +359,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 26.12.1
 
       - name: Install dependencies
         run: pnpm install

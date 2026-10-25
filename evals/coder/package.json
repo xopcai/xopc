@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=26.12.1"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -23,7 +23,7 @@
     "@agent-evals/runner": "workspace:*",
     "@agent-evals/sandbox": "workspace:*",
     "@agent-evals/storage": "workspace:*",
-    "@types/node": "^25.9.1",
+    "@types/node": "^26.6.5",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "vitest": "4.1.5",

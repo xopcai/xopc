@@ -6,7 +6,7 @@ An SSH tunnel securely forwards the remote host's local Gateway port to your com
 
 On a persistent VPS, including Hetzner:
 
-1. Install Node.js >= 22.22.3 and xopc using the [installation guide](../getting-started.md).
+1. Install Node.js >= 26.12.1 and xopc using the [installation guide](../getting-started.md).
 2. Set `gateway.bind` to `loopback` and configure a strong Gateway token.
 3. Install and start the Gateway service:
 

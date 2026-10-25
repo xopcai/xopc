@@ -1,6 +1,6 @@
 import type { CheckResult, DoctorContext } from '../types.js';
 
-const MINIMUM_NODE_VERSION = [22, 22, 3] as const;
+const MINIMUM_NODE_VERSION = [26, 12, 1] as const;
 
 function parseNodeVersion(): [number, number, number] | undefined {
   const match = process.version.match(/^v(\d+)\.(\d+)\.(\d+)/);
@@ -33,15 +33,15 @@ export async function checkNodeVersion(_ctx: DoctorContext): Promise<CheckResult
       id: 'node-version',
       label: 'Host Node.js',
       status: 'fail',
-      message: `Node.js ${process.version} is below the required minimum (22.22.3).`,
-      hints: ['Install Node.js 22.22.3+ from https://nodejs.org/'],
+      message: `Node.js ${process.version} is below the required minimum (26.12.1).`,
+      hints: ['Install Node.js 26.12.1+ from https://nodejs.org/'],
     };
   }
   return {
     id: 'node-version',
     label: 'Host Node.js',
     status: 'pass',
-    message: `Node.js ${process.version} meets the project requirement (>= 22.22.3).`,
+    message: `Node.js ${process.version} meets the project requirement (>= 26.12.1).`,
     hints: [],
   };
 }

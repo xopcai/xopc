@@ -146,7 +146,7 @@ Persistent delivery flows through the broker in `src/realtime/` and
 
 ## Build and Distribution
 
-The package is ESM TypeScript on Node.js 22+. `tsdown` builds unbundled Node
+The package is ESM TypeScript on Node.js 26.12.1+. `tsdown` builds unbundled Node
 output under `dist/src/**` and extension output under `dist/extensions/**`.
 Declaration files are emitted by `tsc`. The Web console is a separate Vite/React
 package under `web/`; its production build is copied to the gateway static root.
@@ -163,7 +163,7 @@ Packaging surfaces include:
 
 | Layer | Technology |
 |-------|------------|
-| Runtime | Node.js 22+ |
+| Runtime | Node.js 26.12.1+ |
 | Language | TypeScript |
 | LLM SDK | `@earendil-works/pi-ai` |
 | Agent Framework | `@earendil-works/pi-agent-core` |
