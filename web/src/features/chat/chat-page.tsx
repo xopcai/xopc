@@ -133,6 +133,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   });
 
   const skillDiscovery = !personal && !embedded && !taskId && searchParams.get('scene') === 'find-skills';
+  const automationSetup = searchParams.get('setup') === 'automation';
   const agentSetup = !embedded && !taskId && searchParams.get('agentSetup') === '1';
   const skillQuery = personal ? '' : searchParams.get('skill')?.trim() ?? '';
   const slashQuery = personal ? '' : searchParams.get('slash')?.trim() ?? '';
@@ -1118,6 +1119,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                       <AgentRunErrorBanner errorText={stream.error} />
                     </div>
                   ) : null}
+                  {automationSetup ? <section className="mb-4 rounded-xl border border-edge bg-surface-panel p-4"><h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '一起安排好你的任务' : 'Let’s plan your task'}</h2><p className="mt-1 text-sm text-fg-muted">{msgSlice.items.length === 0 ? (language === 'zh' ? '从你想做的事开始，时间、频率和结果形式都可以慢慢聊。发送下面的内容开始，安排好后再由你确认。' : 'Start with what you want done. We can work out timing, frequency, and results together. Send the message below to begin, then confirm the plan when it’s ready.') : (language === 'zh' ? '继续告诉我你的想法。已安排的任务和每次运行的结果，都可以回到定时任务页查看。' : 'Keep sharing what you have in mind. Visit scheduled tasks to see what’s been arranged and the results of each run.')}</p><Link className="mt-2 inline-block text-sm text-accent" to="/automations">{language === 'zh' ? '查看定时任务' : 'View scheduled tasks'}</Link></section> : null}
                   {!embedded && taskId ? (
                     <div className="hidden md:block">
                       <TaskSessionBanner taskId={taskId} />

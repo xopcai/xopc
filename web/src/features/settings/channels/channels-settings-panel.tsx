@@ -1,3 +1,6 @@
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
+import { TelegramSetupGuide } from './telegram-setup-guide';
+import { channelDocsUrl } from '@/navigation';
 import { AlertTriangle, CircleAlert, CircleCheck, ExternalLink, Loader2, RotateCcw, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -621,12 +624,12 @@ export function ChannelsSettingsPanel({
   );
   const basicConfigPaths = useMemo(() => getBasicConfigPaths(activeEntry), [activeEntry]);
   const basicConfigSchema = useMemo(
-    () => pickSchemaPaths(formConfigSchema, basicConfigPaths),
-    [basicConfigPaths, formConfigSchema],
+    () => activeEntry?.id === 'telegram' ? orderTelegramSetupSchema(pickSchemaPaths(formConfigSchema, basicConfigPaths)) : pickSchemaPaths(formConfigSchema, basicConfigPaths),
+    [activeEntry?.id, basicConfigPaths, formConfigSchema],
   );
   const advancedConfigSchema = useMemo(
     () => omitSchemaPaths(formConfigSchema, basicConfigPaths),
-    [basicConfigPaths, formConfigSchema],
+    [activeEntry?.id, basicConfigPaths, formConfigSchema],
   );
   const hasBasicConfigFields = useMemo(() => hasSchemaFields(basicConfigSchema), [basicConfigSchema]);
   const channelAgentId = activeEntry
@@ -646,6 +649,7 @@ export function ChannelsSettingsPanel({
     ? agentListDisplayName(defaultAgent, m.agentsSettings)
     : agentsData?.defaultId ?? '';
   const schemaLabels = useMemo(() => ({
+    secretInputLabels: secretInputLabelsFromChannels(ch),
     defaultBooleanLabel: ch.schemaBooleanDefault,
     unsupportedArrayType: ch.schemaUnsupportedArrayType,
     arrayAddPlaceholder: ch.schemaArrayAddPlaceholder,
@@ -891,7 +895,7 @@ export function ChannelsSettingsPanel({
                       </span>
                       {activeEntry.docsPath ? (
                         <a
-                          href={activeEntry.docsPath}
+                          href={channelDocsUrl(language, activeEntry.docsPath)}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex shrink-0 items-center gap-1 text-accent hover:underline"
@@ -930,6 +934,7 @@ export function ChannelsSettingsPanel({
             />
 
             <ChannelSetupReadinessBanner entry={activeEntry} ch={ch} />
+            {activeEntry.id === 'telegram' ? <TelegramSetupGuide language={language} /> : null}
 
             {showSetupCard && extensionModal?.placement !== 'replace-config' ? (
               <ChannelSetupCard
@@ -1034,4 +1039,12 @@ export function ChannelsSettingsPanel({
       </ChannelSettingsShell>
     </SettingsPageFrame>
   );
+}
+
+function orderTelegramSetupSchema(schema: JsonSchema): JsonSchema {
+  const properties = schema.properties as Record<string, JsonSchema> | undefined;
+  if (!properties) return schema;
+  const order = ['botToken', 'dmPolicy', 'allowFrom', 'groupPolicy', 'groupAllowFrom'];
+  return { ...schema, properties: Object.fromEntries(Object.entries(properties).map(([key, value]) => [key,
+    { ...orderTelegramSetupSchema(value), ...(order.includes(key) ? { 'x-order': order.indexOf(key) } : {}) }])) };
 }

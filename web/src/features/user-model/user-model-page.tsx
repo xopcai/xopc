@@ -1349,7 +1349,7 @@ export function UserModelPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="max-w-2xl">
                 <h2 className="font-semibold text-fg">{knowledgeKindFilter === 'all' ? t.allMemory : knowledgeKindLabel(knowledgeKindFilter, language)}</h2>
-                <p className="mt-1 text-sm leading-6 text-fg-muted">{kindFilteredKnowledge.length} {t.items} · {t.memoryLibraryHint}</p>
+                <p className="mt-1 text-sm leading-6 text-fg-muted">{kindFilteredKnowledge.length} {t.items} · {language === 'zh' ? '当前筛选的工作资料记录数，包含未启用或待核验项；不同于顶部已启用且有依据的记忆数。' : 'Work records matching this filter, including inactive or unverified items; separate from active, supported memories above.'} · {t.memoryLibraryHint}</p>
               </div>
               <label className="relative block sm:w-80">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" />

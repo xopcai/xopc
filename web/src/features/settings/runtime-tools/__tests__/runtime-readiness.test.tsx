@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { MemoryRouter } from 'react-router-dom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -34,7 +35,7 @@ it('repairs a dependency in ordinary setup using the saved version without rewri
   document.body.append(container);
   root = createRoot(container);
   const original = structuredClone(mocks.config);
-  await act(async () => root.render(<RuntimeReadiness />));
+  await act(async () => root.render(<MemoryRouter><RuntimeReadiness /></MemoryRouter>));
   expect(container.querySelector('details')?.open).toBe(true);
   const repair = [...container.querySelectorAll('button')].find(button => button.textContent === 'Repair')!;
   await act(async () => repair.click());

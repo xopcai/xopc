@@ -18,17 +18,23 @@ export function CapabilitySettingsSheet() {
   const isOpen = useRef(false);
   const body = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef(new Map<string, number>());
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [use, setUse] = useState<ModelSetupUse>();
+  const [purpose, setPurpose] = useState<'phone' | 'automation'>();
   const [view, setView] = useState<'settings' | 'services'>('settings');
   const [pending, setPending] = useState(false);
   isOpen.current = open;
   const zh = useLocaleStore(state => state.language) === 'zh';
   useEffect(() => {
     const open = (event: Event) => {
-      const detail = (event as CustomEvent<{ use?: string; view?: string }>).detail;
+      const detail = (event as CustomEvent<{ use?: string; view?: string; purpose?: string }>).detail;
       const use = parseCapabilityUse(detail?.use ?? null);
-      if (use && !pending) { if (!isOpen.current) returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setUse(use); setOpen(true); setView(detail?.view === 'services' ? 'services' : 'settings'); }
+      if (use && !pending) { if (!isOpen.current) {
+        returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const nearestDialog = returnFocus.current?.closest<HTMLElement>('[role="dialog"]');
+        if (!nearestDialog?.closest('[data-capability-settings-sheet]')) setPortalHost(nearestDialog?.parentElement?.closest<HTMLElement>('[role="dialog"]') ?? nearestDialog ?? null);
+      } setUse(use); setPurpose(detail?.purpose === 'phone' || detail?.purpose === 'automation' ? detail.purpose : undefined); setOpen(true); setView(detail?.view === 'services' ? 'services' : 'settings'); }
     };
     window.addEventListener('open-capability-settings', open);
     return () => window.removeEventListener('open-capability-settings', open);
@@ -43,10 +49,10 @@ export function CapabilitySettingsSheet() {
   const changeView = (next: 'settings' | 'services') => {
     if (!pending) setView(next);
   };
-  return <Dialog.Root open={open} onOpenChange={value => { if (!pending) setOpen(value); }}><Dialog.Portal forceMount><div className="contents"><Activity mode={open ? 'visible' : 'hidden'}>
+  return <Dialog.Root open={open} onOpenChange={value => { if (!pending) setOpen(value); }}><Dialog.Portal forceMount container={portalHost ?? undefined}><div className="contents"><Activity mode={open ? 'visible' : 'hidden'}>
     <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[150] bg-scrim" />
-    <Dialog.Content forceMount onCloseAutoFocus={event => { event.preventDefault(); requestAnimationFrame(() => returnFocus.current?.focus()); }} className="xopc-dialog-content fixed inset-x-3 top-1/2 z-[151] mx-auto flex h-[min(48rem,calc(100dvh-2rem))] w-[calc(100%-1.5rem)] max-w-3xl -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay" onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onInteractOutside={event => { if (pending) event.preventDefault(); }}>
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-5 py-4"><div><Dialog.Title className="text-base font-semibold text-fg">{use ? capabilityLabels[use][zh ? 0 : 1] : ''}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-fg-muted">{use ? capabilityDescriptions[use][zh ? 0 : 1] : ''}</Dialog.Description></div><Button variant="ghost" className="size-11 shrink-0 p-0" aria-label={zh ? '关闭设置' : 'Close settings'} disabled={pending} onClick={() => setOpen(false)}><X className="size-4" aria-hidden /></Button></header>
+    <Dialog.Content data-capability-settings-sheet forceMount onCloseAutoFocus={event => { event.preventDefault(); requestAnimationFrame(() => returnFocus.current?.focus()); }} className="xopc-dialog-content fixed inset-x-3 top-1/2 z-[151] mx-auto flex h-[min(48rem,calc(100dvh-2rem))] w-[calc(100%-1.5rem)] max-w-3xl -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay" onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onInteractOutside={event => { if (pending) event.preventDefault(); }}>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-5 py-4"><div><Dialog.Title className="text-base font-semibold text-fg">{purpose === 'phone' ? (zh ? '为手机控制连接模型服务' : 'Connect a model service for phone control') : purpose === 'automation' ? (zh ? '为自动化配置模型' : 'Configure models for automation') : use ? capabilityLabels[use][zh ? 0 : 1] : ''}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-fg-muted">{purpose === 'phone' ? (zh ? '此处连接服务；关闭后继续选择手机模型并测试。未保存的手机选择会保留。' : 'Connect the service here, then close to select and test the phone model. Your selection is retained.') : purpose === 'automation' ? (zh ? '关闭后返回当前自动化草稿；配置模型不会启用自动化。' : 'Close to return to your automation draft. Model setup does not enable it.') : use ? capabilityDescriptions[use][zh ? 0 : 1] : ''}</Dialog.Description></div><Button variant="ghost" className="size-11 shrink-0 p-0" aria-label={zh ? '关闭设置' : 'Close settings'} disabled={pending} onClick={() => setOpen(false)}><X className="size-4" aria-hidden /></Button></header>
       <div className="shrink-0 border-b border-edge px-5 py-3"><SlidingTabList role="tablist" aria-label={zh ? '能力配置' : 'Capability configuration'} className="inline-flex gap-1 rounded-xl bg-surface-inset p-1" indicatorClassName="rounded-md bg-surface-panel shadow-sm">{(['settings', 'services'] as const).map(tab => <Button key={tab} id={`${id}-${tab}`} role="tab" aria-selected={view === tab} aria-controls={`${id}-panel`} tabIndex={view === tab ? 0 : -1} variant="ghost" className={view === tab ? 'bg-surface-panel text-fg shadow-sm hover:bg-surface-panel' : ''} disabled={pending} onClick={() => changeView(tab)} onKeyDown={event => {
         if (pending || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();

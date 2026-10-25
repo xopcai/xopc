@@ -25,7 +25,7 @@
       "undo": "Unable to undo strategy"
     },
     "productDelivery": {
-    "heading": "Turn deliverables",
+    "heading": "Turn outputs",
     "partialResults": "Showing partial results",
     "diffPreview": "Edit preview",
     "proposedChanges": "Proposed changes (not applied)",
@@ -218,7 +218,7 @@
     "activityParallel": "Working on {{count}} items…",
     "workLogTitle": "Execution details",
     "workLogRunning": "Working…",
-    "workLogComplete": "Completed ·",
+    "workLogComplete": "Turn ended ·",
     "workLogPartial": "Partially completed",
     "workLogFailed": "Could not finish",
     "toolError": "Could not complete this step",

@@ -1,3 +1,4 @@
+import { ResourceUnavailable } from '@/components/ui/resource-unavailable';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   ArrowLeft,
@@ -385,11 +386,11 @@ export function LocalAppWorkbenchPage() {
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: <Link to="/local-apps" className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '返回应用工坊' : 'Back to App Studio'}><ArrowLeft className="size-4" /></Link>,
-      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{app?.name || (zh ? '创建应用' : 'Create app')}</h1>,
-      end: app ? <div className="flex flex-wrap items-center gap-2"><PageContextCaptureButton resource={{ kind: 'local_app', id: app.id, revision: validation?.sourceHash ?? '' }} disabled={busy || chatBusy || checkingDraft || !validation?.sourceHash} /><Button asChild variant="ghost" className="h-9"><Link to={`/projects/${encodeURIComponent(app.projectId)}`}><FolderKanban className="size-4" />{zh ? 'Project' : 'Project'}</Link></Button><Button className="h-9" onClick={() => void onContinueDevelopment()} disabled={chatBusy}>{chatBusy ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareCode className="size-4" />}{zh ? '继续开发' : 'Continue building'}</Button></div> : null,
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{app?.name || (isNew ? (zh ? '创建应用' : 'Create app') : (zh ? '应用详情' : 'App details'))}</h1>,
+      end: app ? <div className="flex flex-wrap items-center gap-2"><PageContextCaptureButton resource={{ kind: 'local_app', id: app.id, revision: validation?.sourceHash ?? '' }} disabled={busy || chatBusy || checkingDraft || !validation?.sourceHash} /><Button asChild variant="ghost" className="h-9"><Link to={`/projects/${encodeURIComponent(app.projectId)}`}><FolderKanban className="size-4" />{zh ? '项目' : 'Project'}</Link></Button><Button className="h-9" onClick={() => void onContinueDevelopment()} disabled={chatBusy}>{chatBusy ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareCode className="size-4" />}{zh ? '继续开发' : 'Continue building'}</Button></div> : null,
     });
     return () => clearPageHeader();
-  }, [app, busy, chatBusy, checkingDraft, validation?.sourceHash, clearPageHeader, onContinueDevelopment, setPageHeader, zh]);
+  }, [app, isNew, busy, chatBusy, checkingDraft, validation?.sourceHash, clearPageHeader, onContinueDevelopment, setPageHeader, zh]);
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();
@@ -566,13 +567,13 @@ export function LocalAppWorkbenchPage() {
       <div className="flex min-h-0 flex-1 bg-surface-panel p-3 sm:p-5 xl:p-6">
         <div className="grid w-full min-w-0 overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-surface lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
           <form onSubmit={onCreate} className="flex flex-col border-b border-edge-subtle p-5 lg:border-b-0 lg:border-r">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent"><Sparkles className="size-4" />{zh ? '告诉 Coder 你的想法' : 'Tell Coder your idea'}</div>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent"><Sparkles className="size-4" />{zh ? '告诉编程智能体你的想法' : 'Tell Coder your idea'}</div>
             <h2 className="mt-4 text-xl font-semibold tracking-tight text-fg">{zh ? '你想创建什么？' : 'What do you want to create?'}</h2>
-            <p className="mt-2 text-sm leading-6 text-fg-muted">{zh ? '我们会建立一个 Coder Project，并把应用上下文和开发 Skill 带入对话。' : 'We will create a Coder Project and carry the app context and development skill into chat.'}</p>
+            <p className="mt-2 text-sm leading-6 text-fg-muted">{zh ? '我们会创建项目，并在对话中由编程智能体根据你的想法开发应用。' : 'We will create a Coder Project and carry the app context and development skill into chat.'}</p>
             <label className="mt-6 text-xs font-medium text-fg-muted">{zh ? '应用名称' : 'App name'}<TabCompletionInput value={name} onChange={(event) => setName(event.target.value)} suggestion={suggestionFromExample(zh ? '例如：阅读清单' : 'e.g. Reading list')} onAcceptSuggestion={setName} required className="mt-2 w-full rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '例如：阅读清单' : 'e.g. Reading list'} /></label>
             <label className="mt-4 text-xs font-medium text-fg-muted">{zh ? '描述你的想法' : 'Describe your idea'}<TabCompletionTextarea value={idea} onChange={(event) => setIdea(event.target.value)} suggestion={suggestionFromExample(zh ? '我想要一个可以记录待读文章、标记进度并按主题筛选的小工具…' : 'I want a small tool that tracks articles, reading progress, and topics…')} onAcceptSuggestion={setIdea} required rows={7} className="mt-2 w-full resize-none rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm leading-6 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '我想要一个可以记录待读文章、标记进度并按主题筛选的小工具…' : 'I want a small tool that tracks articles, reading progress, and topics…'} /></label>
             {actionError ? <p className="mt-3 text-sm text-danger" role="alert">{actionError}</p> : null}
-            <Button type="submit" variant="primary" className="mt-5 h-10" disabled={busy || !name.trim() || !idea.trim()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareCode className="size-4" />}{zh ? '进入 Coder 对话' : 'Continue with Coder'}</Button>
+            <Button type="submit" variant="primary" className="mt-5 h-10" disabled={busy || !name.trim() || !idea.trim()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareCode className="size-4" />}{zh ? '开始开发对话' : 'Continue with Coder'}</Button>
           </form>
           <div className="hidden min-h-[620px] place-items-center bg-surface-panel p-8 lg:grid">
             <div className="max-w-md text-center"><div className="mx-auto flex size-16 items-center justify-center rounded-2xl border border-edge bg-surface-base text-accent shadow-surface"><PanelLeft className="size-7" /></div><h3 className="mt-5 text-base font-semibold text-fg">{zh ? '创建后，这里就是实时预览' : 'Your live preview appears here'}</h3><p className="mt-2 text-sm leading-6 text-fg-muted">{zh ? '你可以先体验草稿，再决定是否把它添加到左侧导航。' : 'Try the draft first, then decide whether to add it to the sidebar.'}</p></div>
@@ -583,7 +584,7 @@ export function LocalAppWorkbenchPage() {
   }
 
   if (isLoading) return <div className="grid min-h-0 flex-1 gap-3 bg-surface-panel p-3 lg:grid-cols-[280px_minmax(0,1fr)_260px]"><Skeleton className="rounded-xl" /><Skeleton className="rounded-xl" /><Skeleton className="rounded-xl" /></div>;
-  if (error || !app) return <div className="m-6 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">{error instanceof Error ? error.message : (zh ? '找不到应用' : 'App not found')}</div>;
+  if (error || !app) return <ResourceUnavailable kind="app" missing={!error || /not found|404/i.test(String(error))} backTo="/local-apps" retry={() => void mutateApp()} />;
 
   return (
     <div className="grid min-h-0 flex-1 gap-3 overflow-hidden bg-surface-panel p-3 lg:grid-cols-[280px_minmax(0,1fr)_300px]">
@@ -592,7 +593,7 @@ export function LocalAppWorkbenchPage() {
         <div className="mt-4 min-w-0 rounded-xl bg-surface-panel p-3 text-sm leading-6 text-fg [overflow-wrap:anywhere]">{app.idea}</div>
         <div className="mt-4 rounded-xl bg-accent-soft p-3">
           <p className="flex items-center gap-2 text-sm font-medium text-accent-fg"><CircleCheck className="size-4" />{zh ? '草稿已准备好' : 'Draft is ready'}</p>
-          <p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '继续迭代会进入对应 Project，由 Coder 读取应用上下文和专属 skill。' : 'Continue in the Project where Coder has the app context and dedicated skill.'}</p>
+          <p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '继续开发会打开对应项目的对话，编程智能体可以参考当前应用继续修改。' : 'Continue in the Project where Coder has the app context and dedicated skill.'}</p>
         </div>
         <form className="mt-5" onSubmit={(event) => { event.preventDefault(); void onContinueDevelopment(changeRequest); }}>
           <label className="text-xs font-medium text-fg-muted" htmlFor="local-app-change-request">{zh ? '下一步想改什么？' : 'What should change next?'}</label>
@@ -760,11 +761,11 @@ export function LocalAppWorkbenchPage() {
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]" />
           <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex h-[min(420px,calc(100vh-32px))] w-[min(500px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-2xl focus:outline-none">
             <div className="flex items-start justify-between border-b border-edge-subtle p-5">
-              <div><Dialog.Title className="text-base font-semibold text-fg">{zh ? '卸载当前应用？' : 'Uninstall this app?'}</Dialog.Title><Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">{zh ? '应用会从侧栏移除，但 Project、源码、版本历史和本地数据都会保留。' : 'The app leaves the sidebar, while its Project, source, release history, and local data remain.'}</Dialog.Description></div>
+              <div><Dialog.Title className="text-base font-semibold text-fg">{zh ? '卸载当前应用？' : 'Uninstall this app?'}</Dialog.Title><Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">{zh ? '应用会从侧栏移除，但项目、源码、版本历史和本地数据都会保留。' : 'The app leaves the sidebar, while its Project, source, release history, and local data remain.'}</Dialog.Description></div>
               <Dialog.Close className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover"><X className="size-4" /></Dialog.Close>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5"><div className="rounded-xl bg-surface-panel p-4"><p className="text-sm font-medium text-fg">{app.name}</p><p className="mt-1 text-xs text-fg-muted">{zh ? '之后可从任意保留版本重新安装。' : 'You can reinstall any retained release later.'}</p></div></div>
-            <div className="flex justify-end gap-2 border-t border-edge-subtle p-4"><Dialog.Close asChild><Button>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close><Button variant="ghost" className="text-danger hover:bg-danger-soft hover:text-danger" onClick={() => void onUninstall()} disabled={busy}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}{zh ? '卸载但保留 Project' : 'Uninstall and keep Project'}</Button></div>
+            <div className="flex justify-end gap-2 border-t border-edge-subtle p-4"><Dialog.Close asChild><Button>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close><Button variant="ghost" className="text-danger hover:bg-danger-soft hover:text-danger" onClick={() => void onUninstall()} disabled={busy}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}{zh ? '卸载但保留项目' : 'Uninstall and keep Project'}</Button></div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

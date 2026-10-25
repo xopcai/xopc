@@ -1,3 +1,4 @@
+import { ResourceUnavailable } from '@/components/ui/resource-unavailable';
 /**
  * Extension settings: auto-generated config form (configSchema) + optional iframe (settingsPanels).
  *
@@ -23,15 +24,13 @@ export function ExtensionSettingsPage() {
   const extensions = useExtensions();
 
   if (!extensionId) {
-    return <SettingsPanelNotFound message="No plugin ID provided." />;
+    return <ResourceUnavailable kind="plugin" backTo="/capabilities/extensions" />;
   }
 
   const extension = extensions.find((ext) => ext.id === extensionId);
   if (!extension) {
     return (
-      <SettingsPanelNotFound
-        message={`Plugin "${extensionId}" not found or is not available in this workspace.`}
-      />
+      <ResourceUnavailable kind="plugin" backTo="/capabilities/extensions" />
     );
   }
 
@@ -47,13 +46,11 @@ export function ExtensionSettingsPage() {
 
   if (!hasAutoForm && !hasIframe && !hasProviderCredentialsUi) {
     return (
-      <SettingsPanelNotFound
-        message={`Plugin "${extensionId}" has no settings panels or config schema.`}
-      />
+      <ResourceUnavailable kind="plugin-settings" backTo="/capabilities/extensions" />
     );
   }
 
-  const title = panel?.title ?? `${extension.name} Settings`;
+  const title = panel?.title ?? (language === 'zh' ? `${extension.name} 设置` : `${extension.name} Settings`);
 
   return (
     <SettingsPageFrame gap="gap-5">
@@ -82,14 +79,6 @@ export function ExtensionSettingsPage() {
           />
         </div>
       ) : null}
-    </SettingsPageFrame>
-  );
-}
-
-function SettingsPanelNotFound({ message }: { message: string }) {
-  return (
-    <SettingsPageFrame gap="gap-3">
-      <p className="text-sm text-fg-muted">{message}</p>
     </SettingsPageFrame>
   );
 }

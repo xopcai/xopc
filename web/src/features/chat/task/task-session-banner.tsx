@@ -1,4 +1,5 @@
-import type { TaskOperationalState, TaskPhase } from '@xopcai/gateway-contract';
+import { TaskResultStatus } from '@/features/tasks/task-result-status';
+import { currentTaskReceipt, detailStatusKey, detailStatusTone } from '@/features/tasks/task-detail-summary';
 import { ExternalLink, Target } from 'lucide-react';
 import { memo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -8,12 +9,6 @@ import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
-
-function statusClass(phase: TaskPhase, operationalState: TaskOperationalState): string {
-  if (phase === 'closed') return 'border-success/35 text-success';
-  if (operationalState === 'waiting' || operationalState === 'blocked') return 'border-warning/40 text-warning';
-  return 'border-accent/40 text-accent';
-}
 
 /** Durable task state shown inside the conversation that is executing it. */
 export const TaskSessionBanner = memo(function TaskSessionBanner({
@@ -29,7 +24,7 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
   if (!data) return null;
 
   const { task, operationalState } = data;
-  const latestReceipt = data.receipts[0];
+  const latestReceipt = currentTaskReceipt(data);
   const needsUser = data.attention.length > 0;
   const isActive = task.phase !== 'closed' && ['queued', 'running', 'verifying'].includes(operationalState);
   const detail = needsUser
@@ -56,8 +51,8 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-fg-muted">{copy.taskProgress.title}</span>
-            <span className={cn('rounded-full border px-1.5 py-0.5 text-[10px] font-medium', statusClass(task.phase, operationalState))}>
-              {task.phase} · {operationalState}
+            <span className={cn('rounded-full border px-1.5 py-0.5 text-[10px] font-medium', detailStatusTone(detailStatusKey(data)))}>
+              {copy.detailStatuses[detailStatusKey(data)]}
             </span>
             {verifiedEvidenceCount > 0 ? (
               <span className="text-[11px] text-fg-muted">
@@ -76,6 +71,7 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
           <ExternalLink className="size-3.5" aria-hidden />
         </Link>
       </div>
+      <TaskResultStatus detail={data} language={language} />
     </section>
   );
 });

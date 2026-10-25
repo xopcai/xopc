@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -16,10 +16,11 @@ export function ProjectUnderstandingCheckbox({ checked, onChange, disabled }: {
   checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean;
 }) {
   const copy = useCopy();
-  return <label className="flex cursor-pointer items-start gap-2.5 text-sm text-fg">
-    <input type="checkbox" className="mt-1 accent-accent" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
-    <span>{copy.auto}<span className="mt-1 block text-xs leading-5 text-fg-subtle">{copy.hint}</span></span>
-  </label>;
+  const helpId = useId();
+  return <div><label className="flex cursor-pointer items-start gap-2.5 text-sm text-fg">
+    <input type="checkbox" aria-describedby={helpId} className="mt-1 accent-accent" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+    <span>{copy.auto}</span>
+  </label><p id={helpId} className="mt-1 pl-6 text-xs leading-5 text-fg-subtle">{copy.hint}</p></div>;
 }
 
 function useProjectUnderstanding(projectId: string) {
@@ -41,8 +42,8 @@ function useProjectUnderstanding(projectId: string) {
   return result;
 }
 
-export function ProjectUnderstandingAction({ projectId, onStarted, className }: {
-  projectId: string; onStarted?: () => void; className?: string;
+export function ProjectUnderstandingAction({ projectId, hasProjectFolder, onStarted, className }: {
+  projectId: string; hasProjectFolder: boolean; onStarted?: () => void; className?: string;
 }) {
   const copy = useCopy();
   const { data, mutate } = useProjectUnderstanding(projectId);
@@ -58,6 +59,7 @@ export function ProjectUnderstandingAction({ projectId, onStarted, className }: 
       onStarted?.();
     } catch { setError(true); } finally { setBusy(false); }
   };
+  if (!hasProjectFolder) return <ProjectFolderRequired />;
   return <div>
     <button type="button" className={className ?? 'text-xs text-fg-muted hover:text-fg disabled:opacity-50'} disabled={busy || running}
       onClick={() => void start()}>
@@ -67,7 +69,7 @@ export function ProjectUnderstandingAction({ projectId, onStarted, className }: 
   </div>;
 }
 
-export function ProjectUnderstandingPanel({ projectId }: { projectId: string }) {
+export function ProjectUnderstandingPanel({ projectId, hasProjectFolder }: { projectId: string; hasProjectFolder: boolean }) {
   const copy = useCopy();
   const { data, error, isLoading, mutate } = useProjectUnderstanding(projectId);
   const [editing, setEditing] = useState(false);
@@ -83,11 +85,12 @@ export function ProjectUnderstandingPanel({ projectId }: { projectId: string }) 
       setEditing(false);
     } catch { setSaveError(true); } finally { setSaving(false); }
   };
+  if (!hasProjectFolder) return <section className="rounded-xl border border-edge p-4"><ProjectFolderRequired /></section>;
   if (isLoading) return <Skeleton className="h-12 w-full rounded-xl" />;
   return <section className="rounded-xl border border-edge bg-surface-panel px-5 py-3">
     <div className="flex items-center justify-between gap-3 text-xs text-fg-subtle">
       <span>{isProjectUnderstandingRunning(data?.status) ? copy.running : data?.status === 'failed' || data?.status === 'canceled' || error ? copy.failed : copy.title}</span>
-      {!isProjectUnderstandingRunning(data?.status) ? <ProjectUnderstandingAction projectId={projectId} /> : null}
+      {!isProjectUnderstandingRunning(data?.status) ? <ProjectUnderstandingAction projectId={projectId} hasProjectFolder={hasProjectFolder} /> : null}
     </div>
     {data?.overview ? <details className="mt-2">
       <summary className="cursor-pointer text-sm text-fg-muted">{copy.view}</summary>
@@ -101,4 +104,9 @@ export function ProjectUnderstandingPanel({ projectId }: { projectId: string }) 
       </div>}
     </details> : null}
   </section>;
+}
+
+function ProjectFolderRequired() {
+  const zh = useLocaleStore(state => state.language) === 'zh';
+  return <p className="text-xs leading-5 text-fg-muted">{zh ? '先在项目设置中绑定文件夹，再了解该目录中的资料。当前项目仍可组织对话和任务。' : 'Link a folder in project settings before learning from its materials. You can still organize conversations and tasks.'}</p>;
 }

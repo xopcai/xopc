@@ -1,7 +1,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { CornerDownRight, ChevronDown, ChevronUp, Ellipsis, FileIcon, GripVertical, MessageCirclePlus, NotebookPen, Pencil, Trash2 } from 'lucide-react';
 import { memo, useRef } from 'react';
-import { parseUserTurnDocument, renderUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
+import { parseUserTurnDocument, renderUserTurnDocument, taskDescriptionForDisplay, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 
 import { useFollowUpRowDrag } from './use-follow-up-row-drag';
 
@@ -73,7 +73,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
         const refsById = new Map(item.contextRefs?.flatMap(ref => ref.refId ? [[ref.refId, ref.title] as const] : []) ?? []);
         const inlineRefIds = new Set(document ? userTurnDocumentRefIds(document) : []);
         const detachedRefs = item.contextRefs?.filter(ref => !ref.refId || !inlineRefIds.has(ref.refId));
-        let preview = (document
+        let preview = taskDescriptionForDisplay(document
           ? renderUserTurnDocument(document, refId => refsById.get(refId))
           : item.text).trim();
         if (!preview && item.attachments?.length) {

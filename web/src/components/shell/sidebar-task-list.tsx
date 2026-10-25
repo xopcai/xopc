@@ -596,7 +596,7 @@ function SidebarProjectMenu({
             <ExternalLink className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
             {sb.projectOpen}
           </Link>
-          <ProjectUnderstandingAction projectId={project.id} onStarted={() => setMenuOpen(false)}
+          <ProjectUnderstandingAction hasProjectFolder={Boolean(project.workspaceRoot?.trim())} projectId={project.id} onStarted={() => setMenuOpen(false)}
             className="flex w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50" />
           <button
             type="button"
@@ -1071,7 +1071,7 @@ function SidebarTaskListContent({
   const [createProjectWorkspace, setCreateProjectWorkspace] = useState('');
   const [createProjectError, setCreateProjectError] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [autoUnderstand, setAutoUnderstand] = useState(true);
+  const [autoUnderstand, setAutoUnderstand] = useState(false);
   const [includedConversationId, setIncludedConversationId] = useState<string | undefined>(() => activeConversationId);
   const [projectsCollapsed, setProjectsCollapsed] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
@@ -1516,15 +1516,15 @@ function SidebarTaskListContent({
     event.preventDefault();
     const name = createProjectName.trim();
     const workspaceRoot = createProjectWorkspace.trim();
-    if (!name || !workspaceRoot || creatingProject) return;
+    if (!name || creatingProject) return;
 
     setCreatingProject(true);
     setCreateProjectError(null);
     try {
-      const project = await createProject({ name, workspaceRoot, autoUnderstand });
+      const project = await createProject({ name, ...(workspaceRoot ? { workspaceRoot } : {}), autoUnderstand: Boolean(workspaceRoot) && autoUnderstand });
       setCreateProjectName('');
       setCreateProjectWorkspace('');
-      setAutoUnderstand(true);
+      setAutoUnderstand(false);
       setCreateProjectOpen(false);
       refreshSidebar();
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
@@ -1819,9 +1819,9 @@ function SidebarTaskListContent({
                       </span>
                     </span>
                   </button>
-                  <p className="text-xs font-normal text-fg-subtle">{projectsText.workspaceSelectionHint}</p>
+                  <p className="text-xs font-normal text-fg-muted">{projectsText.workspaceSelectionHint}</p>
                 </div>
-                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creatingProject} />
+                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creatingProject || !createProjectWorkspace.trim()} />
                 {createProjectError ? (
                   <p className="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
                     {createProjectError}
@@ -1835,7 +1835,7 @@ function SidebarTaskListContent({
                 <Button
                   type="submit"
                   variant="primary"
-                  disabled={creatingProject || !createProjectName.trim() || !createProjectWorkspace.trim()}
+                  disabled={creatingProject || !createProjectName.trim()}
                 >
                   {creatingProject ? projectsText.home.creating : projectsText.create}
                 </Button>

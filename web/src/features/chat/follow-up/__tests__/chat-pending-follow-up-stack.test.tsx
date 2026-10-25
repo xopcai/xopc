@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { PERSONAL_WORKER_RESULT_GUIDANCE } from '@xopcai/gateway-contract';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -76,4 +77,12 @@ describe('follow-up actions', () => {
     act(() => root.render(<ChatPendingFollowUpStack items={[item]} {...callbacks()} steeringBusyId={item.id} />));
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>('button')).every(button => button.disabled)).toBe(true);
   });
+  it('projects host instructions out of a retry preview without changing queued data', () => {
+    const queued = { ...item, status: 'interrupted' as const, text: `<task_brief>\nReview the change\n\n${PERSONAL_WORKER_RESULT_GUIDANCE}\n</task_brief>` };
+    act(() => root.render(<ChatPendingFollowUpStack items={[queued]} {...callbacks()} />));
+    expect(container.textContent).toContain('Review the change');
+    expect(container.textContent).not.toMatch(/task_brief|publish_task_result|Result for the originating/);
+    expect(queued.text).toContain(PERSONAL_WORKER_RESULT_GUIDANCE);
+  });
+
 });

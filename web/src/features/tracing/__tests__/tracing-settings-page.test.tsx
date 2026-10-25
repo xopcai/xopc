@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { queries, request, credentialState, copy } = vi.hoisted(() => ({ queries: [] as URLSearchParams[], request: vi.fn(), credentialState: { configured: false }, copy: vi.fn(async () => true) }));
+const { queries, request, credentialState, copy, loadState, retryLoad } = vi.hoisted(() => ({ queries: [] as URLSearchParams[], request: vi.fn(), credentialState: { configured: false }, copy: vi.fn(async () => true), loadState: { failed: false, lastError: '' }, retryLoad: vi.fn(async () => {}) }));
 vi.mock('@/lib/copy-to-clipboard', () => ({ copyTextToClipboard: copy }));
 vi.mock('@/stores/locale-store', () => ({ useLocaleStore: (selector: (state: { language: string }) => unknown) => selector({ language: 'en' }) }));
 vi.mock('../tracing-api', () => ({ traceUrl: (path: string) => `http://localhost/api/observability/${path}`, traceRequest: request }));
@@ -16,16 +16,17 @@ vi.mock('swr', () => ({ default: (key: string | null) => {
   const url = new URL(key);
   let data: unknown;
   if (url.pathname.endsWith('/traces')) {
+    if (loadState.failed) return { error: new Error('Tracing service unavailable'), isValidating: false, mutate: retryLoad };
     queries.push(url.searchParams);
     const start = Number(url.searchParams.get('cursor') ?? '0');
     const count = Number(url.searchParams.get('limit'));
-    data = { traces: Array.from({ length: Math.min(count, 25 - start) }, (_, offset) => ({ traceId: String(start + offset), spanId: 'test', name: `Run ${start + offset + 1}`, type: 'agent', status: 'success', startedAt: 1000, endedAt: 1100, attributes: {} })), nextCursor: start + count < 25 ? String(start + count) : null };
+    data = { traces: Array.from({ length: Math.min(count, 25 - start) }, (_, offset) => ({ traceId: String(start + offset), spanId: 'test', name: `Run ${start + offset + 1}`, type: 'agent', status: 'success', startedAt: 1000, endedAt: 1100, attributes: {}, stats: { generations: 1, tokens: 10, knownCostUsd: 0, unknownCostCalls: start + offset === 0 ? 1 : 0 } })), nextCursor: start + count < 25 ? String(start + count) : null };
   } else if (url.pathname.endsWith('/settings')) {
     data = { config: { enabled: true, capture: 'redacted', local: { retentionDays: 7, maxStoreMiB: 256, maxTraces: 10000, maxSpans: 100000, maxTraceKiB: 1024, maxWriteMiBPerMinute: 2 }, langfuse: { enabled: false, baseUrl: 'https://cloud.langfuse.com' } }, credentials: { publicKeyConfigured: credentialState.configured, secretKeyConfigured: credentialState.configured, publicKeySource: 'none', secretKeySource: 'none', baseUrlSource: 'config' } };
   } else {
-    data = { local: { physicalBytes: 0, bytes: 0, traces: 25, spans: 25 }, langfuse: { state: 'disabled', pending: 0, dropped: 0 } };
+    data = { local: { physicalBytes: 0, bytes: 0, traces: 25, spans: 25, lastError: loadState.lastError }, langfuse: { state: 'disabled', pending: 0, dropped: 0 } };
   }
-  return { data, isValidating: false, mutate: vi.fn(async () => {}) };
+  return { data, isValidating: false, mutate: retryLoad };
 } }));
 
 import { TracingSettingsPage } from '../tracing-settings-page';
@@ -43,6 +44,9 @@ beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   queries.length = 0;
   credentialState.configured = false;
+  loadState.failed = false;
+  loadState.lastError = '';
+  retryLoad.mockClear();
   copy.mockClear();
   request.mockReset();
   request.mockImplementation(async (_path: string, method: string, body: unknown) => method === 'PATCH' ? { config: body } : { ok: true });
@@ -52,6 +56,25 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('tracing records navigation', () => {
+  it('keeps a recorder failure distinct from task results and retains diagnostics behind details', () => {
+    loadState.lastError = 'Trace worker stopped';
+    act(() => root.render(<TracingSettingsPage />));
+    act(() => button('Capture settings').click());
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Existing task results are separate');
+    const diagnostic = [...container.querySelectorAll('details')].find(item => item.textContent?.includes('Trace worker stopped'))!;
+    expect(diagnostic.open).toBe(false);
+    act(() => button('Refresh recording status').click());
+    expect(retryLoad).toHaveBeenCalledOnce();
+  });
+  it('explains a failed load without calling it an empty result and retries the same list', () => {
+    loadState.failed = true;
+    act(() => root.render(<TracingSettingsPage />));
+    expect(results().textContent).toContain('This does not mean there are no records');
+    expect(results().textContent).not.toContain('Tracing service unavailable');
+    expect(results().textContent).not.toContain('No traces in this range');
+    act(() => button('Retry loading records').click());
+    expect(retryLoad).toHaveBeenCalledOnce();
+  });
   it('replaces each bounded page and supports backward navigation and the last page', () => {
     expect(results().querySelectorAll('button')).toHaveLength(10);
     expect(results().className).toContain('overflow-y-auto');
@@ -170,4 +193,12 @@ describe('Langfuse key viewing and copying', () => {
     expect(copy).not.toHaveBeenCalled();
     expect(container.textContent).toContain('Reveal unavailable');
   });
+});
+
+it('shows pending cost as the primary state while preserving a confirmed zero', () => {
+  const rows = results().querySelectorAll('button');
+  expect(rows[0].textContent).toContain('Cost pending');
+  expect(rows[0].textContent).toContain('known portion $0.0000');
+  expect(rows[1].textContent).toContain('$0.0000');
+  expect(rows[1].textContent).not.toContain('Cost pending');
 });

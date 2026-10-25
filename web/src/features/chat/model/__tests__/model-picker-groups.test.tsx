@@ -38,5 +38,5 @@ it('selects the exact model ID even when names match across providers',async()=>
   expect(change).toHaveBeenCalledExactlyOnceWith('bailian/beta');
 });
 it('keeps form selectors flat unless provider grouping is requested',async()=>{
-  await render(false);expect(groups()).toEqual([]);expect(container.querySelector('[title="cloud/alpha"]')?.textContent).toBe('Alphacloud');
+  await render(false);expect(groups()).toEqual([]);expect(container.querySelector('[title="cloud/alpha"]')?.textContent).toBe('AlphaChat and everyday taskscloud');
 });

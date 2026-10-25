@@ -1,3 +1,4 @@
+import { RuntimeImpact } from './runtime-impact';
 import { useState } from 'react';
 import useSWR from 'swr';
 
@@ -43,6 +44,7 @@ export function RuntimeReadiness() {
       <summary className="cursor-pointer text-sm font-medium text-fg">{zh ? '执行环境状态' : 'Execution environment status'}{data ? ` · ${statuses.filter((status) => status.state === 'ready').length}/${statuses.length}` : ''}</summary>
       {error ? <div role="alert" className="mt-3 text-sm text-danger">{t.loadError}<Button variant="ghost" onClick={() => void mutate()}>{t.refresh}</Button></div> : !data ? <Skeleton className="mt-3 h-20" /> : (
         <div className="mt-3 space-y-3">
+          <RuntimeImpact statuses={statuses} zh={zh} />
           {statuses.map((status) => (
             <div key={status.runtime} className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0"><p className="text-sm text-fg">{t.runtimeNames[status.runtime]}</p><p className="text-xs text-fg-muted">{status.message}</p></div>

@@ -1,3 +1,4 @@
+import { toolGroup, toolGroupLabel } from './tool-presentation';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -42,7 +43,7 @@ export function AgentDefaultsToolsPanel({
   );
   const allTools = useMemo(
     () => [...new Set([...builtinTools.map((tool) => tool.id), ...Object.keys(draft.tools)])]
-      .filter((id) => id !== 'computer_use' || isComputerUseAvailable()).sort(),
+      .filter((id) => id !== 'computer_use' || isComputerUseAvailable()).sort((a, b) => ['read', 'files', 'execute', 'external', 'devices', 'other'].indexOf(toolGroup(a)) - ['read', 'files', 'execute', 'external', 'devices', 'other'].indexOf(toolGroup(b)) || a.localeCompare(b)),
     [builtinTools, draft.tools],
   );
   const counts = useMemo(() => ({
@@ -76,7 +77,7 @@ export function AgentDefaultsToolsPanel({
     <section className="rounded-xl bg-surface-hover/20 p-5">
       <div>
         <h2 className="text-base font-semibold text-fg">{zh ? '默认工具权限' : 'Default tool permissions'}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{zh ? '允许：直接执行；询问：执行前确认；禁用：智能体无法使用。' : 'Allow runs directly, Ask requires confirmation, and Deny makes the tool unavailable.'}</p>
+        <p className="mt-1 text-sm text-fg-muted">{zh ? '允许：直接执行；询问：执行前确认；禁用：智能体无法使用。分组只解释用途；命令、组合工具的实际读写与外部影响取决于调用内容，请逐项核对。' : 'Allow runs directly, Ask requires confirmation, and Deny makes the tool unavailable.'}</p>
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -88,20 +89,17 @@ export function AgentDefaultsToolsPanel({
 
       <SettingsAdvancedSection title={zh ? "工具调用限制" : "Tool call limits"} summary={zh ? "每个工具的调用次数和超时限制继续生效；授权可在下方直接修改。" : "Call and timeout limits remain active; edit permissions below."}>{null}</SettingsAdvancedSection>
       <div className="mt-4 flex max-h-[38rem] flex-col gap-1 overflow-y-auto rounded-xl bg-surface-base/45 p-1 [&>*]:rounded-lg [&>*]:bg-surface-panel/55">
-        {visibleTools.map((id) => {
+        {visibleTools.map((id, index) => {
           const policy = draft.tools[id] ?? { mode: 'allow' as const };
           const description = descriptions.get(id);
           const expanded = expandedTool === id;
           return (
             <div key={id} className="px-4 py-3">
+              {index === 0 || toolGroup(visibleTools[index - 1]) !== toolGroup(id) ? <h3 className="mb-3 border-b border-edge pb-2 text-sm font-semibold text-fg">{toolGroupLabel(toolGroup(id), zh)}</h3> : null}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <code className="text-xs font-medium text-fg">{id}</code>
-                  {description ? (
-                    <p className="mt-1 text-xs leading-5 text-fg-muted">
-                      {zh ? description.zh : description.en}
-                    </p>
-                  ) : null}
+                  <p className="text-sm font-medium text-fg">{(zh ? description?.zh : description?.en) || id}</p><code className="text-xs text-fg-muted">{id}</code>
+
                 </div>
                 <div className="flex items-center gap-2">
                   <SlidingTabList className="flex rounded-lg bg-surface-base p-1" role="group" aria-label={id} indicatorClassName="rounded-md bg-accent">

@@ -1,3 +1,4 @@
+import { ResourceUnavailable } from '@/components/ui/resource-unavailable';
 /**
  * ExtensionPage — renders a full-page extension UI via ExtensionIframeHost.
  *
@@ -54,24 +55,24 @@ export function ExtensionPage() {
   }, [clearPageHeader, extension, extensionId, page, setPageHeader]);
 
   if (!extensionId) {
-    return <ExtensionPageNotFound message="No plugin ID provided." />;
+    return <ResourceUnavailable kind="plugin" backTo="/capabilities/extensions" />;
   }
 
   if (!extension) {
     return (
-      <ExtensionPageNotFound message={`Plugin "${extensionId}" not found or has no UI.`} />
+      <ResourceUnavailable kind={extensions.some(ext => ext.id === extensionId) ? "plugin-page" : "plugin"} backTo="/capabilities/extensions" />
     );
   }
 
   if (!pages?.length) {
     return (
-      <ExtensionPageNotFound message={`Plugin "${extensionId}" has no page contributions.`} />
+      <ResourceUnavailable kind="plugin-page" backTo="/capabilities/extensions" />
     );
   }
 
   if (!page) {
     return (
-      <ExtensionPageNotFound message={`Page "${pageId}" not found in plugin "${extensionId}".`} />
+      <ResourceUnavailable kind="plugin" backTo="/capabilities/extensions" />
     );
   }
 
@@ -87,16 +88,6 @@ export function ExtensionPage() {
         fixedHeight={undefined}
         maxHeight={99999}
       />
-    </div>
-  );
-}
-
-function ExtensionPageNotFound({ message }: { message: string }) {
-  return (
-    <div className="flex min-h-[min(40vh,16rem)] flex-1 items-center justify-center">
-      <div className="text-center">
-        <p className="text-sm text-fg-muted">{message}</p>
-      </div>
     </div>
   );
 }

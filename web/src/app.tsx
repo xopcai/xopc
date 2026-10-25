@@ -1,3 +1,4 @@
+import { ResourceUnavailable } from '@/components/ui/resource-unavailable';
 import { lazy, Suspense, useEffect } from 'react';
 import { createHashRouter, Link, Navigate, RouterProvider } from 'react-router-dom';
 
@@ -386,7 +387,7 @@ const router = createHashRouter([
               <Suspense fallback={<SettingsRouteFallback />}>
                 <ComputerSettingsPage />
               </Suspense>
-            ) : <Navigate to="/settings/agent-browser" replace />,
+            ) : <ResourceUnavailable kind="desktop" backTo="/settings/overview" />,
           },
           {
             path: 'agent-browser',

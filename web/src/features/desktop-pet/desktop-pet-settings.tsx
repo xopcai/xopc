@@ -1,3 +1,4 @@
+import { ResourceUnavailable } from '@/components/ui/resource-unavailable';
 import {
   AlertCircle,
   ExternalLink,
@@ -94,7 +95,7 @@ export function DesktopPetSettings() {
     return api.onStateChanged(setState);
   }, [api, load]);
 
-  if (!isElectron() || !api) return null;
+  if (!isElectron() || !api) return <ResourceUnavailable kind="desktop" backTo="/settings/overview" />;
   if (!state) {
     return (
       <SettingsPageFrame gap="gap-4">

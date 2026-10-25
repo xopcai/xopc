@@ -2,6 +2,7 @@
 // the original wire form (rather than the server-expanded skill/file bodies).
 
 import {
+  taskDescriptionForDisplay,
   stripMediaClaimCheck,
   stripRuntimeUserMessageEnvelope,
   stripSourceContextsEnvelope,
@@ -97,7 +98,7 @@ export function stripExpandedAtFileBlocks(text: string): string {
 
 /** Full user-bubble scrub for persisted transcript text. */
 export function stripUserMessageForDisplay(text: string): string {
-  let out = stripStartupContextForDisplay(text);
+  let out = taskDescriptionForDisplay(stripStartupContextForDisplay(text));
   out = stripRuntimeUserMessageEnvelope(out);
   out = stripExpandedAtFileBlocks(out);
   out = stripMediaClaimCheck(out);

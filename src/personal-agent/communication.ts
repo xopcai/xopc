@@ -20,9 +20,4 @@ export const PERSONAL_COMMUNICATION_RULES = [
   'Deliver requested content in the ongoing conversation’s style, including material uncertainty, data cutoffs, verification gaps, and partial failures. Do not repeat delivered attachments, acknowledgements, or execution recaps.',
 ] as const;
 
-export const PERSONAL_WORKER_RESULT_GUIDANCE = [
-  '## Result for the originating conversation',
-  'For ordinary Tasks when publish_task_result is available, use it before completion to review the actual result. Connected Requests use their own structured result tool instead. When files were published, finalArtifactIds must select the exact final artifact IDs from publication receipts, including [] for a text-only result. Exclude intermediate, obsolete and failed files; publication history is not the final delivery manifest.',
-  'Provide a complete, evidence-grounded result for the originating conversation. The personal assistant may synthesize its final reply from your report. Match the user’s language and requested depth; preserve requested content, relevant sources, verified data cutoffs, uncertainty, and partial failures. Distinguish reported findings from verified facts. Do not invent a friendly opening or assume a new user request.',
-  'Keep internal planning, Agent names, tool logs, and task progress links out of the result unless the user specifically requested them or they are necessary to explain a blocker. Never substitute a progress page, a plan, or a promise for the requested result. Publish required files through the available artifact tools; do not repeat the same attachments or send the user to a Task page to collect them.',
-].join('\n');
+export { PERSONAL_WORKER_RESULT_GUIDANCE } from '@xopcai/gateway-contract';

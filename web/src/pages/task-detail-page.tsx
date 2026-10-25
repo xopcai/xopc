@@ -1,3 +1,5 @@
+import { TaskResultStatus } from '@/features/tasks/task-result-status';
+import { taskDescriptionForDisplay, preserveTaskExecutionInstructions } from '@xopcai/gateway-contract';
 import { TaskPhaseHistory } from '@/features/tasks/task-phase-history';
 import { TaskInputCard } from '@/features/tasks/task-input-card';
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
@@ -26,7 +28,7 @@ import { cancelTaskRun, commandTask, deleteTask, handoffTask, reviewTaskCriterio
 import { TaskResultEvidence } from '@/features/tasks/task-result-evidence';
 import { TaskCollaborationPanel } from '@/features/tasks/task-collaboration-panel';
 import { taskCopy } from '@/features/tasks/task-copy';
-import { summarizeTaskCriteria } from '@/features/tasks/task-detail-summary';
+import { currentTaskReceipt, detailStatusKey, detailStatusTone, summarizeTaskCriteria } from '@/features/tasks/task-detail-summary';
 import { hasTaskEditConflict, optimisticallyPatchTask, type TaskEditBase } from '@/features/tasks/task-detail-sync';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
 import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
@@ -193,28 +195,9 @@ function readTaskChatPanelPercent(): number {
   }
 }
 
-type DetailStatusKey = 'allocating' | 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'failed' | 'cancelled' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
+
 type TaskEditConflict = 'title' | 'description' | null;
 type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies' | 'acceptance' | 'delete' | 'title';
-
-function detailStatusKey(detail: TaskDetail): DetailStatusKey {
-  if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
-  if (detail.waits.some((wait) => wait.kind === 'paused')) return 'paused';
-  if (detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) return 'needsUser';
-  if (detail.operationalState !== 'idle') return detail.operationalState;
-  if (detail.task.phase === 'backlog') return 'captured';
-  if (detail.task.phase === 'ready') return 'ready';
-  if (detail.task.phase === 'review') return 'review';
-  return 'ready';
-}
-
-function detailStatusTone(status: DetailStatusKey): string {
-  if (status === 'failed') return 'bg-danger/10 text-danger';
-  if (status === 'needsUser' || status === 'blocked') return 'bg-warning/10 text-warning';
-  if (status === 'completed') return 'bg-success-soft text-success';
-  if (status === 'running' || status === 'verifying' || status === 'review') return 'bg-accent-soft text-accent-fg';
-  return 'bg-surface-hover text-fg-muted';
-}
 
 function TextList({ items, empty, contentKey }: {
   items: string[];
@@ -462,7 +445,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
       setEditingDescription(false);
       return;
     }
-    if (await savePatch({ body: body || null })) {
+    if (await savePatch({ body: preserveTaskExecutionInstructions(detail.task.body ?? '', body) || null })) {
       setEditConflict(null);
       setEditingDescription(false);
     }
@@ -616,10 +599,10 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const criterionSummaries = summarizeTaskCriteria(detail);
   const allCriteriaPassed = criterionSummaries.length > 0 && criterionSummaries.every((criterion) => criterion.status === 'passed');
   const pausedWait = detail.waits.find((wait) => wait.kind === 'paused');
-  const latestReceipt = detail.receipts[0];
+  const latestReceipt = currentTaskReceipt(detail);
   const statusKey = detailStatusKey(detail);
   const statusLabel = copy.detailStatuses[statusKey];
-  const objective = detail.task.body?.trim() || detail.task.contract?.objective.trim();
+  const objective = taskDescriptionForDisplay(detail.task.body?.trim() || detail.task.contract?.objective.trim() || '');
   const canSchedule = detail.allowedCommands.includes('mark_ready');
   const canStart = detail.allowedCommands.includes('start');
   const canPause = detail.allowedCommands.includes('add_wait');
@@ -770,6 +753,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           </div>
           <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-medium', detailStatusTone(statusKey))}>{statusLabel}</span>
         </div>
+        <TaskResultStatus detail={detail} language={language} />
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
           <span className="inline-flex min-w-0 items-center gap-2">
             {conversationAgentId ? <AgentAvatarDisplay agentId={conversationAgentId} avatar={conversationAgent?.avatar} size={20} className="shrink-0" /> : null}
@@ -831,7 +815,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         {(deliverables.length > 0 || artifactEvidence.length > 0) ? <ul className="mt-3 space-y-2">{deliverables.map((item) => <li key={item.id} className="rounded-lg bg-surface-hover p-3 text-sm">
           <span className="block text-xs text-fg-muted">{copy.contextKindLabels[item.targetKind]}</span>
           {item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <TaskExpandableContent content={item.title ?? item.targetId} contentKey={`${taskId}:deliverable:${item.id}`} language={language} previewHeight={60} className="mt-1"><a className="block break-all text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a></TaskExpandableContent> : <TaskExpandableContent content={item.title ?? item.targetId} contentKey={`${taskId}:deliverable:${item.id}`} language={language} markdown={false} previewHeight={60} className="mt-1 text-fg" />}
-        </li>)}{artifactEvidence.map((item) => <li key={item.uri ?? item.title} className="rounded-lg bg-surface-hover p-3 text-sm"><span className="block text-xs text-fg-muted">{language === 'zh' ? '执行产物' : 'Run artifact'}</span>{item.uri && /^https?:\/\//.test(item.uri) ? <TaskExpandableContent content={item.title} contentKey={`${taskId}:artifact:${item.uri ?? item.title}`} language={language} previewHeight={60} className="mt-1"><a className="block break-all text-accent hover:underline" href={item.uri} target="_blank" rel="noreferrer">{item.title}</a></TaskExpandableContent> : <TaskExpandableContent content={item.title} contentKey={`${taskId}:artifact:${item.uri ?? item.title}`} language={language} markdown={false} previewHeight={60} className="mt-1 text-fg" />}</li>)}</ul> : <p className="mt-2 text-sm text-fg-muted">{language === 'zh' ? '尚未关联交付物' : 'No deliverables linked yet'}</p>}
+        </li>)}{artifactEvidence.map((item) => <li key={item.uri ?? item.title} className="rounded-lg bg-surface-hover p-3 text-sm"><span className="block text-xs text-fg-muted">{language === 'zh' ? '执行产物（待检查）' : 'Run artifact (review needed)'}</span>{item.uri && /^https?:\/\//.test(item.uri) ? <TaskExpandableContent content={item.title} contentKey={`${taskId}:artifact:${item.uri ?? item.title}`} language={language} previewHeight={60} className="mt-1"><a className="block break-all text-accent hover:underline" href={item.uri} target="_blank" rel="noreferrer">{item.title}</a></TaskExpandableContent> : <TaskExpandableContent content={item.title} contentKey={`${taskId}:artifact:${item.uri ?? item.title}`} language={language} markdown={false} previewHeight={60} className="mt-1 text-fg" />}</li>)}</ul> : <p className="mt-2 text-sm text-fg-muted">{language === 'zh' ? '尚未关联交付物' : 'No deliverables linked yet'}</p>}
         {expectedOutputs.length > 0 ? <div className="mt-4 border-t border-edge-subtle pt-3"><h3 className="text-xs font-medium text-fg-muted">{copy.expectedOutputs}</h3><div className="mt-2"><TextList contentKey={`${taskId}:expectedOutputs`} items={expectedOutputs} empty={copy.noDefinition} /></div></div> : null}
       </section> : null}
 
@@ -862,7 +846,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
                     event.preventDefault();
                     event.stopPropagation();
                     skipDescriptionSaveRef.current = true;
-                    setDescriptionDraft(detail.task.body ?? detail.task.contract?.objective ?? '');
+                    setDescriptionDraft(taskDescriptionForDisplay(detail.task.body ?? detail.task.contract?.objective ?? ''));
                     setEditingDescription(false);
                     queueMicrotask(() => { skipDescriptionSaveRef.current = false; });
                   }
@@ -874,14 +858,14 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
                 {objective && objective !== detail.task.title
                   ? <TaskExpandableContent content={objective} contentKey={`${taskId}:description`} language={language} />
                   : <p className="text-sm leading-6 text-fg-muted">{copy.noTaskDescription}</p>}
-                <button type="button" className="mt-2 rounded-md px-2 py-1 text-xs text-accent hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = detail.task.body ?? detail.task.contract?.objective ?? ''; initialDescriptionDraftRef.current = draft; descriptionEditBaseRef.current = { value: detail.task.body ?? '', version: detail.task.version }; setEditConflict(null); setDescriptionDraft(draft); setEditingDescription(true); }}>{language === 'zh' ? '编辑说明' : 'Edit description'}</button>
+                <button type="button" className="mt-2 rounded-md px-2 py-1 text-xs text-accent hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = taskDescriptionForDisplay(detail.task.body ?? detail.task.contract?.objective ?? ''); initialDescriptionDraftRef.current = draft; descriptionEditBaseRef.current = { value: detail.task.body ?? '', version: detail.task.version }; setEditConflict(null); setDescriptionDraft(draft); setEditingDescription(true); }}>{language === 'zh' ? '编辑说明' : 'Edit description'}</button>
               </div>
             )}
             {editConflict === 'description' ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-warning" role="alert">
                 <span>{language === 'zh' ? 'Agent 在你编辑期间更新了描述。' : 'The Agent updated the description while you were editing.'}</span>
-                <button type="button" className="rounded-md bg-surface-hover px-2 py-1 text-fg" onClick={() => { setDescriptionDraft(detail.task.body ?? ''); setEditConflict(null); setEditingDescription(false); }}>{language === 'zh' ? '使用 Agent 版本' : 'Use Agent version'}</button>
-                <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" onClick={() => void savePatch({ body: descriptionDraft.trim() || null }).then((saved) => { if (saved) { setEditConflict(null); setEditingDescription(false); } })}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
+                <button type="button" className="rounded-md bg-surface-hover px-2 py-1 text-fg" onClick={() => { setDescriptionDraft(taskDescriptionForDisplay(detail.task.body ?? '')); setEditConflict(null); setEditingDescription(false); }}>{language === 'zh' ? '使用 Agent 版本' : 'Use Agent version'}</button>
+                <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" onClick={() => void savePatch({ body: preserveTaskExecutionInstructions(detail.task.body ?? '', descriptionDraft.trim()) || null }).then((saved) => { if (saved) { setEditConflict(null); setEditingDescription(false); } })}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
               </div>
             ) : null}
           </section>

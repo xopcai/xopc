@@ -38,7 +38,7 @@ it('offers one model picker, connection status and the central management link',
   expect(container.querySelectorAll('select')).toHaveLength(1);
   expect(container.querySelector('input')).toBeNull();
   expect(container.textContent).toContain('My provider · 凭据就绪');
-  expect(container.querySelector('a')?.getAttribute('href')).toBe('/settings/capabilities/models');
+  expect(container.querySelector('a')?.getAttribute('href')).toBe('/settings/capabilities/models?returnTo=%2Fsettings%2Fphone-use&purpose=phone');
   expect(container.textContent).not.toContain('动作协议');
 });
 it('saves only the chosen phone route without modifying shared credentials', async () => {
@@ -58,4 +58,15 @@ it('keeps unavailable stored models visible but prevents saving them', async () 
   await render('removed/model');
   expect(container.textContent).toContain('当前模型不可用');
   expect(saveButton().disabled).toBe(true);
+});
+
+it('opens service configuration in place and retains an unsaved phone model choice', async () => {
+  const listener = vi.fn(); window.addEventListener('open-capability-settings', listener);
+  try {
+    await render(); await choose('phone-provider/autoglm-phone');
+    await act(async () => container.querySelector('a')!.click());
+    expect(listener.mock.calls[0][0].detail).toEqual({ use: 'chat', view: 'services', purpose: 'phone' });
+    expect(container.querySelector('select')?.value).toBe('phone-provider/autoglm-phone');
+    expect(onSave).not.toHaveBeenCalled();
+  } finally { window.removeEventListener('open-capability-settings', listener); }
 });

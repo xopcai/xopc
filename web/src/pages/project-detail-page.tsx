@@ -1,3 +1,4 @@
+import { ResourceUnavailable } from '@/components/ui/resource-unavailable';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
@@ -309,7 +310,7 @@ function ProjectSwitcher({
   const [name, setName] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [creating, setCreating] = useState(false);
-  const [autoUnderstand, setAutoUnderstand] = useState(true);
+  const [autoUnderstand, setAutoUnderstand] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
 
@@ -378,7 +379,7 @@ function ProjectSwitcher({
     setMissingWorkspaceRoot(null);
     try {
       const project = await createProject({
-        autoUnderstand,
+        autoUnderstand: Boolean(trimmedWorkspace) && autoUnderstand,
         name: trimmedName,
         ...(trimmedWorkspace ? { workspaceRoot: trimmedWorkspace } : {}),
         ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
@@ -386,7 +387,7 @@ function ProjectSwitcher({
       setCreateOpen(false);
       setName('');
       setWorkspaceRoot('');
-      setAutoUnderstand(true);
+      setAutoUnderstand(false);
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
       setProjects((items) => [project, ...items.filter((item) => item.id !== project.id)]);
       navigate(`/projects/${encodeURIComponent(project.id)}`);
@@ -582,9 +583,9 @@ function ProjectSwitcher({
                     placeholder={projectsText.workspacePlaceholder}
                     inputClassName="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
                   />
-                  <p className="text-xs text-fg-subtle">{projectsText.workspaceHint}</p>
+                  <p className="text-xs text-fg-muted">{projectsText.workspaceHint}</p>
                 </div>
-                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creating} />
+                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creating || !workspaceRoot.trim()} />
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
                 <Dialog.Close asChild>
@@ -1571,9 +1572,9 @@ export function ProjectDetailPage() {
           <ArrowLeft className="size-4" aria-hidden />
           {backPath === '/projects' ? pm.backToProjects : msg.sidebar.back}
         </Link>
-        <p className="mt-6 rounded-lg bg-surface-panel p-4 shadow-surface text-sm text-fg-muted">
-          {error || pm.notFound}
-        </p>
+        <div className="mt-6">
+          <ResourceUnavailable kind="project" missing={!error || /not found|404/i.test(error)} backTo="/projects" />
+        </div>
       </main>
     );
   }
@@ -1676,7 +1677,7 @@ export function ProjectDetailPage() {
       {tab === 'overview' ? (
         <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-primary-tab-overview" className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_20rem] xl:overflow-hidden">
           <div className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
-            <ProjectUnderstandingPanel key={project.id} projectId={project.id} />
+            <ProjectUnderstandingPanel key={project.id} projectId={project.id} hasProjectFolder={Boolean(project.workspaceRoot?.trim())} />
             <div className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface">
               <div className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">

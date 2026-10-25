@@ -57,7 +57,6 @@ export type SettingsShellNavGroup = {
 
 /** Settings tabs shown only in the Electron desktop shell. */
 export const ELECTRON_ONLY_SETTINGS_TABS = new Set<Tab>([
-  'settingsSystem',
   'settingsDesktopPet',
   'settingsDesktopApp',
 ]);
@@ -65,7 +64,7 @@ export const ELECTRON_ONLY_SETTINGS_TABS = new Set<Tab>([
 /** Electron-only group — rendered above Extensions in the settings rail. */
 export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
   id: 'system',
-  tabs: ['settingsSystem', 'settingsDesktopPet', 'settingsDesktopApp'],
+  tabs: ['settingsDesktopPet', 'settingsDesktopApp'],
 };
 
 /**
@@ -80,7 +79,7 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  * retains dependency repair. Electron-only rows are merged by the layout.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsPersonal', 'settingsKeyboardShortcuts'] },
+  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsPersonal', 'settingsSystem', 'settingsKeyboardShortcuts'] },
   {
     id: 'capabilities',
     tabs: [
@@ -175,4 +174,11 @@ export function isSettingsTabActiveAtPath(tab: Tab, pathname: string): boolean {
     return pathname === capabilitySettingsPath('models');
   }
   return pathname === pathForTab(tab);
+}
+
+/** Resolve catalog documentation paths against the public documentation site. */
+export function channelDocsUrl(language: StoredLanguage, docsPath: string): string {
+  if (/^https:\/\//i.test(docsPath)) return docsPath;
+  if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(docsPath)) return helpDocsHomeUrl(language);
+  return docsGuidePageUrl(language, docsPath.replace(/^\/?zh\//, ''));
 }

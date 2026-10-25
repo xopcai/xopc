@@ -1,3 +1,4 @@
+import { PluginScopePreview } from './plugin-scope-preview';
 import { pluginCanStart, pluginNeedsAuthorization } from './plugin-presentation';
 import { extensionCardClass, extensionCardGridClass, extensionCardTriggerClass } from './extension-card-styles';
 import { pluginDetailPath, pluginStartPath } from '@/features/capabilities/capability-links';
@@ -246,7 +247,7 @@ export function ExtensionMarketplacePanel({
                           onClick={() => dispatch({
                             type: 'patch',
                             patch: e.packageType === 'plugin'
-                              ? { detailPkg: e.id, quickInstallPkg: e.id }
+                              ? { detailPkg: e.id, quickInstallPkg: null }
                               : { detailPkg: e.id, quickInstallPkg: null },
                           })}
                           className={cn(
@@ -304,6 +305,7 @@ function ExtensionMarketplaceDetailDialog({
   onUninstall: (id: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const language = useLocaleStore(state => state.language);
   const [riskAccepted, setRiskAccepted] = useState(false);
   const hasToken = useGatewayStore((s) => Boolean(s.conversationId));
   const key = hasToken ? `ext-mp-detail-${packageName}` : null;
@@ -401,6 +403,7 @@ function ExtensionMarketplaceDetailDialog({
                     <dd>{data.downloads}</dd>
                   </div>
                 </dl>
+                <PluginScopePreview data={data} zh={language === 'zh'} />
                 {installKind !== 'bundled' ? (
                   <section className="mt-5 space-y-3 rounded-lg border border-edge bg-surface-base p-4">
                     <div className="flex items-start gap-2.5">

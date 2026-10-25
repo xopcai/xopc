@@ -25,6 +25,7 @@ Active proposed designs:
 ## Maintained reference areas
 
 - [UI design system](./ui-design-system.md): shared visual and interaction rules.
+- [交互与表达规范](./interaction-language.md)：统一对象含义、任务状态、配置返回、授权及费用表达；[体验修复与回归摘要](./ux-regression-2026-10-25.md)记录实施和验证边界。
 - [Technical architecture](./technical/architecture.md), [storage](./storage-architecture.md) and [Agent capabilities](./agent-native-capability-architecture.md): contributor contracts.
 - [Public cloud model services](./xopc-cloud-public-model-services.md) and [image providers](./technical/image-provider-upgrade-plan-2026-10-09.md): current capability contracts and upgrade constraints.
 - [Personal AI follow-ups](./personal-agent-proactivity-technical.md): runtime and policy boundaries; user instructions are in the public guide.

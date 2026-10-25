@@ -1,3 +1,4 @@
+import { openCapabilitySettings } from '@/features/settings/models-hub/open-capability-settings';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
@@ -35,9 +36,9 @@ export function PhoneModelConnection({ value, zh, disabled, onSave, onSelect }: 
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
     {choice && models.data ? <p className="text-xs text-fg-muted">{selected ? `${providerName} · ${selected.configured ? (zh ? '凭据就绪' : 'Credentials ready') : (zh ? '请先配置凭据' : 'Configure credentials first')}` : (zh ? '当前模型不可用，请重新选择。' : 'This model is unavailable. Choose another model.')}</p> : null}
 
-    <Link to="/settings/capabilities/models" className="inline-flex min-h-8 items-center text-xs text-accent-fg hover:underline">{zh ? '管理模型' : 'Manage models'}</Link>
+    <Link to="/settings/capabilities/models?returnTo=%2Fsettings%2Fphone-use&purpose=phone" onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) { event.preventDefault(); openCapabilitySettings('chat', 'services', 'phone'); } }} className="inline-flex min-h-8 items-center text-xs text-accent-fg hover:underline">{zh ? '管理模型' : 'Manage models'}</Link>
     </div>
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-    {saved && <p role="status" className="text-xs text-fg-muted">{zh ? '手机模型已保存' : 'Phone model saved'}</p>}
+    {saved && <p role="status" className="text-xs text-fg-muted">{zh ? '手机模型已保存，请返回手机连接测试实际操作。' : 'Phone model saved. Test it from the phone connection.'}</p>}
   </div>;
 }

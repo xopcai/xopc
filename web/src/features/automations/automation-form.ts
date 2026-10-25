@@ -25,6 +25,7 @@ export interface FormState {
   projectId: string;
   triggerMode: TriggerMode;
   time: string;
+  timezone?: string;
   weekday: string;
   intervalValue: string;
   intervalUnit: AutomationIntervalUnit;
@@ -56,6 +57,7 @@ export const initialForm: FormState = {
   projectId: '',
   triggerMode: 'daily',
   time: '09:00',
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   weekday: '1',
   intervalValue: '1',
   intervalUnit: 'hour',
@@ -154,18 +156,19 @@ export function buildInput(
       kind: 'schedule',
       schedule: {
         kind: 'cron',
+        ...(form.timezone?.trim() ? { tz: form.timezone.trim() } : {}),
         expr: `${minute} ${hour} * * ${form.weekday}`,
       },
     };
   } else if (form.triggerMode === 'cron') {
     trigger = {
       kind: 'schedule',
-      schedule: { kind: 'cron', expr: form.cronExpr.trim() },
+      schedule: { kind: 'cron', ...(form.timezone?.trim() ? { tz: form.timezone.trim() } : {}), expr: form.cronExpr.trim() },
     };
   } else {
     trigger = {
       kind: 'schedule',
-      schedule: { kind: 'cron', expr: `${minute} ${hour} * * *` },
+      schedule: { kind: 'cron', ...(form.timezone?.trim() ? { tz: form.timezone.trim() } : {}), expr: `${minute} ${hour} * * *` },
     };
   }
   const safetyMode = form.actionMode === 'browser_automation' || form.actionMode === 'task_command'
@@ -352,7 +355,7 @@ export function formFromAutomation(
   } else if (automation.trigger.kind === 'schedule') {
     const schedule = automation.trigger.schedule;
     if (schedule.kind === 'cron') {
-      triggerState = cronFormState(schedule.expr);
+      triggerState = { ...cronFormState(schedule.expr), timezone: schedule.tz ?? '' };
     }
     if (schedule.kind === 'interval') {
       triggerState = {

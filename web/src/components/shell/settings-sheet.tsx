@@ -1,4 +1,5 @@
-import { memo, useEffect } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { memo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -29,51 +30,35 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
   const closeTarget = resolveSettingsBackTarget(location.state);
 
   const portalToBody = useMediaQuery(SETTINGS_SHEET_PORTAL_BODY_MQ);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented) {
-        // Nested Radix layers handle Escape after this window capture listener.
-        const nestedSurface = document.querySelectorAll<HTMLElement>('[data-state="open"]:is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"])');
-        if (Array.from(nestedSurface).some(element => element.getClientRects().length > 0)) return;
-        e.stopPropagation();
-        navigate(closeTarget);
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [navigate, closeTarget]);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const scrim = (
-    <div
-      role="presentation"
+    <Dialog.Overlay
       className="absolute inset-0 z-40 bg-scrim/55 backdrop-blur-[2px] dark:bg-black/50"
-      onClick={() => navigate(closeTarget)}
     />
   );
 
   const panel = (
-    <div
+    <Dialog.Content
+      ref={contentRef}
       className={cn(
         'relative z-50 flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-overlay',
         'max-md:shadow-elevated',
         'md:m-3 md:max-h-[calc(100dvh-1.5rem)] md:rounded-2xl md:border md:border-edge md:shadow-elevated',
         'settings-sheet-enter',
       )}
-      role="dialog"
       aria-modal="true"
       aria-label={m.nav.settings}
+      aria-describedby={undefined}
+      onEscapeKeyDown={(event) => {
+        const layers = document.querySelectorAll<HTMLElement>('[data-state="open"]:is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"])');
+        if (Array.from(layers).some(element => element !== contentRef.current
+          && !element.contains(contentRef.current) && element.getClientRects().length > 0)) event.preventDefault();
+      }}
     >
+      <Dialog.Title className="sr-only">{m.nav.settings}</Dialog.Title>
       <SettingsShellLayerProvider layer="page">{children}</SettingsShellLayerProvider>
-    </div>
+    </Dialog.Content>
   );
 
   const shellInner = (
@@ -83,8 +68,7 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
     </>
   );
 
-  if (portalToBody) {
-    return createPortal(
+  const surface = portalToBody ? createPortal(
       <div
         className={cn(
           'fixed inset-0 flex min-h-0 flex-col bg-surface-base',
@@ -94,12 +78,10 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
         {shellInner}
       </div>,
       document.body,
-    );
-  }
-
-  return (
+    ) : (
     <div className="relative flex min-h-0 min-h-[100dvh] flex-1 flex-col md:min-h-0">
       {shellInner}
     </div>
   );
+  return <Dialog.Root open onOpenChange={(open) => { if (!open) navigate(closeTarget); }}>{surface}</Dialog.Root>;
 });

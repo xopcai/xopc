@@ -13,7 +13,7 @@ let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const layerNodes: HTMLElement[] = [];
 function Location() { return <output data-testid="route">{useLocation().pathname}</output>; }
-beforeEach(() => { container = document.createElement('div'); document.body.append(container); root = createRoot(container); media.portal = false; });
+beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); container = document.createElement('div'); document.body.append(container); root = createRoot(container); media.portal = false; });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); layerNodes.splice(0).forEach(node => node.remove()); vi.restoreAllMocks(); });
 const escape = () => act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); });
 const route = () => document.querySelector('[data-testid="route"]')?.textContent;
@@ -42,4 +42,15 @@ it('ignores retained hidden dialogs so normal settings dismissal still works', a
   const layer = document.createElement('div'); layer.setAttribute('role', 'dialog'); layer.dataset.state = 'open'; document.body.append(layer); layerNodes.push(layer);
   vi.spyOn(layer, 'getClientRects').mockReturnValue([] as unknown as DOMRectList);
   await escape(); expect(route()).toBe('/chat');
+});
+
+it('contains programmatic focus in the settings modal and exposes its accessible title', async () => {
+  const background = document.createElement('button'); background.textContent = 'Background'; document.body.append(background); layerNodes.push(background);
+  await render();
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(dialog.getAttribute('aria-modal')).toBe('true');
+  const inside = dialog.querySelectorAll('button')[0];
+  await act(async () => inside.focus());
+  await act(async () => background.focus());
+  expect(dialog.contains(document.activeElement)).toBe(true);
 });
