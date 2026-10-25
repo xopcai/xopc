@@ -27,6 +27,24 @@ function fixture(admin = true) {
   registerPhoneRoutes(app, { service: { currentConfig: config, phoneStreams, sessions: { getActiveRun: () => ({ active: false }), getSession: async (id: string) => id === conversationId ? { agentId: 'main' } : null }, submitSessionInput: vi.fn(async () => ({ ok: true })) }, strictRateLimitMiddleware: async (_c, next) => next() } as unknown as AuthenticatedRouteDeps, runtime);
   return { app, runtime, driver, conversationId, config, phoneStreams };
 }
+it('shares a model-free read-only device connection and validates its video ticket', async () => {
+  const { app, runtime, phoneStreams } = fixture();
+  const device = runtime.repository.save({ serial: 'emulator-5554', name: 'Shared phone', enabled: true, allowedApps: ['com.android.settings'] });
+  try {
+    const response = await app.request(`/api/phone/devices/${device.id}/view`, { method: 'POST' });
+    expect(response.status).toBe(200);
+    const [report] = runtime.reports();
+    const address = `/api/phone/conversations/${encodeURIComponent(`device:${device.id}`)}`;
+    const clientId = randomUUID();
+    const ticket = await app.request(`${address}/${report.sessionId}/video-ticket`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId }) });
+    expect(ticket.status).toBe(200);
+    const issued = (phoneStreams.issue.mock.calls[0] as unknown as [{ client: string; validate: () => Promise<void> }])[0];
+    expect(issued.client).toBe(`test:${clientId}:viewer`);
+    await expect(issued.validate()).resolves.toBeUndefined();
+    const live = await app.request(`${address}?clientId=${clientId}`);
+    expect(await live.json()).toMatchObject({ payload: { ownControl: false, report: { mode: 'observe', controlOwner: 'none' } } });
+  } finally { await runtime.shutdown(); }
+});
 it('issues the same origin-bound video ticket for a registered cloud phone', async () => {
   const { app, runtime, conversationId, phoneStreams } = fixture();
   const device = runtime.repository.save({ serial: 'cloud.example:10001', name: 'Cloud', enabled: true,
@@ -87,7 +105,7 @@ it('binds live screens and control to an existing conversation and exact phone s
   expect(await response.json()).toMatchObject({ ok: true, payload: { ownControl: true, report: { controlOwner: 'human' } } });
   const handback = await app.request(`${base}/${id}/control`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, op: 'handback', operationId: randomUUID(), epoch: 2 }) });
   expect(handback.status).toBe(200);
-  expect(await handback.json()).toMatchObject({ payload: { resumeTurnRequired: true, report: { controlOwner: 'agent' } } });
+  expect(await handback.json()).toMatchObject({ payload: { resumeTurnRequired: false, report: { controlOwner: 'none' } } });
   await runtime.shutdown();
 });
 it('denies live view and takeover for paired principals even when they know the session IDs', async () => {

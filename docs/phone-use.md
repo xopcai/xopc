@@ -48,7 +48,7 @@ Each registered device has a name, an enabled flag and an application access pol
 
 First open an allowed app, then enter one small authorized goal and optional expected completion text. Task controls support pause, resume, continue, stop and release. Resume clears held predictions; the next execution observes the screen again. A screen preview is temporary and available when execution is idle or paused.
 
-The Agent tool is `phone_use`: `discover` → `open` (`observe` or `control`, optional allowed `appPackage`) → `observe` / `run` / `step` → `close`. `run` executes up to 6 actions by default, at most 12, and uses a configurable active execution budget (`phone.maxOperationDurationMs`, default 300,000 ms). Human intervention pauses this budget. On expiry it returns `operation_timeout` with the session paused and its facts/steps intact, rather than reporting user cancellation. Inspect and hand back before continuing. The session also has separate action, model-request and duration limits.
+The Agent tool is `phone_use`: `discover` → `open` (`observe` or `control`, optional allowed `appPackage`) → `observe` / `run` / `step` → `close`. `run` executes up to 6 actions by default, at most 12, and uses a configurable active execution budget (`phone.maxOperationDurationMs`, default 300,000 ms). Human intervention pauses this budget. On expiry it returns `operation_timeout` with the session paused and its facts/steps intact, rather than reporting user cancellation. Inspect and hand back before continuing. Each task retains action and model-request limits; its active time budget is capped by maxOperationDurationMs and maxSessionDurationMs. Connection lifetime is separate.
 
 `verified=true` confirms the specified native UI condition, not an unrelated business result. A model's finish claim remains unverified without evidence. Exhausted budgets yield an unfinished result. Unknown dispatch outcomes require inspection before retrying. Stopping cannot undo an input already delivered to Android.
 
@@ -90,11 +90,15 @@ For browser verification after `pnpm run build:web`, set `XOPC_PHONE_BROWSER=1`.
 
 ## Live phone in chat
 
-Chat sessions expose a Phone button and a conversation-scoped workspace tab. Wide layouts can open it automatically; narrow layouts use the full workspace with Back to chat.
+The global Phone entry is available on every page. Each connected device has one tab in the shared phone panel, keyed by device identity. Chat Phone buttons open that same panel. Switching chats, completing a task, or hiding the panel keeps the connection open. Task completion releases operation ownership so another conversation can use the device. `close` finishes the current tool task; it does not disconnect the phone.
+
+Connections remain open until explicitly disconnected or the Gateway stops. `phone.idleDisconnectMs` defaults to `0` (manual disconnect); Phone settings also offers 15, 30 or 60 idle minutes. Active tasks, manual control and foreground viewing do not count as idle. Video viewers and manual input permissions are released when the panel is hidden; the device connection remains.
+
+Control is exclusive. If another chat or human owns the device, `PHONE_DEVICE_BUSY` returns HTTP 409 with `executionStarted: false`, occupancy information and `retryPolicy: user_initiated`. No task is queued or retried automatically. The global panel is read only and links to the source chat. Its chat-specific entry offers takeover and confirmed task stopping. Stopping keeps the phone connected; disconnecting is a separate confirmed action. Uncertain dispatch outcomes require inspection and cannot be bypassed by reopening or cancelling.
 
 Install the official pinned video server once with `pnpm exec tsx scripts/setup-phone-video.mts`. The chat panel then uses scrcpy H.264 video and WebCodecs; unsupported browsers explicitly fall back to snapshots. The Settings preview modal remains read-only snapshots. View only never injects input. Take over waits for outstanding device input before granting this browser exclusive control. Continuous single-pointer DOWN/MOVE/UP supports click, held drag and long press through a persistent connection. Back and non-password text remain within the app scope. Unicode uses the independent control-only clipboard channel, even when video falls back to snapshots.
 
-Release keeps the task paused. Hand back re-observes the phone and continues the pending tool. If the Agent has already ended its reply, a deduplicated continuation input resumes the original conversation objective. Closing or hiding the phone tab releases human control; disconnect timeout keeps the task paused. Stop cancels execution and releases the phone.
+Release keeps the task paused. Hand back re-observes the phone and continues the pending tool. If the Agent has already ended its reply, a deduplicated continuation input resumes the original conversation objective. Closing or hiding the phone tab releases human control; disconnect timeout keeps the task paused. Stop cancels the task and releases operation ownership while keeping the phone connected. Disconnect is a separate confirmed action. Isolated setup verification still closes its test session to confirm cleanup.
 
 Only Gateway administrators can access this live surface. Pixels are transient and excluded from stored reports and conversation sharing. Passwords and verification codes should be handled on the local device before returning to a non-sensitive screen.
 
@@ -150,3 +154,39 @@ The default device name is `阿里云测试手机`; override it with
 `XOPC_PHONE_DEVICE_NAME`. It uses existing Cloud credentials, makes real model
 requests, and saves test-only screenshots and metadata under
 `/tmp/xopc-phone-cloud-e2e-evidence`.
+
+
+### Multiple phones and device-bound chats
+
+Phone management's View screen action opens the shared global read-only component, including when another conversation controls the phone. It never acquires another operation lease. Global viewers cannot inject input or take over; video tickets use a separate viewer identity, and device-address control requests are rejected server-side. The source chat's entry uses the same component with that conversation's controls.
+
+Multiple registered phones can stay connected at once. Ordinary chats use the system default unless the user explicitly selects another phone by its unique registered name/deviceId. Control in chat creates an empty conversation with customData.phoneDeviceId set to the selected device. This becomes that conversation's effective default, without submitting a task or taking control. Different chats can control different phones concurrently; operation ownership of each individual phone remains exclusive.
+
+## Execution strategies and task results
+
+Settings → Phone Use → Default execution strategy defaults to **Main Agent collaboration** (`phone.executionMode: "collaborative"`). The main Agent plans and sends meaningful small goals, records returned information, and decides the next goal. **Direct execution** (`"direct"`) delegates the complete authorized phone goal to the existing phone model. Both use the same Runtime, model, authorization, verification, takeover and dispatch checks. No separate Planner is created. The experimental `hierarchicalPlanning` flag is independent.
+
+The source chat's phone panel selects the **next task** strategy; this preference persists for that chat. An explicit per-task `executionMode` overrides the chat preference, which overrides the global default. Changing settings does not mutate a running task. `discover` returns the effective strategy, while reports expose `executionMode` and `nextExecutionMode`. The Agent must follow the user's selection and must not switch strategies autonomously.
+
+Use a returned `task.taskId` across related goals and continuation. Each run has a fresh `feedback.segmentId`. Omit taskId for a new task, never merely to reset a budget. Collaborative mode submits a small goal; direct mode submits the entire phone goal. For example:
+
+```json
+{
+  "op": "run",
+  "goal": "Inspect the displayed delivery-inclusive total; do not submit the order",
+  "constraints": ["Do not submit, purchase or send anything"],
+  "requestedOutputs": [{"key": "total", "description": "Read the displayed delivery-inclusive total"}],
+  "maxActions": 6,
+  "budget": {"maxActions": 24, "maxModelRequests": 30, "maxActiveDurationMs": 120000}
+}
+```
+
+`constraints` are bounded model instructions and accumulate across fragments of the same task. They are not a claim that arbitrary natural-language restrictions are mechanically enforced. `completion` and `requestedOutputs` never independently authorize input. Task budgets span fragments and mode switches and can only be tightened. Runtime configuration remains a hard upper bound; manual intervention pauses active execution time.
+
+Named `requestedOutputs` accept unique keys, descriptions and optional exact native `selector` objects (`resourceId`, `text`, `description`). A unique fully visible non-password native match returns an observed value without extra inference. Ambiguous or missing selectors return unavailable with a reason. Without a selector, each field uses a targeted read-only screenshot request within shared budgets. Screenshot fields are unverified, never proof of task completion. Task text, outputs and feedback are transient and excluded from durable operational reports.
+
+`feedback` contains task/segment identity, strategy, outcome, stop reason, verification, runtime-derived progress, outputs with source/frame/time, evidence, per-fragment resource usage and nextAction. Outcomes are `running`, `completed`, `partial`, `blocked`, `needs_user`, `failed` and `cancelled`. Model finish without UI evidence is partial. Completion verifies the current fragment's declared UI conditions, not the entire user task or a business transaction. Missing output values remain explicitly unavailable. Action/request/time exhaustion does not authorize automatic retries or unlimited continuation.
+
+To switch a current task, first select the next strategy and choose **Switch current task → Pause and switch**. The Runtime pauses, waits for dispatched input, discards predictions and coordinates, and observes again. It preserves taskId, restrictions and consumed budgets, and remains paused until the user explicitly hands back in the phone panel. Continue using the same taskId after handback. Human takeover, stale control epochs and unknown dispatch cannot be bypassed by switching. The read-only global viewer cannot change the source chat's strategy.
+
+For an explicit user request through chat, `set_mode` sets `executionMode` for subsequent tasks; `applyCurrent: true` invokes the same pause-and-switch flow. `resume` cannot bypass the post-switch panel handback.

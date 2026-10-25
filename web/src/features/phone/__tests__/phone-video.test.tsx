@@ -45,4 +45,6 @@ it('writes DOWN immediately, coalesces cloud MOVEs behind ACKs, and releases wit
     socket.onclose?.();
   });
   expect(hook.error).toBe('PHONE_CONTROL_CHANGED');
+  await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+  expect(hook.error).toBe('PHONE_CONTROL_CHANGED');
 });

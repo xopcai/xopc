@@ -363,7 +363,7 @@ export class AgentToolsFactory {
 
   /** Drop the tab for a session when its agent instance is removed. */
   async closeBrowserPageForSession(conversationId: string): Promise<void> {
-    await getPhoneRuntime().stop(conversationId, 'close');
+    await getPhoneRuntime().releaseConversation(conversationId);
     await this.computerRuntime?.close(conversationId);
     await this.browserRuntime?.closeTaskSession(conversationId);
   }
@@ -739,7 +739,9 @@ export class AgentToolsFactory {
           const config = this.deps.getConfig?.();
           const conversationId = getEmbeddedExecutionSession() ?? currentConversationId();
           if (!config || !conversationId) throw new Error('Phone Use requires an active conversation');
-          return { owner: conversationId, ...phoneExecutionContext(config, resolvedAgentId) };
+          const phoneDeviceId = getSessionMetadata(conversationId)?.customData?.phoneDeviceId;
+          return { owner: conversationId, ...phoneExecutionContext(config, resolvedAgentId),
+            ...(typeof phoneDeviceId === 'string' ? { preferredDeviceId: phoneDeviceId } : {}) };
         },
       })] : []),
       ...(cfg?.computer.enabled && this.deps.endpointTools

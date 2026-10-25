@@ -3,9 +3,9 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 
-vi.mock('../phone-live-api', async importOriginal => ({ ...await importOriginal<typeof import('../phone-live-api')>(), phoneFrame: vi.fn(), controlPhone: vi.fn() }));
+vi.mock('../phone-live-api', async importOriginal => ({ ...await importOriginal<typeof import('../phone-live-api')>(), phoneFrame: vi.fn(), controlPhone: vi.fn(), setPhoneExecutionMode: vi.fn() }));
 import { PhoneLivePanel } from '../phone-live-panel';
-import { controlPhone, phoneFrame, type PhoneLiveState } from '../phone-live-api';
+import { setPhoneExecutionMode, controlPhone, phoneFrame, type PhoneLiveState } from '../phone-live-api';
 import { useLocaleStore } from '@/stores/locale-store';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -47,6 +47,10 @@ function button(label: string) {
   expect(match, `Button ${label}`).toBeDefined();
   return match!;
 }
+async function menuItem(label: string) {
+  await act(async () => button('更多手机操作').click());
+  await act(async () => button(label).click());
+}
 
 it('takes over a paused session instead of resuming the Agent and locks input until ownership is confirmed', async () => {
   const state = session();
@@ -70,7 +74,7 @@ it('keeps releasing control and handing back to the Agent as separate actions', 
   await act(async () => button('仅查看').click());
   expect(container!.querySelector('[aria-label="发送到手机的文本"]')).toBeNull();
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'release', expect.any(Object));
-  await act(async () => button('交还 Agent').click());
+  await act(async () => button('交还手机').click());
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'handback', expect.any(Object));
   expect(container!.querySelector('[data-phone-device-shell]')?.getAttribute('style')).toContain('0.5625');
 });
@@ -88,9 +92,68 @@ it('leaves ended sessions inert and keeps diagnostics collapsed until requested'
   await mountPanel(session({ status: 'closed' }));
   expect(container!.querySelector('canvas')?.className).toContain('hidden');
   expect([...container!.querySelectorAll('button')].some(b => b.textContent === '接管手机')).toBe(false);
-  const details = button('连接详情');
-  expect(details.getAttribute('aria-expanded')).toBe('false');
-  expect(document.getElementById(details.getAttribute('aria-controls')!)?.hidden).toBe(true);
-  await act(async () => details.click());
-  expect(document.getElementById(details.getAttribute('aria-controls')!)?.hidden).toBe(false);
+  expect(container!.querySelector('dl')).toBeNull();
+  await menuItem('连接详情');
+  expect(container!.querySelector('dl')).not.toBeNull();
+  await act(async () => button('关闭连接详情').click());
+  expect(container!.querySelector('dl')).toBeNull();
+});
+
+it('renders a shared global preview without manual controls or control side effects', async () => {
+  vi.mocked(controlPhone).mockClear();
+  useLocaleStore.setState({ language: 'zh' });
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  const state = session({ status: 'running', controlOwner: 'human' }, true);
+  await act(async () => root!.render(<PhoneLivePanel conversationId="device:phone" state={state} onChange={vi.fn()} readOnly />));
+  expect([...container.querySelectorAll('button')].some(b => /接管手机|交还手机|手机输入|手机返回/.test(b.textContent ?? ''))).toBe(false);
+  await act(async () => root!.unmount()); root = undefined;
+  expect(controlPhone).not.toHaveBeenCalled();
+});
+
+it('changes the next task preference without stopping the current task', async () => {
+  const state = session({ status: 'running', executionMode: 'collaborative', nextExecutionMode: 'collaborative', task: { taskId: 'task' } });
+  vi.mocked(setPhoneExecutionMode).mockResolvedValue({ ...state, report: { ...state.report, nextExecutionMode: 'direct' } });
+  await mountPanel(state);
+  expect(container!.textContent).not.toContain('下一任务');
+  expect(container!.textContent).not.toContain('Beta');
+  await menuItem('操作设置');
+  await act(async () => button('下一任务执行方式').click());
+  await act(async () => [...document.body.querySelectorAll('button')].find(b => b.textContent === '直接执行')!.click());
+  expect(setPhoneExecutionMode).toHaveBeenLastCalledWith('conversation', state, 'direct', false);
+  expect(controlPhone).not.toHaveBeenCalledWith('conversation', state, 'pause', expect.anything());
+});
+
+it('requires confirmation before switching the current task and locks it during human control', async () => {
+  const state = session({ executionMode: 'collaborative', nextExecutionMode: 'direct', task: { taskId: 'task' } });
+  vi.mocked(setPhoneExecutionMode).mockClear(); vi.mocked(setPhoneExecutionMode).mockResolvedValue(state);
+  await mountPanel(state);
+  await menuItem('操作设置');
+  await act(async () => button('切换当前任务…').click());
+  expect(setPhoneExecutionMode).not.toHaveBeenCalled();
+  expect(container!.textContent).toContain('预算不会重置');
+  await act(async () => button('暂停并切换').click());
+  expect(setPhoneExecutionMode).toHaveBeenCalledWith('conversation', state, 'direct', true);
+  await act(async () => root!.render(<PhoneLivePanel conversationId="conversation" state={{ ...state, ownControl: true, report: { ...state.report, controlOwner: 'human' } }} onChange={vi.fn()} />));
+  expect(button('切换当前任务…').disabled).toBe(true);
+});
+
+it('opens controls over the phone without sending input and disables manual controls until closed', async () => {
+  vi.mocked(controlPhone).mockClear();
+  await mountPanel(session({ controlOwner: 'human' }, true));
+  await act(async () => button('更多手机操作').click());
+  const shade = container!.querySelector('.phone-control-shade');
+  expect(container!.querySelector('.phone-device-screen')?.contains(shade)).toBe(true);
+  expect(button('手机返回').disabled).toBe(true);
+  const image = container!.querySelector('img')!;
+  vi.spyOn(image, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 720, height: 1280 } as DOMRect);
+  await act(async () => {
+    image.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 300 }));
+    image.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 200, clientY: 300 }));
+  });
+  await act(async () => button('连接详情').click());
+  expect(shade?.querySelector('dl')).not.toBeNull();
+  expect(controlPhone).not.toHaveBeenCalled();
+  await act(async () => button('收起控制中心').click());
+  expect(container!.querySelector('.phone-control-shade')).toBeNull();
+  expect(button('手机返回').disabled).toBe(false);
 });

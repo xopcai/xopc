@@ -36,6 +36,135 @@ function fixture(adapter: PhoneModelAdapter = new MockPhoneModel()) {
   return { repository, runtime, driver, device, context, frames, setScreen: (texts: string[]) => { current = texts; } };
 }
 
+describe('persistent device connections', () => {
+  it('keeps the same shared video source when another chat acquires an idle phone', async () => {
+    const f = fixture();
+    const provider: PhoneInteractiveProvider = {
+      descriptor: { kind: 'scrcpy-h264', protocolVersion: 1, continuousTouch: true, maxPointers: 1 },
+      geometry: { width: 100, height: 200, version: 1, codec: 'avc1.640028' },
+      foreground: vi.fn(async () => 'com.android.settings'), start: vi.fn(async () => {}),
+      subscribe: vi.fn(() => () => {}), pointer: vi.fn(async () => {}), refresh: vi.fn(),
+      revoke: vi.fn(async () => {}), close: vi.fn(async () => {}),
+    };
+    const factory = vi.fn(() => provider);
+    const runtime = new PhoneRuntime(f.repository, () => f.driver, async () => new MockPhoneModel(), factory);
+    try {
+      await runtime.execute('chat-a', { op: 'open', mode: 'control' }, f.context);
+      const id = runtime.status('chat-a')!.sessionId;
+      const first = await runtime.liveVideo('chat-a', id, f.context);
+      await runtime.execute('chat-a', { op: 'close' }, f.context);
+      await runtime.execute('chat-b', { op: 'open', mode: 'control' }, f.context);
+      expect(await runtime.liveVideo('chat-b', id, f.context)).toBe(first);
+      expect(factory).toHaveBeenCalledOnce(); expect(provider.start).toHaveBeenCalledOnce();
+      expect(provider.close).not.toHaveBeenCalled();
+    } finally { await runtime.shutdown(); }
+  });
+  it('opens a shared read-only connection without a model and reuses it for a controlling chat', async () => {
+    const f = fixture();
+    try {
+      await f.runtime.viewDevice(f.device.id, f.context.config, 'main');
+      const [view] = f.runtime.reports();
+      expect(view).toMatchObject({ deviceId: f.device.id, mode: 'observe', controlOwner: 'none' });
+      const image = await f.runtime.preview(f.device.id, f.context.config, new AbortController().signal);
+      expect(image.frame.length).toBeGreaterThan(0); image.frame.fill(0);
+      const controlled = await f.runtime.execute('chat-a', { op: 'open', mode: 'control' }, f.context);
+      expect(controlled).toMatchObject({ sessionId: view.sessionId, mode: 'control', owner: 'chat-a' });
+      expect(f.driver.discover).toHaveBeenCalledOnce();
+      await f.runtime.viewDevice(f.device.id, f.context.config, 'main');
+      expect(f.runtime.status('chat-a')).toMatchObject({ controlOwner: 'agent' });
+    } finally { await f.runtime.shutdown(); }
+  });
+  it('resolves the conversation target before the system default and keeps multiple phones connected', async () => {
+    const f = fixture();
+    const second = f.repository.save({ serial: 'emulator-5556', name: 'Second phone', enabled: true, allowedApps: ['com.android.settings'] });
+    vi.mocked(f.driver.discover).mockResolvedValue([f.device, second].map(device => ({ serial: device.serial, name: device.name, state: 'device', emulator: true })));
+    try {
+      const targeted = { ...f.context, preferredDeviceId: second.id };
+      expect(await f.runtime.execute('chat-a', { op: 'discover' }, targeted)).toMatchObject({ defaultDeviceId: second.id, systemDefaultDeviceId: f.device.id });
+      expect(await f.runtime.execute('chat-a', { op: 'open', mode: 'control' }, targeted)).toMatchObject({ deviceId: second.id });
+      await f.runtime.execute('chat-a', { op: 'close' }, targeted);
+      expect(await f.runtime.execute('chat-a', { op: 'open', deviceId: f.device.id, mode: 'control' }, targeted)).toMatchObject({ deviceId: f.device.id });
+      expect(f.runtime.reports().filter(report => report.status !== 'closed')).toHaveLength(2);
+      expect(await f.runtime.execute('chat-b', { op: 'open', deviceId: second.id, mode: 'control' }, f.context)).toMatchObject({ deviceId: second.id });
+      expect(f.runtime.status('chat-a')).toMatchObject({ deviceId: f.device.id, controlOwner: 'agent' });
+      expect(f.runtime.status('chat-b')).toMatchObject({ deviceId: second.id, controlOwner: 'agent' });
+    } finally { await f.runtime.shutdown(); }
+  });
+  it('returns actionable contention details to the chat tool without dispatching another task', async () => {
+    const f = fixture();
+    try {
+      await f.runtime.execute('chat-a', { op: 'open', mode: 'control' }, f.context);
+      const tool = createPhoneUseTool({ runtime: f.runtime, context: () => ({ ...f.context, owner: 'chat-b' }) });
+      const result = await tool.execute('busy-open', { op: 'open', mode: 'control' }, new AbortController().signal);
+      expect(result.details).toMatchObject({ ok: false, error: { code: 'PHONE_DEVICE_BUSY', executionStarted: false, occupancy: { conversationId: 'chat-a' }, retryPolicy: 'user_initiated' } });
+      expect(f.driver.execute).not.toHaveBeenCalled();
+    } finally { await f.runtime.shutdown(); }
+  });
+  it('reuses the connected device across conversations and ignores late closes from the old owner', async () => {
+    const f = fixture();
+    try {
+      const first = await f.runtime.execute('chat-a', { op: 'open', mode: 'control' }, f.context);
+      await f.runtime.releaseConversation('chat-a');
+      expect(f.runtime.status('chat-a')).toMatchObject({ status: 'ready', controlOwner: 'none' });
+      const second = await f.runtime.execute('chat-b', { op: 'open', mode: 'control' }, f.context);
+      expect(second).toMatchObject({ sessionId: (first as { sessionId: string }).sessionId, owner: 'chat-b' });
+      expect(f.driver.discover).toHaveBeenCalledOnce();
+      expect(f.runtime.reports()).toHaveLength(1);
+      await f.runtime.execute('chat-a', { op: 'close' }, f.context);
+      expect(f.runtime.status('chat-b')).toMatchObject({ status: 'ready', controlOwner: 'agent' });
+      await f.runtime.stopDevice(f.device.id);
+      expect(f.runtime.status('chat-b')).toMatchObject({ status: 'closed' });
+      expect(f.repository.leaseActive(f.device.serial)).toBe(false);
+    } finally { await f.runtime.shutdown(); }
+  });
+  it('rejects a simultaneous open before any second discovery or dispatch', async () => {
+    const f = fixture();
+    let release!: () => void;
+    vi.mocked(f.driver.discover).mockImplementation(async () => {
+      await new Promise<void>(resolve => { release = resolve; });
+      return [{ serial: f.device.serial, name: 'Phone', state: 'device', emulator: true }];
+    });
+    try {
+      const opening = f.runtime.execute('chat-a', { op: 'open', mode: 'control' }, f.context);
+      await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+      await expect(f.runtime.execute('chat-b', { op: 'open', mode: 'control' }, f.context)).rejects.toMatchObject({
+        code: 'PHONE_DEVICE_BUSY', details: { executionStarted: false, occupancy: { kind: 'opening' }, retryPolicy: 'user_initiated' },
+      });
+      release(); await opening;
+      expect(f.driver.discover).toHaveBeenCalledOnce(); expect(f.driver.execute).not.toHaveBeenCalled();
+    } finally { release?.(); await f.runtime.shutdown(); }
+  });
+  it('reports the occupying conversation and manual owner without stealing control', async () => {
+    const f = fixture();
+    try {
+      await f.runtime.execute('chat-a', { op: 'open', mode: 'control' }, f.context);
+      await expect(f.runtime.execute('chat-b', { op: 'open', mode: 'control' }, f.context)).rejects.toMatchObject({
+        code: 'PHONE_DEVICE_BUSY', details: { executionStarted: false, occupancy: { kind: 'agent', conversationId: 'chat-a' } },
+      });
+      const report = f.runtime.status('chat-a')!;
+      await f.runtime.liveControl('chat-a', report.sessionId, f.context, 'human', { op: 'takeover', operationId: randomUUID(), epoch: report.controlEpoch! });
+      await expect(f.runtime.execute('chat-b', { op: 'open', mode: 'control' }, f.context)).rejects.toMatchObject({
+        details: { executionStarted: false, occupancy: { kind: 'human', conversationId: 'chat-a' } },
+      });
+      expect(f.runtime.status('chat-a')).toMatchObject({ controlOwner: 'human' });
+      expect(f.driver.execute).not.toHaveBeenCalled();
+    } finally { await f.runtime.shutdown(); }
+  });
+  it('keeps idle connections beyond the old session deadline and disconnects only after configured inactivity', async () => {
+    vi.useFakeTimers(); const f = fixture();
+    try {
+      await f.runtime.execute('chat-a', { op: 'open', mode: 'control' }, f.context);
+      await f.runtime.execute('chat-a', { op: 'close' }, f.context);
+      await vi.advanceTimersByTimeAsync(20 * 60_000);
+      expect(f.runtime.status('chat-a')).toMatchObject({ status: 'ready' });
+      const context = { ...f.context, config: ConfigSchema.parse({ phone: { enabled: true, idleDisconnectMs: 60_000 } }) };
+      f.runtime.liveStatus('chat-a', f.runtime.status('chat-a')!.sessionId, context, 'viewer');
+      await vi.advanceTimersByTimeAsync(3001);
+      expect(f.runtime.status('chat-a')).toMatchObject({ status: 'closed' });
+    } finally { await f.runtime.shutdown(); vi.useRealTimers(); }
+  });
+});
+
 it('reconnects an offline wireless phone when opening it without resuming an old task', async () => {
   const { runtime, repository, device, driver, context } = fixture();
   const saved = repository.save({ ...device, serial: '192.168.1.5:39999', wireless: { host: '192.168.1.5', port: 39999, guid: 'guid', hardwareSerial: 'hardware' } }, device.id);
@@ -152,7 +281,7 @@ describe('phone runtime', () => {
       await one.input('human', { type: 'pointer', phase: 'down', seq: 1, epoch: 2, geometry: 1, x: 500, y: 500 });
       await f.runtime.liveControl('cloud-chat', id, context, 'human', { op: 'handback', epoch: 2, operationId: randomUUID() });
       expect(provider.pointer).toHaveBeenCalledOnce(); expect(provider.revoke).toHaveBeenCalled();
-      expect(f.runtime.status('cloud-chat')?.controlOwner).toBe('agent');
+      expect(f.runtime.status('cloud-chat')?.controlOwner).toBe('none');
       expect(() => one.input('human', { type: 'pointer', phase: 'up', seq: 2, epoch: 2, geometry: 1, x: 500, y: 500 })).toThrow('Manual control');
     } finally { await f.runtime.shutdown(); }
   });
@@ -293,7 +422,7 @@ describe('phone runtime', () => {
     resolve({ kind: 'action', action: { type: 'tap', point: [100, 200] } });
     await stop; await rejected;
     expect(f.driver.execute).not.toHaveBeenCalled();
-    expect(f.runtime.status('one')?.status).toBe('cancelled');
+    expect(f.runtime.status('one')).toMatchObject({ status: 'ready', controlOwner: 'none' });
   });
   it('rejects out-of-scope screens before sending them to a model', async () => {
     const predict = vi.fn(); const f = fixture({ predict });
@@ -338,7 +467,7 @@ describe('phone runtime', () => {
     await f.runtime.execute('one', { op: 'open', mode: 'control' }, f.context);
     await expect(f.runtime.execute('one', { op: 'run', goal: 'Test', scenario: 'settings-about', maxActions: 6 }, f.context)).rejects.toThrow();
     expect(f.runtime.status('one')).toMatchObject({ status: 'outcome_unknown', verified: false, actions: 1 });
-    await expect(f.runtime.execute('one', { op: 'run', goal: 'Test', scenario: 'settings-about', maxActions: 6 }, f.context)).rejects.toMatchObject({ code: 'PHONE_OPEN_REQUIRED' });
+    await expect(f.runtime.execute('one', { op: 'run', goal: 'Test', scenario: 'settings-about', maxActions: 6 }, f.context)).rejects.toMatchObject({ code: 'PHONE_PAUSED' });
     expect(f.driver.execute).toHaveBeenCalledOnce();
   });
   it('does not issue blind mock gestures when native UI text is unavailable', async () => {
@@ -459,11 +588,11 @@ it('recovers to an allowed application without exposing refused pixels or granti
   await f.runtime.shutdown();
 });
 
-it('returns a complete live state when cancelling so the chat panel can render its terminal state', async () => {
+it('returns an idle connected live state when cancelling a phone task', async () => {
   const f = fixture(); await f.runtime.execute('cancel-view', { op: 'open', mode: 'control' }, f.context);
   const id = f.runtime.status('cancel-view')!.sessionId;
   const result = await f.runtime.liveControl('cancel-view', id, f.context, 'browser', { op: 'cancel', epoch: 1, operationId: randomUUID() });
-  expect(result).toMatchObject({ report: { sessionId: id, status: 'cancelled', deviceName: 'Test phone' }, ownControl: false, frame: null });
+  expect(result).toMatchObject({ report: { sessionId: id, status: 'ready', deviceName: 'Test phone' }, ownControl: false, frame: null });
   await f.runtime.shutdown();
 });
 
@@ -544,7 +673,7 @@ it('can hand back directly after tool pause without reusing the aborted operatio
     await f.runtime.execute('paused-tool', { op: 'pause' }, f.context);
     const report = f.runtime.status('paused-tool')!;
     const result = await f.runtime.liveControl('paused-tool', report.sessionId, f.context, 'browser', { op: 'handback', epoch: report.controlEpoch!, operationId: randomUUID() });
-    expect(result).toMatchObject({ report: { status: 'ready', controlOwner: 'agent', handoff: 'idle' }, resumeTurnRequired: true });
+    expect(result).toMatchObject({ report: { status: 'ready', controlOwner: 'none', handoff: 'idle' }, resumeTurnRequired: false });
     expect(await f.runtime.execute('paused-tool', { op: 'observe' }, f.context)).toMatchObject({ status: 'ready' });
   } finally { await f.runtime.shutdown(); }
 });
@@ -561,7 +690,7 @@ it('preserves explicit caller cancellation instead of reporting an operation dea
     const operation = f.runtime.execute('user-cancel', { op: 'step', goal: 'Read', scenario: 'settings-about' }, f.context, controller.signal);
     const rejected = expect(operation).rejects.toMatchObject({ code: 'PHONE_CANCELLED' });
     await ready; controller.abort(); await rejected;
-    expect(f.runtime.status('user-cancel')).toMatchObject({ status: 'cancelled', errorCode: 'PHONE_CANCELLED' });
+    expect(f.runtime.status('user-cancel')).toMatchObject({ status: 'ready', controlOwner: 'none', errorCode: 'PHONE_CANCELLED' });
   } finally { await f.runtime.shutdown(); }
 });
 
@@ -577,7 +706,7 @@ it('does not leave control stuck in returning when the handback observation fail
     expect(f.runtime.status('handback-failure')).toMatchObject({ status: 'paused', controlOwner: 'none', handoff: 'idle' });
     expect(await f.runtime.liveControl('handback-failure', report.sessionId, f.context, 'browser',
       { op: 'handback', epoch: f.runtime.status('handback-failure')!.controlEpoch!, operationId: randomUUID() }))
-      .toMatchObject({ report: { status: 'ready', controlOwner: 'agent', handoff: 'idle' } });
+      .toMatchObject({ report: { status: 'ready', controlOwner: 'none', handoff: 'idle' } });
   } finally { await f.runtime.shutdown(); }
 });
 

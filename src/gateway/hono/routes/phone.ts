@@ -8,7 +8,7 @@ import { normalizePhoneAppAccess, phoneAppAccess } from '../../../phone/app-acce
 import { getDefaultAgentId } from '../../../routing/resolve-route.js';
 import { getModelRegistry } from '../../../providers/model-registry.js';
 import { isProviderConfiguredSync } from '../../../providers/index.js';
-import { MOCK_PHONE_MODEL, PhoneActionSchema, PhoneConfigSchema, PhoneDeviceSchema, PhoneError, PhoneInputSchema } from '../../../phone/contracts.js';
+import { MOCK_PHONE_MODEL, PhoneExecutionModeSchema, PhoneActionSchema, PhoneConfigSchema, PhoneDeviceSchema, PhoneError, PhoneInputSchema } from '../../../phone/contracts.js';
 import { createPhoneModel, phoneModelProfile } from '../../../phone/model-adapter.js';
 import { getPhoneRuntime, phoneExecutionContext, type PhoneRuntime } from '../../../phone/runtime.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
@@ -17,6 +17,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { registerPhoneSetupRoutes } from './phone-setup.js';
 import { registerPhoneWirelessRoutes } from './phone-wireless.js';
 import { resolveAdbPath } from '../../../phone/adb-driver.js';
+import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 
 const log = createLogger('Hono:Phone');
 const deviceInput = PhoneDeviceSchema.omit({ id: true, createdAt: true, revision: true, connection: true, wireless: true });
@@ -26,7 +27,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   app.onError((error, c) => {
     const code = error instanceof PhoneError ? error.code : error instanceof z.ZodError ? 'PHONE_INVALID_INPUT' : 'PHONE_OPERATION_FAILED';
     if (!(error instanceof PhoneError) && !(error instanceof z.ZodError)) log.warn({ phase: 'phone_route', errorCode: code }, 'Phone operation failed');
-    return c.json({ ok: false, error: { code, message: error instanceof PhoneError ? error.message : error instanceof z.ZodError ? 'Invalid phone request' : 'Phone operation failed. Check device diagnostics.' } }, error instanceof PhoneError ? error.status : error instanceof z.ZodError ? 400 : 500);
+    return c.json({ ok: false, error: { code, ...(error instanceof PhoneError ? error.details : {}), message: error instanceof PhoneError ? error.message : error instanceof z.ZodError ? 'Invalid phone request' : 'Phone operation failed. Check device diagnostics.' } }, error instanceof PhoneError ? error.status : error instanceof z.ZodError ? 400 : 500);
   });
   const { service, strictRateLimitMiddleware } = deps;
   app.use('/api/phone/*', async (c, next) => {
@@ -37,6 +38,33 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
 
   registerPhoneSetupRoutes(app, deps);
   registerPhoneWirelessRoutes(app, deps, runtime);
+
+  app.get('/api/phone/connections', async c => {
+    c.header('Cache-Control', 'no-store');
+    const payload = await Promise.all(runtime.reports().filter(report => report.status !== 'closed').map(async report => {
+      const source = report.sourceConversationId ?? report.owner;
+      const conversation = /^[\da-f]{8}-[\da-f-]{27}$/i.test(source) ? await service.sessions.getSession(source) : undefined;
+      const { facts: _facts, readings: _readings, steps: _steps, task: _task, feedback: _feedback, ...metadata } = report;
+      return { ...metadata, sourceConversationName: conversation?.name };
+    }));
+    return c.json({ ok: true, payload });
+  });
+  app.post('/api/phone/devices/:id/disconnect', strictRateLimitMiddleware, async c => {
+    await runtime.stopDevice(z.string().uuid().parse(c.req.param('id')));
+    return c.json({ ok: true });
+  });
+  app.post('/api/phone/devices/:id/view', strictRateLimitMiddleware, async c => {
+    const id = z.string().uuid().parse(c.req.param('id'));
+    await runtime.viewDevice(id, service.currentConfig, getDefaultAgentId(), c.req.raw.signal);
+    c.header('Cache-Control', 'no-store'); return c.json({ ok: true });
+  });
+  app.post('/api/phone/devices/:id/conversations', strictRateLimitMiddleware, async c => {
+    const device = runtime.repository.get(z.string().uuid().parse(c.req.param('id')));
+    if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'This phone is disabled', 403);
+    const conversation = createConversation({ agentId: getDefaultAgentId(), sourceChannel: 'webchat',
+      sourceChatId: 'webchat', name: device.name, customData: { phoneDeviceId: device.id } });
+    c.header('Cache-Control', 'no-store'); return c.json({ ok: true, payload: { conversationId: conversation.key, deviceId: device.id } }, 201);
+  });
 
   app.use('/api/phone/cloud/aliyun/*', bodyLimit({ maxSize: 24 * 1024, onError: c => c.json({ ok: false, error: { code: 'PHONE_UPLOAD_TOO_LARGE', message: 'Phone key upload exceeds 24 KB' } }, 413) }));
   app.post('/api/phone/cloud/aliyun/test', strictRateLimitMiddleware, async c => {
@@ -56,10 +84,11 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   app.get('/api/phone/settings', c => c.json({ ok: true, payload: { config: service.currentConfig.phone, defaultDeviceId: runtime.repository.defaultDevice(), runner: 'gateway-local', agentId: getDefaultAgentId() } }));
   app.patch('/api/phone/settings', strictRateLimitMiddleware, async c => {
     const config = PhoneConfigSchema.parse(await c.req.json());
-    await runtime.shutdown();
+    if (!config.enabled || config.adbPath !== service.currentConfig.phone.adbPath) await runtime.shutdown();
     const next = structuredClone(service.currentConfig); next.phone = config;
     const result = await service.saveConfig(next);
     if (!result.saved) throw new PhoneError('PHONE_CONFIG_SAVE_FAILED', 'Unable to save Phone Use settings');
+    runtime.updateConnectionPolicy(next);
     return c.json({ ok: true, payload: { config } });
   });
   app.get('/api/phone/devices', async c => {
@@ -148,23 +177,39 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     frameSeq: z.number().int().positive().optional(), geometry: z.number().int().positive().optional(), action: PhoneActionSchema.optional(),
   }).strict();
   async function conversationPhone(conversationId: string, requestedSessionId?: string) {
+    if (conversationId.startsWith('device:')) {
+      const deviceId = z.string().uuid().parse(conversationId.slice(7));
+      const report = runtime.reports().find(report => report.deviceId === deviceId && report.status !== 'closed');
+      if (!report || requestedSessionId && report.sessionId !== requestedSessionId) throw new PhoneError('PHONE_SESSION_NOT_FOUND', 'Phone connection changed. Refresh the phone panel.', 404);
+      const conversation = /^[\da-f]{8}-[\da-f-]{27}$/i.test(report.owner) ? await service.sessions.getSession(report.owner) : undefined;
+      return { owner: report.owner, report, transcriptId: conversation?.transcriptId, context: runtime.deviceContext(deviceId, service.currentConfig) };
+    }
     z.string().uuid().parse(conversationId);
     const conversation = await service.sessions.getSession(conversationId);
     if (!conversation) throw new PhoneError('PHONE_CONVERSATION_NOT_FOUND', 'Conversation not found', 404);
     const report = runtime.status(conversationId);
     if (requestedSessionId && report?.sessionId !== requestedSessionId) throw new PhoneError('PHONE_SESSION_NOT_FOUND', 'Phone session not found', 404);
     if (report && report.agentId !== conversation.agentId) throw new PhoneError('PHONE_ACCESS_CHANGED', 'Conversation Agent changed', 403);
-    return { report, transcriptId: conversation.transcriptId, context: phoneExecutionContext(service.currentConfig, conversation.agentId) };
+    return { owner: conversationId, report, transcriptId: conversation.transcriptId, context: phoneExecutionContext(service.currentConfig, conversation.agentId) };
   }
   app.get('/api/phone/conversations/:conversationId', async c => {
-    const owner = c.req.param('conversationId'); const client = liveClient.parse(c.req.query('clientId'));
-    const { report, context } = await conversationPhone(owner);
+    let owner = c.req.param('conversationId'); const client = liveClient.parse(c.req.query('clientId'));
+    const { report, context, owner: resolvedOwner } = await conversationPhone(owner); owner = resolvedOwner;
     c.header('Cache-Control', 'no-store');
-    return c.json({ ok: true, payload: report ? runtime.liveStatus(owner, report.sessionId, context, `${getGatewayPrincipal(c).principalId}:${client}`) : null });
+    return c.json({ ok: true, payload: report ? runtime.liveStatus(owner, report.sessionId, context, `${getGatewayPrincipal(c).principalId}:${client}${c.req.param('conversationId').startsWith('device:') ? ':viewer' : ''}`) : null });
+  });
+  app.post('/api/phone/conversations/:conversationId/:sessionId/execution-mode', strictRateLimitMiddleware, async c => {
+    const address = c.req.param('conversationId');
+    if (address.startsWith('device:')) throw new PhoneError('PHONE_OBSERVE_ONLY', 'Change execution mode from the source conversation', 403);
+    const { owner, context } = await conversationPhone(address, c.req.param('sessionId'));
+    const input = z.object({ executionMode: PhoneExecutionModeSchema, applyCurrent: z.boolean().default(false), epoch: z.number().int().positive(), clientId: liveClient }).strict().parse(await c.req.json());
+    await runtime.setExecutionMode(owner, input.executionMode, context, input.applyCurrent, input.epoch);
+    c.header('Cache-Control', 'no-store');
+    return c.json({ ok: true, payload: runtime.liveStatus(owner, c.req.param('sessionId'), context, `${getGatewayPrincipal(c).principalId}:${input.clientId}`) });
   });
   app.get('/api/phone/conversations/:conversationId/:sessionId/frame', async c => {
-    const owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
-    const { context } = await conversationPhone(owner, id);
+    let owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
+    const { context, owner: resolvedOwner } = await conversationPhone(owner, id); owner = resolvedOwner;
     const frame = await runtime.liveFrame(owner, id, context, c.req.raw.signal);
     c.header('Cache-Control', 'no-store'); c.header('Content-Type', 'image/png'); c.header('X-Content-Type-Options', 'nosniff');
     c.header('X-Phone-Frame-Seq', String(frame.seq)); c.header('X-Phone-Captured-At', String(frame.capturedAt));
@@ -173,25 +218,29 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     return c.body(bytes);
   });
   app.post('/api/phone/conversations/:conversationId/:sessionId/video-ticket', strictRateLimitMiddleware, async c => {
-    const owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
+    const address = c.req.param('conversationId'); const id = c.req.param('sessionId');
     const { clientId } = z.object({ clientId: liveClient }).strict().parse(await c.req.json());
-    await conversationPhone(owner, id);
-    const principal = getGatewayPrincipal(c); const client = `${principal.principalId}:${clientId}`;
-    const validate = async () => { const { context } = await conversationPhone(owner, id); runtime.liveStatus(owner, id, context, client); };
+    await conversationPhone(address, id);
+    const principal = getGatewayPrincipal(c); const client = `${principal.principalId}:${clientId}${c.req.param('conversationId').startsWith('device:') ? ':viewer' : ''}`;
+    const validate = async () => { const resolved = await conversationPhone(address, id); runtime.liveStatus(resolved.owner, id, resolved.context, client); };
     const issued = service.phoneStreams.issue({ origin: new URL(c.req.url).origin, principal: principal.principalId, client, validate,
-      connect: async () => { const { context } = await conversationPhone(owner, id); return runtime.liveVideo(owner, id, context); },
-      disconnect: () => runtime.disconnectVideo(owner, id, client) });
+      connect: async () => { const resolved = await conversationPhone(address, id); return runtime.liveVideo(resolved.owner, id, resolved.context); },
+      disconnect: async () => {
+        const resolved = await conversationPhone(address, id).catch(() => undefined);
+        if (resolved) await runtime.disconnectVideo(resolved.owner, id, client);
+      } });
     c.header('Cache-Control', 'no-store');
     return c.json({ ok: true, payload: { ...issued, transport: 'scrcpy-h264', protocolVersion: 1 } });
   });
   app.post('/api/phone/conversations/:conversationId/:sessionId/control', async c => {
-    const owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
-    const { context, transcriptId } = await conversationPhone(owner, id);
+    if (c.req.param('conversationId').startsWith('device:')) throw new PhoneError('PHONE_OBSERVE_ONLY', 'The global phone viewer is read only. Use the controlling conversation for input.', 403);
+    let owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
+    const { context, transcriptId, owner: resolvedOwner } = await conversationPhone(owner, id); owner = resolvedOwner;
     const { clientId, ...input } = liveControlInput.parse(await c.req.json());
     const result = await runtime.liveControl(owner, id, context, `${getGatewayPrincipal(c).principalId}:${clientId}`, input);
-    if (input.op === 'handback' && (result as { resumeTurnRequired?: boolean }).resumeTurnRequired && !service.sessions.getActiveRun(owner).active) {
+    if (transcriptId && input.op === 'handback' && (result as { resumeTurnRequired?: boolean }).resumeTurnRequired && !service.sessions.getActiveRun(owner).active) {
       const resumed = await service.submitSessionInput({ conversationId: owner, expectedTranscriptId: transcriptId, clientMessageId: input.operationId,
-        delivery: 'next', content: '手机已交还，请先确认当前页面，继续未完成的任务；已完成的步骤不要重复，结束后关闭手机会话。',
+        delivery: 'next', content: '手机已交还，请先确认当前页面，继续未完成的任务；已完成的步骤不要重复，结束后释放操作权，保持手机连接。',
         origin: { type: 'system', source: 'internal' } });
       if (!resumed.ok) throw new PhoneError('PHONE_RESUME_FAILED', 'Phone control returned. Send Continue in chat to resume the task.', 409);
     }

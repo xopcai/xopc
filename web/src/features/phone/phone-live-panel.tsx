@@ -1,28 +1,34 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Bot, ChevronDown, CircleCheck, Hand, Info, Keyboard, Loader2, MoreHorizontal, Pause, Play, RefreshCw, Smartphone, Square } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { ArrowLeft, CircleCheck, Hand, Info, Keyboard, Loader2, MoreHorizontal, Pause, Play, RefreshCw, Settings2, Smartphone, Square, X } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 
-import { BetaBadge } from '@/components/ui/beta-badge';
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
-import { controlPhone, phoneEnded, phoneFrame, phonePoint, type PhoneAction, type PhoneLiveState } from './phone-live-api';
+import { setPhoneExecutionMode, controlPhone, phoneEnded, phoneErrorMessage, phoneFrame, phonePoint, type PhoneAction, type PhoneLiveState } from './phone-live-api';
 import { usePhoneVideo } from './use-phone-video';
 
 import './phone-live-panel.css';
 
 type Frame = { url: string; seq: number; capturedAt: number; width: number; height: number };
-export function PhoneLivePanel({ conversationId, state, onChange }: {
-  conversationId: string; state: PhoneLiveState; onChange: (state?: PhoneLiveState) => void;
+export function PhoneLivePanel({ conversationId, state, onChange, readOnly = false, headerActions, connectionActions, connectionNotice, onControlsClose, onHeaderPointerDown, onHeaderKeyDown }: {
+  conversationId: string; state: PhoneLiveState; onChange: (state?: PhoneLiveState) => void; readOnly?: boolean;
+  headerActions?: ReactNode; connectionActions?: ReactNode; connectionNotice?: ReactNode; onControlsClose?: () => void;
+  onHeaderPointerDown?: (event: PointerEvent<HTMLElement>) => void;
+  onHeaderKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
 }) {
   const zh = useLocaleStore(s => s.language) === 'zh';
   const [frame, setFrame] = useState<Frame>();
   const [error, setError] = useState(''); const [frameError, setFrameError] = useState('');
   const [busy, setBusy] = useState(''); const [text, setText] = useState(''); const [now, setNow] = useState(Date.now());
   const [showText, setShowText] = useState(false);
+  const [showControls, setShowControls] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const detailsTrigger = useRef<HTMLButtonElement>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [confirmMode, setConfirmMode] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(false);
   const refreshFrame = useRef<(() => void) | undefined>(undefined);
   const [visible, setVisible] = useState(document.visibilityState === 'visible');
   const latest = useRef(state); latest.current = state;
@@ -30,12 +36,16 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
   const gesture = useRef<{ point: number[]; at: number; seq: number } | null>(null);
   const ended = phoneEnded(state.report.status);
   const working = state.report.handoff !== undefined && state.report.handoff !== 'idle';
-  const human = state.ownControl && state.report.controlOwner === 'human';
+  const human = !readOnly && state.ownControl && state.report.controlOwner === 'human';
   const canvas = useRef<HTMLCanvasElement>(null);
   const video = usePhoneVideo(conversationId, state.report.sessionId, !ended && visible, canvas, state.report.controlEpoch);
+  const floating = Boolean(onHeaderPointerDown);
+  useEffect(() => { video.cancel(); gesture.current = null; }, [floating, video.cancel]);
   const videoPlaying = video.status === 'playing';
   const snapshot = video.status === 'fallback';
-  const paused = state.report.controlOwner === 'none' || ['paused', 'needs_user'].includes(state.report.status);
+  const inspection = ['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(state.report.status);
+  const idle = state.report.controlOwner === 'none' && !inspection;
+  const paused = state.report.controlOwner === 'none' || inspection;
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -43,12 +53,12 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
   useEffect(() => {
     const release = () => {
       const current = latest.current;
-      if (current.ownControl && !phoneEnded(current.report.status)) void controlPhone(conversationId, current, 'release', {}, true).catch(() => {});
+      if (!readOnly && current.ownControl && !phoneEnded(current.report.status)) void controlPhone(conversationId, current, 'release', {}, true).catch(() => {});
     };
     const visibility = () => { setVisible(document.visibilityState === 'visible'); if (document.hidden) release(); };
     window.addEventListener('pagehide', release); document.addEventListener('visibilitychange', visibility);
     return () => { release(); window.removeEventListener('pagehide', release); document.removeEventListener('visibilitychange', visibility); };
-  }, [conversationId]);
+  }, [conversationId, readOnly]);
   useEffect(() => {
     if (!human || !visible) return;
     const heartbeat = setInterval(() => { void controlPhone(conversationId, latest.current, 'heartbeat').catch(() => onChange()); }, 5000);
@@ -82,15 +92,23 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
     return () => { if (refreshFrame.current === refresh) refreshFrame.current = undefined; disposed = true; abort.abort(); clearTimeout(timer); if (urlRef.current) URL.revokeObjectURL(urlRef.current); urlRef.current = ''; };
   }, [conversationId, state.report.sessionId, ended, visible, zh, snapshot]);
   async function command(op: string, action?: PhoneAction, frameSeq?: number) {
+    if (readOnly) return false;
     if (busyRef.current) return;
     video.cancel(); gesture.current = null; busyRef.current = true; setBusy(op); setError('');
     if (['takeover', 'handback', 'release', 'pause', 'cancel'].includes(op)) { setShowText(false); setText(''); }
     try { onChange(await controlPhone(conversationId, latest.current, op, { action, frameSeq, ...(videoPlaying && video.geometry ? { geometry: video.geometry.version } : {}) })); return true; }
-    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); onChange(); return false; }
+    catch (failure) { setError(phoneErrorMessage(failure, zh)); onChange(); return false; }
     finally { busyRef.current = false; setBusy(''); refreshFrame.current?.(); }
   }
+  async function changeMode(mode: 'collaborative' | 'direct', applyCurrent = false) {
+    if (readOnly || busyRef.current) return;
+    busyRef.current = true; setBusy('execution-mode'); setError('');
+    try { onChange(await setPhoneExecutionMode(conversationId, latest.current, mode, applyCurrent)); setConfirmMode(false); }
+    catch (failure) { setError(phoneErrorMessage(failure, zh)); onChange(); }
+    finally { busyRef.current = false; setBusy(''); }
+  }
   async function sendText() {
-    if (!text || (!frame && !videoPlaying)) return;
+    if (showControls || !text || (!frame && !videoPlaying)) return;
     const sent = text;
     if (await command('input', { type: 'typeText', text: sent }, frame?.seq)) setText(current => current === sent ? '' : current);
   }
@@ -99,17 +117,18 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
   }
   const age = frame ? Math.max(0, (now - frame.capturedAt) / 1000) : null;
   const otherHuman = state.report.controlOwner === 'human' && !human;
-  const controlMode = state.report.mode === 'control';
-  const disabled = Boolean(busy) || working || ended || otherHuman;
-  const title = ended ? (zh ? '会话已结束' : 'Session ended')
+  const controlMode = !readOnly && state.report.mode === 'control';
+  const disabled = Boolean(busy) || working || ended || otherHuman || showControls;
+  const title = ended ? (zh ? '连接已断开' : 'Disconnected')
     : busy === 'takeover' || state.report.handoff === 'acquiring' ? (zh ? '正在接管…' : 'Taking control…')
-      : busy === 'handback' || state.report.handoff === 'returning' ? (zh ? '正在交还 Agent…' : 'Returning to Agent…')
+      : busy === 'handback' || state.report.handoff === 'returning' ? (zh ? '正在交还…' : 'Returning control…')
         : working ? (zh ? '正在交接控制权…' : 'Transferring control…')
           : human ? (zh ? '你正在操作' : 'You control the phone')
             : otherHuman ? (zh ? '另一窗口正在操作' : 'Controlled in another window')
-              : !controlMode ? (zh ? '仅查看' : 'View only')
-                : paused ? (zh ? '等待你接管' : 'Ready for you to take over')
-                  : (zh ? 'Agent 正在操作' : 'Agent is operating');
+              : !controlMode ? (inspection ? (zh ? '等待处理 · 仅查看' : 'Needs attention · View only') : state.report.controlOwner === 'agent' ? (zh ? '聊天正在操作 · 仅查看' : 'Chat in control · View only') : (zh ? '已连接 · 仅查看' : 'Connected · View only'))
+                : idle ? (zh ? '已连接' : 'Connected')
+                : paused ? (zh ? '等待检查或接管' : 'Needs inspection or takeover')
+                  : (zh ? '聊天正在操作' : 'Chat is operating');
   const connected = !ended && (videoPlaying || Boolean(frame));
   const connectionLabel = ended ? (zh ? '画面已停止' : 'Preview stopped')
     : video.status === 'blocked' ? (zh ? '画面受限' : 'Preview restricted')
@@ -117,57 +136,61 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
         : snapshot ? (age !== null && age > 4 ? (zh ? '画面更新较慢' : 'Preview delayed') : (zh ? '定时更新画面' : 'Snapshot preview'))
           : connected ? (zh ? '已连接' : 'Connected') : (zh ? '正在连接…' : 'Connecting…');
   const helper = ended ? (zh ? '在聊天中让 Agent 重新打开手机，即可继续使用。' : 'Ask the Agent in chat to reopen the phone to continue.')
-    : state.report.stopReason === 'text_input_required' ? (human ? (zh ? '请使用手机自带键盘输入，完成后交还 Agent。' : 'Type with the phone keyboard, then hand back to the Agent.') : (zh ? '请接管并使用手机自带键盘输入，完成后交还 Agent。' : 'Take over, type with the phone keyboard, then hand back to the Agent.'))
+    : state.report.status === 'outcome_unknown' || state.report.stopReason === 'inspect_before_retry' ? (zh ? '上一步的结果尚未确认。请接管检查，避免重复操作。' : 'The last result is unconfirmed. Take over to inspect before repeating any action.')
+    : state.report.stopReason === 'text_input_required' ? (human ? (zh ? '请使用手机自带键盘输入，完成后交还手机。' : 'Type with the phone keyboard, then hand back control.') : (zh ? '请接管并使用手机自带键盘输入，完成后交还手机。' : 'Take over, type with the phone keyboard, then hand back control.'))
       : state.report.stopReason === 'text_input_unconfirmed' ? (human ? (zh ? '请检查输入框，避免重复输入；确认后交还 Agent。' : 'Inspect the field to avoid duplicate text, then hand back to the Agent.') : (zh ? '请先接管检查输入框，避免重复输入；确认后交还 Agent。' : 'Take over and inspect the field before retrying to avoid duplicate text. Then hand back to the Agent.'))
     : video.status === 'blocked' ? (zh ? '当前页面不在授权范围内，请先返回授权应用。' : 'This page is outside the allowed apps. Return to an authorized app first.')
       : working || busy === 'takeover' || busy === 'handback' ? (zh ? '控制权交接完成后，即可继续操作。' : 'Controls become available once the handoff completes.')
-      : human ? (snapshot ? (zh ? '当前画面定时更新，拖动可能稍有延迟。' : 'Snapshot preview; dragging may be delayed.') : (zh ? '可以点击、滑动和输入文字，Agent 已暂停。' : 'Click, swipe or type. The Agent is paused.'))
+      : human ? (snapshot ? (zh ? '画面更新稍有延迟，操作后请稍候。' : 'The preview may be delayed. Wait briefly after input.') : (zh ? '可以点击、滑动和输入，任务已暂停。' : 'Click, swipe or type. The task is paused.'))
         : otherHuman ? (zh ? '此窗口仅查看，操作由另一窗口控制。' : 'View only here. Another window controls the phone.')
           : !controlMode ? (zh ? '当前会话仅查看，可在聊天中请求操作手机。' : 'This session is view only. Ask in chat to control the phone.')
-            : paused ? (zh ? '接管后，可以直接点击、滑动和输入文字。' : 'Take over to click, swipe and type on the phone.')
+            : idle ? (zh ? '手机保持连接。可接管操作，或在任意聊天中发起新任务。' : 'Phone stays connected. Take over or start a task from any chat.')
+            : paused ? (zh ? '任务已暂停。接管检查后即可继续。' : 'Task paused. Take over to inspect before continuing.')
               : (zh ? '随时接管，Agent 会先暂停操作。' : 'Take over at any time. The Agent will pause first.');
   const dimensions = frame ?? video.geometry;
   const ratio = dimensions ? dimensions.width / dimensions.height : 9 / 20;
   const primaryLabel = ended ? (zh ? '会话已结束' : 'Session ended')
     : busy === 'takeover' ? (zh ? '正在接管…' : 'Taking control…')
       : busy === 'handback' ? (zh ? '正在交还…' : 'Returning control…')
-        : human ? (zh ? '交还 Agent' : 'Hand back to Agent') : (zh ? '接管手机' : 'Take over phone');
-  return <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-base" aria-label={zh ? '手机实时画面' : 'Live phone'}>
-    <header className="flex shrink-0 items-center gap-2 border-b border-edge px-4 py-2.5">
-      {human || paused ? <Hand className="size-4 shrink-0 text-accent" aria-hidden /> : <Bot className="size-4 shrink-0 text-accent" aria-hidden />}
+        : human ? (zh ? '交还手机' : 'Hand back control') : (zh ? '接管手机' : 'Take over phone');
+  const previewProblem = video.status === 'blocked' || snapshot && (Boolean(frameError) || !frame || (age ?? 0) > 4);
+  const showHelper = ended || human || inspection || working || otherHuman || video.status === 'blocked';
+  const showFooter = controlMode && !ended || showHelper || Boolean(error);
+  function changeControls(open: boolean) {
+    if (open) { video.cancel(); gesture.current = null; }
+    else { setConfirmMode(false); setConfirmStop(false); setShowSettings(false); setShowDetails(false); onControlsClose?.(); }
+    setShowControls(open);
+  }
+  return <Dialog.Root modal={false} open={showControls} onOpenChange={changeControls}><section style={{ '--phone-screen-ratio': ratio } as CSSProperties} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel" aria-label={zh ? '手机实时画面' : 'Live phone'}>
+    <header className={cn('flex shrink-0 items-center gap-1 bg-surface-panel px-5 py-4', onHeaderPointerDown && 'cursor-grab touch-none select-none active:cursor-grabbing')}
+      data-phone-drag-handle={onHeaderPointerDown ? '' : undefined} tabIndex={onHeaderPointerDown ? 0 : undefined}
+      aria-label={onHeaderPointerDown ? (zh ? '拖动手机小窗，可使用方向键移动' : 'Drag phone window, or use arrow keys to move') : undefined}
+      onPointerDown={onHeaderPointerDown} onKeyDown={onHeaderKeyDown}>
       <div className="min-w-0 flex-1" role="status" aria-live="polite">
-        <p className="truncate text-sm font-medium text-fg">{title}</p>
-        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-muted"><span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', connected ? 'bg-success' : 'bg-fg-muted')} />{connectionLabel}</p>
+        <h3 className="truncate text-[15px] font-semibold tracking-tight text-fg">{state.report.deviceName}</h3>
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-fg-muted"><span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', connected && !previewProblem ? 'bg-success' : 'bg-fg-muted')} />{ended || connected && !previewProblem ? title : connectionLabel}</p>
       </div>
-      <BetaBadge />
-      <DropdownMenu.Root modal={false}>
-        <DropdownMenu.Trigger asChild><Button variant="ghost" className="size-9 shrink-0 rounded-lg p-0" aria-label={zh ? '更多手机操作' : 'More phone actions'}><MoreHorizontal className="size-4" aria-hidden /></Button></DropdownMenu.Trigger>
-        <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[150] min-w-40 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
-          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none focus:bg-surface-hover" onSelect={() => { setShowDetails(true); requestAnimationFrame(() => detailsTrigger.current?.focus()); }}><Info className="size-4" aria-hidden />{zh ? '连接详情' : 'Connection details'}</DropdownMenu.Item>
-          <DropdownMenu.Item disabled={Boolean(busy) || working || ended} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-danger outline-none focus:bg-surface-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50" onSelect={() => void command('cancel')}><Square className="size-4" aria-hidden />{zh ? '结束会话' : 'End session'}</DropdownMenu.Item>
-        </DropdownMenu.Content></DropdownMenu.Portal>
-      </DropdownMenu.Root>
+      <Dialog.Trigger asChild><Button variant="ghost" className="size-8 shrink-0 rounded-full p-0 text-fg-muted" aria-label={zh ? '更多手机操作' : 'More phone actions'}><MoreHorizontal className="size-4" aria-hidden /></Button></Dialog.Trigger>
+      {headerActions}
     </header>
-    <div className="phone-live-stage relative flex min-h-0 flex-1 items-center justify-center bg-surface-inset p-4">
-      <div className={cn('phone-device-shell relative shrink-0 rounded-[28px] border border-phone-rim bg-phone-shell shadow-phone-device', human && 'ring-2 ring-accent/60 ring-offset-2 ring-offset-surface-inset')} style={{ '--phone-screen-ratio': ratio } as CSSProperties} data-phone-device-shell>
-        <span className="pointer-events-none absolute left-1/2 top-1.5 h-[3px] w-8 -translate-x-1/2 rounded-full bg-phone-rim" aria-hidden />
-        <span className="pointer-events-none absolute -right-[3px] top-20 h-9 w-0.5 rounded-r bg-phone-rim" aria-hidden />
-        <div className="phone-device-screen relative w-full overflow-hidden rounded-[18px] bg-surface-base">
+    <div className="phone-live-stage relative flex min-h-0 items-center justify-center bg-surface-panel p-3">
+      <div className={cn('phone-device-shell relative shrink-0 border border-phone-rim/60 bg-phone-shell', human && 'outline outline-2 outline-accent/60 outline-offset-4')} style={{ '--phone-screen-ratio': ratio } as CSSProperties} data-phone-device-shell>
+        <div className="phone-device-screen relative w-full overflow-hidden bg-surface-base">
           <canvas ref={canvas} aria-label={zh ? '手机视频画面' : 'Phone video screen'}
             data-phone-video-status={video.status} data-phone-video-error={video.error} data-phone-video-frames={video.frames} data-phone-video-fps={video.fps.toFixed(1)} data-phone-input-ack-ms={video.ackMs?.toFixed(1)}
             className={cn('absolute inset-0 h-full w-full select-none object-contain', videoPlaying ? '' : 'hidden', human ? 'touch-none cursor-crosshair' : 'cursor-default')}
             onPointerDown={event => {
-              if (!human || busy || working || !videoPlaying || !video.geometry || event.button !== 0) return;
+              if (showControls || !human || busy || working || !videoPlaying || !video.geometry || event.button !== 0) return;
               const p = phonePoint(event.currentTarget.getBoundingClientRect(), video.geometry.width, video.geometry.height, event.clientX, event.clientY);
               if (!p) return; event.currentTarget.setPointerCapture(event.pointerId); video.pointer('down', p);
             }}
             onPointerMove={event => {
-              if (!human || busy || working || !video.geometry || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              if (showControls || !human || busy || working || !video.geometry || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
               const p = phonePoint(event.currentTarget.getBoundingClientRect(), video.geometry.width, video.geometry.height, event.clientX, event.clientY);
               if (p) video.pointer('move', p);
             }}
             onPointerUp={event => {
-              if (!video.geometry || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              if (showControls || !video.geometry || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
               const p = phonePoint(event.currentTarget.getBoundingClientRect(), video.geometry.width, video.geometry.height, event.clientX, event.clientY);
               if (p) video.pointer('up', p); else video.cancel(); event.currentTarget.releasePointerCapture(event.pointerId);
             }} onPointerCancel={video.cancel} onLostPointerCapture={video.cancel} />
@@ -175,13 +198,13 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
           {frame ? <img src={frame.url} alt={zh ? '手机当前屏幕' : 'Current phone screen'} width={frame.width} height={frame.height} draggable={false}
             className={cn('absolute inset-0 h-full w-full select-none object-contain', human ? 'touch-none cursor-crosshair' : 'cursor-default')}
             onPointerDown={event => {
-              if (!human || busy || working || !frame || (age ?? 99) > 5) return;
+              if (showControls || !human || busy || working || !frame || (age ?? 99) > 5) return;
               const p = point(event); if (!p) return;
               gesture.current = { point: p, at: Date.now(), seq: frame.seq }; event.currentTarget.setPointerCapture(event.pointerId);
             }} onPointerCancel={() => { gesture.current = null; }}
             onPointerUp={event => {
               const start = gesture.current; gesture.current = null;
-              if (!start || !human || busy) return;
+              if (showControls || !start || !human || busy) return;
               const end = point(event); if (!end) return;
               const duration = Date.now() - start.at;
               const distance = Math.hypot(end[0] - start.point[0], end[1] - start.point[1]);
@@ -190,49 +213,79 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
               void command('input', action, start.seq);
             }} /> : ended ? <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 text-center text-sm text-fg-muted"><Smartphone className="size-8" strokeWidth={1.25} aria-hidden /><p>{zh ? '会话已结束' : 'Session ended'}</p></div>
               : snapshot && frameError ? <div className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto px-4 text-center"><p role="alert" className="text-sm text-fg-muted">{zh ? '暂时无法显示手机画面，请检查连接或授权应用。' : 'Phone preview unavailable. Check the connection or allowed app.'}</p>{human ? <div className="mt-3 flex flex-wrap justify-center gap-2">{state.allowedApps?.map(app => <Button key={app} disabled={Boolean(busy)} onClick={() => void command('recover', { type: 'launch', package: app })}>{state.allowedApps?.length === 1 ? (zh ? '返回授权应用' : 'Return to allowed app') : `${zh ? '打开' : 'Open'} ${app}`}</Button>)}</div> : null}</div> : snapshot ? <Skeleton className="h-full w-full rounded-none" /> : null}
+          {showControls && <div className="absolute inset-0 z-20 bg-surface-base/30 backdrop-blur-sm" aria-hidden onPointerDown={event => { event.preventDefault(); event.stopPropagation(); changeControls(false); }} />}
+          <Dialog.Content aria-describedby={undefined} onInteractOutside={event => event.preventDefault()} className="phone-control-shade absolute inset-x-0 top-0 z-30 flex max-h-full flex-col overflow-hidden rounded-b-[24px] border-b border-edge bg-surface-overlay/95 text-fg shadow-popover backdrop-blur-xl">
+            <div aria-hidden className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-fg-muted/30" />
+            <header className="flex shrink-0 items-center justify-between px-4 pb-3 pt-2">
+              <Dialog.Title className="text-sm font-semibold">{zh ? '控制中心' : 'Control center'}</Dialog.Title>
+              <Dialog.Close asChild><Button variant="ghost" className="size-8 rounded-full p-0" aria-label={zh ? '收起控制中心' : 'Close control center'}><X className="size-4" /></Button></Dialog.Close>
+            </header>
+            <div className="min-h-0 space-y-3 overflow-y-auto overscroll-contain px-3 pb-4">
+              <div className="rounded-2xl bg-surface-panel/80 p-4"><p className="text-sm font-medium">{state.report.deviceName}</p><p className="mt-1 text-xs text-fg-muted">{title}</p>{state.report.controlOwner === 'agent' && state.report.goalPreview && <p className="mt-2 text-xs leading-relaxed text-fg-muted">{state.report.goalPreview}</p>}</div>
+              <div className="grid grid-cols-2 gap-2">
+                {!readOnly && !ended && <Button variant="secondary" className="min-h-14 rounded-2xl text-xs" aria-expanded={showSettings} onClick={() => setShowSettings(value => !value)}><Settings2 className="size-4" />{zh ? '操作设置' : 'Control settings'}</Button>}
+                <Button variant="secondary" className="min-h-14 rounded-2xl text-xs" aria-expanded={showDetails} onClick={() => setShowDetails(value => !value)}><Info className="size-4" />{zh ? '连接详情' : 'Connection details'}</Button>
+                {connectionActions}
+                {!readOnly && !idle && !ended && <Button variant="secondary" disabled={Boolean(busy) || working} className="min-h-14 rounded-2xl text-xs text-danger" onClick={() => setConfirmStop(true)}><Square className="size-4" />{zh ? '停止当前任务…' : 'Stop current task…'}</Button>}
+              </div>
+              {error && <p role="alert" className="px-1 text-xs text-danger">{error}</p>}
+              {connectionNotice}
+              {!readOnly && !ended && showSettings && <div className="space-y-3 rounded-2xl bg-surface-panel/80 p-4 text-xs text-fg-muted">
+                <div className="flex items-center justify-between"><h4 className="text-sm font-medium text-fg">{zh ? '操作设置' : 'Control settings'}</h4><Button variant="ghost" className="size-7 rounded-full p-0" aria-label={zh ? '关闭操作设置' : 'Close control settings'} onClick={() => setShowSettings(false)}><X className="size-3.5" /></Button></div>
+                <p>{zh ? '当前任务：' : 'Current task: '}{(state.report.executionMode ?? state.report.nextExecutionMode) === 'direct' ? (zh ? '直接执行' : 'Direct execution') : (zh ? '主 Agent 协作' : 'Main Agent collaboration')}</p>
+                <label className="flex items-center gap-2"><span>{zh ? '下一任务' : 'Next task'}</span><Select aria-label={zh ? '下一任务执行方式' : 'Next task strategy'} value={state.report.nextExecutionMode ?? 'collaborative'} disabled={Boolean(busy) || working} onChange={event => void changeMode(event.target.value as 'collaborative' | 'direct')}>
+                  <SelectOption value="collaborative">{zh ? '主 Agent 协作' : 'Main Agent collaboration'}</SelectOption>
+                  <SelectOption value="direct">{zh ? '直接执行' : 'Direct execution'}</SelectOption>
+                </Select></label>
+                {state.report.task && state.report.executionMode !== state.report.nextExecutionMode && <Button variant="ghost" disabled={Boolean(busy) || working || human || otherHuman || state.report.status === 'outcome_unknown' || state.report.status === 'needs_user'} onClick={() => setConfirmMode(true)}>{zh ? '切换当前任务…' : 'Switch current task…'}</Button>}
+                {confirmMode && <div role="alert" className="space-y-2"><p>{zh ? '将暂停当前任务，等待已派发操作结束并重新观察。切换后需检查并交还 Agent，已执行操作不会撤销，预算不会重置。' : 'Pause, wait for dispatched input and observe again. Inspect and hand back after switching. Delivered input and consumed budget are preserved.'}</p><Button disabled={Boolean(busy)} onClick={() => void changeMode(state.report.nextExecutionMode ?? 'collaborative', true)}>{zh ? '暂停并切换' : 'Pause and switch'}</Button><Button variant="ghost" onClick={() => setConfirmMode(false)}>{zh ? '取消' : 'Cancel'}</Button></div>}
+              </div>}
+              {confirmStop && <div role="alert" className="shrink-0 space-y-2 border-b border-edge p-4 text-sm"><p>{zh ? '确认停止来源聊天的当前手机任务？手机将保持连接，已执行的操作无法撤回。' : 'Stop the source chat’s phone task? The phone stays connected. Delivered input cannot be undone.'}</p><Button disabled={Boolean(busy)} onClick={() => { void command('cancel').then(ok => { if (ok) setConfirmStop(false); }); }}>{zh ? '确认停止' : 'Stop task'}</Button><Button variant="ghost" onClick={() => setConfirmStop(false)}>{zh ? '继续任务' : 'Keep task'}</Button></div>}
+              {showDetails && <div className="rounded-2xl bg-surface-panel/80">
+                <div className="flex items-center justify-between px-5 py-3"><h4  className="text-sm font-medium outline-none">{zh ? '连接详情' : 'Connection details'}</h4><Button variant="ghost" className="size-7 rounded-full p-0" aria-label={zh ? '关闭连接详情' : 'Close connection details'} onClick={() => setShowDetails(false)}><X className="size-3.5" /></Button></div>
+                <div id={`phone-details-${state.report.sessionId}`} className="px-5 pb-4 text-xs text-fg-muted">
+                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 break-words">
+                    <dt>{zh ? '手机' : 'Phone'}</dt><dd>{state.report.deviceName}</dd>
+                    <dt>Agent</dt><dd>{state.report.agentId}</dd>
+                    <dt>{zh ? '手机模型' : 'Phone model'}</dt><dd>{state.report.modelRef}</dd>
+                    <dt>{zh ? '画面' : 'Preview'}</dt><dd>{ended ? (zh ? '已停止' : 'Stopped') : videoPlaying ? (zh ? '实时视频' : 'Live video') : snapshot ? (zh ? '定时截图' : 'Snapshots') : connectionLabel}</dd>
+                    {videoPlaying ? <><dt>{zh ? '帧率' : 'Frame rate'}</dt><dd>{video.fps.toFixed(0)} FPS{video.fps < 1 ? (zh ? ' · 静止画面时可能不产生新帧' : ' · Static screens may not produce new frames') : ''}</dd></> : null}
+                    {video.ackMs !== undefined ? <><dt>{zh ? '输入应答' : 'Input ACK'}</dt><dd>{video.ackMs.toFixed(0)} ms</dd></> : null}
+                    {snapshot && age !== null ? <><dt>{zh ? '画面时间' : 'Frame age'}</dt><dd>{age.toFixed(1)} s</dd></> : null}
+                    <dt>{zh ? '操作次数' : 'Actions'}</dt><dd>{state.report.actions}</dd>
+                  </dl>
+                  {snapshot && video.error && !ended ? <div className="mt-3 flex items-center gap-2"><span>{zh ? '实时视频不可用，正在使用定时截图。' : 'Video unavailable. Using snapshots.'}</span><Button variant="ghost" className="shrink-0 px-2 py-1 text-xs text-accent" onClick={video.retry}><RefreshCw className="size-3" aria-hidden />{zh ? '重试视频' : 'Retry video'}</Button></div> : null}
+                  {error || frameError || video.error || state.report.message ? <p className="mt-2 whitespace-pre-wrap break-words">{[error, frameError, video.error, state.report.message].filter(Boolean).join(' · ')}</p> : null}
+                  {ended ? <p className="mt-2 flex items-center gap-1"><CircleCheck className="size-3.5" aria-hidden />{zh ? '画面采集与手机控制已结束' : 'Screen capture and control have ended'}</p> : null}
+                </div>
+              </div>}
+            </div>
+          </Dialog.Content>
         </div>
       </div>
     </div>
-    <footer className="shrink-0 border-t border-edge bg-surface-base">
-      <div className="mx-auto w-full max-w-xl px-4 pb-3 pt-2.5">
-        <p className="mb-2 text-center text-xs leading-relaxed text-fg-muted">{helper}</p>
-        {error ? <p role="alert" className="mb-2 text-xs text-danger">{zh ? '操作未完成，请重试。详细原因可在连接详情中查看。' : 'Action failed. Try again or check connection details.'}</p> : null}
-        {!ended ? <div className="flex flex-wrap gap-2">
-          {controlMode ? <Button variant={human ? 'primary' : 'ghost'} className={cn('min-h-11 min-w-0 flex-1 rounded-lg', !human && 'border border-accent/20 bg-accent-soft text-accent-fg hover:border-accent/40 hover:bg-accent-soft hover:text-accent-fg dark:border-accent/30 dark:hover:bg-accent/30')} disabled={disabled} onClick={() => void command(human ? 'handback' : 'takeover')}>
+    {showFooter && <footer className="shrink-0 bg-surface-panel">
+      <div className="mx-auto w-full max-w-xl px-5 py-4">
+        {showHelper && <p className="mb-3 text-center text-xs leading-relaxed text-fg-muted">{helper}</p>}
+        {error && !showControls ? <p role="alert" className="mb-2 text-xs text-danger">{error}</p> : null}
+        {!ended ? <div className="flex flex-wrap justify-center gap-2">
+          {controlMode ? <Button variant={human ? 'primary' : 'secondary'} className="min-h-10 min-w-36 rounded-full px-5" disabled={disabled} onClick={() => void command(human ? 'handback' : 'takeover')}>
             {busy || working ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> : human ? <Play className="size-4" aria-hidden /> : <Hand className="size-4" aria-hidden />}{primaryLabel}
           </Button> : null}
-          {!otherHuman && controlMode ? <Button variant="ghost" className="min-h-11 rounded-lg" disabled={disabled} onClick={() => void command(human ? 'release' : paused ? 'handback' : 'pause')}>
-            {!human && !paused ? <Pause className="size-4" aria-hidden /> : null}{human ? (zh ? '仅查看' : 'View only') : paused ? (zh ? '让 Agent 继续' : 'Let Agent continue') : (zh ? '暂停任务' : 'Pause task')}
+          {!otherHuman && controlMode && !idle ? <Button variant="ghost" className="min-h-11 rounded-lg" disabled={disabled} onClick={() => void command(human ? 'release' : paused ? 'handback' : 'pause')}>
+            {!human && !paused ? <Pause className="size-4" aria-hidden /> : null}{human ? (zh ? '仅查看' : 'View only') : paused ? (zh ? '继续任务' : 'Continue task') : (zh ? '暂停任务' : 'Pause task')}
           </Button> : null}
         </div> : null}
         {human ? <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机返回' : 'Phone back'} disabled={Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => void command('input', { type: 'back' }, frame?.seq)}><ArrowLeft className="size-4" aria-hidden /></Button>
-          <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机输入' : 'Phone keyboard'} aria-expanded={showText} disabled={state.textInput === 'manual' || Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => setShowText(value => !value)}><Keyboard className="size-4" aria-hidden /></Button>
+          <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机返回' : 'Phone back'} disabled={showControls || Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => void command('input', { type: 'back' }, frame?.seq)}><ArrowLeft className="size-4" aria-hidden /></Button>
+          <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机输入' : 'Phone keyboard'} aria-expanded={showText} disabled={showControls || state.textInput === 'manual' || Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => setShowText(value => !value)}><Keyboard className="size-4" aria-hidden /></Button>
           <span className="text-xs text-fg-muted">{state.textInput === 'manual' ? (zh ? '请使用手机自带键盘输入' : 'Use the phone keyboard to type') : (zh ? '仅查看会保持任务暂停' : 'View only keeps the task paused')}</span>
         </div> : null}
         {human && showText ? <form className="mt-2 flex gap-2" onSubmit={event => { event.preventDefault(); void sendText(); }}>
-          <input aria-label={zh ? '发送到手机的文本' : 'Text to send to phone'} placeholder={zh ? '输入非密码文本…' : 'Type non-password text…'} autoComplete="off" value={text} disabled={Boolean(busy) || working || (!frame && !videoPlaying)} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault(); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 text-sm focus-visible:outline-2 focus-visible:outline-accent" />
-          <Button type="submit" className="rounded-lg" disabled={Boolean(busy) || working || !text || (!frame && !videoPlaying)}>{zh ? '输入' : 'Type'}</Button>
+          <input aria-label={zh ? '发送到手机的文本' : 'Text to send to phone'} placeholder={zh ? '输入非密码文本…' : 'Type non-password text…'} autoComplete="off" value={text} disabled={showControls || Boolean(busy) || working || (!frame && !videoPlaying)} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault(); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 text-sm focus-visible:outline-2 focus-visible:outline-accent" />
+          <Button type="submit" className="rounded-lg" disabled={showControls || Boolean(busy) || working || !text || (!frame && !videoPlaying)}>{zh ? '输入' : 'Type'}</Button>
         </form> : null}
       </div>
-      <div className="border-t border-edge">
-        <button ref={detailsTrigger} type="button" aria-expanded={showDetails} aria-controls={`phone-details-${state.report.sessionId}`} onClick={() => setShowDetails(value => !value)} className="flex min-h-9 w-full items-center gap-1.5 px-4 py-2 text-left text-xs text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"><ChevronDown className={cn('size-3.5 transition-transform motion-reduce:transition-none', showDetails && 'rotate-180')} aria-hidden />{zh ? '连接详情' : 'Connection details'}</button>
-        <div id={`phone-details-${state.report.sessionId}`} hidden={!showDetails} className="max-h-[min(30vh,12rem)] overflow-y-auto overscroll-contain px-4 pb-3 text-xs text-fg-muted">
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 break-words">
-            <dt>{zh ? '手机' : 'Phone'}</dt><dd>{state.report.deviceName}</dd>
-            <dt>Agent</dt><dd>{state.report.agentId}</dd>
-            <dt>{zh ? '手机模型' : 'Phone model'}</dt><dd>{state.report.modelRef}</dd>
-            <dt>{zh ? '画面' : 'Preview'}</dt><dd>{ended ? (zh ? '已停止' : 'Stopped') : videoPlaying ? (zh ? '实时视频' : 'Live video') : snapshot ? (zh ? '定时截图' : 'Snapshots') : connectionLabel}</dd>
-            {videoPlaying ? <><dt>{zh ? '帧率' : 'Frame rate'}</dt><dd>{video.fps.toFixed(0)} FPS{video.fps < 1 ? (zh ? ' · 静止画面时可能不产生新帧' : ' · Static screens may not produce new frames') : ''}</dd></> : null}
-            {video.ackMs !== undefined ? <><dt>{zh ? '输入应答' : 'Input ACK'}</dt><dd>{video.ackMs.toFixed(0)} ms</dd></> : null}
-            {snapshot && age !== null ? <><dt>{zh ? '画面时间' : 'Frame age'}</dt><dd>{age.toFixed(1)} s</dd></> : null}
-            <dt>{zh ? '操作次数' : 'Actions'}</dt><dd>{state.report.actions}</dd>
-          </dl>
-          {snapshot && video.error && !ended ? <div className="mt-3 flex items-center gap-2"><span>{zh ? '实时视频不可用，正在使用定时截图。' : 'Video unavailable. Using snapshots.'}</span><Button variant="ghost" className="shrink-0 px-2 py-1 text-xs text-accent" onClick={video.retry}><RefreshCw className="size-3" aria-hidden />{zh ? '重试视频' : 'Retry video'}</Button></div> : null}
-          {error || frameError || video.error || state.report.message ? <p className="mt-2 whitespace-pre-wrap break-words">{[error, frameError, video.error, state.report.message].filter(Boolean).join(' · ')}</p> : null}
-          {ended ? <p className="mt-2 flex items-center gap-1"><CircleCheck className="size-3.5" aria-hidden />{zh ? '画面采集与手机控制已结束' : 'Screen capture and control have ended'}</p> : null}
-        </div>
-      </div>
-    </footer>
-  </section>;
+    </footer>}
+  </section></Dialog.Root>;
 }

@@ -1,4 +1,5 @@
 import { MobilePrimaryNav } from '@/components/shell/mobile-primary-nav';
+import { GlobalPhoneWorkspace } from '@/features/phone/global-phone-workspace';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { VoiceCallProvider } from '@/features/voice/realtime/voice-call-provider';
@@ -206,6 +207,7 @@ function AppShellContent() {
       <ExtensionNavigateListener />
       <GlobalCommandPaletteHost />
       <GlobalQuickCaptureHost />
+      <GlobalPhoneWorkspace />
       <GlobalDiscussionCaptureHost />
       <CapabilitySettingsSheet />
       <SupportReportHost />
@@ -244,7 +246,7 @@ function AppShellContent() {
           <SidebarColumn />
 
           {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
-          <div className="app-main-surface relative flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-panel">
+          <div className="app-main-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
             <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {!isSettingsRoute ? <PrimaryAppHeader /> : null}

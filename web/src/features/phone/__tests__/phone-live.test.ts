@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from 'vitest';
 
+import { usePhoneWorkspaceStore } from '../phone-workspace-store';
 import { fetchConversationPhone, phonePoint } from '../phone-live-api';
 import { useRightWorkspaceStore as workspace } from '@/stores/right-workspace-store';
 
@@ -12,18 +13,19 @@ it('maps the image rectangle without accepting letterbox clicks', () => {
   expect(phonePoint(rect, 200, 100, 300, 60)).toBeNull();
   expect(phonePoint(rect, 200, 100, 300, 250)).toEqual([500, 500]);
 });
-it('deduplicates phone tabs per conversation and preserves a file the user is viewing', () => {
+it('shares one global phone window across conversations without replacing their file tabs', () => {
   const s = workspace.getState();
   const file = s.openFile({ path: 'notes.md' }, 'chat-one');
+  usePhoneWorkspaceStore.setState({ open: false, selected: null });
   s.openPhone('phone-one', 'Emulator', 'chat-one', false);
-  s.openPhone('phone-one', 'Emulator', 'chat-one', false);
-  expect(workspace.getState().panes['chat-one']).toMatchObject({ activeId: file, tabs: [{ kind: 'file' }, { kind: 'phone' }] });
   s.openPhone('phone-one', 'Emulator', 'chat-two', false);
-  expect(workspace.getState().panes['chat-two']).toMatchObject({ open: false, tabs: [{ kind: 'phone' }] });
-  s.openPhone('phone-one', 'Emulator', 'chat-one', true);
-  expect(workspace.getState().panes['chat-one']).toMatchObject({ open: true, activeId: 'phone:phone-one' });
-  s.setOpen(false, 'chat-one');
-  expect(workspace.getState().panes['chat-two'].open).toBe(false);
+  expect(workspace.getState().panes['chat-one']).toMatchObject({ activeId: file, tabs: [{ kind: 'file' }, { kind: 'phone', phoneSessionId: 'phone-one' }] });
+  expect(workspace.getState().panes['chat-two']).toMatchObject({ open: false, activeId: null, tabs: [{ kind: 'phone', phoneSessionId: 'phone-one' }] });
+  expect(usePhoneWorkspaceStore.getState()).toMatchObject({ open: false, selected: 'phone-one' });
+  s.openPhone('phone-one', 'Emulator', 'chat-two', true);
+  expect(usePhoneWorkspaceStore.getState()).toMatchObject({ open: true, selected: 'phone-one' });
+  usePhoneWorkspaceStore.getState().hide();
+  expect(usePhoneWorkspaceStore.getState()).toMatchObject({ open: false, selected: 'phone-one' });
 });
 
 it('keeps a draft conversation pollable after its initial not-found response', async () => {

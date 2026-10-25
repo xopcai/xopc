@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { normalizePhoneAppAccess } from './app-access.js';
 
 import { DurableState } from '../storage/sqlite/durable-state.js';
-import { PhoneDeviceSchema, PhoneError, type PhoneDevice, type PhoneReport } from './contracts.js';
+import { PhoneDeviceSchema, PhoneError, type PhoneDevice, type PhoneReport, type PhoneExecutionMode } from './contracts.js';
 
 function parseDevice(value: PhoneDevice): PhoneDevice {
   const { agentIds: _removed, ...device } = value as PhoneDevice & { agentIds?: unknown };
@@ -38,6 +38,11 @@ export class PhoneRepository {
     this.get(id); this.devices.delete(id);
     if (this.defaultDevice() === id) this.preferences.delete('defaultDevice');
   }
+  executionMode(owner: string): PhoneExecutionMode | undefined {
+    const mode = this.preferences.get(`executionMode:${owner}`);
+    return mode === 'direct' || mode === 'collaborative' ? mode : undefined;
+  }
+  setExecutionMode(owner: string, mode: PhoneExecutionMode): void { this.preferences.set(`executionMode:${owner}`, mode); }
   defaultDevice(): string | undefined { return this.preferences.get('defaultDevice'); }
   setDefault(id: string): void { this.get(id); this.preferences.set('defaultDevice', id); }
   acquire(serial: string): string {
@@ -60,7 +65,7 @@ export class PhoneRepository {
   }
   report(value: PhoneReport): void {
     // Screen facts are transient; only bounded operational metadata survives restart.
-    const { facts: _facts, message: _message, readings: _readings, ...metadata } = value;
+    const { facts: _facts, message: _message, readings: _readings, goalPreview: _goal, task: _task, feedback: _feedback, ...metadata } = value;
     this.reports.set(value.sessionId, metadata);
     const all = this.reports.entries();
     for (const [id] of all.slice(0, Math.max(0, all.length - 50))) this.reports.delete(id);

@@ -15,7 +15,7 @@ export function registerPhoneDependencyRoutes(parent: Hono, deps: AuthenticatedR
   const app = new Hono();
   const base = '/api/runtime-tools/phone-dependencies';
   const manager = () => new PhoneDependencyManager({ stateDir: resolveStateDir(), config: deps.service.currentConfig.runtimeTools, adbPath: deps.service.currentConfig.phone.adbPath });
-  const adbBusy = () => getPhoneRuntime().reports().some(report => !['closed', 'cancelled', 'failed', 'outcome_unknown'].includes(report.status));
+  const adbBusy = () => getPhoneRuntime().reports().some(report => report.status !== 'closed');
   app.use(`${base}/*`, bodyLimit({ maxSize: 8192 }));
   const admin: MiddlewareHandler = async (c, next) => {
     const principal = getGatewayPrincipal(c);

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { usePhoneWorkspaceStore } from '@/features/phone/phone-workspace-store';
 
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -40,7 +41,7 @@ function read(): Stored {
       const p = value as WorkspacePane;
       if (!p || !Array.isArray(p.tabs)) continue;
       const tabs = p.tabs.filter((t) => t && typeof t.id === 'string' && typeof t.title === 'string'
-        && ((t.kind === 'phone' && typeof t.phoneSessionId === 'string') || (t.kind === 'file' && typeof t.path === 'string') || (t.kind === 'sidechat' && typeof t.sideChatId === 'string') || t.kind === 'home' || t.kind === 'files'));
+        && ((t.kind === 'file' && typeof t.path === 'string') || (t.kind === 'sidechat' && typeof t.sideChatId === 'string') || t.kind === 'home' || t.kind === 'files'));
       panes[scope] = { open: p.open === true && tabs.length > 0, tabs, activeId: tabs.some((t) => t.id === p.activeId) ? p.activeId : tabs[0]?.id ?? null };
     }
     return { ...defaults, panes };
@@ -80,7 +81,7 @@ type State = Stored & {
   keepFileOpen: (id: string) => void;
   scope: string;
   migrateScope: (from: string, to: string) => void;
-  openPhone: (phoneSessionId: string, title: string, scope: string, activate?: boolean) => void;
+  openPhone: (phoneSessionId: string, title: string, scope: string, activate?: boolean, showWindow?: boolean) => void;
   openTools: (scope?: string) => string;
   openFiles: (scope?: string) => void;
   openBrowser: (url?: string, scope?: string, returnTo?: string) => string;
@@ -131,13 +132,16 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
       set({ panes, scope: get().scope === from ? to : get().scope });
       persist(get());
     },
-    openPhone: (phoneSessionId, title, scope, activate = true) => {
+    openPhone: (phoneSessionId, title, scope, activate = true, showWindow = true) => {
       const id = `phone:${phoneSessionId}`;
-      commit(scope, pane => ({
-        ...pane, open: activate ? true : pane.open,
-        activeId: activate || !pane.activeId ? id : pane.activeId,
-        tabs: pane.tabs.some(tab => tab.id === id) ? pane.tabs : [...pane.tabs, { id, kind: 'phone', phoneSessionId, title, visitedAt: Date.now(), returnTo: pane.activeId ?? undefined }],
+      commit(scope, p => ({
+        open: activate || p.open,
+        activeId: activate ? id : p.activeId,
+        tabs: p.tabs.some(t => t.id === id)
+          ? p.tabs.map(t => t.id === id ? { ...t, title } : t)
+          : [...p.tabs, { id, kind: 'phone', phoneSessionId, title, visitedAt: Date.now() }],
       }));
+      if (showWindow) usePhoneWorkspaceStore.getState().show(phoneSessionId, activate, /^[\da-f]{8}-[\da-f-]{27}$/i.test(scope) ? scope : undefined);
     },
     openTools: (scope = get().scope) => {
       const id = crypto.randomUUID();
@@ -182,10 +186,17 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
       if (open && !get().panes[scope]?.tabs.length) { get().openTools(scope); return; }
       commit(scope, (p) => ({ ...p, open, activeId: p.activeId ?? p.tabs[0]?.id ?? null }));
     },
-    activate: (id, scope = get().scope) => commit(scope, (p) => ({
+    activate: (id, scope = get().scope) => {
+      const tab = get().panes[scope]?.tabs.find(t => t.id === id);
+      if (tab?.kind === 'phone') {
+        usePhoneWorkspaceStore.getState().setDisplayMode('docked');
+        usePhoneWorkspaceStore.getState().show(tab.phoneSessionId, true, /^[\da-f]{8}-[\da-f-]{27}$/i.test(scope) ? scope : undefined);
+      }
+      commit(scope, (p) => ({
       ...p, open: Boolean(id && p.tabs.some((t) => t.id === id)), activeId: id && p.tabs.some((t) => t.id === id) ? id : p.activeId,
       tabs: p.tabs.map((t) => t.id === id ? { ...t, visitedAt: Date.now() } : t),
-    })),
+    }));
+    },
     openFile: (file, scope = get().scope) => {
       const pane = get().panes[scope] ?? EMPTY_WORKSPACE_PANE;
       const existing = pane.tabs.find((t) => t.kind === 'file' && (fileTabKey(t) === fileTabKey(file) || t.aliases?.includes(fileTabKey(file))));

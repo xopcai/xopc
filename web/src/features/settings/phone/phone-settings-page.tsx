@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronDown, FlaskConical, Play, Plus, RefreshCw, ShieldCheck, Smartphone, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import { PhoneDependenciesCard } from '@/features/settings/runtime-tools/phone-d
 
 import { AddPhoneDialog } from './add-phone-dialog';
 import { WirelessReconnectDialog } from './wireless-reconnect-dialog';
-import { PhoneScreenDialog } from './phone-screen-dialog';
+import { usePhoneWorkspaceStore } from '@/features/phone/phone-workspace-store';
 import { PhoneAppPicker } from './phone-app-picker';
 import { PhoneTextInput } from './phone-text-input';
 import { PhoneModelConnection } from './phone-model-connection';
@@ -94,7 +94,7 @@ export function PhoneSettingsPage() {
   const [expectText, setExpectText] = useState('');
   const [sessionId, setSessionId] = useState(() => sessionStorage.getItem('phone-settings-session') ?? '');
   const session = useSWR(sessionId ? ['phone-session', sessionId] : null, () => phoneRequest<PhoneReport>(`/sessions/${sessionId}`), { refreshInterval: 1500 });
-  const [previewDevice, setPreviewDevice] = useState<PhoneDevice>();
+  const navigate = useNavigate();
   const [diagnostics, setDiagnostics] = useState<Record<string, { pending: boolean; text: string; error?: boolean }>>({});
   const report = session.data;
   const running = report?.status === 'running';
@@ -150,8 +150,24 @@ export function PhoneSettingsPage() {
 
     </section>
 
+    <section className={panelClass}>
+      <label className="block space-y-2 text-sm"><span>{zh ? '默认执行方式' : 'Default execution strategy'}</span>
+        {!settings.data ? <Skeleton className="h-10 w-full" /> : <Select aria-label={zh ? '默认执行方式' : 'Default execution strategy'} value={settings.data.config.executionMode ?? 'collaborative'} disabled={busy} onChange={event => { const executionMode = event.target.value; void perform(async () => { await phoneRequest('/settings', { ...settings.data!.config, executionMode }, 'PATCH'); await settings.mutate(); }); }}>
+          <SelectOption value="collaborative">{zh ? '主 Agent 协作（默认）' : 'Main Agent collaboration (default)'}</SelectOption>
+          <SelectOption value="direct">{zh ? '直接执行' : 'Direct execution'}</SelectOption>
+        </Select>}
+        <p className="text-xs text-fg-muted">{zh ? '协作：主 Agent 拆解目标并根据反馈继续。直接执行：手机模型自行规划完整手机任务。修改只影响新任务，聊天可覆盖。' : 'Collaboration: the main Agent plans small goals using feedback. Direct: the phone model plans the full phone task. Changes affect new tasks; chats can override.'}</p>
+      </label>
+    </section>
+
     <section aria-label={zh ? '手机模型配置' : 'Phone model configuration'} className={panelClass}>
       <h2 className="text-sm font-semibold">{zh ? '操作模型' : 'Phone model'}</h2>
+      {settings.data && <label className="block space-y-2 text-sm"><span>{zh ? '连接保持时间' : 'Connection lifetime'}</span>
+        <Select aria-label={zh ? '连接保持时间' : 'Connection lifetime'} value={String(settings.data.config.idleDisconnectMs ?? 0)} disabled={busy || running} onChange={event => { const idleDisconnectMs = Number(event.target.value); void perform(async () => { await phoneRequest('/settings', { ...settings.data!.config, idleDisconnectMs }, 'PATCH'); await settings.mutate(); }); }}>
+          <SelectOption value="0">{zh ? '保持连接，直到手动断开' : 'Keep connected until disconnected'}</SelectOption>
+          {[15, 30, 60].map(minutes => <SelectOption key={minutes} value={String(minutes * 60_000)}>{zh ? `闲置 ${minutes} 分钟后断开` : `Disconnect after ${minutes} idle minutes`}</SelectOption>)}
+        </Select><p className="text-xs text-fg-muted">{zh ? '任务结束后保留连接；执行任务、人工操作和查看画面期间不计闲置。' : 'Tasks finish without disconnecting. Running tasks, manual control and viewing the screen do not count as idle.'}</p>
+      </label>}
       {!defaults.data && !defaults.error ? <Skeleton className="h-20 w-full" /> : <PhoneModelConnection value={savedModel} onSelect={setModel} onSave={saveModel} zh={zh} disabled={busy || running || !defaults.data} />}
       {defaults.error && <p role="alert" className="text-sm text-danger">{String(defaults.error)}</p>}
 
@@ -174,9 +190,19 @@ export function PhoneSettingsPage() {
         {devices.data?.devices.map(device => <div key={device.id} className="border-b border-edge-subtle pb-4 last:border-b-0 last:pb-0">
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3"><Smartphone className="mt-0.5 size-5 shrink-0 text-fg-muted" /><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{device.name}{device.id === devices.data?.defaultDeviceId && <span className="ml-2 inline-block rounded-md bg-surface-inset px-2 py-0.5 text-xs font-normal text-fg-muted">{zh ? '默认' : 'Default'}</span>}</p><p className="mt-1 break-all text-xs text-fg-muted">{device.connection ? `${zh ? '阿里云' : 'Alibaba Cloud'} · ADB · ` : ''}{device.serial} · {device.enabled ? (device.connection ? (zh ? '已配置 · 按需连接' : 'Configured · Connects on demand') : ({ device: zh ? '已连接' : 'Connected', offline: zh ? '离线' : 'Offline', unauthorized: zh ? '待授权' : 'Unauthorized' }[devices.data?.discovery.find(item => item.serial === device.serial)?.state ?? ''] ?? (zh ? '未连接' : 'Disconnected'))) : (zh ? '已禁用' : 'Disabled')}</p></div></div>
-          <div className="flex shrink-0 items-center gap-1 self-end sm:self-start">
+          <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1 self-end sm:self-start">
             <Button variant="ghost" disabled={busy} onClick={() => setEditing({ device, serial: device.serial, name: device.name })}>{zh ? '管理' : 'Manage'}</Button>
-            <Button variant="ghost" disabled={busy || running} onClick={() => setPreviewDevice(device)}>{zh ? '查看屏幕' : 'View screen'}</Button>
+            <Button variant="ghost" disabled={busy || !device.enabled} onClick={() => { void perform(async () => {
+              await phoneRequest(`/devices/${device.id}/view`, {});
+              window.dispatchEvent(new Event('phone-connections-changed'));
+              usePhoneWorkspaceStore.getState().show(device.id);
+            }); }}>{zh ? '查看屏幕' : 'View screen'}</Button>
+            <Button variant="ghost" disabled={busy || !device.enabled} onClick={() => { void perform(async () => {
+              const created = await phoneRequest<{ conversationId: string }>(`/devices/${device.id}/conversations`, {});
+              window.dispatchEvent(new Event('session-created'));
+              usePhoneWorkspaceStore.getState().hide();
+              navigate(`/chat/${created.conversationId}`);
+            }); }}>{zh ? '对话控制手机' : 'Control in chat'}</Button>
             <DropdownMenu.Root modal={false}>
               <DropdownMenu.Trigger asChild><Button variant="ghost" disabled={busy} aria-label={zh ? `${device.name}的更多操作` : `More actions for ${device.name}`}>{zh ? '更多' : 'More'}<ChevronDown className="size-3.5" aria-hidden /></Button></DropdownMenu.Trigger>
               <DropdownMenu.Portal>
@@ -218,7 +244,6 @@ export function PhoneSettingsPage() {
       </div>
     </details>
 
-    {previewDevice && <PhoneScreenDialog device={previewDevice} sessionId={report?.deviceId === previewDevice.id && !['closed', 'cancelled', 'failed', 'outcome_unknown'].includes(report.status) ? sessionId : undefined} zh={zh} onClose={() => setPreviewDevice(undefined)} />}
     {adding && <AddPhoneDialog onAdded={() => { void devices.mutate(); }} zh={zh} onClose={() => setAdding(false)} onSelect={device => { setAdding(false); setEditing({ serial: device.serial, name: device.name }); }} />}
     {reconnecting && <WirelessReconnectDialog device={reconnecting} zh={zh} onClose={() => setReconnecting(undefined)} onConnected={async () => { await devices.mutate(); }} />}
     {editing && settings.data && <DeviceForm {...editing} zh={zh} onSave={async () => { await devices.mutate(); }} onClose={() => setEditing(undefined)} />}

@@ -42,6 +42,27 @@ function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests
 }
 
 describe('phone runtime reliability integration', () => {
+  it('dispatches the native Up button across changing Settings uptime without replanning or takeover', async () => {
+    const about = { ...element(''), description: '关于手机', clickable: false, bounds: [0, 0, 1000, 100] as PhoneElement['bounds'] };
+    const label = { ...element('开机累计时长', 'android:id/title'), clickable: false, bounds: [36, 700, 216, 741] as PhoneElement['bounds'] };
+    const value = { ...element('35:47:09', 'android:id/summary'), clickable: false, bounds: [36, 741, 118, 770] as PhoneElement['bounds'] };
+    const up = { ...element('', ''), description: '向上导航' };
+    const before = observation([about, label, value, up], 'com.android.settings');
+    const f = fixture(async () => {
+      f.set({ ...before, elements: [about, label, { ...value, text: '35:47:12' }, up] });
+      return { kind: 'action', action: { type: 'tap', point: [200, 300] } };
+    }, { semanticControls: false });
+    const device = f.repository.list()[0];
+    f.repository.save({ ...device, allowedApps: ['com.android.settings'] }, device.id);
+    f.set(before);
+    vi.mocked(f.driver.execute).mockImplementation(async () => { f.set(observation([element('显示')], 'com.android.settings')); });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Return to Settings', expectText: '显示' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ verified: true, actions: 1, modelRequests: 1, diagnostics: { stalePredictions: 0 } });
+    expect(result.humanActions ?? 0).toBe(0);
+    expect(f.driver.execute).toHaveBeenCalledOnce();
+  });
+
   it('automatically reads an empty native screen without sending device input and keeps source metadata transient', async () => {
     const readScreen = vi.fn<NonNullable<PhoneModelAdapter['readScreen']>>(async () => 'Android version: 15');
     const f = fixture(vi.fn(), { readScreen });
@@ -421,7 +442,7 @@ describe('phone runtime reliability integration', () => {
     controller.abort();
     release(observation([element('Saved')]));
     await rejected;
-    expect(f.runtime.status('reliability')).toMatchObject({ verified: false, status: 'cancelled' });
+    expect(f.runtime.status('reliability')).toMatchObject({ verified: false, status: 'ready', controlOwner: 'none', errorCode: 'PHONE_CANCELLED' });
     expect(f.driver.execute).not.toHaveBeenCalled();
     expect(predict).not.toHaveBeenCalled();
   });

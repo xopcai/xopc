@@ -12,11 +12,30 @@ function ambientClock(node: PhoneElement): boolean {
     && clock.test(node.text) && (!node.description || clock.test(node.description));
 }
 
-function semanticElements(observation: PhoneObservation): PhoneElement[] {
-  return observation.elements.map(node => ambientClock(node) ? { ...node, text: '', description: '' } : node);
+function inert(node: PhoneElement): boolean {
+  return !node.clickable && !node.editable && !node.focused && !node.password;
 }
 
-/** Ignore only recognized inert system-clock text, never arbitrary application content. */
+function settingsUptime(observation: PhoneObservation): PhoneElement | undefined {
+  if (observation.package !== 'com.android.settings'
+    || !observation.elements.some(node => inert(node) && [node.text, node.description].some(text => /^(?:关于手机|关于设备|About phone|About device)$/i.test(text)))) return;
+  const labels = observation.elements.filter(node => inert(node) && node.resourceId === 'android:id/title'
+    && /^(?:开机累计时长|已开机时间|正常运行时间|Up time|Uptime)$/i.test(node.text));
+  if (labels.length !== 1) return;
+  const label = labels[0];
+  const values = observation.elements.filter(node => inert(node) && node.resourceId === 'android:id/summary'
+    && /^\d{1,6}:[0-5]\d:[0-5]\d$/.test(node.text) && (!node.description || node.description === node.text)
+    && node.bounds[0] === label.bounds[0] && node.bounds[1] >= label.bounds[3]
+    && node.bounds[1] - label.bounds[3] <= Math.max(16, node.bounds[3] - node.bounds[1]));
+  return values.length === 1 ? values[0] : undefined;
+}
+
+function semanticElements(observation: PhoneObservation): PhoneElement[] {
+  const uptime = settingsUptime(observation);
+  return observation.elements.map(node => ambientClock(node) || node === uptime ? { ...node, text: '', description: '' } : node);
+}
+
+/** Ignore recognized inert system clocks and the labeled Settings uptime value. */
 export function observationSignature(observation: PhoneObservation): string {
   return createHash('sha256').update(JSON.stringify([observation.package, observation.width, observation.height, observation.rotation,
     observation.elements.length ? semanticElements(observation)
@@ -27,7 +46,7 @@ function atPoint(elements: PhoneElement[], x: number, y: number): PhoneElement[]
   return elements.filter(node => node.bounds[0] <= x && x < node.bounds[2] && node.bounds[1] <= y && y < node.bounds[3]);
 }
 
-/** Preserve full page semantics; only inert system-clock updates may be ignored. */
+/** Preserve page semantics and geometry while ignoring recognized ambient counters. */
 export function canDispatchPhoneAction(action: PhoneAction, before: PhoneObservation, fresh: PhoneObservation): boolean {
   if (!geometryMatches(before, fresh)) return false;
   if (JSON.stringify(before.elements) === JSON.stringify(fresh.elements)) {
@@ -38,11 +57,12 @@ export function canDispatchPhoneAction(action: PhoneAction, before: PhoneObserva
     const [x, y] = [action.point[0] * before.width / 1000, action.point[1] * before.height / 1000];
     const targets = atPoint(before.elements, x, y);
     // No accessibility target, ambiguous duplicate IDs, or a new overlay keeps the conservative guard.
-    const identified = targets.filter(node => node.resourceId && node.clickable && !node.password);
+    const identified = targets.filter(node => (node.resourceId || node.description || node.text) && node.clickable && !node.password);
     if (identified.length !== 1) return false;
     const target = identified[0];
-    if (before.elements.filter(node => node.resourceId === target.resourceId).length !== 1
-      || fresh.elements.filter(node => node.resourceId === target.resourceId).length !== 1) return false;
+    const sameIdentity = (node: PhoneElement) => target.resourceId ? node.resourceId === target.resourceId
+      : node.clickable && node.text === target.text && node.description === target.description;
+    if (before.elements.filter(sameIdentity).length !== 1 || fresh.elements.filter(sameIdentity).length !== 1) return false;
     return JSON.stringify(targets) === JSON.stringify(atPoint(fresh.elements, x, y));
   }
   if (action.type === 'typeText') {
@@ -51,7 +71,7 @@ export function canDispatchPhoneAction(action: PhoneAction, before: PhoneObserva
     return previous.length === 1 && current.length === 1 && Boolean(previous[0].resourceId)
       && JSON.stringify(previous) === JSON.stringify(current);
   }
-  return false;
+  return action.type === 'back' || action.type === 'swipe' || action.type === 'wait';
 }
 
 /** Evaluate all native nodes, separately from the truncated display facts. */

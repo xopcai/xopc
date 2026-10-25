@@ -6,7 +6,9 @@ import { PhoneError, type PhoneObservation } from './contracts.js';
 export class PhoneOperationBudget {
   readonly controller = new AbortController();
   private remaining: number;
-  constructor(durationMs = 300_000) { this.remaining = durationMs; }
+  private readonly duration: number;
+  get elapsedMs(): number { return this.duration - this.remaining + (this.timer ? Date.now() - this.started : 0); }
+  constructor(durationMs = 300_000) { this.remaining = durationMs; this.duration = durationMs; }
   private started = 0;
   private timer?: ReturnType<typeof setTimeout>;
   resume(): void {

@@ -384,8 +384,13 @@ it('routes MCP draft testing, OAuth, tools, deletion and commit without overlapp
 
 
 it('maps all Phone Use route families without swallowing nearby paths', () => {
-  for (const path of ['/api/phone/cloud/aliyun/test', '/api/phone/cloud/aliyun/add', '/api/phone/cloud/aliyun/tests/token', '/api/phone/conversations/conversation-id', '/api/phone/conversations/conversation-id/session-id/frame', '/api/phone/conversations/conversation-id/session-id/control', '/api/phone/conversations/conversation-id/session-id/video-ticket', '/api/phone/live/v1/ws', '/api/phone/settings', '/api/phone/apps', '/api/phone/devices/id/apps', '/api/phone/devices/id/input-status', '/api/phone/devices', '/api/phone/devices/id', '/api/phone/devices/id/default', '/api/phone/devices/id/diagnostics', '/api/phone/devices/id/screen', '/api/phone/models', '/api/phone/models/autoglm-preset', '/api/phone/sessions', '/api/phone/sessions/id', '/api/phone/sessions/id/execute', '/api/phone/sessions/id/screen']) {
+  for (const path of ['/api/phone/connections', '/api/phone/devices/id/view', '/api/phone/devices/id/conversations', '/api/phone/devices/id/disconnect', '/api/phone/conversations/device%3Adevice-id', '/api/phone/cloud/aliyun/test', '/api/phone/cloud/aliyun/add', '/api/phone/cloud/aliyun/tests/token', '/api/phone/conversations/conversation-id', '/api/phone/conversations/conversation-id/session-id/frame', '/api/phone/conversations/conversation-id/session-id/control', '/api/phone/conversations/conversation-id/session-id/video-ticket', '/api/phone/live/v1/ws', '/api/phone/settings', '/api/phone/apps', '/api/phone/devices/id/apps', '/api/phone/devices/id/input-status', '/api/phone/devices', '/api/phone/devices/id', '/api/phone/devices/id/default', '/api/phone/devices/id/diagnostics', '/api/phone/devices/id/screen', '/api/phone/models', '/api/phone/models/autoglm-preset', '/api/phone/sessions', '/api/phone/sessions/id', '/api/phone/sessions/id/execute', '/api/phone/sessions/id/screen']) {
     expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('phone');
   }
   for (const path of ['/api/phones', '/api/phone-extra/settings', '/api/browser/status']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('phone');
+});
+
+it('maps phone execution strategy changes without capturing neighboring routes', () => {
+  expect(findAuthenticatedLazyRouteBundle('/api/phone/conversations/id/session/execution-mode')?.id).toBe('phone');
+  expect(findAuthenticatedLazyRouteBundle('/api/phone-other/conversations/id/session/execution-mode')).toBeUndefined();
 });

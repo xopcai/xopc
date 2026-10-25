@@ -68,6 +68,8 @@ vi.mock('@/features/notes/note-preview-modal', () => ({ NotePreviewModal: () => 
 vi.mock('@/features/notes/global-quick-capture', () => ({ GlobalQuickCaptureHost: () => null }));
 vi.mock('@/features/discussions/global-discussion-capture', () => ({ GlobalDiscussionCaptureHost: () => null }));
 vi.mock('@/features/gateway/gateway-realtime-bridge', () => ({ GatewayRealtimeBridge: () => null }));
+// Phone networking is covered separately; shell routing must not contact a live Gateway with fixture credentials.
+vi.mock('@/features/phone/global-phone-workspace', () => ({ GlobalPhoneWorkspace: () => null }));
 vi.mock('@/features/notifications/product-notification-coordinator', () => ({ ProductNotificationCoordinator: () => null }));
 vi.mock('@/features/support/support-report-host', () => ({ SupportReportHost: () => null }));
 vi.mock('@/features/voice/global-read-aloud-player', () => ({ GlobalReadAloudPlayer: () => null }));
