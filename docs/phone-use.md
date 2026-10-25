@@ -202,3 +202,11 @@ Named `requestedOutputs` accept unique keys, descriptions and optional exact nat
 To switch a current task, first select the next strategy and choose **Switch current task → Pause and switch**. The Runtime pauses, waits for dispatched input, discards predictions and coordinates, and observes again. It preserves taskId, restrictions and consumed budgets, and remains paused until the user explicitly hands back in the phone panel. Continue using the same taskId after handback. Human takeover, stale control epochs and unknown dispatch cannot be bypassed by switching. The read-only global viewer cannot change the source chat's strategy.
 
 For an explicit user request through chat, `set_mode` sets `executionMode` for subsequent tasks; `applyCurrent: true` invokes the same pause-and-switch flow. `resume` cannot bypass the post-switch panel handback.
+
+## HarmonyOS phone workspace
+
+On a compatible Gateway, the HarmonyOS conversation header shows a phone icon when that conversation has Phone Use. Discovery stays in the conversation; tap the icon or swipe left to view the phone. Swipe right to return while viewing. During manual control, gestures operate the remote phone and the header returns to chat.
+
+New Android, iOS and HarmonyOS pairings include cloud phone viewing and control by default; no separate phone authorization is needed. In Gateway paired-device details, **Cloud phone access** can be changed to **View only** or **Not allowed** while preserving other device capabilities. Revoking the device also disconnects its phone streams and invalidates its credentials. Explicitly disabled or restricted existing grants remain unchanged. Registration, ADB keys and phone settings remain administrator-only. Permission to control does not acquire ownership: the user still selects **Take over** to pause the Agent and operate the phone.
+
+The phone page uses native H.264 video with an explicit snapshot fallback. Takeover pauses the Agent and waits for outstanding input. **Done, continue task** hands back and re-observes before continuing. Returning to chat or backgrounding releases manual ownership and leaves the task paused. A persisted assistance request can be reconnected with Take over. Reconnect does not reboot a cloud instance or replay inputs. Text entry remains subject to the existing non-password-field policy.

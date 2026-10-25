@@ -204,6 +204,7 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
       deps.service.endpointTools.registry.revokePrincipal(principal.deviceId);
       deps.service.realtime.disconnectPrincipal(principal.deviceId);
       deps.service.voiceRealtime.disconnectPrincipal(principal.deviceId);
+      deps.service.phoneStreams.disconnectPrincipal(principal.deviceId);
     }
     return c.json({ ok: true, revoked });
   });

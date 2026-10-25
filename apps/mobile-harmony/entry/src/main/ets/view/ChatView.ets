@@ -1,3 +1,5 @@
+import { XopcPhoneViewModel } from '../viewmodel/phoneViewModel';
+import { XopcPhoneView } from './PhoneView';
 import { XopcChatRenderKeys } from '../common/chatRenderKeys';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
@@ -72,6 +74,8 @@ interface XopcChatMessageMenuAction {
 
 @ComponentV2
 export struct XopcChatView {
+  @Local phone: XopcPhoneViewModel = new XopcPhoneViewModel();
+  @Local phonePage: number = 0;
   @Local colors: XopcThemeColors = appThemeColors;
   @Param requestedId: string = '';
   @Param taskId: string = '';
@@ -780,6 +784,7 @@ export struct XopcChatView {
   }
   private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
   private dismissOverlay(): boolean {
+    if (this.phonePage === 1) { this.phonePage = 0; return true; }
     if (this.personalSettingsOpen) { this.personalSettingsOpen = false; return true; }
     if (this.searchOpen) { this.closeMessageSearch(); return true; }
     if (this.panelOpen) { this.setPanel(false); return true; }
@@ -875,7 +880,7 @@ export struct XopcChatView {
     this.setPanel(true);
     this.chooseAction(this.requestedAction);
   }
-  aboutToDisappear(): void { this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+  aboutToDisappear(): void { this.phone.dispose(); this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
 
   private async newConversation(agentId: string = this.options.agentId, projectId: string | null = this.chat.projectId || null, executionMode?: string): Promise<void> {
     if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
@@ -1690,7 +1695,30 @@ export struct XopcChatView {
     }
   }
 
+  @Monitor('chat.selectedId', 'chat.connection', 'activePage', 'layout.foreground', 'phonePage')
+  syncPhoneWorkspace(): void {
+    this.phone.bind(this.chat.selectedId, this.activePage && this.layout.foreground, this.phonePage === 1);
+    if (this.phonePage === 1) this.dismissComposer();
+  }
+  @Monitor('phone.summary')
+  onPhoneAvailability(): void { if (this.phone.summary && !this.phone.summary.available) this.phonePage = 0; }
+
   build() {
+    Swiper() {
+      this.chatWorkspace()
+      if (this.phone.summary?.available || this.phonePage === 1) {
+        Column() {
+          XopcPhoneView({ phone: this.phone, onReturn: (): void => { this.phonePage = 0; } })
+        }.width('100%').height('100%').padding({ top: this.chatTopInset + 8 })
+      }
+    }.index(this.phonePage).loop(false).indicator(false).cachedCount(1)
+      .disableSwipe(!this.phone.summary?.available || this.phone.state?.ownControl === true || this.phone.busy)
+      .onChange((index: number): void => { this.phonePage = index; })
+      .width('100%').height(LayoutPolicy.matchParent)
+  }
+
+  @Builder
+  chatWorkspace() {
     Stack({ alignContent: Alignment.TopStart }) {
     Column() {
       if (this.hasConnectionIssue() || this.chat.cachedHistory || this.chat.error) {
@@ -1746,24 +1774,28 @@ export struct XopcChatView {
         Column().id('chat-status-bar-background').width('100%').height(this.chatTopInset)
           .align(Alignment.TopStart).backgroundColor(this.colors.surface).hitTestBehavior(HitTestMode.None)
         Row({ space: 12 }) {
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 8 }) {
-              XopcPersonalAgentAvatar({ extent: 36, compact: true, activePage: this.activePage,
-                agentId: this.personalConversation ? this.personalAgent?.agentId ?? '' : this.chat.agentId || this.options.agentId,
-                appearance: this.personalConversation ? this.personalAgent?.appearance ?? 'loopi'
-                  : this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === (this.chat.agentId || this.options.agentId))?.avatar?.startsWith('xopc:loopi:') ? 'loopi' : 'configured',
-                avatarReference: this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === (this.chat.agentId || this.options.agentId))?.avatar ?? '',
-                revision: this.personalConversation ? this.personalAgent?.revision ?? 0 : gatewaySession.connectionRevision() })
-              Text(this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled'))
-                .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: 140 })
-            }.padding({ left: 6, right: 14 })
-          }.height(48).backgroundColor(this.colors.panel)
+          Button({ type: ButtonType.Circle }) {
+            XopcPersonalAgentAvatar({ extent: 36, compact: true, activePage: this.activePage,
+              agentId: this.personalConversation ? this.personalAgent?.agentId ?? '' : this.chat.agentId || this.options.agentId,
+              appearance: this.personalConversation ? this.personalAgent?.appearance ?? 'loopi'
+                : this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === (this.chat.agentId || this.options.agentId))?.avatar?.startsWith('xopc:loopi:') ? 'loopi' : 'configured',
+              avatarReference: this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === (this.chat.agentId || this.options.agentId))?.avatar ?? '',
+              revision: this.personalConversation ? this.personalAgent?.revision ?? 0 : gatewaySession.connectionRevision() })
+          }.width(48).height(48).padding(6).backgroundColor(this.colors.panel)
             .border({ width: 1, color: this.colors.border }).borderRadius(24).clip(true).onClick((): void => {
               if (this.personalConversation) this.personalSettingsOpen = true; else this.openSheet('agent');
             })
           Blank().layoutWeight(1)
           Row() {
+            if (this.phone.summary?.available) {
+              Button({ type: ButtonType.Circle }) {
+                Stack({ alignContent: Alignment.TopEnd }) {
+                  SymbolGlyph($r('sys.symbol.phone_1')).fontSize(22).fontColor([this.colors.foreground])
+                  if (this.phone.summary.needsUser) { Circle().width(7).height(7).fill(this.colors.accent) }
+                }
+              }.id('chat-header-phone').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+                .accessibilityText($r('app.string.phone_open')).onClick((): void => { this.dismissComposer(); this.phonePage = 1; })
+            }
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.foreground])
             }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).id('chat-header-search')

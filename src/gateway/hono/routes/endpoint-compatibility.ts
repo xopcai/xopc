@@ -19,6 +19,8 @@ export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
       turnDeviceContextV1: true,
       endpointEnvironmentV1: true,
       locationSharingV1: true,
+      mobilePhoneWorkspaceV1: true,
+      phoneMediaProtocolVersion: 1,
       deviceStateToolsV1: true,
       hardwareBridgeV1: true,
       deviceLocationTasksV1: true,

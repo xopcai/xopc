@@ -13,6 +13,8 @@ export const GATEWAY_SCOPES = [
   'automations.write',
   'notifications.self',
   'device.self',
+  'phone.view',
+  'phone.control',
   'gateway.admin',
 ] as const;
 
@@ -35,6 +37,8 @@ export const DEFAULT_MOBILE_SCOPES = [
   'automations.write',
   'notifications.self',
   'device.self',
+  'phone.view',
+  'phone.control',
 ] as const satisfies readonly GatewayScope[];
 
 export const DEFAULT_BROWSER_EXTENSION_SCOPES = [

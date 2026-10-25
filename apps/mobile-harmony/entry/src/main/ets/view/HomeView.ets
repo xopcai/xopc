@@ -433,7 +433,7 @@ export struct XopcHomeView {
         XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
           taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: false,
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-      }.hideTitleBar(true).onBackPressed((): boolean => { this.pathStack.pop(); return true; })
+      }.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.pathStack.pop(); return true; })
     } else if (page === 'tasks' || page === 'projects' || page === 'automations' || page === 'project-settings'
       || page === 'task-create' || page === 'automation-create') {
       XopcWorkspaceView({ section: page === 'tasks' || page === 'task-create' ? 'tasks'

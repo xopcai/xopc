@@ -1,7 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ShieldOff, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
+import { Select, SelectOption } from '@/components/ui/popover-select';
+import { fetchJson } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
+import { mutate } from 'swr';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -88,6 +92,7 @@ export function DeviceDetailDrawer({
                 </div>
               </section>
 
+              {device.access && !device.access.revokedAt && device.platform !== 'chrome' ? <DevicePhoneAccess key={device.id} device={device} zh={language === 'zh'} /> : null}
               <section>
                 <h3 className="text-sm font-semibold text-fg">{copy.endpointsTitle}</h3>
                 <div className="mt-2 space-y-2">
@@ -170,4 +175,29 @@ function DeviceNickname({ device, zh, onRename }: { device: ManagedDevice; zh: b
     </Button>
     {error ? <p role="alert" className="text-sm text-danger">{zh ? '保存失败，请刷新设备信息后重试。' : 'Unable to save. Refresh device information and retry.'}</p> : null}
   </form>;
+}
+
+function DevicePhoneAccess({ device, zh }: { device: ManagedDevice; zh: boolean }) {
+  const initial = device.access?.scopes.includes('phone.control') ? 'control' : device.access?.scopes.includes('phone.view') ? 'view' : 'none';
+  const [access, setAccess] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+  useEffect(() => setAccess(initial), [initial]);
+  return <section className="space-y-2">
+    <h3 className="text-sm font-semibold text-fg">{zh ? '云手机访问' : 'Cloud phone access'}</h3>
+    <p className="text-sm text-fg-muted">{zh ? '移动端配对后默认可查看并接管。可在此关闭，或撤销整个设备的授权。' : 'Mobile pairing includes viewing and control by default. Disable it here or revoke the device entirely.'}</p>
+    <Select value={access} disabled={saving} onChange={async event => {
+      const next = event.target.value;
+      setSaving(true); setError(false);
+      try {
+        await fetchJson(apiUrl(`/api/phone/device-access/${encodeURIComponent(device.id)}`), { method: 'PATCH', body: JSON.stringify({ access: next }) });
+        setAccess(next); await mutate(apiUrl('/api/endpoint-tools/devices'));
+      } catch { setError(true); } finally { setSaving(false); }
+    }}>
+      <SelectOption value="none">{zh ? '不允许' : 'Not allowed'}</SelectOption>
+      <SelectOption value="view">{zh ? '仅查看' : 'View only'}</SelectOption>
+      <SelectOption value="control">{zh ? '查看并接管' : 'View and control'}</SelectOption>
+    </Select>
+    {error ? <p role="alert" className="text-sm text-danger">{zh ? '授权保存失败，请重试。' : 'Unable to save phone access.'}</p> : null}
+  </section>;
 }

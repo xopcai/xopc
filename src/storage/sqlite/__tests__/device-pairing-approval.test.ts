@@ -12,6 +12,7 @@ import {
   revokeDevice,
   rotateDeviceRefreshToken,
   buildRefreshProofMessage,
+  setDevicePhoneAccess,
 } from '../device-access-repository.js';
 import { createDevicePairingSetup } from '../device-pairing-repository.js';
 import { getOrCreateGatewayIdentity } from '../gateway-identity-repository.js';
@@ -34,12 +35,25 @@ describe('computer-approved device pairing', () => {
     return { ...body, signature: crypto.sign('sha256', Buffer.from(buildDevicePairingProof(action, body)),
       { key: keys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') };
   }
-  function request(platform: 'ios' | 'harmonyos' = 'ios') {
+  function request(platform: 'android' | 'ios' | 'harmonyos' = 'ios') {
     return submitDevicePairingRequest(signed('request', { device: {
       displayName: 'Work phone', platform, publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
     } }), now);
   }
   const refreshToken = () => `xopc_rt_${crypto.randomUUID()}_${crypto.randomBytes(32).toString('base64url')}`;
+
+  it.each(['android', 'ios', 'harmonyos'] as const)('defaults %s pairing to cloud phone control and preserves an explicit disable', platform => {
+    const pending = request(platform);
+    decideDevicePairingRequest(pending.requestId, 'approve', pending.revision, now);
+    const complete = signed('complete', { idempotencyKey: crypto.randomUUID(), initialRefreshToken: refreshToken() });
+    operateDevicePairingRequest('complete', complete, now);
+    const device = listDevices()[0];
+    expect(device.scopes).toEqual(expect.arrayContaining(['phone.view', 'phone.control']));
+    expect(device.scopes).not.toContain('gateway.admin');
+    setDevicePhoneAccess(device.id, 'none');
+    operateDevicePairingRequest('complete', complete, now);
+    expect(listDevices()[0].scopes).toEqual(device.scopes.filter(scope => !scope.startsWith('phone.')));
+  });
 
   it('pairs HarmonyOS with mobile scopes and requires the same explicit approval', () => {
     const pending = request('harmonyos');

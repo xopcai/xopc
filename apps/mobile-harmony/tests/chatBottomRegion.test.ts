@@ -215,7 +215,7 @@ describe('chat bottom region composition', () => {
     expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
     expect(sessions).toContain('.cachedCount(5)');
     expect(chat).not.toContain('chat-drawer');
-    expect(home).toContain("}.hideTitleBar(true).onBackPressed((): boolean => { this.pathStack.pop(); return true; })");
+    expect(home).toContain("}.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.pathStack.pop(); return true; })");
     expect(chat).not.toContain('PanGesture(');
   });
 
@@ -240,9 +240,13 @@ describe('chat bottom region composition', () => {
 
   });
 
-  it('shows the conversation title in the header and keeps model selection in the actions sheet', () => {
+  it('shows only the agent logo in the header and keeps model selection in the actions sheet', () => {
     const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.sendFlightActive)'));
-    expect(header).toContain("this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled')");
+    expect(header).toContain('XopcPersonalAgentAvatar({ extent: 36');
+    expect(header).toContain('.width(48).height(48).padding(6)');
+    expect(header).not.toMatch(/\bText\(/);
+    expect(header).not.toContain('this.chat.title');
+    expect(header).not.toContain('this.personalAgent?.displayName');
     expect(header).not.toContain("$r('sys.symbol.line_3_horizontal')");
     expect(header).not.toContain("this.options.modelName(appSettings.effectiveLanguage())");
     expect(header).not.toContain(".id('chat-model-picker')");

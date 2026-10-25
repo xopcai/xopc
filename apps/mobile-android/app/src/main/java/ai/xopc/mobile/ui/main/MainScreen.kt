@@ -376,6 +376,7 @@ private fun AssistantHistorySkeleton() {
 fun MainScreen(
   modifier: Modifier = Modifier,
   connection: ConnectionUiState = ConnectionUiState(),
+  phoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null,
   onPair: (String) -> Unit = {},
   onCancelPairing: () -> Unit = {},
   onConversationSearchChange: (String) -> Unit = {},
@@ -698,7 +699,7 @@ fun MainScreen(
       else R.string.assistant_save_note_error, Toast.LENGTH_SHORT).show()
     onMessageNoteFeedbackHandled(feedback)
   }
-  MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
+  MainContent(phoneRepository = phoneRepository, selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
     onPair = onPair, onCancelPairing = onCancelPairing, onScanPairing = scanPairingCode,
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
@@ -903,6 +904,7 @@ internal fun MainContent(
   selectedTab: HomeTab,
   onSelectTab: (HomeTab) -> Unit,
   connection: ConnectionUiState = ConnectionUiState(),
+  phoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null,
   onPair: (String) -> Unit = {},
   onCancelPairing: () -> Unit = {},
   onScanPairing: () -> Unit = {},
@@ -1382,7 +1384,11 @@ internal fun MainContent(
     if (inputVoiceHeld && inputVoiceElapsed >= 120) finishInputVoice(inputVoiceDestination)
   }
   val focusManager = LocalFocusManager.current
-  val showBottomChrome = connection.profile != null && when (selectedTab) {
+  var phonePage by remember(connection.profile?.gatewayId, connection.selectedConversationId) { mutableStateOf(false) }
+  val phoneController = rememberPhoneWorkspace(phoneRepository, connection.selectedConversationId,
+    connection.profile?.gatewayId, selectedTab == HomeTab.Assistant, phonePage)
+  val phoneUi = phoneWorkspaceState(phoneController)
+  val showBottomChrome = !(selectedTab == HomeTab.Assistant && phonePage) && connection.profile != null && when (selectedTab) {
     HomeTab.Progress -> progressAtRoot
     HomeTab.Notes -> notesAtRoot
     HomeTab.Me -> personalPage == "home"
@@ -1562,7 +1568,8 @@ internal fun MainContent(
         if (connection.profile == null) PairingScreen(title, connection, onPair, onCancelPairing,
           onScanPairing,
           pairingScanning, pairingScanError, insets)
-        else if (selectedTab == HomeTab.Assistant) AssistantScreen(connection,
+        else if (selectedTab == HomeTab.Assistant) PhoneConversationPager(phoneController, phonePage, { phonePage = it }) {
+          AssistantScreen(connection,
           rootInsets, insets, onSelectConversation,
           onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
           onNoteFileContent,
@@ -1595,7 +1602,10 @@ internal fun MainContent(
           assistantReferenceKind, { assistantReferenceKind = it },
           assistantReferenceQuery, { assistantReferenceQuery = it },
           { assistantActionsOpen = it }, onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
-          onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, personalModelRequestRevision, { personalModelRequestRevision = 0 })
+          onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, personalModelRequestRevision, { personalModelRequestRevision = 0 },
+          phoneAvailable = phoneUi.summary?.available == true, phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.summary?.needsUser == true,
+          onOpenPhone = { phonePage = true })
+        }
         else ConversationsScreen(connection, rootInsets, bottomChromeHeight,
           onConversationSearchChange,
           onRefreshConversations, onLoadMoreConversations, {
@@ -2474,7 +2484,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onUpdateAgentProfile: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
   onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
-  onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {}) {
+  onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {},
+  phoneAvailable: Boolean = false, phoneNeedsUser: Boolean = false, onOpenPhone: () -> Unit = {}) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val bottomChromeHeight = bottomChromeInsets.calculateBottomPadding()
@@ -2836,6 +2847,12 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         .background(MaterialTheme.colorScheme.surfaceContainer)
         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
         .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (phoneAvailable) IconButton(onClick = onOpenPhone, modifier = Modifier.testTag("chat-header-phone")) {
+          Box {
+            Icon(painterResource(R.drawable.action_phone), contentDescription = stringResource(R.string.phone_open), modifier = Modifier.size(22.dp))
+            if (phoneNeedsUser) Box(Modifier.align(Alignment.TopEnd).size(6.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
+          }
+        }
         IconButton(onClick = { messageSearchOpen = true }, modifier = Modifier.testTag("chat-header-search")) {
           Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.chat_personal_search), modifier = Modifier.size(22.dp))
         }

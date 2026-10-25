@@ -1,1 +1,8 @@
-{ "name": "entry", "version": "0.1.0", "description": "xopc mobile", "dependencies": {} }
+{
+  "name": "entry",
+  "version": "0.1.0",
+  "description": "xopc mobile",
+  "dependencies": {
+    "libphonevideo.so": "file:./src/main/cpp/types/libphonevideo"
+  }
+}

@@ -408,6 +408,16 @@ private data class RestoredGateway(val profile: GatewayProfile?, val conversatio
 
 class GatewayViewModel(application: Application) : AndroidViewModel(application) {
   private val session = GatewaySession(application)
+  private var phoneRepositoryGateway: String? = null
+  private var cachedPhoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null
+  val phoneRepository: ai.xopc.mobile.gateway.PhoneRepository
+    get() {
+      val id = session.currentProfile()?.gatewayId
+      if (cachedPhoneRepository == null || phoneRepositoryGateway != id) {
+        phoneRepositoryGateway = id; cachedPhoneRepository = ai.xopc.mobile.gateway.PhoneRepository(session)
+      }
+      return checkNotNull(cachedPhoneRepository)
+    }
   private val conversations = ConversationRepository(session, application)
   private val clarificationRepository = ClarificationRepository(session)
   private var clarificationJob: Job? = null

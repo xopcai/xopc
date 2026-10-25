@@ -35,6 +35,7 @@ type Session = {
   controller: AbortController; active?: Promise<unknown>; createdAt: number; modelRef: string; adbPath: string;
   context: ExecutionContext; frames: PhoneFrameCache; io: Promise<unknown>; ioBusy: boolean;
   prediction?: AbortController; budget?: PhoneOperationBudget; wake: Set<() => void>;
+  authorizeHuman?: () => void;
   human?: string; humanExpiresAt?: number; viewedAt: number; preview?: Promise<void>;
   commands: Promise<unknown>; receipts: Map<string, { hash: string; result: Promise<unknown> }>;
   applications: PhoneApplication[];
@@ -937,6 +938,7 @@ export class PhoneRuntime {
   }
   private async dispatch(session: Session, action: PhoneAction, observation: PhoneObservation, context: ExecutionContext, signal: AbortSignal, epoch = session.report.controlEpoch, resetTask = false, settingsPage?: 'about-phone'): Promise<boolean> {
     return this.io(session, async () => {
+      if (session.human) session.authorizeHuman?.();
       signal.throwIfAborted(); this.guard(session, context, !session.human);
       if (epoch !== session.report.controlEpoch || session.report.controlOwner === 'none' || session.report.handoff !== 'idle') return false;
       if (session.human && Date.now() > (session.humanExpiresAt ?? 0)) throw new PhoneError('PHONE_CONTROL_REQUIRED', 'Manual control expired', 409);
@@ -1121,6 +1123,7 @@ export class PhoneRuntime {
           if (!phoneAllowsApp(session.device, app)) throw new PhoneError('PHONE_APP_DENIED', 'Current page is outside the authorized applications', 403);
           session.viewedAt = Date.now();
         }, (client, epoch) => {
+          session.authorizeHuman?.();
           if (terminal.has(session.report.status) || session.report.handoff !== 'idle' || session.report.controlOwner !== 'human'
             || session.human !== client || session.report.controlEpoch !== epoch || Date.now() > (session.humanExpiresAt ?? 0)) throw new PhoneError('PHONE_CONTROL_CHANGED', 'Manual control is no longer available', 409);
           session.humanExpiresAt = Date.now() + 15_000;
@@ -1135,10 +1138,10 @@ export class PhoneRuntime {
     try { await stream.start(); return stream; }
     catch (error) { await stream.close(); if (session.stream === stream) session.stream = undefined; throw error; }
   }
-  async disconnectVideo(owner: string, id: string, client: string): Promise<void> {
+  async disconnectVideo(owner: string, id: string, client: string, epoch?: number): Promise<void> {
     const session = this.sessions.get(owner);
     if (!session || session.report.sessionId !== id) return;
-    if (session.human === client) {
+    if (session.human === client && (epoch === undefined || session.report.controlEpoch === epoch)) {
       session.human = undefined; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
       session.report.status = 'paused'; session.report.stopReason = 'control_disconnected'; this.publish(session);
       try { await session.stream?.revoke(); } catch { await this.stop(owner, 'cancel'); }
@@ -1166,7 +1169,8 @@ export class PhoneRuntime {
   async liveControl(owner: string, id: string, context: ExecutionContext, client: string, input: {
     op: 'takeover' | 'release' | 'handback' | 'pause' | 'cancel' | 'heartbeat' | 'input' | 'recover';
     epoch: number; operationId: string; frameSeq?: number; geometry?: number; action?: PhoneAction;
-  }): Promise<unknown> {
+  }, authorize?: () => void): Promise<unknown> {
+    authorize?.();
     const session = this.liveSession(owner, id, context);
     if (session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Phone execution mode is changing', 409);
     if (this.deviceOpenings.has(session.device.id)) throw this.busy(session.device.id, session);
@@ -1187,6 +1191,7 @@ export class PhoneRuntime {
     }
     if (session.receipts.size >= 240 && !['cancel', 'release', 'heartbeat'].includes(input.op)) throw new PhoneError('PHONE_SESSION_LIMIT', 'Phone control request limit reached; reopen the session');
     const result = session.commands.catch(() => {}).then(async () => {
+      authorize?.();
       if (terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Phone session ended', 409);
       this.guard(session, context, input.op === 'handback');
       if (session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Phone execution mode is changing', 409);
@@ -1205,7 +1210,7 @@ export class PhoneRuntime {
         }
         if (session.controller.signal.aborted && !session.active) session.controller = new AbortController();
         session.human = undefined;
-        if (input.op === 'takeover') { session.human = client; session.humanExpiresAt = Date.now() + 15_000; session.report.controlOwner = 'human'; }
+        if (input.op === 'takeover') { authorize?.(); session.authorizeHuman = authorize; session.human = client; session.humanExpiresAt = Date.now() + 15_000; session.report.controlOwner = 'human'; }
         session.report.handoff = 'idle'; this.publish(session);
       } else if (input.op === 'release') {
         if (session.human !== client) throw new PhoneError('PHONE_CONTROL_REQUIRED', 'This browser does not control the phone', 409);
@@ -1229,6 +1234,7 @@ export class PhoneRuntime {
           if (!terminal.has(session.report.status)) session.report.status = 'paused';
           this.publish(session); throw error;
         } finally { observation?.frame.fill(0); }
+        authorize?.();
         session.report.controlOwner = session.active || session.taskPending ? 'agent' : 'none'; session.report.status = session.active ? 'running' : 'ready';
         session.report.handoff = 'idle'; session.modeHandbackRequired = false; session.report.message = undefined; session.report.stopReason = undefined;
         session.budget?.resume(); this.publish(session); for (const wake of session.wake) wake();

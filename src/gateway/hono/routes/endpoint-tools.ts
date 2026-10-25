@@ -122,6 +122,7 @@ export function registerEndpointToolRoutes(
       if (accessRevoked) {
         deps.service.realtime.disconnectPrincipal(id);
         deps.service.voiceRealtime.disconnectPrincipal(id);
+        deps.service.phoneStreams.disconnectPrincipal(id);
       }
       if (principalRevoked) {
         for (const endpoint of deps.service.endpointTools.registry.list()) {

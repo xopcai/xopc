@@ -113,6 +113,7 @@ describe('endpoint tool principal routes', () => {
       tools: [],
     };
     const revokedPrincipals: string[] = [];
+    const disconnectedPhones: string[] = [];
     const disconnect = () => undefined;
     const app = new Hono();
     app.use('*', async (c, next) => { setGatewayPrincipal(c, { kind: 'owner', principalId: 'local-owner', scopes: ['gateway.admin'] }); await next(); });
@@ -120,6 +121,7 @@ describe('endpoint tool principal routes', () => {
       service: {
         realtime: { disconnectPrincipal: disconnect },
         voiceRealtime: { disconnectPrincipal: disconnect },
+        phoneStreams: { disconnectPrincipal: (id: string) => disconnectedPhones.push(id) },
         endpointTools: { registry: { list: () => [endpoint], revokePrincipal: (id: string) => revokedPrincipals.push(id) }, disconnect },
       },
     } as unknown as AuthenticatedRouteDeps);
@@ -153,6 +155,7 @@ describe('endpoint tool principal routes', () => {
     ] } });
 
     expect(revokedPrincipals).toEqual(expect.arrayContaining([id, endpointOnlyId]));
+    expect(disconnectedPhones).toEqual([id]);
     const after = await app.request('/api/endpoint-tools/devices');
     const afterBody = await after.json() as { payload: unknown[] };
     expect(afterBody.payload).toEqual(expect.arrayContaining([

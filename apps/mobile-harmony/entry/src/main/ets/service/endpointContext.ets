@@ -23,7 +23,8 @@ export class XopcEndpointContextPublisher {
   private epoch: string = '';
   private running: boolean = false;
   private claim?: XopcTurnClaim;
-  constructor(private uuid: () => string) {}
+  private uuid: () => string;
+  constructor(uuid: () => string) { this.uuid = uuid; }
   start(claim: XopcTurnClaim): void {
     this.stop(); this.claim = claim;
     this.timer = setInterval((): void => { this.tick(); }, 15000);

@@ -35,7 +35,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
           val connection by gateway.state.collectAsStateWithLifecycle()
           LaunchedEffect(gateway) { gateway.restore() }
           GatewayForegroundRecovery(onForeground = gateway::onForeground, onBackground = gateway::onBackground)
-          MainScreen(connection = connection, onPair = gateway::pair,
+          MainScreen(phoneRepository = gateway.phoneRepository,connection = connection, onPair = gateway::pair,
             onCancelPairing = gateway::cancelPairing,
             appearanceMode = appearanceMode, onAppearanceModeChange = onAppearanceModeChange,
             colorScheme = colorScheme, onColorSchemeChange = onColorSchemeChange,

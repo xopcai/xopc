@@ -367,6 +367,27 @@ describe('phone runtime', () => {
     const rejected = expect(operation).rejects.toThrow();
     await f.runtime.stop('one', 'cancel'); await rejected; await f.runtime.shutdown();
   });
+  it('fences stale video cleanup and rechecks the manual grant at dispatch', async () => {
+    const f = fixture(); let granted = true;
+    const authorize = () => { if (!granted) throw new PhoneError('PHONE_PERMISSION_REQUIRED', 'Grant revoked', 403); };
+    try {
+      await f.runtime.execute('one', { op: 'open', mode: 'control' }, f.context);
+      const id = f.runtime.status('one')!.sessionId;
+      await f.runtime.liveControl('one', id, f.context, 'mobile', { op: 'takeover', epoch: 1, operationId: randomUUID() }, authorize);
+      const epoch = f.runtime.status('one')!.controlEpoch!;
+      await f.runtime.disconnectVideo('one', id, 'mobile', epoch - 1);
+      expect(f.runtime.liveStatus('one', id, f.context, 'mobile').ownControl).toBe(true);
+      const frame = await f.runtime.liveFrame('one', id, f.context, new AbortController().signal);
+      granted = false;
+      await expect(f.runtime.liveControl('one', id, f.context, 'mobile', { op: 'input', epoch,
+        operationId: randomUUID(), frameSeq: frame.seq, action: { type: 'tap', point: [100, 100] } }))
+        .rejects.toMatchObject({ code: 'PHONE_PERMISSION_REQUIRED' });
+      expect(f.driver.execute).not.toHaveBeenCalled();
+      await f.runtime.disconnectVideo('one', id, 'mobile', epoch);
+      expect(f.runtime.liveStatus('one', id, f.context, 'mobile').ownControl).toBe(false);
+      frame.frame.fill(0);
+    } finally { await f.runtime.shutdown(); }
+  });
   it('denies stale frames and revokes manual input when the heartbeat expires', async () => {
     vi.useFakeTimers();
     const f = fixture();
