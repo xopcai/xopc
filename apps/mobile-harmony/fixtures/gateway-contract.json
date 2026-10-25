@@ -1576,6 +1576,7 @@
                             "path": {
                               "type": "string",
                               "maxLength": 500,
+                              "format": "starts_with",
                               "pattern": "^\\/.*"
                             },
                             "token": {
