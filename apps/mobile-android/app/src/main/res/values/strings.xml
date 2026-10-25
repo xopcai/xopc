@@ -848,4 +848,8 @@
   <string name="phone_release">End control, keep paused</string>
   <string name="phone_cancel">Cancel</string>
   <string name="phone_unavailable">The phone connection has ended. Return to chat to continue.</string>
+    <string name="assistant_stages_expand">Show %1$d earlier stages</string>
+    <string name="assistant_stages_collapse">Collapse earlier stages</string>
+    <string name="assistant_stages_waiting">Waiting for your input. Complete the requested action to continue.</string>
+    <string name="assistant_stages_interrupted">Execution stopped. Completed work is retained.</string>
 </resources>

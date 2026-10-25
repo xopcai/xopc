@@ -25,7 +25,8 @@ data class TurnClaim(val endpointId: String, val token: String, val supportsDevi
 }
 
 data class RunStreamEvent(val runId: String, val conversationId: String, val type: String,
-  val messageId: String?, val delta: String?, val offset: Int?, val presentation: String? = null) {
+  val messageId: String?, val delta: String?, val offset: Int?, val presentation: String? = null,
+  val status: String? = null) {
   companion object {
     fun parse(topic: String, event: String, data: JSONObject): RunStreamEvent? {
       val runId = topic.removePrefix("run:")
@@ -37,7 +38,8 @@ data class RunStreamEvent(val runId: String, val conversationId: String, val typ
         (payload.opt("messageId") as? String)?.takeIf(String::isNotBlank),
         (payload.opt("delta") as? String)?.takeIf(String::isNotEmpty),
         (payload.opt("offset") as? Number)?.toInt()?.takeIf { it >= 0 },
-        payload.optString("presentation").takeIf(String::isNotBlank))
+        payload.optString("presentation").takeIf(String::isNotBlank),
+        payload.optString("status").takeIf { it in setOf("success", "error", "cancelled", "suspended") })
     }
   }
 }

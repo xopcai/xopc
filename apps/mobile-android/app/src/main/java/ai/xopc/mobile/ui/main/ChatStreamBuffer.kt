@@ -1,6 +1,32 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.gateway.ConversationMessage
+import ai.xopc.mobile.gateway.ConversationNarration
+
+data class AssistantRunProgress(
+  val runId: String? = null,
+  val stages: List<ConversationNarration> = emptyList(),
+  val status: String? = null,
+) {
+  fun forRun(id: String): AssistantRunProgress = if (id == runId) this else AssistantRunProgress(id)
+
+  fun record(id: String, text: String): AssistantRunProgress {
+    val publicText = text.replace(Regex("\\s+"), " ").trim().take(160)
+    if (publicText.isBlank() || stages.any { it.id == id }) return this
+    return copy(stages = stages + ConversationNarration(id, publicText))
+  }
+
+  fun restore(messages: List<ConversationMessage>): AssistantRunProgress {
+    if (runId == null) return this
+    val saved = messages.filter { it.turnId == runId }.flatMap { it.narrations }
+    return copy(stages = (saved + stages).distinctBy { it.id })
+  }
+
+  val terminalStatus: String? get() = status?.takeIf { it in setOf("error", "cancelled", "suspended") }
+
+  fun visibleStages(answerStarted: Boolean): List<ConversationNarration> =
+    if (status in setOf("success", "completed") || (answerStarted && terminalStatus == null)) emptyList() else stages
+}
 
 /** Received offsets remain authoritative while UI publications are coalesced. */
 internal class ChatStreamBuffer {

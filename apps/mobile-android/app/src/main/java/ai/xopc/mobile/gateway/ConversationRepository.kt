@@ -60,7 +60,9 @@ data class ConversationMessage(val id: String, val role: String, val text: Strin
   val hasNonTextContent: Boolean = false, val media: List<ConversationMedia> = emptyList(),
   val references: List<ConversationReference> = emptyList(),
   val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null,
-  val sourceIds: Set<String> = setOf(id), val renderId: String = id, val answerConfirmed: Boolean = true)
+  val sourceIds: Set<String> = setOf(id), val renderId: String = id, val answerConfirmed: Boolean = true,
+  val narrations: List<ConversationNarration> = emptyList())
+data class ConversationNarration(val id: String, val text: String)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
   val agentId: String? = null, val nextBeforeCursor: String? = null)
 data class ExecutionStep(val id: String, val kind: String, val category: String, val text: String,
@@ -1216,9 +1218,17 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
           (raw != null && (0 until raw.length()).any { part ->
             raw.optJSONObject(part)?.optString("type")?.let { it != "text" } == true
           })
+        val messageId = item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }
+        val narrations = if (role != "assistant") emptyList() else (0 until (textContent?.length() ?: 0)).mapNotNull { part ->
+          textContent?.optJSONObject(part)?.takeIf {
+            it.optString("type") == "text" && it.optString("presentation") == "narration"
+          }?.let { block -> ConversationNarration(block.optString("segmentId").ifBlank { messageId },
+            block.optString("text").replace(Regex("\\s+"), " ").trim().take(160)) }?.takeIf { it.text.isNotBlank() }
+        }
         if (text.isBlank() && !hasNonTextContent) null else
           ConversationMessage(item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }, role, text,
-            item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome)
+            item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome,
+            narrations = narrations)
       }
       val grouped = mutableListOf<ConversationMessage>()
       parsed.forEach { message ->
@@ -1238,6 +1248,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
             references = (previous.references + message.references).distinctBy { it.kind to it.sourceId },
             targets = (previous.targets + message.targets).distinctBy { it.kind to it.id },
             outcome = message.outcome ?: previous.outcome,
+            narrations = (previous.narrations + message.narrations).distinctBy { it.id },
           )
         }
       }

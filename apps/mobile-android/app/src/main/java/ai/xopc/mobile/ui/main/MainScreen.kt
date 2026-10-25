@@ -2548,6 +2548,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val displayMessages = remember(connection.messages, connection.liveMessages) {
     chatPresentationMessages(connection.messages, connection.liveMessages)
   }
+  val isPersonalChat = connection.personal.agent?.let {
+    it.state == "ready" && it.conversationId == connection.selectedConversationId
+  } == true
+  val showStagedProgress = !isPersonalChat && (connection.sending || connection.activeRunId != null ||
+    connection.runProgress.terminalStatus != null)
+  val answerStarted = displayMessages.any { it.role == "assistant" && it.turnId == connection.runProgress.runId &&
+    it.answerConfirmed && it.text.isNotBlank() }
   val latestConnection by rememberUpdatedState(connection)
   val selectedMessageConversationId = connection.selectedConversationId
   val externalLinkFailure = stringResource(R.string.message_open_link_failed)
@@ -2606,13 +2613,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       awaitingReplyAnchor = false
     }
   }
-  LaunchedEffect(replyAnchorId, displayMessages, connection.liveText, connection.activeRunId,
+  LaunchedEffect(replyAnchorId, displayMessages, connection.liveText, connection.activeRunId, showStagedProgress,
     replyRowHeights.toMap(), messageViewportHeight, bottomChromePx, followBottom) {
     if (!connection.historyLoadingOlder) {
       val anchor = displayMessages.indexOfFirst { it.id == replyAnchorId }
       val replyRows = if (anchor >= 0) displayMessages.drop(anchor + 1) else emptyList()
       val replyHeight = replyRows.sumOf { replyRowHeights[it.renderId] ?: 0 }.toFloat() +
-        replyRows.size * replyGapPx
+        replyRows.size * replyGapPx + if (showStagedProgress) (replyRowHeights["assistant-waiting"] ?: 0) else 0
       replySpace = replySpace.consume(replyHeight / density.density,
         (messageViewportHeight - bottomChromePx - replyGapPx) / density.density, followBottom)
     }
@@ -2726,7 +2733,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         Box(modifier = Modifier.weight(1f).padding(top = chatTopInset + 88.dp)) { AssistantHistorySkeleton() }
       } else if (!connection.historyLoading && displayMessages.isEmpty() &&
         connection.historyBefore == null && connection.activeRunId == null &&
-        connection.liveText.isBlank() && connection.optimisticText.isBlank()) {
+        connection.liveText.isBlank() && connection.optimisticText.isBlank() && !showStagedProgress) {
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()
           .onSizeChanged { messageViewportHeight = it.height }
           .padding(top = chatTopInset, bottom = bottomChromeHeight).testTag("assistant-welcome-viewport")) {
@@ -2754,7 +2761,14 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             }
           }
         }
-        if ((connection.sending || connection.activeRunId != null) && !connection.runError &&
+        if (showStagedProgress) {
+          item(key = "assistant-waiting") {
+            Box(Modifier.onSizeChanged { replyRowHeights["assistant-waiting"] = it.height }) {
+              AssistantStagesView(progress = connection.runProgress, answerStarted = answerStarted,
+                connected = connection.realtimeStatus == "connected", paused = connection.clarification != null)
+            }
+          }
+        } else if (isPersonalChat && (connection.sending || connection.activeRunId != null) && !connection.runError &&
           connection.clarification == null && !connection.liveMessages.any { it.answerConfirmed && it.text.isNotBlank() }) {
           item(key = "assistant-waiting") {
             AssistantWaitingBubble(runId = connection.activeRunId ?: "sending", narration = connection.liveNarration,

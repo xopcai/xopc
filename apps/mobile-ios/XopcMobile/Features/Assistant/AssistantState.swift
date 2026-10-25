@@ -19,6 +19,7 @@ final class AssistantState {
     private(set) var isLoadingContext = false
     private(set) var contextError: String?
     private(set) var executionActivity: [ExecutionActivityItem] = []
+    private(set) var runProgress = AssistantRunProgress()
     private(set) var activityLabel: String?
     private var clarificationAttempt: (id: String, command: ClarificationResponseCommand)?
     private(set) var clarification: ClarificationRequest?
@@ -66,6 +67,7 @@ final class AssistantState {
         streamBuffer.reset()
         streamGap = false
         executionActivity = []
+        runProgress = AssistantRunProgress()
         activityLabel = nil
         errorMessage = nil
         contextSummary = nil
@@ -104,6 +106,9 @@ final class AssistantState {
             let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
             guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
             runID = run.active ? run.runId : nil
+            if let runID {
+                runProgress.begin(runID); runProgress.restore(history.session.messages)
+            }
             if runID != nil {
                 startFollowing(conversation, using: gateway)
             }
@@ -136,6 +141,9 @@ final class AssistantState {
         isSending = true
         errorMessage = nil
         executionActivity = []
+        if runID == nil {
+            runProgress = AssistantRunProgress()
+        }
         activityLabel = AppLocalization.resolve("正在准备")
         let optimisticID = "local-\(UUID().uuidString)"
         let optimisticText = content.isEmpty
@@ -307,6 +315,10 @@ final class AssistantState {
                 }
             }
             let savedIDs = Set(saved.map(\.id))
+            if let runID {
+                runProgress.begin(runID)
+            }
+            runProgress.restore(history.session.messages)
             let live = messages.filter { message in
                 (streamBuffer.containsLive(message.id) || (retainLive && message.isPending)) && !savedIDs.contains(message.id)
             }
@@ -326,10 +338,12 @@ final class AssistantState {
     }
 
     func apply(_ event: RunStreamEvent, runID: String) {
+        runProgress.begin(runID)
         if event.name != "assistant_delta" {
             flushStream()
         }
         if event.isTerminal {
+            runProgress.status = event.name == "error" ? "error" : event.status ?? "success"
             streamGap = false
             messages = streamBuffer.finish(messages)
             self.runID = nil
@@ -360,6 +374,7 @@ final class AssistantState {
         let id = event.messageId ?? runID
         if event.presentation == "narration" {
             if let narration = messages.first(where: { $0.id == id }) {
+                runProgress.record(id: id, text: narration.text)
                 appendActivity(id: "narration:\(id)", title: String(narration.text.prefix(160)), status: "done")
             }
             streamBuffer.closeNarration(id)
@@ -385,6 +400,8 @@ final class AssistantState {
         guard let runID else { return }
         do {
             try await gateway.abort(runID: runID)
+            runProgress.begin(runID)
+            runProgress.status = "cancelled"
             pauseConversation()
             self.runID = nil
             isSending = false
