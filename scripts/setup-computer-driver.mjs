@@ -8,7 +8,10 @@ import { COMPUTER_DRIVER_VERSION, computerDriverRelease } from './lib/computer-d
 
 // Upgrade only with reviewed protocol fixtures and a new release digest.
 const version = COMPUTER_DRIVER_VERSION;
-if (!['darwin', 'win32'].includes(process.platform)) { console.log('Skipping unsupported Computer Use platform.'); process.exit(0); }
+if (!['darwin', 'win32'].includes(process.platform) || (process.platform === 'win32' && process.arch !== 'x64')) {
+  console.log(`Skipping unsupported Computer Use target: ${process.platform}-${process.arch}.`);
+  process.exit(0);
+}
 const target = computerDriverRelease(process.platform, process.arch);
 const downloadUrl = `https://api.github.com/repos/trycua/cua/releases/assets/${target.assetId}`;
 const maxDownloadAttempts = 4;

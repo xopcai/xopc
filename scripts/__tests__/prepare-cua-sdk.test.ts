@@ -54,9 +54,11 @@ describe('prepareCuaSdkRuntime', () => {
     expect(runLipo).not.toHaveBeenCalled();
   });
 
-  it('refuses missing Windows native libraries and unsupported architectures', () => {
+  it('refuses missing Windows x64 libraries and skips the unavailable ARM64 SDK', () => {
     expect(() => prepareCuaSdkRuntime('/unused', { platform: 'win32', arch: 'x64' })).toThrow('ENOENT');
-    expect(() => prepareCuaSdkRuntime('/unused', { platform: 'win32', arch: 'arm64' })).toThrow('Unsupported Windows');
+    const runLipo = vi.fn();
+    expect(() => prepareCuaSdkRuntime('/unused', { platform: 'win32', arch: 'arm64' }, runLipo)).not.toThrow();
+    expect(runLipo).not.toHaveBeenCalled();
   });
 
   it('rejects a mismatched Windows SDK before loading native code', () => {

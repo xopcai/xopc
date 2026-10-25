@@ -74,7 +74,8 @@ describe('packaged computer driver', () => {
     mkdirSync(cache, { recursive: true });
     writeFileSync(join(cache, 'cua-driver.exe'), 'replaced executable');
     expect(() => stageComputerDriver(root, pack, { platform: 'win32', arch: 'x64' })).toThrow('checksum mismatch');
-    expect(() => stageComputerDriver(root, pack, { platform: 'win32', arch: 'arm64' })).toThrow('Unsupported');
+    stageComputerDriver(root, pack, { platform: 'win32', arch: 'arm64' });
+    expect(existsSync(join(pack, '_pack-resources/computer-driver/cua-driver.exe'))).toBe(false);
   });
 
   it.each(['linux'])('does not ship a macOS driver for %s', platform => {
