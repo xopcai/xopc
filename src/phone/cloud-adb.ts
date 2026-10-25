@@ -12,6 +12,6 @@ export class CloudAdbConnection extends CloudAdbTransport {
       const { CloudScrcpyProvider } = await import('./cloud-scrcpy.js');
       const provider = new CloudScrcpyProvider(this.endpoint, Buffer.from(this.key), () => {}, undefined, true);
       try { await provider.pasteText(text, signal); } finally { await provider.close(); }
-    });
+    }, this.hierarchy.bind(this));
   }
 }

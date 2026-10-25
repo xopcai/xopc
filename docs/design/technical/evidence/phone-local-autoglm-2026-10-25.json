@@ -1,0 +1,40 @@
+{
+  "version": "12",
+  "seconds": 30.21,
+  "modelRef": "autoglm-local/autoglm-phone-9b",
+  "status": "completed",
+  "verified": true,
+  "stopReason": "condition_satisfied",
+  "actions": 3,
+  "modelRequests": 2,
+  "diagnostics": {
+    "stalePredictions": 0,
+    "protocolRepairs": 0,
+    "unchangedActions": 0,
+    "completionCorrections": 0
+  },
+  "steps": [
+    {
+      "action": "launch",
+      "at": 1792894767511,
+      "dispatch": "completed",
+      "actor": "agent"
+    },
+    {
+      "action": "tap",
+      "at": 1792894780072,
+      "dispatch": "completed",
+      "actor": "agent"
+    },
+    {
+      "action": "swipe",
+      "at": 1792894793722,
+      "dispatch": "completed",
+      "actor": "agent"
+    }
+  ],
+  "versionFacts": [
+    "Android 版本",
+    "12"
+  ]
+}

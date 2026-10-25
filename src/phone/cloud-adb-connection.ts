@@ -8,8 +8,10 @@ import { Consumable, ReadableStream, StructDeserializeStream } from '@yume-chan/
 
 import { resolveCredentialsDir } from '../config/paths.js';
 import { parsePhoneApplications, phoneApplicationsCommand } from './applications.js';
+import { observeAdbConsumption } from './cloud-adb-writable.js';
 import { readScrcpyServer } from './scrcpy-assets.js';
 import { PhoneError } from './contracts.js';
+import { PHONE_UI_DEX } from './ui-dump-binary.js';
 
 /** Accept only an explicit TCP endpoint, never URLs, paths or ADB commands. */
 export function parseCloudEndpoint(value: string): { host: string; port: number; endpoint: string } {
@@ -81,7 +83,7 @@ export class CloudAdbConnection {
       })).catch(() => { socket.destroy(); });
       const key = this.key;
       const transport = await AdbDaemonTransport.authenticate({ serial: this.endpoint,
-        connection: { readable: raw.pipeThrough(new StructDeserializeStream(AdbPacket)), writable: serializer.writable },
+        connection: { readable: raw.pipeThrough(new StructDeserializeStream(AdbPacket)), writable: observeAdbConsumption(serializer.writable) },
         credentialStore: { *iterateKeys() { yield { buffer: key, name: 'xopc-cloud-phone' }; }, generateKey() { throw new Error('Key generation disabled'); } },
         authenticators: [AdbSignatureAuthenticator],
       });
@@ -120,6 +122,26 @@ export class CloudAdbConnection {
     } finally {
       combined.removeEventListener('abort', abort!);
       clearTimeout(this.idle); this.idle = setTimeout(() => this.close(), 30_000); this.idle.unref();
+    }
+  }
+  async hierarchy(signal: AbortSignal): Promise<string> {
+    const combined = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
+    const abort = () => this.close(); combined.addEventListener('abort', abort, { once: true });
+    const remote = `/data/local/tmp/xopc-ui-${randomUUID()}.dex`;
+    try {
+      combined.throwIfAborted();
+      const adb = await this.client(); combined.throwIfAborted();
+      const sync = await adb.sync();
+      try {
+        const binary = Buffer.from(PHONE_UI_DEX, 'base64');
+        await sync.write({ filename: remote, permission: 0o600, file: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(binary); controller.close(); } }) });
+      } finally { await sync.dispose(); }
+      const result = (await this.command('', ['-s', this.endpoint, 'shell', 'env', `CLASSPATH=${remote}`, 'app_process', '/', 'ai.xopc.phone.PhoneUiDump'], combined)).toString();
+      if (!result.includes('<hierarchy') || !result.includes('</hierarchy>')) throw new PhoneError('PHONE_UI_UNAVAILABLE', 'Unable to capture the active phone UI hierarchy', 502);
+      return result;
+    } finally {
+      combined.removeEventListener('abort', abort);
+      await this.command('', ['-s', this.endpoint, 'shell', 'rm', '-f', remote], undefined, 3000).catch(() => {});
     }
   }
   async applications(signal: AbortSignal) {
