@@ -53,11 +53,21 @@ export function resolveAppLink(raw: string, currentHref = window.location.href):
 
   const productReference = parseProductReferenceDeepLink(href);
   if (productReference) {
-    const route = productReferenceOpenRoute({
+    let route = productReferenceOpenRoute({
       ...productReference,
       title: productReference.id,
       capabilities: ['open'],
     });
+    if (route && productReference.kind === 'automation') {
+      const query = new URL(href).searchParams;
+      const runId = query.get('runId') || query.get('run');
+      if (query.get('view') === 'run' || runId) {
+        const target = new URL(route, 'https://xopc.local');
+        target.searchParams.set('view', 'run');
+        if (runId) target.searchParams.set('run', runId);
+        route = `${target.pathname}${target.search}`;
+      }
+    }
     return route ? { kind: 'internal-route', route } : { kind: 'blocked' };
   }
 
@@ -95,6 +105,15 @@ export type AppLinkLabels = {
   destinations: Record<string, string>;
 };
 
+export function withAppLinkLabel(intent: AppLinkIntent, label: string): AppLinkIntent {
+  if (intent.kind === 'internal-route' && /^\/automations\?/.test(intent.route) && /^(?:查看(?:运行情况|执行情况|运行结果|执行结果)|View (?:run|execution|progress|results?)|Track run)$/i.test(label)) {
+    const target = new URL(intent.route, 'https://xopc.local');
+    target.searchParams.set('view', 'run');
+    return { kind: 'internal-route', route: `${target.pathname}${target.search}` };
+  }
+  return intent;
+}
+
 export function decorateAppLinks(
   root: HTMLElement,
   labels?: AppLinkLabels,
@@ -102,7 +121,9 @@ export function decorateAppLinks(
 ): void {
   for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a')) {
     if (isWorkspaceLink?.(anchor)) continue;
-    const intent = resolveAppLink(anchor.getAttribute('href') ?? '');
+    let intent = resolveAppLink(anchor.getAttribute('href') ?? '');
+    const label = anchor.dataset.xopcLinkLabel ?? anchor.textContent?.trim() ?? '';
+    intent = withAppLinkLabel(intent, label);
     anchor.dataset.xopcLinkKind = intent.kind;
     if (intent.kind === 'blocked') {
       // Unsupported targets (including auto-linked email addresses) are content,

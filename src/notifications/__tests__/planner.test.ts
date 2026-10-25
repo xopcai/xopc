@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { notificationPlanFromGatewayEvent } from '../planner.js';
 
 describe('notificationPlanFromGatewayEvent', () => {
+  it('names the completed task and keeps failure notifications readable while retaining execution identity', () => {
+    const run = { id: 'run-1', automationId: 'task-1', automationName: 'Daily review', status: 'failed', error: 'Internal model configuration failure' };
+    const plan = notificationPlanFromGatewayEvent('automation.run.completed', { run, notificationPolicy: 'all' });
+    expect(plan?.notification).toMatchObject({ title: { zh: 'Daily review · 需要处理' }, target: { automationId: 'task-1', runId: 'run-1' }, body: { zh: '这次运行未完成，打开查看原因，或通过对话修复。' } });
+  });
   it('maps chat completion to a localized conversation notification', () => {
     const plan = notificationPlanFromGatewayEvent('agent.run.ended', {
       schemaVersion: 1,

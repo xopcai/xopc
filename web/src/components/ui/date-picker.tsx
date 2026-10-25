@@ -113,9 +113,10 @@ export function DatePicker({
           align="start"
           sideOffset={6}
           collisionPadding={12}
+          collisionBoundary={portalContainer ?? undefined}
           className={cn(
             popoverZ,
-            'w-[19rem] rounded-2xl border border-edge bg-surface-overlay p-3 shadow-float outline-none',
+            'max-h-[var(--radix-popover-content-available-height)] w-[19rem] overflow-y-auto rounded-2xl border border-edge bg-surface-overlay p-3 shadow-float outline-none',
           )}
         >
           <div className="flex h-10 items-center justify-between gap-2 px-1">

@@ -6,9 +6,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ project: vi.fn(), run: vi.fn(), definitions: vi.fn(), automations: vi.fn(), runs: vi.fn(), app: vi.fn(), snapshot: vi.fn() }));
+const mocks = vi.hoisted(() => ({ project: vi.fn(), run: vi.fn(), definitions: vi.fn(), automations: vi.fn(), getAutomation: vi.fn(), runs: vi.fn(), app: vi.fn(), snapshot: vi.fn() }));
 vi.mock('@/features/projects/api', () => ({ fetchProject: mocks.project }));
-vi.mock('@/features/automations/automation-api', () => ({ automationApi: { list: mocks.automations, runs: mocks.runs } }));
+vi.mock('@/features/automations/automation-api', () => ({ automationApi: { list: mocks.automations, get: mocks.getAutomation, runs: mocks.runs } }));
+vi.mock('@/features/chat/agent-selection/chat-agents-api', () => ({ fetchChatAgents: async () => ({ defaultId: 'main', items: [] }) }));
 vi.mock('@/features/local-apps/api', () => ({ getLocalApp: mocks.app, getLocalAppSnapshot: mocks.snapshot }));
 
 import ProductPreviewContent from '../product-preview-content';
@@ -39,6 +40,17 @@ async function render(href: string, modal = false) {
 }
 
 describe('chat product previews', () => {
+  it('opens an editable task link with the shared task form instead of a summary preview', async () => {
+    mocks.getAutomation.mockResolvedValue({ automation: { id: 'a1', name: 'Morning digest', enabled: false,
+      action: { kind: 'agent', instruction: 'Summarize updates' }, trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 9 * * *', tz: 'Asia/Shanghai' } },
+      conversationMode: 'continuous', delivery: { notificationPolicy: 'all', destinations: [] }, state: {}, createdAtMs: 1, updatedAtMs: 1 } });
+    await render('/automations?automation=a1', true);
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.querySelector('textarea')?.value).toBe('Summarize updates');
+    expect(dialog.querySelector('[aria-label="Task name"]')).not.toBeNull();
+    expect(dialog.textContent).toContain('Save');
+    expect(dialog.textContent).not.toContain('Open full page');
+  });
   it('shows project brief and recent progress without management controls', async () => {
     await render('/projects/p1');
     expect(container.textContent).toContain('Build a calendar');

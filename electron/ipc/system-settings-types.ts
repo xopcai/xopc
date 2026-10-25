@@ -33,7 +33,6 @@ export type SystemSettingsBehavior = {
   runInBackground: boolean;
   backgroundSupported: boolean;
   openAtLogin: boolean;
-  openAsHidden: boolean;
   keepAwakeEnabled: boolean;
   keepAwakePreferred: boolean;
   notifyEnabled: boolean;

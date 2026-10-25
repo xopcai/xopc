@@ -136,11 +136,11 @@ function automationPlan(payload: unknown): NotificationPlan | null {
       target: { kind: 'automation_run', automationId: run.automationId, runId: run.id },
       priority: completed ? 'normal' : 'high',
       title: completed
-        ? { en: 'Automation completed', zh: '自动化已完成' }
-        : { en: 'Automation needs attention', zh: '自动化需要处理' },
+        ? { en: `${run.automationName} · Completed`, zh: `${run.automationName} · 已完成` }
+        : { en: `${run.automationName} · Needs attention`, zh: `${run.automationName} · 需要处理` },
       body: {
-        en: (run.error || run.summary || run.automationName).slice(0, 180),
-        zh: (run.error || run.summary || run.automationName).slice(0, 180),
+        en: completed ? (run.summary || run.automationName).slice(0, 180) : 'This run did not finish. Open it to see the reason and fix it in chat.',
+        zh: completed ? (run.summary || run.automationName).slice(0, 180) : '这次运行未完成，打开查看原因，或通过对话修复。',
       },
       payload: { automationId: run.automationId, runId: run.id },
     },

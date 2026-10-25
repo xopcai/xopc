@@ -345,7 +345,7 @@ async function loadCustomPet(
   dir: string,
 ): Promise<{ pet: DesktopPetDefinition | null; issue?: DesktopPetIssue }> {
   const validation = await validateDesktopPetPackage(dir);
-  if (!validation.ok) {
+  if (validation.ok === false) {
     return { pet: null, issue: validation.issue };
   }
 

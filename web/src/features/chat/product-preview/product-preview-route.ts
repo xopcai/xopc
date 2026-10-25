@@ -4,7 +4,7 @@ import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
 
 export const PRODUCT_PREVIEW_PARAM = 'preview';
 export type ProductPreviewKind = 'project' | 'automation' | 'local_app';
-export type ProductPreviewTarget = { kind: ProductPreviewKind; id: string; href: string; ownerAgentId?: string; sourceHash?: string };
+export type ProductPreviewTarget = { kind: ProductPreviewKind; id: string; href: string; ownerAgentId?: string; sourceHash?: string; view?: 'run'; runId?: string };
 
 /** Only viewing an object is eligible; editing, creating and using it stay on pages. */
 export function resolveProductPreviewTarget(href: string): ProductPreviewTarget | null {
@@ -26,14 +26,15 @@ export function resolveProductPreviewTarget(href: string): ProductPreviewTarget 
   const ownerAgentId = url.searchParams.get('agentId') || url.searchParams.get('agent') || undefined;
   const sourceHash = url.searchParams.get('sourceHash') || undefined;
   const params = new URLSearchParams(url.searchParams);
-  for (const key of ['run', 'def', 'agent', 'returnTo']) params.delete(key);
+  for (const key of ['def', 'agent', 'returnTo']) params.delete(key);
+  if (kind !== 'automation') params.delete('run');
   if (ownerAgentId) params.set('agentId', ownerAgentId);
   let path = kind === 'project' ? `/projects/${encodeURIComponent(id)}`
     : kind === 'automation' ? '/automations' : `/local-apps/${encodeURIComponent(id)}`;
   if (kind === 'automation') params.set('automation', id);
   if (kind === 'local_app') { params.delete('kind'); params.delete('id'); }
   path += params.size ? `?${params.toString()}` : '';
-  return { kind, id, href: path, ownerAgentId, sourceHash };
+  return { kind, id, href: path, ownerAgentId, sourceHash, ...(kind === 'automation' && (params.get('view') === 'run' || params.get('run')) ? { view: 'run' as const, runId: params.get('run') || undefined } : {}) };
 }
 
 export function closeProductPreviewHref(pathname: string, rawSearch: string): string {

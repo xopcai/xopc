@@ -295,6 +295,7 @@ function deliveryForXopcResult(
         kind: 'automation',
         id,
         title: deliveryText(source?.name) ?? 'Automation',
+        runId: deliveryText(record(resultRecord.run)?.id),
         summary: deliverySummary(source?.description),
         status: enabled ? 'enabled' : 'paused',
         revision: deliveryRevision(source?.updatedAtMs),

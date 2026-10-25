@@ -141,6 +141,29 @@ describe('MarkdownView links', () => {
     expect(location.searchParams.get('preview')).toBe(preview);
   });
 
+  it('opens the current task as a preview from its embedded conversation', () => {
+    const container = renderMarkdown('[打开任务](xopc://open?kind=automation&id=a1)', undefined, '/automations?automation=a1');
+    act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    const location = new URL(container.querySelector('[data-location]')!.textContent, 'https://xopc.local');
+    expect(location.pathname).toBe('/automations');
+    expect(location.searchParams.get('automation')).toBe('a1');
+    expect(location.searchParams.get('preview')).toBe('/automations?automation=a1');
+  });
+
+  it('opens legacy run-status wording as execution progress instead of task editing', () => {
+    const container = renderMarkdown('[查看运行情况](xopc://open?kind=automation&id=a1)', undefined, '/chat/c1');
+    act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    const location = new URL(container.querySelector('[data-location]')!.textContent, 'https://xopc.local');
+    expect(location.searchParams.get('preview')).toBe('/automations?automation=a1&view=run');
+  });
+
+  it('preserves an explicit execution identity in a progress link', () => {
+    const container = renderMarkdown('[查看运行情况](xopc://open?kind=automation&id=a1&view=run&runId=run-1)', undefined, '/automations?automation=a1');
+    act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    const location = new URL(container.querySelector('[data-location]')!.textContent, 'https://xopc.local');
+    expect(location.searchParams.get('preview')).toBe('/automations?automation=a1&view=run&run=run-1');
+  });
+
   it.each(['/settings/agent-browser', '/capabilities/skills', '/user-model'])('keeps intentional page navigation from chat: %s', (href) => {
     const container = renderMarkdown(`[Open](${href})`, undefined, '/chat/c1');
     act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));

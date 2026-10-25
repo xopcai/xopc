@@ -42,12 +42,13 @@ export const ProductReferenceSchema = z.object({
   status: z.string().optional(),
   revision: z.string().optional(),
   projectId: z.string().optional(),
+  runId: z.string().min(1).optional(),
   capabilities: z.array(ProductCapabilitySchema).default([]),
 });
 
 export type ProductReference = z.infer<typeof ProductReferenceSchema>;
 
-export type ProductReferenceLocator = Pick<ProductReference, 'kind' | 'id'>;
+export type ProductReferenceLocator = Pick<ProductReference, 'kind' | 'id' | 'runId'>;
 
 export const ProductDeliveryOperationSchema = z.enum([
   'created',
@@ -144,7 +145,7 @@ export function productReferenceRoute(reference: ProductReference): string | nul
     case 'note':
       return `/notes/${id}`;
     case 'automation':
-      return `/automations?automation=${id}`;
+      return `/automations?automation=${id}${reference.runId ? `&view=run&run=${encodeURIComponent(reference.runId)}` : ''}`;
     case 'local_app':
       return `/local-apps/${id}`;
     case 'chat_preview':
@@ -174,8 +175,12 @@ export function productReferenceOpenRoute(reference: ProductReference): string |
   return `/open?${params.toString()}`;
 }
 
-export function productReferenceDeepLink(reference: Pick<ProductReference, 'kind' | 'id'>): string {
+export function productReferenceDeepLink(reference: ProductReferenceLocator): string {
   const params = new URLSearchParams({ kind: reference.kind, id: reference.id });
+  if (reference.kind === 'automation' && reference.runId) {
+    params.set('view', 'run');
+    params.set('runId', reference.runId);
+  }
   return `xopc://open?${params.toString()}`;
 }
 
@@ -187,7 +192,8 @@ export function parseProductReferenceDeepLink(value: string): ProductReferenceLo
     // Older/model-authored session links use the session key as `key`.
     const id = url.searchParams.get('id')?.trim()
       || (kind.success && kind.data === 'session' ? url.searchParams.get('key')?.trim() : undefined);
-    return kind.success && id ? { kind: kind.data, id } : null;
+    const runId = url.searchParams.get('runId')?.trim() || url.searchParams.get('run')?.trim();
+    return kind.success && id ? { kind: kind.data, id, ...(kind.data === 'automation' && runId ? { runId } : {}) } : null;
   } catch {
     return null;
   }

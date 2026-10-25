@@ -115,6 +115,7 @@ function formatAutomation(item: AutomationDto): string {
 function automationDelivery(
   automation: Pick<Automation, 'id' | 'name' | 'description' | 'enabled' | 'updatedAtMs' | 'projectId'>,
   operation: 'created' | 'updated' | 'started',
+  runId?: string,
 ): ProductDeliveryEnvelope {
   return {
     version: PRODUCT_DELIVERY_VERSION,
@@ -122,6 +123,7 @@ function automationDelivery(
     primary: {
       kind: 'automation',
       id: automation.id,
+      ...(runId ? { runId } : {}),
       title: automation.name,
       summary: automation.description?.trim() || undefined,
       status: automation.enabled ? 'enabled' : 'paused',
@@ -246,7 +248,7 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
           const { automation, run } = AutomationRunMutationOutputSchema.parse(await call(`xopc.automations.${params.action}`, { id }));
           return textResult(`Queued automation run ${run.id}.`, {
             run,
-            ...(automation ? { delivery: automationDelivery(automation, 'started') } : {}),
+            ...(automation ? { delivery: automationDelivery(automation, 'started', run.id) } : {}),
           });
         }
         case 'pause':

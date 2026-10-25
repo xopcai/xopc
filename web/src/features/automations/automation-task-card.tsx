@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import useSWR, { mutate } from 'swr';
 import { CalendarClock, ChevronDown, MessageCircle, Pencil, X } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { ModelSelector } from '@/features/chat/model/model-selector';
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DatePicker } from '@/components/ui/date-picker';
 import { TimePicker } from '@/components/ui/time-picker';
 import { messages } from '@/i18n/messages';
 import { automationApi, type Automation } from './automation-api';
@@ -53,7 +55,8 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
   const save = async () => {
     setBusy(true); setError(''); setConflict(false);
     try {
-      if (form.triggerMode === 'once' && (!form.onceAt || !Number.isFinite(new Date(form.onceAt).getTime()) || new Date(form.onceAt).getTime() <= Date.now())) throw new Error(zh ? '请选择未来的运行时间。' : 'Choose a future run time.');
+      const scheduleChanged = !snapshot || (['triggerMode', 'onceAt', 'time', 'weekday', 'timezone', 'cronExpr', 'intervalValue', 'intervalUnit'] as const).some(key => form[key] !== initial[key]);
+      if ((scheduleChanged || snapshot?.enabled) && form.triggerMode === 'once' && (!form.onceAt || !Number.isFinite(new Date(form.onceAt).getTime()) || new Date(form.onceAt).getTime() <= Date.now())) throw new Error(zh ? '请选择未来的运行时间。' : 'Choose a future run time.');
       if (snapshot && snapshot.action.kind !== 'agent') throw new Error(zh ? '请在任务页编辑此类型任务。' : 'Edit this task type on the task page.');
       if (['daily', 'weekly'].includes(form.triggerMode) && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.time)) throw new Error(zh ? '请选择有效的运行时间。' : 'Choose a valid run time.');
       if (form.triggerMode === 'interval' && automationIntervalMs(form.intervalValue, form.intervalUnit) < 60000) throw new Error(zh ? '运行间隔至少为一分钟。' : 'Use an interval of at least one minute.');
@@ -64,7 +67,7 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
         await automationApi.update(snapshot.id, {
           expectedRevision: snapshot.updatedAtMs, name,
           action: { ...snapshot.action, instruction: form.instruction.trim(), agentId: form.agentId.trim() || undefined, model: form.model.trim() || undefined },
-          trigger: input.trigger, conversationMode: form.conversationMode,
+          ...(scheduleChanged ? { trigger: input.trigger } : {}), conversationMode: form.conversationMode,
           delivery: { ...snapshot.delivery, notificationPolicy: form.notificationPolicy },
         });
       } else {
@@ -117,7 +120,10 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
           </Select></div>
           {['daily', 'weekly'].includes(form.triggerMode) ? <div className={rowClass}><span className="text-sm text-fg">{zh ? '时间' : 'Time'}</span><div className="flex min-w-0 items-center gap-2 text-sm text-fg-muted"><span className="truncate text-xs">{timezoneLabel}</span><TimePicker value={form.time} onChange={time => update({ time })} ariaLabel={zh ? '时间' : 'Time'} className="w-auto" triggerClassName="w-auto border-0 bg-transparent px-0 shadow-none" /></div></div> : null}
           {form.triggerMode === 'weekly' ? <div className={rowClass}><span className="text-sm text-fg">{zh ? '星期' : 'Day'}</span><Select aria-label={zh ? '星期' : 'Day'} className={choiceClass} value={form.weekday} onChange={event => update({ weekday: event.target.value })}>{Object.entries(zh ? { '1': '星期一', '2': '星期二', '3': '星期三', '4': '星期四', '5': '星期五', '6': '星期六', '0': '星期日' } : { '1': 'Monday', '2': 'Tuesday', '3': 'Wednesday', '4': 'Thursday', '5': 'Friday', '6': 'Saturday', '0': 'Sunday' }).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></div> : null}
-          {form.triggerMode === 'once' ? <div className={rowClass}><label htmlFor="automation-once-at" className="text-sm text-fg">{zh ? '时间' : 'Time'}</label><input id="automation-once-at" type="datetime-local" className="min-w-0 bg-transparent py-3 text-sm text-fg-muted" value={form.onceAt} onInput={event => update({ onceAt: event.currentTarget.value })} onChange={event => update({ onceAt: event.target.value })} /></div> : null}
+          {form.triggerMode === 'once' ? <>
+            <div className={rowClass}><span className="text-sm text-fg">{zh ? '日期' : 'Date'}</span><DatePicker ariaLabel={zh ? '运行日期' : 'Run date'} className="w-auto bg-transparent text-fg-muted" value={form.onceAt.split('T')[0]} onChange={date => update({ onceAt: `${date}T${form.onceAt.split('T')[1] || form.time}` })} /></div>
+            <div className={rowClass}><span className="text-sm text-fg">{zh ? '时间' : 'Time'}</span><TimePicker ariaLabel={zh ? '运行时间' : 'Run time'} value={form.onceAt.split('T')[1] || form.time} onChange={time => update({ onceAt: `${form.onceAt.split('T')[0]}T${time}` })} triggerClassName="border-0 bg-transparent text-fg-muted shadow-none" /></div>
+          </> : null}
           {form.triggerMode === 'cron' ? <div className={rowClass}><label htmlFor="automation-cron" className="text-sm text-fg">{zh ? '时间规则' : 'Schedule'}</label><input id="automation-cron" className="min-w-0 bg-transparent py-3 text-right text-sm text-fg-muted" value={form.cronExpr} onChange={event => update({ cronExpr: event.target.value })} /></div> : null}
           {form.triggerMode === 'interval' ? <div className={rowClass}><label htmlFor="automation-interval" className="text-sm text-fg">{zh ? '每隔' : 'Every'}</label><div className="flex items-center gap-3"><input id="automation-interval" type="number" min="1" aria-label={zh ? '间隔数值' : 'Interval value'} className="w-16 bg-transparent text-right text-sm text-fg-muted" value={form.intervalValue} onChange={event => update({ intervalValue: event.target.value })} /><Select aria-label={zh ? '间隔单位' : 'Interval unit'} className={choiceClass} value={form.intervalUnit} onChange={event => update({ intervalUnit: event.target.value as FormState['intervalUnit'] })}><SelectOption value="minute">{zh ? '分钟' : 'Minutes'}</SelectOption><SelectOption value="hour">{zh ? '小时' : 'Hours'}</SelectOption><SelectOption value="day">{zh ? '天' : 'Days'}</SelectOption><SelectOption value="week">{zh ? '周' : 'Weeks'}</SelectOption></Select></div></div> : null}
         </section>
@@ -142,7 +148,8 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
   </Dialog.Portal></Dialog.Root>;
 }
 
-export function AutomationTaskCard({ automationId, language, inConfiguration = false }: { automationId: string; language: 'zh' | 'en'; inConfiguration?: boolean }) {
+export function AutomationTaskCard({ automationId, runId, language, inConfiguration = false }: { automationId: string; runId?: string; language: 'zh' | 'en'; inConfiguration?: boolean }) {
+  const location = useLocation();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -153,6 +160,11 @@ export function AutomationTaskCard({ automationId, language, inConfiguration = f
   const labels = messages(language);
   if (isLoading && !task) return <Skeleton className="my-3 h-20 w-full rounded-xl" />;
   if (loadError || !task) return <div className="my-3 rounded-xl border border-edge p-4 text-sm text-fg-muted"><p>{zh ? '任务已删除或暂时无法读取。' : 'This task was deleted or is unavailable.'}</p><button type="button" className="mt-2 underline" onClick={() => void reload()}>{zh ? '重试' : 'Retry'}</button></div>;
+  if (runId) return <div className="my-3 flex items-center gap-3 rounded-xl border border-edge p-3" data-product-delivery="automation">
+    <CalendarClock className="size-5 shrink-0 text-fg-muted" aria-hidden />
+    <span className="min-w-0 flex-1 truncate text-sm font-medium">{task.name}</span>
+    <Link className="shrink-0 rounded-lg border border-edge px-3 py-2 text-xs text-fg hover:bg-surface-hover" to={chatProductHref(`${location.pathname}${location.search}`, `/automations?automation=${encodeURIComponent(task.id)}&view=run&run=${encodeURIComponent(runId)}`)}>{zh ? '查看运行情况' : 'View run'}</Link>
+  </div>;
   const continueChat = async () => {
     setBusy(true); setError('');
     try { navigate(await openAutomationConfigurationChat({ automationId: task.id })); }

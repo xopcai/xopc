@@ -10,7 +10,7 @@ import { resolveDataRemovalTargets } from './paths.js';
 export async function removeUserDataDirs(): Promise<void> {
   const targets = resolveDataRemovalTargets([
     app.getPath('userData'),
-    app.getPath('cache'),
+    app.getPath('sessionData'),
     app.getPath('logs'),
     resolveStateDir(),
     resolveConfigPath(),

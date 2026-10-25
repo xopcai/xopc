@@ -304,6 +304,7 @@ describe('xopc_use tool', () => {
       },
     });
 
+
     const updated = parseToolJson(await tool.execute('call-2', {
       mode: 'project',
       command: 'update',
@@ -370,6 +371,12 @@ describe('xopc_use tool', () => {
         projectId: project.id,
       },
     });
+
+    const queued = await tool.execute('call-project-automation-run', { mode: 'automation', command: 'run', args: { id: created.automation.id } });
+    const execution = parseToolJson(queued).run;
+    expect(execution.id).toBeTruthy();
+    expect(queued.details.delivery).toMatchObject({ operation: 'started', primary: { id: created.automation.id, runId: execution.id } });
+    expect(queued.content[0]).toMatchObject({ text: expect.stringContaining(`runId=${execution.id}`) });
 
     const listed = parseToolJson(await tool.execute('call-project-automation-list', {
       mode: 'automation',

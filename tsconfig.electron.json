@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["electron/**/*.ts"],
+  "exclude": ["node_modules", "dist", "out", "**/__tests__/**"]
+}

@@ -306,7 +306,7 @@ export function AssistantResultTail({
   const supersededFileReferences = new Set(outcomeFileReferenceKeys(view.outcome));
   if (inAutomationConfiguration) {
     for (const { delivery, reference } of productDeliveryReferences(visibleDeliveries)) {
-      if (reference.kind === 'automation' && delivery.operation !== 'failed') supersededFileReferences.add(`automation:${reference.id}`);
+      if (reference.kind === 'automation' && !reference.runId && delivery.operation !== 'failed') supersededFileReferences.add(`automation:${reference.id}`);
     }
   }
   const productCount = productDeliveryReferences(visibleDeliveries, supersededFileReferences).length;

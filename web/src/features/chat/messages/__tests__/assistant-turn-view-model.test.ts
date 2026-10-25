@@ -4,6 +4,12 @@ import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-
 import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
 
 describe('buildAssistantTurnViewModel', () => {
+  it('recovers the exact execution from historical tool output for old cards and message links', () => {
+    const delivery = { version: 2, operation: 'started', primary: { kind: 'automation', id: 'a1', title: 'Progress', capabilities: ['open'] } };
+    const result = JSON.stringify({ run: { id: 'original-run', automationId: 'a1' } }) + '\nOpen in xopc: [Open](xopc://open?kind=automation&id=a1)\nxopc-product-delivery:' + encodeURIComponent(JSON.stringify(delivery));
+    const view = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [{ type: 'tool_use', id: 'run', name: 'xopc_use', status: 'done', result }] }, isStreaming: false, reasoningLevel: 'off' });
+    expect(view.deliveries[0]?.delivery.primary?.runId).toBe('original-run');
+  });
   it.each(['off', 'on', 'stream'] as const)('shows public Personal text immediately with %s reasoning detail', (reasoningLevel) => {
     const message: Message = { role: 'assistant', textSurface: 'conversation', content: [
       { type: 'thinking', text: 'private thought', streaming: true },
