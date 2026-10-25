@@ -11,6 +11,7 @@ import { createLogger } from '../utils/logger.js';
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js';
 import { CloudPhones } from './cloud-phones.js';
+import { WirelessPhones } from './wireless.js';
 import { AdbPhoneDriver, resolveAdbPath, type PhoneDriver } from './adb-driver.js';
 import { createPhoneModel, isAboutScreen, type PhoneModelAdapter, type PhoneModelDecision, type PhoneTrajectoryEntry } from './model-adapter.js';
 import { PhoneRepository } from './repository.js';
@@ -44,6 +45,8 @@ const log = createLogger('PhoneRuntime');
 const terminal = new Set(['cancelled', 'closed', 'failed', 'outcome_unknown']);
 
 export class PhoneRuntime {
+  private reconnecting = new Map<string, Promise<PhoneDevice>>();
+  private reconnectAfter = new Map<string, number>();
   private cloudPhones?: CloudPhones;
   get cloud(): CloudPhones { return this.cloudPhones ??= new CloudPhones(this.repository); }
   private sessions = new Map<string, Session>();
@@ -54,12 +57,40 @@ export class PhoneRuntime {
     private driverFactory: (path: string) => PhoneDriver = path => new AdbPhoneDriver(path),
     private modelFactory = createPhoneModel,
     private interactiveFactory: (adb: string, serial: string, failed: () => void) => PhoneInteractiveProvider = (adb, serial, failed) => new LocalScrcpyProvider(adb, serial, failed),
+    readonly wireless = new WirelessPhones(),
   ) {}
 
   async driverFor(device: PhoneDevice, config: Config): Promise<PhoneDriver> {
     return device.connection ? this.cloud.driver(device) : this.driverFactory(resolveAdbPath(config.phone.adbPath));
   }
-  async discover(config: Config, signal?: AbortSignal) { return this.driverFactory(resolveAdbPath(config.phone.adbPath)).discover(signal); }
+  async discover(config: Config, signal?: AbortSignal) {
+    const driver = this.driverFactory(resolveAdbPath(config.phone.adbPath));
+    let devices = await driver.discover(signal);
+    const missing = this.repository.list().filter(device => device.enabled && device.wireless
+      && !devices.some(item => item.serial === device.serial && item.state === 'device') && (this.reconnectAfter.get(device.id) ?? 0) < Date.now()).slice(0, 2);
+    const reconnectSignal = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
+    await Promise.all(missing.map(async device => {
+      this.reconnectAfter.set(device.id, Date.now() + 30_000);
+      await this.reconnectWireless(device.id, config, reconnectSignal).catch(() => { signal?.throwIfAborted(); });
+    }));
+    if (missing.length) devices = await driver.discover(signal);
+    return devices;
+  }
+  reconnectWireless(id: string, config: Config, signal?: AbortSignal, endpoint?: { host: string; port: number }): Promise<PhoneDevice> {
+    const active = this.reconnecting.get(id); if (active) return active;
+    const task = (async () => {
+      const device = this.repository.get(id);
+      if (!device.wireless || device.connection) throw new PhoneError('PHONE_NOT_WIRELESS', 'Choose a registered wireless phone');
+      if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'Phone access is disabled', 403);
+      await Promise.all(this.reports().filter(report => report.deviceId === id).map(report => this.stop(report.owner, 'close')));
+      this.cloudPhones?.disconnect(id);
+      const result = await this.wireless.reconnect(resolveAdbPath(config.phone.adbPath), device.wireless, signal, endpoint);
+      const current = this.repository.get(id);
+      if (current.revision !== device.revision) throw new PhoneError('PHONE_DEVICE_CHANGED', 'Phone settings changed; retry connection', 409);
+      return this.repository.save({ ...current, serial: result.device.serial, wireless: result.wireless }, id);
+    })().finally(() => this.reconnecting.delete(id));
+    this.reconnecting.set(id, task); return task;
+  }
   async applications(input: { deviceId?: string; serial?: string }, config: Config, signal: AbortSignal): Promise<PhoneApplication[]> {
     let driver: PhoneDriver; let serial: string;
     if (input.deviceId) {
@@ -139,13 +170,17 @@ export class PhoneRuntime {
         if (previous && !terminal.has(previous.report.status)) throw new PhoneError('PHONE_ALREADY_OPEN', 'Close the current phone session before opening another');
         const deviceId = input.deviceId ?? this.repository.defaultDevice();
         if (!deviceId) throw new PhoneError('PHONE_DEVICE_REQUIRED', 'Choose a registered phone in Phone Use settings');
-        const device = this.repository.get(deviceId);
+        let device = this.repository.get(deviceId);
         if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'This phone is disabled', 403);
         const modelRef = context.modelRef;
         if (!modelRef) throw new PhoneError('PHONE_MODEL_REQUIRED', 'Choose a Phone Use model in settings');
         const adbPath = resolveAdbPath(context.config.phone.adbPath);
         const driver = await this.driverFor(device, context.config);
-        const found = (await driver.discover(signal)).find(item => item.serial === device.serial);
+        let found = (await driver.discover(signal)).find(item => item.serial === device.serial);
+        if (found?.state !== 'device' && device.wireless) {
+          device = await this.reconnectWireless(device.id, context.config, signal);
+          found = (await driver.discover(signal)).find(item => item.serial === device.serial);
+        }
         if (found?.state !== 'device') throw new PhoneError('PHONE_DEVICE_OFFLINE', 'Phone is offline or has not authorized ADB');
         if (modelRef === MOCK_PHONE_MODEL && !found.emulator) throw new PhoneError('PHONE_MOCK_EMULATOR_ONLY', 'The deterministic mock model is only enabled for local Android emulators');
         const lease = this.repository.acquire(device.serial);
@@ -855,6 +890,8 @@ export class PhoneRuntime {
   }
   async stopDevice(id: string): Promise<void> { await Promise.all(this.reports().filter(report => report.deviceId === id).map(report => this.stop(report.owner, 'cancel'))); this.cloudPhones?.disconnect(id); }
   async shutdown(): Promise<void> {
+    this.wireless.close(); this.reconnectAfter.clear();
+    await Promise.allSettled(this.reconnecting.values());
     for (const controller of this.openings.values()) controller.abort(); await Promise.all([...this.sessions.keys()].map(owner => this.stop(owner, 'close'))); this.cloudPhones?.close(); this.sessions.clear(); if (this.maintenance) clearInterval(this.maintenance); this.maintenance = undefined; }
 }
 

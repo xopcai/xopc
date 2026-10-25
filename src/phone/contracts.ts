@@ -25,6 +25,7 @@ export const PhoneDeviceSchema = z.object({
   textInput: z.enum(['auto', 'manual']).optional(),
   allowedApps: z.array(z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/)).max(500).default([]),
   connection: z.object({ kind: z.literal('aliyun-adb'), endpoint: z.string().max(200), credentialId: z.string().uuid() }).strict().optional(),
+  wireless: z.object({ guid: z.string().min(1).max(200), hardwareSerial: z.string().min(1).max(200), host: z.string().max(100), port: z.number().int().min(1).max(65535) }).strict().optional(),
   createdAt: z.number(), revision: z.number().int().positive(),
 }).strict();
 export type PhoneDevice = z.infer<typeof PhoneDeviceSchema>;

@@ -36,6 +36,33 @@ function fixture(adapter: PhoneModelAdapter = new MockPhoneModel()) {
   return { repository, runtime, driver, device, context, frames, setScreen: (texts: string[]) => { current = texts; } };
 }
 
+it('reconnects an offline wireless phone when opening it without resuming an old task', async () => {
+  const { runtime, repository, device, driver, context } = fixture();
+  const saved = repository.save({ ...device, serial: '192.168.1.5:39999', wireless: { host: '192.168.1.5', port: 39999, guid: 'guid', hardwareSerial: 'hardware' } }, device.id);
+  vi.mocked(driver.discover).mockResolvedValue([]);
+  const reconnect = vi.spyOn(runtime.wireless, 'reconnect').mockImplementation(async () => {
+    vi.mocked(driver.discover).mockResolvedValue([{ serial: '192.168.1.5:40001', name: 'Phone', state: 'device', emulator: false }]);
+    return { device: { serial: '192.168.1.5:40001', name: 'Phone', state: 'device', emulator: false }, wireless: { ...saved.wireless!, port: 40001 } };
+  });
+  const report = await runtime.execute('wireless-owner', { op: 'open', deviceId: device.id, mode: 'observe' }, { ...context, modelRef: 'test/phone' });
+  expect(report).toMatchObject({ deviceId: device.id, status: 'ready', actions: 0 });
+  expect(reconnect).toHaveBeenCalledOnce(); expect(driver.execute).not.toHaveBeenCalled();
+  expect(repository.get(device.id)).toMatchObject({ serial: '192.168.1.5:40001', allowedApps: device.allowedApps });
+  await runtime.shutdown();
+});
+
+it('throttles failed discovery reconnects and leaves disabled phones untouched', async () => {
+  const { runtime, repository, device, driver, context } = fixture();
+  repository.save({ ...device, wireless: { host: '192.168.1.5', port: 39999, guid: 'guid', hardwareSerial: 'hardware' } }, device.id);
+  vi.mocked(driver.discover).mockResolvedValue([]);
+  const reconnect = vi.spyOn(runtime.wireless, 'reconnect').mockRejectedValue(new Error('offline'));
+  await runtime.discover(context.config); await runtime.discover(context.config);
+  expect(reconnect).toHaveBeenCalledOnce();
+  repository.save({ ...repository.get(device.id), enabled: false }, device.id);
+  await expect(runtime.reconnectWireless(device.id, context.config)).rejects.toMatchObject({ code: 'PHONE_DEVICE_DENIED' });
+  expect(reconnect).toHaveBeenCalledOnce(); await runtime.shutdown();
+});
+
 describe('phone model contracts', () => {
   it('inherits or overrides the dedicated route without affecting chat', () => {
     const defaults = AgentDefaultsSchema.parse({ models: { chat: { primary: 'chat/model' }, phoneUse: { primary: MOCK_PHONE_MODEL } } });

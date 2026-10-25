@@ -6,6 +6,11 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps wireless pairing and reconnection through Phone without capturing nearby prefixes', () => {
+    for (const path of ['/api/phone/wireless/discovery', '/api/phone/wireless/pairings', '/api/phone/wireless/pairings/id', '/api/phone/wireless/connect', '/api/phone/devices/id/reconnect'])
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('phone');
+    expect(findAuthenticatedLazyRouteBundle('/api/phone-wireless/pairings')).toBeUndefined();
+  });
   it('routes guided Phone setup through the authenticated Phone admin bundle', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/phone/setup')?.id).toBe('phone');
     expect(findAuthenticatedLazyRouteBundle('/api/phone-other/setup')).toBeUndefined();

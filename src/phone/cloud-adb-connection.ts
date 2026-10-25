@@ -1,5 +1,5 @@
 import { createPrivateKey, randomUUID } from 'node:crypto';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { connect, type Socket } from 'node:net';
 import { join } from 'node:path';
 
@@ -11,6 +11,7 @@ import { parsePhoneApplications, phoneApplicationsCommand } from './applications
 import { observeAdbConsumption } from './cloud-adb-writable.js';
 import { readScrcpyServer } from './scrcpy-assets.js';
 import { PhoneError } from './contracts.js';
+import { protectPhoneCredential } from './cloud-key-permissions.js';
 import { PHONE_UI_DEX } from './ui-dump-binary.js';
 
 /** Accept only an explicit TCP endpoint, never URLs, paths or ADB commands. */
@@ -35,12 +36,23 @@ export class PhoneCloudKeyStore {
     return join(this.root, `${id}.der`);
   }
   async save(key: Buffer): Promise<string> {
-    await mkdir(this.root, { recursive: true, mode: 0o700 }); await chmod(this.root, 0o700);
-    const id = randomUUID(); await writeFile(this.path(id), key, { mode: 0o600, flag: 'wx' }); return id;
+    await mkdir(this.root, { recursive: true, mode: 0o700 });
+    await protectPhoneCredential(this.root, true);
+    const id = randomUUID(); const path = this.path(id);
+    await writeFile(path, key, { mode: 0o600, flag: 'wx' });
+    try { await protectPhoneCredential(path, false); return id; }
+    catch (error) { await rm(path, { force: true }); throw error; }
   }
   async load(id: string): Promise<Buffer> {
-    try { return await readFile(this.path(id)); }
-    catch { throw new PhoneError('PHONE_KEY_MISSING', 'Phone private key is unavailable. Remove this connection and add it again.'); }
+    try {
+      const path = this.path(id);
+      await lstat(path);
+      await protectPhoneCredential(this.root, true); await protectPhoneCredential(path, false);
+      return await readFile(path);
+    } catch (error) {
+      if (error instanceof PhoneError && error.code === 'PHONE_KEY_PERMISSIONS') throw error;
+      throw new PhoneError('PHONE_KEY_MISSING', 'Phone private key is unavailable. Remove this connection and add it again.');
+    }
   }
   async remove(id: string): Promise<void> { await rm(this.path(id), { force: true }); }
 }

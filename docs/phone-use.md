@@ -14,6 +14,18 @@ For an existing cloud phone, start with the [Alibaba Cloud Phone setup guide](ho
 
 The Gateway host must have Android SDK Platform Tools. The runner searches `ANDROID_HOME`, `ANDROID_SDK_ROOT`, common SDK directories and PATH. A custom executable can be set through `phone.adbPath` in `xopc.json`. The browser running the console does not provide USB access to a remote Gateway.
 
+## Connect a phone wirelessly (Android 11+)
+
+Open **Add phone → Wireless Android phone**. The phone and the **Gateway host** must share a local network; sharing a network with only the browser is insufficient. This version supports private IPv4 LAN addresses. A remote connector is not included.
+
+For **QR pairing**, enable Developer options → Wireless debugging on the phone, choose **Pair device with QR code**, and scan the displayed code. Codes expire after 90 seconds. Status distinguishes pairing from connecting. Once connected, confirm the phone name and application access to save it.
+
+For **Pairing code**, open **Pair device with pairing code** on the phone. Select a discovered pairing endpoint or enter its IP, pairing port and six-digit code. The connection port is discovered automatically; if mDNS is blocked, enter the port shown on the main Wireless debugging screen. Pairing and connection ports are different and dynamic; do not assume port 5555. **Already paired** connects with the current IP and connection port without pairing again.
+
+Saved wireless phones retry connection during device discovery, at most once every 30 seconds per phone. The device menu also offers **Reconnect**, with manual address recovery. Reconnection checks the authenticated phone identity before updating its address and preserves the registration, default selection and app permissions. It never resumes an Agent task automatically. If the phone forgot this Gateway, pair again first, then reconnect the existing registration. Removing an xopc registration does not revoke Android's ADB trust; use the phone's Wireless debugging settings to forget the Gateway.
+
+ADB and mDNS run on the Gateway host. If discovery fails, check Platform Tools, firewall and Wi-Fi client isolation, or use manual addresses. Pairing secrets and QR contents are transient and are not logged or stored in the database.
+
 ## Configure a phone model
 
 After connecting to XOPC Cloud, an unset global phone model defaults to `xopc-cloud/phone`, using your existing Cloud authorization. It routes to hosted AutoGLM Phone; no separate BigModel key is needed on the client. Existing phone selections and Agent overrides are preserved. Cloud availability and account quotas apply.

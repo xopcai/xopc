@@ -15,9 +15,11 @@ import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { createLogger } from '../../../utils/logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { registerPhoneSetupRoutes } from './phone-setup.js';
+import { registerPhoneWirelessRoutes } from './phone-wireless.js';
+import { resolveAdbPath } from '../../../phone/adb-driver.js';
 
 const log = createLogger('Hono:Phone');
-const deviceInput = PhoneDeviceSchema.omit({ id: true, createdAt: true, revision: true, connection: true });
+const deviceInput = PhoneDeviceSchema.omit({ id: true, createdAt: true, revision: true, connection: true, wireless: true });
 
 export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, runtime: PhoneRuntime = getPhoneRuntime()): void {
   const app = new Hono();
@@ -34,6 +36,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   });
 
   registerPhoneSetupRoutes(app, deps);
+  registerPhoneWirelessRoutes(app, deps, runtime);
 
   app.use('/api/phone/cloud/aliyun/*', bodyLimit({ maxSize: 24 * 1024, onError: c => c.json({ ok: false, error: { code: 'PHONE_UPLOAD_TOO_LARGE', message: 'Phone key upload exceeds 24 KB' } }, 413) }));
   app.post('/api/phone/cloud/aliyun/test', strictRateLimitMiddleware, async c => {
@@ -82,7 +85,12 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     const input = deviceInput.parse(await c.req.json());
     const discovered = await runtime.discover(service.currentConfig, c.req.raw.signal);
     if (!discovered.some(device => device.serial === input.serial && device.state === 'device')) throw new PhoneError('PHONE_DEVICE_OFFLINE', 'Choose a connected and authorized ADB device');
-    const device = runtime.repository.save(input);
+    const wireless = runtime.wireless.known(input.serial);
+    if (wireless) {
+      const verified = await runtime.wireless.connect(resolveAdbPath(service.currentConfig.phone.adbPath), wireless, c.req.raw.signal, wireless);
+      input.serial = verified.device.serial;
+    }
+    const device = runtime.repository.save({ ...input, ...(wireless ? { wireless } : {}) });
     if (!runtime.repository.defaultDevice()) runtime.repository.setDefault(device.id);
     return c.json({ ok: true, payload: device }, 201);
   });
