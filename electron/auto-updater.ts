@@ -1,4 +1,5 @@
 import { app, autoUpdater as nativeAutoUpdater, type BrowserWindow } from 'electron';
+import { join } from 'node:path';
 import type { NsisUpdater } from 'electron-updater';
 import electronUpdater from 'electron-updater';
 import type { UpdateInfo, ProgressInfo } from 'electron-updater';
@@ -8,6 +9,7 @@ const { autoUpdater } = electronUpdater;
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { bypassNextAppQuitConfirmation } from './quit-confirmation.js';
+import { windowsPublishers, verifyWindowsUpdateSignature } from './windows-signature.js';
 
 const log = createLogger('AutoUpdater');
 
@@ -28,6 +30,7 @@ export type UpdateStatus =
 
 let currentStatus: UpdateStatus = { state: 'idle' };
 let checkTimer: ReturnType<typeof setInterval> | null = null;
+let checkDelayTimer: ReturnType<typeof setTimeout> | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 let lastCheckWasManual = false;
 
@@ -54,6 +57,16 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   }
 
   mainWindowRef = mainWindow;
+  if (process.platform === 'win32') {
+    (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = verifyWindowsUpdateSignature;
+    try {
+      const publishers = windowsPublishers(join(process.resourcesPath, 'app-update.yml'));
+      (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = (_names, file) => verifyWindowsUpdateSignature(publishers, file);
+    } catch {
+      // Preserve existing unsigned builds; only signed builds have a publisher to pin.
+      log.warn('Windows updater has no approved publisher metadata; signed-update trust is unavailable');
+    }
+  }
 
   const feedBaseRaw = (process.env['XOPC_UPDATE_FEED_URL'] ?? DEFAULT_UPDATE_FEED_BASE).replace(/\/$/, '');
   let effectiveFeedBase = feedBaseRaw;
@@ -86,12 +99,6 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   // or never reaches `update-downloaded`; full installer download is more reliable.
   if (process.platform === 'win32') {
     autoUpdater.disableDifferentialDownload = true;
-    // Release builds must keep signature verification enabled. This override is only for local
-    // updater-feed migration tests where the publisherName metadata is known to be wrong.
-    if (process.env['XOPC_WIN_UPDATER_SKIP_SIGNATURE_VERIFY'] === '1') {
-      log.warn('Windows auto-update: skipping exe signature verification by explicit override.');
-      (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = async () => null;
-    }
   }
 
   autoUpdater.logger = {
@@ -199,7 +206,7 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     setStatus({ state: 'error', message: err.message });
   });
 
-  setTimeout(() => {
+  checkDelayTimer = setTimeout(() => {
     checkForUpdates(false);
   }, CHECK_DELAY_MS);
 
@@ -251,6 +258,7 @@ export function quitAndInstall(): void {
 }
 
 export function stopAutoUpdater(): void {
+  if (checkDelayTimer) { clearTimeout(checkDelayTimer); checkDelayTimer = null; }
   if (checkTimer) {
     clearInterval(checkTimer);
     checkTimer = null;

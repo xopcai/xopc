@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { RealtimeEndpointBinding } from '@xopcai/realtime-client';
 
 const state = vi.hoisted(() => ({
@@ -48,20 +50,26 @@ import { DesktopEndpointHost, resolveComputerDriverPath, resolveComputerDriverSd
 import { RealtimeConnectionError } from '@xopcai/realtime-client';
 
 describe('computer driver paths', () => {
+  it('resolves Windows executable names and architecture-specific caches', () => {
+    expect(resolveComputerDriverPath({ platform: 'win32', arch: 'x64', packaged: false, resourcesPath: '/resources', mainDir: '/workspace/out/main' }))
+      .toBe(join('/workspace', '.cache/computer-driver/0.36.0/win32-x64/cua-driver.exe'));
+    expect(resolveComputerDriverPath({ platform: 'win32', packaged: true, resourcesPath: '/resources', mainDir: '/unused' }))
+      .toBe(join('/resources', 'bin/cua-driver.exe'));
+  });
   it('resolves development cache relative to the bundled main entry, not app.getAppPath or cwd', () => {
-    expect(resolveComputerDriverPath({ packaged: false, resourcesPath: '/electron/Resources', mainDir: '/workspace/out/main' }))
-      .toBe('/workspace/.cache/computer-driver/0.36.0/cua-driver');
+    expect(resolveComputerDriverPath({ platform: 'darwin', packaged: false, resourcesPath: '/electron/Resources', mainDir: '/workspace/out/main' }))
+      .toBe(join('/workspace', '.cache/computer-driver/0.36.0/cua-driver'));
   });
 
   it('resolves packaged resources outside app.asar, independent of the development cache', () => {
-    expect(resolveComputerDriverPath({ packaged: true, resourcesPath: '/Applications/xopc.app/Contents/Resources',
+    expect(resolveComputerDriverPath({ platform: 'darwin', packaged: true, resourcesPath: '/Applications/xopc.app/Contents/Resources',
       mainDir: '/Applications/xopc.app/Contents/Resources/app.asar/out/main' }))
-      .toBe('/Applications/xopc.app/Contents/Resources/bin/cua-driver');
+      .toBe(join('/Applications/xopc.app/Contents/Resources', 'bin/cua-driver'));
   });
 
   it('loads the packaged SDK from its real unpacked path so its dylib can be opened', () => {
     expect(resolveComputerDriverSdkUrl({ packaged: true, resourcesPath: '/Applications/xopc.app/Contents/Resources' }))
-      .toBe('file:///Applications/xopc.app/Contents/Resources/app.asar.unpacked/node_modules/@trycua/cua-driver/dist/index.js');
+      .toBe(pathToFileURL(join('/Applications/xopc.app/Contents/Resources', 'app.asar.unpacked/node_modules/@trycua/cua-driver/dist/index.js')).href);
     expect(resolveComputerDriverSdkUrl({ packaged: false, resourcesPath: '/workspace' })).toBeUndefined();
   });
 });
@@ -178,7 +186,7 @@ describe('desktop principal reenrollment', () => {
     const next = JSON.parse(state.saved!);
     expect(next.principalId).not.toBe(previous.principalId);
     expect(next.publicKey).not.toBe(previous.publicKey);
-    expect(state.atomicWrite).toHaveBeenCalledWith('/fixture/desktop-endpoint-identity.json', expect.any(String), { mode: 0o600 });
+    expect(state.atomicWrite).toHaveBeenCalledWith(join('/fixture', 'desktop-endpoint-identity.json'), expect.any(String), { mode: 0o600 });
     const client = state.clients[0];
     const hello = await client.binding.createHello();
     expect(hello.principalId).toBe(next.principalId);

@@ -4,19 +4,21 @@ import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { COMPUTER_DRIVER_VERSION, computerDriverRelease } from './lib/computer-driver-release.mjs';
 
 // Upgrade only with reviewed protocol fixtures and a new release digest.
-const version = '0.36.0';
-if (process.platform !== 'darwin') { console.log('Skipping macOS-only Computer Use driver.'); process.exit(0); }
-const sha256 = '584e44435a26f5aa90c2f0097242307efbd63e843fc3f61072147c1963b0e592';
-const binarySha256 = '87c7e782e69703d95524e4ceb7ceba03c8a159caabf1f1ce2c118eade7d2a5ec';
-const downloadUrl = 'https://api.github.com/repos/trycua/cua/releases/assets/646667377';
+const version = COMPUTER_DRIVER_VERSION;
+if (!['darwin', 'win32'].includes(process.platform)) { console.log('Skipping unsupported Computer Use platform.'); process.exit(0); }
+const target = computerDriverRelease(process.platform, process.arch);
+const downloadUrl = `https://api.github.com/repos/trycua/cua/releases/assets/${target.assetId}`;
 const maxDownloadAttempts = 4;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const output = join(root, '.cache', 'computer-driver', version);
+const output = join(root, '.cache', 'computer-driver', version, target.cacheDirectory);
 try {
-  const cached = await readFile(join(output, 'cua-driver'));
-  if (createHash('sha256').update(cached).digest('hex') !== binarySha256) throw new Error('Cached driver checksum mismatch');
+  for (const [name, digest] of Object.entries(target.files)) {
+    const cached = await readFile(join(output, name));
+    if (createHash('sha256').update(cached).digest('hex') !== digest) throw new Error(`Cached driver checksum mismatch: ${name}`);
+  }
   console.log(`Verified cached Cua Driver ${version}`); process.exit(0);
 } catch (error) { if (error.code !== 'ENOENT') throw error; }
 // Shared CI runners can exhaust GitHub's anonymous API rate limit.
@@ -43,16 +45,26 @@ for (let attempt = 1; attempt <= maxDownloadAttempts; attempt += 1) {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
   }
 }
-if (createHash('sha256').update(bytes).digest('hex') !== sha256) throw new Error('Driver checksum mismatch');
+if (createHash('sha256').update(bytes).digest('hex') !== target.sha256) throw new Error('Driver checksum mismatch');
 const temp = await mkdtemp(join(tmpdir(), 'xopc-cua-'));
-const archive = join(temp, 'driver.tar.gz');
+const archive = join(temp, target.archive);
 await writeFile(archive, bytes, { mode: 0o600 });
-const entries = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).trim().split('\n');
-const binary = entries.find((entry) => /(^|\/)cua-driver$/.test(entry));
-if (!binary || binary.startsWith('/') || binary.split('/').includes('..')) throw new Error('Unexpected driver archive');
-execFileSync('tar', ['-xzf', archive, '-C', temp, binary]);
+const entries = execFileSync('tar', ['-tf', archive], { encoding: 'utf8' }).trim().split(/\r?\n/);
+const selected = Object.keys(target.files).map(name => {
+  const matches = entries.filter(entry => entry === name || entry.endsWith(`/${name}`));
+  const entry = matches[0];
+  if (matches.length !== 1 || entry.startsWith('/') || entry.includes('\\') || entry.split('/').includes('..') || entry.includes(':')) throw new Error('Unexpected driver archive');
+  return { name, entry };
+});
+execFileSync('tar', ['-xf', archive, '-C', temp, ...selected.map(file => file.entry)]);
+for (const { name, entry } of selected) {
+  const extracted = await readFile(join(temp, entry));
+  if (createHash('sha256').update(extracted).digest('hex') !== target.files[name]) throw new Error(`Driver binary checksum mismatch: ${name}`);
+}
 await mkdir(output, { recursive: true, mode: 0o700 });
-await copyFile(join(temp, binary), join(output, 'cua-driver'));
-await chmod(join(output, 'cua-driver'), 0o755);
-console.log(`Verified Cua Driver ${version}: ${output}/cua-driver`);
+for (const { name, entry } of selected) {
+  await copyFile(join(temp, entry), join(output, name));
+  if (process.platform === 'darwin') await chmod(join(output, name), 0o755);
+}
+console.log(`Verified Cua Driver ${version}: ${output}`);
 console.log(`Download retained for inspection: ${temp}`);

@@ -48,7 +48,8 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
   const [appSearch, setAppSearch] = useState('');
   const [showAppPicker, setShowAppPicker] = useState(false);
   const [showPermissionDetails, setShowPermissionDetails] = useState(false);
-  const native = window.electronAPI?.platform === 'darwin' ? window.electronAPI.computer : undefined;
+  const windows = window.electronAPI?.platform === 'win32';
+  const native = isComputerUseAvailable() ? window.electronAPI?.computer : undefined;
   const system = window.electronAPI?.platform === 'darwin' ? window.electronAPI.system : undefined;
   useEffect(() => {
     if (!native) return;
@@ -101,20 +102,20 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
   const controlStatus = desktop?.controlPaused ? t.pausedNotice : !controlEnabled ? t.disabled
     : desktop?.connected ? `${t.connected} · ${sessionLabel}` : desktop ? t.disconnected : t.checking;
   const needsPermissions = !native || nativeError || desktop?.reenrollmentRequired === true || Boolean(desktop?.error || desktop?.session?.errorCode)
-    || (desktop != null && (!desktop.permissions.accessibility || desktop.permissions.screenRecording !== 'granted'));
-  const permissionsReady = desktop?.permissions.accessibility === true && desktop.permissions.screenRecording === 'granted'
-    && !desktop.reenrollmentRequired;
+    || (desktop != null && !windows && (!desktop.permissions.accessibility || desktop.permissions.screenRecording !== 'granted'));
+  const permissionsReady = (windows ? desktop?.connected === true : desktop?.permissions.accessibility === true && desktop.permissions.screenRecording === 'granted')
+    && !desktop?.reenrollmentRequired;
   const authorizedApps = access?.apps.filter(item => access.authorizedAppIds.includes(item.appId)) ?? [];
   const availableApps = access?.apps.filter(item => !access.authorizedAppIds.includes(item.appId)
     && `${item.name} ${item.appId}`.toLocaleLowerCase().includes(appSearch.toLocaleLowerCase())) ?? [];
 
   const permissionsPanel = <section aria-labelledby="computer-permissions-title" className="space-y-3">
     <h2 id="computer-permissions-title" className="text-sm font-semibold text-fg">{t.permissions}</h2>
-    {!native ? <p className="rounded-xl bg-surface-hover/20 p-5 text-sm leading-relaxed text-fg-muted">{window.electronAPI && window.electronAPI.platform !== 'darwin' ? t.unsupportedPlatform : t.desktopRequired}</p> :
+    {!native ? <p className="rounded-xl bg-surface-hover/20 p-5 text-sm leading-relaxed text-fg-muted">{window.electronAPI ? t.unsupportedPlatform : t.desktopRequired}</p> :
       nativeError ? <p role="alert" className="rounded-xl bg-danger-soft p-5 text-sm text-danger">{t.nativeError}</p> :
       !desktop ? <div aria-label={t.checking}><Skeleton className="h-20 w-full rounded-xl" /></div> :
       permissionsReady && !showPermissionDetails ? <div className="overflow-hidden rounded-2xl border border-edge bg-surface-panel">
-        <SettingRow icon={<ShieldCheck className="size-5" />} title={t.systemPermissions} description={t.granted}>
+        <SettingRow icon={<ShieldCheck className="size-5" />} title={windows ? t.windowsAccess : t.systemPermissions} description={windows ? t.windowsAccessDescription : t.granted}>
           <Button onClick={() => setShowPermissionDetails(true)}>{t.viewDetails}</Button>
         </SettingRow>
       </div> :
@@ -122,6 +123,7 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
         <SettingRow icon={<Monitor className="size-5" />} title={t.device} description={<span aria-live="polite">{desktop.connected ? t.connected : t.disconnected} · {sessionLabel}</span>}>
           {desktop.reenrollmentRequired && <Button disabled={busy} onClick={() => { void perform(async () => { setDesktop(await native.reenroll()); }); }}>{t.reenroll}</Button>}
         </SettingRow>
+        {windows && <SettingRow icon={<ShieldCheck className="size-5" />} title={t.windowsAccess} description={t.windowsAccessDescription} />}
         {system && <>
           <SettingRow icon={<ShieldCheck className="size-5" />} title={t.accessibility}>
             <span className="text-xs text-fg-muted">{desktop.permissions.accessibility ? t.granted : t.notGranted}</span>
@@ -142,6 +144,8 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
       meta={<span className="mt-3 inline-flex rounded-md border border-edge px-2 py-1 text-xs text-fg-muted">{t.preview}</span>}
       actions={native && <Button onClick={() => { void stop(); }}><Square className="size-3.5" />{t.stop}</Button>} />
 
+    {windows && <p className="text-sm leading-relaxed text-fg-muted">{t.windowsAccessDescription}</p>}
+
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
     {notice && <p role="status" className="text-sm text-fg-muted">{t.stoppedNotice}</p>}
 
@@ -152,7 +156,7 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
         <div className="divide-y divide-edge-subtle overflow-hidden rounded-2xl border border-edge bg-surface-panel">
           <SettingRow icon={<MousePointer2 className="size-5" />} title={t.desktop} description={<span aria-live="polite">{controlStatus}</span>}>
             <button type="button" role="switch" aria-label={t.desktop} aria-checked={controlEnabled}
-              disabled={busy || !isComputerUseAvailable()} onClick={() => { void saveEnabled(config?.computer?.enabled !== true); }}
+              disabled={busy || !isComputerUseAvailable() || desktop?.capabilities?.supported === false} onClick={() => { void saveEnabled(config?.computer?.enabled !== true); }}
               className="touch-target flex items-center rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
               <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${controlEnabled ? 'bg-accent' : 'bg-fg-muted/30'}`}>
                 <span className={`size-5 rounded-full bg-white transition-transform ${controlEnabled ? 'translate-x-5' : 'translate-x-0'}`} />

@@ -1,8 +1,10 @@
 {
   "computerSettings": {
     "title": "电脑控制",
-    "subtitle": "让 xopc 使用 Mac 上的应用。",
-    "preview": "macOS · 实验性",
+    "subtitle": "让 xopc 使用电脑上的应用。",
+    "preview": "macOS / Windows x64 · 实验性",
+    "windowsAccess": "Windows 桌面访问",
+    "windowsAccessDescription": "使用当前登录的桌面，文字和键盘输入会检查原生控件。密码框、只读或无法验证的字段需要手动输入，部分后台快捷键可能无法执行。",
     "previewFootnote": "预览功能可能出错，请核对任务结果。",
     "control": "控制能力",
     "desktop": "桌面应用",
@@ -36,8 +38,8 @@
     "device": "桌面连接",
     "connected": "桌面已连接",
     "disconnected": "等待桌面连接",
-    "desktopRequired": "请在 xopc macOS 桌面应用中授权。网页控制台不能批准本机操作。",
-    "unsupportedPlatform": "本机桌面控制目前仅支持 macOS 预览版。",
+    "desktopRequired": "请在 macOS 或 Windows x64 的 xopc 桌面应用中授权。网页控制台不能批准本机操作。",
+    "unsupportedPlatform": "本机桌面控制目前支持 macOS 和 Windows x64。",
     "accessibility": "辅助功能",
     "screen": "屏幕录制",
     "granted": "已授权",

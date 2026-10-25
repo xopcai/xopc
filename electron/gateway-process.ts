@@ -431,11 +431,12 @@ export function stopGatewayProcess(): void {
       // Synchronous tree kill so before-quit can finish before Electron exits; avoids orphaned
       // gateway processes that keep the HTTP port and make the next session exit with code 1.
       try {
-        spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+        const killed = spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
           windowsHide: true,
           encoding: 'utf8',
           stdio: 'ignore',
         });
+        if (killed.error || killed.status !== 0) throw killed.error ?? new Error(`taskkill exited ${killed.status}`);
       } catch {
         try {
           child.kill();

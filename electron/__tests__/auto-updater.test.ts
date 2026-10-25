@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => {
     nativeHandlers: new Map<string, (...args: unknown[]) => void>(),
     builtinCheckForUpdates: vi.fn(),
     bypassQuitConfirmation: vi.fn(),
+    publishers: vi.fn(() => ['CN=XOPC Validation, O=XOPC Validation']),
+    verifySignature: vi.fn(async () => 'signature rejected'),
     updater: {
       setFeedURL: vi.fn(),
       on: vi.fn((event: string, handler: (...args: unknown[]) => void) => handlers.set(event, handler)),
@@ -35,6 +37,7 @@ vi.mock('@xopcai/xopc/utils/logger.js', () => ({
 vi.mock('../quit-confirmation.js', () => ({
   bypassNextAppQuitConfirmation: mocks.bypassQuitConfirmation,
 }));
+vi.mock('../windows-signature.js', () => ({ windowsPublishers: mocks.publishers, verifyWindowsUpdateSignature: mocks.verifySignature }));
 
 let updater: typeof import('../auto-updater.js');
 
@@ -49,6 +52,7 @@ describe('Electron auto updater', () => {
     mocks.bypassQuitConfirmation.mockClear();
     mocks.updater.quitAndInstall.mockClear();
     mocks.updater.checkForUpdates.mockClear();
+    mocks.publishers.mockReset().mockReturnValue(['CN=XOPC Validation, O=XOPC Validation']);
     updater = await import('../auto-updater.js');
     updater.initAutoUpdater({
       isDestroyed: () => false,
@@ -113,5 +117,24 @@ describe('Electron auto updater', () => {
     expect(updater.getUpdateStatus()).toEqual({ state: 'downloaded', version: '0.0.401' });
     updater.quitAndInstall();
     expect(mocks.updater.quitAndInstall).toHaveBeenCalledWith(false, true);
+  });
+
+  it('pins Windows verification and ignores the retired signature bypass', async () => {
+    updater.stopAutoUpdater();
+    vi.stubGlobal('process', { ...process, platform: 'win32', resourcesPath: '/fixture/resources', env: { ...process.env, XOPC_WIN_UPDATER_SKIP_SIGNATURE_VERIFY: '1' } });
+    updater.initAutoUpdater({ isDestroyed: () => false, webContents: { send: vi.fn() } } as never);
+    const result = await (mocks.updater as any).verifyUpdateCodeSignature(['CN=attacker'], '/fixture/update.exe');
+    expect(result).toBe('signature rejected');
+    expect(mocks.verifySignature).toHaveBeenCalledWith(['CN=XOPC Validation, O=XOPC Validation'], '/fixture/update.exe');
+  });
+
+  it('preserves existing unsigned Windows update checks without publisher metadata', () => {
+    updater.stopAutoUpdater();
+    vi.stubGlobal('process', { ...process, platform: 'win32', resourcesPath: '/fixture/resources' });
+    mocks.publishers.mockImplementation(() => { throw new Error('no publisher'); });
+    updater.initAutoUpdater({ isDestroyed: () => false, webContents: { send: vi.fn() } } as never);
+    updater.checkForUpdates(true);
+    expect(mocks.updater.checkForUpdates).toHaveBeenCalled();
+    expect(mocks.updater.autoInstallOnAppQuit).toBe(true);
   });
 });

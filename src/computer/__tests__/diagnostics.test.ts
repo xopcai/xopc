@@ -49,6 +49,11 @@ describe('private computer session diagnostics', () => {
   });
   it.each([
     ['COMPUTER_READ_ONLY', 'permission'], ['COMPUTER_WINDOW_CHANGED', 'target'], ['COMPUTER_UI_UNSTABLE', 'observation'],
+    ['COMPUTER_WINDOWS_TEXT_INPUT_UNVERIFIED', 'permission'], ['COMPUTER_PLATFORM_UNSUPPORTED', 'permission'],
+    ['COMPUTER_WINDOWS_KEY_TARGET_REQUIRED', 'permission'], ['COMPUTER_WINDOWS_KEY_TARGET_CHANGED', 'native'],
+    ['COMPUTER_WINDOWS_EDIT_TARGET_CHANGED', 'native'], ['COMPUTER_DRIVER_PRESS_KEY_REFUSED', 'native'],
+    ['COMPUTER_DRIVER_HOTKEY_REFUSED', 'native'],
+    ['COMPUTER_WINDOW_APP_CHANGED', 'target'], ['COMPUTER_NATIVE_IDENTITY_UNAVAILABLE', 'target'],
     ['COMPUTER_MODEL_HTTP_429', 'model'], ['COMPUTER_NO_PROGRESS', 'no_progress'], ['COMPUTER_ACTION_BUDGET', 'budget'],
     ['COMPUTER_SEMANTIC_ACTION_UNCONFIRMED', 'native'], ['COMPUTER_EVALUATION_TIMEOUT', 'harness'],
     ['COMPUTER_DRIVER_KEY_REFUSED', 'native'], ['COMPUTER_DRIVER_SCROLL_REFUSED', 'native'],

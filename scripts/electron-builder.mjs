@@ -40,7 +40,18 @@ function shouldStripProxy(value) {
   return typeof value === 'string' && LOCAL_PROXY.test(value);
 }
 
-const env = loadElectronSigningEnv(root);
+const extra = process.argv.slice(2);
+const electronPlatform = extra.includes('--mac') ? 'darwin' : extra.includes('--win') ? 'win32' : extra.includes('--linux') ? 'linux' : process.platform;
+const env = loadElectronSigningEnv(root, process.env, electronPlatform);
+const yaml = requireRoot('js-yaml');
+const config = yaml.load(readFileSync(packConfig, 'utf8'));
+if (electronPlatform === 'win32' && env.WIN_CSC_LINK) {
+  config.win.signExts = ['.dll', '.node'];
+  config.win.signtoolOptions = { ...config.win.signtoolOptions, signingHashAlgorithms: ['sha256'], rfc3161TimeStampServer: 'http://timestamp.digicert.com' };
+}
+if (electronPlatform === 'win32' && env.XOPC_WINDOWS_PUBLISHER) {
+  config.win.signtoolOptions = { ...config.win.signtoolOptions, publisherName: [env.XOPC_WINDOWS_PUBLISHER] };
+}
 if (process.env['ELECTRON_BUILDER_KEEP_PROXY'] !== '1') {
   for (const k of PROXY_KEYS) {
     if (shouldStripProxy(env[k])) delete env[k];
@@ -54,18 +65,10 @@ env.ELECTRON_BUILDER_BINARIES_MIRROR ??= 'https://npmmirror.com/mirrors/electron
 // land under repo's dist/release even though the pack dir is in os.tmpdir().
 env.XOPC_ELECTRON_RELEASE_OUTPUT = join(root, 'dist/release');
 
-const extra = process.argv.slice(2);
 const hasPublishFlag = extra.some((a) => a === '--publish' || a.startsWith('--publish='));
 const publishArgs =
   process.env['ELECTRON_PUBLISH'] === '1' || hasPublishFlag ? [] : ['--publish', 'never'];
 
-const electronPlatform = extra.includes('--mac')
-  ? 'darwin'
-  : extra.includes('--win')
-    ? 'win32'
-    : extra.includes('--linux')
-      ? 'linux'
-      : process.platform;
 const electronArch = extra.includes('--arm64') ? 'arm64' : extra.includes('--x64') ? 'x64' : process.arch;
 const compatibility = spawnSync(process.execPath, [join(root, 'scripts/verify-electron-gateway-compatibility.mjs')], {
   stdio: 'inherit', cwd: root, env,
@@ -76,7 +79,7 @@ const entitlementsPath = join(packDir, '_pack-resources/entitlements.mac.plist')
 const effectivePackConfig = join(packDir, 'electron-builder.effective.yml');
 writeFileSync(
   effectivePackConfig,
-  readFileSync(packConfig, 'utf8').replaceAll('__XOPC_ELECTRON_ENTITLEMENTS__', entitlementsPath),
+  yaml.dump(config).replaceAll('__XOPC_ELECTRON_ENTITLEMENTS__', entitlementsPath),
 );
 
 const r = spawnSync(

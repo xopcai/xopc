@@ -34,7 +34,7 @@ describe('prepareCuaSdkRuntime', () => {
     for (const name of CUA_MAC_NATIVE_FILES) {
       expect(readFileSync(join(dir, name), 'utf8')).toBe(`thin:${slice}`);
       expect(readFileSync(join(root, name), 'utf8')).toBe('universal');
-      expect(statSync(join(dir, name)).mode & 0o777).toBe(0o755);
+      expect(statSync(join(dir, name)).mode & 0o777).toBe(process.platform === 'win32' ? statSync(join(root, name)).mode & 0o777 : 0o755);
     }
     expect(runLipo).toHaveBeenCalledTimes(4);
     expect(readdirSync(dir).sort()).toEqual([...CUA_MAC_NATIVE_FILES].sort());
@@ -48,10 +48,27 @@ describe('prepareCuaSdkRuntime', () => {
     expect(readFileSync(join(dir, CUA_MAC_NATIVE_FILES[0]), 'utf8')).toBe('universal');
   });
 
-  it.each(['linux', 'win32'])('leaves %s native packages unchanged', platform => {
+  it.each(['linux'])('leaves %s native packages unchanged', platform => {
     const runLipo = vi.fn();
     prepareCuaSdkRuntime('/unused', { platform, arch: 'x64' }, runLipo);
     expect(runLipo).not.toHaveBeenCalled();
+  });
+
+  it('refuses missing Windows native libraries and unsupported architectures', () => {
+    expect(() => prepareCuaSdkRuntime('/unused', { platform: 'win32', arch: 'x64' })).toThrow('ENOENT');
+    expect(() => prepareCuaSdkRuntime('/unused', { platform: 'win32', arch: 'arm64' })).toThrow('Unsupported Windows');
+  });
+
+  it('rejects a mismatched Windows SDK before loading native code', () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-windows-sdk-'));
+    roots.push(root);
+    const dir = join(root, 'node_modules/@trycua/cua-driver-win32-x64-msvc');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'package.json'), '{"version":"0.35.0"}');
+    expect(() => prepareCuaSdkRuntime(root, { platform: 'win32', arch: 'x64' })).toThrow('version mismatch');
+    writeFileSync(join(dir, 'package.json'), '{"version":"0.36.0"}');
+    writeFileSync(join(dir, 'cua_driver_sdk.dll'), 'invalid native library');
+    expect(() => prepareCuaSdkRuntime(root, { platform: 'win32', arch: 'x64' })).toThrow('checksum mismatch');
   });
 
   it('rejects a missing target slice', () => {

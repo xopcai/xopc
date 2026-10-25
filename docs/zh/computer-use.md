@@ -1,11 +1,29 @@
 # 电脑控制预览
 
-通过 macOS 桌面应用，让 xopc 读取或操作一个应用窗口。预览功能需要兼容的 GUI 模型和系统权限，建议从小范围、有人看护的任务开始。
+通过 macOS 或 Windows x64 桌面应用，让 xopc 读取或操作一个应用窗口。预览功能需要兼容的 GUI 模型与本机应用授权，建议从小范围、有人看护的任务开始。
+
+Windows 的 [安装后完整验证](../design/technical/computer-use-windows-installed-validation.md) 覆盖正式 NSIS 安装、正常应用与包内 Gateway、认证会话 API、签名桌面 WebSocket、截图上传、真实聊天/GUI 模型、重启和卸载。在没有安装或运行 xopc 的交互账户构建安装包后，可运行 `node --import tsx scripts/run-computer-windows-installed-validation.mts` 复现；Authenticode 签名分发另行验收。
+
+## Windows x64 预览
+
+Windows 通过与 macOS 相同的本地 Broker 支持窗口观察、原生 UIA 按钮、文字和键盘输入。启用电脑控制，在设置中授权应用并选择兼容模型后，可以从计算器或临时原生文本框开始。部分应用不支持后台输入，对应动作会明确拒绝，不会静默切换到前台操作。
+
+请在当前登录的交互桌面中运行。Session 0 服务、锁屏、UAC 确认及更高权限目标不在本预览的认证范围。Windows 无需设置 macOS 的辅助功能和屏幕录制权限。
+
+文字输入要求当前观察中恰有一个 `inputAllowed: true` 的原生字段。xopc 通过 Windows UIA 补充密码框与只读属性，唯一匹配控件边界，并在真正输入前重新检查控件运行时身份及安全状态。密码框、禁用、屏幕外、只读、存在歧义或无法验证的字段需要手动输入。原生 `setValue` 替换整个字段；Windows ValuePattern 路径上的 `typeText` 追加文字，不假定插入光标位置。网页内容字段继续优先使用已有的浏览器工具。
+
+键盘输入要求授权窗口内存在已验证的非密码焦点控件，执行前会重新检查焦点，并通过当前原生 token 后台投递。Windows 使用 `ctrl` 而非 `cmd`，Backspace 与 Delete 分开处理；全局及退出窗口的快捷键会被拒绝。部分应用框架不支持后台组合键，会返回明确拒绝；不会改用前台或全局输入重试。拖拽、右键菜单、混合 DPI 和广泛第三方应用兼容性尚未认证；ARM64 与完整签名安装包另行验收。macOS 原有能力保持不变。
+
+开发者可先运行 `node scripts/setup-computer-driver.mjs`，再运行 `pnpm exec tsx scripts/run-computer-windows-validation.mts`。此手动验证会打开 Windows 计算器，清除当前表达式、计算 6 × 7 并验证 42，同时检查重复动作回执和停止行为。需要 Windows x64 交互会话，验证后保留计算器窗口，并将不含窗口内容的证据写入 `.cache/computer-windows-validation/result.json`。此验证不调用模型，也不代表 Gateway 网络链路或安装包已通过认证。
+
+文字与真实模型验证使用 `pnpm exec tsx scripts/run-computer-windows-input-validation.mts [provider/model]`，默认沿用现有 `xopc-cloud/computer`。脚本创建并关闭独立 WinForms 窗口，先验证中文、emoji、多行追加、字段替换、End、Backspace 和密码框／只读拒绝，再让真实模型通过 ComputerRuntime 与本地 Broker 替换已有示例、按 End 并点击 Verify。应用必须同时读到准确文字和键盘事件，才会返回 PASS。GUI-Plus 可使用受控的 `set_value` 原生扩展，提供当前字段 ref 和完整替换文字。仅该临时窗口会发送给模型，调用按现有服务规则计费；凭据保留在原有存储中，会话、配置、数据库和证据隔离在 `.cache/computer-windows-input-validation/<run-id>/`。不伪造模型响应；端点传输使用进程内适配，因此不代表 Gateway 网络、其他应用或安装包已完成认证。
+
+实测版本、模型请求次数与验证边界见 [Windows 输入验证记录](../design/technical/computer-use-windows-input-validation.md)。
 
 ## 完成设置
 
-1. 安装包含电脑控制功能的已签名 macOS 桌面版本。
-2. 打开 **设置 → 集成 → 电脑控制**（`#/settings/computer-use`），启用控制，并为 xopc 授予 macOS 辅助功能和屏幕录制权限。
+1. 安装包含电脑控制功能的对应平台桌面版本。
+2. 打开 **设置 → 集成 → 电脑控制**（`#/settings/computer-use`），启用控制。macOS 还需为 xopc 授予辅助功能和屏幕录制权限。
 3. 允许需要使用的应用。建议先逐个授权应用。
 4. 从已连接目录选择支持截图输入和工具调用的模型或兼容 GUI 模型并保存。自有密钥先连接对应服务商；使用 XOPC Cloud 时先登录并刷新目录。普通聊天的模型选择不会自动配置电脑控制。
 5. 在桌面聊天中说：`读取飞书当前页面，不要点击。` 如果需要启动应用，请明确说：`打开飞书并读取当前页面。`

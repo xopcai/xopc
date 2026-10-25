@@ -3,7 +3,28 @@ import { ChatCompletionsComputerAdapter, GUI_PLUS_SYSTEM_PROMPT, GUI_PLUS_OBSERV
 import { computerDiagnostic } from '../errors.js';
 
 const call = (arguments_: unknown) => `<tool_call>${JSON.stringify({ name: 'computer_use', arguments: arguments_ })}</tool_call>`;
+
+describe('Windows model key normalization', () => {
+  it('preserves Backspace separately from Delete for a Windows observation', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { tool_calls: [{ function: {
+      name: 'computer_proposal', arguments: JSON.stringify({ proposal: { kind: 'action', action: { kind: 'pressKeys', keys: ['Backspace'] } } }),
+    } }] } }] }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    expect(await adapter.predict({ goal: 'Delete one character', image: new Uint8Array([1]), mimeType: 'image/png',
+      width: 100, height: 100, summary: JSON.stringify({ platform: 'win32', elements: [] }) }))
+      .toEqual({ kind: 'action', action: { kind: 'pressKeys', keys: ['backspace'] } });
+  });
+});
 describe('GUI-Plus adapter', () => {
+  it('supports bounded native field replacement without coordinates or key shortcuts', () => {
+    expect(parseGuiPlusProposal(call({ action: 'set_value', ref: 'e7', text: '中文🙂' }), 800, 600))
+      .toEqual({ kind: 'action', action: { kind: 'setValue', ref: 'e7', text: '中文🙂' } });
+    for (const args of [{ action: 'set_value', ref: 'e7' }, { action: 'set_value', text: 'text' },
+      { action: 'set_value', ref: 'e7', text: 'text', coordinate: [1, 2] }]) {
+      expect(() => parseGuiPlusProposal(call(args), 800, 600)).toThrow('INVALID_MODEL_OUTPUT');
+    }
+    expect(GUI_PLUS_SYSTEM_PROMPT).toContain('set_value requires both ref and text');
+  });
   it('defines only answer in the read-only hosted function signature', () => {
     const tool = JSON.parse(GUI_PLUS_OBSERVATION_PROMPT.match(/<tools>\n(.*)\n<\/tools>/)![1]);
     expect(tool.function.parameters.properties.action.enum).toEqual(['answer']);
@@ -57,7 +78,7 @@ describe('GUI-Plus adapter', () => {
   it.each([
     { action: 'activate' }, { action: 'activate', ref: '' }, { action: 'activate', ref: 'x'.repeat(201) },
     { action: 'activate', ref: 'e1', coordinate: [500, 500] }, { action: 'show_menu', ref: 'e1', text: 'extra' },
-    { action: 'set_value', ref: 'e1', text: 'value' },
+    { action: 'set_value', ref: 'e1', value: 'value' },
   ])('rejects malformed or unsupported native extensions: %j', args => {
     expect(() => parseGuiPlusProposal(call(args), 800, 600)).toThrow('COMPUTER_INVALID_MODEL_OUTPUT');
   });

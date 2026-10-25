@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
@@ -33,8 +33,8 @@ class FakeChildProcess extends EventEmitter {
 
   kill(signal?: NodeJS.Signals): boolean {
     this.killSignals.push(signal);
-    if (signal === 'SIGKILL' || (signal === 'SIGTERM' && this.exitOnSigterm)) {
-      this.signalCode = signal;
+    if (signal === 'SIGKILL' || ((!signal || signal === 'SIGTERM') && this.exitOnSigterm)) {
+      this.signalCode = signal ?? 'SIGTERM';
       queueMicrotask(() => this.emit('exit', null, signal));
     }
     return true;
@@ -55,7 +55,9 @@ describe('embedded gateway shutdown', () => {
   beforeEach(() => {
     mocks.spawn.mockReset();
     mocks.spawnSync.mockReset();
+    vi.stubGlobal('process', { ...process, platform: 'darwin' });
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it('waits for a graceful SIGTERM exit', async () => {
     const child = new FakeChildProcess(true);
@@ -73,5 +75,29 @@ describe('embedded gateway shutdown', () => {
     await stopGatewayProcessAndWait(10);
 
     expect(child.killSignals).toEqual(['SIGTERM', 'SIGKILL']);
+  });
+
+  it('stops the owned Windows process tree without opening a console', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' });
+    const child = new FakeChildProcess(true);
+    spawnFakeGateway(child);
+    mocks.spawnSync.mockImplementation(() => {
+      child.signalCode = 'SIGKILL';
+      queueMicrotask(() => child.emit('exit', null, 'SIGKILL'));
+      return { status: 0 };
+    });
+    await stopGatewayProcessAndWait(50);
+    expect(mocks.spawnSync).toHaveBeenCalledWith('taskkill', ['/PID', '12345', '/T', '/F'],
+      expect.objectContaining({ windowsHide: true, stdio: 'ignore' }));
+    expect(child.killSignals).toEqual([]);
+  });
+
+  it.each([{ status: 1 }, { status: null, error: new Error('taskkill unavailable') }])('falls back when Windows taskkill fails: %j', async result => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' });
+    const child = new FakeChildProcess(true);
+    spawnFakeGateway(child);
+    mocks.spawnSync.mockReturnValue(result);
+    await stopGatewayProcessAndWait(50);
+    expect(child.killSignals).toEqual([undefined]);
   });
 });

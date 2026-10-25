@@ -12,6 +12,8 @@ import {
 import { prepareNodePtyPackage, resolveNodePtyPackage } from './prepare-node-pty.mjs';
 import { pruneElectronPdfjsRuntime } from './prune-electron-pdfjs-runtime.mjs';
 import { prepareCuaSdkRuntime } from './prepare-cua-sdk.mjs';
+import { COMPUTER_DRIVER_VERSION, computerDriverRelease } from './lib/computer-driver-release.mjs';
+import { createHash } from 'node:crypto';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const packDir = mkdtempSync(join(tmpdir(), 'xopc-electron-pack-'));
@@ -125,8 +127,19 @@ export function thinMacBinary(source, destination, arch, runLipo = spawnSync) {
 export function stageComputerDriver(repoRoot, packDirPath, target, thinBinary = thinMacBinary) {
   const computerDriverDir = join(packDirPath, '_pack-resources', 'computer-driver');
   mkdirSync(computerDriverDir, { recursive: true });
+  if (target.platform === 'win32') {
+    const release = computerDriverRelease(target.platform, target.arch);
+    for (const [name, digest] of Object.entries(release.files)) {
+      const source = join(repoRoot, '.cache', 'computer-driver', COMPUTER_DRIVER_VERSION, release.cacheDirectory, name);
+      if (!existsSync(source)) throw new Error('Run node scripts/setup-computer-driver.mjs before packaging Windows Computer Use.');
+      if (createHash('sha256').update(readFileSync(source)).digest('hex') !== digest) throw new Error(`Computer driver checksum mismatch: ${name}`);
+      cpSync(source, join(computerDriverDir, name));
+    }
+    cpSync(join(repoRoot, 'electron/resources/computer-driver-LICENSE.txt'), join(computerDriverDir, 'computer-driver-LICENSE.txt'));
+    return;
+  }
   if (target.platform !== 'darwin') return;
-  const driver = join(repoRoot, '.cache', 'computer-driver', '0.36.0', 'cua-driver');
+  const driver = join(repoRoot, '.cache', 'computer-driver', COMPUTER_DRIVER_VERSION, 'cua-driver');
   if (!existsSync(driver)) throw new Error('Run node scripts/setup-computer-driver.mjs before packaging macOS Computer Use.');
   thinBinary(driver, join(computerDriverDir, 'cua-driver'), target.arch);
   cpSync(join(repoRoot, 'electron/resources/computer-driver-LICENSE.txt'), join(computerDriverDir, 'computer-driver-LICENSE.txt'));

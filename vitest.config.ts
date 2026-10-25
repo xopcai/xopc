@@ -54,7 +54,15 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'computer-desktop',
-          include: ['electron/computer/**/*.{test,spec}.{ts,tsx}', 'electron/browser/**/*.{test,spec}.{ts,tsx}'],
+          include: [
+            'electron/computer/**/*.{test,spec}.{ts,tsx}',
+            'electron/browser/**/*.{test,spec}.{ts,tsx}',
+            'electron/__tests__/gateway-process*.test.ts',
+            'electron/__tests__/trusted-renderer.test.ts',
+            'electron/__tests__/electron-user-paths.test.ts',
+            'electron/__tests__/windows-signature.test.ts',
+            'electron/__tests__/windows-signature-process.test.ts',
+          ],
           setupFiles: [setupFile],
           maxWorkers: 2,
           sequence: { groupOrder: 4 },
