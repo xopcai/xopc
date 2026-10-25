@@ -19,11 +19,13 @@ import { MIME_TYPE_BY_EXTENSION } from '../ipc/file-ipc.js';
 import { normalizeExternalHttpUrl } from '../external-url.js';
 import { assertGatewayCompatibility, GATEWAY_PROTOCOL_INCOMPATIBLE } from '../gateway-compatibility.js';
 import { writeTextAtomic } from '../../src/infra/write-file-atomic.js';
+import { createLogger } from '../../src/utils/logger.js';
 import { uploadDesktopFrame } from './frame-upload.js';
 import { executeComputerCommand } from './execute-command.js';
 import { ComputerAccessPolicy } from './access-policy.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
+const log = createLogger('DesktopEndpointHost');
 
 export function resolveComputerDriverPath(options: { packaged: boolean; resourcesPath: string; mainDir: string; platform?: NodeJS.Platform; arch?: string }): string {
   const platform = options.platform ?? process.platform;
@@ -54,6 +56,12 @@ export class DesktopEndpointHost {
   private controlPaused = false;
   private readonly lifetime = new AbortController();
   private readonly accessPolicy = new ComputerAccessPolicy();
+  private stopBrokerInBackground(): void {
+    void this.broker.stop().catch(() => {
+      if (!this.reenrollmentRequired) this.error = 'COMPUTER_DRIVER_CLEANUP_UNCONFIRMED';
+      log.warn({ phase: 'cleanup' }, 'Computer driver stop could not be confirmed');
+    });
+  }
   constructor(private readonly options: { connection(): { port: number; token: string } | undefined; window(): BrowserWindow | null }) {
     // Dev launches out/main/index.js directly, so app.getAppPath() is not the repository root.
     const binary = resolveComputerDriverPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, mainDir: import.meta.dirname });
@@ -161,7 +169,7 @@ export class DesktopEndpointHost {
     this.claim = undefined;
     this.client?.disconnect(); this.client = undefined;
     this.controller?.disconnect(); this.controller = undefined;
-    void this.broker.stop();
+    this.stopBrokerInBackground();
     this.error = 'Desktop identity was revoked. Re-register this device in Computer Use settings.';
   }
   private async identity(): Promise<{ data: Identity; privateKey: string }> {
@@ -272,10 +280,10 @@ export class DesktopEndpointHost {
       if (this.stopped || this.reenrollmentRequired || this.client !== realtime) return;
       this.claim = { type: 'endpoint', endpointId, token: turnToken }; controller.connect(message => realtime.sendEndpointMessage(message)); },
       onMessage: message => { void controller.handleMessage(message); },
-      onDisconnected: () => { this.claim = undefined; controller.disconnect(); void this.broker.stop(); },
+      onDisconnected: () => { this.claim = undefined; controller.disconnect(); this.stopBrokerInBackground(); },
     });
     this.client = realtime; this.controller = controller; realtime.connect();
   }
-  visibilityChanged(): void { this.controller?.publishAvailability(); if (!this.visible()) void this.broker.stop(); }
+  visibilityChanged(): void { this.controller?.publishAvailability(); if (!this.visible()) this.stopBrokerInBackground(); }
   async close(): Promise<void> { this.stopped = true; this.lifetime.abort(); clearTimeout(this.retry); this.client?.disconnect(); this.controller?.disconnect(); await this.broker.dispose(); }
 }

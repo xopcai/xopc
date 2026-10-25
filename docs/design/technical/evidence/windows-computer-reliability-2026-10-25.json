@@ -1,0 +1,382 @@
+{
+  "version": 1,
+  "date": "2026-10-25",
+  "platform": "win32",
+  "arch": "x64",
+  "windowsBuild": "10.0.26200",
+  "driverVersion": "0.36.0",
+  "scope": {
+    "gateway": "real HTTP and WebSocket",
+    "models": "not called; deterministic authorized inputs",
+    "installedPackage": false,
+    "ciAndPublishingChanged": false
+  },
+  "faults": [
+    {
+      "name": "lost-completed-result",
+      "passed": true,
+      "nativeInputs": 1,
+      "noReplay": true
+    },
+    {
+      "name": "driver-crash",
+      "passed": true,
+      "noAdditionalInputs": true
+    },
+    {
+      "name": "hidden-control-ui",
+      "passed": true,
+      "noAdditionalInputs": true
+    },
+    {
+      "name": "gateway-restart",
+      "mode": "abrupt-process-exit",
+      "passed": true,
+      "principalRetained": true,
+      "noReplay": true
+    }
+  ],
+  "matrix": [
+    {
+      "name": "WinForms native fixture",
+      "outcome": "passed",
+      "oracle": "app-owned control/event state",
+      "trials": [
+        {
+          "repetition": 0,
+          "wallMs": 23323,
+          "verified": true
+        },
+        {
+          "repetition": 1,
+          "wallMs": 23910,
+          "verified": true
+        },
+        {
+          "repetition": 2,
+          "wallMs": 23927,
+          "verified": true
+        }
+      ],
+      "safeReplans": 0,
+      "wallMs": 75045,
+      "phaseSummary": {
+        "discover": {
+          "samples": 1,
+          "failed": 0,
+          "totalMs": 991,
+          "p50Ms": 991,
+          "p95Ms": 991,
+          "minMs": 991,
+          "maxMs": 991
+        },
+        "stop": {
+          "samples": 2,
+          "failed": 0,
+          "totalMs": 1136,
+          "p50Ms": 488,
+          "p95Ms": 648,
+          "minMs": 488,
+          "maxMs": 648
+        },
+        "resolveTarget": {
+          "samples": 1,
+          "failed": 0,
+          "totalMs": 1720,
+          "p50Ms": 1720,
+          "p95Ms": 1720,
+          "minMs": 1720,
+          "maxMs": 1720
+        },
+        "observe": {
+          "samples": 72,
+          "failed": 0,
+          "totalMs": 61555,
+          "p50Ms": 854,
+          "p95Ms": 873,
+          "minMs": 840,
+          "maxMs": 880
+        },
+        "perform": {
+          "samples": 9,
+          "failed": 0,
+          "totalMs": 8485,
+          "p50Ms": 1054,
+          "p95Ms": 1256,
+          "minMs": 683,
+          "maxMs": 1256
+        }
+      },
+      "unattributedMs": 1158,
+      "observationShare": 0.8202411886201613
+    },
+    {
+      "name": "WPF native fixture",
+      "outcome": "passed",
+      "oracle": "app-owned control/event state",
+      "trials": [
+        {
+          "repetition": 0,
+          "wallMs": 21456,
+          "verified": true
+        },
+        {
+          "repetition": 1,
+          "wallMs": 21248,
+          "verified": true
+        },
+        {
+          "repetition": 2,
+          "wallMs": 22864,
+          "verified": true
+        }
+      ],
+      "safeReplans": 0,
+      "wallMs": 70570,
+      "phaseSummary": {
+        "discover": {
+          "samples": 1,
+          "failed": 0,
+          "totalMs": 1107,
+          "p50Ms": 1107,
+          "p95Ms": 1107,
+          "minMs": 1107,
+          "maxMs": 1107
+        },
+        "stop": {
+          "samples": 2,
+          "failed": 0,
+          "totalMs": 1349,
+          "p50Ms": 654,
+          "p95Ms": 695,
+          "minMs": 654,
+          "maxMs": 695
+        },
+        "resolveTarget": {
+          "samples": 1,
+          "failed": 0,
+          "totalMs": 2503,
+          "p50Ms": 2503,
+          "p95Ms": 2503,
+          "minMs": 2503,
+          "maxMs": 2503
+        },
+        "observe": {
+          "samples": 72,
+          "failed": 0,
+          "totalMs": 54796,
+          "p50Ms": 760,
+          "p95Ms": 780,
+          "minMs": 741,
+          "maxMs": 801
+        },
+        "perform": {
+          "samples": 9,
+          "failed": 0,
+          "totalMs": 9683,
+          "p50Ms": 1151,
+          "p95Ms": 1199,
+          "minMs": 633,
+          "maxMs": 1199
+        }
+      },
+      "unattributedMs": 1132,
+      "observationShare": 0.7764772566246281
+    },
+    {
+      "name": "Windows Calculator",
+      "outcome": "passed",
+      "oracle": "native display equals 42",
+      "actions": 5,
+      "wallMs": 25931,
+      "phaseSummary": {
+        "discover": {
+          "samples": 1,
+          "failed": 0,
+          "totalMs": 1103,
+          "p50Ms": 1103,
+          "p95Ms": 1103,
+          "minMs": 1103,
+          "maxMs": 1103
+        },
+        "stop": {
+          "samples": 2,
+          "failed": 0,
+          "totalMs": 1228,
+          "p50Ms": 550,
+          "p95Ms": 678,
+          "minMs": 550,
+          "maxMs": 678
+        },
+        "resolveTarget": {
+          "samples": 1,
+          "failed": 0,
+          "totalMs": 4305,
+          "p50Ms": 4305,
+          "p95Ms": 4305,
+          "minMs": 4305,
+          "maxMs": 4305
+        },
+        "observe": {
+          "samples": 16,
+          "failed": 0,
+          "totalMs": 14435,
+          "p50Ms": 897,
+          "p95Ms": 952,
+          "minMs": 882,
+          "maxMs": 952
+        },
+        "perform": {
+          "samples": 5,
+          "failed": 0,
+          "totalMs": 4752,
+          "p50Ms": 1066,
+          "p95Ms": 1075,
+          "minMs": 487,
+          "maxMs": 1075
+        }
+      },
+      "unattributedMs": 108,
+      "observationShare": 0.556669623230882
+    },
+    {
+      "name": "Windows Notepad",
+      "outcome": "limited",
+      "reason": "COMPUTER_DRIVER_HOTKEY_REFUSED",
+      "textAndEndDispatchCompleted": true,
+      "saveVerified": false,
+      "stoppedWithoutReplay": true,
+      "safeReplans": 1,
+      "wallMs": 27105,
+      "phaseSummary": {
+        "discover": {
+          "samples": 1,
+          "failed": 0,
+          "totalMs": 1316,
+          "p50Ms": 1316,
+          "p95Ms": 1316,
+          "minMs": 1316,
+          "maxMs": 1316
+        },
+        "stop": {
+          "samples": 3,
+          "failed": 0,
+          "totalMs": 1310,
+          "p50Ms": 653,
+          "p95Ms": 657,
+          "minMs": 0,
+          "maxMs": 657
+        },
+        "resolveTarget": {
+          "samples": 1,
+          "failed": 0,
+          "totalMs": 2741,
+          "p50Ms": 2741,
+          "p95Ms": 2741,
+          "minMs": 2741,
+          "maxMs": 2741
+        },
+        "observe": {
+          "samples": 22,
+          "failed": 0,
+          "totalMs": 19942,
+          "p50Ms": 905,
+          "p95Ms": 923,
+          "minMs": 891,
+          "maxMs": 947
+        },
+        "perform": {
+          "samples": 3,
+          "failed": 1,
+          "totalMs": 1705,
+          "p50Ms": 624,
+          "p95Ms": 638,
+          "minMs": 443,
+          "maxMs": 638
+        }
+      },
+      "unattributedMs": 91,
+      "observationShare": 0.7357314148681056
+    }
+  ],
+  "faultPhaseSummary": {
+    "discover": {
+      "samples": 5,
+      "failed": 0,
+      "totalMs": 14594,
+      "p50Ms": 2772,
+      "p95Ms": 3515,
+      "minMs": 2757,
+      "maxMs": 3515
+    },
+    "stop": {
+      "samples": 16,
+      "failed": 0,
+      "totalMs": 8584,
+      "p50Ms": 481,
+      "p95Ms": 3020,
+      "minMs": 0,
+      "maxMs": 3020
+    },
+    "resolveTarget": {
+      "samples": 4,
+      "failed": 0,
+      "totalMs": 14372,
+      "p50Ms": 3591,
+      "p95Ms": 3598,
+      "minMs": 3589,
+      "maxMs": 3598
+    },
+    "observe": {
+      "samples": 18,
+      "failed": 1,
+      "totalMs": 17829,
+      "p50Ms": 855,
+      "p95Ms": 3300,
+      "minMs": 842,
+      "maxMs": 3300
+    },
+    "perform": {
+      "samples": 1,
+      "failed": 0,
+      "totalMs": 697,
+      "p50Ms": 697,
+      "p95Ms": 697,
+      "minMs": 697,
+      "maxMs": 697
+    }
+  },
+  "regression": {
+    "passed": 480,
+    "skipped": 9,
+    "filesPassed": 28,
+    "filesSkipped": 1,
+    "typecheck": true,
+    "electronBuild": true
+  },
+  "executionArtifacts": {
+    "faults": {
+      "startedAt": "2026-10-25T09:03:41.753Z",
+      "finishedAt": "2026-10-25T09:06:54.795Z",
+      "resultSha256": "1039aee1468dd772ed6224acb78b98a83deaf9dde5793786659aa6490a20facd",
+      "desktopBundleSha256": "75abe1c56349b148e647d44733969d7a5b5361414141894bbefa59d450e648b3"
+    },
+    "matrix": {
+      "startedAt": "2026-10-25T08:59:25.533Z",
+      "finishedAt": "2026-10-25T09:02:18.152Z",
+      "resultSha256": "03fc87dd21616ceaaddc594234d4a9a259d572ae52686f311c7c3246db518803",
+      "desktopBundleSha256": "f79b361038633e1a8fdb3db552d33693b8fa6fcbb735207e74ff97d3c0600251"
+    },
+    "notepad": {
+      "startedAt": "2026-10-25T09:06:00.213Z",
+      "finishedAt": "2026-10-25T09:06:35.102Z",
+      "resultSha256": "6db22d99ebb273791bb89cd5ff9a254749b786318410834b43fcd9a1ef17930b",
+      "desktopBundleSha256": "c77b0e17a2b38034114411b9e9f9998ec90d3aabd21ccf7ec51824f866b94a11"
+    }
+  },
+  "cleanupSmoke": {
+    "passed": true,
+    "notepadCleanupChecked": true,
+    "sourceResultSha256": "ce8ef3eb357f95920f126dc05c2cabb2306d1282c5d0558e4209db5c2cbe9c3c"
+  }
+}

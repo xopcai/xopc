@@ -43,6 +43,24 @@ function envelope(observed: Awaited<ReturnType<typeof ready>>) {
 }
 afterEach(async () => { await Promise.all(brokers.splice(0).map((b) => b.dispose())); });
 describe('desktop computer authority', () => {
+  it('revokes the old grant immediately when a native observation fails', async () => {
+    const f = fixture(true); await f.open();
+    const observed = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    vi.mocked(f.driver.observe).mockRejectedValueOnce(new Error('driver pipe disconnected'));
+    await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' })).rejects.toThrow('pipe disconnected');
+    expect(f.broker.snapshot().status).toBe('stopped');
+    await expect(f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(observed) })).rejects.toThrow('REVOKED');
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('revokes a grant when the driver dies during the fresh input precheck', async () => {
+    const f = fixture(true); await f.open();
+    const observed = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: envelope(observed) };
+    await f.broker.command(command); await Promise.resolve();
+    vi.mocked(f.driver.observe).mockRejectedValueOnce(new Error('driver crashed'));
+    await expect(f.broker.command(command)).rejects.toThrow('driver crashed');
+    expect(f.broker.snapshot().status).toBe('stopped'); expect(f.driver.perform).not.toHaveBeenCalled();
+  });
   it.each(['activate', 'showMenu'] as const)('keeps %s inside consent, freshness and execution receipt boundaries', async kind => {
     const f = fixture(); const obs = await ready(f);
     const command = { op: 'act' as const, owner: 'o', sessionId: 's', envelope: {

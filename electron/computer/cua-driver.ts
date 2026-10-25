@@ -30,6 +30,15 @@ const Bounds = z.object({ x: z.number(), y: z.number(), width: z.number().positi
 const hash = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex');
 const DENIED_APPS = /(^com\.apple\.(Terminal|systempreferences|KeychainAccess)$|password|1password|bitwarden|iterm)/i;
 
+async function cleanupDeadline(operation: () => Promise<unknown>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([Promise.resolve().then(operation), new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('COMPUTER_DRIVER_CLEANUP_UNCONFIRMED')), timeoutMs);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
 function semanticActions(element: Record<string, unknown>): string[] {
   if (typeof element.element_token !== 'string' || !element.element_token || element.enabled === false
     || element.in_web_content === true || element.role === 'AXSecureTextField') return [];
@@ -97,6 +106,7 @@ export class CuaComputerDriver implements ComputerDriver {
   private sdk?: CuaSdkModule;
   private starting?: Promise<void>;
   private stopping?: Promise<void>;
+  private cleanupUnconfirmed = false;
   private generation = 0;
   private elements: Array<Record<string, unknown>> = [];
   private frame?: { bounds: z.infer<typeof Bounds>; width: number; height: number };
@@ -113,6 +123,7 @@ export class CuaComputerDriver implements ComputerDriver {
   ) {}
 
   private async start(): Promise<void> {
+    if (this.cleanupUnconfirmed) throw new Error('COMPUTER_DRIVER_CLEANUP_UNCONFIRMED');
     if (this.stopping) throw new Error('COMPUTER_DRIVER_STOPPING');
     if (this.client) return;
     if (this.starting) return this.starting;
@@ -593,7 +604,12 @@ export class CuaComputerDriver implements ComputerDriver {
     this.generation++;
     if (!this.stopping) {
       const starting = this.starting;
-      this.stopping = (async () => { await this.cleanup(); await starting?.catch(() => {}); await this.cleanup(); })()
+      this.stopping = (async () => {
+        await this.cleanup();
+        if (starting) await cleanupDeadline(() => starting.catch(() => {}), 3000);
+        await this.cleanup();
+        this.cleanupUnconfirmed = false;
+      })().catch(error => { this.cleanupUnconfirmed = true; throw error; })
         .finally(() => { this.stopping = undefined; });
     }
     return this.stopping;
@@ -602,10 +618,15 @@ export class CuaComputerDriver implements ComputerDriver {
     this.elements = []; this.frame = undefined; this.observedTarget = undefined; this.windowsInput = undefined;
     const client = this.client; this.client = undefined;
     this.sdk = undefined;
-    const host = this.host; this.host = undefined;
-    await client?.shutdown().catch(() => {});
-    (client as { uniffiDestroy?: () => void } | undefined)?.uniffiDestroy?.();
-    await host?.stop().catch(() => {});
-    (host as { uniffiDestroy?: () => void } | undefined)?.uniffiDestroy?.();
+    const host = this.host;
+    // A broken RPC connection must not prevent the owned daemon from being stopped.
+    if (client) await cleanupDeadline(() => client.shutdown(), 750).catch(() => {});
+    try { (client as { uniffiDestroy?: () => void } | undefined)?.uniffiDestroy?.(); } catch { /* Daemon cleanup still runs. */ }
+    if (host) {
+      try { await cleanupDeadline(() => host.stop(), 3000); }
+      catch (error) { this.cleanupUnconfirmed = true; throw new Error('COMPUTER_DRIVER_CLEANUP_UNCONFIRMED', { cause: error }); }
+      if (this.host === host) this.host = undefined;
+      try { (host as { uniffiDestroy?: () => void }).uniffiDestroy?.(); } catch { /* The daemon already acknowledged stop. */ }
+    }
   }
 }

@@ -2,6 +2,8 @@
 
 通过 macOS 或 Windows x64 桌面应用，让 xopc 读取或操作一个应用窗口。预览功能需要兼容的 GUI 模型与本机应用授权，建议从小范围、有人看护的任务开始。
 
+[Windows 稳定性矩阵](https://github.com/xopcai/xopc/blob/main/docs/design/technical/windows-computer-reliability.md) 补充验证了回包丢失、私有驱动崩溃、隐藏控制界面和 Gateway 硬退出，并记录跨应用分阶段耗时。WinForms/WPF 样例与 Calculator 正向通过；Notepad 后台保存组合键仍受限，拒绝后停止，不改用全局输入绕过。CI 构建发布要求保持不变。
+
 Windows 的 [安装后完整验证](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-windows-installed-validation.md) 覆盖正式 NSIS 安装、正常应用与包内 Gateway、认证会话 API、签名桌面 WebSocket、截图上传、真实聊天/GUI 模型、重启和卸载。在没有安装或运行 xopc 的交互账户构建安装包后，可运行 `node --import tsx scripts/run-computer-windows-installed-validation.mts` 复现；Authenticode 签名分发另行验收。
 
 ## Windows x64 预览

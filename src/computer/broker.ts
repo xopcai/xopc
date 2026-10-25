@@ -177,8 +177,9 @@ export class ComputerBroker {
     return this.result(s);
   }
   private async observe(s: Session): Promise<BrokerResult> {
-    let frame = await this.driver.observe(s.target!, s.controller.signal);
+    let frame: DriverObservation | undefined;
     try {
+    frame = await this.driver.observe(s.target!, s.controller.signal);
     const validateFrame = () => {
       this.active(s);
       if (frame.target.appId !== s.appId || frame.target.processIdentity !== s.target!.processIdentity || frame.target.windowId !== s.target!.windowId) throw new Error('COMPUTER_TARGET_CHANGED');
@@ -219,7 +220,10 @@ export class ComputerBroker {
     s.touchedAt = this.now();
     return { ...this.result(s), observation: s.observation, frame: { bytes: frame.image, mimeType: frame.mimeType } };
     } catch (error) {
-      frame.image.fill(0);
+      frame?.image.fill(0);
+      await this.stop().catch(() => {
+        log.warn({ sessionId: s.id, phase: 'cleanup' }, 'Computer driver cleanup failed after observation failure');
+      });
       throw error;
     }
   }
@@ -261,7 +265,9 @@ export class ComputerBroker {
     // or weakening the original full target/digest comparison. A persistent
     // change still refuses the envelope and uses the existing bounded rescue.
     for (let sample = 0; sample < 4; sample++) {
-      const current = await this.driver.observe(s.target!, s.controller.signal);
+      let current: DriverObservation;
+      try { current = await this.driver.observe(s.target!, s.controller.signal); }
+      catch (error) { await this.stop().catch(() => {}); throw error; }
       try {
         this.active(s);
         const sameTarget = JSON.stringify(current.target) === JSON.stringify(observed.target);
