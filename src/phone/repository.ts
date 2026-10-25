@@ -58,7 +58,7 @@ export class PhoneRepository {
   }
   report(value: PhoneReport): void {
     // Screen facts are transient; only bounded operational metadata survives restart.
-    const { facts: _facts, message: _message, ...metadata } = value;
+    const { facts: _facts, message: _message, readings: _readings, ...metadata } = value;
     this.reports.set(value.sessionId, metadata);
     const all = this.reports.entries();
     for (const [id] of all.slice(0, Math.max(0, all.length - 50))) this.reports.delete(id);

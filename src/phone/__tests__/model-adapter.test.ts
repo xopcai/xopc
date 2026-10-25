@@ -25,6 +25,32 @@ function element(overrides: Partial<PhoneElement> = {}): PhoneElement {
     editable: false, password: false, bounds: [100, 200, 500, 400], ...overrides };
 }
 
+describe('read-only phone screenshot transcription', () => {
+  it.each(['autoglm-phone-v1', 'structured-phone-v1'] as const)('reads screenshots with %s without dispatching actions', async profile => {
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'phone', provider: 'test', api: 'openai-completions', input: ['image'],
+      baseUrl: 'https://phone.example/v1', phoneUse: { profile }, maxTokens: 2048 } as any);
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ choices: [{ message: {
+      content: profile === 'autoglm-phone-v1' ? 'finish(message="Android version: 15")' : '{"kind":"complete","summary":"Android version: 15"}',
+    }, finish_reason: 'stop' }] }));
+    vi.stubGlobal('fetch', fetch);
+    const adapter = await createPhoneModel('test/phone', {} as Config, 'main');
+    expect(await adapter.readScreen!(prediction(), new AbortController().signal)).toBe('Android version: 15');
+    const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
+    expect(body.messages[0].content).toContain('read-only screenshot transcription');
+    expect(body.messages[0].content).toContain('Never return an action');
+    expect(body.messages[0].content).not.toContain('Required rows and values must be fully visible and present in the native UI facts');
+    expect(body.messages[1].content[1]).toMatchObject({ type: 'image_url' });
+  });
+
+  it.each(['do(action="Tap", element=[100,200])', 'do(action="Take_over", message="Unreadable")', 'finish(message="")'])('rejects a reading response that is not a transcription: %s', async content => {
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'phone', provider: 'test', api: 'openai-completions', input: ['image'],
+      baseUrl: 'https://phone.example/v1', phoneUse: { profile: 'autoglm-phone-v1' }, maxTokens: 2048 } as any);
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ choices: [{ message: { content }, finish_reason: 'stop' }] })));
+    const adapter = await createPhoneModel('test/phone', {} as Config, 'main');
+    await expect(adapter.readScreen!(prediction(), new AbortController().signal)).rejects.toMatchObject({ code: 'PHONE_SCREEN_UNREADABLE' });
+  });
+});
+
 describe('phone model context and protocol', () => {
   it('preserves attempted targets and queries in bounded context while excluding password nodes', () => {
     const input = prediction();
