@@ -2,6 +2,10 @@
 
 These are user-facing entry points as of October 25, 2026. See [GitHub Releases](https://github.com/xopcai/xopc/releases) for exact versions and artifacts, and [Update xopc](./update.md) for upgrade steps. Desktop, Gateway, mobile, and browser extension builds are distributed separately; updating the core package does not update every client.
 
+## v0.0.419: Windows packaging fixes
+
+Windows x64 desktop builds now extract the verified Computer Use driver with the system archive tool. Windows ARM64 builds omit that unavailable driver; Computer Use remains supported on macOS and Windows x64 only.
+
 ## v0.0.417: Windows Computer Use and wireless phones
 
 - Computer Use now includes a Windows x64 desktop preview for window observation, native button activation, text entry and keyboard input. It requires an interactive desktop, authorized application and compatible GUI model; ARM64 and fully signed installers remain separate release checks.
