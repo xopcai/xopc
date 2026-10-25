@@ -85,10 +85,10 @@ struct PhoneWorkspaceView: View {
                             let ratio = model.fallback ? (model.frame?.image.size.width ?? 1) / (model.frame?.image.size.height ?? 2) : CGFloat(model.width) / CGFloat(model.height)
                             let width = min(proxy.size.width, proxy.size.height * ratio)
                             let height = width / ratio
-                            let x = (point.x - (proxy.size.width - width) / 2) / width * 1000
-                            let y = (point.y - (proxy.size.height - height) / 2) / height * 1000
-                            guard x >= 0, x <= 1000, y >= 0, y <= 1000 else { model.pointer("cancel", x: 0, y: 0); return }
-                            model.pointer(phase, x: Int(x), y: Int(y))
+                            let horizontal = (point.x - (proxy.size.width - width) / 2) / width * 1000
+                            let vertical = (point.y - (proxy.size.height - height) / 2) / height * 1000
+                            guard horizontal >= 0, horizontal <= 1000, vertical >= 0, vertical <= 1000 else { model.pointer("cancel", x: 0, y: 0); return }
+                            model.pointer(phase, x: Int(horizontal), y: Int(vertical))
                         }
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -171,8 +171,8 @@ struct PhoneWorkspaceView: View {
         return "正在连接手机…"
     }
 
-    private func command(_ op: String, action: PhoneAction? = nil) {
-        Task { await model.command(op, action: action) }
+    private func command(_ operation: String, action: PhoneAction? = nil) {
+        Task { await model.command(operation, action: action) }
     }
 }
 

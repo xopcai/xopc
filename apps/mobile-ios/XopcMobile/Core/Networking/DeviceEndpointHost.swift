@@ -59,6 +59,7 @@ actor DeviceEndpointPool {
     }
 }
 
+// swiftlint:disable:next type_body_length
 actor DeviceEndpointHost {
     private let client: GatewayClient
     private var socket: URLSessionWebSocketTask?

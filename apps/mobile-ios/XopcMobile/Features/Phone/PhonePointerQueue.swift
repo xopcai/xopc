@@ -10,21 +10,21 @@ import Foundation
     private var move: (Int, Int)?
     private var end: (Int, Int)?
     private(set) var pendingSince: Date?
-    func pointer(_ phase: String, x: Int, y: Int) {
+    func pointer(_ phase: String, x coordinateX: Int, y coordinateY: Int) {
         if phase == "cancel" {
             cancel(); return
         }
         if phase == "down" {
-            cancel(); held = true; dispatch(phase, x, y); return
+            cancel(); held = true; dispatch(phase, coordinateX, coordinateY); return
         }
         guard held else { return }
         if phase == "move" {
-            move = (x, y)
+            move = (coordinateX, coordinateY)
         }
         if phase == "up" {
             held = false; if move != nil {
-                move = (x, y)
-            }; end = (x, y)
+                move = (coordinateX, coordinateY)
+            }; end = (coordinateX, coordinateY)
         }
         drain()
     }
@@ -43,8 +43,8 @@ import Foundation
         }
     }
 
-    private func dispatch(_ phase: String, _ x: Int, _ y: Int) {
-        sequence += 1; outstanding = sequence; pendingSince = Date(); send(phase, x, y, sequence)
+    private func dispatch(_ phase: String, _ coordinateX: Int, _ coordinateY: Int) {
+        sequence += 1; outstanding = sequence; pendingSince = Date(); send(phase, coordinateX, coordinateY, sequence)
     }
 
     func cancel() {

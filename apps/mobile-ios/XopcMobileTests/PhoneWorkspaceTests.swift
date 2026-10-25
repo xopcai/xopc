@@ -5,7 +5,7 @@ import XCTest
     func testPointerBackpressureKeepsFinalUp() {
         let queue = PhonePointerQueue()
         var sent: [String] = []
-        queue.send = { phase, x, _, seq in sent.append("\(seq):\(phase):\(x)") }
+        queue.send = { phase, coordinateX, _, seq in sent.append("\(seq):\(phase):\(coordinateX)") }
         queue.pointer("down", x: 10, y: 10)
         for index in 0 ..< 400 {
             queue.pointer("move", x: index, y: 20)
