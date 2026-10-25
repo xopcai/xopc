@@ -1,3 +1,4 @@
+import { phoneAssistance, pendingPhoneAssistance, phoneAssistanceReport, cancelPhoneAssistance } from '../../../phone/assistance.js';
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -38,10 +39,36 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
 
   registerPhoneSetupRoutes(app, deps);
   registerPhoneWirelessRoutes(app, deps, runtime);
+  app.get('/api/phone/devices/:id/environment', c => {
+    const id = z.uuid().parse(c.req.param('id')); const device = runtime.repository.get(id);
+    c.header('Cache-Control', 'no-store');
+    return c.json({ ok: true, payload: { ...runtime.environment.status(id), supported: device.connection?.kind === 'aliyun-adb' } });
+  });
+  app.post('/api/phone/devices/:id/environment/cleanup', strictRateLimitMiddleware, async c => {
+    const id = z.uuid().parse(c.req.param('id')); runtime.repository.get(id);
+    const state = runtime.environment.status(id);
+    const cleared = state.shareId ? await runtime.environment.clear(state.shareId, id) : true;
+    return c.json({ ok: true, payload: { cleared, ...runtime.environment.status(id) } });
+  });
 
+  const connectionReports = () => {
+    const reports = runtime.reports().filter(report => report.status !== 'closed');
+    for (const wait of pendingPhoneAssistance()) {
+      if (!reports.some(report => report.deviceId === wait.checkpoint.report.deviceId)) reports.push(phoneAssistanceReport(wait));
+    }
+    return reports.map(report => {
+      const wait = phoneAssistance(report.owner);
+      return wait && ['open', 'queued'].includes(wait.status) ? { ...report, assistanceId: wait.id, ...(wait.status === 'open' && report.controlOwner !== 'human' ? { status: 'needs_user' as const } : {}) } : report;
+    });
+  };
+  const liveStatus = (owner: string, id: string, context: ReturnType<typeof phoneExecutionContext>, client: string) => {
+    const state = runtime.liveStatus(owner, id, context, client);
+    const wait = phoneAssistance(owner);
+    return wait && ['open', 'queued'].includes(wait.status) ? { ...state, report: { ...state.report, assistanceId: wait.id, ...(wait.status === 'open' && state.report.controlOwner !== 'human' ? { status: 'needs_user' as const } : {}) } } : state;
+  };
   app.get('/api/phone/connections', async c => {
     c.header('Cache-Control', 'no-store');
-    const payload = await Promise.all(runtime.reports().filter(report => report.status !== 'closed').map(async report => {
+    const payload = await Promise.all(connectionReports().map(async report => {
       const source = report.sourceConversationId ?? report.owner;
       const conversation = /^[\da-f]{8}-[\da-f-]{27}$/i.test(source) ? await service.sessions.getSession(source) : undefined;
       const { facts: _facts, readings: _readings, steps: _steps, task: _task, feedback: _feedback, ...metadata } = report;
@@ -129,10 +156,12 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     const next = normalizePhoneAppAccess({ ...previous, ...patch,
       ...(patch.allowedApps && patch.appAccess === undefined ? { appAccess: 'selected' as const } : {}) });
     await runtime.stopDevice(id);
+    if (previous.connection) await runtime.environment.recover(id, true);
     return c.json({ ok: true, payload: runtime.repository.save(next, id) });
   });
   app.delete('/api/phone/devices/:id', strictRateLimitMiddleware, async c => {
     const id = c.req.param('id'); const device = runtime.repository.get(id); await runtime.stopDevice(id);
+    if (device.connection) await runtime.environment.recover(id, true);
     await runtime.cloud.remove(device); runtime.repository.remove(id);
     return c.json({ ok: true });
   });
@@ -173,21 +202,24 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   const liveClient = z.string().uuid();
   const liveControlInput = z.object({
     clientId: liveClient, operationId: z.string().uuid(), epoch: z.number().int().positive(),
+    assistanceId: z.string().uuid().optional(),
     op: z.enum(['takeover', 'release', 'handback', 'pause', 'cancel', 'heartbeat', 'input', 'recover']),
     frameSeq: z.number().int().positive().optional(), geometry: z.number().int().positive().optional(), action: PhoneActionSchema.optional(),
   }).strict();
   async function conversationPhone(conversationId: string, requestedSessionId?: string) {
     if (conversationId.startsWith('device:')) {
       const deviceId = z.string().uuid().parse(conversationId.slice(7));
-      const report = runtime.reports().find(report => report.deviceId === deviceId && report.status !== 'closed');
+      const report = connectionReports().find(report => report.deviceId === deviceId);
       if (!report || requestedSessionId && report.sessionId !== requestedSessionId) throw new PhoneError('PHONE_SESSION_NOT_FOUND', 'Phone connection changed. Refresh the phone panel.', 404);
       const conversation = /^[\da-f]{8}-[\da-f-]{27}$/i.test(report.owner) ? await service.sessions.getSession(report.owner) : undefined;
-      return { owner: report.owner, report, transcriptId: conversation?.transcriptId, context: runtime.deviceContext(deviceId, service.currentConfig) };
+      return { owner: report.owner, report, transcriptId: conversation?.transcriptId, context: runtime.status(report.owner) && runtime.status(report.owner)?.status !== 'closed' ? runtime.deviceContext(deviceId, service.currentConfig) : phoneExecutionContext(service.currentConfig, report.agentId) };
     }
     z.string().uuid().parse(conversationId);
     const conversation = await service.sessions.getSession(conversationId);
     if (!conversation) throw new PhoneError('PHONE_CONVERSATION_NOT_FOUND', 'Conversation not found', 404);
-    const report = runtime.status(conversationId);
+    const connected = runtime.status(conversationId);
+    const wait = phoneAssistance(conversationId);
+    const report = connected && connected.status !== 'closed' ? connected : wait && ['open', 'queued'].includes(wait.status) ? phoneAssistanceReport(wait) : undefined;
     if (requestedSessionId && report?.sessionId !== requestedSessionId) throw new PhoneError('PHONE_SESSION_NOT_FOUND', 'Phone session not found', 404);
     if (report && report.agentId !== conversation.agentId) throw new PhoneError('PHONE_ACCESS_CHANGED', 'Conversation Agent changed', 403);
     return { owner: conversationId, report, transcriptId: conversation.transcriptId, context: phoneExecutionContext(service.currentConfig, conversation.agentId) };
@@ -196,7 +228,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     let owner = c.req.param('conversationId'); const client = liveClient.parse(c.req.query('clientId'));
     const { report, context, owner: resolvedOwner } = await conversationPhone(owner); owner = resolvedOwner;
     c.header('Cache-Control', 'no-store');
-    return c.json({ ok: true, payload: report ? runtime.liveStatus(owner, report.sessionId, context, `${getGatewayPrincipal(c).principalId}:${client}${c.req.param('conversationId').startsWith('device:') ? ':viewer' : ''}`) : null });
+    return c.json({ ok: true, payload: report ? runtime.status(owner)?.status !== 'closed' && runtime.status(owner) ? liveStatus(owner, report.sessionId, context, `${getGatewayPrincipal(c).principalId}:${client}${c.req.param('conversationId').startsWith('device:') ? ':viewer' : ''}`) : { report, ownControl: false, frame: null } : null });
   });
   app.post('/api/phone/conversations/:conversationId/:sessionId/execution-mode', strictRateLimitMiddleware, async c => {
     const address = c.req.param('conversationId');
@@ -205,7 +237,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     const input = z.object({ executionMode: PhoneExecutionModeSchema, applyCurrent: z.boolean().default(false), epoch: z.number().int().positive(), clientId: liveClient }).strict().parse(await c.req.json());
     await runtime.setExecutionMode(owner, input.executionMode, context, input.applyCurrent, input.epoch);
     c.header('Cache-Control', 'no-store');
-    return c.json({ ok: true, payload: runtime.liveStatus(owner, c.req.param('sessionId'), context, `${getGatewayPrincipal(c).principalId}:${input.clientId}`) });
+    return c.json({ ok: true, payload: liveStatus(owner, c.req.param('sessionId'), context, `${getGatewayPrincipal(c).principalId}:${input.clientId}`) });
   });
   app.get('/api/phone/conversations/:conversationId/:sessionId/frame', async c => {
     let owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
@@ -235,14 +267,46 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   app.post('/api/phone/conversations/:conversationId/:sessionId/control', async c => {
     if (c.req.param('conversationId').startsWith('device:')) throw new PhoneError('PHONE_OBSERVE_ONLY', 'The global phone viewer is read only. Use the controlling conversation for input.', 403);
     let owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
-    const { context, transcriptId, owner: resolvedOwner } = await conversationPhone(owner, id); owner = resolvedOwner;
-    const { clientId, ...input } = liveControlInput.parse(await c.req.json());
-    const result = await runtime.liveControl(owner, id, context, `${getGatewayPrincipal(c).principalId}:${clientId}`, input);
-    if (transcriptId && input.op === 'handback' && (result as { resumeTurnRequired?: boolean }).resumeTurnRequired && !service.sessions.getActiveRun(owner).active) {
-      const resumed = await service.submitSessionInput({ conversationId: owner, expectedTranscriptId: transcriptId, clientMessageId: input.operationId,
-        delivery: 'next', content: '手机已交还，请先确认当前页面，继续未完成的任务；已完成的步骤不要重复，结束后释放操作权，保持手机连接。',
-        origin: { type: 'system', source: 'internal' } });
-      if (!resumed.ok) throw new PhoneError('PHONE_RESUME_FAILED', 'Phone control returned. Send Continue in chat to resume the task.', 409);
+    const { clientId, assistanceId, ...input } = liveControlInput.parse(await c.req.json());
+    const requestedWait = phoneAssistance(owner);
+    const allowRecovery = assistanceId && requestedWait?.id === assistanceId
+      && requestedWait.checkpoint.report.sessionId === id && ['takeover', 'handback'].includes(input.op);
+    const { context, transcriptId, owner: resolvedOwner } = await conversationPhone(owner, allowRecovery ? undefined : id); owner = resolvedOwner;
+    const wait = phoneAssistance(owner);
+    if (assistanceId && (!wait || wait.id !== assistanceId || !['open', 'queued', 'resuming', 'completed'].includes(wait.status)))
+      throw new PhoneError('PHONE_ASSISTANCE_CHANGED', 'The phone task changed. Refresh before continuing.', 409);
+    // A retried completion must not repeat handback or enqueue another run.
+    if (input.op === 'handback' && assistanceId && wait?.status !== 'open') {
+      service.resumePhoneAssistance(owner, assistanceId);
+      return c.json({ ok: true, payload: runtime.status(owner) && runtime.status(owner)?.status !== 'closed' ? liveStatus(owner, runtime.status(owner)!.sessionId, context, `${getGatewayPrincipal(c).principalId}:${clientId}`) : { report: phoneAssistanceReport(wait!), ownControl: false, frame: null } });
+    }
+    let sessionId = id;
+    if (wait?.status === 'open' && ['takeover', 'handback'].includes(input.op)) {
+      const restored = await runtime.restoreAssistance(wait.checkpoint, context, c.req.raw.signal, wait.id);
+      if (restored.sessionId !== id) { sessionId = restored.sessionId; input.epoch = restored.controlEpoch!; }
+    }
+    let result: unknown;
+    try {
+      const current = runtime.status(owner);
+      result = input.op === 'handback' && wait?.status === 'open' && current?.status === 'ready' && current.controlOwner === 'agent'
+        ? liveStatus(owner, sessionId, context, `${getGatewayPrincipal(c).principalId}:${clientId}`)
+        : await runtime.liveControl(owner, sessionId, context, `${getGatewayPrincipal(c).principalId}:${clientId}`, input);
+    }
+    catch (error) {
+      const latest = phoneAssistance(owner);
+      if (input.op !== 'handback' || !wait || latest?.id !== wait.id || latest.status === 'open'
+        || !(error instanceof PhoneError) || !['PHONE_CONTROL_CHANGED', 'PHONE_CONTROL_BUSY'].includes(error.code)) throw error;
+      result = liveStatus(owner, sessionId, context, `${getGatewayPrincipal(c).principalId}:${clientId}`);
+    }
+    if (input.op === 'cancel') cancelPhoneAssistance(owner);
+    if (input.op === 'handback') {
+      if (wait?.status === 'open') service.resumePhoneAssistance(owner, wait.id);
+      else if (transcriptId && (result as { resumeTurnRequired?: boolean }).resumeTurnRequired) {
+        const resumed = await service.submitSessionInput({ conversationId: owner, expectedTranscriptId: transcriptId,
+          clientMessageId: `phone-handback:${sessionId}:${input.epoch}`, delivery: 'next',
+          content: '手机已交还，请先确认当前页面，继续未完成的任务；已完成的步骤不要重复。', origin: { type: 'system', source: 'internal' } });
+        if (!resumed.ok) throw new PhoneError('PHONE_RESUME_FAILED', 'Phone control returned. Send Continue in chat to resume the task.', 409);
+      }
     }
     c.header('Cache-Control', 'no-store'); return c.json({ ok: true, payload: result });
   });

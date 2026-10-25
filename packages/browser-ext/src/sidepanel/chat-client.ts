@@ -219,6 +219,7 @@ export class BrowserChatClient {
   private endpointBinding?: string;
   private endpointBindingTask?: Promise<void>;
   private endpointPoll?: ReturnType<typeof setInterval>;
+  private lastContextPulse = 0;
   private readonly onRuntimeMessage = (message: { type?: string; claim?: TurnClaim }) => {
     if (message.type !== 'browser/endpoint-ready' || !message.claim) return;
     this.turnClaim = message.claim;
@@ -312,6 +313,7 @@ export class BrowserChatClient {
   }
 
   stop(): void {
+    void chrome.runtime.sendMessage({ type: 'browser/context-activity', foreground: false }).catch(() => undefined);
     chrome.runtime.onMessage.removeListener(this.onRuntimeMessage);
     if (this.endpointPoll) clearInterval(this.endpointPoll);
     this.endpointPoll = undefined;
@@ -336,6 +338,11 @@ export class BrowserChatClient {
   }
 
   private async refreshEndpointClaim(): Promise<void> {
+    if (Date.now() - this.lastContextPulse >= 10_000) {
+      this.lastContextPulse = Date.now();
+      void chrome.runtime.sendMessage({ type: 'browser/context-activity',
+        foreground: typeof document !== 'undefined' && document.visibilityState === 'visible' }).catch(() => undefined);
+    }
     const previousEndpointId = this.turnClaim?.endpointId;
     const response = await chrome.runtime.sendMessage({ type: 'browser/get-endpoint-claim' }).catch(() => undefined) as {
       claim?: TurnClaim;

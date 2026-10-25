@@ -1113,6 +1113,9 @@ export class GatewayService {
   submitSessionInput(...args: Parameters<GatewayAgentRunner['submitSessionInput']>) {
     return this.agentRunner.submitSessionInput(...args);
   }
+  resumePhoneAssistance(conversationId: string, waitId: string): void {
+    this.agentRunner.inputs.resumePhone(conversationId, waitId);
+  }
 
   withSessionInputSubmission<T>(conversationId: string, operation: () => Promise<T>): Promise<T> {
     return this.agentRunner.inputs.withSubmission(conversationId, operation);
@@ -1385,6 +1388,11 @@ export class GatewayService {
     await this.localApps.recoverPendingReleases();
     const { recoverCapabilityImports } = await import('../imports/runtime.js');
     await recoverCapabilityImports();
+    const pendingPhoneLocation = getSqliteDatabase().prepare("SELECT 1 FROM durable_state WHERE namespace = 'phone.location-environment' LIMIT 1").get();
+    if (pendingPhoneLocation) {
+      const { getPhoneRuntime } = await import('../phone/runtime.js');
+      void getPhoneRuntime().environment.sweep().catch(() => log.warn({ phase: 'phone_location_recovery' }, 'Phone location recovery remains pending'));
+    }
     this.createNotificationService().start();
     this.startTime = Date.now();
     this.running = true;
@@ -1793,6 +1801,7 @@ export class GatewayService {
     log.debug('Stopping gateway service...');
     await this._workDiscovery?.stop();
     this.readiness.markStarting();
+    await this.endpointTools.locations.close();
     this.endpointTools.close();
     await this.sideChats.disposeAll();
     this.homeIntelligenceHost?.stop();

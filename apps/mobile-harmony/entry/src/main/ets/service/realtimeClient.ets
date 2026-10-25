@@ -1,4 +1,5 @@
 import { connectionProof } from './requestProof';
+import { XopcEndpointContextPublisher } from './endpointContext';
 import { cancelDevicePersonalTool, cancelAllDevicePersonalTools } from './devicePersonalTools';
 import { cancelDeviceLocation, cancelAllDeviceLocations } from './deviceLocation';
 import { i18n } from '@kit.LocalizationKit';
@@ -22,7 +23,7 @@ interface XopcDeviceEndpointMessage { type: string; payload: Object; }
 interface XopcDeviceCancellation { invocationId: string; }
 interface XopcDeviceEndpointFrame { protocolVersion: number; messageId: string; type: string; sentAt: number; payload: Object; }
 class XopcEmptyPayload {}
-interface XopcDeviceCompatibility { turnDeviceContextV1?: boolean; deviceStateToolsV1?: boolean; deviceLocationTasksV1?: boolean; mobilePersonalToolsV1?: boolean; }
+interface XopcDeviceCompatibility { turnDeviceContextV1?: boolean; endpointEnvironmentV1?: boolean; deviceStateToolsV1?: boolean; deviceLocationTasksV1?: boolean; mobilePersonalToolsV1?: boolean; }
 
 export class XopcRealtimeClient {
   private crypto: XopcDeviceCrypto = new XopcDeviceCrypto('endpoint-key');
@@ -36,6 +37,8 @@ export class XopcRealtimeClient {
   private lastReceived: number = 0;
   private claim?: XopcTurnClaim;
   private supportsDeviceContext: boolean = false;
+  private supportsEnvironment: boolean = false;
+  private contextPublisher: XopcEndpointContextPublisher = new XopcEndpointContextPublisher((): string => this.crypto.uuid());
 
   environment(): XopcEndpointContext | undefined {
     if (!this.supportsDeviceContext || !this.claim) return undefined;
@@ -85,6 +88,7 @@ export class XopcRealtimeClient {
   }
 
   private release(): void {
+    this.contextPublisher.stop();
     cancelAllDeviceLocations(); cancelAllDevicePersonalTools();
     this.ready = false; this.claim = undefined;
     clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
@@ -118,6 +122,7 @@ export class XopcRealtimeClient {
       phase = 'compatibility';
       const compatibility = JSON.parse(await gatewaySession.request('/api/endpoint-tools/compatibility')) as XopcPayload<XopcDeviceCompatibility>;
       this.supportsDeviceContext = compatibility.payload?.turnDeviceContextV1 === true;
+      this.supportsEnvironment = compatibility.payload?.endpointEnvironmentV1 === true;
       phase = 'register';
       await gatewaySession.request('/api/endpoint-tools/principals', 'POST', JSON.stringify(registration));
       const clientId = 'harmonyos:' + profile.deviceId;
@@ -221,6 +226,7 @@ export class XopcRealtimeClient {
       const payload = frame.payload as XopcReady;
       if (!payload.endpoint?.turnToken || !payload.endpoint.endpointId) throw new Error('MISSING_ENDPOINT_CLAIM');
       this.claim = { type: 'endpoint', endpointId: payload.endpoint.endpointId, token: payload.endpoint.turnToken };
+      if (this.supportsEnvironment) this.contextPublisher.start(this.claim);
       this.ready = true; this.attempt = 0;
       this.onState('connected');
     } else if (frame.kind === 'endpoint.message') {

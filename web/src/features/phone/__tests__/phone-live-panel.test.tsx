@@ -52,6 +52,24 @@ async function menuItem(label: string) {
   await act(async () => button(label).click());
 }
 
+it('shows the saved task after restart without requesting unavailable video or screenshots', async () => {
+  vi.mocked(phoneFrame).mockClear();
+  await mountPanel(session({ reconnectRequired: true, assistanceId: 'saved-wait', status: 'needs_user' }));
+  expect(container!.textContent).toContain('任务进度已保留');
+  expect(phoneFrame).not.toHaveBeenCalled();
+  expect(button('接管手机').disabled).toBe(false);
+});
+
+it('shows the takeover reason and tells the user how to continue the original task', async () => {
+  const state = session({ status: 'needs_user', stopReason: 'user_takeover', message: '请在手机上完成验证码登录' });
+  await mountPanel(state);
+  expect(container!.textContent).toContain('请在手机上完成验证码登录');
+  expect(container!.textContent).toContain('请接管手机完成所需操作');
+  vi.mocked(controlPhone).mockResolvedValue(state);
+  await act(async () => button('接管手机').click());
+  expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'takeover', expect.any(Object));
+});
+
 it('takes over a paused session instead of resuming the Agent and locks input until ownership is confirmed', async () => {
   const state = session();
   let finish!: (value: PhoneLiveState) => void;

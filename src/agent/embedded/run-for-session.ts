@@ -87,8 +87,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       && supervisor.signal.reason.message === 'Agent run deadline expired') {
       result = { ...result, ok: false, retryable: false, terminationReason: 'deadline_exceeded', errorMessage: supervisor.signal.reason.message };
     }
-    turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required';
-    if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required') return result;
+    turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required' && result.stopReason !== 'phone_assistance_required';
+    if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required' || result.stopReason === 'phone_assistance_required') return result;
     try {
       const rows = await sessionStore.loadTranscriptRows(conversationId);
       const hasTurn = rows.some((source) => {

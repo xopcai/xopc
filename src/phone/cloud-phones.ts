@@ -6,6 +6,7 @@ import { CloudAdbConnection, parseCloudEndpoint, parseCloudPrivateKey, PhoneClou
 import { CloudScrcpyProvider } from './cloud-scrcpy.js';
 import { PhoneError, type PhoneDevice } from './contracts.js';
 import type { PhoneRepository } from './repository.js';
+import { WuyingLocationAdapter } from './wuying-location.js';
 
 type Draft = { owner: string; endpoint: string; key: Buffer; expiresAt: number; timer: ReturnType<typeof setTimeout> };
 export class CloudPhones {
@@ -66,6 +67,13 @@ export class CloudPhones {
     const binding = device.connection;
     if (!binding) throw new PhoneError('PHONE_CONNECTION_INVALID', 'Missing cloud connection');
     return new CloudScrcpyProvider(binding.endpoint, await this.keys.load(binding.credentialId), failed, this.connect);
+  }
+  async locationAdapter(device: PhoneDevice) {
+    if (device.connection?.kind !== 'aliyun-adb') throw new PhoneError('PHONE_ENV_UNSUPPORTED', 'Choose an Alibaba cloud phone', 409);
+    const connection = this.connect(device.connection.endpoint, await this.keys.load(device.connection.credentialId));
+    return { adapter: new WuyingLocationAdapter(async (args, signal) =>
+      (await connection.command('', ['-s', device.connection!.endpoint, 'shell', ...args], signal, 15_000)).toString()),
+    close: () => connection.dispose() };
   }
   disconnect(id: string): void { this.connections.get(id)?.dispose(); this.connections.delete(id); }
   async remove(device: PhoneDevice): Promise<void> { this.disconnect(device.id); if (device.connection) await this.keys.remove(device.connection.credentialId); }

@@ -120,7 +120,8 @@ export async function submitSessionInput(
       }
     }
     const endpoint = deps.service.endpointTools.registry.get(origin.data.endpointId)!;
-    const sourceContexts = [deviceTurnSourceContext(endpoint, environment.data), ...browserContexts.data.map(browserPageContextToAgentContext)];
+    const sourceContexts = [deviceTurnSourceContext(endpoint, environment.data,
+      deps.service.endpointTools.contexts?.view(endpoint.endpointId), deps.service.endpointTools.locations?.list(endpoint.endpointId, conversationId)), ...browserContexts.data.map(browserPageContextToAgentContext)];
     if (body.appContext !== undefined) {
       try {
         sourceContexts.push(await deps.service.prepareSessionAppContext(

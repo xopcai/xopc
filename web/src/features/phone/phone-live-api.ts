@@ -7,7 +7,7 @@ export type PhoneAction = { type: 'tap' | 'longPress'; point: number[]; duration
   | { type: 'swipe'; start: number[]; end: number[]; durationMs: number }
   | { type: 'launch'; package: string } | { type: 'back' } | { type: 'typeText'; text: string };
 export type PhoneLiveState = {
-  report: { sessionId: string; deviceId?: string; owner?: string; deviceName: string; agentId: string; modelRef: string; status: string; mode: string;
+  report: { assistanceId?: string; reconnectRequired?: boolean; sessionId: string; deviceId?: string; owner?: string; deviceName: string; agentId: string; modelRef: string; status: string; mode: string;
     executionMode?: 'collaborative' | 'direct'; nextExecutionMode?: 'collaborative' | 'direct'; task?: { taskId: string };
     feedback?: { outcome: string; nextAction: string };
     controlOwner?: 'agent' | 'human' | 'none'; controlEpoch?: number; handoff?: string; message?: string; stopReason?: string;
@@ -30,6 +30,9 @@ export function phoneErrorMessage(error: unknown, zh: boolean): string {
     PHONE_APP_DENIED: '当前页面不在授权应用范围内，请返回授权应用。',
     PHONE_SESSION_NOT_FOUND: '手机连接或来源聊天已变化，请刷新手机面板。',
     PHONE_PAUSED: '手机任务已暂停，请检查手机状态并明确交回控制权后继续。',
+    PHONE_DEVICE_OFFLINE: '手机暂未连接，任务进度已保留。请连接手机后重试。',
+    PHONE_BINDING_CHANGED: '手机或 Agent 设置已变化，任务进度已保留。请检查设备和模型设置后重试。',
+    PHONE_ASSISTANCE_CHANGED: '待接管任务已更新，请刷新状态后操作。',
   };
   return zh && code && messages[code] ? messages[code] : value?.message ?? (zh ? '无法完成手机操作，请检查连接状态。' : 'Phone operation failed. Check the connection.');
 }
@@ -48,7 +51,7 @@ export function useConversationPhone(conversationId: string, enabled = true) {
 }
 export async function controlPhone(conversationId: string, state: PhoneLiveState, op: string, extra: { action?: PhoneAction; frameSeq?: number; geometry?: number } = {}, keepalive = false) {
   const response = await fetchJson<{ payload: PhoneLiveState }>(apiUrl(`${base(conversationId)}/${state.report.sessionId}/control`), {
-    method: 'POST', keepalive, body: JSON.stringify({ clientId: phoneClientId, operationId: crypto.randomUUID(), epoch: state.report.controlEpoch, op, ...extra }),
+    method: 'POST', keepalive, body: JSON.stringify({ clientId: phoneClientId, assistanceId: state.report.assistanceId, operationId: crypto.randomUUID(), epoch: state.report.controlEpoch, op, ...extra }),
   });
   return response.payload;
 }

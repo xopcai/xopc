@@ -1,3 +1,4 @@
+import { phoneResumeForRun } from '../../phone/assistance.js';
 import { withModelUsageOrigin, modelUsageOriginFromTurn } from '../../providers/model-usage.js';
 import { resolveAgentMainConversationId } from '../../routing/agent-session-key.js';
 import { resolveDefaultAgentId } from '../agent-scope.js';
@@ -277,7 +278,7 @@ async function* runProcessDirectStreamingInner(
   deps.sessionStore?.idleCompaction?.interrupt(conversationId);
   const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(conversationId, input.runId));
   const isClarificationResume = Boolean(input.runId && getClarificationResumeInput(conversationId, input.runId));
-  const isInternalResume = isConnectionResume || isClarificationResume
+  const isInternalResume = Boolean(input.runId && phoneResumeForRun(conversationId, input.runId)) || isConnectionResume || isClarificationResume
     || Boolean(input.runId && getTaskContinuation(conversationId, input.runId));
   const isTaskUpdate = input.origin.type === 'system' && input.origin.source === 'task_update';
   const { channel, chatId } = await deps.resolveSessionEndpoint(conversationId);

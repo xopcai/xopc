@@ -6,6 +6,7 @@ import {
   type BrowserActionInput,
 } from '@xopcai/browser-control-contract';
 import {
+  EndpointContextPublisher,
   EndpointToolHostController,
   EndpointToolRegistry,
 } from '@xopcai/endpoint-tools-client';
@@ -37,6 +38,21 @@ let endpointClaim: { endpointId: string; token: string } | undefined;
 let lastConnectionError: string | undefined;
 let connectTask: Promise<void> | undefined;
 let connectionGeneration = 0;
+const contextViewers = new Map<string, number>();
+const contextPublisher = new EndpointContextPublisher({
+  request: async (path, body, signal) => {
+    const response = await gatewayFetch(path, { method: body === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(10_000)]) });
+    return response.ok ? response.json() : { ok: false };
+  },
+  capture: () => ({ 'environment.timezone': Intl.DateTimeFormat().resolvedOptions().timeZone, 'environment.locale': navigator.language }),
+  isForeground: () => {
+    for (const [id, until] of contextViewers) if (until <= Date.now()) contextViewers.delete(id);
+    return contextViewers.size > 0;
+  },
+  createId: () => crypto.randomUUID(),
+});
 
 function clearReconnectAlarm(): void {
   void chrome.alarms.clear(RECONNECT_ALARM);
@@ -87,6 +103,8 @@ async function connect(generation: number): Promise<void> {
   if (realtime || !await readProfile()) return;
   await registerBrowserEndpoint();
   const profile = await getAccessProfile();
+  const compatibility = await gatewayFetch('/api/endpoint-tools/compatibility', {}, profile);
+  const environmentSupported = compatibility.ok && (await compatibility.json())?.payload?.endpointEnvironmentV1 === true;
   const id = await backgroundClientId();
   const client = new RealtimeClient({
     clientId: id,
@@ -126,6 +144,7 @@ async function connect(generation: number): Promise<void> {
     createHello: () => createBrowserEndpointHello(browserToolRegistry.descriptors()),
     onReady: ({ endpointId, turnToken }) => {
       endpointClaim = { endpointId, token: turnToken };
+      if (environmentSupported) contextPublisher.start(endpointClaim);
       setRecordingClaim(endpointClaim);
       lastConnectionError = undefined;
       clearReconnectAlarm();
@@ -135,6 +154,7 @@ async function connect(generation: number): Promise<void> {
     },
     onMessage: (message) => { void endpointHost.handleMessage(message); },
     onDisconnected: () => {
+      contextPublisher.stop();
       endpointClaim = undefined;
       setRecordingClaim(undefined);
       endpointHost.disconnect();
@@ -147,6 +167,7 @@ async function connect(generation: number): Promise<void> {
 }
 
 function disconnect(): void {
+  contextPublisher.stop();
   connectionGeneration += 1;
   realtime?.disconnect();
   realtime = undefined;
@@ -173,10 +194,20 @@ type BrowserRuntimeMessage = {
   type: string;
   operation?: string;
   tabId?: number;
+  foreground?: boolean;
 };
 
 chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, sendResponse) => {
-  if (message.type === 'browser/recording-event') {
+  if (message.type === 'browser/context-activity') {
+    if (!sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`) || sender.tab) {
+      sendResponse({ ok: false }); return true;
+    }
+    const id = sender.documentId ?? sender.url;
+    if (message.foreground === true) contextViewers.set(id, Date.now() + 30_000);
+    else contextViewers.delete(id);
+    void contextPublisher.tick();
+    sendResponse({ ok: true });
+  } else if (message.type === 'browser/recording-event') {
     void acceptRecordingEvent(message as never, sender).then(() => sendResponse({ ok: true })).catch((error) => sendResponse({ ok: false, error: String(error) }));
   } else if (message.type === 'browser/recording-command') {
     if (!sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`) || sender.tab) { sendResponse({ ok: false, error: 'Invalid recording control source.' }); return true; }

@@ -1,4 +1,5 @@
 import { sha256 } from '@noble/hashes/sha256';
+export { EndpointContextPublisher, type EndpointContextPublisherOptions } from './context.js';
 import {
   ENDPOINT_PROTOCOL_VERSION,
   canonicalJson,

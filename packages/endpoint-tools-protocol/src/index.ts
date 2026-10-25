@@ -310,3 +310,5 @@ export { bridgeDescriptor, BRIDGE_RESOURCE_SCHEMA, BRIDGE_READ_INPUT_SCHEMA, BRI
 export { locationDescriptor, locationRequestSchema, locationSampleSchema, LOCATION_INPUT_SCHEMA, LOCATION_OUTPUT_SCHEMA, type LocationRequest, type LocationSample } from './location.js';
 
 export { personalDescriptor, PERSONAL_TOOL_NAMES, CONTACT_PICK_INPUT_SCHEMA, CALENDAR_INPUT_SCHEMA, CALENDAR_OUTPUT_SCHEMA, type PersonalToolName } from './personal.js';
+export * from './context.js';
+export * from './location-sharing.js';

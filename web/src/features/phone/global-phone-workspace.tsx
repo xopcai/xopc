@@ -1,4 +1,4 @@
-import { MessageSquare, PanelRight, PictureInPicture2, Smartphone, Unplug, X } from 'lucide-react';
+import { Hand, MessageSquare, PanelRight, PictureInPicture2, Smartphone, Unplug, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,7 @@ import { PhoneLivePanel } from './phone-live-panel';
 import { phoneEnded, useConversationPhone, type PhoneLiveState } from './phone-live-api';
 import { usePhoneWorkspaceStore } from './phone-workspace-store';
 import { usePhoneWindowLayout } from './use-phone-window-layout';
+import { PhoneAssistanceActions } from './phone-assistance-card';
 
 type Connection = PhoneLiveState['report'] & { deviceId: string; owner: string; sourceConversationName?: string };
 export function phoneOccupancy(report: PhoneLiveState['report'], zh: boolean): string {
@@ -48,6 +49,8 @@ export function GlobalPhoneWorkspace() {
     (await fetchJson<{ payload: Connection[] }>(apiUrl('/api/phone/connections'))).payload,
   { refreshInterval: 1500, shouldRetryOnError: false });
   const reports = connections.data ?? [];
+  const assistance = reports.filter(report => report.status === 'needs_user' && report.controlOwner !== 'human');
+  const relayed = useRef(new Map<string, string>());
   const active = selected ? reports.find(r => r.deviceId === selected || r.sessionId === selected) : reports[0];
   useEffect(() => {
     if (!open) return;
@@ -57,8 +60,12 @@ export function GlobalPhoneWorkspace() {
       if (current?.tabs.find(t => t.id === current.activeId)?.kind === 'phone') state.setOpen(false);
       return;
     }
-    state.openPhone(active?.sessionId ?? selected ?? 'connected', active?.deviceName ?? 'Phone', state.scope, true, false);
-  }, [activation, open, floating, active?.sessionId, active?.deviceName, selected]);
+    if (active) for (const tab of state.panes[state.scope]?.tabs ?? []) {
+      if (tab.kind === 'phone' && (tab.phoneSessionId === active.sessionId && tab.phoneSessionId !== active.deviceId
+        || !reports.some(report => tab.phoneSessionId === report.deviceId || tab.phoneSessionId === report.sessionId))) state.remove(tab.id, state.scope);
+    }
+    state.openPhone(active?.deviceId ?? selected ?? 'connected', active?.deviceName ?? 'Phone', state.scope, true, false);
+  }, [activation, open, floating, active?.sessionId, active?.deviceId, active?.deviceName, selected, reports]);
   const canControl = Boolean(active && controlConversationId === active.owner);
   const phoneAddress = active ? canControl ? active.owner : `device:${active.deviceId}` : '';
   const phone = useConversationPhone(phoneAddress, open && Boolean(active));
@@ -66,6 +73,15 @@ export function GlobalPhoneWorkspace() {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => { hide(); }, [identity, hide]);
+  useEffect(() => {
+    const pending = reports.find(report => report.status === 'needs_user' && report.controlOwner !== 'human'
+      && (report.sourceConversationId ?? report.owner) === scope);
+    if (!pending) return;
+    const request = `${pending.controlEpoch}:${pending.stopReason}`;
+    if (relayed.current.get(pending.sessionId) === request) return;
+    relayed.current.set(pending.sessionId, request);
+    show(pending.sessionId, true, scope);
+  }, [reports, scope, show]);
   useEffect(() => {
     const refresh = () => { void connections.mutate(); };
     window.addEventListener('phone-connections-changed', refresh);
@@ -89,6 +105,14 @@ export function GlobalPhoneWorkspace() {
         {error && <p role="alert" className="px-4 py-2 text-sm text-danger">{error}</p>}</>;
   return <>
     <div ref={fallbackMount} className="hidden" />
+    {assistance.length > 0 && <div role="alert" className="fixed bottom-20 right-4 z-[82] max-h-[40dvh] w-[min(22rem,calc(100vw-2rem))] space-y-3 overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-4 text-sm shadow-popover">
+      {assistance.map(report => <div key={report.sessionId} className="space-y-2">
+        <p className="flex items-center gap-2 font-medium"><Hand className="size-4 shrink-0 text-accent" aria-hidden />{report.deviceName} · {zh ? '需要你操作' : 'Your help is needed'}</p>
+        {report.message && <p className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-fg-muted">{report.message}</p>}
+        <p className="text-xs text-fg-muted">{zh ? '任务已暂停。请接管手机完成操作，再点击“已完成，继续任务”。' : 'The task is paused. Take over, complete the requested action, then hand back control to continue.'}</p>
+        <PhoneAssistanceActions conversationId={report.sourceConversationId ?? report.owner} state={{ report, ownControl: false, frame: null }} onChange={() => { void connections.mutate(); void phone.mutate(); }} />
+      </div>)}
+    </div>}
     {(!open || !floating && !workspaceVisible) && <Button variant="secondary" className="fixed bottom-4 right-4 z-50 gap-2 rounded-full bg-surface-panel" onClick={() => show()} aria-label={zh ? '全局手机连接' : 'Phone connections'}>
       <Smartphone className="size-4" /><span>{zh ? '手机' : 'Phones'} · {reports.length}{reports.some(r => r.controlOwner === 'agent' || r.controlOwner === 'human') ? (zh ? ' · 操作中' : ' · In use') : ''}</span>
       {reports.some(r => r.controlOwner === 'agent') && <span className="size-2 rounded-full bg-accent" aria-label={zh ? '操作中' : 'In use'} />}

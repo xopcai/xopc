@@ -1,6 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { summarizeSourceContext, type AgentSourceContext } from './types.js';
+import { deviceEnvironmentText } from './device-environment.js';
 
 function readTextContent(message: AgentMessage): string {
   const content = (message as { content?: unknown }).content;
@@ -52,7 +53,7 @@ export function injectSourceContextsIntoUserMessage(
       `<source_context kind="${sourceContext.kind}" id="${escapeAttribute(sourceContext.sourceId)}" version="${escapeAttribute(sourceContext.version)}">`,
       contextBoundary(sourceContext),
       '',
-      sourceContext.text.trim(),
+      deviceEnvironmentText(sourceContext),
       '</source_context>',
     ]),
     '</source_contexts>',

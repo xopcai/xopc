@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 const mocks = vi.hoisted(() => ({
+  phoneSuspended: vi.fn(),
+  appendMessage: vi.fn(),
   connectionSuspended: vi.fn(),
   connectionResume: vi.fn(),
   customMessage: vi.fn(),
@@ -19,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   session: undefined as any,
   leaseController: undefined as AbortController | undefined,
 }));
+
+vi.mock('../../../phone/assistance.js', () => ({ isPhoneAssistanceSuspended: (...args: unknown[]) => mocks.phoneSuspended(...args), phoneAssistance: () => ({ id: 'phone-wait' }), phoneResumeForRun: () => undefined }));
 
 vi.mock('../../../storage/sqlite/connection-wait-repository.js', () => ({
   isConnectionSuspended: (...args: unknown[]) => mocks.connectionSuspended(...args),
@@ -58,6 +62,7 @@ vi.mock('../session-runner.js', () => ({
     return {
       session,
       piSm: {
+        appendMessage: mocks.appendMessage,
         flushPendingToolResults: vi.fn(),
         appendCustomEntry: vi.fn(),
       },
@@ -116,6 +121,7 @@ import { EmbeddedRunConflictError } from '../runs.js';
 describe('runXopcEmbeddedTurn image input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.phoneSuspended.mockReturnValue(false);
     mocks.connectionSuspended.mockReturnValue(false);
     mocks.connectionResume.mockReturnValue(undefined);
     mocks.leaseController = new AbortController();
@@ -678,6 +684,27 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(result).toMatchObject({ ok: true, stopReason: 'connection_required' });
     expect(mocks.retryTurn).not.toHaveBeenCalled();
     expect(mocks.session.abort).not.toHaveBeenCalled();
+  });
+
+  it('ends a phone assistance turn normally, saves a visible notice and blocks subsequent tools', async () => {
+    mocks.prompt.mockImplementationOnce(async () => {
+      mocks.phoneSuspended.mockReturnValue(true);
+      await mocks.session.agent.afterToolCall({ toolCall: { id: 'phone', name: 'phone_use' }, args: {},
+        isError: false, result: { content: [{ type: 'text', text: 'needs_user' }], details: {} } });
+      await expect(mocks.session.agent.beforeToolCall({ toolCall: { name: 'shell' }, args: {} })).resolves.toMatchObject({ block: true, terminate: true });
+      await expect(mocks.session.agent.finishTurn({})).resolves.toEqual({ action: 'end' });
+    });
+    const events: unknown[] = [];
+    const result = await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'phone-run',
+      userMessage: { role: 'user', content: 'Read orders on the phone', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai', api: 'openai-completions' } as any, modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000, onEvent: event => events.push(event),
+    });
+    expect(result).toMatchObject({ ok: true, stopReason: 'phone_assistance_required' });
+    expect(mocks.appendMessage).toHaveBeenCalledWith(expect.objectContaining({ role: 'assistant', stopReason: 'stop' }));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'message_end' }));
+    expect(mocks.retryTurn).not.toHaveBeenCalled(); expect(mocks.session.abort).not.toHaveBeenCalled();
   });
 
 });
