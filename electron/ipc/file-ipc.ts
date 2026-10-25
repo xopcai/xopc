@@ -843,7 +843,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     if (!resolved.ok) return resolved;
     const validation = await validateOpenPath(resolved.path);
     if (!validation.ok) return validation;
-    clipboard.writeText(resolved.path);
+    await clipboard.writeText(resolved.path);
     return { ok: true };
   });
 

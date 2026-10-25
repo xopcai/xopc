@@ -218,7 +218,7 @@ export class DesktopEndpointHost {
             await writeFile(result.filePath, content, 'utf8'); return { saved: true, name: basename(result.filePath) };
           },
         },
-        clipboard: { readText: async () => clipboard.readText(), writeText: async (text) => { clipboard.writeText(text); return true; } },
+        clipboard: { readText: async () => clipboard.readText(), writeText: async (text) => { await clipboard.writeText(text); return true; } },
         shell: { openExternalUrl: async (url) => { const normalized = normalizeExternalHttpUrl(url); if (!normalized) return { ok: false, error: 'Invalid URL' }; await shell.openExternal(normalized); return { ok: true }; } },
         system: { showEndpointNotification: async (input) => showEndpointNotification(input) },
       })).filter(definition => compatibility.payload?.deviceStateToolsV1 === true || !definition.descriptor.name.includes('.device.get_')),
