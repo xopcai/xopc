@@ -10,6 +10,15 @@ import { promisify } from 'node:util';
 import { collectPublishManifestErrors, PI_RUNTIME_PACKAGES } from './check-publish-manifest.mjs';
 
 const exec = promisify(execFile);
+const packageManagerCommand = (name, args) => {
+  if (process.platform !== 'win32') return [name, args];
+  // Launch JS entry points directly: execFile cannot execute Windows .cmd shims.
+  const entry = name === 'pnpm'
+    ? process.env.npm_execpath
+    : join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
+  assert.ok(entry, `Missing ${name} CLI entry point; run this check through pnpm`);
+  return [process.execPath, [entry, ...args]];
+};
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const { verifyInstalledGatewayRuntime } = await import(
   pathToFileURL(join(root, 'dist/src/infra/package-runtime-check.js')).href
@@ -20,12 +29,12 @@ let gatewayOutput = '';
 try {
   const archive = process.argv[2] ? resolve(process.argv[2]) : join(work, 'xopc.tgz');
   if (!process.argv[2]) {
-    await exec('pnpm', ['pack', '--out', archive], { cwd: root, timeout: 120_000, maxBuffer: 1024 * 1024 });
+    await exec(...packageManagerCommand('pnpm', ['pack', '--out', archive]), { cwd: root, timeout: 120_000, maxBuffer: 1024 * 1024 });
   }
   const prefix = join(work, 'install');
   console.log('Installing packed artifact into an empty npm prefix (without the workspace lockfile)...');
   // npm is intentional here: this reproduces end-user global installs, not workspace dependency management.
-  await exec('npm', ['install', '-g', '--prefix', prefix, archive, '--no-audit', '--no-fund', '--loglevel=error'], {
+  await exec(...packageManagerCommand('npm', ['install', '-g', '--prefix', prefix, archive, '--no-audit', '--no-fund', '--loglevel=error']), {
     cwd: work, timeout: 600_000, maxBuffer: 1024 * 1024,
     env: { ...process.env, NPM_CONFIG_CACHE: join(work, 'npm-cache') },
   });
