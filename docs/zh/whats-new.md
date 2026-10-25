@@ -1,6 +1,14 @@
 # 近期变化
 
-以下是截至 2026 年 10 月 10 日的用户使用入口。具体版本与安装包见 [GitHub Releases](https://github.com/xopcai/xopc/releases)，更新方法见[升级指南](./update.md)。桌面、网关、手机和浏览器扩展独立分发，更新主程序不会自动更新所有客户端。
+以下是截至 2026 年 10 月 25 日的用户使用入口。具体版本与安装包见 [GitHub Releases](https://github.com/xopcai/xopc/releases)，更新方法见[升级指南](./update.md)。桌面、网关、手机和浏览器扩展独立分发，更新主程序不会自动更新所有客户端。
+
+## v0.0.417：Windows 电脑控制与无线手机
+
+- 电脑控制增加 Windows x64 桌面预览，支持窗口观察、原生按钮激活、文本与键盘输入。需要交互式桌面、应用授权与兼容 GUI 模型；ARM64 和完整签名安装包仍需单独验证。
+- Android 11+ 手机可在私有 IPv4 局域网内通过二维码或配对码连接，已保存手机支持校验身份后重连。网关主机需要安装 Android SDK Platform Tools。
+- 手机连接在重启后保留，工作区手机视图支持调整大小。
+
+[电脑控制](./computer-use.md) · [手机连接与使用边界](./phone-use.md) · [版本变更](https://github.com/xopcai/xopc/compare/v0.0.416...v0.0.417)。npm 包需要 Node.js 26.12.1 或更高版本；更新核心包不会安装原生移动端或浏览器客户端。
 
 ## 个人 Agent 与任务交付
 
@@ -29,7 +37,7 @@
 
 近期更新改进了 XOPC Cloud 模型设置、语音选择与通话处理，并扩展图像生成和编辑支持。使用当前目录选择模型；能力仍受提供商、凭据和客户端版本限制。
 
-[模型](./models.md) · [语音](./voice.md) · [图像与视觉](./image-multimodal.md)。[电脑控制](./computer-use.md)仍是 macOS 预览，需要专用 GUI 模型及系统权限。
+[模型](./models.md) · [语音](./voice.md) · [图像与视觉](./image-multimodal.md)。[电脑控制](./computer-use.md)提供 macOS 和 Windows x64 桌面预览，需要专用 GUI 模型及本地应用授权。
 
 ## 升级后检查
 
