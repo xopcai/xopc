@@ -15,6 +15,7 @@ private struct DeviceCompatibility: Decodable {
     let deviceLocationTasksV1: Bool?
     let mobilePersonalToolsV1: Bool?
     let deviceStateToolsV1: Bool?
+    let endpointEnvironmentV1: Bool?
 
     var catalogJson: String {
         if deviceStateToolsV1 != true {
@@ -71,6 +72,7 @@ actor DeviceEndpointHost {
     private var invocations: [String: Task<Void, Never>] = [:]
     private var reader: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
+    private var environmentTask: Task<Void, Never>?
     private let instance = UUID().uuidString.lowercased()
 
     init(client: GatewayClient) {
@@ -96,6 +98,7 @@ actor DeviceEndpointHost {
             task.cancel()
         }; invocations.removeAll()
         reader?.cancel(); heartbeat?.cancel()
+        environmentTask?.cancel(); environmentTask = nil
         socket?.cancel(with: .normalClosure, reason: nil)
         socket = nil
     }
@@ -141,6 +144,9 @@ actor DeviceEndpointHost {
                   let token = endpoint["turnToken"] as? String, token.count >= 32 else { throw GatewayClientError.invalidResponse }
             let claim = DeviceEndpointOrigin(endpointId: endpointId, token: token)
             self.claim = claim
+            if compatibility.payload?.endpointEnvironmentV1 == true {
+                environmentTask = Task { await publishEnvironment(claim) }
+            }
             startLoops(socket)
             return claim
         } catch { stop(); throw error }
@@ -153,6 +159,55 @@ actor DeviceEndpointHost {
                 do { try await Task.sleep(for: .seconds(15)); try Task.checkCancellation(); try await send("realtime.ping", [:]) }
                 catch { break }
             }
+        }
+    }
+
+    private struct EnvironmentAck: Decodable {
+        let connectionEpoch: String?
+        let revision: Int
+    }
+
+    private func environmentRequest(_ path: String, body: Data? = nil) async throws -> EnvironmentAck {
+        let response: GatewayEnvelope<EnvironmentAck> = try await client.request(path: path,
+            method: body == nil ? "GET" : "POST", body: body)
+        try Task.checkCancellation()
+        guard response.isSuccessful, let payload = response.payload else { throw GatewayClientError.invalidResponse }
+        return payload
+    }
+
+    private func publishEnvironment(_ origin: DeviceEndpointOrigin) async {
+        let root = "/api/user-context/environment"
+        var epoch: String?
+        var sequence = 0
+        var heartbeatSequence = 0
+        var nextReport: Int64 = 0
+        while !Task.isCancelled && claim?.token == origin.token {
+            do {
+                if epoch == nil {
+                    guard let endpoint = origin.endpointId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) else { return }
+                    epoch = try await environmentRequest(root + "/endpoints/" + endpoint).connectionEpoch
+                }
+                guard let epoch else { return }
+                let foreground = await MainActor.run { UIApplication.shared.applicationState == .active }
+                heartbeatSequence += 1
+                let source: [String: Any] = ["type": "endpoint", "endpointId": origin.endpointId, "token": origin.token]
+                _ = try await environmentRequest(root + "/heartbeats", body: Self.json(["origin": source, "heartbeat": [
+                    "connectionEpoch": epoch, "sequence": heartbeatSequence, "availability": foreground ? "foreground" : "background"]]))
+                let now = Self.now()
+                if foreground && now >= nextReport {
+                    sequence += 1
+                    _ = try await environmentRequest(root + "/reports", body: Self.json(["origin": source, "report": [
+                        "version": 1, "reportId": UUID().uuidString, "connectionEpoch": epoch, "sequence": sequence,
+                        "baseRevision": NSNull(), "mode": "full", "capturedAt": now,
+                        "values": ["environment.timezone": TimeZone.current.identifier,
+                                   "environment.locale": Locale.current.identifier.replacingOccurrences(of: "_", with: "-")]]]))
+                    nextReport = now + 60_000
+                }
+            } catch {
+                if Task.isCancelled { return }
+                epoch = nil; nextReport = 0
+            }
+            do { try await Task.sleep(for: .seconds(15)) } catch { return }
         }
     }
 

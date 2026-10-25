@@ -4,6 +4,7 @@ import { withCloudCreditBudget, cloudCreditBudgetStopMessage } from '../../provi
 import { XopcCloudAccountService } from '../../providers/xopc-cloud-account-service.js';
 import { resolveModel, getApiKey } from '../../providers/index.js';
 import type { Config } from '../../config/schema.js';
+import { ConfigSchema } from '../../config/schema.js';
 import type { PhoneElement } from '../contracts.js';
 import { buildPhoneModelContext, createPhoneModel, parseAutoGlmResponse, type PhonePrediction } from '../model-adapter.js';
 
@@ -26,6 +27,35 @@ function element(overrides: Partial<PhoneElement> = {}): PhoneElement {
 }
 
 describe('read-only phone screenshot transcription', () => {
+  it.each([undefined, 120000])('honors the configured request timeout (%s) and reports no dispatch', async configured => {
+    const deadline = new AbortController();
+    const timer = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, options) => new Promise((_resolve, reject) => {
+      options!.signal!.addEventListener('abort', () => reject(options!.signal!.reason), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const adapter = await createPhoneModel('test/phone', ConfigSchema.parse({ phone: { modelRequestTimeoutMs: configured } }), 'main');
+      const predictionResult = adapter.predict(prediction(), new AbortController().signal);
+      const checked = expect(predictionResult).rejects.toMatchObject({ code: 'PHONE_MODEL_TIMEOUT', message: expect.stringContaining('no action') });
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+      expect(timer).toHaveBeenCalledWith(configured ?? 45000);
+      deadline.abort(new DOMException('Deadline expired', 'TimeoutError'));
+      await checked;
+    } finally { timer.mockRestore(); }
+  });
+  it('preserves caller cancellation instead of reporting a model deadline', async () => {
+    const user = new AbortController();
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, options) => new Promise((_resolve, reject) => {
+      options!.signal!.addEventListener('abort', () => reject(options!.signal!.reason), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetch);
+    const adapter = await createPhoneModel('test/phone', ConfigSchema.parse({}), 'main');
+    const cancellation = new Error('Cancelled by the user');
+    const result = adapter.predict(prediction(), user.signal);
+    const checked = expect(result).rejects.toBe(cancellation);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce()); user.abort(cancellation); await checked;
+  });
   it.each(['autoglm-phone-v1', 'structured-phone-v1'] as const)('reads screenshots with %s without dispatching actions', async profile => {
     vi.mocked(resolveModel).mockReturnValueOnce({ id: 'phone', provider: 'test', api: 'openai-completions', input: ['image'],
       baseUrl: 'https://phone.example/v1', phoneUse: { profile }, maxTokens: 2048 } as any);

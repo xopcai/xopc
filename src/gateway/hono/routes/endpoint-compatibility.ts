@@ -17,6 +17,8 @@ export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
         capabilities: REALTIME_CAPABILITIES,
       },
       turnDeviceContextV1: true,
+      endpointEnvironmentV1: true,
+      locationSharingV1: true,
       deviceStateToolsV1: true,
       hardwareBridgeV1: true,
       deviceLocationTasksV1: true,

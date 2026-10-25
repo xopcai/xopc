@@ -1,3 +1,4 @@
+import { isPhoneAssistanceSuspended, phoneAssistance, phoneResumeForRun } from '../../phone/assistance.js';
 import { isNestedCodemodePolicy } from './codemode-extension.js';
 import { ProviderUsageScopeError } from '../../providers/model-usage.js';
 import { traceRun, traceTools, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
@@ -713,6 +714,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     let recoveryMessages = [...session.agent.state.messages];
     let policyStopReason: string | undefined;
     let lengthRecoveryExhausted = false;
+    let phoneStopped = false;
+    let phoneNotice: string | undefined;
     let connectionStopped = false;
     let clarificationStopped = false;
     let sentVisibleMessage = false;
@@ -739,6 +742,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (isComputerControlActive(conversationId) && !isComputerLeaseTool(context.toolCall.name)) {
         return { block: true, reason: 'A desktop-control lease is active. Only computer_use, clarification and static tool manuals are admitted until release is confirmed. Close the lease before an authorized tool handoff. Never use shell, browser or raw MCP to bypass a desktop refusal.' };
       }
+      if (phoneStopped) return { block: true, reason: 'Waiting for the user to finish operating the phone.', terminate: true };
       if (connectionStopped) return { block: true, reason: 'Waiting for the user to connect an app.', terminate: true };
       if (clarificationStopped) return { block: true, reason: 'Waiting for the user to answer.', terminate: true };
       const decision = await params.turnPolicy?.beforeToolCall(externalPolicyContext(context, tools), signal);
@@ -767,6 +771,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       return decision;
     };
     const hostAfterTool: NonNullable<typeof nativeAfterTool> = async (context) => {
+      phoneStopped ||= isPhoneAssistanceSuspended(conversationId, runId);
+      if (phoneStopped && context.toolCall.name === 'phone_use') {
+        const details = context.result.details as { message?: string } | undefined;
+        if (typeof details?.message === 'string') phoneNotice = details.message.slice(0, 500);
+      }
       connectionStopped ||= isConnectionSuspended(conversationId, runId);
       clarificationStopped ||= isClarificationSuspended(conversationId, runId);
       const scoped = context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args)
@@ -811,7 +820,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
       policyCompleted ||= policyStopped && params.turnPolicy?.stopReason?.() === 'completed';
       if (policyStopped) policyStopReason ??= 'Agent execution policy stopped before completion';
-      if (policyStopped || connectionStopped || clarificationStopped) return { action: 'end' };
+      if (policyStopped || connectionStopped || clarificationStopped || phoneStopped) return { action: 'end' };
       const continuation = params.turnPolicy?.takeContinuationMessage?.();
       if (continuation) {
         session.agent.steer({ role: 'user', content: continuation, timestamp: Date.now() });
@@ -860,7 +869,10 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           if (runAbortSignal.aborted) return;
           const connectionResume = getConnectionResumeInput(conversationId, runId);
           const clarificationResume = getClarificationResumeInput(conversationId, runId);
-          if (connectionResume) {
+          const phoneResume = phoneResumeForRun(conversationId, runId);
+          if (phoneResume) {
+            await session.sendCustomMessage({ customType: 'phone_resume', content: userMessageToPromptText(userMessage), display: false }, { triggerTurn: true });
+          } else if (connectionResume) {
             await session.sendCustomMessage({ customType: 'connection_resume', content: connectionResume.content, display: false }, { triggerTurn: true });
           } else if (clarificationResume) {
             await session.sendCustomMessage({ customType: 'clarification_resume', content: clarificationResume.content, display: false }, { triggerTurn: true });
@@ -877,18 +889,18 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           }
           await session.agent.waitForIdle();
           clarificationStopped ||= isClarificationSuspended(conversationId, runId);
-          if (connectionStopped || clarificationStopped) return;
+          if (connectionStopped || clarificationStopped || phoneStopped) return;
           const recoverSettledTurn = async () => {
-            if (policyStopped || connectionStopped || clarificationStopped) return;
+            if (policyStopped || connectionStopped || clarificationStopped || phoneStopped) return;
             await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
               conversationId,
               log,
               signal: runAbortSignal,
               budget: requestRetryBudget,
-              shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped,
+              shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped && !phoneStopped,
               onRetry: () => { recoveringModel = true; recoveryMessages = [...session.agent.state.messages]; },
             });
-            if (policyStopped || connectionStopped || clarificationStopped) return;
+            if (policyStopped || connectionStopped || clarificationStopped || phoneStopped) return;
             const recovered = await maybeRecoverInterruptedContext({
               agent: session.agent,
               model: resolvedModel,
@@ -904,7 +916,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             if (recovered) await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
               conversationId, log, signal: runAbortSignal,
               budget: requestRetryBudget,
-              shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped,
+              shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped && !phoneStopped,
               onRetry: () => { recoveringModel = true; recoveryMessages = [...session.agent.state.messages]; },
             });
           };
@@ -937,6 +949,19 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         { timeoutExtensionMs: params.timeoutExtensionMs },
       );
 
+      if (phoneStopped) {
+        const wait = phoneAssistance(conversationId);
+        const text = `需要你在手机上完成一步操作。${phoneNotice ? ` ${phoneNotice}\n` : '\n'}请点击“接管手机”，完成后点击“已完成，继续任务”，我会从当前页面继续原任务。`;
+        const notice: AssistantMessage = { role: 'assistant', content: [{ type: 'text', text }],
+          api: resolvedModel.api, provider: resolvedModel.provider, model: resolvedModel.id,
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop', timestamp: Date.now() };
+        runner.piSm.appendMessage(notice);
+        session.agent.state.messages = [...session.agent.state.messages, notice];
+        onEvent?.({ type: 'message_start', runId, message: notice });
+        onEvent?.({ type: 'message_end', runId, message: notice });
+        runner.piSm.appendCustomEntry('phone_assistance_required', { runId, waitId: wait?.id });
+      }
       if (connectionStopped) runner.piSm.appendCustomEntry('connection_required', { runId, conversationId });
       if (clarificationStopped) runner.piSm.appendCustomEntry('clarification_required', { runId, conversationId });
       runner.piSm.appendCustomEntry('coding_verification', { runId, workspace: workspaceDir, required: params.verifyChanges ?? false, ...await verification.summary() });
@@ -975,7 +1000,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       });
       return {
         ok: true,
-        ...(connectionStopped
+        ...(phoneStopped ? { stopReason: 'phone_assistance_required' as const } : connectionStopped
           ? { stopReason: 'connection_required' as const }
           : clarificationStopped
             ? { stopReason: 'clarification_required' as const }

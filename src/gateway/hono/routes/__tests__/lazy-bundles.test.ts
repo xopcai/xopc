@@ -6,6 +6,24 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps authorized location sharing separately from basic reports and phone cleanup', () => {
+    for (const path of ['/api/user-context/environment/location-shares', '/api/user-context/environment/location-shares/id', '/api/user-context/environment/location-shares/id/samples'])
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('location-sharing');
+    expect(findAuthenticatedLazyRouteBundle('/api/user-context/environment/location-shares-other')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/user-context/environment/location-shares/id/other')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/user-context/environment/reports')?.id).toBe('endpoint-environment');
+    for (const path of ['/api/phone/devices/id/environment', '/api/phone/devices/id/environment/cleanup']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('phone');
+    expect(findAuthenticatedLazyRouteBundle('/api/phone-other/devices/id/environment')).toBeUndefined();
+  });
+  it('maps per-endpoint environment paths without capturing neighboring namespaces', () => {
+    for (const path of ['/api/user-context/environment', '/api/user-context/environment/reports',
+      '/api/user-context/environment/heartbeats', '/api/user-context/environment/endpoints/phone']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('endpoint-environment');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/user-context/environment-other')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/user-context/environment/reports/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/phone/devices/id')?.id).toBe('phone');
+  });
   it('maps wireless pairing and reconnection through Phone without capturing nearby prefixes', () => {
     for (const path of ['/api/phone/wireless/discovery', '/api/phone/wireless/pairings', '/api/phone/wireless/pairings/id', '/api/phone/wireless/connect', '/api/phone/devices/id/reconnect'])
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('phone');

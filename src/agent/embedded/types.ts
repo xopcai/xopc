@@ -93,7 +93,7 @@ export type RunXopcEmbeddedTurnParams = {
 export type RunXopcEmbeddedTurnResult = {
   terminationReason?: import('../orchestration/run-termination.js').AgentTerminationReason;
   ok: boolean;
-  stopReason?: 'connection_required' | 'clarification_required' | 'policy_limit' | 'response_truncated';
+  stopReason?: 'phone_assistance_required' | 'connection_required' | 'clarification_required' | 'policy_limit' | 'response_truncated';
   /** False for harness failures that must not trigger another model attempt. */
   retryable?: boolean;
   errorMessage?: string;

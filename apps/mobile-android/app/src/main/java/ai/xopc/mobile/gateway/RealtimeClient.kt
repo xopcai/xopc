@@ -7,6 +7,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
@@ -103,6 +106,7 @@ internal class RealtimeClient(
     val supportsLocationTools = compatibility.optJSONObject("payload")?.optBoolean("deviceLocationTasksV1") == true
     val supportsDeviceTools = compatibility.optJSONObject("payload")?.optBoolean("deviceStateToolsV1") == true
     val supportsDeviceContext = compatibility.optJSONObject("payload")?.optBoolean("turnDeviceContextV1") == true
+    val supportsEnvironment = compatibility.optJSONObject("payload")?.optBoolean("endpointEnvironmentV1") == true
     val ticketResponse = runInterruptible(Dispatchers.IO) {
       val registered = JSONObject(gateway.request("/api/endpoint-tools/principals", "POST", registration.toString()))
       require(registered.optBoolean("ok")) { "ENDPOINT_REGISTRATION_FAILED" }
@@ -135,6 +139,7 @@ internal class RealtimeClient(
     val socket = http.newWebSocket(Request.Builder()
       .url(origin.replaceFirst("https:", "wss:") + "/api/realtime/v1/ws")
       .header("X-Xopc-Proof", connectionProof).build(), listener)
+    var environmentJob: kotlinx.coroutines.Job? = null
     try {
       val first = withTimeoutOrNull(10_000) { events.receiveCatching().getOrNull() }
         ?: throw IllegalStateException("REALTIME_HELLO_TIMEOUT")
@@ -145,6 +150,10 @@ internal class RealtimeClient(
         "MISSING_ENDPOINT_CLAIM"
       }
       claim = TurnClaim(clientId, endpointReady.getString("turnToken"), supportsDeviceContext)
+      if (supportsEnvironment) {
+        val contextClaim = claim!!
+        environmentJob = CoroutineScope(currentCoroutineContext()).launch { publishEnvironment(contextClaim) }
+      }
       synchronized(this) {
         readySocket = socket
         watchedRunTopic?.let { subscribe(socket, it, watchedRunSeq) }
@@ -205,11 +214,46 @@ internal class RealtimeClient(
       }
       throw IllegalStateException("REALTIME_DISCONNECTED")
     } finally {
+      environmentJob?.cancel()
       DeviceLocation.cancelAll(); DevicePersonalTools.cancelAll()
         claim = null
       synchronized(this) { if (readySocket === socket) readySocket = null }
       socket.close(1000, "Closing")
       events.close()
+    }
+  }
+
+  private suspend fun publishEnvironment(origin: TurnClaim) {
+    val root = "/api/user-context/environment"
+    var epoch: String? = null
+    var sequence = 0L
+    var heartbeatSequence = 0L
+    var nextReport = 0L
+    suspend fun request(path: String, body: JSONObject? = null): JSONObject = runInterruptible(Dispatchers.IO) {
+      val response = JSONObject(if (body == null) gateway.request(path) else gateway.request(path, "POST", body.toString()))
+      require(response.optBoolean("ok")) { "CONTEXT_UNAVAILABLE" }
+      response.getJSONObject("payload")
+    }
+    while (currentCoroutineContext().isActive && claim?.token == origin.token) {
+      try {
+        if (epoch == null) epoch = request("$root/endpoints/${java.net.URLEncoder.encode(origin.endpointId, "UTF-8")}").getString("connectionEpoch")
+        val foreground = withContext(Dispatchers.Main.immediate) { DeviceLocation.isForeground() }
+        request("$root/heartbeats", JSONObject().put("origin", origin.json()).put("heartbeat", JSONObject()
+          .put("connectionEpoch", epoch).put("sequence", ++heartbeatSequence)
+          .put("availability", if (foreground) "foreground" else "background")))
+        val now = System.currentTimeMillis()
+        if (foreground && now >= nextReport) {
+          val values = JSONObject().put("environment.timezone", java.util.TimeZone.getDefault().id)
+            .put("environment.locale", java.util.Locale.getDefault().toLanguageTag())
+          request("$root/reports", JSONObject().put("origin", origin.json()).put("report", JSONObject()
+            .put("version", 1).put("reportId", UUID.randomUUID().toString()).put("connectionEpoch", epoch)
+            .put("sequence", ++sequence).put("baseRevision", JSONObject.NULL).put("mode", "full")
+            .put("capturedAt", now).put("values", values)))
+          nextReport = now + 60_000
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) { epoch = null; nextReport = 0L }
+      delay(15_000)
     }
   }
 

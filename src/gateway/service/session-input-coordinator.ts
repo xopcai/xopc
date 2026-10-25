@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { consumePhoneAssistance, finishPhoneAssistance, phoneAssistance, queuePhoneAssistance, reconcilePhoneAssistance, type PhoneAssistance } from '../../phone/assistance.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
@@ -138,6 +139,7 @@ export class SessionInputCoordinator {
     beforeExecute?: (input: SessionInput) => Promise<boolean>;
     continueConnection?: (wait: ConnectionWait, idempotencyKey: string) => Promise<void>;
     cancelConnection?: (wait: ConnectionWait) => void;
+    completePhone?: (wait: PhoneAssistance) => Promise<void>;
     sessionExists: (conversationId: string) => Promise<boolean>;
     execute: (input: {
       inputReceivedAtMs?: number;
@@ -168,6 +170,11 @@ export class SessionInputCoordinator {
 
   snapshot(conversationId: string): SessionInputState {
     return getSessionInputState(conversationId);
+  }
+  resumePhone(conversationId: string, waitId: string): void {
+    queuePhoneAssistance(conversationId, waitId);
+    this.publish(conversationId);
+    void this.drain(conversationId);
   }
 
   private connectionTarget(conversationId: string, runtime = this.snapshot(conversationId)): ConnectionWait | undefined {
@@ -398,6 +405,23 @@ export class SessionInputCoordinator {
       return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
     }
     const runtime = this.snapshot(conversationId);
+    const phoneWait = phoneAssistance(conversationId);
+    const completedPhone = /^(?:我已(?:完成|登录|登陆|输入验证码)[，,、\s]*(?:请)?继续(?:原任务|任务)?|(?:登录|登陆|验证码|手机操作)(?:已)?完成[了]?[，,、\s]*(?:请)?继续(?:原任务|任务)?|好了[，,、\s]*继续(?:原任务|任务)?|(?:i(?: have|'ve) )?(?:logged in|finished on the phone|completed the phone action)[,\s]+(?:please )?(?:continue|resume)(?: the task)?)[。.!！\s]*$/iu.test(content);
+    if (completedPhone && phoneWait?.status === 'open' && this.deps.completePhone && input.origin.type !== 'system'
+      && !attachments?.length && !input.contextRefs?.length && !getActiveConnectionWait(conversationId) && !getActiveClarification(conversationId)) {
+      if (input.expectedTranscriptId && input.expectedTranscriptId !== phoneWait.transcriptId) return { ok: false, code: 'SESSION_CHANGED' };
+      await this.deps.completePhone(phoneWait);
+      runSqliteWriteTransaction(() => {
+        const row = insertSessionInput({ id: crypto.randomUUID(), conversationId, clientMessageId, expectedTranscriptId: phoneWait.transcriptId,
+          content, requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: input.origin });
+        queuePhoneAssistance(conversationId, phoneWait.id);
+        appendTranscriptEntry(conversationId, { role: 'user', content, timestamp: row.createdAtMs });
+        setSessionInputStatus(row.id, 'completed');
+      });
+      emitSessionTranscriptUpdate({ conversationId });
+      void this.drain(conversationId);
+      return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
+    }
     const wait = this.connectionTarget(conversationId, runtime);
     const control = wait?.principalId === 'local-owner' ? connectionControl(input, wait) : undefined;
     const payload = connectionInputPayload(wait, control);
@@ -477,9 +501,10 @@ export class SessionInputCoordinator {
             this.publish(conversationId);
             continue;
           }
-          allowed = allowed && consumeConnectionResume(input) && consumeClarificationResume(input);
+          allowed = allowed && consumeConnectionResume(input) && consumeClarificationResume(input) && consumePhoneAssistance(input);
         } catch (err) {
           log.warn({ err, conversationId, runId, inputId: input.id }, 'Session input preflight failed');
+          finishPhoneAssistance(input, false);
           finishSessionInputRun(conversationId, runId, 'failed', 'Input preflight failed');
           if (input.kind === 'connection_resume') reconcileConnectionWaits();
           this.publish(conversationId);
@@ -487,6 +512,7 @@ export class SessionInputCoordinator {
         }
         if (!allowed) {
           finishSessionInputRun(conversationId, runId, 'cancelled');
+          finishPhoneAssistance(input, false);
           this.publish(conversationId);
           continue;
         }
@@ -528,6 +554,7 @@ export class SessionInputCoordinator {
             ? 'cancelled'
             : 'failed';
         finishSessionInputRun(conversationId, runId, terminal, terminal === 'failed' ? result.summary : undefined);
+        finishPhoneAssistance(input, terminal === 'completed');
         this.publish(conversationId);
       }
     } finally {
@@ -662,7 +689,7 @@ export class SessionInputCoordinator {
   recover(): void {
     const interrupted = recoverSessionInputState();
     new TaskRunRepository().reconcileCancelledRuns();
-    for (const conversationId of new Set([...interrupted, ...reconcileConnectionWaits(true)])) {
+    for (const conversationId of new Set([...interrupted, ...reconcileConnectionWaits(true), ...reconcilePhoneAssistance()])) {
       this.publish(conversationId);
       void this.drain(conversationId);
     }

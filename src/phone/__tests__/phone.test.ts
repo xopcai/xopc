@@ -37,6 +37,20 @@ function fixture(adapter: PhoneModelAdapter = new MockPhoneModel()) {
 }
 
 describe('persistent device connections', () => {
+  it('blocks Agent actions on expired location but keeps explicit inspection and cancellation available', async () => {
+    const f = fixture();
+    try {
+      await f.runtime.execute('chat-location', { op: 'open', mode: 'control' }, f.context);
+      const id = f.runtime.status('chat-location')!.sessionId;
+      vi.spyOn(f.runtime.environment, 'assertAllowed').mockImplementation(() => { throw new PhoneError('CONTEXT_STALE', 'Location expired', 409); });
+      await expect(f.runtime.execute('chat-location', { op: 'observe' }, f.context)).rejects.toMatchObject({ code: 'CONTEXT_STALE' });
+      const frame = await f.runtime.liveFrame('chat-location', id, f.context, new AbortController().signal);
+      expect(frame.frame.length).toBeGreaterThan(0); frame.frame.fill(0);
+      expect(f.driver.execute).not.toHaveBeenCalled();
+      await f.runtime.stop('chat-location', 'cancel');
+      expect(f.runtime.status('chat-location')).toMatchObject({ controlOwner: 'none' });
+    } finally { await f.runtime.shutdown(); }
+  });
   it('keeps the same shared video source when another chat acquires an idle phone', async () => {
     const f = fixture();
     const provider: PhoneInteractiveProvider = {
@@ -369,7 +383,26 @@ describe('phone runtime', () => {
       frame.frame.fill(0);
     } finally { await f.runtime.shutdown(); vi.useRealTimers(); }
   });
-  it('waits for explicit handback after a real model requests user assistance', async () => {
+  it('lets the main Agent request assistance without another model prediction or phone action', async () => {
+    const predict = vi.fn(async () => ({ kind: 'complete' as const, summary: 'Ready for inspection' }));
+    const f = fixture({ predict });
+    const onNeedsUser = vi.fn(() => 'saved-assistance');
+    const context = { ...f.context, modelRef: 'phone/model', onNeedsUser };
+    try {
+      await expect(f.runtime.execute('main', { op: 'request_user', reason: 'Check login' }, context)).rejects.toMatchObject({ code: 'PHONE_OPEN_REQUIRED' });
+      await f.runtime.execute('main', { op: 'open', mode: 'control' }, context);
+      await f.runtime.execute('main', { op: 'run', goal: 'Check login after manual inspection', maxActions: 1 }, context);
+      await f.runtime.execute('main', { op: 'pause' }, context);
+      const before = f.runtime.status('main')!;
+      const result = await f.runtime.execute('main', { op: 'request_user', reason: 'Confirm login on the phone' }, context);
+      expect(result).toMatchObject({ status: 'needs_user', controlOwner: 'none', assistanceId: 'saved-assistance', message: 'Confirm login on the phone' });
+      expect(onNeedsUser).toHaveBeenCalledOnce();
+      expect(onNeedsUser.mock.calls[0]).toMatchObject([{ task: { taskId: before.task!.taskId }, usage: { actions: 0, modelRequests: before.modelRequests } }]);
+      expect(predict).toHaveBeenCalledOnce(); expect(f.driver.execute).not.toHaveBeenCalled();
+      await expect(f.runtime.execute('main', { op: 'resume' }, context)).rejects.toMatchObject({ code: 'PHONE_PAUSED' });
+    } finally { await f.runtime.shutdown(); }
+  });
+  it('returns a pending task after a real model requests user assistance', async () => {
     const predict = vi.fn(async () => ({ kind: 'needsUser' as const, reason: 'Confirm on the phone' }));
     const f = fixture({ predict }); const context = { ...f.context, modelRef: 'phone/model' };
     await f.runtime.execute('one', { op: 'open', mode: 'control' }, context);
@@ -378,10 +411,40 @@ describe('phone runtime', () => {
     await vi.waitFor(() => expect(f.runtime.status('one')?.status).toBe('needs_user'));
     expect(f.runtime.status('one')?.controlOwner).toBe('none');
     expect(predict).toHaveBeenCalledOnce();
+    expect(await operation).toMatchObject({ status: 'needs_user', verified: false });
+    const taskId = f.runtime.status('one')!.task!.taskId;
     f.setScreen(['Android version', '15']);
     await f.runtime.liveControl('one', id, context, 'browser', { op: 'handback', epoch: f.runtime.status('one')!.controlEpoch!, operationId: randomUUID() });
-    expect(await operation).toMatchObject({ verified: true, facts: ['Android version', '15'] });
+    expect(await f.runtime.execute('one', { op: 'run', taskId, goal: 'Read', expectText: 'Android version', maxActions: 3 }, context)).toMatchObject({ verified: true, facts: ['Android version', '15'] });
     expect(predict).toHaveBeenCalledOnce(); await f.runtime.shutdown();
+  });
+  it('relays assistance once and settles the tool before manual takeover', async () => {
+    const predict = vi.fn(async () => ({ kind: 'needsUser' as const, reason: '请在手机上完成验证码登录' }));
+    const f = fixture({ predict }); const context = { ...f.context, modelRef: 'phone/model' };
+    const tool = createPhoneUseTool({ runtime: f.runtime, context: () => ({ ...context, owner: 'relay' }) });
+    const update = vi.fn();
+    try {
+      await f.runtime.execute('relay', { op: 'open', mode: 'control' }, context);
+      const operation = tool.execute('run', { op: 'run', goal: 'Read Android version after login', expectText: 'Android version', maxActions: 3 }, undefined, update);
+      await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
+      expect((await operation).details).toMatchObject({ status: 'needs_user' });
+      const waiting = f.runtime.status('relay')!;
+      expect(update.mock.calls[0][0].details).toMatchObject({ status: 'needs_user', reason: '请在手机上完成验证码登录', nextAction: 'user_takeover' });
+      expect(JSON.stringify(update.mock.calls)).not.toContain('test-pixels');
+      const client = 'browser'; const id = waiting.sessionId;
+      await f.runtime.liveControl('relay', id, context, client, { op: 'takeover', epoch: waiting.controlEpoch!, operationId: randomUUID() });
+      expect(f.runtime.status('relay')).toMatchObject({ status: 'paused', controlOwner: 'human' });
+      expect(predict).toHaveBeenCalledOnce(); expect(f.driver.execute).not.toHaveBeenCalled();
+      f.setScreen(['Android version', '15']);
+      await f.runtime.liveControl('relay', id, context, client, { op: 'handback', epoch: f.runtime.status('relay')!.controlEpoch!, operationId: randomUUID() });
+      expect(await f.runtime.execute('relay', { op: 'run', taskId: waiting.task!.taskId, goal: waiting.task!.goal, expectText: 'Android version', maxActions: 3 }, context)).toMatchObject({ verified: true });
+      expect(update).toHaveBeenCalledOnce(); expect(predict).toHaveBeenCalledOnce();
+      // A later task must not keep the completed tool's progress callback alive.
+      const later = f.runtime.execute('relay', { op: 'run', goal: 'Read again', maxActions: 1 }, context);
+      expect(await later).toMatchObject({ status: 'needs_user' });
+      expect(update).toHaveBeenCalledOnce();
+      await f.runtime.stop('relay', 'cancel');
+    } finally { await f.runtime.shutdown(); }
   });
   it('rejects an input when human control expires during its fresh observation', async () => {
     vi.useFakeTimers(); const f = fixture();
@@ -742,6 +805,7 @@ it('honors manual-only text input before dispatch and preserves the session for 
   await f.runtime.execute('manual-text',{op:'open',mode:'control'},f.context);
   const result=await f.runtime.execute('manual-text',{op:'run',goal:'输入 hello',maxActions:1},f.context);
   expect(result).toMatchObject({status:'needs_user',controlOwner:'none',stopReason:'text_input_required',actions:0});
+  await expect(f.runtime.execute('manual-text', { op: 'resume' }, f.context)).rejects.toMatchObject({ code: 'PHONE_PAUSED' });
   expect(f.driver.execute).not.toHaveBeenCalled(); await f.runtime.stop('manual-text','close');
 });
 it('keeps manual takeover usable after an unconfirmed text paste and does not retry it', async () => {

@@ -4,6 +4,14 @@ Phone Use lets an xopc Agent operate a registered Android device using a dedicat
 
 For an existing cloud phone, start with the [Alibaba Cloud Phone setup guide](how-to/connect-aliyun-cloud-phone.md) to obtain its ADB address and private key.
 
+## Share your current location with a cloud phone
+
+In the Web phone panel, choose **Share current location**, select approximate or precise location, and click **Agree and share**. Your browser then asks for location permission. This uses the device running the UI even when Gateway runs in the cloud. The browser requires HTTPS or another secure context. Pause a running Agent before the first location application.
+
+Choose a single sample (valid for 30 seconds) or foreground sharing for up to five minutes, refreshed every ten seconds. **Stop sharing**, leaving the view, permission withdrawal, source loss, sample expiry and task completion trigger restoration of the cloud phone's previous GPS location. If restoration cannot be verified, **Retry location cleanup** becomes available and dependent Agent actions remain blocked. Native mobile sharing screens and background tracking are not included yet.
+
+The Wuying adapter uses the registered ADB connection and verifies both the location property and Android GPS. Unsupported image formats are rejected. Apps with location permission can read the location, and task models may see it on screen. Raw source samples do not enter chat or long-term memory; previously collected third-party app data cannot be recalled. Restoring GPS does not change the cloud phone's network address or account information.
+
 ## Set up a local emulator
 
 1. Start an Android emulator with Android Studio or `android emulator start <AVD name>`.
@@ -54,6 +62,8 @@ The Agent tool is `phone_use`: `discover` → `open` (`observe` or `control`, op
 
 ## Current boundaries
 
+`phone.modelRequestTimeoutMs` sets the deadline for one phone-model response, including reading its body. It defaults to 45,000 ms and accepts 1,000–300,000 ms. A slow local vision model can use a longer deadline while the existing task active-time budget still bounds execution. Deadline expiry returns `PHONE_MODEL_TIMEOUT`; no action from that timed-out prediction is dispatched. Caller cancellation remains separate.
+
 Two experimental execution capabilities can be enabled independently in the top-level `phone` configuration:
 
 ```json
@@ -99,6 +109,8 @@ Control is exclusive. If another chat or human owns the device, `PHONE_DEVICE_BU
 Install the official pinned video server once with `pnpm exec tsx scripts/setup-phone-video.mts`. The chat panel then uses scrcpy H.264 video and WebCodecs; unsupported browsers explicitly fall back to snapshots. The Settings preview modal remains read-only snapshots. View only never injects input. Take over waits for outstanding device input before granting this browser exclusive control. Continuous single-pointer DOWN/MOVE/UP supports click, held drag and long press through a persistent connection. Back and non-password text remain within the app scope. Unicode uses the independent control-only clipboard channel, even when video falls back to snapshots.
 
 Release keeps the task paused. Hand back re-observes the phone and continues the pending tool. If the Agent has already ended its reply, a deduplicated continuation input resumes the original conversation objective. Closing or hiding the phone tab releases human control; disconnect timeout keeps the task paused. Stop cancels the task and releases operation ownership while keeping the phone connected. Disconnect is a separate confirmed action. Isolated setup verification still closes its test session to confirm cleanup.
+
+The main Agent can call `phone_use({ op: "request_user", reason: "Complete login on the phone" })` to request assistance directly; a plain `pause` only pauses the task. When the phone model requests help with login, SMS verification or CAPTCHA, Phone Use returns a pending result, saves a minimal task checkpoint in SQLite and ends the current turn normally. The checkpoint retains the task, device/Agent binding and consumed budgets, without screenshots, credentials, verification codes or model action coordinates. The console shows a persistent takeover reminder and opens the phone panel once in the source chat. Requests from other chats offer a shortcut to that chat. Click **Take over phone** to open the screen and acquire manual control in one action, complete the requested operation, then click **Done, continue task**. You can also act directly on the physical phone and click Done without browser takeover. The completion is durably queued once, even if the previous turn is still closing. A follow-up turn continues from a fresh screen observation with the original task and remaining budgets. An explicit completion message in the source chat, such as “logged in, continue”, uses the same recovery path. Ordinary questions do not hand back the phone. Browser refresh preserves the request. After Gateway restart, the saved request remains available; reconnecting revalidates the device and Agent before continuing. A continuation interrupted during execution requires another explicit user handback and never automatically replays device input. Hiding the panel does not dismiss the reminder or resume the task.
 
 Only Gateway administrators can access this live surface. Pixels are transient and excluded from stored reports and conversation sharing. Passwords and verification codes should be handled on the local device before returning to a non-sensitive screen.
 

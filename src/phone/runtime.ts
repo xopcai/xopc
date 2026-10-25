@@ -8,10 +8,12 @@ import { LocalScrcpyProvider } from './scrcpy.js';
 import type { PhoneInteractiveProvider } from './live-provider.js';
 
 import { createLogger } from '../utils/logger.js';
+import { pendingPhoneAssistance, phoneAssistance, updatePhoneCheckpoint, type PhoneCheckpoint } from './assistance.js';
 
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js';
 import { CloudPhones } from './cloud-phones.js';
+import { PhoneLocationEnvironment } from './location-environment.js';
 import { WirelessPhones } from './wireless.js';
 import { AdbPhoneDriver, resolveAdbPath, type PhoneDriver } from './adb-driver.js';
 import { createPhoneModel, isAboutScreen, type PhoneModelAdapter, type PhoneModelDecision, type PhoneTrajectoryEntry } from './model-adapter.js';
@@ -26,7 +28,7 @@ import {
   type PhoneApplication, type PhoneObservation, type PhoneReport, type PhoneExecutionMode,
 } from './contracts.js';
 
-type ExecutionContext = { config: Config; agentId: string; modelRef?: string; preferredDeviceId?: string; toolDenied?: boolean; validateBinding?: () => boolean };
+type ExecutionContext = { config: Config; agentId: string; modelRef?: string; preferredDeviceId?: string; toolDenied?: boolean; validateBinding?: () => boolean; assistanceId?: string; onNeedsUser?: (checkpoint: PhoneCheckpoint) => string | undefined };
 const VIEW_MODEL = 'phone-view-only';
 type Session = {
   report: PhoneReport; device: PhoneDevice; lease: string; driver: PhoneDriver; adapter: PhoneModelAdapter;
@@ -57,8 +59,35 @@ export class PhoneRuntime {
   private reconnecting = new Map<string, Promise<PhoneDevice>>();
   private reconnectAfter = new Map<string, number>();
   private cloudPhones?: CloudPhones;
+  private locationEnvironment?: PhoneLocationEnvironment;
+  get environment(): PhoneLocationEnvironment {
+    return this.locationEnvironment ??= new PhoneLocationEnvironment(this.repository, {
+      adapter: device => this.cloud.locationAdapter(device),
+      exclusive: (phoneId, owner, cleanup, action) => this.withEnvironmentLock(phoneId, owner, cleanup, action),
+    });
+  }
+  private async withEnvironmentLock<T>(phoneId: string, owner: string, cleanup: boolean, action: () => Promise<T>): Promise<T> {
+    const device = this.repository.get(phoneId);
+    if (this.deviceOpenings.has(phoneId)) throw new PhoneError('PHONE_DEVICE_BUSY', 'Phone environment is busy', 409);
+    const session = [...this.sessions.values()].find(value => value.device.id === phoneId && value.report.status !== 'closed');
+    if (session && cleanup && !['closed', 'cancelled', 'completed'].includes(session.report.status)) await this.stop(session.report.owner, 'pause');
+    if (session && !cleanup && (session.report.owner !== owner || session.active && !this.locationEnvironment?.hasVerified(phoneId, owner))) throw new PhoneError('PHONE_DEVICE_BUSY', 'Pause the phone task before sharing location', 409);
+    const opening = new AbortController(); this.deviceOpenings.set(phoneId, opening);
+    let lease: string | undefined;
+    try {
+      if (session) {
+        this.repository.renew(device.serial, session.lease);
+        const result = await this.io(session, action);
+        session.report.controlEpoch!++; session.frames.invalidate(); this.publish(session);
+        return result;
+      }
+      lease = this.repository.acquire(device.serial);
+      return await action();
+    } finally { if (lease) this.repository.release(device.serial, lease); if (this.deviceOpenings.get(phoneId) === opening) this.deviceOpenings.delete(phoneId); }
+  }
   get cloud(): CloudPhones { return this.cloudPhones ??= new CloudPhones(this.repository); }
   private sessions = new Map<string, Session>();
+  private listeners = new Map<string, Set<(report: PhoneReport) => void>>();
   private lastDevices = new Map<string, string>();
   private openings = new Map<string, AbortController>();
   private deviceOpenings = new Map<string, AbortController>();
@@ -152,6 +181,46 @@ export class PhoneRuntime {
     return [...this.sessions.values()].map(session => structuredClone(session.report));
   }
   status(owner: string): PhoneReport | undefined { const report = this.sessions.get(owner)?.report; return report && structuredClone(report); }
+  private checkpoint(session: Session): PhoneCheckpoint {
+    const { sessionId, deviceId, deviceName, owner, agentId, modelRef, executionMode } = session.report;
+    return { report: { sessionId, deviceId, deviceName, owner, agentId, modelRef, executionMode }, deviceRevision: session.device.revision,
+      task: structuredClone(session.report.task!), usage: {
+        actions: session.report.actions - (session.report.humanActions ?? 0) - (session.taskStart?.actions ?? 0),
+        modelRequests: session.report.modelRequests - (session.taskStart?.modelRequests ?? 0),
+        activeDurationMs: (session.taskActiveMs ?? 0) + (session.budget?.elapsedMs ?? 0),
+      } };
+  }
+  async restoreAssistance(checkpoint: PhoneCheckpoint, context: ExecutionContext, signal?: AbortSignal, assistanceId?: string): Promise<PhoneReport> {
+    const { owner, deviceId, agentId, modelRef } = checkpoint.report;
+    if (context.agentId !== agentId || context.modelRef !== modelRef || this.repository.get(deviceId).revision !== checkpoint.deviceRevision)
+      throw new PhoneError('PHONE_BINDING_CHANGED', 'Phone or Agent settings changed. Inspect the task before restarting.', 409);
+    const existing = this.sessions.get(owner);
+    if (existing && existing.report.status !== 'closed') {
+      this.guard(existing, context);
+      if (existing.report.deviceId !== deviceId || existing.report.task && existing.report.task.taskId !== checkpoint.task.taskId)
+        throw new PhoneError('PHONE_ASSISTANCE_CHANGED', 'Another phone task is active', 409);
+      if (existing.report.task) {
+        existing.report.assistanceId = assistanceId ?? existing.report.assistanceId;
+        return this.publish(existing);
+      }
+      if (existing.active || existing.human) throw this.busy(deviceId, existing);
+    }
+    if (!existing || existing.report.status === 'closed') await this.execute(owner, { op: 'open', deviceId, mode: 'control' }, { ...context, assistanceId }, signal);
+    const session = this.sessions.get(owner)!;
+    session.report.task = structuredClone(checkpoint.task); session.taskPending = true;
+    session.report.executionMode = checkpoint.task.executionMode;
+    session.report.actions = checkpoint.usage.actions; session.report.modelRequests = checkpoint.usage.modelRequests;
+    session.taskStart = { actions: 0, modelRequests: 0 }; session.taskActiveMs = checkpoint.usage.activeDurationMs;
+    session.report.status = 'needs_user'; session.report.stopReason = 'user_takeover';
+    session.report.assistanceId = assistanceId;
+    session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+    return this.publish(session);
+  }
+  subscribe(owner: string, listener: (report: PhoneReport) => void): () => void {
+    const listeners = this.listeners.get(owner) ?? new Set();
+    listeners.add(listener); this.listeners.set(owner, listeners);
+    return () => { listeners.delete(listener); if (!listeners.size) this.listeners.delete(owner); };
+  }
   deviceContext(id: string, config: Config): ExecutionContext {
     const session = [...this.sessions.values()].find(session => session.device.id === id && session.report.status !== 'closed');
     if (!session) throw new PhoneError('PHONE_SESSION_NOT_FOUND', 'Phone is not connected', 404);
@@ -171,6 +240,12 @@ export class PhoneRuntime {
     if (!session || session.report.status === 'closed') return;
     if (this.deviceOpenings.has(session.device.id)) return;
     if (session.active) { await this.stop(owner, 'cancel'); return; }
+    const wait = phoneAssistance(owner);
+    if (wait && ['open', 'queued', 'resuming'].includes(wait.status) && session.report.task?.taskId === wait.checkpoint.task.taskId
+      && session.report.status !== 'completed') {
+      if (!session.human) { session.report.status = 'needs_user'; session.report.controlOwner = 'none'; this.publish(session); }
+      return;
+    }
     if (!session.human && !['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(session.report.status)) await this.finishTask(owner);
   }
   private publish(session: Session): PhoneReport {
@@ -181,10 +256,16 @@ export class PhoneRuntime {
       activeDurationMs: session.segmentUsage.activeDurationMs + (session.budget?.elapsedMs ?? 0),
     }, session.report.feedback);
     session.report.updatedAt = Date.now();
+    if (session.report.task) updatePhoneCheckpoint(session.report.owner, this.checkpoint(session));
     this.repository.report(session.report);
+    for (const listener of this.listeners.get(session.report.owner) ?? []) {
+      try { listener(structuredClone(session.report)); }
+      catch { log.warn({ conversationId: session.report.owner, phase: 'report_listener' }, 'Phone progress listener failed'); }
+    }
     return structuredClone(session.report);
   }
-  private guard(session: Session, context: ExecutionContext): void {
+  private guard(session: Session, context: ExecutionContext, requireLocation = true): void {
+    if (requireLocation) this.locationEnvironment?.assertAllowed(session.device.id, session.report.owner);
     if (!context.config.phone.enabled || context.toolDenied) throw new PhoneError('PHONE_DISABLED', 'Phone Use is disabled for this agent');
     if (context.modelRef !== session.modelRef || resolveAdbPath(context.config.phone.adbPath) !== session.adbPath) throw new PhoneError('PHONE_BINDING_CHANGED', 'Phone model or execution configuration changed; reopen the phone');
     if (context.validateBinding && !context.validateBinding()) throw new PhoneError('PHONE_BINDING_CHANGED', 'Agent model or tool policy changed; reopen the phone');
@@ -197,6 +278,20 @@ export class PhoneRuntime {
   }
   async execute(owner: string, raw: PhoneInput, context: ExecutionContext, signal: AbortSignal = new AbortController().signal): Promise<unknown> {
     const input = PhoneInputSchema.parse(raw);
+    if (input.op === 'request_user') {
+      const session = this.sessions.get(owner);
+      if (!session?.report.task || terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Start a phone task before requesting user assistance', 409);
+      this.guard(session, context);
+      if (session.human || session.active || session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Wait for the current phone operation before requesting user assistance', 409);
+      if (session.report.status === 'outcome_unknown') throw new PhoneError('PHONE_DISPATCH_UNKNOWN', 'Inspect the previous input before continuing', 409);
+      session.controller.abort(); session.prediction?.abort(); session.budget?.pause();
+      session.report.status = 'needs_user'; session.report.stopReason = 'user_takeover'; session.report.message = input.reason;
+      session.report.controlOwner = 'none'; session.report.controlEpoch!++; session.report.verified = false;
+      session.report.assistanceId = context.onNeedsUser?.(this.checkpoint(session));
+      this.publish(session);
+      await session.stream?.revoke();
+      return this.publish(session);
+    }
     if (input.op === 'close') return this.finishTask(owner);
     if (['cancel', 'close', 'pause'].includes(input.op)) return this.stop(owner, input.op as 'cancel' | 'close' | 'pause');
     if (input.op === 'status') return this.status(owner) ?? { status: 'closed' };
@@ -206,6 +301,7 @@ export class PhoneRuntime {
     signal.throwIfAborted();
     if (input.op === 'open') {
       const requestedDevice = input.deviceId ?? context.preferredDeviceId ?? this.repository.defaultDevice();
+      if (requestedDevice && this.repository.get(requestedDevice).connection) await this.environment.recover(requestedDevice);
       if (requestedDevice && this.deviceOpenings.has(requestedDevice)) throw this.busy(requestedDevice);
       if (this.openings.has(owner)) throw new PhoneError('PHONE_SESSION_BUSY', 'A phone is already being opened', 409);
       const opening = new AbortController(); this.openings.set(owner, opening);
@@ -216,6 +312,8 @@ export class PhoneRuntime {
         if (this.sessions.size >= 50 && ![...this.sessions.values()].some(session => session.device.id === requestedDevice)) throw new PhoneError('PHONE_CAPACITY', 'Disconnect an idle phone in the global phone panel before opening another', 409);
         const previous = this.sessions.get(owner);
         const deviceId = requestedDevice;
+        const waiting = pendingPhoneAssistance().find(wait => wait.checkpoint.report.deviceId === deviceId);
+        if (waiting && waiting.id !== context.assistanceId) throw new PhoneError('PHONE_PAUSED', 'This phone has a pending user handoff. Complete or cancel that task before opening another.', 409);
         if (!deviceId) throw new PhoneError('PHONE_DEVICE_REQUIRED', 'Choose a registered phone in Phone Use settings');
         if (previous && !terminal.has(previous.report.status) && previous.device.id !== deviceId) {
           if (previous.active || previous.human || previous.report.controlOwner !== 'none' || !['ready', 'completed'].includes(previous.report.status)) throw this.busy(previous.device.id, previous);
@@ -336,6 +434,7 @@ export class PhoneRuntime {
     if (session.active) throw new PhoneError('PHONE_SESSION_BUSY', 'A phone operation is already running', 409);
     this.guard(session, context);
     if (input.op === 'resume') {
+      if (session.report.status === 'needs_user') throw new PhoneError('PHONE_PAUSED', 'User assistance is required. Wait for explicit handback in the phone panel', 409);
       if (session.modeHandbackRequired) throw new PhoneError('PHONE_PAUSED', 'Inspect the phone and explicitly hand back in the phone panel after changing execution mode', 409);
       if (session.report.steps.at(-1)?.dispatch === 'unknown') throw new PhoneError('PHONE_DISPATCH_UNKNOWN', 'Inspect the previous input before continuing; do not retry automatically', 409);
       session.controller = new AbortController(); session.report.controlOwner = 'agent'; session.report.controlEpoch!++; session.report.status = 'ready'; session.report.stopReason = undefined; session.report.message = undefined;
@@ -424,7 +523,7 @@ export class PhoneRuntime {
       if (session.report.status === 'cancelled' && !session.controller.signal.aborted) {
         session.report.status = 'ready'; session.taskPending = false;
       }
-      if (session.report.status === 'completed') session.taskPending = false;
+      if (session.report.status === 'completed') { session.taskPending = false; await this.locationEnvironment?.releaseOwner(owner); }
       if (!terminal.has(session.report.status) && !session.human && !['paused', 'needs_user'].includes(session.report.status)) {
         session.report.controlOwner = 'none'; session.report.controlEpoch!++; this.publish(session);
       }
@@ -473,6 +572,7 @@ export class PhoneRuntime {
     if (this.deviceOpenings.has(session.device.id)) throw this.busy(session.device.id, session);
     if (session.human || session.report.status === 'needs_user' || session.report.steps.at(-1)?.dispatch === 'unknown') throw this.busy(session.device.id, session);
     if (session.active) await this.stop(owner, 'pause');
+    await this.locationEnvironment?.releaseOwner(owner);
     session.controller = new AbortController(); session.report.controlOwner = 'none'; session.report.controlEpoch!++;
     if (session.report.status !== 'completed') session.report.status = 'ready';
     session.report.stopReason = 'task_finished';
@@ -659,8 +759,10 @@ export class PhoneRuntime {
           session.report.status = decision.kind === 'needsUser' ? 'needs_user' : 'completed';
           session.report.stopReason = decision.kind === 'needsUser' ? 'user_takeover' : 'model_finished_unverified';
           if (decision.kind === 'needsUser' && !session.report.mock) {
-            session.report.controlOwner = 'none'; session.report.controlEpoch!++; session.budget?.pause(); this.publish(session);
-            await this.waitForAgent(session, signal); observation.frame.fill(0); observation = await this.observe(session, signal); continue;
+            session.report.controlOwner = 'none'; session.report.controlEpoch!++; session.budget?.pause();
+            session.report.assistanceId = context.onNeedsUser?.(this.checkpoint(session));
+            await session.stream?.revoke();
+            return this.publish(session);
           }
           return this.publish(session);
         }
@@ -759,7 +861,9 @@ export class PhoneRuntime {
         session.report.errorCode = failure.code; session.report.message = failure.message;
         session.report.currentAction = undefined;
         session.report.stopReason = failure.code === 'PHONE_TEXT_INPUT_UNAVAILABLE' ? 'text_input_required' : 'text_input_unconfirmed';
-        session.budget?.pause(); await session.stream?.revoke();
+        session.budget?.pause();
+        session.report.assistanceId = context.onNeedsUser?.(this.checkpoint(session));
+        await session.stream?.revoke();
         return this.publish(session);
       }
       if (failure instanceof PhoneError && failure.code === 'PHONE_OPERATION_TIMEOUT'
@@ -833,7 +937,7 @@ export class PhoneRuntime {
   }
   private async dispatch(session: Session, action: PhoneAction, observation: PhoneObservation, context: ExecutionContext, signal: AbortSignal, epoch = session.report.controlEpoch, resetTask = false, settingsPage?: 'about-phone'): Promise<boolean> {
     return this.io(session, async () => {
-      signal.throwIfAborted(); this.guard(session, context);
+      signal.throwIfAborted(); this.guard(session, context, !session.human);
       if (epoch !== session.report.controlEpoch || session.report.controlOwner === 'none' || session.report.handoff !== 'idle') return false;
       if (session.human && Date.now() > (session.humanExpiresAt ?? 0)) throw new PhoneError('PHONE_CONTROL_REQUIRED', 'Manual control expired', 409);
       if (!session.human && session.report.actions - (session.report.humanActions ?? 0) >= context.config.phone.maxActionsPerSession) throw new PhoneError('PHONE_ACTION_LIMIT', 'Phone action limit reached');
@@ -892,6 +996,7 @@ export class PhoneRuntime {
     await session.active?.catch(() => {});
     await session.io.catch(() => {});
     if (op === 'close') this.repository.release(session.device.serial, session.lease);
+    if (op !== 'pause') await this.locationEnvironment?.releaseOwner(owner);
     if (op === 'cancel') {
       session.controller = new AbortController(); session.report.status = 'ready'; session.report.controlOwner = 'none';
       session.taskPending = false;
@@ -920,10 +1025,10 @@ export class PhoneRuntime {
   }
   private async capture(session: Session, signal: AbortSignal): Promise<PhoneObservation> {
     return this.io(session, async () => {
-      signal.throwIfAborted(); this.guard(session, session.context);
+      signal.throwIfAborted(); this.guard(session, session.context, false);
       const observation = await (session.driver.capture ?? session.driver.observe).call(session.driver, session.device.serial, signal);
       try {
-        this.guard(session, session.context); this.allowedScreen(session, observation);
+        this.guard(session, session.context, false); this.allowedScreen(session, observation);
         if (!terminal.has(session.report.status)) session.frames.set(observation);
         return observation;
       } catch (error) { observation.frame.fill(0); session.frames.clear(); throw error; }
@@ -949,7 +1054,7 @@ export class PhoneRuntime {
       for (const session of this.sessions.values()) {
         if (terminal.has(session.report.status)) { session.frames.clear(); const stream = session.stream; session.stream = undefined; void stream?.close(); continue; }
         try {
-          this.guard(session, session.context);
+          this.guard(session, session.context, false);
           const idleLimit = session.context.config.phone.idleDisconnectMs;
           if (idleLimit && !session.active && !session.human && session.report.controlOwner === 'none'
             && Date.now() - Math.max(session.viewedAt, session.report.updatedAt) >= idleLimit) {
@@ -971,7 +1076,7 @@ export class PhoneRuntime {
     if (!session || session.report.sessionId !== id) throw new PhoneError('PHONE_SESSION_NOT_FOUND', 'Phone session not found', 404);
     if (context.agentId !== session.report.agentId) throw new PhoneError('PHONE_ACCESS_CHANGED', 'Agent binding changed', 403);
     if (!terminal.has(session.report.status)) {
-      try { this.guard(session, context); } catch (error) { session.frames.clear(); throw error; }
+      try { this.guard(session, context, false); } catch (error) { session.frames.clear(); throw error; }
     }
     session.context = context; this.startMaintenance();
     return session;
@@ -1011,7 +1116,7 @@ export class PhoneRuntime {
       session.stream = new PhoneInteractiveSession(provider,
         async () => {
           if (terminal.has(session.report.status)) throw new PhoneError('PHONE_VIDEO_ENDED', 'Phone session ended', 409);
-          this.guard(session, session.context);
+          this.guard(session, session.context, false);
           const app = await provider.foreground(AbortSignal.timeout(2000));
           if (!phoneAllowsApp(session.device, app)) throw new PhoneError('PHONE_APP_DENIED', 'Current page is outside the authorized applications', 403);
           session.viewedAt = Date.now();
@@ -1047,13 +1152,13 @@ export class PhoneRuntime {
     if (!session.frames.get() || Date.now() - session.frames.get()!.capturedAt > (session.human ? 150 : 600)) {
       session.preview ??= (async () => {
         const observation = await this.capture(session, signal);
-        try { this.guard(session, context); this.allowedScreen(session, observation); }
+        try { this.guard(session, context, false); this.allowedScreen(session, observation); }
         catch (error) { session.frames.clear(); throw error; }
         finally { observation.frame.fill(0); }
       })().finally(() => { session.preview = undefined; });
       await session.preview;
     }
-    this.guard(session, context);
+    this.guard(session, context, false);
     const frame = session.frames.get();
     if (!frame) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Phone session ended', 409);
     return { ...frame, frame: Buffer.from(frame.frame) };
@@ -1083,7 +1188,7 @@ export class PhoneRuntime {
     if (session.receipts.size >= 240 && !['cancel', 'release', 'heartbeat'].includes(input.op)) throw new PhoneError('PHONE_SESSION_LIMIT', 'Phone control request limit reached; reopen the session');
     const result = session.commands.catch(() => {}).then(async () => {
       if (terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Phone session ended', 409);
-      this.guard(session, context);
+      this.guard(session, context, input.op === 'handback');
       if (session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Phone execution mode is changing', 409);
       if (input.epoch !== session.report.controlEpoch) throw new PhoneError('PHONE_CONTROL_CHANGED', 'Control changed. Refresh before trying again.', 409);
       if (session.human && session.human !== client) throw new PhoneError('PHONE_CONTROL_BUSY', 'Another browser window controls this phone', 409);
@@ -1166,11 +1271,20 @@ export class PhoneRuntime {
     }); session.receipts.set(key, { hash, result });
     return result;
   }
-  async stopDevice(id: string): Promise<void> { this.deviceOpenings.get(id)?.abort(); await Promise.all(this.reports().filter(report => report.deviceId === id).map(report => this.stop(report.owner, 'close'))); this.cloudPhones?.disconnect(id); }
+  /** Called only for an explicit completion message from the controlling conversation's user. */
+  async completeAssistanceForUser(owner: string, context: ExecutionContext): Promise<void> {
+    const session = this.sessions.get(owner);
+    if (!session) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Reconnect the phone before continuing', 409);
+    this.guard(session, context);
+    if (session.report.controlOwner === 'agent' && session.report.status === 'ready') return;
+    await this.liveControl(owner, session.report.sessionId, context, session.human ?? `phone-user:${owner}`,
+      { op: 'handback', epoch: session.report.controlEpoch!, operationId: randomUUID() });
+  }
+  async stopDevice(id: string): Promise<void> { this.deviceOpenings.get(id)?.abort(); await Promise.all(this.reports().filter(report => report.deviceId === id).map(report => this.stop(report.owner, 'close'))); try { await this.locationEnvironment?.releaseDevice(id); } finally { this.cloudPhones?.disconnect(id); } }
   async shutdown(): Promise<void> {
     this.wireless.close(); this.reconnectAfter.clear();
     await Promise.allSettled(this.reconnecting.values());
-    for (const controller of this.openings.values()) controller.abort(); await Promise.all([...this.sessions.keys()].map(owner => this.stop(owner, 'close'))); this.cloudPhones?.close(); this.sessions.clear(); this.lastDevices.clear(); if (this.maintenance) clearInterval(this.maintenance); this.maintenance = undefined; }
+    for (const controller of this.openings.values()) controller.abort(); await Promise.all([...this.sessions.keys()].map(owner => this.stop(owner, 'close'))); await this.locationEnvironment?.close(); this.cloudPhones?.close(); this.sessions.clear(); this.lastDevices.clear(); if (this.maintenance) clearInterval(this.maintenance); this.maintenance = undefined; }
 }
 
 let runtime: PhoneRuntime | undefined;

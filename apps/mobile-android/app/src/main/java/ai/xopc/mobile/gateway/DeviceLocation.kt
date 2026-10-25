@@ -26,6 +26,7 @@ internal object DeviceLocation {
   private var launcher: ActivityResultLauncher<Array<String>>? = null
   private var permission: CompletableDeferred<Unit>? = null
   fun attach(owner: ComponentActivity, requests: ActivityResultLauncher<Array<String>>) { activity = owner; launcher = requests }
+  fun isForeground(): Boolean = activity?.lifecycle?.currentState?.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) == true
   fun detach(owner: ComponentActivity) { if (activity === owner) { cancelAll(); activity = null; launcher = null } }
   fun permissionsChanged() { permission?.complete(Unit); permission = null }
   fun cancel(id: String) { scope.launch { jobs.remove(id)?.cancel() } }

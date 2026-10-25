@@ -7,13 +7,14 @@ import useSWR from 'swr';
 
 vi.mock('swr', () => ({ default: vi.fn() }));
 vi.mock('@/lib/fetch', () => ({ fetchJson: vi.fn() }));
-vi.mock('../phone-live-api', async original => ({ ...await original<typeof import('../phone-live-api')>(), useConversationPhone: vi.fn() }));
+vi.mock('../phone-live-api', async original => ({ ...await original<typeof import('../phone-live-api')>(), useConversationPhone: vi.fn(), controlPhone: vi.fn() }));
 vi.mock('../phone-live-panel', () => ({ PhoneLivePanel: ({ headerActions }: { headerActions?: import('react').ReactNode }) => <div>Phone preview{headerActions}</div> }));
 
 import { fetchJson } from '@/lib/fetch';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { GlobalPhoneWorkspace, phoneOccupancy } from '../global-phone-workspace';
-import { phoneErrorMessage, useConversationPhone, type PhoneLiveState } from '../phone-live-api';
+import { controlPhone, phoneErrorMessage, useConversationPhone, type PhoneLiveState } from '../phone-live-api';
 import { usePhoneWorkspaceStore } from '../phone-workspace-store';
 import { phoneWindowWidthLimits, clampPhoneWindowPosition } from '../use-phone-window-layout';
 
@@ -93,4 +94,60 @@ it('limits proportional resizing by both viewport dimensions', () => {
   const small = phoneWindowWidthLimits({ width: 320, height: 480 });
   expect(small.max * 640 / 288).toBeLessThanOrEqual(456);
   expect(small.min).toBeLessThanOrEqual(small.max);
+});
+
+it('opens the controlling phone for assistance once and keeps the request reachable after hiding', async () => {
+  useLocaleStore.setState({ language: 'zh' });
+  useRightWorkspaceStore.getState().setScope(report.owner);
+  const data: Array<PhoneLiveState['report'] & { deviceId: string; owner: string }> = [{ ...report, status: 'needs_user', controlEpoch: 2, stopReason: 'user_takeover', message: '请完成验证码登录' }];
+  vi.mocked(useSWR).mockReturnValue({ data, mutate: vi.fn(), isLoading: false } as unknown as ReturnType<typeof useSWR>);
+  vi.mocked(useConversationPhone).mockReturnValue({ data: { report: data[0], ownControl: false, frame: null }, mutate: vi.fn() } as unknown as ReturnType<typeof useConversationPhone>);
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  const render = () => root!.render(<MemoryRouter><GlobalPhoneWorkspace /></MemoryRouter>);
+  await act(async () => render());
+  expect(usePhoneWorkspaceStore.getState()).toMatchObject({ open: true, selected: report.sessionId, controlConversationId: report.owner });
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('请完成验证码登录');
+  await act(async () => usePhoneWorkspaceStore.getState().hide());
+  await act(async () => render());
+  expect(usePhoneWorkspaceStore.getState().open).toBe(false);
+  vi.mocked(controlPhone).mockResolvedValue({ report: data[0], ownControl: true, frame: null });
+  await act(async () => ([...document.querySelectorAll('button')].find(b => b.textContent === '接管手机') as HTMLButtonElement).click());
+  expect(controlPhone).toHaveBeenCalledWith(report.owner, expect.any(Object), 'takeover');
+  expect(usePhoneWorkspaceStore.getState().open).toBe(true);
+  expect(fetchJson).not.toHaveBeenCalled();
+  data[0] = { ...data[0], status: 'paused', controlOwner: 'human' };
+  await act(async () => render());
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+});
+
+it('announces requests from other chats without taking control or replacing the current phone', async () => {
+  useRightWorkspaceStore.getState().setScope('another-chat');
+  const pending = { ...report, status: 'needs_user', message: 'Login needed' };
+  vi.mocked(useSWR).mockReturnValue({ data: [pending], mutate: vi.fn(), isLoading: false } as unknown as ReturnType<typeof useSWR>);
+  vi.mocked(useConversationPhone).mockReturnValue({ data: null, mutate: vi.fn() } as unknown as ReturnType<typeof useConversationPhone>);
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><GlobalPhoneWorkspace /></MemoryRouter>));
+  expect(usePhoneWorkspaceStore.getState().open).toBe(false);
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('Login needed');
+  expect(fetchJson).not.toHaveBeenCalled();
+});
+
+
+it('reuses the same phone workspace tab when restart recovery creates a new session', async () => {
+  useRightWorkspaceStore.getState().setScope('restart-chat');
+  useRightWorkspaceStore.getState().openPhone(report.sessionId, report.deviceName, 'restart-chat', false, false);
+  useRightWorkspaceStore.getState().openPhone('obsolete-pre-restart-session', report.deviceName, 'restart-chat', false, false);
+  const data = [{ ...report }];
+  vi.mocked(useSWR).mockReturnValue({ data, mutate: vi.fn(), isLoading: false } as unknown as ReturnType<typeof useSWR>);
+  vi.mocked(useConversationPhone).mockReturnValue({ data: { report: data[0], ownControl: false, frame: null }, mutate: vi.fn() } as unknown as ReturnType<typeof useConversationPhone>);
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  const render = () => root!.render(<MemoryRouter><GlobalPhoneWorkspace /></MemoryRouter>);
+  await act(async () => render());
+  await act(async () => usePhoneWorkspaceStore.getState().show(report.sessionId));
+  expect(useRightWorkspaceStore.getState().panes['restart-chat'].tabs.filter(t => t.kind === 'phone')).toHaveLength(1);
+  data[0] = { ...report, sessionId: 'restored-session' };
+  await act(async () => { usePhoneWorkspaceStore.getState().show('restored-session'); render(); });
+  const tabs = useRightWorkspaceStore.getState().panes['restart-chat'].tabs.filter(t => t.kind === 'phone');
+  expect(tabs).toHaveLength(1);
+  expect(tabs[0]).toMatchObject({ id: `phone:${report.deviceId}`, phoneSessionId: report.deviceId });
 });

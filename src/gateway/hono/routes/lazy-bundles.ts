@@ -24,6 +24,22 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'location-sharing',
+    match: path => /^\/api\/user-context\/environment\/location-shares(?:\/[^/]+(?:\/samples)?)?$/.test(path),
+    load: async () => {
+      const { registerLocationSharingRoutes } = await import('./location-sharing.js');
+      return { register: registerLocationSharingRoutes };
+    },
+  },
+  {
+    id: 'endpoint-environment',
+    match: path => /^\/api\/user-context\/environment(?:\/(?:reports|heartbeats|endpoints\/[^/]+))?$/.test(path),
+    load: async () => {
+      const { registerEndpointEnvironmentRoutes } = await import('./endpoint-environment.js');
+      return { register: registerEndpointEnvironmentRoutes };
+    },
+  },
+  {
     id: 'phone',
     match: path => startsWithAny(path, ['/api/phone']),
     load: async () => {

@@ -16,6 +16,7 @@ export const PhoneConfigSchema = z.object({
   hierarchicalPlanning: z.boolean().default(false),
   maxActionsPerSession: z.number().int().min(1).max(80).default(40),
   maxModelRequests: z.number().int().min(1).max(120).default(60),
+  modelRequestTimeoutMs: z.number().int().min(1000).max(300_000).default(45_000),
   maxOperationDurationMs: z.number().int().min(1000).max(900_000).default(300_000),
   maxSessionDurationMs: z.number().int().min(1000).max(900_000).default(900_000),
   idleDisconnectMs: z.number().int().min(0).max(86_400_000).default(0),
@@ -109,6 +110,7 @@ export type PhoneTaskFeedback = {
   nextAction: 'wait' | 'replan' | 'inspect' | 'user' | 'done';
 };
 export const PhoneInputSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('request_user'), reason: z.string().trim().min(1).max(1000) }).strict(),
   z.object({ op: z.literal('discover') }).strict(),
   z.object({ op: z.literal('set_mode'), executionMode: PhoneExecutionModeSchema, applyCurrent: z.boolean().default(false) }).strict(),
   z.object({ op: z.literal('open'), deviceId: z.string().uuid().optional(), mode: z.enum(['observe', 'control']), appPackage: z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/).optional(), settingsPage: z.literal('about-phone').optional() }).strict().refine(input => !input.settingsPage || input.mode === 'control' && input.appPackage === 'com.android.settings', 'About phone requires authorized Settings control'),
@@ -129,6 +131,8 @@ export type PhoneReading = {
   text: string[]; frameId: string; capturedAt: number; reason?: string;
 };
 export type PhoneReport = {
+  assistanceId?: string;
+  reconnectRequired?: boolean;
   sessionId: string; deviceId: string; deviceName: string; owner: string; agentId: string;
   modelRef: string; mock: boolean; mode: 'observe' | 'control'; status: PhoneStatus;
   actions: number; humanActions?: number; modelRequests: number; createdAt: number; updatedAt: number;

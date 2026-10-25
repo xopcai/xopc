@@ -1,4 +1,6 @@
 import type { AgentService } from '../agent/service.js';
+import { cancelPhoneAssistance } from '../phone/assistance.js';
+import { getPhoneRuntime } from '../phone/runtime.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
 import { abortEmbeddedRun } from '../agent/embedded/runs.js';
 import type { SessionIndex } from '../session/index.js';
@@ -38,6 +40,8 @@ export async function performSessionReset(
   if (!task) {
     return { ok: false, error: 'Session not found' };
   }
+  cancelPhoneAssistance(key);
+  await getPhoneRuntime().stop(key, 'cancel');
 
   try {
     const agent = deps.getAgentService();

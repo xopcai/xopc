@@ -43,6 +43,14 @@ DELETE /api/endpoint-tools/bindings/:sessionKey
 
 Bindings are persisted in SQLite. An explicit binding is authoritative: if its endpoint is offline, the provider exposes no endpoint tools and does not silently fall back to the turn origin.
 
+## Per endpoint environment
+
+Gateways advertise `endpointEnvironmentV1` separately from the existing turn-device context. While in use, clients publish basic timezone/locale reports and independent foreground heartbeats over authenticated HTTP under `/api/user-context/environment`. Reports require the current endpoint turn claim, connection epoch, monotonic sequence and bounded field schemas. Device credentials can access only their own endpoints; owner credentials still need the active claim to write.
+
+Gateway context is bounded and process-local. Full reports replace fields; patch reports require an exact revision. Heartbeats expire after 45 seconds and never renew samples. Timezone/locale expire after five minutes; optional power samples expire after 30 seconds. Clients currently capture timezone/locale every minute while foreground and check heartbeat every 15 seconds. Personal location, clipboard and other unregistered fields are rejected by this reporting API; existing single-use tools retain their policies.
+
+Accepted messages freeze their verified source's safe context. Agent injection removes expired values again and keeps dynamic device content outside trusted system instructions. Execution target bindings do not change context provenance. Phone environment transfer has only an unsupported adapter boundary until consumer grants and cleanup are implemented.
+
 ## Background boundary
 
 Interactive tools are not background workers. `EndpointDeviceJobRequest`, `EndpointDeviceJobStatus`, and `EndpointDeviceEvent` are separate protocol contracts with consent-grant, idempotency, expiry, subscription, and event identity fields. They are deliberately excluded from `ServerEndpointMessage` and `ClientEndpointMessage`.

@@ -1,3 +1,4 @@
+import { phoneResumeForRun } from '../../phone/assistance.js';
 /**
  * Shared building blocks for the two direct-turn entry points (streaming
  * webchat realtime and one-shot CLI). Both flows do the same hydrate → maybe-slash
@@ -192,7 +193,7 @@ export async function runDirectAgentTurn(
   const turnId = input.runId ?? crypto.randomUUID();
   const isConnectionResume = Boolean(getConnectionResumeInput(input.conversationId, turnId));
   const isClarificationResume = Boolean(getClarificationResumeInput(input.conversationId, turnId));
-  const isResume = isConnectionResume || isClarificationResume || Boolean(getTaskContinuation(input.conversationId, turnId));
+  const isResume = Boolean(phoneResumeForRun(input.conversationId, turnId)) || isConnectionResume || isClarificationResume || Boolean(getTaskContinuation(input.conversationId, turnId));
   const userContext = await deps.agentManager.prepareUserTurnContext(
     input.userMessage,
     input.conversationId,
@@ -234,7 +235,7 @@ export async function runDirectAgentTurn(
     onEvent: input.onEvent,
   });
 
-  if (!isResume && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required') {
+  if (!isResume && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required' && result.stopReason !== 'phone_assistance_required') {
     deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.conversationId);
   }
 

@@ -35,6 +35,7 @@ import {
   settleEndpointConfirmation,
 } from './confirmation-store';
 import { clearEndpointTurnClaim, publishEndpointTurnClaim } from './turn-claim';
+import { createEndpointContextPublisher } from './context-publisher';
 
 const RECONNECT_DELAY_MS = 2_000;
 
@@ -78,6 +79,8 @@ export class EndpointToolHost {
   private registrationBlocked = false;
   private endpointId?: string;
   private supportsDeviceState = false;
+  private supportsEnvironment = false;
+  private readonly contextPublisher = createEndpointContextPublisher();
   private supportsLocationTasks = false;
   private turnToken?: string;
   private readonly registry: EndpointToolRegistry;
@@ -98,14 +101,19 @@ export class EndpointToolHost {
     this.stopped = false;
     this.registrationBlocked = false;
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    window.addEventListener('focus', this.onVisibilityChange);
+    window.addEventListener('blur', this.onVisibilityChange);
     window.addEventListener('gateway-authenticated', this.onTokenSaved);
     await this.connect();
   }
 
   stop(): void {
     this.stopped = true;
+    this.contextPublisher.stop();
     publishTurnEnvironmentSupport(false);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    window.removeEventListener('focus', this.onVisibilityChange);
+    window.removeEventListener('blur', this.onVisibilityChange);
     window.removeEventListener('gateway-authenticated', this.onTokenSaved);
     window.clearTimeout(this.reconnectTimer);
     this.detachRealtime?.();
@@ -124,6 +132,7 @@ export class EndpointToolHost {
 
   private readonly onVisibilityChange = () => {
     this.controller.publishAvailability();
+    void this.contextPublisher.refresh();
   };
 
   private connect(allowIdentityRotation = true): Promise<void> {
@@ -141,6 +150,7 @@ export class EndpointToolHost {
     try {
       const compatibility = await apiFetch(apiUrl('/api/endpoint-tools/compatibility'));
       const compatibilityBody = await compatibility.json().catch(() => null);
+      this.supportsEnvironment = compatibility.ok && compatibilityBody?.payload?.endpointEnvironmentV1 === true;
       publishTurnEnvironmentSupport(compatibility.ok && compatibilityBody?.payload?.turnDeviceContextV1 === true);
       this.supportsLocationTasks = compatibility.ok && compatibilityBody?.payload?.deviceLocationTasksV1 === true;
       this.supportsDeviceState = compatibility.ok && compatibilityBody?.payload?.deviceStateToolsV1 === true;
@@ -190,11 +200,13 @@ export class EndpointToolHost {
           this.turnToken = turnToken;
           publishEndpointTurnClaim(endpointId, turnToken);
           this.controller.connect(sendGatewayEndpointMessage);
+          if (this.supportsEnvironment) this.contextPublisher.start({ endpointId, token: turnToken });
         },
         onMessage: (message) => {
           void this.controller.handleMessage(message);
         },
         onDisconnected: () => {
+          this.contextPublisher.stop();
           this.controller.disconnect();
           clearEndpointTurnClaim(this.turnToken);
           this.turnToken = undefined;

@@ -33,12 +33,16 @@ import {
   type EndpointTransport,
 } from './registry.js';
 import { EndpointUploadService } from './upload-service.js';
+import { EndpointContextStore } from './context-store.js';
+import { LocationSharingService } from './location-sharing.js';
 
 const log = createLogger('EndpointTools');
 const MAX_MESSAGE_CLOCK_SKEW_MS = 60_000;
 
 export class EndpointToolRuntime {
   readonly registry: EndpointRegistry;
+  readonly contexts: EndpointContextStore;
+  readonly locations: LocationSharingService;
   readonly grants: DeviceGrantService;
   readonly invocations: EndpointInvocationService;
   readonly uploads: EndpointUploadService;
@@ -54,6 +58,8 @@ export class EndpointToolRuntime {
   } = {}) {
     const policy = new EndpointToolPolicy();
     this.registry = new EndpointRegistry(policy);
+    this.contexts = new EndpointContextStore(this.registry);
+    this.locations = new LocationSharingService(this.registry, this.contexts);
     this.grants = new DeviceGrantService(this.registry, Date.now, recordDeviceGrantEvent);
     this.bindings = new EndpointBindingService(this.registry, {
       get: getEndpointSessionBinding,
@@ -133,6 +139,8 @@ export class EndpointToolRuntime {
     this.grants.close();
     this.invocations.close();
     this.uploads.close();
+    this.contexts.close();
+    void this.locations.close();
     this.registry.closeAll();
   }
 }

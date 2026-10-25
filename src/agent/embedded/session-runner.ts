@@ -317,7 +317,7 @@ export class EmbeddedSessionRunnerPool {
       {
         conversationId: params.transcriptRuntime.persistent ? runtimeId : undefined,
         persistCustomTypes: ['codemode-store', TOOL_DISCOVERY_STATE, 'coding_run_started', 'coding_verification',
-          'xopc.model-selection', AGENT_PROFILE_CONTEXT_STATE, 'connection_required', 'clarification_required'],
+          'xopc.model-selection', AGENT_PROFILE_CONTEXT_STATE, 'connection_required', 'clarification_required', 'phone_assistance_required'],
         contextWindowTokens: model.contextWindow ?? 128_000,
         transformMessageForPersistence: params.transcriptRuntime.persistent
           ? (message) => transformUserMessageForPersistence(runtimeId, message)

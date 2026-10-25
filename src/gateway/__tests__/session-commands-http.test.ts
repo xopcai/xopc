@@ -1,4 +1,5 @@
 import { EndpointRegistry } from '../../endpoint-tools/registry.js';
+import { EndpointContextStore } from '../../endpoint-tools/context-store.js';
 import { createEndpointPrincipal } from '../../storage/sqlite/endpoint-principal-repository.js';
 import { getSessionInputById } from '../../storage/sqlite/session-input-repository.js';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -32,11 +33,15 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
   seedTestAgentCatalog();
   const token = 'session-command-test-token';
   const registry = new EndpointRegistry();
+  const contexts = new EndpointContextStore(registry);
   createEndpointPrincipal({ id: 'phone', kind: 'mobile', platform: 'ios', displayName: 'Phone', publicKey: 'fixture' });
   const hello = { principalId: 'phone', endpointId: 'ios:phone', connectionInstanceId: randomUUID(), displayName: 'Phone',
     kind: 'mobile' as const, platform: 'ios', appVersion: '1', availability: 'foreground' as const, nonce: 'nonce',
     signedAt: Date.now(), signature: 'fixture-signature', tools: [] };
   let registration = registry.register(hello, 'connection-1', { readyState: 1, send: () => {}, close: () => {} });
+  contexts.heartbeat(hello.endpointId, { connectionEpoch: 'connection-1', sequence: 1, availability: 'foreground' });
+  contexts.report(hello.endpointId, { version: 1, reportId: 'context-report', connectionEpoch: 'connection-1',
+    sequence: 1, baseRevision: null, mode: 'full', capturedAt: Date.now(), values: { 'environment.timezone': 'Asia/Shanghai' } });
   let finish!: (value: { status: string; summary: string }) => void;
   const execute = vi.fn((_input: unknown) => new Promise<{ status: string; summary: string }>(resolve => { finish = resolve; }));
   const interrupt = vi.fn(async () => { finish({ status: 'aborted', summary: '' }); });
@@ -51,7 +56,7 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token,
     isGatewayReady: () => true, getExtensionLoader: () => null,
     projects: { get: () => null },
-    endpointTools: { registry },
+    endpointTools: { registry, contexts },
     sessions: { getSession: async (id: string) => getSessionMetadata(id), getAgentConfig: async () => ({ model: 'test/model', thinkingLevel: 'off', fixedModel: true }) },
     getSessionInputState,
     emit: vi.fn(),
@@ -90,6 +95,8 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     expect(first.payload.receipt.conversationId).toBe(id);
     const frozen = getSessionInputById(id, first.payload.receipt.inputId)!;
     expect(frozen.contextSnapshots).toEqual([expect.objectContaining({ kind: 'device_context', sourceId: hello.endpointId, title: 'Phone' })]);
+    expect(JSON.parse(frozen.contextSnapshots![0].text).taskContext.fields['environment.timezone'])
+      .toMatchObject({ status: 'fresh', value: 'Asia/Shanghai' });
     expect(JSON.stringify(frozen)).not.toContain(registration.turnToken);
     registration = registry.register(hello, 'connection-2', { readyState: 1, send: () => {}, close: () => {} });
     command.origin.token = registration.turnToken;

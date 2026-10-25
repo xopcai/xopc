@@ -1,3 +1,4 @@
+import { isPhoneAssistanceSuspended } from '../../phone/assistance.js';
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
 import { isClarificationSuspended } from '../../storage/sqlite/clarification-wait-repository.js';
 import crypto from 'crypto';
@@ -278,7 +279,7 @@ export async function *runGatewayAgent(
 
         const connectionSuspended = isConnectionSuspended(conversationId, runId);
         const clarificationSuspended = isClarificationSuspended(conversationId, runId);
-        const suspended = connectionSuspended || clarificationSuspended;
+        const suspended = connectionSuspended || clarificationSuspended || isPhoneAssistanceSuspended(conversationId, runId);
         const cancelled = mergedSignal.aborted || embeddedAborted;
         const endStatus = cancelled ? 'cancelled' : suspended ? 'suspended' : streamError ? 'error' : 'success';
         const endSummary = cancelled

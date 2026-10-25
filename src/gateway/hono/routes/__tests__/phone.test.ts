@@ -12,21 +12,107 @@ import { PhoneRuntime } from '../../../../phone/runtime.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
 import { registerPhoneRoutes } from '../phone.js';
+import { phoneAssistance, queuePhoneAssistance, requirePhoneAssistance } from '../../../../phone/assistance.js';
+import type { PhoneModelAdapter } from '../../../../phone/model-adapter.js';
+import { ensureSessionRecord } from '../../../../storage/sqlite/session-repository.js';
+import { readCurrentTranscriptId } from '../../../../storage/sqlite/session-instance-repository.js';
+import { getSqliteDatabase } from '../../../../storage/sqlite/transaction.js';
+import { getSessionInputState } from '../../../../storage/sqlite/session-input-repository.js';
 
 beforeEach(() => { closeXopcDatabase(); openXopcDatabase({ path: ':memory:' }); seedTestAgentCatalog(); });
 afterEach(() => closeXopcDatabase());
 
-function fixture(admin = true) {
+function fixture(admin = true, adapter?: PhoneModelAdapter) {
   const app = new Hono();
   app.use('*', async (c, next) => { setGatewayPrincipal(c, { kind: admin ? 'owner' : 'device', principalId: 'test', scopes: ['gateway.admin'] }); await next(); });
   const driver = { discover: vi.fn(async () => [{ serial: 'emulator-5554', name: 'Emulator', state: 'device', emulator: true }]), applications: vi.fn(async () => [{ packageName: 'com.android.settings', label: '设置' }, { packageName: 'com.android.deskclock', label: '时钟' }]), textInputStatus: vi.fn(async () => ({ androidSdk: 31, unicode: 'available' as const, method: 'scrcpy-clipboard' as const, keyboardRequired: false as const })), observe: vi.fn(), execute: vi.fn() };
   const conversationId = randomUUID();
   const config = ConfigSchema.parse({ phone: { enabled: true } });
-  const runtime = new PhoneRuntime(new PhoneRepository(), () => driver);
+  const runtime = new PhoneRuntime(new PhoneRepository(), () => driver, adapter ? async () => adapter : undefined);
   const phoneStreams = { issue: vi.fn(() => ({ ticket: 'one-use-ticket', path: '/api/phone/live/v1/ws' })) };
-  registerPhoneRoutes(app, { service: { currentConfig: config, phoneStreams, sessions: { getActiveRun: () => ({ active: false }), getSession: async (id: string) => id === conversationId ? { agentId: 'main' } : null }, submitSessionInput: vi.fn(async () => ({ ok: true })) }, strictRateLimitMiddleware: async (_c, next) => next() } as unknown as AuthenticatedRouteDeps, runtime);
-  return { app, runtime, driver, conversationId, config, phoneStreams };
+  const resumePhoneAssistance = vi.fn((owner: string, waitId: string) => { queuePhoneAssistance(owner, waitId); });
+  registerPhoneRoutes(app, { service: { currentConfig: config, phoneStreams, resumePhoneAssistance, sessions: { getActiveRun: () => ({ active: true }), getSession: async (id: string) => id === conversationId ? { agentId: 'main', transcriptId: readCurrentTranscriptId(getSqliteDatabase(), id) } : null }, submitSessionInput: vi.fn(async () => ({ ok: true })) }, strictRateLimitMiddleware: async (_c, next) => next() } as unknown as AuthenticatedRouteDeps, runtime);
+  return { app, runtime, driver, conversationId, config, phoneStreams, resumePhoneAssistance };
 }
+
+async function assistanceFixture() {
+  const f = fixture(true, { predict: async () => ({ kind: 'needsUser', reason: 'Complete login on the phone' }) });
+  initializeTestAgentCatalog({ defaults: AgentDefaultsSchema.parse({ models: { chat: { primary: 'chat/model' }, phoneUse: { primary: 'test/phone' } } }) });
+  ensureSessionRecord(f.conversationId, '.', { agentId: 'main', sourceChannel: 'webchat' });
+  f.driver.observe.mockImplementation(async () => ({ frameId: randomUUID(), capturedAt: Date.now(), width: 100, height: 200, rotation: 0,
+    package: 'com.android.settings', frame: Buffer.from('private-pixels'), elements: [] }));
+  const device = f.runtime.repository.save({ serial: 'emulator-5554', name: 'Phone', enabled: true, appAccess: 'all', allowedApps: [] });
+  const context = { config: f.config, agentId: 'main', modelRef: 'test/phone',
+    onNeedsUser: (checkpoint: Parameters<typeof requirePhoneAssistance>[3]) => requirePhoneAssistance(f.conversationId, 'old-run', 'call', checkpoint).id };
+  await f.runtime.execute(f.conversationId, { op: 'open', deviceId: device.id, mode: 'control' }, context);
+  await f.runtime.execute(f.conversationId, { op: 'run', goal: 'Read orders', maxActions: 2 }, context);
+  const report = f.runtime.status(f.conversationId)!;
+  const path = `/api/phone/conversations/${f.conversationId}/${report.sessionId}/control`;
+  const clientId = randomUUID();
+  const send = (op: string, epoch = report.controlEpoch!, assistanceId = report.assistanceId) => f.app.request(path, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, op, epoch, assistanceId, operationId: randomUUID() }) });
+  return { ...f, report, send, clientId };
+}
+
+it('queues early, concurrent and retried completion requests exactly once even with an active old run', async () => {
+  const f = await assistanceFixture();
+  try {
+    const responses = await Promise.all([f.send('handback'), f.send('handback')]);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    expect(phoneAssistance(f.conversationId)?.status).toBe('queued');
+    const queued = phoneAssistance(f.conversationId)?.queuedInputId;
+    expect((await f.send('handback')).status).toBe(200);
+    expect(phoneAssistance(f.conversationId)?.queuedInputId).toBe(queued);
+    expect(getSessionInputState(f.conversationId).inputs).toHaveLength(1);
+    expect(f.driver.execute).not.toHaveBeenCalled();
+  } finally { await f.runtime.shutdown(); }
+});
+
+it('projects a saved wait after runtime restart and restores only when the user takes over', async () => {
+  const f = await assistanceFixture();
+  try {
+    await f.runtime.shutdown();
+    const connections = await f.app.request('/api/phone/connections');
+    expect(await connections.json()).toMatchObject({ payload: [{ assistanceId: f.report.assistanceId, status: 'needs_user' }] });
+    expect(f.runtime.status(f.conversationId)).toBeUndefined();
+    const state = await f.app.request(`/api/phone/conversations/${f.conversationId}?clientId=${f.clientId}`);
+    expect(await state.json()).toMatchObject({ payload: { ownControl: false, report: { assistanceId: f.report.assistanceId } } });
+    const takeover = await f.send('takeover', 1);
+    expect(takeover.status).toBe(200);
+    const restored = (await takeover.json()).payload.report;
+    expect(restored).toMatchObject({ controlOwner: 'human', assistanceId: f.report.assistanceId });
+    expect(restored.sessionId).not.toBe(f.report.sessionId);
+    // A stale URL from before restart can safely complete this same durable request.
+    expect((await f.send('handback', restored.controlEpoch)).status).toBe(200);
+    expect(phoneAssistance(f.conversationId)?.status).toBe('queued');
+  } finally { await f.runtime.shutdown(); }
+});
+
+it('retains the wait when fresh observation fails and rejects another request identity', async () => {
+  const f = await assistanceFixture();
+  try {
+    expect((await f.send('handback', f.report.controlEpoch!, randomUUID())).status).toBe(409);
+    f.driver.observe.mockRejectedValueOnce(new Error('Phone temporarily unavailable'));
+    expect((await f.send('handback')).status).toBe(500);
+    expect(phoneAssistance(f.conversationId)?.status).toBe('open');
+    expect(getSessionInputState(f.conversationId).inputs).toHaveLength(0);
+    expect((await f.send('handback', f.runtime.status(f.conversationId)!.controlEpoch!)).status).toBe(200);
+  } finally { await f.runtime.shutdown(); }
+});
+
+it('allows retry after handback succeeded but durable queue insertion failed', async () => {
+  const f = await assistanceFixture();
+  try {
+    getSqliteDatabase().exec("CREATE TEMP TRIGGER fail_phone_queue BEFORE INSERT ON session_inputs BEGIN SELECT RAISE(ABORT, 'queue unavailable'); END");
+    expect((await f.send('handback')).status).toBe(500);
+    expect(phoneAssistance(f.conversationId)?.status).toBe('open');
+    expect(f.runtime.status(f.conversationId)).toMatchObject({ controlOwner: 'agent', status: 'ready' });
+    getSqliteDatabase().exec('DROP TRIGGER fail_phone_queue');
+    expect((await f.send('handback')).status).toBe(200);
+    expect(phoneAssistance(f.conversationId)?.status).toBe('queued');
+    expect(getSessionInputState(f.conversationId).inputs).toHaveLength(1);
+  } finally { await f.runtime.shutdown(); }
+});
 it('shares a model-free read-only device connection and validates its video ticket', async () => {
   const { app, runtime, phoneStreams } = fixture();
   const device = runtime.repository.save({ serial: 'emulator-5554', name: 'Shared phone', enabled: true, allowedApps: ['com.android.settings'] });

@@ -62,7 +62,8 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
     const payload = await receiveSessionCommand(deps.service, id.data, principal.principalId, command, async () => {
       if (!('input' in command)) return [];
       const endpoint = command.origin.type === 'endpoint' ? deps.service.endpointTools.registry.get(command.origin.endpointId) : undefined;
-      const contexts = endpoint ? [deviceTurnSourceContext(endpoint, command.input.endpointContext)] : [];
+      const contexts = endpoint ? [deviceTurnSourceContext(endpoint, command.input.endpointContext,
+        deps.service.endpointTools.contexts?.view(endpoint.endpointId), deps.service.endpointTools.locations?.list(endpoint.endpointId, id.data))] : [];
       contexts.push(...(command.input.browserContexts ?? []).map(browserPageContextToAgentContext));
       if (command.input.appContext) contexts.push(await deps.service.prepareSessionAppContext(command.input.appContext, principal, id.data, command.clientMessageId));
       return contexts;

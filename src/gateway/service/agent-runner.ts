@@ -1,3 +1,4 @@
+import { completePhoneAssistanceFromUser, preparePhoneContinuation } from '../../phone/assistance-service.js';
 import { readClarificationPresentation, type ClarificationSubmission } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
@@ -101,9 +102,10 @@ export class GatewayAgentRunner {
       opts.publishRealtime('sessions', 'session.connection-wait.changed', { conversationId, revision });
     });
     this.inputs = new SessionInputCoordinator({
-      beforeExecute: opts.validateConnectionResume,
+      beforeExecute: async input => (await opts.validateConnectionResume?.(input) ?? true) && await preparePhoneContinuation(input, opts.getConfig()),
       continueConnection: opts.continueConnection,
       cancelConnection: opts.cancelConnection,
+      completePhone: wait => completePhoneAssistanceFromUser(wait, opts.getConfig()),
       prioritizeInput: input => (input.origin.type !== 'system' || input.origin.source === 'cli') && isPersonalConversation(input.conversationId),
       interrupt: async (conversationId, runId, reason) => {
         const execution = this.activeExecutionBySession.get(conversationId);
