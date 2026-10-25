@@ -1,5 +1,6 @@
 import { XopcChatRow, XopcChatBlock } from '../model/chat';
 import { mergeAssistantRows, chatAnswerText } from './chatRichContent';
+import { chatStageStatus } from './chatLiveActivity';
 
 /** Progress and rich results need a readable container even before answer text exists. */
 export function chatNeedsWideBubble(row: XopcChatRow): boolean {
@@ -14,7 +15,7 @@ function copyPresentationRow(row: XopcChatRow): XopcChatRow {
     media: row.media?.slice(), refs: row.refs, deliveries: row.deliveries?.slice(), toolCalls: row.toolCalls, blocks: row.blocks?.slice(),
     outcome: row.outcome, turnId: row.turnId, live: row.live, progress: row.progress, sourceIds: row.sourceIds?.slice(),
     activity: row.activity, activityUpdatedAtMs: row.activityUpdatedAtMs, activityTools: row.activityTools?.slice(),
-    executionActivity: row.executionActivity,
+    executionActivity: row.executionActivity, runStatus: row.runStatus,
     toolResultId: row.toolResultId, toolResultError: row.toolResultError, toolResultDetails: row.toolResultDetails };
 }
 
@@ -31,6 +32,7 @@ export function chatPresentationRows(history: XopcChatRow[], live: XopcChatRow |
       merged.live = live.live; merged.progress = live.progress;
       merged.activity = live.activity; merged.activityUpdatedAtMs = live.activityUpdatedAtMs;
       merged.activityTools = live.activityTools;
+      merged.runStatus = live.runStatus;
       rows[rows.length - 1] = merged;
     } else rows.push(live);
   } else if (runId) {
@@ -43,6 +45,6 @@ export function chatPresentationRows(history: XopcChatRow[], live: XopcChatRow |
   }
   return rows.filter((row: XopcChatRow): boolean => row.role !== 'assistant' || !!row.live
     || !!chatAnswerText(row) || (row.media || []).length > 0 || (row.deliveries || []).length > 0
-    || (row.outcome?.deliverables || []).length > 0 || row.outcome?.status === 'failed'
+    || (row.outcome?.deliverables || []).length > 0 || !!chatStageStatus(row)
     || (row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'review'));
 }

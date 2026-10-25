@@ -1,5 +1,5 @@
 import { XopcChatBlock, XopcChatRow, XopcLiveActivityTool, XopcStreamPayload } from '../model/chat';
-import { chatToolDisplayKind } from './chatRichContent';
+import { chatAnswerStarted, chatToolDisplayKind } from './chatRichContent';
 
 /** Keep only bounded, user-readable activity metadata from the realtime stream. */
 export function reduceChatLiveActivity(row: XopcChatRow, event: string, payload: XopcStreamPayload): void {
@@ -63,5 +63,27 @@ export function chatLiveNarration(row: XopcChatRow): string {
       return block.text.replace(/\s+/g, ' ').trim().slice(0, 160);
     }
   }
+  return '';
+}
+
+/** Completed public stages remain visible while the next message is being classified. */
+export function chatLiveStages(row: XopcChatRow): XopcChatBlock[] {
+  if ((!row.live && !chatStageStatus(row)) || (chatAnswerStarted(row) && !chatStageStatus(row))) return [];
+  const seen = new Set<string>();
+  return (row.blocks || []).filter((block: XopcChatBlock): boolean => {
+    if (block.kind !== 'text' || block.presentation !== 'narration') return false;
+    // Compact history and realtime segments can have different IDs for the same public message.
+    const text = block.text.replace(/\s+/g, ' ').trim().slice(0, 160);
+    if (!text || seen.has(text)) return false;
+    seen.add(text);
+    return true;
+  });
+}
+
+/** Terminal states must remain readable even when no final answer was produced. */
+export function chatStageStatus(row: XopcChatRow): string {
+  if (row.runStatus === 'error' || row.outcome?.status === 'failed') return 'failed';
+  if (row.runStatus === 'cancelled' || row.outcome?.status === 'partial') return 'interrupted';
+  if (row.runStatus === 'suspended' || row.outcome?.status === 'suspended') return 'waiting';
   return '';
 }

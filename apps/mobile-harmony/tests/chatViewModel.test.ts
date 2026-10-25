@@ -557,10 +557,28 @@ describe('chat history isolation', () => {
     mocks.history.mockRejectedValueOnce(new Error('OFFLINE'));
     event('run_end', { status: 'cancelled' });
     await vi.waitFor(() => expect(chat.error).toBe('OFFLINE'));
-    expect(chat.liveRow?.live).toBe(false); expect(chat.liveRow?.text).toBe('answer'); expect(chat.liveRow?.blocks?.[0].presentation).toBe('answer');
+    expect(chat.liveRow?.live).toBe(false); expect(chat.liveRow?.runStatus).toBe('cancelled');
+    expect(chat.liveRow?.text).toBe('answer'); expect(chat.liveRow?.blocks?.[0].presentation).toBe('pending');
     mocks.history.mockResolvedValueOnce(page('one', 'answer')); await chat.loadHistory(false);
     expect(chat.liveRow).toBeUndefined(); expect(chat.rows[0].text).toBe('answer');
     expect(chat.rows[0].executionActivity).toBe(true); chat.dispose();
+  });
+  it('keeps cancellation visible across authoritative history refreshes with no final answer', async () => {
+    const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+    mocks.history.mockResolvedValue({ session: { key: 'one', messages: [{ id: 'stage', role: 'assistant', turnId: 'run',
+      content: [{ type: 'text', text: '正在安装京东', presentation: 'narration' }],
+    }] }, pagination: { hasMore: false } });
+    const event = (name: string, payload: object) => realtimeClient.onEvent({ topic: 'run:run', seq: 1, event: name,
+      data: { conversationId: 'one', runId: 'run', payload } });
+    event('assistant_delta', { messageId: 'stage', delta: '正在安装京东', offset: 0 });
+    event('assistant_message_end', { messageId: 'stage', presentation: 'narration' });
+    event('run_end', { status: 'cancelled' });
+    await vi.waitFor(() => expect(chat.rows[0]?.runStatus).toBe('cancelled'));
+    expect(chat.liveRow).toBeUndefined();
+    await chat.loadHistory(false);
+    expect(chat.rows[0].runStatus).toBe('cancelled');
+    expect(chat.rows[0].blocks?.[0].presentation).toBe('narration');
+    chat.dispose();
   });
   it('recovers ordered rich history on a gap without appending replayed deltas twice', async () => {
     vi.useFakeTimers();

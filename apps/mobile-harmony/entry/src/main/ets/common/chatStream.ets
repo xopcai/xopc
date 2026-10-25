@@ -6,7 +6,7 @@ import { reduceChatLiveActivity } from './chatLiveActivity';
 export function reduceChatStream(previous: XopcChatRow | undefined, event: string, payload: XopcStreamPayload, runId: string): XopcChatRow {
   const row: XopcChatRow = previous ? { id: previous.id, role: previous.role, text: previous.text,
     refs: previous.refs, outcome: previous.outcome, turnId: previous.turnId, live: previous.live,
-    progress: previous.progress, sourceIds: previous.sourceIds, deliveries: previous.deliveries,
+    progress: previous.progress, sourceIds: previous.sourceIds, deliveries: previous.deliveries, runStatus: previous.runStatus,
     activity: previous.activity, activityUpdatedAtMs: previous.activityUpdatedAtMs,
     executionActivity: previous.executionActivity,
     activityTools: event === 'tool_start' || event === 'tool_end'
@@ -52,11 +52,12 @@ export function reduceChatStream(previous: XopcChatRow | undefined, event: strin
     if (index < 0) blocks.push(review); else blocks[index] = review;
   } else if (event === 'turn_outcome') row.outcome = chatOutcome(payload as Object as XopcTurnOutcome);
   else if (event === 'progress') row.progress = '';
-  else if (event === 'error') { row.live = false; row.progress = ''; }
+  else if (event === 'error') { row.live = false; row.progress = ''; row.runStatus = 'error'; }
   else if (event === 'run_end') {
     row.live = false; row.progress = '';
+    row.runStatus = payload.status || row.runStatus;
     blocks.forEach((block: XopcChatBlock): void => {
-      if (block.presentation === 'pending') block.presentation = 'answer';
+      if (block.presentation === 'pending' && (!row.runStatus || row.runStatus === 'success')) block.presentation = 'answer';
     });
   }
   row.blocks = blocks;

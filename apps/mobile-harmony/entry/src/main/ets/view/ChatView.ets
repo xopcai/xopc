@@ -9,6 +9,7 @@ import { XopcChatRow, XopcChatAttachment, XopcChatBlock, XopcContextRef, XopcRef
   XopcHistoryMedia, XopcArtifact, XopcChatAgent, XopcHostDirectory, XopcQueuedInput, XopcExecutionDetail } from '../model/chat';
 import { XopcChatMessageContent } from './ChatMessageContent';
 import { XopcChatStepsView } from './ChatStepsView';
+import { chatStageStatus } from '../common/chatLiveActivity';
 import { CHAT_ACTION_PANEL_CLOSE_MS, CHAT_ACTION_PANEL_OPEN_MS, XopcChatActionPanel } from './ChatActionPanel';
 import { XopcChatExecutionDetailView } from './ChatExecutionDetailView';
 import { XopcChatRepository } from '../repository/chatRepository';
@@ -1299,14 +1300,14 @@ export struct XopcChatView {
             }.width('100%').alignItems(HorizontalAlign.End)
           } else if (item.item.role === 'assistant') {
             Column({ space: 2 }) {
-              if (item.item.live && !chatAnswerStarted(item.item) && !this.prompt.prompt) {
+              if (this.personalConversation && item.item.live && !chatAnswerStarted(item.item) && !this.prompt.prompt) {
                 XopcChatStepsView({ row: item.item, runStartedAtMs: this.chat.runStartedAtMs,
                   connection: this.chat.connection,
                   animateDots: this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion })
               }
               if (chatAnswerStarted(item.item) || (item.item.media || []).length > 0 || (item.item.refs || []).length > 0
                 || (!item.item.live && ((item.item.deliveries || []).length > 0 || (item.item.outcome?.deliverables || []).length > 0))
-                || item.item.outcome?.status === 'failed'
+                || (this.personalConversation && item.item.outcome?.status === 'failed')
                 || (item.item.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'review')) {
               Column() {
                 XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId, disclosure: this.disclosure,
@@ -1314,6 +1315,7 @@ export struct XopcChatView {
                   onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
                   onShowExecution: (row: XopcChatRow): void => { this.openExecutionDetail(row); },
                   runStartedAtMs: this.chat.runStartedAtMs, connection: this.chat.connection, showWaiting: false,
+                  showFailure: this.personalConversation,
                   reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: this.onNavigate,
                   onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
               }.id('chat-assistant-card-' + item.item.id).width(this.assistantBubbleWidth(item.item))
@@ -1330,7 +1332,12 @@ export struct XopcChatView {
                   }
                 }))
               }
-
+              if (!this.personalConversation && (item.item.live || !!chatStageStatus(item.item))) {
+                XopcChatStepsView({ row: item.item, staged: true, paused: !!item.item.live && !!this.prompt.prompt,
+                  runStartedAtMs: this.chat.runStartedAtMs,
+                  connection: this.chat.connection,
+                  animateDots: this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion })
+              }
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
             Column({ space: 2 }) {
