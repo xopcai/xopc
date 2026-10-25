@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import {
   BrowserWindow,
@@ -310,6 +310,14 @@ if (process.platform === 'win32') {
     app.commandLine.appendSwitch('no-sandbox');
     app.commandLine.appendSwitch('disable-setuid-sandbox');
   }
+}
+
+// Keep portable and validation instances independent before Chromium takes its lock.
+const electronUserDataDir = process.env['XOPC_ELECTRON_USER_DATA_DIR'];
+if (electronUserDataDir) {
+  const directory = resolve(electronUserDataDir);
+  mkdirSync(directory, { recursive: true });
+  app.setPath('userData', directory);
 }
 
 startLocalCrashReporter();

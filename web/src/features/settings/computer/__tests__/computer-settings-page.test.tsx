@@ -31,8 +31,8 @@ async function renderPanel(zh = true) {
 }
 
 it.each([
-  { language: 'zh' as const, badge: 'macOS · 实验性', notice: '请核对任务结果', label: '电脑控制' },
-  { language: 'en' as const, badge: 'macOS · Experimental', notice: 'Check the result', label: 'Computer use' },
+  { language: 'zh' as const, badge: 'macOS / Windows x64 · 实验性', notice: '请核对任务结果', label: '电脑控制' },
+  { language: 'en' as const, badge: 'macOS / Windows x64 · Experimental', notice: 'Check the result', label: 'Computer use' },
 ])('labels computer use as experimental in $language without changing settings', async ({ language, badge, notice, label }) => {
   window.electronAPI = undefined;
   const container = await renderPanel(language === 'zh');
@@ -183,11 +183,26 @@ it('wires missing macOS permissions and keeps stop usable during a pending permi
 });
 
 it('does not offer native control actions on unsupported platforms', async () => {
-  window.electronAPI = { platform: 'win32', computer: { status: vi.fn() }, system: {} } as any;
+  window.electronAPI = { platform: 'linux', computer: { status: vi.fn() }, system: {} } as any;
   const container = await renderPanel();
-  expect(container.textContent).toContain('本机桌面控制目前仅支持 macOS');
+  expect(container.textContent).toContain('本机桌面控制目前支持 macOS 和 Windows x64');
   expect(container.textContent).not.toContain('停止桌面操作');
   expect(window.electronAPI!.computer!.status).not.toHaveBeenCalled();
+});
+
+it('offers Windows control without displaying macOS permission prompts', async () => {
+  const requestAccessibility = vi.fn();
+  const stop = vi.fn();
+  window.electronAPI = { platform: 'win32', computer: { status: async () => ({ connected: true,
+    permissions: { accessibility: false, screenRecording: 'unknown' }, capabilities: { supported: true, delivery: 'background', textInput: false } }), stop },
+    system: { requestAccessibility } } as any;
+  const container = await renderPanel();
+  expect(container.textContent).toContain('停止桌面操作');
+  const switchButton = container.querySelector('button[role="switch"]') as HTMLButtonElement;
+  expect(switchButton.disabled).toBe(false);
+  expect(container.textContent).not.toContain('打开设置');
+  expect(container.textContent).not.toContain('屏幕录制');
+  expect(requestAccessibility).not.toHaveBeenCalled();
 });
 
 it('reports native status failures instead of showing an unverified connection', async () => {

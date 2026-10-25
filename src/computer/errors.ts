@@ -39,6 +39,18 @@ export function computerRecovery(code: string): string {
     return 'Screenshot upload to the Gateway failed. No automatic retry. Report the diagnosticId and HTTP status; do not change model providers or bypass desktop controls.';
   }
   switch (code) {
+    case 'COMPUTER_WINDOWS_TEXT_INPUT_UNVERIFIED': case 'COMPUTER_WINDOWS_KEY_INPUT_UNVERIFIED':
+      return 'This Windows control cannot be certified for safe input. Ask the user to enter text manually. Do not substitute key presses, paste, shell commands, coordinates or another tool to bypass this refusal.';
+    case 'COMPUTER_WINDOWS_KEY_TARGET_REQUIRED':
+      return 'Keyboard input requires one verified non-password control focused inside the authorized window. Observe or focus the intended safe control before a new proposal; never send keys to another window or bypass the refusal with global input.';
+    case 'COMPUTER_WINDOWS_KEY_TARGET_CHANGED': case 'COMPUTER_WINDOWS_EDIT_TARGET_CHANGED':
+      return 'The native input target or its safety state changed before dispatch. Inspect the actual application and release this operation. Do not replay an uncertain input or switch to global keys, paste or shell input.';
+    case 'COMPUTER_WINDOW_APP_CHANGED':
+      return 'The native window no longer belongs to the authorized application. Stop and select the intended application again. A shared Windows host process does not authorize its other app windows. Do not reuse old refs or replay uncertain input.';
+    case 'COMPUTER_NATIVE_IDENTITY_UNAVAILABLE':
+      return 'The desktop cannot verify the native target identity in the current interactive session. Check that the app and xopc are on the same signed-in desktop. Do not bypass this check or automatically elevate privileges.';
+    case 'COMPUTER_PLATFORM_UNSUPPORTED':
+      return 'This desktop build does not support Computer Use on this platform or architecture. Use a supported macOS or Windows x64 desktop build.';
     case 'COMPUTER_ELEMENT_REF_REQUIRED': case 'COMPUTER_ELEMENT_TARGET_CHANGED':
     case 'COMPUTER_SEMANTIC_ACTION_UNSUPPORTED':
       return 'The native element reference or action is unavailable for this window. No automatic coordinate fallback. Reopen and observe fresh evidence before choosing a different action; never reuse an old reference or replay an uncertain input.';
@@ -68,7 +80,7 @@ export function computerRecovery(code: string): string {
     case 'COMPUTER_READ_ONLY': return 'This session is read-only. Do not retry an action or reopen in control mode without user authorization.';
     case 'COMPUTER_DEVICE_BUSY': case 'COMPUTER_BUSY': return 'Another desktop operation is active. Wait for it to finish; do not stop another task.';
     case 'COMPUTER_CONTROL_PAUSED': case 'COMPUTER_LOCAL_UI_REQUIRED': return 'Ask the user to resume desktop control locally. Do not automatically resume or bypass this stop.';
-    case 'COMPUTER_OS_PERMISSION_REQUIRED': return 'Ask the user to check Accessibility and Screen Recording in macOS settings.';
+    case 'COMPUTER_OS_PERMISSION_REQUIRED': return 'Check local desktop access. On macOS, review Accessibility and Screen Recording. On Windows, use the signed-in interactive desktop and inspect the driver diagnostic; do not request macOS permissions or automatically elevate privileges.';
     default: return 'Do not repeat the same call without a state change. Report this error; never bypass desktop restrictions with shell or other tools.';
   }
 }

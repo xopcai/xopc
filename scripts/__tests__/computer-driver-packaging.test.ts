@@ -67,7 +67,17 @@ describe('packaged computer driver', () => {
     expect(() => stageComputerDriver(root, pack, { platform: 'darwin', arch: 'arm64' })).toThrow('setup-computer-driver.mjs');
   });
 
-  it.each(['win32', 'linux'])('does not ship a macOS driver for %s', platform => {
+  it('fails Windows packaging when the driver bundle is missing or has been replaced', () => {
+    const { root, pack } = fixture();
+    expect(() => stageComputerDriver(root, pack, { platform: 'win32', arch: 'x64' })).toThrow('setup-computer-driver.mjs');
+    const cache = join(root, '.cache/computer-driver/0.36.0/win32-x64');
+    mkdirSync(cache, { recursive: true });
+    writeFileSync(join(cache, 'cua-driver.exe'), 'replaced executable');
+    expect(() => stageComputerDriver(root, pack, { platform: 'win32', arch: 'x64' })).toThrow('checksum mismatch');
+    expect(() => stageComputerDriver(root, pack, { platform: 'win32', arch: 'arm64' })).toThrow('Unsupported');
+  });
+
+  it.each(['linux'])('does not ship a macOS driver for %s', platform => {
     const { root, pack } = fixture();
     stageComputerDriver(root, pack, { platform, arch: 'x64' });
     expect(existsSync(join(pack, '_pack-resources/computer-driver'))).toBe(true);
@@ -77,6 +87,6 @@ describe('packaged computer driver', () => {
   it('copies the driver outside app.asar into the runtime bin directory', () => {
     const config = load(readFileSync(new URL('../electron-builder.pack.yml', import.meta.url), 'utf8')) as { extraResources: Array<{ from: string; to: string; filter: string[] }> };
     expect(config.extraResources.find(resource => resource.from === '_pack-resources/computer-driver'))
-      .toEqual({ from: '_pack-resources/computer-driver', to: 'bin', filter: ['cua-driver', 'computer-driver-LICENSE.txt'] });
+      .toEqual({ from: '_pack-resources/computer-driver', to: 'bin', filter: ['cua-driver', 'cua-driver.exe', 'cua-driver-uia.exe', 'cua-cursor-theme.exe', 'cua_driver_sdk.dll', 'cua_driver_node_runtime.node', 'computer-driver-LICENSE.txt'] });
   });
 });

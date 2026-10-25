@@ -131,6 +131,8 @@ jobs:
           _EB_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           _EB_WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           _EB_WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # Optional full Windows certificate Subject DN; unsigned builds do not require it.
+          XOPC_WINDOWS_PUBLISHER: ${{ vars.WINDOWS_PUBLISHER }}
           # Notarization (used when mac.notarize is true in scripts/electron-builder.pack.yml)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -138,8 +140,8 @@ jobs:
         run: |
           if [[ "${{ matrix.os }}" == windows* ]]; then
             if [[ -n "${_EB_WIN_CSC_LINK:-}" && -n "${_EB_WIN_CSC_KEY_PASSWORD:-}" ]]; then
-              export CSC_LINK="$_EB_WIN_CSC_LINK"
-              export CSC_KEY_PASSWORD="$_EB_WIN_CSC_KEY_PASSWORD"
+              export WIN_CSC_LINK="$_EB_WIN_CSC_LINK"
+              export WIN_CSC_KEY_PASSWORD="$_EB_WIN_CSC_KEY_PASSWORD"
             else
               echo "⚠️ WIN_CSC_LINK/WIN_CSC_KEY_PASSWORD not set; building unsigned Windows installer"
               unset CSC_LINK CSC_KEY_PASSWORD

@@ -3,7 +3,7 @@
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ELECTRON_PACKAGED_DEPENDENCIES } from './electron-runtime-externals.mjs';
@@ -81,7 +81,7 @@ export { findDefaultAsar };
 
 function main() {
   const inputArg = process.argv[2];
-  const input = inputArg ? join(process.cwd(), inputArg) : findDefaultAsar();
+  const input = inputArg ? resolve(process.cwd(), inputArg) : findDefaultAsar();
   const asarPath = input.endsWith('.app') ? join(input, 'Contents/Resources/app.asar') : input;
   if (!existsSync(asarPath)) {
     console.error(`[verify-electron-asar-deps] app.asar not found: ${asarPath}`);

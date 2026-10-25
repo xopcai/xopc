@@ -16,13 +16,28 @@ const aliases = {
 };
 
 /** Load only signing settings; explicit environment values take precedence. */
-export function loadElectronSigningEnv(root, inherited = process.env) {
+export function loadElectronSigningEnv(root, inherited = process.env, platform = process.platform) {
   const path = join(root, '.env.local');
   const local = existsSync(path) ? parse(readFileSync(path)) : {};
   const env = { ...inherited };
   for (const [key, alias] of Object.entries(aliases)) {
+    if (platform === 'win32' && key.startsWith('CSC_')) continue;
     const value = inherited[key] || inherited[alias] || local[key] || local[alias];
     if (value) env[key] = value;
+  }
+  if (platform === 'win32') {
+    // Generic CSC_* may contain a macOS Developer ID certificate.
+    delete env.CSC_LINK;
+    delete env.CSC_KEY_PASSWORD;
+    for (const key of ['WIN_CSC_LINK', 'WIN_CSC_KEY_PASSWORD', 'XOPC_WINDOWS_PUBLISHER']) {
+      const alias = key.startsWith('XOPC_') ? key : `XOPC_${key}`;
+      const value = inherited[key] ?? inherited[alias] ?? local[key] ?? local[alias];
+      if (value !== undefined) env[key] = value;
+    }
+    if (env.WIN_CSC_LINK) {
+      env.CSC_LINK = env.WIN_CSC_LINK;
+      env.CSC_KEY_PASSWORD = env.WIN_CSC_KEY_PASSWORD ?? '';
+    }
   }
   return env;
 }

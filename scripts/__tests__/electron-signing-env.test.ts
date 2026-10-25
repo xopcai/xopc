@@ -30,3 +30,9 @@ it('supports standard API-key and Keychain settings without changing the input e
 it('keeps builds without local signing configuration supported', () => {
   expect(loadElectronSigningEnv(join(tmpdir(), 'xopc-missing-signing-config'), { PATH: '/usr/bin' })).toEqual({ PATH: '/usr/bin' });
 });
+it('keeps Windows credentials separate from generic macOS certificates', () => {
+  const root = fixture('CSC_LINK=mac.p12\nXOPC_CSC_KEY_PASSWORD=mac-password\nXOPC_WIN_CSC_LINK=windows.pfx\nXOPC_WIN_CSC_KEY_PASSWORD=windows-password\nXOPC_WINDOWS_PUBLISHER=CN=Fixture');
+  expect(loadElectronSigningEnv(root, {}, 'win32')).toMatchObject({ CSC_LINK: 'windows.pfx', CSC_KEY_PASSWORD: 'windows-password', XOPC_WINDOWS_PUBLISHER: 'CN=Fixture' });
+  expect(loadElectronSigningEnv(fixture('CSC_LINK=mac.p12'), { CSC_LINK: 'ci-mac.p12' }, 'win32').CSC_LINK).toBeUndefined();
+  expect(loadElectronSigningEnv(root, {}, 'darwin').CSC_LINK).toBe('mac.p12');
+});

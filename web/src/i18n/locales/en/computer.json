@@ -1,8 +1,10 @@
 {
   "computerSettings": {
     "title": "Computer use",
-    "subtitle": "Let xopc use apps on your Mac.",
-    "preview": "macOS · Experimental",
+    "subtitle": "Let xopc use apps on your computer.",
+    "preview": "macOS / Windows x64 · Experimental",
+    "windowsAccess": "Windows desktop access",
+    "windowsAccessDescription": "Uses your signed-in desktop. Text and keyboard input require a verified native control. Password, read-only and unsupported fields require manual input. Some background shortcuts may be refused.",
     "previewFootnote": "This preview can make mistakes. Check the result of each task.",
     "control": "Control",
     "desktop": "Desktop applications",
@@ -36,8 +38,8 @@
     "device": "Desktop connection",
     "connected": "Desktop connected",
     "disconnected": "Waiting for desktop connection",
-    "desktopRequired": "Open the xopc macOS desktop app to grant access. The web console cannot approve local control.",
-    "unsupportedPlatform": "Native desktop control is currently available only in the macOS preview.",
+    "desktopRequired": "Open the xopc desktop app on macOS or Windows x64 to grant access. The web console cannot approve local control.",
+    "unsupportedPlatform": "Native desktop control currently requires macOS or Windows x64.",
     "accessibility": "Accessibility",
     "screen": "Screen recording",
     "granted": "Granted",

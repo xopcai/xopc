@@ -8,7 +8,7 @@ const priorType = Object.getOwnPropertyDescriptor(process, 'type');
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); if (priorType) Object.defineProperty(process, 'type', priorType); else delete (process as any).type; });
 describe('private native driver admission', () => {
   function native(windows: Array<Record<string, unknown>>, apps = [{ bundle_id: 'fixture', name: '飞书', pid: 42, running: true }]) {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'start').mockResolvedValue(undefined);
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     const call = vi.spyOn(driver as any, 'callUntyped').mockImplementation(async (name: unknown, args: any) => ({ data: name === 'list_apps' ? { apps }
@@ -202,7 +202,7 @@ describe('private native driver admission', () => {
     expect(f.call).not.toHaveBeenCalledWith('bring_to_front', expect.anything(), expect.anything());
   });
   it.each(['ai.xopc.xopc', 'com.github.Electron', 'custom.host'])('refuses self-control of %s before starting the driver', async appId => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'custom.host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'custom.host', undefined, 'darwin');
     await expect(driver.resolveTarget(appId, new AbortController().signal, { prepare: false })).rejects.toThrow('SELF_CONTROL_DENIED');
     expect(io.access).not.toHaveBeenCalled();
   });
@@ -229,7 +229,7 @@ describe('private native driver admission', () => {
     expect(JSON.stringify(scoped)).not.toContain('Recent documents');
   });
   it('includes static outcome text without exposing native element tokens', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     vi.spyOn(driver as any, 'getWindowState').mockResolvedValue({
       pid: 42, windowId: 9n, screenshotFrameValid: true, windowBounds: { x: 0, y: 0, width: 800, height: 600 }, screenshotWidth: 800, screenshotHeight: 600,
@@ -244,7 +244,7 @@ describe('private native driver admission', () => {
     expect(frame.summary).not.toContain('private-native-token');
   });
   it('requests both structured elements and markdown from the pinned native SDK', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     const getWindowState = vi.fn().mockResolvedValue({ pid: 42, windowId: 9n, screenshotFrameValid: true,
       windowBounds: { x: 0, y: 0, width: 800, height: 600 }, screenshotWidth: 800, screenshotHeight: 600,
@@ -256,7 +256,7 @@ describe('private native driver admission', () => {
       includeAccessibilityTree: true, includeScreenshot: true }), expect.anything());
   });
   it('re-captures a transient invalid frame from the same exact window without input', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     const invalid = { pid: 42, windowId: 9n, screenshotFrameValid: false, images: [{ dataBase64: 'private-invalid-frame' }] };
     const capture = vi.spyOn(driver as any, 'getWindowState').mockResolvedValueOnce(invalid).mockResolvedValue({
@@ -275,7 +275,7 @@ describe('private native driver admission', () => {
     [{ pid: 43, windowId: 9n, screenshotFrameValid: false, images: [] }, 1],
     [{ pid: 42, windowId: 10n, screenshotFrameValid: false, images: [] }, 1],
   ])('bounds invalid-frame capture and never follows changed window identity', async (state, count) => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     const capture = vi.spyOn(driver as any, 'getWindowState').mockResolvedValue(state);
     await expect(driver.observe({ appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9',
@@ -283,7 +283,7 @@ describe('private native driver admission', () => {
     expect(capture).toHaveBeenCalledTimes(count);
   });
   it('cancels invalid-frame resampling before another capture', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     const controller = new AbortController();
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     const capture = vi.spyOn(driver as any, 'getWindowState').mockImplementation(async () => {
@@ -294,7 +294,7 @@ describe('private native driver admission', () => {
     expect(capture).toHaveBeenCalledOnce();
   });
   it('never sends a system sharing accessory observation to the model, even after explicit selection', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     vi.spyOn(driver as any, 'getWindowState').mockResolvedValue({ pid: 42, windowId: 9n,
       elements: [{ elementIndex: 0n, role: 'AXWindow', depth: 0 },
@@ -302,7 +302,7 @@ describe('private native driver admission', () => {
     await expect(driver.observe({ appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 66, height: 20, geometryRevision: '1' }, new AbortController().signal)).rejects.toThrow('COMPUTER_WINDOW_CHANGED');
   });
   it('preserves valid pixels and explicitly reports unavailable accessibility content', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     vi.spyOn(driver as any, 'getWindowState').mockResolvedValue({ pid: 42, windowId: 9n,
       windowBounds: { x: 0, y: 0, width: 800, height: 600 }, screenshotWidth: 800, screenshotHeight: 600, elements: [],
@@ -321,7 +321,7 @@ describe('private native driver admission', () => {
     expect(f.client.click.mock.calls[0][0].target.inner.windowId).toBe(largeWindowId);
   });
   it('accepts native app catalogs containing processes without a bundle identifier', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'start').mockResolvedValue(undefined);
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     vi.spyOn(driver as any, 'listApps').mockResolvedValue([
@@ -338,7 +338,7 @@ describe('private native driver admission', () => {
     let release!: () => void;
     io.access.mockImplementation(() => new Promise<void>(resolve => { release = resolve; }));
     const loadSdk = vi.fn();
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', loadSdk as any);
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', loadSdk as any, 'darwin');
     const starting = driver.resolveTarget('fixture', new AbortController().signal, { prepare: false });
     const rejected = expect(starting).rejects.toThrow('STOPPED');
     const stopped = driver.stop(); release(); await stopped; await rejected;
@@ -355,7 +355,7 @@ describe('private native driver admission', () => {
       EmbeddedCuaDriverHost: class { constructor() { return host; } },
       CuaDriver: { connect: vi.fn() },
     }));
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', loadSdk as any);
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', loadSdk as any, 'darwin');
     const starting = driver.resolveTarget('fixture', new AbortController().signal, { prepare: false });
     const rejected = expect(starting).rejects.toThrow('STOPPED');
     await vi.waitFor(() => expect(host.start).toHaveBeenCalled());
@@ -366,7 +366,7 @@ describe('private native driver admission', () => {
     expect(destroy).toHaveBeenCalled();
   });
   it('rejects ungrounded text and unsafe/global shortcuts', () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     expect(() => driver.validateAction({ kind: 'typeText', text: 'secret' })).toThrow('EDITABLE');
     expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['cmd', 'q'] })).toThrow('UNSAFE');
     expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['cmd', 'shift', 'a'] })).not.toThrow();

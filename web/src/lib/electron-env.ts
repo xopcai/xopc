@@ -3,9 +3,9 @@ export function isElectron(): boolean {
   return typeof window !== 'undefined' && Boolean(window.electronAPI);
 }
 
-/** Native computer control is currently supported only by the macOS desktop shell. */
+/** Native control requires a supported desktop shell; readiness is checked locally. */
 export function isComputerUseAvailable(): boolean {
-  return typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin';
+  return typeof window !== 'undefined' && ['darwin', 'win32'].includes(window.electronAPI?.platform ?? '');
 }
 
 /** Cron "keep screen on" can use main-process `powerSaveBlocker` (works on `file://`; Wake Lock does not). */

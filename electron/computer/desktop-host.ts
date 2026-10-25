@@ -25,10 +25,12 @@ import { ComputerAccessPolicy } from './access-policy.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
 
-export function resolveComputerDriverPath(options: { packaged: boolean; resourcesPath: string; mainDir: string }): string {
+export function resolveComputerDriverPath(options: { packaged: boolean; resourcesPath: string; mainDir: string; platform?: NodeJS.Platform; arch?: string }): string {
+  const platform = options.platform ?? process.platform;
+  const name = platform === 'win32' ? 'cua-driver.exe' : 'cua-driver';
   return options.packaged
-    ? join(options.resourcesPath, 'bin', 'cua-driver')
-    : join(options.mainDir, '..', '..', '.cache', 'computer-driver', '0.36.0', 'cua-driver');
+    ? join(options.resourcesPath, 'bin', name)
+    : join(options.mainDir, '..', '..', '.cache', 'computer-driver', '0.36.0', ...(platform === 'win32' ? [`win32-${options.arch ?? process.arch}`] : []), name);
 }
 
 export function resolveComputerDriverSdkUrl(options: { packaged: boolean; resourcesPath: string }): string | undefined {
@@ -65,6 +67,9 @@ export class DesktopEndpointHost {
   private visible(): boolean { const w = this.options.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); }
   snapshot() { return { connected: !!this.claim, claim: this.claim, error: this.error, reenrollmentRequired: this.reenrollmentRequired,
     controlPaused: this.controlPaused, session: this.broker.snapshot(),
+    platform: process.platform,
+    capabilities: { supported: process.platform === 'darwin' || (process.platform === 'win32' && process.arch === 'x64'), delivery: 'background',
+      textInput: process.platform === 'darwin' || (process.platform === 'win32' && process.arch === 'x64') },
     permissions: { accessibility: process.platform === 'darwin' && systemPreferences.isTrustedAccessibilityClient(false),
       screenRecording: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'unknown' } }; }
   async stopControl(): Promise<void> {

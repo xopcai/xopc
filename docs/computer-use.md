@@ -1,11 +1,29 @@
 # Computer Use preview
 
-Use the macOS desktop app to ask xopc to read or operate one application window. This preview requires a compatible GUI model and native permissions. Start with a small, supervised task.
+Use the macOS or Windows x64 desktop app to ask xopc to read or operate one application window. This preview requires a compatible GUI model and local application access. Start with a small, supervised task.
+
+## Windows x64 preview
+
+Windows supports window observation, native UIA button activation, text entry and keyboard input through the same local broker as macOS. Enable Computer Use, allow the application in Settings, and select a compatible model. Start with Calculator or a disposable native text field. Applications without a supported background input route may refuse actions; the runtime does not silently switch to foreground input.
+
+Run in your signed-in interactive desktop. A service in Session 0, the lock screen, UAC prompts and higher-integrity targets are outside this preview's certified scope. Windows does not use the macOS Accessibility/Screen Recording settings.
+
+Text entry requires one currently observed native field with `inputAllowed: true`. xopc supplements the pinned driver's observation with Windows UIA password/read-only metadata, uniquely matches native control bounds, and rechecks the runtime identity and safety state immediately before dispatch. Password, disabled, offscreen, read-only, ambiguous and unverified fields require manual input. Native `setValue` replaces the value; `typeText` appends on the Windows ValuePattern path rather than assuming caret insertion. Web-content fields retain the existing Browser Use workflow.
+
+Keys require a verified non-password control focused inside the authorized window. The broker rechecks focus and targets that exact native token in background mode. Windows uses `ctrl`, not `cmd`; Backspace and Delete remain distinct. Global/window-escape shortcuts are refused. Some background chords are unsupported by the target toolkit and return a refusal. The runtime never retries a refused/uncertain input through foreground or global injection. Drag, context-menu, mixed-DPI and broad third-party application compatibility are not certified. ARM64 and a fully signed Windows installer remain separate release checks. The macOS feature set is unchanged.
+
+For developers, run `node scripts/setup-computer-driver.mjs`, then `pnpm exec tsx scripts/run-computer-windows-validation.mts`. This opt-in check opens Windows Calculator, clears its current expression, computes 6 × 7, verifies 42, checks duplicate-action receipts, and stops the broker. It requires an interactive Windows x64 session, leaves Calculator open, and writes content-free evidence under `.cache/computer-windows-validation/result.json`. It does not call a model or certify Gateway/network integration or the installer.
+
+For native text and real-model validation, run `pnpm exec tsx scripts/run-computer-windows-input-validation.mts [provider/model]`. It defaults to the existing `xopc-cloud/computer` route, creates and closes its own WinForms app, checks Unicode/multiline append, value replacement, End/Backspace and password/read-only refusals, then asks the actual model to replace an existing sample, press End and activate Verify through ComputerRuntime and the real broker. The app requires both the exact text and the key event before reporting PASS. GUI-Plus can use the bounded native `set_value` extension with a current field ref and complete replacement text. Only this disposable window is sent to the model; normal provider usage charges apply. Credentials remain in their existing store; session/config/database state and evidence are isolated under `.cache/computer-windows-input-validation/<run-id>/`. No model responses are stubbed. Endpoint transport is in-process, so this check does not certify Gateway networking, other apps or the installer.
+
+See [Windows input validation evidence](./design/technical/computer-use-windows-input-validation.md) for the tested build, model request counts and remaining scope.
+
+The [installed Windows validation](./design/technical/computer-use-windows-installed-validation.md) additionally exercises the production NSIS installer, normal packaged app and bundled Gateway, authenticated session input, signed desktop WebSocket, screenshot uploads, real chat/GUI models, restart and uninstall. Run `node --import tsx scripts/run-computer-windows-installed-validation.mts` after building the installer, in a clean interactive Windows account. Authenticode signing remains a separate release check.
 
 ## Set up
 
-1. Install a signed macOS desktop build that includes Computer Use.
-2. Open **Settings → Integrations → Computer use** (`#/settings/computer-use`). Enable computer control and grant macOS Accessibility and Screen Recording permissions to xopc.
+1. Install a desktop build that includes Computer Use for your platform.
+2. Open **Settings → Integrations → Computer use** (`#/settings/computer-use`). Enable computer control. On macOS, grant Accessibility and Screen Recording permissions to xopc.
 3. Allow the applications you intend to use. Start with individual applications rather than unrestricted app access.
 4. Choose a compatible GUI model from the connected catalog and save it. For your own key, connect the appropriate provider first; for XOPC Cloud, sign in, refresh the catalog, and select `xopc-cloud/computer` (XOPC Cloud Computer / XOPC 云端电脑操作). Ordinary chat selection does not configure this capability.
 5. In desktop Chat, ask: `Read the current page in Feishu; do not click.` If the app needs to be opened, explicitly ask: `Open Feishu and read the current page.`

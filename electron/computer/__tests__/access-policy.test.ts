@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { join } from 'node:path';
 
 const state = vi.hoisted(() => ({ files: new Map<string, string>() }));
 vi.mock('electron', () => ({ app: { getPath: () => '/fixture' } }));
@@ -24,7 +25,7 @@ describe('computer access policy', () => {
   });
 
   it('rejects malformed policy instead of widening access', async () => {
-    state.files.set('/fixture/computer-access-policy.json', '{"authorizedAppIds":["com.example.Notes"]}');
+    state.files.set(join('/fixture', 'computer-access-policy.json'), '{"authorizedAppIds":["com.example.Notes"]}');
     await expect(new ComputerAccessPolicy().allows('com.example.Notes')).rejects.toThrow();
   });
 

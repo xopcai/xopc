@@ -47,6 +47,11 @@ extraResources:
     to: bin
     filter:
       - cua-driver
+      - cua-driver.exe
+      - cua-driver-uia.exe
+      - cua-cursor-theme.exe
+      - cua_driver_sdk.dll
+      - cua_driver_node_runtime.node
       - computer-driver-LICENSE.txt
   - from: _pack-resources/rg
     to: bin
