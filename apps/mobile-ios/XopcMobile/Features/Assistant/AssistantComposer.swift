@@ -5,6 +5,7 @@ import SwiftUI
 // swiftlint:disable:next type_body_length
 struct AssistantComposer: View {
     let configuration: GatewayConfiguration
+    var focusAllowed = true
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -84,6 +85,9 @@ struct AssistantComposer: View {
         }
         .padding(.horizontal, 8)
         .padding(.top, 8)
+        .onChange(of: focusAllowed) {
+            if !focusAllowed { isComposerFocused = false; isActionPanelExpanded = false }
+        }
         .onChange(of: isComposerFocused) {
             onInputFocusChanged(isComposerFocused)
             if isComposerFocused {

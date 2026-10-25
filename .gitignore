@@ -110,3 +110,8 @@ diagnosis/
 /.phone-apps-baseline-*/
 /docs/design/technical/evidence/phone-recovery-*
 /docs/design/technical/evidence/phone-semantic-planning-*
+
+# HarmonyOS native compiler intermediates
+apps/mobile-harmony/entry/.cxx/
+
+/apps/mobile-android/.kotlin/

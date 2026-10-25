@@ -38,6 +38,11 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/realtime/tickets' || path.startsWith('/api/status')) return 'gateway.status';
   if (path === '/api/device-auth/refresh' || path === '/api/devices/me') return 'device.self';
   if (path.startsWith('/api/devices/me/push')) return 'notifications.self';
+  if (/^\/api\/phone\/conversations\/[^/]+\/summary$/.test(path) && method === 'GET') return 'sessions.read';
+  if (/^\/api\/phone\/conversations\/[^/]+$/.test(path) && method === 'GET') return 'phone.view';
+  if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/frame$/.test(path) && method === 'GET') return 'phone.view';
+  if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/video-ticket$/.test(path) && method === 'POST') return 'phone.view';
+  if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/control$/.test(path) && method === 'POST') return 'phone.control';
   if (path.startsWith('/api/endpoint-tools')) return 'device.self';
   if (path === '/api/user-context/environment' || path.startsWith('/api/user-context/environment/')) return 'device.self';
   if (path === '/api/personal-agent/activity') return 'tasks.read';

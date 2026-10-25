@@ -3,13 +3,17 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
+import type { ConversationPhoneSummary } from '@xopcai/gateway-contract';
+
+import { setDevicePhoneAccess } from '../../../storage/sqlite/device-access-repository.js';
+import { authorizePhoneAccess, phoneAdministrator } from '../../security/phone-access.js';
 
 import { normalizePhoneAppAccess, phoneAppAccess } from '../../../phone/app-access.js';
 
 import { getDefaultAgentId } from '../../../routing/resolve-route.js';
 import { getModelRegistry } from '../../../providers/model-registry.js';
 import { isProviderConfiguredSync } from '../../../providers/index.js';
-import { MOCK_PHONE_MODEL, PhoneExecutionModeSchema, PhoneActionSchema, PhoneConfigSchema, PhoneDeviceSchema, PhoneError, PhoneInputSchema } from '../../../phone/contracts.js';
+import { type PhoneReport, MOCK_PHONE_MODEL, PhoneExecutionModeSchema, PhoneActionSchema, PhoneConfigSchema, PhoneDeviceSchema, PhoneError, PhoneInputSchema } from '../../../phone/contracts.js';
 import { createPhoneModel, phoneModelProfile } from '../../../phone/model-adapter.js';
 import { getPhoneRuntime, phoneExecutionContext, type PhoneRuntime } from '../../../phone/runtime.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
@@ -33,8 +37,40 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   const { service, strictRateLimitMiddleware } = deps;
   app.use('/api/phone/*', async (c, next) => {
     const principal = getGatewayPrincipal(c);
-    if ((principal.kind !== 'owner' && principal.kind !== 'trusted-proxy') || !principal.scopes.includes('gateway.admin')) return c.json({ ok: false, error: { code: 'PHONE_ADMIN_REQUIRED', message: 'Phone settings require Gateway administrator access' } }, 403);
-    return next();
+    if (!phoneAdministrator(principal)) {
+      const path = c.req.path;
+      const conversation = /^\/api\/phone\/conversations\/([0-9a-f-]{36})(?:\/(summary|[0-9a-f-]{36}\/(?:frame|video-ticket|control)))?$/i.test(path);
+      const summary = path.endsWith('/summary') && c.req.method === 'GET';
+      const allowed = conversation && (c.req.method === 'GET' || c.req.method === 'POST' && /\/(video-ticket|control)$/.test(path));
+      if (!allowed || principal.kind !== 'device' || !principal.scopes.includes('sessions.read')) throw new PhoneError('PHONE_ADMIN_REQUIRED', 'Phone management requires administrator access', 403);
+      if (!summary) authorizePhoneAccess(principal, path.endsWith('/control'));
+    }
+    await next();
+    if (principal.kind === 'device' && c.res.status === 200 && c.res.headers.get('Content-Type')?.includes('application/json')) {
+      const body = await c.res.clone().json() as { payload?: { report?: Partial<PhoneReport>; ownControl?: boolean; textInput?: string } };
+      const report = body.payload?.report;
+      if (report && body.payload) {
+        const { sessionId, deviceId, deviceName, status, mode, controlOwner, controlEpoch, handoff, assistanceId,
+          reconnectRequired, stopReason, currentAction, updatedAt } = report;
+        body.payload = { ownControl: body.payload.ownControl, textInput: body.payload.textInput,
+          report: { sessionId, deviceId, deviceName, status, mode, controlOwner, controlEpoch, handoff, assistanceId,
+            reconnectRequired, stopReason, currentAction, updatedAt } };
+        c.res = c.json(body);
+        c.header('Cache-Control', 'no-store');
+      }
+    }
+  });
+
+  app.patch('/api/phone/device-access/:id', strictRateLimitMiddleware, async c => {
+    const actor = getGatewayPrincipal(c);
+    if (actor.kind === 'device' || !actor.scopes.includes('gateway.admin')) return c.json({ ok: false }, 403);
+    const input = z.object({ access: z.enum(['none', 'view', 'control']) }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ ok: false }, 400);
+    const device = setDevicePhoneAccess(c.req.param('id'), input.data.access);
+    if (!device) return c.json({ ok: false }, 404);
+    deps.service.phoneStreams.disconnectPrincipal(device.id);
+    c.header('Cache-Control', 'no-store');
+    return c.json({ ok: true, payload: { id: device.id, scopes: device.scopes } });
   });
 
   registerPhoneSetupRoutes(app, deps);
@@ -204,6 +240,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     clientId: liveClient, operationId: z.string().uuid(), epoch: z.number().int().positive(),
     assistanceId: z.string().uuid().optional(),
     op: z.enum(['takeover', 'release', 'handback', 'pause', 'cancel', 'heartbeat', 'input', 'recover']),
+    expectedTranscriptId: z.uuid().optional(),
     frameSeq: z.number().int().positive().optional(), geometry: z.number().int().positive().optional(), action: PhoneActionSchema.optional(),
   }).strict();
   async function conversationPhone(conversationId: string, requestedSessionId?: string) {
@@ -224,6 +261,21 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     if (report && report.agentId !== conversation.agentId) throw new PhoneError('PHONE_ACCESS_CHANGED', 'Conversation Agent changed', 403);
     return { owner: conversationId, report, transcriptId: conversation.transcriptId, context: phoneExecutionContext(service.currentConfig, conversation.agentId) };
   }
+  app.get('/api/phone/conversations/:conversationId/summary', async c => {
+    const principal = getGatewayPrincipal(c);
+    const id = c.req.param('conversationId');
+    const { report, transcriptId } = await conversationPhone(id);
+    let access: ConversationPhoneSummary['access'] = 'none';
+    try { authorizePhoneAccess(principal); access = 'view'; } catch { /* Summary carries no private phone metadata without a grant. */ }
+    if (access === 'view') { try { authorizePhoneAccess(principal, true); access = 'control'; } catch { /* Read-only grant. */ } }
+    const payload: ConversationPhoneSummary = { available: Boolean(report), access, needsUser: Boolean(report && access !== 'none' && report.status === 'needs_user') };
+    if (report && access !== 'none') {
+      payload.deviceName = report.deviceName; payload.taskState = report.status; payload.updatedAt = report.updatedAt;
+      if (transcriptId && report.deviceId) payload.binding = { conversationId: id, transcriptId, phoneSessionId: report.sessionId, phoneDeviceId: report.deviceId };
+    }
+    c.header('Cache-Control', 'no-store');
+    return c.json({ ok: true, payload });
+  });
   app.get('/api/phone/conversations/:conversationId', async c => {
     let owner = c.req.param('conversationId'); const client = liveClient.parse(c.req.query('clientId'));
     const { report, context, owner: resolvedOwner } = await conversationPhone(owner); owner = resolvedOwner;
@@ -241,8 +293,11 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   });
   app.get('/api/phone/conversations/:conversationId/:sessionId/frame', async c => {
     let owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
-    const { context, owner: resolvedOwner } = await conversationPhone(owner, id); owner = resolvedOwner;
+    const { context, transcriptId, owner: resolvedOwner } = await conversationPhone(owner, id); owner = resolvedOwner;
+    const principal = getGatewayPrincipal(c);
+    if (principal.kind === 'device' && c.req.query('expectedTranscriptId') !== transcriptId) throw new PhoneError('PHONE_BINDING_CHANGED', 'Conversation changed', 409);
     const frame = await runtime.liveFrame(owner, id, context, c.req.raw.signal);
+    try { authorizePhoneAccess(principal); } catch (error) { frame.frame.fill(0); throw error; }
     c.header('Cache-Control', 'no-store'); c.header('Content-Type', 'image/png'); c.header('X-Content-Type-Options', 'nosniff');
     c.header('X-Phone-Frame-Seq', String(frame.seq)); c.header('X-Phone-Captured-At', String(frame.capturedAt));
     c.header('X-Phone-Width', String(frame.width)); c.header('X-Phone-Height', String(frame.height)); c.header('X-Phone-Rotation', String(frame.rotation));
@@ -251,15 +306,24 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   });
   app.post('/api/phone/conversations/:conversationId/:sessionId/video-ticket', strictRateLimitMiddleware, async c => {
     const address = c.req.param('conversationId'); const id = c.req.param('sessionId');
-    const { clientId } = z.object({ clientId: liveClient }).strict().parse(await c.req.json());
-    await conversationPhone(address, id);
-    const principal = getGatewayPrincipal(c); const client = `${principal.principalId}:${clientId}${c.req.param('conversationId').startsWith('device:') ? ':viewer' : ''}`;
-    const validate = async () => { const resolved = await conversationPhone(address, id); runtime.liveStatus(resolved.owner, id, resolved.context, client); };
-    const issued = service.phoneStreams.issue({ origin: new URL(c.req.url).origin, principal: principal.principalId, client, validate,
+    const { clientId, purpose, expectedTranscriptId, epoch } = z.object({ clientId: liveClient, purpose: z.enum(['view', 'control']).optional(), expectedTranscriptId: z.uuid().optional(), epoch: z.number().int().positive().optional() }).strict().parse(await c.req.json());
+    const initial = await conversationPhone(address, id);
+    const principal = getGatewayPrincipal(c); const client = `${principal.principalId}:${clientId}${address.startsWith('device:') || principal.kind === 'device' && purpose !== 'control' ? ':viewer' : ''}`;
+    const native = principal.kind === 'device';
+    const interactive = native ? purpose === 'control' : purpose !== 'view' && !address.startsWith('device:');
+    if (native && (!expectedTranscriptId || expectedTranscriptId !== initial.transcriptId)) throw new PhoneError('PHONE_BINDING_CHANGED', 'Conversation changed; refresh the phone', 409);
+    const validate = async () => {
+      authorizePhoneAccess(principal, interactive);
+      const resolved = await conversationPhone(address, id);
+      if (resolved.transcriptId !== initial.transcriptId) throw new PhoneError('PHONE_BINDING_CHANGED', 'Conversation changed', 409);
+      const state = runtime.liveStatus(resolved.owner, id, resolved.context, client);
+      if (native && interactive && (!state.ownControl || epoch !== state.report.controlEpoch)) throw new PhoneError('PHONE_CONTROL_CHANGED', 'Take over before opening an interactive stream', 409);
+    };
+    if (native) await validate();
+    const issued = service.phoneStreams.issue({ ...(native ? { deviceId: principal.deviceId, readOnly: !interactive, inputEpoch: interactive ? epoch : undefined } : { readOnly: !interactive }), origin: new URL(c.req.url).origin, principal: principal.principalId, client, validate,
       connect: async () => { const resolved = await conversationPhone(address, id); return runtime.liveVideo(resolved.owner, id, resolved.context); },
       disconnect: async () => {
-        const resolved = await conversationPhone(address, id).catch(() => undefined);
-        if (resolved) await runtime.disconnectVideo(resolved.owner, id, client);
+        await runtime.disconnectVideo(initial.owner, id, client, native ? epoch : undefined);
       } });
     c.header('Cache-Control', 'no-store');
     return c.json({ ok: true, payload: { ...issued, transport: 'scrcpy-h264', protocolVersion: 1 } });
@@ -267,11 +331,13 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   app.post('/api/phone/conversations/:conversationId/:sessionId/control', async c => {
     if (c.req.param('conversationId').startsWith('device:')) throw new PhoneError('PHONE_OBSERVE_ONLY', 'The global phone viewer is read only. Use the controlling conversation for input.', 403);
     let owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
-    const { clientId, assistanceId, ...input } = liveControlInput.parse(await c.req.json());
+    const actor = getGatewayPrincipal(c);
+    const { clientId, assistanceId, expectedTranscriptId, ...input } = liveControlInput.parse(await c.req.json());
     const requestedWait = phoneAssistance(owner);
     const allowRecovery = assistanceId && requestedWait?.id === assistanceId
       && requestedWait.checkpoint.report.sessionId === id && ['takeover', 'handback'].includes(input.op);
     const { context, transcriptId, owner: resolvedOwner } = await conversationPhone(owner, allowRecovery ? undefined : id); owner = resolvedOwner;
+    if (getGatewayPrincipal(c).kind === 'device' && (!expectedTranscriptId || expectedTranscriptId !== transcriptId)) throw new PhoneError('PHONE_BINDING_CHANGED', 'Conversation changed; refresh the phone', 409);
     const wait = phoneAssistance(owner);
     if (assistanceId && (!wait || wait.id !== assistanceId || !['open', 'queued', 'resuming', 'completed'].includes(wait.status)))
       throw new PhoneError('PHONE_ASSISTANCE_CHANGED', 'The phone task changed. Refresh before continuing.', 409);
@@ -290,7 +356,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
       const current = runtime.status(owner);
       result = input.op === 'handback' && wait?.status === 'open' && current?.status === 'ready' && current.controlOwner === 'agent'
         ? liveStatus(owner, sessionId, context, `${getGatewayPrincipal(c).principalId}:${clientId}`)
-        : await runtime.liveControl(owner, sessionId, context, `${getGatewayPrincipal(c).principalId}:${clientId}`, input);
+        : await runtime.liveControl(owner, sessionId, context, `${getGatewayPrincipal(c).principalId}:${clientId}`, input, () => authorizePhoneAccess(actor, true));
     }
     catch (error) {
       const latest = phoneAssistance(owner);

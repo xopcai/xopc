@@ -18,4 +18,10 @@ describe('gateway scopes', () => {
     expect(DEFAULT_MOBILE_SCOPES).not.toContain('gateway.admin');
     expect(DEFAULT_BROWSER_EXTENSION_SCOPES).not.toContain('voice.configure');
   });
+
+  it('includes cloud phone viewing and control in mobile pairing only', () => {
+    expect(DEFAULT_MOBILE_SCOPES).toEqual(expect.arrayContaining(['phone.view', 'phone.control']));
+    expect(DEFAULT_BROWSER_EXTENSION_SCOPES).not.toContain('phone.view');
+    expect(DEFAULT_BROWSER_EXTENSION_SCOPES).not.toContain('phone.control');
+  });
 });

@@ -361,3 +361,23 @@ export function revokeDevice(deviceId: string, now = Date.now()): boolean {
     return changed;
   });
 }
+
+/** Checks a live transport without retaining its bearer token. */
+export function isDeviceAccessSessionActive(deviceId: string, sessionId: string, now = Date.now()): boolean {
+  return Boolean(getSqliteDatabase().prepare(`SELECT 1 FROM device_access_sessions a JOIN devices d ON d.device_id = a.device_id
+    WHERE a.device_id = ? AND a.session_id = ? AND a.revoked_at IS NULL AND d.revoked_at IS NULL AND a.expires_at > ?`)
+    .get(deviceId, sessionId, now));
+}
+
+/** Changes only phone permissions, preserving all other grants. */
+export function setDevicePhoneAccess(deviceId: string, access: 'none' | 'view' | 'control'): DeviceRecord | undefined {
+  return runSqliteWriteTransaction(db => {
+    const device = getDevice(deviceId);
+    if (!device || device.revokedAt !== undefined || device.platform === 'chrome') return undefined;
+    const scopes: GatewayScope[] = device.scopes.filter(scope => scope !== 'phone.view' && scope !== 'phone.control');
+    if (access !== 'none') scopes.push('phone.view');
+    if (access === 'control') scopes.push('phone.control');
+    db.prepare('UPDATE devices SET scopes_json = ? WHERE device_id = ?').run(JSON.stringify(scopes), deviceId);
+    return getDevice(deviceId);
+  });
+}

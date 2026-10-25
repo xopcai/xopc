@@ -2,7 +2,10 @@ vi.mock('../entry/src/main/ets/service/requestProof.ets', () => ({ connectionPro
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), request: vi.fn() }));
+const mocks = vi.hoisted(() => {
+  Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
+  return { create: vi.fn(), request: vi.fn() };
+});
 vi.mock('@kit.NetworkKit', () => ({ webSocket: { createWebSocket: mocks.create } }));
 vi.mock('../entry/src/main/ets/service/deviceLocation.ets', () => ({ invokeDeviceLocation: vi.fn(), cancelDeviceLocation: vi.fn(), cancelAllDeviceLocations: vi.fn() }));
 vi.mock('../entry/src/main/ets/service/devicePersonalTools.ets', () => ({ invokeDevicePersonalTool: vi.fn(), cancelDevicePersonalTool: vi.fn(), cancelAllDevicePersonalTools: vi.fn() }));

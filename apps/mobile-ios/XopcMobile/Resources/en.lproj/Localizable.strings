@@ -960,3 +960,36 @@
 
 "变更记录" = "Change log";
 "调整阶段不会启动或停止执行，每次变更都会记录。" = "Changing phase does not start or stop a run. Every change is recorded.";
+
+"查看手机" = "View phone";
+"返回对话" = "Return to conversation";
+"正在交接控制权…" = "Transferring control…";
+"你正在操作 · AI 已暂停" = "You are in control · AI paused";
+"其他客户端正在操作" = "Controlled by another client";
+"任务已暂停" = "Task paused";
+"AI 操作中" = "AI is operating the phone";
+"任务已完成" = "Task completed";
+"已连接" = "Connected";
+"请在 Gateway 已配对设备设置中授权手机访问。" = "Authorize phone access in Gateway device settings.";
+"手机画面暂不可用，请检查连接后重试。" = "Phone connection unavailable. Check the connection and retry.";
+"当前页面不在授权应用范围内，请返回授权应用。" = "This application is outside the allowed scope. Return to an authorized application.";
+"重新连接" = "Reconnect";
+"正在连接手机…" = "Connecting to phone…";
+"截图模式" = "Snapshot mode";
+"重试视频" = "Retry video";
+"操作尚未确认，请检查手机状态后再试。" = "Operation not confirmed. Check the phone before trying again.";
+"输入到手机的文字" = "Text to enter on phone";
+"返回键" = "Back";
+"输入文字" = "Enter text";
+"交回 AI" = "Return to AI";
+"接管手机" = "Take over phone";
+"当前设备仅可查看" = "This device can only view the phone";
+"继续任务" = "Continue task";
+"任务进度已保留，请接管手机重新连接并完成所需操作。" = "Task progress is saved. Take over to reconnect and finish the required steps.";
+"暂停任务" = "Pause task";
+"停止任务" = "Stop task";
+"停止当前手机任务？已经执行的操作无法撤回。" = "Stop this phone task? Inputs already delivered cannot be undone.";
+"更多手机操作" = "More phone actions";
+"结束控制，保持暂停" = "End control, keep paused";
+
+"手机连接已结束，返回对话继续。" = "The phone connection has ended. Return to chat to continue.";

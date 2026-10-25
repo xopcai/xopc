@@ -58,7 +58,22 @@ struct AssistantView<Dock: View>: View {
     @State private var userScrollingMessages = false
     @State private var bottomScrollTask: Task<Void, Never>?
 
+    @State private var phone = PhoneWorkspaceModel()
+    @State private var showingPhone = false
+
     var body: some View {
+        PhoneConversationPages(showingPhone: showingPhone, canPage: phone.summary?.available == true && phone.live?.ownControl != true,
+                               onPage: { showingPhone = $0 }, phone: phone) { chatBody }
+            .task(id: PhoneObservationKey(configuration: configuration, conversationID: conversation?.id,
+                                          active: isActive && scenePhase == .active, visible: showingPhone)) {
+                guard isActive, scenePhase == .active, let conversation, !conversation.isDraft else { phone.leave(); return }
+                await phone.observe(configuration: configuration, conversationID: conversation.id, visible: showingPhone)
+            }
+            .onChange(of: conversation?.id) { showingPhone = false }
+            .onDisappear { phone.leave() }
+    }
+
+    private var chatBody: some View {
         VStack(spacing: 0) {
             content
                 .accessibilityHidden(!isActive)
@@ -615,6 +630,7 @@ struct AssistantView<Dock: View>: View {
     private var composer: AssistantComposer {
         AssistantComposer(
             configuration: configuration,
+            focusAllowed: !showingPhone,
             draft: $draft,
             attachments: $attachments,
             references: $references,
@@ -738,6 +754,14 @@ struct AssistantView<Dock: View>: View {
             }
             Spacer(minLength: 0)
             HStack(spacing: 0) {
+                if phone.summary?.available == true {
+                    Button { showingPhone = true } label: {
+                        Image(systemName: "iphone").font(.system(size: 22)).frame(width: 44, height: 44)
+                            .overlay(alignment: .topTrailing) {
+                                if phone.summary?.needsUser == true { Circle().fill(.blue).frame(width: 6, height: 6).padding(6) }
+                            }
+                    }.accessibilityLabel("查看手机").accessibilityIdentifier("chat-header-phone")
+                }
                 Button {
                     showingMessageSearch = true
                 } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(.rect) }
@@ -755,6 +779,7 @@ struct AssistantView<Dock: View>: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
                 .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat-floating-header")
     }
 }
@@ -1143,4 +1168,11 @@ private struct ChatMessageSearchView: View {
             }.presentationDetents([.fraction(0.92)])
         }
     }
+}
+
+private struct PhoneObservationKey: Equatable {
+    let configuration: GatewayConfiguration
+    let conversationID: String?
+    let active: Bool
+    let visible: Bool
 }

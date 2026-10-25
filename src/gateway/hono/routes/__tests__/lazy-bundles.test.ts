@@ -419,3 +419,9 @@ it('maps task configuration conversations without matching neighboring automatio
   }
   expect(findAuthenticatedLazyRouteBundle('/api/automations-other/configuration-conversations')).toBeUndefined();
 });
+
+it('maps mobile phone workspace and permission routes without neighboring prefixes', () => {
+  for (const path of ['/api/phone/conversations/id/summary', '/api/phone/conversations/id/session/video-ticket', '/api/phone/conversations/id/session/control']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('phone');
+  expect(findAuthenticatedLazyRouteBundle('/api/phone-other/conversations/id/summary')).toBeUndefined();
+  expect(findAuthenticatedLazyRouteBundle('/api/phone/device-access/id')?.id).toBe('phone');
+});
