@@ -198,6 +198,7 @@ export class PhoneRuntime {
     const startedAt = Date.now();
     session.report.errorCode = undefined; session.report.verified = false; session.report.verificationLevel = 'none';
     session.report.stopReason = undefined; session.report.message = undefined;
+    session.report.facts = undefined; session.report.readings = undefined;
     try {
       await this.waitForAgent(session, signal); session.report.status = 'running';
       this.publish(session);
@@ -206,7 +207,12 @@ export class PhoneRuntime {
       observation = await this.observe(session, signal);
       this.allowedScreen(session, observation);
       if (input.op === 'observe') {
-        this.recordObservation(session, observation); session.report.status = 'ready'; return this.publish(session);
+        this.recordObservation(session, observation);
+        if (!session.report.facts?.length || input.goal) {
+          await this.readScreen(session, observation, input.goal ?? 'Read the visible page text and values', context, signal);
+        }
+        if (session.report.controlOwner === 'agent' && !signal.aborted) session.report.status = 'ready';
+        return this.publish(session);
       }
       if (input.op !== 'run' && input.op !== 'step') throw new PhoneError('PHONE_INVALID_OPERATION', 'Unsupported operation');
       if (session.report.mode !== 'control') throw new PhoneError('PHONE_OBSERVE_ONLY', 'Reopen the phone in control mode to execute actions');
@@ -353,8 +359,13 @@ export class PhoneRuntime {
             recoveryHint = `Your completion claim is not verified. These required native UI conditions are not all satisfied: ${JSON.stringify({ expectText: input.expectText, ...input.completion })}. Recheck the fresh screen, preserve user constraints, and continue if a safe authorized action can satisfy the goal; otherwise report unfinished.`;
             observation.frame.fill(0); observation = await this.observe(session, signal); continue;
           }
-          session.report.status = decision.kind === 'needsUser' ? 'needs_user' : 'completed';
           session.report.message = decision.kind === 'needsUser' ? decision.reason : decision.summary;
+          if (decision.kind === 'complete') {
+            this.recordObservation(session, observation);
+            await this.readScreen(session, observation, input.goal, context, signal);
+            if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') return this.publish(session);
+          }
+          session.report.status = decision.kind === 'needsUser' ? 'needs_user' : 'completed';
           session.report.stopReason = decision.kind === 'needsUser' ? 'user_takeover' : 'model_finished_unverified';
           if (decision.kind === 'needsUser' && !session.report.mock) {
             session.report.controlOwner = 'none'; session.report.controlEpoch!++; session.budget?.pause(); this.publish(session);
@@ -495,6 +506,35 @@ export class PhoneRuntime {
   private recordObservation(session: Session, observation: PhoneObservation): void {
     session.report.foregroundApp = observation.package;
     session.report.facts = [...new Set(observation.elements.flatMap(node => node.password ? [] : [node.text, node.description]).filter(Boolean))].slice(0, 60);
+    session.report.readings = [{ source: 'native_ui', verification: 'observed', text: session.report.facts,
+      frameId: observation.frameId, capturedAt: observation.capturedAt }];
+  }
+  private async readScreen(session: Session, observation: PhoneObservation, goal: string, context: ExecutionContext, signal: AbortSignal): Promise<void> {
+    if (session.report.mock) return;
+    const reading: NonNullable<PhoneReport['readings']>[number] = { source: 'screenshot', verification: 'unavailable', text: [],
+      frameId: observation.frameId, capturedAt: observation.capturedAt };
+    const epoch = session.report.controlEpoch;
+    this.guard(session, context); this.allowedScreen(session, observation); signal.throwIfAborted();
+    if (observation.elements.some(node => node.password)) reading.reason = 'password_field_visible';
+    else if (!session.adapter.readScreen) reading.reason = 'model_reading_unavailable';
+    else if (session.report.modelRequests >= context.config.phone.maxModelRequests) reading.reason = 'model_request_limit';
+    else {
+      session.report.modelRequests++;
+      session.prediction = new AbortController();
+      try {
+        const text = await session.adapter.readScreen({ goal, observation, allowedApps: session.device.allowedApps,
+          appAccess: phoneAppAccess(session.device), history: [] }, AbortSignal.any([signal, session.prediction.signal]));
+        signal.throwIfAborted(); this.guard(session, context); this.allowedScreen(session, observation);
+        if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') return;
+        if (text.trim()) { reading.text = [text.slice(0, 1000)]; reading.verification = 'unverified'; }
+        else reading.reason = 'screen_unreadable';
+      } catch (error) {
+        signal.throwIfAborted(); this.guard(session, context);
+        if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') return;
+        reading.reason = error instanceof PhoneError ? error.code : 'screen_reading_failed';
+      } finally { session.prediction = undefined; }
+    }
+    session.report.readings = [...(session.report.readings ?? []), reading];
   }
   private async dispatch(session: Session, action: PhoneAction, observation: PhoneObservation, context: ExecutionContext, signal: AbortSignal, epoch = session.report.controlEpoch, resetTask = false, settingsPage?: 'about-phone'): Promise<boolean> {
     return this.io(session, async () => {
@@ -549,7 +589,7 @@ export class PhoneRuntime {
     session.report.status = op === 'pause' ? 'paused' : op === 'cancel' ? 'cancelled' : 'closed';
     session.report.stopReason = op; if (op !== 'close') session.report.verified = false;
     if (op !== 'pause') {
-      session.report.facts = undefined; session.report.message = undefined; session.trajectory = []; session.trajectorySummary = []; session.frames.clear();
+      session.report.facts = undefined; session.report.message = undefined; session.report.readings = undefined; session.trajectory = []; session.trajectorySummary = []; session.frames.clear();
       session.adapter = { predict: async () => { throw new PhoneError('PHONE_OPEN_REQUIRED', 'Reopen the phone session'); } };
     }
     this.publish(session);

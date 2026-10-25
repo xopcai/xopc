@@ -74,7 +74,7 @@ export type PhoneCompletion = z.infer<typeof PhoneCompletionSchema>;
 export const PhoneInputSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('discover') }).strict(),
   z.object({ op: z.literal('open'), deviceId: z.string().uuid().optional(), mode: z.enum(['observe', 'control']), appPackage: z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/).optional(), settingsPage: z.literal('about-phone').optional() }).strict().refine(input => !input.settingsPage || input.mode === 'control' && input.appPackage === 'com.android.settings', 'About phone requires authorized Settings control'),
-  z.object({ op: z.literal('observe') }).strict(),
+  z.object({ op: z.literal('observe'), goal: z.string().trim().min(1).max(2000).optional() }).strict(),
   z.object({ op: z.enum(['run', 'step']), goal: z.string().trim().min(1).max(2000),
     scenario: z.literal('settings-about').optional(),
     expectText: z.string().min(1).max(200).optional(),
@@ -85,12 +85,18 @@ export const PhoneInputSchema = z.discriminatedUnion('op', [
 ]);
 export type PhoneInput = z.infer<typeof PhoneInputSchema>;
 export type PhoneStatus = 'ready' | 'running' | 'paused' | 'needs_user' | 'completed' | 'cancelled' | 'closed' | 'failed' | 'outcome_unknown';
+export type PhoneReading = {
+  source: 'native_ui' | 'screenshot';
+  verification: 'observed' | 'unverified' | 'unavailable';
+  text: string[]; frameId: string; capturedAt: number; reason?: string;
+};
 export type PhoneReport = {
   sessionId: string; deviceId: string; deviceName: string; owner: string; agentId: string;
   modelRef: string; mock: boolean; mode: 'observe' | 'control'; status: PhoneStatus;
   actions: number; humanActions?: number; modelRequests: number; createdAt: number; updatedAt: number;
   verified: boolean; verificationLevel: 'none' | 'ui'; stopReason?: string; errorCode?: string;
   facts?: string[]; foregroundApp?: string; message?: string;
+  readings?: PhoneReading[];
   steps: Array<{ action: PhoneAction['type']; at: number; dispatch: 'completed' | 'unknown'; actor?: 'agent' | 'human' }>;
   controlOwner?: 'agent' | 'human' | 'none'; controlEpoch?: number; handoff?: 'idle' | 'acquiring' | 'returning';
   currentAction?: PhoneAction['type'];

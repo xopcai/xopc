@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createPhoneUseTool } from '../../agent/tools/phone-use-tool.js';
+
 import { ConfigSchema } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import type { PhoneDriver } from '../adb-driver.js';
@@ -20,7 +22,7 @@ function observation(elements: PhoneElement[], app = 'com.test.editor'): PhoneOb
   return { frameId: randomUUID(), capturedAt: Date.now(), width: 1000, height: 1000, rotation: 0,
     package: app, frame: Buffer.from('synthetic-pixels'), elements };
 }
-function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests?: number; semanticControls?: boolean; hierarchicalPlanning?: boolean } = {}) {
+function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests?: number; readScreen?: PhoneModelAdapter['readScreen']; semanticControls?: boolean; hierarchicalPlanning?: boolean } = {}) {
   const repository = new PhoneRepository();
   const device = repository.save({ serial: 'reliability-editor', name: 'Synthetic editor', enabled: true, allowedApps: ['com.test.editor', 'com.test.other'] });
   repository.setDefault(device.id);
@@ -30,7 +32,7 @@ function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests
     observe: vi.fn(async () => ({ ...current, frameId: randomUUID(), frame: Buffer.from(current.frame) })),
     execute: vi.fn(async () => {}),
   };
-  const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict }));
+  const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict, readScreen: options.readScreen }));
   runtimes.push(runtime);
   const context = { config: ConfigSchema.parse({ phone: { enabled: true, maxModelRequests: options.modelRequests ?? 10,
     semanticControls: options.semanticControls, hierarchicalPlanning: options.hierarchicalPlanning } }), agentId: 'main', modelRef: 'test/reliability' };
@@ -40,6 +42,127 @@ function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests
 }
 
 describe('phone runtime reliability integration', () => {
+  it('automatically reads an empty native screen without sending device input and keeps source metadata transient', async () => {
+    const readScreen = vi.fn<NonNullable<PhoneModelAdapter['readScreen']>>(async () => 'Android version: 15');
+    const f = fixture(vi.fn(), { readScreen });
+    f.set(observation([])); await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'observe' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ verified: false, verificationLevel: 'none', modelRequests: 1, facts: [],
+      readings: [{ source: 'native_ui', verification: 'observed', text: [] },
+        { source: 'screenshot', verification: 'unverified', text: ['Android version: 15'], frameId: expect.any(String), capturedAt: expect.any(Number) }] });
+    expect(readScreen).toHaveBeenCalledOnce();
+    expect(f.driver.execute).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain('synthetic-pixels');
+    expect(f.repository.history()[0].readings).toBeUndefined();
+    await f.runtime.execute('reliability', { op: 'close' }, f.context);
+    expect(f.runtime.status('reliability')?.readings).toBeUndefined();
+  });
+
+  it('returns screenshot readings to the chat Agent through both tool content and details in observe mode', async () => {
+    const predict = vi.fn<PhoneModelAdapter['predict']>();
+    const f = fixture(predict, { readScreen: async () => 'Android version: 15' });
+    f.set(observation([]));
+    const tool = createPhoneUseTool({ runtime: f.runtime, context: () => ({ ...f.context, owner: 'reliability' }) });
+    const signal = new AbortController().signal;
+    await tool.execute('open', { op: 'open', mode: 'observe' }, signal);
+    const result = await tool.execute('read', { op: 'observe' }, signal);
+    expect(result.details).toMatchObject({ mode: 'observe', verified: false, readings: [
+      { source: 'native_ui' }, { source: 'screenshot', verification: 'unverified', text: ['Android version: 15'] }] });
+    const content = result.content[0];
+    expect(content.type).toBe('text');
+    if (content.type === 'text') expect(JSON.parse(content.text)).toEqual(result.details);
+    expect(predict).not.toHaveBeenCalled(); expect(f.driver.execute).not.toHaveBeenCalled();
+  });
+
+  it('does not send screenshots from a disallowed app or password screen to the reading model', async () => {
+    const readScreen = vi.fn<NonNullable<PhoneModelAdapter['readScreen']>>();
+    const f = fixture(vi.fn(), { readScreen }); await f.open();
+    f.set(observation([], 'com.private.app'));
+    await expect(f.runtime.execute('reliability', { op: 'observe' }, f.context)).rejects.toMatchObject({ code: 'PHONE_APP_DENIED' });
+    expect(readScreen).not.toHaveBeenCalled();
+    // Reopen after the rejected operation, then inspect a protected field.
+    await f.runtime.execute('reliability', { op: 'close' }, f.context); await f.open();
+    f.set(observation([{ ...element('secret'), password: true }]));
+    const result = await f.runtime.execute('reliability', { op: 'observe' }, f.context) as PhoneReport;
+    expect(result.readings?.[1]).toMatchObject({ verification: 'unavailable', reason: 'password_field_visible', text: [] });
+    expect(readScreen).not.toHaveBeenCalled(); expect(JSON.stringify(result)).not.toContain('secret');
+  });
+
+  it('uses native facts without a model call and accepts a targeted reading for partial native text', async () => {
+    const readScreen = vi.fn<NonNullable<PhoneModelAdapter['readScreen']>>(async () => 'Android version: 15');
+    const f = fixture(vi.fn(), { readScreen }); await f.open();
+    const native = await f.runtime.execute('reliability', { op: 'observe' }, f.context) as PhoneReport;
+    expect(native.readings).toMatchObject([{ source: 'native_ui', verification: 'observed', text: ['Initial'] }]);
+    expect(readScreen).not.toHaveBeenCalled();
+    const visual = await f.runtime.execute('reliability', { op: 'observe', goal: 'Read Android version' }, f.context) as PhoneReport;
+    expect(visual.readings?.[1]).toMatchObject({ source: 'screenshot', verification: 'unverified', text: ['Android version: 15'] });
+    expect(readScreen.mock.calls[0][0]).toMatchObject({ goal: 'Read Android version' });
+  });
+
+  it('automatically reads screenshot-only values after model completion without satisfying native predicates', async () => {
+    const readScreen = vi.fn<NonNullable<PhoneModelAdapter['readScreen']>>(async () => 'Android version: 15');
+    const f = fixture(async () => ({ kind: 'complete', summary: 'About phone' }), { readScreen }); await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read Android version', expectText: 'Android version' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ verified: false, verificationLevel: 'none', stopReason: 'model_finished_unverified', modelRequests: 3 });
+    expect(result.readings?.[1]).toMatchObject({ source: 'screenshot', verification: 'unverified', text: ['Android version: 15'] });
+    expect(readScreen).toHaveBeenCalledOnce(); expect(f.driver.execute).not.toHaveBeenCalled();
+  });
+
+  it('reads screenshot-only values for goals without explicit completion predicates', async () => {
+    const readScreen = vi.fn(async () => 'Version: 15');
+    const f = fixture(async () => ({ kind: 'complete', summary: 'Done' }), { readScreen }); await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read version' }, f.context) as PhoneReport;
+    expect(result.readings?.[1]).toMatchObject({ source: 'screenshot', text: ['Version: 15'], verification: 'unverified' });
+    expect(result.modelRequests).toBe(2);
+  });
+
+  it('keeps native verification independent and skips the visual fallback when predicates are verified', async () => {
+    const readScreen = vi.fn(async () => 'Wrong value');
+    const f = fixture(vi.fn(), { readScreen }); await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read Initial', expectText: 'Initial' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ verified: true, verificationLevel: 'ui', modelRequests: 0 });
+    expect(readScreen).not.toHaveBeenCalled();
+  });
+
+  it('does not exceed the shared model request budget for screenshot readings', async () => {
+    const readScreen = vi.fn(async () => 'Version: 15');
+    const f = fixture(async () => ({ kind: 'complete', summary: 'Done' }), { readScreen, modelRequests: 1 }); await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read version' }, f.context) as PhoneReport;
+    expect(result.readings?.[1]).toMatchObject({ verification: 'unavailable', text: [], reason: 'model_request_limit' });
+    expect(result.modelRequests).toBe(1); expect(readScreen).not.toHaveBeenCalled();
+  });
+
+  it('reports unreadable screenshots without fabricating text or losing native facts', async () => {
+    const f = fixture(vi.fn(), { readScreen: async () => { throw new PhoneError('PHONE_SCREEN_UNREADABLE', 'Unreadable'); } }); await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'observe', goal: 'Read version' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ status: 'ready', facts: ['Initial'], readings: [
+      { source: 'native_ui' }, { source: 'screenshot', text: [], verification: 'unavailable', reason: 'PHONE_SCREEN_UNREADABLE' }] });
+  });
+
+  it('rejects a visual reading if device authorization changes while the model is running', async () => {
+    let f: ReturnType<typeof fixture>;
+    f = fixture(vi.fn(), { readScreen: async () => {
+      const device = f.repository.list()[0]; f.repository.save({ ...device, enabled: false }, device.id);
+      return 'Version: 15';
+    } }); f.set(observation([])); await f.open();
+    await expect(f.runtime.execute('reliability', { op: 'observe' }, f.context)).rejects.toMatchObject({ code: 'PHONE_ACCESS_CHANGED' });
+    expect(f.runtime.status('reliability')?.readings?.some(reading => reading.source === 'screenshot')).toBe(false);
+  });
+
+  it('discards a late screenshot reading after pause', async () => {
+    let finish!: (value: string) => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const f = fixture(vi.fn(), { readScreen: async () => { entered(); return new Promise(resolve => { finish = resolve; }); } });
+    f.set(observation([])); await f.open();
+    const operation = f.runtime.execute('reliability', { op: 'observe' }, f.context);
+    await started;
+    const stopped = f.runtime.stop('reliability', 'pause'); finish('Late value');
+    await Promise.allSettled([operation, stopped]);
+    expect(f.runtime.status('reliability')).toMatchObject({ status: 'paused' });
+    expect(f.runtime.status('reliability')?.readings?.some(reading => reading.source === 'screenshot')).toBe(false);
+  });
+
   it('resolves a semantic target through the fresh observation before dispatch and independent completion', async () => {
     const f = fixture(async input => ({ kind: 'action', action: { type: 'tapElement', frameId: input.observation.frameId,
       selector: { text: 'Initial' } } }), { semanticControls: true });

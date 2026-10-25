@@ -137,7 +137,7 @@ describe('phone runtime', () => {
     const result = await tool.execute('run', { op: 'run', goal: 'Test', scenario: 'settings-about' }, signal);
     expect(result.details).toMatchObject({ verified: true, mock: true });
     expect(JSON.stringify(result)).not.toContain('test-pixels');
-    expect(JSON.stringify(result)).not.toContain('frameId');
+    expect(result.details).toMatchObject({ readings: [{ source: 'native_ui', verification: 'observed', frameId: expect.any(String) }] });
     await tool.execute('close', { op: 'close' }, signal);
   });
   it('executes a guarded action, verifies new native evidence and clears every frame', async () => {
