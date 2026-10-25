@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { tunnelApiErrorCode, tunnelApiRequiresAuthorization } from './tunnel-api';
+import { tunnelApiErrorCode, tunnelApiRequiresAuthorization, tunnelRegistrationKeyRejected } from './tunnel-api';
 
 describe('tunnelApiErrorCode', () => {
+  it('recognizes rejected registration keys without mistaking heartbeat or network failures for them', () => {
+    expect(tunnelRegistrationKeyRejected({ body: { code: 'TUNNEL_REGISTRATION_KEY_REJECTED' } })).toBe(true);
+    expect(tunnelRegistrationKeyRejected(new Error('Tunnel register failed: 401'))).toBe(true);
+    expect(tunnelRegistrationKeyRejected(new Error('Tunnel heartbeat rejected: 401'))).toBe(false);
+    expect(tunnelRegistrationKeyRejected(new Error('Tunnel register failed: 500'))).toBe(false);
+  });
   it('reads a structured Gateway error code', () => {
     expect(tunnelApiErrorCode({
       body: {

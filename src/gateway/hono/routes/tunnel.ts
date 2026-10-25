@@ -32,6 +32,7 @@ import {
   TunnelRegistrationProvisionError,
 } from '../../../tunnel/xopc-cloud-registration.js';
 import { consumeTunnelMutationLimit } from '../../../tunnel/tunnel-rate-limit.js';
+import { TunnelRecoveryProofRejectedError, TunnelRegistrationKeyRejectedError } from '../../../tunnel/broker-client.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createLogger('Gateway:Tunnel');
@@ -283,6 +284,10 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: message, phase: 'tunnel_start' }, `Tunnel start failed: ${message}`);
+      if (err instanceof TunnelRegistrationKeyRejectedError || err instanceof TunnelRecoveryProofRejectedError) {
+        return c.json({ error: message, code: err.code }, 409);
+      }
       if (err instanceof TunnelRegistrationSecretError) {
         return c.json(
           { error: message, code: TUNNEL_REGISTRATION_SECRET_REQUIRED_CODE },

@@ -169,6 +169,8 @@
         "statusUnavailable": "Connection status is temporarily unavailable. Retrying automatically—keep this window open.",
         "readinessFailed": "Remote connection status is temporarily unavailable.",
         "routeSetupFailed": "The secure connection could not be established. Try again, or use Tailscale or your own HTTPS route.",
+        "routeAuthorizationRequired": "The saved connection key was rejected. Authorize the connection again to obtain a new key.",
+        "routeRecoveryRequired": "This gateway has an active cloud lease, but its matching recovery credentials are unavailable. Wait for the lease to expire or ask an administrator to release it. You can also use Tailscale or your own HTTPS route.",
         "routeKeyLimitTitle": "XOPC Secure Link access keys are full",
         "routeKeyLimitHint": "This account already has 10 access keys. Revoke an unused key in Client access, then return and retry. Other active keys are not changed. You can also use Tailscale or your own HTTPS route.",
         "manageTunnelKeys": "Manage access keys",

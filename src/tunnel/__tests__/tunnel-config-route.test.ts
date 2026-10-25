@@ -4,7 +4,7 @@ import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js'
 import { createHonoApp } from '../../gateway/hono/app.js';
 import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { TunnelBrokerUrlSchema } from '../../config/schema.js';
-import { TunnelBrokerClient } from '../broker-client.js';
+import { TunnelBrokerClient, TunnelRecoveryProofRejectedError, TunnelRegistrationKeyRejectedError } from '../broker-client.js';
 import { CURRENT_TUNNEL_CONSENT_VERSION } from '../consent.js';
 import { getTunnelService } from '../tunnel-service.js';
 
@@ -55,6 +55,32 @@ describe('PATCH /api/config tunnel key', () => {
       expect(() => new TunnelBrokerClient(url)).toThrow('Tunnel broker requires HTTPS');
     }
     expect(TunnelBrokerUrlSchema.safeParse('https://frp.example/api').success).toBe(true);
+  });
+
+  it('returns a recoverable code for rejected registration keys through the authenticated route', async () => {
+    vi.spyOn(getTunnelService(), 'start').mockRejectedValue(new TunnelRegistrationKeyRejectedError());
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ brokerUrl: 'https://frp.xopc.ai/api' }));
+    const service = mockService();
+    const app = createHonoApp({ service, token: 'gateway-secret-token' });
+    const response = await app.request('/api/tunnel/start', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer gateway-secret-token', 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Tunnel register failed: 401', code: 'TUNNEL_REGISTRATION_KEY_REJECTED' });
+    expect(service.saveConfig).not.toHaveBeenCalled();
+  });
+
+  it('reports a lease ownership conflict separately from a rejected key', async () => {
+    vi.spyOn(getTunnelService(), 'start').mockRejectedValue(new TunnelRecoveryProofRejectedError());
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ brokerUrl: 'https://frp.xopc.ai/api' }));
+    const app = createHonoApp({ service: mockService(), token: 'gateway-secret-token' });
+    const response = await app.request('/api/tunnel/start', {
+      method: 'POST', headers: { Authorization: 'Bearer gateway-secret-token', 'Content-Type': 'application/json' }, body: '{}',
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Active lease ownership proof required', code: 'TUNNEL_RECOVERY_PROOF_REJECTED' });
   });
 
   it('stops the runtime and disables startup flags before clearing the key', async () => {
