@@ -17,7 +17,7 @@ ENV CI=true \
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare "pnpm@${XOPC_PNPM_VERSION}" --activate
+RUN npm install --global "pnpm@${XOPC_PNPM_VERSION}"
 
 # Persist fetched packages in a normal layer, including on ephemeral CI builders.
 COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -80,7 +80,6 @@ ENV NODE_ENV=production \
     XOPC_CONFIG_PATH=/home/node/.xopc/xopc.json \
     XOPC_WORKSPACE=/home/node/.xopc/workspace \
     XOPC_LOG_DIR=/home/node/.xopc/logs \
-    COREPACK_HOME=/usr/local/share/corepack \
     TERM=xterm-256color
 
 WORKDIR /app
@@ -106,10 +105,7 @@ COPY --from=runtime-assets --chown=node:node /app/docs ./docs
 COPY --from=runtime-assets --chown=node:node /app/extensions ./extensions
 COPY --from=runtime-assets --chown=node:node /app/packages ./packages
 
-RUN install -d -m 0755 "$COREPACK_HOME" && \
-    corepack enable && \
-    corepack prepare "pnpm@${XOPC_PNPM_VERSION}" --activate && \
-    chmod -R a+rX "$COREPACK_HOME" && \
+RUN npm install --global "pnpm@${XOPC_PNPM_VERSION}" && \
     ln -sf /app/dist/src/cli/bin.js /usr/local/bin/xopc && \
     chmod 755 /app/dist/src/cli/bin.js && \
     install -d -m 0700 -o node -g node \
