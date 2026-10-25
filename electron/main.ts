@@ -551,7 +551,7 @@ function registerStartupRecoveryIpc(): void {
   ipcMain.handle('startup:copy-diagnostic', async (event) => {
     assertStartupRecoveryRenderer(event);
     try {
-      clipboard.writeText(await collectStartupSupportReport());
+      await clipboard.writeText(await collectStartupSupportReport());
       return { ok: true };
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) };
@@ -1269,9 +1269,9 @@ app.whenReady().then(async () => {
     appendElectronStartupLog(`preload dom-content-loaded url=${redactUrlForLog(href || 'about:blank')}`);
   });
 
-  ipcMain.handle('clipboard:write-text', (_event, text: unknown) => {
+  ipcMain.handle('clipboard:write-text', async (_event, text: unknown) => {
     if (typeof text !== 'string' || !text) return false;
-    clipboard.writeText(text);
+    await clipboard.writeText(text);
     return true;
   });
 
