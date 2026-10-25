@@ -2,6 +2,12 @@ import Foundation
 import Observation
 
 @MainActor @Observable final class PhoneWorkspaceModel {
+    private struct TouchStart {
+        let horizontal: Int
+        let vertical: Int
+        let date: Date
+    }
+
     private(set) var summary: PhoneSummary?
     private(set) var live: PhoneLiveState?
     private(set) var busy = false
@@ -22,7 +28,7 @@ import Observation
     private var streamKey = ""
     private var streamTask: Task<Void, Never>?
     private var heartbeatAt = Date.distantPast
-    private var touchStart: (Int, Int, Date)?
+    private var touchStart: TouchStart?
     var canControl: Bool {
         summary?.access == "control" && live?.report.mode == "control" && (live?.report.controlOwner != "human" || live?.ownControl == true)
     }
@@ -52,6 +58,7 @@ import Observation
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func refresh() async {
         guard let repository, active, !busy else { return }
         let operationRevision = operations
@@ -91,19 +98,19 @@ import Observation
         }
     }
 
-    func command(_ op: String, action: PhoneAction? = nil) async {
+    func command(_ operation: String, action: PhoneAction? = nil) async {
         guard let repository, let binding = summary?.binding, let state = live, active, visible, !busy else { return }
         let revision = generation
-        if op != "heartbeat" {
+        if operation != "heartbeat" {
             operations += 1; busy = true; failed = false; video?.pointer("cancel", x: 0, y: 0)
         }
         defer {
-            if revision == generation, op != "heartbeat" {
+            if revision == generation, operation != "heartbeat" {
                 busy = false
             }
         }
         do {
-            let result = try await repository.command(binding, state: state, op: op, action: action,
+            let result = try await repository.command(binding, state: state, op: operation, action: action,
                                                       geometry: playing ? geometry : nil, frameSeq: fallback ? frame?.seq : nil)
             guard revision == generation, visible, active else {
                 if result.ownControl {
@@ -166,24 +173,24 @@ import Observation
         stopVideo(); fallback = false; failed = false; frame = nil; await refresh()
     }
 
-    func pointer(_ phase: String, x: Int, y: Int) {
+    func pointer(_ phase: String, x coordinateX: Int, y coordinateY: Int) {
         guard active, visible, live?.ownControl == true, !busy else { return }
         if playing {
-            video?.pointer(phase, x: x, y: y); return
+            video?.pointer(phase, x: coordinateX, y: coordinateY); return
         }
         if phase == "cancel" {
             touchStart = nil; return
         }
         if phase == "down" {
-            touchStart = (x, y, Date())
+            touchStart = TouchStart(horizontal: coordinateX, vertical: coordinateY, date: Date())
         }
         guard phase == "up", let start = touchStart else { return }
         touchStart = nil
         guard let frame, Date().timeIntervalSince1970 * 1000 - frame.capturedAt < 5000 else { return }
-        let duration = min(3000, max(100, Int(Date().timeIntervalSince(start.2) * 1000)))
-        let action = abs(x - start.0) + abs(y - start.1) > 25
-            ? PhoneAction(type: "swipe", start: [start.0, start.1], end: [x, y], durationMs: duration)
-            : PhoneAction(type: duration >= 500 ? "longPress" : "tap", point: [x, y], durationMs: duration)
+        let duration = min(3000, max(100, Int(Date().timeIntervalSince(start.date) * 1000)))
+        let action = abs(coordinateX - start.horizontal) + abs(coordinateY - start.vertical) > 25
+            ? PhoneAction(type: "swipe", start: [start.horizontal, start.vertical], end: [coordinateX, coordinateY], durationMs: duration)
+            : PhoneAction(type: duration >= 500 ? "longPress" : "tap", point: [coordinateX, coordinateY], durationMs: duration)
         Task { await command("input", action: action) }
     }
 }

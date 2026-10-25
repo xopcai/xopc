@@ -2,6 +2,7 @@ import XCTest
 @testable import XopcMobile
 
 @MainActor final class PhonePairingIntegrationTests: XCTestCase {
+    // swiftlint:disable:next function_body_length
     func testSignedPhoneAccessWithIndependentSimulatorPairing() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let link = environment["XOPC_PHONE_PAIRING_LINK"], let conversationID = environment["XOPC_PHONE_CONVERSATION_ID"] else {

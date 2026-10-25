@@ -22,18 +22,18 @@ import UIKit
     private let pointers = PhonePointerQueue()
     init() {
         layer.videoGravity = .resizeAspect
-        pointers.send = { [weak self] phase, x, y, seq in
+        pointers.send = { [weak self] phase, coordinateX, coordinateY, seq in
             guard let self else { return }
-            send(["type": "pointer", "phase": phase, "x": x, "y": y, "seq": seq, "epoch": epoch, "geometry": geometry])
+            send(["type": "pointer", "phase": phase, "x": coordinateX, "y": coordinateY, "seq": seq, "epoch": epoch, "geometry": geometry])
         }
         pointers.cancelInput = { [weak self] in
             guard let self else { return }; send(["type": "cancelPointers", "epoch": epoch])
         }
     }
 
-    func pointer(_ phase: String, x: Int, y: Int) {
+    func pointer(_ phase: String, x coordinateX: Int, y coordinateY: Int) {
         if !closed, epoch > 0 {
-            pointers.pointer(phase, x: x, y: y)
+            pointers.pointer(phase, x: coordinateX, y: coordinateY)
         }
     }
 
@@ -47,6 +47,7 @@ import UIKit
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     func consume(repository: PhoneRepository, binding: PhoneBinding, state: PhoneLiveState) async throws {
         let ticket = try await repository.ticket(binding, state: state)
         var url = URLComponents(url: repository.client.configuration.baseURL, resolvingAgainstBaseURL: false)!
@@ -106,6 +107,7 @@ import UIKit
         layer.flushAndRemoveImage(); format = nil; sps = nil; pps = nil
     }
 
+    // swiftlint:disable cyclomatic_complexity function_body_length
     private func decode(_ packet: Data) throws {
         guard packet.count > 32, packet.count <= 4 * 1024 * 1024, readUInt(packet, 4, 4) == UInt64(geometry) else { return }
         let flags = packet[0]
@@ -165,6 +167,8 @@ import UIKit
             rendered = true; onPlaying()
         }
     }
+
+    // swiftlint:enable cyclomatic_complexity function_body_length
 
     private func readUInt(_ data: Data, _ offset: Int, _ count: Int) -> UInt64 {
         data[offset ..< (offset + count)].reduce(0) { ($0 << 8) | UInt64($1) }

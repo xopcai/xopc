@@ -48,6 +48,8 @@ struct PhoneControlRequest: Encodable {
     let operationId: String
     let epoch: Int
     let expectedTranscriptId: String
+    // The wire format uses the short "op" field.
+    // swiftlint:disable:next identifier_name
     let op: String
     let assistanceId: String?
     let action: PhoneAction?
@@ -88,11 +90,11 @@ struct PhoneRepository: Sendable {
         return result.payload
     }
 
-    func command(_ binding: PhoneBinding, state: PhoneLiveState, op: String, action: PhoneAction? = nil,
+    func command(_ binding: PhoneBinding, state: PhoneLiveState, op operation: String, action: PhoneAction? = nil,
                  geometry: Int? = nil, frameSeq: Int? = nil) async throws -> PhoneLiveState
     {
         let body = PhoneControlRequest(clientId: clientID, operationId: UUID().uuidString.lowercased(), epoch: state.report.controlEpoch,
-                                       expectedTranscriptId: binding.transcriptId, op: op, assistanceId: state.report.assistanceId,
+                                       expectedTranscriptId: binding.transcriptId, op: operation, assistanceId: state.report.assistanceId,
                                        action: action, geometry: geometry, frameSeq: frameSeq)
         let result: PhoneEnvelope<PhoneLiveState> = try await client.request(path: base(binding.conversationId) + "/\(state.report.sessionId)/control",
                                                                              method: "POST", body: client.encoder.encode(body))
