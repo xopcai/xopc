@@ -26,7 +26,6 @@ import {
   type ProductDomainId,
 } from '@/navigation/product-navigation';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useSidebarStore } from '@/stores/sidebar-store';
 
 const DEFAULT_VISIBLE_ITEMS = 3;
 const SIDEBAR_DOMAIN_IDS = ['work', 'capabilities', 'automation', 'apps'] as const;
@@ -141,10 +140,7 @@ export function SidebarNavItems({
         title={displayName}
         onMouseEnter={() => preloadRouteForPath('/personal')}
         onFocus={() => preloadRouteForPath('/personal')}
-        onClick={() => {
-          useSidebarStore.getState().setCollapsed(true);
-          onNavigate?.();
-        }}
+        onClick={onNavigate}
       >
         <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
           <PersonalAvatar appearance={profile?.appearance ?? 'loopi'} agentId={profile?.agentId} className="size-5" />
