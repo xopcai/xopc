@@ -215,7 +215,8 @@ describe('chat bottom region composition', () => {
     expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
     expect(sessions).toContain('.cachedCount(5)');
     expect(chat).not.toContain('chat-drawer');
-    expect(chat).toContain('startX >= 24 && startX <= this.sceneGestureWidth - 24');
+    expect(home).toContain("}.hideTitleBar(true).onBackPressed((): boolean => { this.pathStack.pop(); return true; })");
+    expect(chat).not.toContain('PanGesture(');
   });
 
   it('centers the conversation create icon without relying on a clipped text glyph', () => {
