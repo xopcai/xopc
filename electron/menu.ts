@@ -251,10 +251,10 @@ export function invokeAppMenuAction(
       wc.send('menu:history-navigate', 1);
       break;
     case 'agent.agents':
-      wc.send('menu:navigate', '/agents');
+      wc.send('menu:navigate', '/capabilities/agents');
       break;
     case 'agent.skills':
-      wc.send('menu:navigate', '/skills');
+      wc.send('menu:navigate', '/capabilities/skills');
       break;
     case 'agent.automations':
       wc.send('menu:navigate', '/automations');
