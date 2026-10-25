@@ -59,6 +59,8 @@ it('does not let a paired device use the owner phone management surface', async 
   const { app, driver } = fixture(false);
   const response = await app.request('/api/phone/devices');
   expect(response.status).toBe(403); expect(driver.discover).not.toHaveBeenCalled();
+  for (const [path, method] of [['/api/phone/wireless/discovery', 'GET'], ['/api/phone/wireless/pairings', 'POST'], ['/api/phone/wireless/pairings/id', 'DELETE'], ['/api/phone/wireless/connect', 'POST'], ['/api/phone/devices/id/reconnect', 'POST']])
+    expect((await app.request(path, { method })).status).toBe(403);
 });
 it('checks session ownership and never exposes unregistered phone screens', async () => {
   const { app } = fixture();

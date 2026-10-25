@@ -17,18 +17,20 @@ it('only permits the fixed About entry for Settings control, without arbitrary i
   expect(command).not.toHaveBeenCalled();
 });
 
-it('retries a compressed native hierarchy when an animated cloud Settings page never becomes idle', async () => {
-  let compressed = false;
+it('retries an incomplete native hierarchy without changing compressed capture mode', async () => {
+  let dumps = 0;
   const command = vi.fn(async (_path: string, args: string[], _signal: AbortSignal) => {
-    if (args.includes('dump')) { compressed = args.includes('--compressed'); return Buffer.from(compressed ? 'UI hierarchy dumped' : 'ERROR: could not get idle state.'); }
-    if (args.includes('cat')) return Buffer.from(compressed ? '<hierarchy><node text="Android version" content-desc="" resource-id="android:id/title" bounds="[0,0][100,100]" clickable="true" password="false" focused="false" /></hierarchy>' : 'cat: no such file');
+    if (args.includes('dump')) { dumps++; return Buffer.from(dumps > 1 ? `UI hierarchy dumped to: ${args.at(-1)}` : 'ERROR: could not get idle state.'); }
+    if (args.includes('cat')) return Buffer.from('<hierarchy><node text="Android version" content-desc="" resource-id="android:id/title" bounds="[0,0][100,100]" clickable="true" password="false" focused="false" /></hierarchy>');
     return Buffer.alloc(0);
   });
   const driver = new AdbPhoneDriver('test-adb', command, false);
   vi.spyOn(driver, 'capture').mockResolvedValue({ frameId: 'test', capturedAt: Date.now(), width: 1080, height: 2400, rotation: 0, package: 'com.android.settings', frame: Buffer.alloc(0), elements: [] });
   const result = await driver.observe('cloud-test', new AbortController().signal);
   expect(result.elements).toMatchObject([{ text: 'Android version' }]);
-  const dumps = command.mock.calls.filter(([, args]) => args.includes('dump'));
-  expect(dumps).toHaveLength(2); expect(dumps[1][1]).toContain('--compressed');
+  const attempts = command.mock.calls.filter(([, args]) => args.includes('dump'));
+  expect(attempts).toHaveLength(2);
+  for (const [, args] of attempts) expect(args).toContain('--compressed');
+  expect(command.mock.calls.filter(([, args]) => args.includes('cat'))).toHaveLength(1);
   expect(command.mock.calls.filter(([, args]) => args.includes('rm'))).toHaveLength(2);
 });

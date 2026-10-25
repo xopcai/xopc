@@ -28,6 +28,8 @@ export class PhoneRepository {
   save(input: Omit<PhoneDevice, 'id' | 'createdAt' | 'revision'>, id?: string): PhoneDevice {
     const previous = id ? this.get(id) : undefined;
     if (this.list().some(device => device.serial === input.serial && device.id !== id)) throw new PhoneError('PHONE_DEVICE_DUPLICATE', 'This ADB device is already registered');
+    if (input.wireless && this.list().some(device => device.id !== id && device.wireless?.hardwareSerial === input.wireless.hardwareSerial))
+      throw new PhoneError('PHONE_DEVICE_DUPLICATE', 'This wireless phone is already registered; reconnect it from the device menu');
     const next = normalizePhoneAppAccess(PhoneDeviceSchema.parse({ ...input, id: id ?? randomUUID(), createdAt: previous?.createdAt ?? Date.now(), revision: (previous?.revision ?? 0) + 1 }));
     this.devices.set(next.id, next);
     return next;

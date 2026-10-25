@@ -16,6 +16,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { PhoneDependenciesCard } from '@/features/settings/runtime-tools/phone-dependencies-card';
 
 import { AddPhoneDialog } from './add-phone-dialog';
+import { WirelessReconnectDialog } from './wireless-reconnect-dialog';
 import { PhoneScreenDialog } from './phone-screen-dialog';
 import { PhoneAppPicker } from './phone-app-picker';
 import { PhoneTextInput } from './phone-text-input';
@@ -86,6 +87,7 @@ export function PhoneSettingsPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [adding, setAdding] = useState(false);
+  const [reconnecting, setReconnecting] = useState<PhoneDevice>();
   const [editing, setEditing] = useState<{ device?: PhoneDevice; serial: string; name: string }>();
   const [selected, setSelected] = useState('');
   const [goal, setGoal] = useState('');
@@ -179,6 +181,7 @@ export function PhoneSettingsPage() {
               <DropdownMenu.Trigger asChild><Button variant="ghost" disabled={busy} aria-label={zh ? `${device.name}的更多操作` : `More actions for ${device.name}`}>{zh ? '更多' : 'More'}<ChevronDown className="size-3.5" aria-hidden /></Button></DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 <DropdownMenu.Content align="end" sideOffset={6} collisionPadding={12} className="z-[90] min-w-40 max-w-[calc(100vw-1.5rem)] rounded-xl border border-edge bg-surface-overlay p-1 text-fg shadow-popover">
+                  {device.wireless && <DropdownMenu.Item disabled={busy || !device.enabled} className={deviceMenuItemClass} onSelect={() => setReconnecting(device)}>{zh ? '重新连接' : 'Reconnect'}</DropdownMenu.Item>}
                   <DropdownMenu.Item disabled={busy || diagnostics[device.id]?.pending} className={deviceMenuItemClass} onSelect={() => { void diagnose(device); }}>{device.connection ? (zh ? '连接诊断' : 'Connect & diagnose') : (zh ? '诊断' : 'Diagnose')}</DropdownMenu.Item>
                   {device.id !== devices.data?.defaultDeviceId && <DropdownMenu.Item disabled={busy} className={deviceMenuItemClass} onSelect={() => { void perform(async () => { await phoneRequest(`/devices/${device.id}/default`, {}); await devices.mutate(); }); }}>{zh ? '设为默认' : 'Set default'}</DropdownMenu.Item>}
                   <DropdownMenu.Separator className="my-1 border-t border-edge-subtle" />
@@ -217,6 +220,7 @@ export function PhoneSettingsPage() {
 
     {previewDevice && <PhoneScreenDialog device={previewDevice} sessionId={report?.deviceId === previewDevice.id && !['closed', 'cancelled', 'failed', 'outcome_unknown'].includes(report.status) ? sessionId : undefined} zh={zh} onClose={() => setPreviewDevice(undefined)} />}
     {adding && <AddPhoneDialog onAdded={() => { void devices.mutate(); }} zh={zh} onClose={() => setAdding(false)} onSelect={device => { setAdding(false); setEditing({ serial: device.serial, name: device.name }); }} />}
+    {reconnecting && <WirelessReconnectDialog device={reconnecting} zh={zh} onClose={() => setReconnecting(undefined)} onConnected={async () => { await devices.mutate(); }} />}
     {editing && settings.data && <DeviceForm {...editing} zh={zh} onSave={async () => { await devices.mutate(); }} onClose={() => setEditing(undefined)} />}
   </SettingsPageFrame>;
 }
