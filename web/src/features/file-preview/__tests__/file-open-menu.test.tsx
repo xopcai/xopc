@@ -86,13 +86,18 @@ describe('file open menu', () => {
     expect(openWith).toHaveBeenLastCalledWith(otherApp.path);
   });
 
-  it('offers system default and the native application picker', async () => {
+  it('offers the native application picker', async () => {
     render();
     const m = messages('en').workspace;
-    let menu = await openMenu();
+    const menu = await openMenu();
     await act(async () => [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === m.chooseApp)!.click());
     expect(chooseApp).toHaveBeenCalledOnce();
-    menu = await openMenu();
+  });
+
+  it('offers the system default and keeps it as the main action', async () => {
+    render();
+    const m = messages('en').workspace;
+    const menu = await openMenu();
     await act(async () => [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === m.openSystemApp)!.click());
     expect(systemOpen).toHaveBeenCalledOnce();
     await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${m.openSystemApp}"]`)!.click());
