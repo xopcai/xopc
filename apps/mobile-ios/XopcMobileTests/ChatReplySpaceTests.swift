@@ -47,15 +47,7 @@ struct ChatReplySpaceTests {
 
 @MainActor
 final class ChatKeyboardLayoutTests: XCTestCase {
-    func testWorkKeyboardDoesNotReverseTailFollowing() async throws {
-        try await verifyKeyboard(scene: .work)
-    }
-
-    func testLifeKeyboardDoesNotReverseTailFollowing() async throws {
-        try await verifyKeyboard(scene: .life)
-    }
-
-    private func verifyKeyboard(scene mode: AssistantScene) async throws {
+    func testKeyboardDoesNotReverseTailFollowing() async throws {
         let configuration = GatewayConfiguration(baseURL: URL(string: "http://127.0.0.1:18791/keyboard")!, token: "synthetic-keyboard-fixture")
         do { _ = try await GatewayClient(configuration: configuration).fetchAgents() }
         catch { throw XCTSkip("Start apps/mobile-ios/scripts/parity-fixture.py for the native keyboard test") }
@@ -63,7 +55,7 @@ final class ChatKeyboardLayoutTests: XCTestCase {
         let previous = scene.keyWindow
         let window = UIWindow(windowScene: scene)
         window.frame = scene.coordinateSpace.bounds
-        let controller = UIHostingController(rootView: KeyboardChatFixture(configuration: configuration, scene: mode)
+        let controller = UIHostingController(rootView: KeyboardChatFixture(configuration: configuration)
             .environment(\.scenePhase, .active))
         window.rootViewController = controller
         window.makeKeyAndVisible()
@@ -134,7 +126,6 @@ final class ChatKeyboardLayoutTests: XCTestCase {
 
 private struct KeyboardChatFixture: View {
     let configuration: GatewayConfiguration
-    let scene: AssistantScene
     @State private var keyboardVisible = false
     @State private var call = RealtimeVoiceCall()
     var body: some View {
@@ -144,11 +135,11 @@ private struct KeyboardChatFixture: View {
                           personalAgent: nil, quickChatHandoff: nil, onStartConversation: { _ in },
                           onStartScopedConversation: { _, _, _ in }, onConversationUpdated: { _ in },
                           onQuickChatHandled: { _ in }, onPersonalAgentUpdated: { _ in }, onOpenSettings: {},
-                          onInputFocusChanged: { _ in }, scene: scene)
+                          onInputFocusChanged: { _ in })
             { composer, _ in
                 VStack(spacing: 0) {
                     composer
-                    if scene == .work, !keyboardVisible {
+                    if !keyboardVisible {
                         Color.clear.frame(height: 66)
                     }
                 }.background(Color(uiColor: .systemBackground))

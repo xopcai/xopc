@@ -1,5 +1,4 @@
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
-import { gatewaySession } from '../service/gatewaySession';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatView } from './ChatView';
 import { CHAT_ACTION_PANEL_CLOSE_MS, CHAT_ACTION_PANEL_OPEN_MS, XopcChatActionPanel } from './ChatActionPanel';
@@ -51,11 +50,6 @@ export struct XopcHomeView {
   @Local recordingViewportWidth: number = 0;
   @Local recordingViewportHeight: number = 0;
   @Local tab: number = 0;
-  @Local lifeMode: boolean = false;
-  @Local sceneOpening: boolean = false;
-  private workChatId: string = '';
-  private workTab: number = 0;
-  private sceneRequest: number = 0;
   @Computed get quickComposerPlaceholder(): ResourceStr {
     return this.tab === 2 ? $r('app.string.quick_chat_progress_placeholder')
       : this.tab === 3 ? $r('app.string.quick_chat_library_placeholder')
@@ -128,7 +122,6 @@ export struct XopcHomeView {
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
   }
   private navigate(route: XopcMobileRoute): void {
-    if (this.lifeMode) this.switchScene(false);
     if (route.page === 'project-new-chat') { void this.openProjectChat(route.projectId ?? ''); return; }
     if (route.page === 'task-chat') { void this.openTaskChat(route); return; }
     if (route.page === 'understanding-chat') {
@@ -295,50 +288,11 @@ export struct XopcHomeView {
         return;
       }
       this.returnToConversations = false;
-      this.workChatId = this.activeChatId;
-      this.workTab = this.tab;
-      this.setLifeMode(true);
       this.activeChatId = record.conversationId;
       this.switchToChat(record.conversationId, '');
     } finally {
       this.personalOpening = false;
     }
-  }
-
-  private setLifeMode(life: boolean): void {
-    this.getUIContext().getFocusController().clearFocus();
-    this.getUIContext().animateTo({ duration: this.layout.reduceMotion ? 0 : 260, curve: Curve.LinearOutSlowIn }, (): void => {
-      this.lifeMode = life;
-    });
-  }
-
-  private switchScene(life: boolean): void {
-    const request = ++this.sceneRequest;
-    if (!life) {
-      this.sceneOpening = false;
-      if (!this.lifeMode) return;
-      this.setLifeMode(false);
-      if (this.workChatId) this.switchToChat(this.workChatId, '');
-      this.activateTab(this.workTab);
-      return;
-    }
-    if (this.lifeMode || this.sceneOpening) return;
-    this.sceneOpening = true;
-    const connection = gatewaySession.connectionRevision();
-    const selection = this.chatRequestRevision;
-    const tab = this.tab;
-    void this.personalAgent.openOrCreate().then((record: XopcPersonalAgentRecord | null): void => {
-      if (request !== this.sceneRequest || connection !== gatewaySession.connectionRevision()
-        || selection !== this.chatRequestRevision || tab !== this.tab) return;
-      if (!record) {
-        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(this.personalAgent.error, 'save') });
-        return;
-      }
-      this.workChatId = this.activeChatId;
-      this.workTab = this.tab;
-      this.setLifeMode(true);
-      this.switchToChat(record.conversationId, '');
-    }).finally((): void => { if (request === this.sceneRequest) this.sceneOpening = false; });
   }
 
   private openConversationFromList(id: string, focusComposer: boolean): void {
@@ -656,12 +610,10 @@ export struct XopcHomeView {
 
   @LocalBuilder
   chatDock() {
-    if (!this.lifeMode && this.tab === 0 && this.layout.isMainDockVisible(0)) {
+    if (this.tab === 0 && this.layout.isMainDockVisible(0)) {
       Column() {
         this.dockItems()
       }.id('main-tab-dock').width('100%')
-        .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 36 }))
-          .animation({ duration: this.layout.reduceMotion ? 0 : 260, curve: Curve.LinearOutSlowIn }))
     }
   }
 
@@ -672,8 +624,6 @@ export struct XopcHomeView {
       Column() {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
         TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
-          showSceneSwitch: true, lifeMode: this.lifeMode, sceneOpening: this.sceneOpening,
-          onSwitchScene: (life: boolean): void => { this.switchScene(life); },
           personalAgent: this.personalAgent.record,
           onPersonalAgentSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
           focusRevision: this.chatFocusRevision,

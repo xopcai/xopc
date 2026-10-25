@@ -1,7 +1,5 @@
 {
   "string": [
-    { "name": "home_mode_life", "value": "Life" },
-    { "name": "home_mode_work", "value": "Work" },
     {"name":"recording_outcome_save_failed_title","value":"Recording could not be saved"},
     {"name":"recording_outcome_save_failed_body","value":"No recoverable audio has been confirmed. Check microphone permission and available storage before recording again."},
     {"name":"recording_outcome_cancelled_title","value":"Processing stopped"},

@@ -17,9 +17,6 @@ struct AssistantView<Dock: View>: View {
     let onPersonalAgentUpdated: (PersonalAgentRecord) -> Void
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
-    var scene: AssistantScene?
-    var sceneOpening = false
-    var onSelectScene: (AssistantScene) -> Void = { _ in }
     let bottomDock: (AssistantComposer, Bool) -> Dock
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -30,7 +27,6 @@ struct AssistantView<Dock: View>: View {
     @State var draft = ""
     @State var attachments: [MessageAttachment] = []
     @State var references: [ContextReference] = []
-    @State private var sceneDrafts: [AssistantScene: AssistantSceneDraft] = [:]
     @State var attachmentError: String?
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
@@ -66,14 +62,6 @@ struct AssistantView<Dock: View>: View {
         VStack(spacing: 0) {
             content
                 .accessibilityHidden(!isActive)
-                .id(scene)
-                .transition(reduceMotion ? .opacity : .asymmetric(
-                    insertion: .opacity.combined(with: .offset(x: scene == .life ? -32 : 32)),
-                    removal: .opacity
-                ))
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.26), value: scene)
-                .modifier(ChatSceneSwipe(scene: scene, enabled: isActive && !sceneOpening && !isActionPanelExpanded,
-                                         topInset: chatTopInset + 72, bottomInset: 24, onSelect: onSelectScene))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
                 .ignoresSafeArea(.container, edges: .top)
@@ -88,7 +76,6 @@ struct AssistantView<Dock: View>: View {
                     readAloudBar
                 }
                 bottomDock(composer, isActionPanelExpanded)
-                    .accessibilityHidden(!isActive)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomDockHeight = $0 }
         }
@@ -106,8 +93,7 @@ struct AssistantView<Dock: View>: View {
                 .accessibilityHidden(true)
         }
         .overlay(alignment: .top) {
-            floatingHeader.padding(.horizontal, scene == nil ? 20 : 12).padding(.top, 8)
-                .accessibilityHidden(!isActive)
+            floatingHeader.padding(.horizontal, 20).padding(.top, 8)
         }
         .fullScreenCover(isPresented: $showingMessageSearch) {
             ChatMessageSearchView(messages: state.messages, configuration: configuration,
@@ -122,7 +108,6 @@ struct AssistantView<Dock: View>: View {
             }
         }
         .task(id: configuration) {
-            sceneDrafts = [:]
             await state.load(using: GatewayClient(configuration: configuration))
             if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
                 state.select(agent)
@@ -154,12 +139,7 @@ struct AssistantView<Dock: View>: View {
                 state.pauseConversation()
             }
         }
-        .onChange(of: AssistantSceneSelection(conversationID: conversation?.id, scene: scene)) { previous, current in
-            let changingScene = previous.scene != current.scene
-            if changingScene, let previousScene = previous.scene {
-                sceneDrafts[previousScene] = AssistantSceneDraft(text: draft, attachments: attachments, references: references)
-            }
-            let restored = changingScene ? current.scene.flatMap { sceneDrafts[$0] } : nil
+        .onChange(of: conversation?.id) {
             readAloud.stop()
             assistantAudio.stop()
             executionPresentation = nil
@@ -172,9 +152,9 @@ struct AssistantView<Dock: View>: View {
             if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
                 state.select(agent)
             }
-            draft = restored?.text ?? ""
-            attachments = restored?.attachments ?? []
-            references = restored?.references ?? []
+            draft = ""
+            attachments = []
+            references = []
             attachmentError = nil
             isActionPanelExpanded = false
         }
@@ -650,8 +630,6 @@ struct AssistantView<Dock: View>: View {
             canStartRealtimeVoice: conversation != nil && !startingVoice && !state.isRunActive
                 && !state.isSending && realtimeVoiceCall.phase == .idle,
             isRunActive: state.isRunActive,
-            isSceneActive: isActive,
-            scene: scene,
             onInputFocusChanged: onInputFocusChanged,
             onStop: {
                 Task { await state.stop(using: GatewayClient(configuration: configuration)) }
@@ -707,12 +685,10 @@ struct AssistantView<Dock: View>: View {
     }
 
     private func requestConversation(_ agentID: String) {
-        guard scene != .life else { return }
         requestStart(.agent(agentID))
     }
 
     private func requestStart(_ start: PendingConversationStart) {
-        guard scene != .life else { return }
         if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty || !references.isEmpty {
             pendingStart = start
         } else {
@@ -732,16 +708,9 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var floatingHeader: some View {
-        HStack(spacing: scene == nil ? 12 : 4) {
+        HStack(spacing: 12) {
             Group {
-                if scene == .life {
-                    PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 36, active: isActive)
-                        .frame(width: 48, height: 48)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-                        .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
-                        .accessibilityLabel("当前助手")
-                        .accessibilityIdentifier("chat-agent-avatar")
-                } else if isPersonalConversation {
+                if isPersonalConversation {
                     Button { showingPersonalProfile = true } label: {
                         HStack(spacing: 8) {
                             PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 36, active: isActive)
@@ -761,20 +730,13 @@ struct AssistantView<Dock: View>: View {
                             ConfiguredAgentAvatar(configuration: configuration,
                                                   agent: state.agents.first(where: { $0.id == conversation?.agentId }) ?? state.selectedAgent,
                                                   size: 36, active: isActive)
-                            if scene == nil {
-                                Text(verbatim: conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
-                            }
-                        }.padding(.horizontal, scene == nil ? 12 : 6).frame(height: 48)
+                            Text(verbatim: conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
+                        }.padding(.horizontal, 12).frame(height: 48)
                             .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
                     }
-                    .accessibilityLabel(Text(verbatim: currentAgentName))
                 }
             }
             Spacer(minLength: 0)
-            if let scene {
-                AssistantSceneSwitch(scene: scene, opening: sceneOpening, onSelect: onSelectScene)
-                Spacer(minLength: 0)
-            }
             HStack(spacing: 0) {
                 Button {
                     showingMessageSearch = true
@@ -793,20 +755,8 @@ struct AssistantView<Dock: View>: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
                 .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
         }
-        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat-floating-header")
     }
-}
-
-private struct AssistantSceneSelection: Equatable {
-    let conversationID: String?
-    let scene: AssistantScene?
-}
-
-private struct AssistantSceneDraft {
-    let text: String
-    let attachments: [MessageAttachment]
-    let references: [ContextReference]
 }
 
 struct PersonalAgentProfileView: View {
