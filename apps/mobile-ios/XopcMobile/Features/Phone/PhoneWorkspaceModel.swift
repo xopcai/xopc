@@ -26,22 +26,32 @@ import Observation
     var canControl: Bool {
         summary?.access == "control" && live?.report.mode == "control" && (live?.report.controlOwner != "human" || live?.ownControl == true)
     }
+
     func observe(configuration: GatewayConfiguration, conversationID: String, visible: Bool) async {
         leave()
-        if self.conversationID != conversationID || self.repository?.client.configuration != configuration { summary = nil }
+        if self.conversationID != conversationID || self.repository?.client.configuration != configuration {
+            summary = nil
+        }
         let repository = PhoneRepository(client: GatewayClient(configuration: configuration))
         self.repository = repository; self.conversationID = conversationID
         active = true; self.visible = visible; generation += 1
         let revision = generation
         do {
             guard try await repository.supported() else { summary = nil; active = false; return }
-            while !Task.isCancelled && revision == generation {
+            while !Task.isCancelled, revision == generation {
                 await refresh()
                 try await Task.sleep(for: .milliseconds(visible ? 1200 : 4000))
             }
-        } catch is CancellationError {} catch { if revision == generation { failed = true } }
-        if revision == generation { leave() }
+        } catch is CancellationError {} catch {
+            if revision == generation {
+                failed = true
+            }
+        }
+        if revision == generation {
+            leave()
+        }
     }
+
     private func refresh() async {
         guard let repository, active, !busy else { return }
         let operationRevision = operations
@@ -49,44 +59,72 @@ import Observation
         do {
             let next = try await repository.summary(conversationID)
             guard revision == generation, operationRevision == operations, active, !Task.isCancelled else { return }
-            if next.binding != summary?.binding { releaseOld(); stopVideo(); live = nil; frame = nil; fallback = false }
-            if summary != next { summary = next }
+            if next.binding != summary?.binding {
+                releaseOld(); stopVideo(); live = nil; frame = nil; fallback = false
+            }
+            if summary != next {
+                summary = next
+            }
             guard next.available, next.access != "none", let binding = next.binding else {
                 releaseOld(); stopVideo(); live = nil; frame = nil; failed = false; return
             }
             guard visible else { return }
             let state = try await repository.state(conversationID)
             guard revision == generation, operationRevision == operations, active, visible, !Task.isCancelled else { return }
-            if live != state { live = state }
+            if live != state {
+                live = state
+            }
             if state?.ownControl == true, !busy, Date().timeIntervalSince(heartbeatAt) > 4 {
                 heartbeatAt = Date(); await command("heartbeat")
             }
             ensureVideo()
-            if fallback && touchStart == nil {
+            if fallback, touchStart == nil {
                 let nextFrame = try await repository.frame(binding)
-                if revision == generation && operationRevision == operations && touchStart == nil && visible && !Task.isCancelled { frame = nextFrame }
+                if revision == generation, operationRevision == operations, touchStart == nil, visible, !Task.isCancelled {
+                    frame = nextFrame
+                }
             }
         } catch is CancellationError {} catch {
-            if revision == generation && operationRevision == operations { releaseOld(); stopVideo(); live = nil; frame = nil; failed = true }
+            if revision == generation, operationRevision == operations {
+                releaseOld(); stopVideo(); live = nil; frame = nil; failed = true
+            }
         }
     }
+
     func command(_ op: String, action: PhoneAction? = nil) async {
         guard let repository, let binding = summary?.binding, let state = live, active, visible, !busy else { return }
         let revision = generation
-        if op != "heartbeat" { operations += 1; busy = true; failed = false; video?.pointer("cancel", x: 0, y: 0) }
-        defer { if revision == generation && op != "heartbeat" { busy = false } }
+        if op != "heartbeat" {
+            operations += 1; busy = true; failed = false; video?.pointer("cancel", x: 0, y: 0)
+        }
+        defer {
+            if revision == generation, op != "heartbeat" {
+                busy = false
+            }
+        }
         do {
             let result = try await repository.command(binding, state: state, op: op, action: action,
-                geometry: playing ? geometry : nil, frameSeq: fallback ? frame?.seq : nil)
+                                                      geometry: playing ? geometry : nil, frameSeq: fallback ? frame?.seq : nil)
             guard revision == generation, visible, active else {
-                if result.ownControl { Task { _ = try? await repository.command(binding, state: result, op: "release") } }
+                if result.ownControl {
+                    Task { _ = try? await repository.command(binding, state: result, op: "release") }
+                }
                 return
             }
-            if live != result { live = result }
-            if result.report.sessionId != binding.phoneSessionId { stopVideo(); summary = try await repository.summary(conversationID) }
+            if live != result {
+                live = result
+            }
+            if result.report.sessionId != binding.phoneSessionId {
+                stopVideo(); summary = try await repository.summary(conversationID)
+            }
             ensureVideo()
-        } catch is CancellationError {} catch { if revision == generation { failed = true } }
+        } catch is CancellationError {} catch {
+            if revision == generation {
+                failed = true
+            }
+        }
     }
+
     private func ensureVideo() {
         guard let repository, let binding = summary?.binding, let state = live, active, visible,
               state.report.reconnectRequired != true, !fallback else { return }
@@ -95,35 +133,50 @@ import Observation
         stopVideo(); streamKey = key
         let next = PhoneVideo(); video = next
         next.onGeometry = { [weak self] width, height, geometry in
-            guard let self, self.streamKey == key else { return }; self.width = width; self.height = height; self.geometry = geometry
+            guard let self, streamKey == key else { return }; self.width = width; self.height = height; self.geometry = geometry
         }
         next.onPlaying = { [weak self] in
-            guard let self, self.streamKey == key else { return }; self.playing = true; self.failed = false
+            guard let self, streamKey == key else { return }; playing = true; failed = false
         }
         streamTask = Task { [weak self] in
             do { try await next.consume(repository: repository, binding: binding, state: state) }
             catch is CancellationError {} catch {
-                guard let self, self.streamKey == key, !Task.isCancelled else { return }
-                self.stopVideo(); self.fallback = true
+                guard let self, streamKey == key, !Task.isCancelled else { return }
+                stopVideo(); fallback = true
             }
         }
     }
-    private func stopVideo() { streamKey = ""; streamTask?.cancel(); streamTask = nil; video?.close(); video = nil; playing = false; geometry = 0 }
+
+    private func stopVideo() {
+        streamKey = ""; streamTask?.cancel(); streamTask = nil; video?.close(); video = nil; playing = false; geometry = 0
+    }
+
     private func releaseOld() {
         if let repository, let binding = summary?.binding, let state = live, state.ownControl {
             Task { _ = try? await repository.command(binding, state: state, op: "release") }
         }
     }
+
     func leave() {
         generation += 1; active = false; visible = false
         releaseOld(); stopVideo(); live = nil; frame = nil; fallback = false; busy = false; touchStart = nil
     }
-    func retry() async { stopVideo(); fallback = false; failed = false; frame = nil; await refresh() }
+
+    func retry() async {
+        stopVideo(); fallback = false; failed = false; frame = nil; await refresh()
+    }
+
     func pointer(_ phase: String, x: Int, y: Int) {
         guard active, visible, live?.ownControl == true, !busy else { return }
-        if playing { video?.pointer(phase, x: x, y: y); return }
-        if phase == "cancel" { touchStart = nil; return }
-        if phase == "down" { touchStart = (x, y, Date()) }
+        if playing {
+            video?.pointer(phase, x: x, y: y); return
+        }
+        if phase == "cancel" {
+            touchStart = nil; return
+        }
+        if phase == "down" {
+            touchStart = (x, y, Date())
+        }
         guard phase == "up", let start = touchStart else { return }
         touchStart = nil
         guard let frame, Date().timeIntervalSince1970 * 1000 - frame.capturedAt < 5000 else { return }

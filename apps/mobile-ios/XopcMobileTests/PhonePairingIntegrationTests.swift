@@ -13,7 +13,7 @@ import XCTest
         XCTAssertTrue(supported)
         var summary = try await repository.summary(conversationID)
         let deadline = Date().addingTimeInterval(60)
-        while summary.access != "control" && Date() < deadline {
+        while summary.access != "control", Date() < deadline {
             try await Task.sleep(for: .milliseconds(500)); summary = try await repository.summary(conversationID)
         }
         XCTAssertEqual(summary.access, "control")
@@ -23,7 +23,7 @@ import XCTest
         let controlled = try await repository.command(binding, state: original, op: "takeover")
         XCTAssertTrue(controlled.ownControl)
         let ticket = try await repository.ticket(binding, state: controlled)
-        var components = URLComponents(url: connection.baseURL, resolvingAgainstBaseURL: false)!
+        var components = try XCTUnwrap(URLComponents(url: connection.baseURL, resolvingAgainstBaseURL: false))
         components.scheme = "wss"; components.path = ticket.path; components.query = nil; components.fragment = nil
         let url = try XCTUnwrap(components.url)
         var request = URLRequest(url: url)
@@ -34,11 +34,14 @@ import XCTest
         let socket = URLSession.shared.webSocketTask(with: request); socket.resume()
         do {
             var receivedGeometry = false
-            for _ in 0..<8 {
+            for _ in 0 ..< 8 {
                 let message = try await socket.receive()
-                if case .string(let text) = message,
-                   let object = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
-                    if object["type"] as? String == "geometry" { receivedGeometry = true; break }
+                if case let .string(text) = message,
+                   let object = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
+                {
+                    if object["type"] as? String == "geometry" {
+                        receivedGeometry = true; break
+                    }
                     XCTAssertNotEqual(object["type"] as? String, "fault")
                 }
             }
@@ -57,19 +60,19 @@ import XCTest
         print("PHONE_ACCEPTANCE_REQUEST_VIEW")
         var viewSummary = try await repository.summary(conversationID)
         let viewDeadline = Date().addingTimeInterval(15)
-        while viewSummary.access != "view" && Date() < viewDeadline {
+        while viewSummary.access != "view", Date() < viewDeadline {
             try await Task.sleep(for: .milliseconds(300)); viewSummary = try await repository.summary(conversationID)
         }
         XCTAssertEqual(viewSummary.access, "view")
         do {
             _ = try await repository.command(binding, state: released, op: "takeover")
             XCTFail("View-only access must reject takeover")
-        } catch GatewayClientError.http(let code, _) { XCTAssertEqual(code, 403) }
+        } catch let GatewayClientError.http(code, _) { XCTAssertEqual(code, 403) }
         _ = try await repository.ticket(binding, state: released)
         print("PHONE_ACCEPTANCE_REQUEST_NONE")
         var denied = try await repository.summary(conversationID)
         let noneDeadline = Date().addingTimeInterval(15)
-        while denied.access != "none" && Date() < noneDeadline {
+        while denied.access != "none", Date() < noneDeadline {
             try await Task.sleep(for: .milliseconds(300)); denied = try await repository.summary(conversationID)
         }
         XCTAssertEqual(denied.access, "none")

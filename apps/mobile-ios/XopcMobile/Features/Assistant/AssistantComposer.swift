@@ -86,7 +86,9 @@ struct AssistantComposer: View {
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .onChange(of: focusAllowed) {
-            if !focusAllowed { isComposerFocused = false; isActionPanelExpanded = false }
+            if !focusAllowed {
+                isComposerFocused = false; isActionPanelExpanded = false
+            }
         }
         .onChange(of: isComposerFocused) {
             onInputFocusChanged(isComposerFocused)
