@@ -2,7 +2,7 @@ import { fetchJson, apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type PhoneDevice = { id: string; serial: string; name: string; enabled: boolean; appAccess?: 'all' | 'selected'; textInput?: 'auto' | 'manual'; allowedApps: string[]; revision: number; createdAt: number; wireless?: { guid: string; hardwareSerial: string; host: string; port: number }; connection?: { kind: 'aliyun-adb'; endpoint: string; credentialId: string } };
-export type PhoneConfig = { enabled: boolean; adbPath?: string; maxActionsPerSession: number; maxModelRequests: number; maxOperationDurationMs: number; maxSessionDurationMs: number };
+export type PhoneConfig = { executionMode?: 'collaborative' | 'direct'; enabled: boolean; adbPath?: string; maxActionsPerSession: number; maxModelRequests: number; maxOperationDurationMs: number; maxSessionDurationMs: number; idleDisconnectMs?: number };
 export type PhoneSettings = { config: PhoneConfig; defaultDeviceId?: string; runner: string; agentId: string };
 export type PhoneDevices = { devices: PhoneDevice[]; discovery: Array<{ serial: string; state: string; name: string; emulator: boolean }>; diagnostic?: string; defaultDeviceId?: string };
 export type PhoneModel = { id: string; name: string; profile: string; mock: boolean; configured: boolean };

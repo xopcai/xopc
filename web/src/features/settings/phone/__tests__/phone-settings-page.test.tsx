@@ -24,6 +24,7 @@ vi.mock('../phone-api', () => ({
   phoneRequest: vi.fn(async path => path === '/sessions' ? { id: 'session-one', report: {} } : path === '/sessions/session-one' ? { status: 'ready', actions: 0, modelRequests: 0, deviceName: 'Local emulator', facts: [] } : {}),
 }));
 
+import { usePhoneWorkspaceStore } from '@/features/phone/phone-workspace-store';
 import { PhoneSettingsPage } from '../phone-settings-page';
 import { fetchPhoneScreen, phoneRequest } from '../phone-api';
 import { updateGlobalDefaults } from '@/features/settings/global-defaults-api';
@@ -79,34 +80,30 @@ it('manages phones without a second Agent allowlist', async () => {
   expect(document.body.textContent).toContain('已启用 phone_use 工具的 Agent');
 });
 
-it('shows a fixed screen dialog and revokes its temporary image on close', async () => {
+it('opens the shared global viewer in read-only mode without a separate screen dialog', async () => {
+  usePhoneWorkspaceStore.setState({ open: false, selected: null, controlConversationId: 'another-chat' });
   await render(); await click('查看屏幕');
-  const dialog = document.body.querySelector('[role="dialog"]')!;
-  expect(dialog).not.toBeNull();
-  expect(dialog.className).toContain('h-[min(48rem,90dvh)]');
-  expect(dialog.querySelector('img')?.getAttribute('src')).toBe('blob:phone-preview');
-  expect(container.querySelector('img')).toBeNull();
-  expect(fetchPhoneScreen).toHaveBeenCalledWith('phone-one', expect.any(AbortSignal));
-  await act(async () => (dialog.querySelector('[aria-label="关闭预览"]') as HTMLButtonElement).click());
+  expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one/view', {});
+  expect(usePhoneWorkspaceStore.getState()).toMatchObject({ open: true, selected: 'phone-one', controlConversationId: null });
   expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:phone-preview');
+  expect(fetchPhoneScreen).not.toHaveBeenCalled();
 });
-it('keeps loading and capture failures inside the dialog', async () => {
-  let reject!: (reason: Error) => void;
-  vi.mocked(fetchPhoneScreen).mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+it('reports a failed connection without opening an unrelated phone', async () => {
+  usePhoneWorkspaceStore.setState({ open: false, selected: null, controlConversationId: null });
+  vi.mocked(phoneRequest).mockRejectedValueOnce(new Error('Phone offline'));
   await render(); await click('查看屏幕');
-  expect(document.body.querySelector('[role="dialog"] [aria-busy="true"]')).not.toBeNull();
-  await act(async () => reject(new Error('Phone offline')));
-  expect(document.body.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe('Phone offline');
-  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe('Phone offline');
+  expect(usePhoneWorkspaceStore.getState().open).toBe(false);
 });
-it('discards a capture that completes after the dialog closes', async () => {
-  let resolve!: (blob: Blob) => void;
-  vi.mocked(fetchPhoneScreen).mockReturnValueOnce(new Promise(done => { resolve = done; }));
-  await render(); await click('查看屏幕');
-  await act(async () => (document.body.querySelector('[aria-label="关闭预览"]') as HTMLButtonElement).click());
-  await act(async () => resolve(new Blob(['late pixels'])));
-  expect(URL.createObjectURL).not.toHaveBeenCalled();
+it('creates a device-bound conversation without sending any phone operation', async () => {
+  vi.mocked(phoneRequest).mockResolvedValueOnce({ conversationId: 'new-phone-chat' });
+  const created = vi.fn(); window.addEventListener('session-created', created);
+  try {
+    await render(); await click('对话控制手机');
+    expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one/conversations', {});
+    expect(phoneRequest).toHaveBeenCalledTimes(1);
+    expect(created).toHaveBeenCalledOnce();
+  } finally { window.removeEventListener('session-created', created); }
 });
 it('updates diagnostics in the reserved device row without inserting a page banner', async () => {
   await render();
@@ -146,4 +143,13 @@ it('saves selected applications by their native labels without editing package n
   expect(dialog.querySelector('[role="status"]')?.textContent).toContain('1');
   await act(async () => [...dialog.querySelectorAll('button')].find(b => b.textContent === '保存手机')!.click());
   expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one', { name: 'Local emulator', appAccess: 'selected', allowedApps: ['com.android.deskclock'], textInput: 'auto', enabled: true }, 'PATCH');
+});
+
+it('defaults to main Agent collaboration and saves direct execution without changing other phone settings', async () => {
+  await render();
+  const selector = container.querySelector('[aria-label="默认执行方式"]') as HTMLButtonElement;
+  expect(selector.textContent).toContain('主 Agent 协作');
+  await act(async () => selector.click());
+  await act(async () => [...document.body.querySelectorAll('button')].find(b => b.textContent === '直接执行')!.click());
+  expect(phoneRequest).toHaveBeenCalledWith('/settings', { enabled: true, executionMode: 'direct' }, 'PATCH');
 });

@@ -69,7 +69,8 @@ export default defineConfig(({ mode }) => ({
     proxy: {
       '/api': {
         target: gatewayTarget,
-        changeOrigin: true,
+        // Phone tickets bind to the browser-facing origin, including the dev proxy port.
+        changeOrigin: false,
         ws: true,
       },
       '/health': {

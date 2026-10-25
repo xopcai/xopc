@@ -154,7 +154,7 @@ describe('phone runtime native numeric entry', () => {
     await vi.waitFor(() => expect(f.capturePending()).toBe(true));
     const rejected = expect(running).rejects.toMatchObject({ code: 'PHONE_CANCELLED' });
     controller.abort(); f.release(); await rejected;
-    expect(f.runtime.status(OWNER)).toMatchObject({ verified: false, status: 'cancelled', actions: 2, modelRequests: 1 });
+    expect(f.runtime.status(OWNER)).toMatchObject({ verified: false, status: 'ready', controlOwner: 'none', errorCode: 'PHONE_CANCELLED', actions: 2, modelRequests: 1 });
     expect(f.numericDispatches()).toBe(1);
   });
 

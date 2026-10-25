@@ -211,3 +211,14 @@ it('does not persist browser URLs, titles or native identities in session storag
   expect(saved).not.toContain('Private document');
   expect(JSON.parse(saved).panes.parent.tabs).toEqual([]);
 });
+
+ it('reuses a phone tab alongside project files without replacing the file', () => {
+   const s = workspace.getState();
+   const file = s.openFile({ path: 'report.md' });
+   s.openPhone('device-session', 'Phone', 'parent', false, false);
+   expect(workspace.getState().panes.parent.activeId).toBe(file);
+   s.openPhone('device-session', 'Phone', 'parent', true, false);
+   s.openPhone('device-session', 'Phone', 'parent', true, false);
+   expect(workspace.getState().panes.parent.tabs.map(t => t.kind)).toEqual(['file', 'phone']);
+   expect(workspace.getState().panes.parent.activeId).toBe('phone:device-session');
+ });

@@ -53,7 +53,7 @@ export function usePhoneVideo(conversationId: string, sessionId: string, enabled
     let lastFault = '';
     setState({ status: 'connecting', fps: 0, frames: 0 });
     const clear = () => { const element = canvas.current; if (element) element.getContext('2d')?.clearRect(0, 0, element.width, element.height); };
-    const fallback = (error: string) => { if (disposed) return; renderAllowed = false; clear(); setState(s => ({ ...s, status: 'fallback', error })); socket.current?.close(); };
+    const fallback = (error: string) => { if (disposed) return; clearTimeout(firstTimer); renderAllowed = false; clear(); setState(s => ({ ...s, status: 'fallback', error })); socket.current?.close(); };
     const firstTimer = setTimeout(() => { if (!frames) fallback('Phone video first frame timed out'); }, 8000);
     const statsTimer = setInterval(() => {
       const at = performance.now(); const fps = (frames - previousFrames) * 1000 / (at - lastAt); previousFrames = frames; lastAt = at;

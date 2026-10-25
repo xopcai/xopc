@@ -1,13 +1,45 @@
 .phone-live-stage {
   container-type: size;
+  aspect-ratio: var(--phone-screen-ratio);
+  flex: 0 1 auto;
+  width: 100%;
 }
 
 .phone-device-shell {
   /* Keep the complete source image inside the bezel at any panel size. */
-  width: max(0px, min(100cqw, 420px, calc((100cqh - 28px) * var(--phone-screen-ratio) + 14px)));
-  padding: 16px 6px 10px;
+  --phone-body-radius: clamp(26px, 8cqw, 38px);
+  --phone-screen-radius: calc(var(--phone-body-radius) - 5px);
+  width: max(0px, min(100cqw, calc((100cqh - 10px) * var(--phone-screen-ratio) + 10px)));
+  padding: 4px;
+  border-radius: var(--phone-body-radius);
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-phone-rim) 18%, transparent), var(--shadow-phone-device);
+}
+
+.phone-control-shade[data-state='open'] {
+  animation: phone-shade-in 200ms ease-out;
+}
+
+@keyframes phone-shade-in {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-control-shade[data-state='open'] { animation: none; }
 }
 
 .phone-device-screen {
   aspect-ratio: var(--phone-screen-ratio);
+  border-radius: var(--phone-screen-radius);
+  /* Explicitly clip filtered and animated layers in the compositor as well. */
+  clip-path: inset(0 round var(--phone-screen-radius));
+  isolation: isolate;
+  contain: paint;
+}
+
+.phone-control-shade {
+  border-top-left-radius: var(--phone-screen-radius);
+  border-top-right-radius: var(--phone-screen-radius);
 }

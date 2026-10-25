@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { phoneAllowsApp, phoneAppAccess } from './app-access.js';
+import { nativePhoneOutput, updatePhoneFeedback } from './task-feedback.js';
 import { PhoneFrameCache, PhoneOperationBudget } from './live-state.js';
 import { PhoneInteractiveSession } from './interactive-session.js';
 import { LocalScrcpyProvider } from './scrcpy.js';
@@ -22,10 +23,11 @@ import { confirmPhoneFocusRecovery, phoneBackRecovery, phoneUnfocusedTypingHint,
 import { createPhoneNumericEntry, nextPhoneNumericEntry, type PhoneNumericEntryIntent, type PhoneNumericEntryStep } from './numeric-entry.js';
 import {
   MOCK_PHONE_MODEL, PhoneError, PhoneInputSchema, type PhoneAction, type PhoneDevice, type PhoneInput,
-  type PhoneApplication, type PhoneObservation, type PhoneReport,
+  type PhoneApplication, type PhoneObservation, type PhoneReport, type PhoneExecutionMode,
 } from './contracts.js';
 
-type ExecutionContext = { config: Config; agentId: string; modelRef?: string; toolDenied?: boolean; validateBinding?: () => boolean };
+type ExecutionContext = { config: Config; agentId: string; modelRef?: string; preferredDeviceId?: string; toolDenied?: boolean; validateBinding?: () => boolean };
+const VIEW_MODEL = 'phone-view-only';
 type Session = {
   report: PhoneReport; device: PhoneDevice; lease: string; driver: PhoneDriver; adapter: PhoneModelAdapter;
   controller: AbortController; active?: Promise<unknown>; createdAt: number; modelRef: string; adbPath: string;
@@ -39,10 +41,17 @@ type Session = {
   trajectorySummary: string[];
   stream?: PhoneInteractiveSession;
   streamOpening?: Promise<PhoneInteractiveSession>;
+  videoGeneration?: symbol;
+  taskPending?: boolean;
+  segmentUsage?: { actions: number; modelRequests: number; activeDurationMs: number };
+  taskActiveMs?: number;
+  switching?: boolean;
+  modeHandbackRequired?: boolean;
+  taskStart?: { actions: number; modelRequests: number };
 
 };
 const log = createLogger('PhoneRuntime');
-const terminal = new Set(['cancelled', 'closed', 'failed', 'outcome_unknown']);
+const terminal = new Set(['closed']);
 
 export class PhoneRuntime {
   private reconnecting = new Map<string, Promise<PhoneDevice>>();
@@ -50,7 +59,9 @@ export class PhoneRuntime {
   private cloudPhones?: CloudPhones;
   get cloud(): CloudPhones { return this.cloudPhones ??= new CloudPhones(this.repository); }
   private sessions = new Map<string, Session>();
+  private lastDevices = new Map<string, string>();
   private openings = new Map<string, AbortController>();
+  private deviceOpenings = new Map<string, AbortController>();
   private maintenance?: ReturnType<typeof setInterval>;
   constructor(
     readonly repository = new PhoneRepository(),
@@ -115,6 +126,13 @@ export class PhoneRuntime {
   async preview(id: string, config: Config, signal: AbortSignal): Promise<PhoneObservation> {
     const device = this.repository.get(id);
     if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'Phone access is disabled', 403);
+    const connected = [...this.sessions.values()].find(session => session.device.id === id && session.report.status !== 'closed');
+    if (connected) {
+      this.guard(connected, { ...connected.context, config });
+      const observation = await this.observe(connected, signal);
+      try { this.allowedScreen(connected, observation); return observation; }
+      catch (error) { observation.frame.fill(0); throw error; }
+    }
     const lease = this.repository.acquire(device.serial);
     try {
       const observation = await (await this.driverFor(device, config)).observe(device.serial, signal);
@@ -125,7 +143,6 @@ export class PhoneRuntime {
   async previewSession(owner: string, context: ExecutionContext, signal: AbortSignal): Promise<PhoneObservation> {
     const session = this.sessions.get(owner);
     if (!session || terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Open a phone session first');
-    if (session.active) throw new PhoneError('PHONE_SESSION_BUSY', 'Pause the task before previewing', 409);
     this.guard(session, context);
     const observation = await this.observe(session, signal);
     try { this.allowedScreen(session, observation); return observation; }
@@ -135,7 +152,34 @@ export class PhoneRuntime {
     return [...this.sessions.values()].map(session => structuredClone(session.report));
   }
   status(owner: string): PhoneReport | undefined { const report = this.sessions.get(owner)?.report; return report && structuredClone(report); }
+  deviceContext(id: string, config: Config): ExecutionContext {
+    const session = [...this.sessions.values()].find(session => session.device.id === id && session.report.status !== 'closed');
+    if (!session) throw new PhoneError('PHONE_SESSION_NOT_FOUND', 'Phone is not connected', 404);
+    return { ...session.context, config };
+  }
+  async viewDevice(id: string, config: Config, agentId: string, signal?: AbortSignal): Promise<void> {
+    if ([...this.sessions.values()].some(session => session.device.id === id && session.report.status !== 'closed')) return;
+    const owner = `phone-view:${id}`;
+    await this.execute(owner, { op: 'open', deviceId: id, mode: 'observe' }, { config, agentId, modelRef: VIEW_MODEL }, signal);
+    await this.finishTask(owner);
+  }
+  updateConnectionPolicy(config: Config): void {
+    for (const session of this.sessions.values()) session.context = { ...session.context, config };
+  }
+  async releaseConversation(owner: string): Promise<void> {
+    const session = this.sessions.get(owner);
+    if (!session || session.report.status === 'closed') return;
+    if (this.deviceOpenings.has(session.device.id)) return;
+    if (session.active) { await this.stop(owner, 'cancel'); return; }
+    if (!session.human && !['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(session.report.status)) await this.finishTask(owner);
+  }
   private publish(session: Session): PhoneReport {
+    session.report.nextExecutionMode = this.repository.executionMode(session.report.owner) ?? session.context.config.phone.executionMode;
+    if (session.report.feedback && session.segmentUsage) session.report.feedback = updatePhoneFeedback(session.report, {
+      actions: session.report.actions - session.segmentUsage.actions,
+      modelRequests: session.report.modelRequests - session.segmentUsage.modelRequests,
+      activeDurationMs: session.segmentUsage.activeDurationMs + (session.budget?.elapsedMs ?? 0),
+    }, session.report.feedback);
     session.report.updatedAt = Date.now();
     this.repository.report(session.report);
     return structuredClone(session.report);
@@ -144,7 +188,6 @@ export class PhoneRuntime {
     if (!context.config.phone.enabled || context.toolDenied) throw new PhoneError('PHONE_DISABLED', 'Phone Use is disabled for this agent');
     if (context.modelRef !== session.modelRef || resolveAdbPath(context.config.phone.adbPath) !== session.adbPath) throw new PhoneError('PHONE_BINDING_CHANGED', 'Phone model or execution configuration changed; reopen the phone');
     if (context.validateBinding && !context.validateBinding()) throw new PhoneError('PHONE_BINDING_CHANGED', 'Agent model or tool policy changed; reopen the phone');
-    if (Date.now() - session.createdAt >= context.config.phone.maxSessionDurationMs) throw new PhoneError('PHONE_SESSION_LIMIT', 'Phone session duration limit reached');
     const current = this.repository.get(session.device.id);
     if (!current.enabled || current.revision !== session.device.revision) throw new PhoneError('PHONE_ACCESS_CHANGED', 'Device access changed; reopen the phone');
     this.repository.renew(session.device.serial, session.lease);
@@ -154,26 +197,87 @@ export class PhoneRuntime {
   }
   async execute(owner: string, raw: PhoneInput, context: ExecutionContext, signal: AbortSignal = new AbortController().signal): Promise<unknown> {
     const input = PhoneInputSchema.parse(raw);
+    if (input.op === 'close') return this.finishTask(owner);
     if (['cancel', 'close', 'pause'].includes(input.op)) return this.stop(owner, input.op as 'cancel' | 'close' | 'pause');
     if (input.op === 'status') return this.status(owner) ?? { status: 'closed' };
     if (!context.config.phone.enabled || context.toolDenied) throw new PhoneError('PHONE_DISABLED', 'Enable Phone Use in settings and allow the tool for this agent');
-    if (input.op === 'discover') return { devices: this.repository.list().filter(device => device.enabled), defaultDeviceId: this.repository.defaultDevice() };
+    if (input.op === 'set_mode') return { executionMode: input.executionMode, report: await this.setExecutionMode(owner, input.executionMode, context, input.applyCurrent) };
+    if (input.op === 'discover') return { executionMode: this.repository.executionMode(owner) ?? context.config.phone.executionMode, devices: this.repository.list().filter(device => device.enabled), defaultDeviceId: context.preferredDeviceId ?? this.repository.defaultDevice(), systemDefaultDeviceId: this.repository.defaultDevice() };
     signal.throwIfAborted();
     if (input.op === 'open') {
+      const requestedDevice = input.deviceId ?? context.preferredDeviceId ?? this.repository.defaultDevice();
+      if (requestedDevice && this.deviceOpenings.has(requestedDevice)) throw this.busy(requestedDevice);
       if (this.openings.has(owner)) throw new PhoneError('PHONE_SESSION_BUSY', 'A phone is already being opened', 409);
       const opening = new AbortController(); this.openings.set(owner, opening);
+      if (requestedDevice) this.deviceOpenings.set(requestedDevice, opening);
       signal = AbortSignal.any([signal, opening.signal]);
       try {
         for (const [key, value] of this.sessions) if (terminal.has(value.report.status)) this.sessions.delete(key);
-        if (this.sessions.size >= 50) throw new PhoneError('PHONE_CAPACITY', 'Close an existing phone session before opening another', 409);
+        if (this.sessions.size >= 50 && ![...this.sessions.values()].some(session => session.device.id === requestedDevice)) throw new PhoneError('PHONE_CAPACITY', 'Disconnect an idle phone in the global phone panel before opening another', 409);
         const previous = this.sessions.get(owner);
-        if (previous && !terminal.has(previous.report.status)) throw new PhoneError('PHONE_ALREADY_OPEN', 'Close the current phone session before opening another');
-        const deviceId = input.deviceId ?? this.repository.defaultDevice();
+        const deviceId = requestedDevice;
         if (!deviceId) throw new PhoneError('PHONE_DEVICE_REQUIRED', 'Choose a registered phone in Phone Use settings');
+        if (previous && !terminal.has(previous.report.status) && previous.device.id !== deviceId) {
+          if (previous.active || previous.human || previous.report.controlOwner !== 'none' || !['ready', 'completed'].includes(previous.report.status)) throw this.busy(previous.device.id, previous);
+        }
         let device = this.repository.get(deviceId);
         if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'This phone is disabled', 403);
         const modelRef = context.modelRef;
         if (!modelRef) throw new PhoneError('PHONE_MODEL_REQUIRED', 'Choose a Phone Use model in settings');
+        if (input.appPackage && (input.mode !== 'control' || !phoneAllowsApp(device, input.appPackage))) throw new PhoneError('PHONE_APP_DENIED', 'Launching requires control mode and an allowed application');
+        const connected = [...this.sessions.values()].find(value => value.device.id === deviceId && !terminal.has(value.report.status));
+        if (connected) {
+          if (connected.active || connected.human || connected.report.handoff !== 'idle' || ['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(connected.report.status)
+            || (connected.report.owner !== owner && !['completed', 'ready'].includes(connected.report.status))
+            || (connected.report.owner !== owner && connected.report.controlOwner !== 'none')) throw this.busy(deviceId, connected);
+          if (connected.report.owner === owner && connected.report.controlOwner !== 'none') {
+            this.guard(connected, context);
+            if (connected.report.mode !== input.mode) throw new PhoneError('PHONE_ALREADY_OPEN', 'Finish the current task before changing phone mode', 409);
+            if (input.appPackage) {
+              const observation = await this.observe(connected, signal);
+              try { await this.dispatch(connected, { type: 'launch', package: input.appPackage }, observation, context, signal, connected.report.controlEpoch, false, input.settingsPage); }
+              finally { observation.frame.fill(0); }
+            }
+            return this.publish(connected);
+          }
+          const adapter = await this.modelFactory(modelRef, context.config, context.agentId);
+          signal.throwIfAborted();
+          this.guard(connected, connected.context);
+          if (input.mode === 'control' && modelRef !== MOCK_PHONE_MODEL && !connected.applications.length && connected.driver.applications) {
+            try { connected.applications = await connected.driver.applications(device.serial, signal); }
+            catch { signal.throwIfAborted(); }
+          }
+          await connected.streamOpening?.catch(() => {});
+          await connected.stream?.revoke();
+          await connected.io;
+          signal.throwIfAborted();
+          this.guard(connected, connected.context);
+          this.sessions.delete(connected.report.owner);
+          if (previous && previous !== connected) { this.sessions.delete(owner); previous.report.owner = `phone-view:${previous.device.id}`; this.sessions.set(previous.report.owner, previous); }
+          connected.report.owner = owner; connected.report.agentId = context.agentId; connected.report.modelRef = modelRef;
+          connected.report.sourceConversationId = /^[\da-f]{8}-[\da-f-]{27}$/i.test(owner) ? owner : undefined;
+          connected.report.mode = input.mode; connected.report.mock = modelRef === MOCK_PHONE_MODEL;
+          connected.report.status = 'ready'; connected.report.controlOwner = 'agent'; connected.report.controlEpoch!++;
+          connected.report.actions = 0; connected.report.modelRequests = 0; connected.report.steps = [];
+          connected.report.humanActions = 0;
+          connected.report.verified = false; connected.report.verificationLevel = 'none';
+          connected.report.stopReason = undefined; connected.report.errorCode = undefined; connected.report.message = undefined;
+          connected.report.facts = undefined; connected.report.readings = undefined; connected.report.task = undefined; connected.report.feedback = undefined; connected.report.executionMode = undefined; connected.segmentUsage = undefined; connected.taskActiveMs = 0; connected.taskStart = undefined; connected.modeHandbackRequired = false;
+          connected.report.goalPreview = undefined;
+          connected.adapter = adapter; connected.context = context; connected.modelRef = modelRef;
+          connected.controller = new AbortController(); connected.createdAt = Date.now();
+          connected.taskPending = false;
+          connected.trajectory = []; connected.trajectoryCount = 0; connected.trajectorySummary = []; connected.frames.clear(); connected.receipts.clear();
+          this.sessions.set(owner, connected);
+          this.lastDevices.set(owner, deviceId);
+          if (input.appPackage) {
+            if (input.mode !== 'control' || !phoneAllowsApp(device, input.appPackage)) throw new PhoneError('PHONE_APP_DENIED', 'Launching requires control mode and an allowed application');
+            const observation = await this.observe(connected, signal);
+            try { await this.dispatch(connected, { type: 'launch', package: input.appPackage }, observation, context, signal, connected.report.controlEpoch, false, input.settingsPage); }
+            finally { observation.frame.fill(0); }
+          }
+          return this.publish(connected);
+        }
         const adbPath = resolveAdbPath(context.config.phone.adbPath);
         const driver = await this.driverFor(device, context.config);
         let found = (await driver.discover(signal)).find(item => item.serial === device.serial);
@@ -185,7 +289,7 @@ export class PhoneRuntime {
         if (modelRef === MOCK_PHONE_MODEL && !found.emulator) throw new PhoneError('PHONE_MOCK_EMULATOR_ONLY', 'The deterministic mock model is only enabled for local Android emulators');
         const lease = this.repository.acquire(device.serial);
         try {
-          const adapter = await this.modelFactory(modelRef, context.config, context.agentId);
+          const adapter = modelRef === VIEW_MODEL ? { predict: async (): Promise<never> => { throw new PhoneError('PHONE_OBSERVE_ONLY', 'This connection is view only', 403); } } : await this.modelFactory(modelRef, context.config, context.agentId);
           signal.throwIfAborted();
           let applications: PhoneApplication[] = [];
           if (input.mode === 'control' && modelRef !== MOCK_PHONE_MODEL && driver.applications) {
@@ -197,9 +301,14 @@ export class PhoneRuntime {
             context, applications, trajectory: [], trajectoryCount: 0, trajectorySummary: [], frames: new PhoneFrameCache(), io: Promise.resolve(), ioBusy: false, wake: new Set(), viewedAt: 0,
             commands: Promise.resolve(), receipts: new Map(),
             report: { sessionId: randomUUID(), deviceId: device.id, deviceName: device.name, owner, agentId: context.agentId, modelRef,
+              sourceConversationId: /^[\da-f]{8}-[\da-f-]{27}$/i.test(owner) ? owner : undefined,
               mock: modelRef === MOCK_PHONE_MODEL, mode: input.mode, status: 'ready', actions: 0, modelRequests: 0, controlOwner: 'agent', controlEpoch: 1, handoff: 'idle',
               createdAt: now, updatedAt: now, verified: false, verificationLevel: 'none', steps: [], diagnostics: { stalePredictions: 0, protocolRepairs: 0, unchangedActions: 0, completionCorrections: 0 } } };
+          if (previous && previous.device.id !== deviceId) { this.sessions.delete(owner); previous.report.owner = `phone-view:${previous.device.id}`; this.sessions.set(previous.report.owner, previous); }
           this.sessions.set(owner, session);
+          this.lastDevices.set(owner, deviceId);
+          if (this.lastDevices.size > 500) this.lastDevices.delete(this.lastDevices.keys().next().value!);
+          this.startMaintenance();
           if (input.appPackage) {
             if (input.mode !== 'control' || !phoneAllowsApp(device, input.appPackage)) throw new PhoneError('PHONE_APP_DENIED', 'Launching requires control mode and an allowed application');
             const epoch = session.report.controlEpoch;
@@ -207,25 +316,171 @@ export class PhoneRuntime {
             try { await this.dispatch(session, { type: 'launch', package: input.appPackage }, observation, context, signal, epoch, false, input.settingsPage); } finally { observation.frame.fill(0); }
           }
           return this.publish(session);
-        } catch (error) { this.repository.release(device.serial, lease); this.sessions.delete(owner); throw error; }
-      } finally { this.openings.delete(owner); }
+        } catch (error) {
+          this.repository.release(device.serial, lease);
+          if (this.sessions.get(owner)?.device.id === deviceId) this.sessions.delete(owner);
+          throw error;
+        }
+      } finally { this.openings.delete(owner); if (requestedDevice) this.deviceOpenings.delete(requestedDevice); }
     }
     const session = this.sessions.get(owner);
-    if (!session || terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Open a phone session first');
-    if ((session.human || (session.report.controlOwner === 'none' && !(input.op === 'resume' && session.controller.signal.aborted))) && input.op !== 'run' && input.op !== 'step') throw new PhoneError('PHONE_PAUSED', 'The user controls this phone. Wait for explicit handback in the phone panel', 409);
+    if (!session || terminal.has(session.report.status)) {
+      const deviceId = this.lastDevices.get(owner);
+      const occupying = deviceId && [...this.sessions.values()].find(value => value.device.id === deviceId && !terminal.has(value.report.status));
+      if (occupying) throw this.busy(deviceId!, occupying);
+      throw new PhoneError('PHONE_OPEN_REQUIRED', 'Open a phone session first');
+    }
+    if (session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Phone execution mode is changing', 409);
+    if (this.deviceOpenings.has(session.device.id)) throw this.busy(session.device.id, session);
+    if (session.human) throw new PhoneError('PHONE_PAUSED', 'The user controls this phone. Wait for explicit handback in the phone panel', 409);
     if (session.active) throw new PhoneError('PHONE_SESSION_BUSY', 'A phone operation is already running', 409);
     this.guard(session, context);
     if (input.op === 'resume') {
+      if (session.modeHandbackRequired) throw new PhoneError('PHONE_PAUSED', 'Inspect the phone and explicitly hand back in the phone panel after changing execution mode', 409);
+      if (session.report.steps.at(-1)?.dispatch === 'unknown') throw new PhoneError('PHONE_DISPATCH_UNKNOWN', 'Inspect the previous input before continuing; do not retry automatically', 409);
       session.controller = new AbortController(); session.report.controlOwner = 'agent'; session.report.controlEpoch!++; session.report.status = 'ready'; session.report.stopReason = undefined; session.report.message = undefined;
       return this.publish(session);
     }
-    if (session.report.status === 'paused' || session.report.status === 'needs_user') throw new PhoneError('PHONE_PAUSED', 'Complete manual interaction and resume the phone session');
-    session.budget = new PhoneOperationBudget(context.config.phone.maxOperationDurationMs); if (session.report.controlOwner === 'agent') session.budget.resume();
+    if (['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(session.report.status)) throw new PhoneError('PHONE_PAUSED', 'Inspect the phone and explicitly hand back control before continuing', 409);
+    if (input.op === 'run' || input.op === 'step') {
+      const previous = session.report.task;
+      const continuing = Boolean(input.taskId && previous?.taskId === input.taskId);
+      const executionMode = input.executionMode ?? (continuing ? previous!.executionMode : this.repository.executionMode(owner) ?? context.config.phone.executionMode);
+      if (continuing && executionMode !== previous!.executionMode) throw new PhoneError('PHONE_MODE_SWITCH_REQUIRED', 'Pause and explicitly switch the current task before changing execution mode', 409);
+      const constraints = [...new Set([...(continuing ? previous!.constraints : []), ...(input.constraints ?? [])])];
+      if (constraints.length > 12) throw new PhoneError('PHONE_CONSTRAINT_LIMIT', 'A phone task supports at most 12 constraints; existing constraints cannot be removed');
+      if (!continuing) { session.trajectory = []; session.trajectorySummary = []; session.taskActiveMs = 0; session.taskStart = { actions: session.report.actions - (session.report.humanActions ?? 0), modelRequests: session.report.modelRequests }; }
+      session.report.task = { taskId: continuing ? previous!.taskId : input.taskId ?? randomUUID(), executionMode, goal: input.goal,
+        constraints,
+        requestedOutputs: input.requestedOutputs ?? (continuing ? previous!.requestedOutputs : []),
+        budget: {
+          maxActions: Math.min(input.budget?.maxActions ?? 80, continuing ? previous!.budget?.maxActions ?? 80 : 80),
+          maxModelRequests: Math.min(input.budget?.maxModelRequests ?? 120, continuing ? previous!.budget?.maxModelRequests ?? 120 : 120),
+          maxActiveDurationMs: Math.min(input.budget?.maxActiveDurationMs ?? 900_000, continuing ? previous!.budget?.maxActiveDurationMs ?? 900_000 : 900_000),
+        }, completion: input.completion, expectText: input.expectText };
+      session.report.executionMode = executionMode;
+      session.segmentUsage = { actions: session.report.actions, modelRequests: session.report.modelRequests, activeDurationMs: 0 };
+      session.report.feedback = { taskId: session.report.task.taskId, segmentId: randomUUID(), executionMode, outcome: 'running', verified: false,
+        verificationLevel: 'none', progress: { completed: [], remaining: ['Current goal has not been verified'], source: 'runtime' },
+        outputs: session.report.task.requestedOutputs.map(output => ({ key: output.key, verification: 'unavailable', reason: 'not_observed' })),
+        evidence: [], usage: { actions: 0, modelRequests: 0, activeDurationMs: 0 }, nextAction: 'wait' };
+      session.taskPending = true; session.report.goalPreview = input.goal.slice(0, 160);
+    }
+    if (session.report.controlOwner === 'none') { session.report.controlOwner = 'agent'; session.report.controlEpoch!++; }
+    const duration = Math.min(context.config.phone.maxOperationDurationMs, context.config.phone.maxSessionDurationMs, session.report.task?.budget?.maxActiveDurationMs ?? 900_000);
+    session.budget = new PhoneOperationBudget(Math.max(1, duration - (session.taskActiveMs ?? 0))); if (session.report.controlOwner === 'agent') session.budget.resume();
     const combined = AbortSignal.any([signal, session.controller.signal, session.budget.controller.signal]);
-    const operation = this.perform(session, input, context, combined);
+    const operation = (async () => {
+      await this.perform(session, input, context, combined);
+      if ((input.op === 'run' || input.op === 'step') && ['ready', 'completed'].includes(session.report.status) && session.report.task?.requestedOutputs.length) {
+        const observation = await this.observe(session, combined);
+        try {
+          this.guard(session, context); this.allowedScreen(session, observation); this.recordObservation(session, observation);
+          const conditions = input.completion || input.expectText ? { ...input.completion, requireChange: false,
+            textAll: [...(input.completion?.textAll ?? []), ...(input.expectText ? [input.expectText] : [])] } : undefined;
+          if (session.report.verified && conditions && !phoneCompletionSatisfied({ ...conditions, textAll: conditions.textAll.length ? conditions.textAll : undefined }, observation, true)) {
+            session.report.verified = false; session.report.verificationLevel = 'none'; session.report.status = 'ready'; session.report.stopReason = 'completion_changed';
+          }
+          const epoch = session.report.controlEpoch;
+          for (const request of session.report.task.requestedOutputs) {
+            if (request.selector) continue;
+            await this.readScreen(session, observation, request.description, context, combined);
+            if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') break;
+            const reading = session.report.readings?.at(-1);
+            if (reading?.source === 'screenshot') {
+              const output = session.report.feedback!.outputs.find(output => output.key === request.key)!;
+              Object.assign(output, { value: reading.text.join('\n') || undefined, source: reading.source, verification: reading.verification,
+                frameId: reading.frameId, capturedAt: reading.capturedAt, reason: reading.reason });
+            }
+          }
+          this.publish(session);
+        } finally { observation.frame.fill(0); }
+      }
+    })();
     session.active = operation;
-    try { return await operation; }
-    finally { session.active = undefined; session.budget?.dispose(); session.budget = undefined; }
+    try { await operation; }
+    catch (error) {
+      if (combined.aborted && combined.reason instanceof PhoneError && combined.reason.code === 'PHONE_OPERATION_TIMEOUT'
+        && !['outcome_unknown', 'closed', 'cancelled'].includes(session.report.status) && session.report.steps.at(-1)?.dispatch !== 'unknown') {
+        session.report.status = 'paused'; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+        session.report.stopReason = 'operation_timeout'; session.report.errorCode = 'PHONE_OPERATION_TIMEOUT';
+      }
+      if (['ready', 'completed'].includes(session.report.status)) {
+        session.report.status = combined.aborted ? 'cancelled' : 'failed'; session.report.verified = false; session.report.verificationLevel = 'none';
+        session.report.errorCode = error instanceof PhoneError ? error.code : 'PHONE_OPERATION_FAILED'; session.report.stopReason = 'operation_failed';
+      }
+      if (error instanceof PhoneError && ['PHONE_ACCESS_CHANGED', 'PHONE_APP_DENIED', 'PHONE_BINDING_CHANGED'].includes(error.code)) {
+        session.report.facts = undefined; session.report.readings = [];
+        if (session.report.feedback) session.report.feedback.outputs = session.report.feedback.outputs.map(output => ({ key: output.key, verification: 'unavailable', reason: error.code }));
+      }
+      this.publish(session); throw error;
+    }
+    finally {
+      session.active = undefined;
+      const elapsed = session.budget?.elapsedMs ?? 0;
+      session.taskActiveMs = (session.taskActiveMs ?? 0) + elapsed;
+      if (session.segmentUsage) session.segmentUsage.activeDurationMs += elapsed;
+      session.budget?.dispose(); session.budget = undefined;
+      if (session.report.status === 'cancelled' && !session.controller.signal.aborted) {
+        session.report.status = 'ready'; session.taskPending = false;
+      }
+      if (session.report.status === 'completed') session.taskPending = false;
+      if (!terminal.has(session.report.status) && !session.human && !['paused', 'needs_user'].includes(session.report.status)) {
+        session.report.controlOwner = 'none'; session.report.controlEpoch!++; this.publish(session);
+      }
+    }
+    return structuredClone(session.report);
+  }
+  async setExecutionMode(owner: string, executionMode: PhoneExecutionMode, context: ExecutionContext, applyCurrent = false, expectedEpoch?: number): Promise<PhoneReport | undefined> {
+    const session = this.sessions.get(owner);
+    if (session && expectedEpoch !== undefined && session.report.controlEpoch !== expectedEpoch) throw new PhoneError('PHONE_CONTROL_STALE', 'Phone control changed; refresh before switching', 409);
+    if (applyCurrent && session?.report.task) {
+      this.guard(session, context);
+      if (session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Phone execution mode is changing', 409);
+      if (session.human || session.report.handoff !== 'idle' || session.report.status === 'needs_user') throw new PhoneError('PHONE_PAUSED', 'Wait for explicit user handback before switching the current task', 409);
+      if (session.report.steps.at(-1)?.dispatch === 'unknown' || session.report.status === 'outcome_unknown') throw new PhoneError('PHONE_DISPATCH_UNKNOWN', 'Inspect the previous input before switching', 409);
+      session.switching = true;
+      try {
+        await this.stop(owner, 'pause');
+        if (session.report.steps.at(-1)?.dispatch === 'unknown') throw new PhoneError('PHONE_DISPATCH_UNKNOWN', 'Inspect the previous input before switching', 409);
+        const observation = await this.observe(session, AbortSignal.timeout(10_000));
+        try { this.guard(session, context); this.allowedScreen(session, observation); this.recordObservation(session, observation); }
+        finally { observation.frame.fill(0); }
+        session.trajectory = []; session.trajectorySummary = []; session.frames.clear();
+        session.report.task = { ...session.report.task, executionMode };
+        session.report.executionMode = executionMode;
+        if (session.report.feedback) session.report.feedback = { ...session.report.feedback, executionMode, segmentId: randomUUID() };
+        session.modeHandbackRequired = true;
+        session.report.stopReason = 'mode_changed';
+        session.report.message = 'Execution mode changed. Inspect and hand back control, then continue the remaining goal with the same taskId.';
+      } finally { session.switching = false; }
+    }
+    this.repository.setExecutionMode(owner, executionMode);
+    return session ? this.publish(session) : undefined;
+  }
+  private busy(deviceId: string, session?: Session): PhoneError {
+    const kind = session?.human ? 'human' : session && ['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(session.report.status) ? 'inspection' : session ? 'agent' : 'opening';
+    return new PhoneError('PHONE_DEVICE_BUSY', kind === 'human'
+      ? 'Phone is under manual control. This task did not start. Hand back control before starting another task.'
+      : kind === 'inspection' ? 'Phone requires inspection in the current conversation. This task did not start.'
+        : 'Phone is occupied by another task or is connecting. This task did not start. View the phone or wait; do not retry automatically.', 409,
+    { executionStarted: false, deviceId, occupancy: { kind, conversationId: session?.report.owner
+      ?? [...this.openings].find(([, controller]) => controller === this.deviceOpenings.get(deviceId))?.[0], sessionId: session?.report.sessionId }, retryPolicy: 'user_initiated' });
+  }
+  private async finishTask(owner: string): Promise<PhoneReport | { status: 'closed' }> {
+    const session = this.sessions.get(owner);
+    if (!session || terminal.has(session.report.status)) return this.status(owner) ?? { status: 'closed' };
+    if (this.deviceOpenings.has(session.device.id)) throw this.busy(session.device.id, session);
+    if (session.human || session.report.status === 'needs_user' || session.report.steps.at(-1)?.dispatch === 'unknown') throw this.busy(session.device.id, session);
+    if (session.active) await this.stop(owner, 'pause');
+    session.controller = new AbortController(); session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+    if (session.report.status !== 'completed') session.report.status = 'ready';
+    session.report.stopReason = 'task_finished';
+    session.taskPending = false;
+    session.report.goalPreview = undefined;
+    session.report.facts = undefined; session.report.readings = undefined; session.report.task = undefined; session.report.feedback = undefined; session.segmentUsage = undefined; session.taskActiveMs = 0; session.taskStart = undefined; session.modeHandbackRequired = false; session.frames.clear();
+    await session.stream?.revoke();
+    return this.publish(session);
   }
   private async perform(session: Session, input: Exclude<PhoneInput, { op: 'open' | 'discover' }>, context: ExecutionContext, signal: AbortSignal): Promise<PhoneReport> {
     let observation: PhoneObservation | undefined;
@@ -344,6 +599,7 @@ export class PhoneRuntime {
             session.report.stopReason = actions ? 'condition_satisfied' : 'condition_present'; return this.publish(session);
           } finally { if (observation !== confirmation) confirmation.frame.fill(0); }
         }
+        if (session.report.actions - (session.report.humanActions ?? 0) - (session.taskStart?.actions ?? 0) >= (session.report.task?.budget?.maxActions ?? 80)) { session.report.status = 'ready'; session.report.stopReason = 'task_action_limit'; return this.publish(session); }
         if (actions >= maxActions) { session.report.status = 'ready'; session.report.stopReason = 'action_limit'; return this.publish(session); }
         let decision: PhoneModelDecision | undefined = numericStep ? { kind: 'action', action: numericStep.action } : undefined;
         let resumedText = false;
@@ -354,11 +610,11 @@ export class PhoneRuntime {
           else recoveryHint = 'The focus transition was not confirmed. No text was sent. Reinspect the intended editable field before another action.';
         }
         if (!decision) {
-          if (session.report.modelRequests >= context.config.phone.maxModelRequests) throw new PhoneError('PHONE_MODEL_LIMIT', 'Phone model request limit reached');
+          if (session.report.modelRequests >= this.modelRequestLimit(session, context)) throw new PhoneError('PHONE_MODEL_LIMIT', 'Phone model request limit reached');
           session.report.modelRequests++; session.report.currentAction = undefined; this.publish(session);
           session.prediction = new AbortController();
           try {
-            decision = await session.adapter.predict({ goal: input.goal, observation, completion, allowedApps: session.device.allowedApps, appAccess: phoneAppAccess(session.device),
+            decision = await session.adapter.predict({ goal: input.goal, task: session.report.task, observation, completion, allowedApps: session.device.allowedApps, appAccess: phoneAppAccess(session.device),
               applications: session.applications.filter(app => phoneAllowsApp(session.device, app.packageName)),
               history: session.report.steps.map(step => step.action), trajectory: session.trajectory,
               progressSummary: JSON.stringify({ dispatched: session.trajectoryCount,
@@ -369,7 +625,7 @@ export class PhoneRuntime {
               await this.waitForAgent(session, signal); observation.frame.fill(0); observation = await this.observe(session, signal); continue;
             }
             if (!signal.aborted && error instanceof PhoneError && ['PHONE_MODEL_PROTOCOL', 'PHONE_MODEL_TRUNCATED'].includes(error.code)
-              && repairs < 1 && session.report.modelRequests < context.config.phone.maxModelRequests) {
+              && repairs < 1 && session.report.modelRequests < this.modelRequestLimit(session, context)) {
               repairs++; session.report.diagnostics!.protocolRepairs++;
               protocolFeedback = 'Your previous output was invalid or truncated. Return exactly one complete action in the specified format with no extra prose.';
               observation.frame.fill(0); observation = await this.observe(session, signal); continue;
@@ -389,7 +645,7 @@ export class PhoneRuntime {
         }
         if (decision.kind !== 'action') {
           if (decision.kind === 'complete' && !session.report.mock && (input.completion || input.expectText)
-            && completionCorrections < 1 && session.report.modelRequests < context.config.phone.maxModelRequests) {
+            && completionCorrections < 1 && session.report.modelRequests < this.modelRequestLimit(session, context)) {
             completionCorrections++; session.report.diagnostics!.completionCorrections++;
             recoveryHint = `Your completion claim is not verified. These required native UI conditions are not all satisfied: ${JSON.stringify({ expectText: input.expectText, ...input.completion })}. Recheck the fresh screen, preserve user constraints, and continue if a safe authorized action can satisfy the goal; otherwise report unfinished.`;
             observation.frame.fill(0); observation = await this.observe(session, signal); continue;
@@ -507,7 +763,7 @@ export class PhoneRuntime {
         return this.publish(session);
       }
       if (failure instanceof PhoneError && failure.code === 'PHONE_OPERATION_TIMEOUT'
-        && !terminal.has(session.report.status) && session.report.status !== 'paused') {
+        && !terminal.has(session.report.status) && session.report.status !== 'paused' && session.report.status !== 'outcome_unknown') {
         session.report.status = 'paused'; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
         session.report.handoff = 'idle'; session.report.errorCode = failure.code;
         session.report.stopReason = 'operation_timeout'; session.report.message = failure.message;
@@ -539,10 +795,14 @@ export class PhoneRuntime {
     }
   }
   private recordObservation(session: Session, observation: PhoneObservation): void {
+    if (session.report.task && session.report.feedback) session.report.feedback.outputs = session.report.task.requestedOutputs.map(output => nativePhoneOutput(output, observation));
     session.report.foregroundApp = observation.package;
     session.report.facts = [...new Set(observation.elements.flatMap(node => node.password ? [] : [node.text, node.description]).filter(Boolean))].slice(0, 60);
     session.report.readings = [{ source: 'native_ui', verification: 'observed', text: session.report.facts,
       frameId: observation.frameId, capturedAt: observation.capturedAt }];
+  }
+  private modelRequestLimit(session: Session, context: ExecutionContext): number {
+    return Math.min(context.config.phone.maxModelRequests, (session.taskStart?.modelRequests ?? 0) + (session.report.task?.budget?.maxModelRequests ?? 120));
   }
   private async readScreen(session: Session, observation: PhoneObservation, goal: string, context: ExecutionContext, signal: AbortSignal): Promise<void> {
     if (session.report.mock) return;
@@ -552,7 +812,7 @@ export class PhoneRuntime {
     this.guard(session, context); this.allowedScreen(session, observation); signal.throwIfAborted();
     if (observation.elements.some(node => node.password)) reading.reason = 'password_field_visible';
     else if (!session.adapter.readScreen) reading.reason = 'model_reading_unavailable';
-    else if (session.report.modelRequests >= context.config.phone.maxModelRequests) reading.reason = 'model_request_limit';
+    else if (session.report.modelRequests >= this.modelRequestLimit(session, context)) reading.reason = 'model_request_limit';
     else {
       session.report.modelRequests++;
       session.prediction = new AbortController();
@@ -619,19 +879,24 @@ export class PhoneRuntime {
     if (!session) return { status: 'closed' };
     session.controller.abort(); session.prediction?.abort(); session.human = undefined; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
     if (op === 'pause') await session.stream?.revoke();
-    else { await session.stream?.close(); session.stream = undefined; }
+    else { session.videoGeneration = undefined; await session.stream?.close(); session.stream = undefined; }
     for (const wake of session.wake) wake();
     session.report.status = op === 'pause' ? 'paused' : op === 'cancel' ? 'cancelled' : 'closed';
     session.report.stopReason = op; if (op !== 'close') session.report.verified = false;
     if (op !== 'pause') {
       session.report.facts = undefined; session.report.message = undefined; session.report.readings = undefined; session.trajectory = []; session.trajectorySummary = []; session.frames.clear();
-      session.adapter = { predict: async () => { throw new PhoneError('PHONE_OPEN_REQUIRED', 'Reopen the phone session'); } };
+      if (op === 'close') session.adapter = { predict: async () => { throw new PhoneError('PHONE_OPEN_REQUIRED', 'Reopen the phone session'); } };
     }
     this.publish(session);
     // Await driver cleanup so resume cannot overlap the previous operation.
     await session.active?.catch(() => {});
     await session.io.catch(() => {});
-    if (op !== 'pause') this.repository.release(session.device.serial, session.lease);
+    if (op === 'close') this.repository.release(session.device.serial, session.lease);
+    if (op === 'cancel') {
+      session.controller = new AbortController(); session.report.status = 'ready'; session.report.controlOwner = 'none';
+      session.taskPending = false;
+      if (session.report.steps.at(-1)?.dispatch === 'unknown') { session.report.status = 'outcome_unknown'; session.report.stopReason = 'inspect_before_retry'; }
+    }
     return this.publish(session);
   }
   private async io<T>(session: Session, work: () => Promise<T>): Promise<T> {
@@ -685,13 +950,18 @@ export class PhoneRuntime {
         if (terminal.has(session.report.status)) { session.frames.clear(); const stream = session.stream; session.stream = undefined; void stream?.close(); continue; }
         try {
           this.guard(session, session.context);
+          const idleLimit = session.context.config.phone.idleDisconnectMs;
+          if (idleLimit && !session.active && !session.human && session.report.controlOwner === 'none'
+            && Date.now() - Math.max(session.viewedAt, session.report.updatedAt) >= idleLimit) {
+            void this.stopDevice(session.device.id); continue;
+          }
           if (session.human && Date.now() > (session.humanExpiresAt ?? 0)) {
             session.human = undefined; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
             session.report.status = 'paused'; session.report.stopReason = 'control_disconnected'; this.publish(session);
             void session.stream?.revoke().catch(() => this.stop(session.report.owner, 'cancel'));
           }
           if (Date.now() - session.viewedAt > 30_000) session.frames.clear();
-        } catch { session.frames.clear(); void this.stop(session.report.owner, 'cancel'); }
+        } catch { session.frames.clear(); void this.stopDevice(session.device.id); }
       }
     }, 3000);
     this.maintenance.unref();
@@ -708,24 +978,29 @@ export class PhoneRuntime {
   }
   liveStatus(owner: string, id: string, context: ExecutionContext, client: string) {
     const session = this.liveSession(owner, id, context);
-    return { report: structuredClone(session.report), ownControl: Boolean(session.human === client), allowedApps: [...session.device.allowedApps], appAccess: phoneAppAccess(session.device), textInput: session.device.textInput ?? 'auto',
+    return { report: { ...structuredClone(session.report), nextExecutionMode: this.repository.executionMode(owner) ?? context.config.phone.executionMode }, ownControl: Boolean(session.human === client), allowedApps: [...session.device.allowedApps], appAccess: phoneAppAccess(session.device), textInput: session.device.textInput ?? 'auto',
       frame: session.frames.get() ? { seq: session.frames.get()!.seq, capturedAt: session.frames.get()!.capturedAt } : null };
   }
   async liveVideo(owner: string, id: string, context: ExecutionContext) {
     const session = this.liveSession(owner, id, context);
     if (terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Phone session ended', 409);
     if (session.streamOpening) return session.streamOpening;
-    const opening = this.openLiveVideo(owner, session);
+    const opening = this.openLiveVideo(session);
     session.streamOpening = opening;
     try { return await opening; }
     finally { if (session.streamOpening === opening) session.streamOpening = undefined; }
   }
-  private async openLiveVideo(owner: string, session: Session): Promise<PhoneInteractiveSession> {
+  private async openLiveVideo(session: Session): Promise<PhoneInteractiveSession> {
     if (!session.stream) {
       // Opening an app publishes its report before the launch dispatch finishes.
       await session.io;
       if (terminal.has(session.report.status)) throw new PhoneError('PHONE_VIDEO_ENDED', 'Phone session ended', 409);
-      const failed = () => { void this.stop(owner, 'cancel'); };
+      const generation = Symbol(); session.videoGeneration = generation;
+      const failed = () => {
+        if (session.videoGeneration !== generation || ![...this.sessions.values()].includes(session)) return;
+        session.videoGeneration = undefined;
+        void this.stop(session.report.owner, 'pause');
+      };
       const provider = session.device.connection
         ? await this.cloud.interactive(session.device, failed)
         : this.interactiveFactory(session.adbPath, session.device.serial, failed);
@@ -788,6 +1063,8 @@ export class PhoneRuntime {
     epoch: number; operationId: string; frameSeq?: number; geometry?: number; action?: PhoneAction;
   }): Promise<unknown> {
     const session = this.liveSession(owner, id, context);
+    if (session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Phone execution mode is changing', 409);
+    if (this.deviceOpenings.has(session.device.id)) throw this.busy(session.device.id, session);
     // Keep the lease alive while a slow native observation occupies the command queue.
     if (input.op === 'heartbeat') {
       if (terminal.has(session.report.status) || input.epoch !== session.report.controlEpoch
@@ -807,6 +1084,7 @@ export class PhoneRuntime {
     const result = session.commands.catch(() => {}).then(async () => {
       if (terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Phone session ended', 409);
       this.guard(session, context);
+      if (session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Phone execution mode is changing', 409);
       if (input.epoch !== session.report.controlEpoch) throw new PhoneError('PHONE_CONTROL_CHANGED', 'Control changed. Refresh before trying again.', 409);
       if (session.human && session.human !== client) throw new PhoneError('PHONE_CONTROL_BUSY', 'Another browser window controls this phone', 409);
       if (input.op === 'cancel') { await this.stop(owner, 'cancel'); return this.liveStatus(owner, id, context, client); }
@@ -846,8 +1124,8 @@ export class PhoneRuntime {
           if (!terminal.has(session.report.status)) session.report.status = 'paused';
           this.publish(session); throw error;
         } finally { observation?.frame.fill(0); }
-        session.report.controlOwner = 'agent'; session.report.status = session.active ? 'running' : 'ready';
-        session.report.handoff = 'idle'; session.report.message = undefined; session.report.stopReason = undefined;
+        session.report.controlOwner = session.active || session.taskPending ? 'agent' : 'none'; session.report.status = session.active ? 'running' : 'ready';
+        session.report.handoff = 'idle'; session.modeHandbackRequired = false; session.report.message = undefined; session.report.stopReason = undefined;
         session.budget?.resume(); this.publish(session); for (const wake of session.wake) wake();
       } else if (input.op === 'recover') {
         if (session.human !== client || Date.now() > (session.humanExpiresAt ?? 0)) throw new PhoneError('PHONE_CONTROL_REQUIRED', 'Take over the phone first', 409);
@@ -878,7 +1156,7 @@ export class PhoneRuntime {
         session.frames.invalidate();
         this.publish(session);
       }
-      return { ...this.liveStatus(owner, id, context, client), resumeTurnRequired: input.op === 'handback' && !session.active };
+      return { ...this.liveStatus(owner, id, context, client), resumeTurnRequired: input.op === 'handback' && !session.active && Boolean(session.taskPending) };
     });
     session.commands = result.catch(() => {
       if (terminal.has(session.report.status)) {
@@ -888,11 +1166,11 @@ export class PhoneRuntime {
     }); session.receipts.set(key, { hash, result });
     return result;
   }
-  async stopDevice(id: string): Promise<void> { await Promise.all(this.reports().filter(report => report.deviceId === id).map(report => this.stop(report.owner, 'cancel'))); this.cloudPhones?.disconnect(id); }
+  async stopDevice(id: string): Promise<void> { this.deviceOpenings.get(id)?.abort(); await Promise.all(this.reports().filter(report => report.deviceId === id).map(report => this.stop(report.owner, 'close'))); this.cloudPhones?.disconnect(id); }
   async shutdown(): Promise<void> {
     this.wireless.close(); this.reconnectAfter.clear();
     await Promise.allSettled(this.reconnecting.values());
-    for (const controller of this.openings.values()) controller.abort(); await Promise.all([...this.sessions.keys()].map(owner => this.stop(owner, 'close'))); this.cloudPhones?.close(); this.sessions.clear(); if (this.maintenance) clearInterval(this.maintenance); this.maintenance = undefined; }
+    for (const controller of this.openings.values()) controller.abort(); await Promise.all([...this.sessions.keys()].map(owner => this.stop(owner, 'close'))); this.cloudPhones?.close(); this.sessions.clear(); this.lastDevices.clear(); if (this.maintenance) clearInterval(this.maintenance); this.maintenance = undefined; }
 }
 
 let runtime: PhoneRuntime | undefined;

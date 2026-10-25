@@ -36,6 +36,35 @@ describe('phone target freshness', () => {
     expect(observationSignature(screen([target]))).toBe(observationSignature({ ...screen([target]), frameId: 'new', capturedAt: 0, frame: Buffer.from('new encoding') }));
     expect(observationSignature(screen([target]))).not.toBe(observationSignature(screen([{ ...target, text: 'changed' }])));
   });
+  it('allows navigation past the labeled Settings uptime without hiding other page changes', () => {
+    const about = { ...target, text: '', description: '关于手机', resourceId: 'com.android.settings:id/collapsing_toolbar', clickable: false, bounds: [0, 0, 600, 80] as PhoneElement['bounds'] };
+    const label = { ...about, text: '开机累计时长', description: '', resourceId: 'android:id/title', bounds: [36, 700, 216, 741] as PhoneElement['bounds'] };
+    const value = { ...about, text: '35:47:09', description: '', resourceId: 'android:id/summary', bounds: [36, 741, 118, 770] as PhoneElement['bounds'] };
+    const before = { ...screen([about, label, value, target]), package: 'com.android.settings' };
+    const fresh = { ...before, elements: [about, label, { ...value, text: '35:47:12' }, target] };
+    expect(observationSignature(before)).toBe(observationSignature(fresh));
+    expect(canDispatchPhoneAction({ type: 'back' }, before, fresh)).toBe(true);
+    expect(canDispatchPhoneAction({ type: 'swipe', start: [500, 800], end: [500, 300], durationMs: 500 }, before, fresh)).toBe(true);
+    expect(canDispatchPhoneAction(tap, before, fresh)).toBe(true);
+    const up = { ...target, text: '', description: '向上导航', resourceId: '' };
+    const withUp = { ...before, elements: [about, label, value, up] };
+    const freshUp = { ...fresh, elements: [about, label, { ...value, text: '35:47:12' }, up] };
+    expect(canDispatchPhoneAction(tap, withUp, freshUp)).toBe(true);
+    expect(canDispatchPhoneAction(tap, { ...withUp, elements: [...withUp.elements, { ...up, bounds: [400, 500, 600, 700] }] },
+      { ...freshUp, elements: [...freshUp.elements, { ...up, bounds: [400, 500, 600, 700] }] })).toBe(false);
+    expect(canDispatchPhoneAction(tap, withUp, { ...freshUp, elements: freshUp.elements.map(node => node === up ? { ...up, description: 'Delete' } : node) })).toBe(false);
+    expect(canDispatchPhoneAction({ type: 'back' }, before, { ...fresh, elements: [about, label, { ...value, text: '35:47:12' }, { ...target, text: 'Delete' }] })).toBe(false);
+    for (const change of [{ package: 'com.other.app' }, { width: 900 }])
+      expect(canDispatchPhoneAction({ type: 'back' }, before, { ...fresh, ...change })).toBe(false);
+    for (const mutation of [
+      (nodes: PhoneElement[]) => nodes.map(node => node === label ? { ...node, text: 'Payment timer' } : node),
+      (nodes: PhoneElement[]) => nodes.map(node => node.resourceId === value.resourceId ? { ...node, editable: true } : node),
+      (nodes: PhoneElement[]) => nodes.map(node => node === label ? { ...node, bounds: [36, 600, 216, 641] as PhoneElement['bounds'] } : node),
+      (nodes: PhoneElement[]) => [...nodes, { ...about, resourceId: 'overlay', text: 'Confirm' }],
+    ]) expect(canDispatchPhoneAction({ type: 'back' }, before, { ...fresh, elements: mutation(fresh.elements) })).toBe(false);
+    const otherBefore = { ...before, package: 'com.other.app' };
+    expect(canDispatchPhoneAction({ type: 'back' }, otherBefore, { ...fresh, package: 'com.other.app' })).toBe(false);
+  });
 });
 
 describe('combined phone UI verification', () => {
