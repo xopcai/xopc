@@ -1,14 +1,19 @@
-export function automationChatCreateHref(prompt: string, projectId?: string): string {
-  const params = new URLSearchParams({ draft: prompt.trim(), setup: 'automation' });
-  const normalizedProjectId = projectId?.trim();
-  if (normalizedProjectId) params.set('projectId', normalizedProjectId);
-  else params.set('projectScope', 'none');
-  return `/chat/new?${params.toString()}`;
+import { automationApi } from './automation-api';
+
+export function automationConfigurationHref(conversationId: string, prompt?: string): string {
+  const params = new URLSearchParams({ setup: 'automation' });
+  if (prompt?.trim()) params.set('draft', prompt.trim());
+  return `/chat/${encodeURIComponent(conversationId)}?${params.toString()}`;
 }
 
-export function automationChatEditHref(automation: { id: string; name: string; projectId?: string }, language: 'zh' | 'en'): string {
-  const prompt = language === 'zh'
-    ? `我想调整定时任务“${automation.name}”（ID：${automation.id}）。请先读取这个任务的当前设置，问我想改什么，确认后更新原任务。`
-    : `Help me adjust the scheduled task “${automation.name}” (ID: ${automation.id}). Read its current settings first, ask what I want to change, then update the existing task after confirmation.`;
-  return automationChatCreateHref(prompt, automation.projectId);
+export async function openAutomationConfigurationChat(input: { automationId?: string; projectId?: string; prompt?: string; runId?: string }): Promise<string> {
+  const { conversationId } = await automationApi.openConfiguration({
+    automationId: input.automationId?.trim() || undefined,
+    projectId: input.projectId?.trim() || undefined,
+    ...(input.runId ? { runId: input.runId } : {}),
+  });
+  const params = new URLSearchParams(input.automationId ? { automation: input.automationId.trim() } : { new: '1', setupChat: conversationId });
+  if (input.projectId?.trim()) params.set('projectId', input.projectId.trim());
+  if (input.prompt?.trim()) params.set('chatDraft', input.prompt.trim());
+  return `/automations?${params.toString()}`;
 }

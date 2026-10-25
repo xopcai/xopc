@@ -21,10 +21,13 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { VirtualMessageRows, type MessageRowDescriptor } from './virtual-message-rows';
 import { hasVisibleMessageRow } from './message-row-visibility';
 
+export interface ChatTimelineEntry { id: string; timestamp: number; content: ReactNode }
+
 const ignoreWelcomePrompt = (_selection: WelcomeSuggestionSelection): void => {};
 
 export const MessageList = memo(function MessageList({
   messages: list,
+  timelineEntries = [],
   personal = false,
   authToken,
   conversationId,
@@ -57,6 +60,7 @@ export const MessageList = memo(function MessageList({
   scrollRef,
 }: {
   messages: Message[];
+  timelineEntries?: ChatTimelineEntry[];
   personal?: boolean;
   authToken?: string;
   conversationId?: string | null;
@@ -98,7 +102,7 @@ export const MessageList = memo(function MessageList({
 
   const [virtualized] = useState(Boolean(scrollRef && list.length >= 300));
 
-  const showWelcome = list.length === 0 && !streaming && !sending;
+  const showWelcome = list.length === 0 && timelineEntries.length === 0 && !streaming && !sending;
 
   if (showWelcome) {
     if (welcomeOverlay) {
@@ -137,8 +141,22 @@ export const MessageList = memo(function MessageList({
     return [{ key: messageRowKey(msg, index), index, aliases: msg.role === 'assistant'
       && list[index - 1]?.role === 'task' && msg.turnId === list[index - 1]?.turnId ? [index - 1] : [] }];
   });
+  rows.push(...timelineEntries.map((entry, offset) => ({ key: entry.id, index: list.length + offset, aliases: [] })));
+  let lastTranscriptTime = 0;
+  const transcriptTimes = list.map(message => {
+    lastTranscriptTime = message.timestamp ?? lastTranscriptTime;
+    return lastTranscriptTime;
+  });
+  if (timelineEntries.length) rows.sort((a, b) => {
+    const time = (index: number) => index < list.length ? transcriptTimes[index] : timelineEntries[index - list.length].timestamp;
+    return time(a.index) - time(b.index) || a.index - b.index;
+  });
   const previousVisibleIndex = new Map(rows.map((row, offset) => [row.index, rows[offset - 1]?.index]));
   const renderRow = (index: number) => {
+    if (index >= list.length) {
+      const entry = timelineEntries[index - list.length];
+      return <div key={entry.id} data-chat-timeline-entry={entry.id}>{entry.content}</div>;
+    }
     const msg = list[index];
     const isStreamRow = isStreamingRow(msg, index);
     const isLastUserRow = index === lastUserIndex;

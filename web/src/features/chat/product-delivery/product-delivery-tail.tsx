@@ -1,3 +1,4 @@
+import { AutomationTaskCard } from '@/features/automations/automation-task-card';
 import type {
   ProductDeliveryEnvelope,
   ProductReference,
@@ -158,6 +159,8 @@ function DeliveryRow({
       attention: taskDetail.data?.attention,
     }, language)
     : [deliveryMeta(delivery, reference, language), reference.summary?.trim()].filter(Boolean).join(' · ');
+
+  if (reference.kind === 'automation' && delivery.operation !== 'failed') return <li className="min-w-0"><AutomationTaskCard automationId={reference.id} language={language} /></li>;
 
   const open = () => {
     if (filePath && canPreviewFile) {

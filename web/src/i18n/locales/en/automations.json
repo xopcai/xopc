@@ -339,7 +339,7 @@
     "form": {
       "advanced": "Advanced settings",
       "advancedDescription": "Safety, delivery, and reliability",
-      "createFlowHint": "Complete the rule in three steps: trigger, action, then safety and results.",
+      "createFlowHint": "Describe what you want done, then choose when to run it.",
       "rulePreview": "Current rule",
       "triggerStepDescription": "Choose when this automation starts: on a schedule, event, webhook, or manually.",
       "actionStepDescription": "Choose what an agent, task, or browser automation does after the trigger.",
@@ -376,7 +376,7 @@
       "searchModels": "Search models",
       "noModels": "No matching models",
       "modelHint": "Overrides the selected agent's default model for this automation.",
-      "instruction": "Instruction",
+      "instruction": "Task content",
       "task": "Task",
       "loadingTasks": "Loading tasks...",
       "noTasks": "No runnable tasks",

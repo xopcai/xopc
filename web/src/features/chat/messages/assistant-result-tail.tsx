@@ -1,3 +1,5 @@
+import { useContext } from 'react';
+import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
 import type { TurnOutcome, TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 import {
   Archive,
@@ -300,7 +302,13 @@ export function AssistantResultTail({
   const inlineApps = productDeliveryInlineApps(visibleDeliveries);
   const inlinePreviews = productDeliveryInlinePreviews(visibleDeliveries);
   const queryState = productDeliveryQueryState(visibleDeliveries);
-  const supersededFileReferences = outcomeFileReferenceKeys(view.outcome);
+  const inAutomationConfiguration = useContext(AutomationConfigurationContext);
+  const supersededFileReferences = new Set(outcomeFileReferenceKeys(view.outcome));
+  if (inAutomationConfiguration) {
+    for (const { delivery, reference } of productDeliveryReferences(visibleDeliveries)) {
+      if (reference.kind === 'automation' && delivery.operation !== 'failed') supersededFileReferences.add(`automation:${reference.id}`);
+    }
+  }
   const productCount = productDeliveryReferences(visibleDeliveries, supersededFileReferences).length;
   const allAttachments = [
     ...outcomeAttachments(view.outcome, language),

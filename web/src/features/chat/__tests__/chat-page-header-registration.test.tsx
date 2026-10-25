@@ -71,6 +71,23 @@ describe('ChatPageHeaderRegistration', () => {
     Object.defineProperty(window, 'electronAPI', { configurable: true, value: undefined });
   });
 
+  it('renders the full inline chat toolbar without replacing the page header', () => {
+    const pageTitle = <span>Scheduled tasks</span>;
+    usePageHeaderStore.setState({ main: pageTitle });
+    act(() => root.render(<MemoryRouter><ChatPageHeaderRegistration inline conversationId="task-chat"
+      chatHeadline="Task conversation" chatAgents={[]} showChatAgentSelector={false} chatAgentId="main"
+      onChatAgentChange={() => {}} chatAgentDisabled={false} hasMessages /></MemoryRouter>));
+    expect(container.querySelector('header')?.textContent).toContain('Task conversation');
+    expect(container.querySelector('[aria-label="Chat menu"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Open workspace tools"]')).not.toBeNull();
+    expect(usePageHeaderStore.getState().main).toBe(pageTitle);
+    act(() => (container.querySelector('[aria-label="Open workspace tools"]') as HTMLButtonElement).click());
+    expect(useWorkspacePanelStore.getState().conversationIdOverride).toBe('task-chat');
+    expect(useRightWorkspaceStore.getState().panes['task-chat']?.open).toBe(true);
+    act(() => root.render(<MemoryRouter />));
+    expect(usePageHeaderStore.getState().main).toBe(pageTitle);
+  });
+
   it('does not clear the shell header while replacing chat session details', () => {
     const states: boolean[] = [];
     const unsubscribe = usePageHeaderStore.subscribe((state) => {

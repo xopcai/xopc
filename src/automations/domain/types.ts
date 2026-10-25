@@ -341,6 +341,7 @@ export interface AutomationDeps {
     getModelForSession?: (conversationId: string) => string | undefined;
   };
   getDefaultAgentId?: () => string;
+  isAgentAvailable?: (agentId: string) => boolean;
   prepareAgentSession?: (input: PrepareAutomationAgentSessionInput) => Promise<void>;
   browserAutomationService?: {
     get(id: string): { revision: number; verified: boolean } | null;

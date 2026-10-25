@@ -166,7 +166,7 @@ function AppShellContent() {
   // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
   const routeKey = pathname.split('/')[1] || 'root';
   /** Routes that scroll inside the page (not on this shell wrapper). */
-  const routeUsesInternalScroll = routeKey === 'chat' || routeKey === 'notes' || routeKey === 'personal';
+  const routeUsesInternalScroll = routeKey === 'chat' || routeKey === 'notes' || routeKey === 'personal' || routeKey === 'automations';
 
   if (isWorkDiscoveryRoute) {
     return (
@@ -273,7 +273,7 @@ function AppShellContent() {
               </div>
               <RightWorkspace scope={workspaceScope}
                 onDockedWidthChange={setWorkspaceDockedWidth}
-                enabled={!isSettingsRoute && (pathname.startsWith('/chat') || pathname === '/personal' || ((Boolean(taskModalId) || pathname.startsWith('/tasks/')) && Boolean(workspaceOverride)))}
+                enabled={!isSettingsRoute && (pathname.startsWith('/chat') || pathname === '/personal' || (pathname === '/automations' && Boolean(workspaceOverride)) || ((Boolean(taskModalId) || pathname.startsWith('/tasks/')) && Boolean(workspaceOverride)))}
                 elevated={Boolean(taskModalId)} />
             </div>
           </div>

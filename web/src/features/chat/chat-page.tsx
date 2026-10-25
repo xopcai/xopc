@@ -1,3 +1,5 @@
+import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
+import { AutomationConfigurationPanel } from '@/features/automations/automation-task-card';
 import { chatVirtualScroll, pauseChatTailFollowing } from '@/features/chat/scroll/chat-virtual-scroll';
 import * as Dialog from '@radix-ui/react-dialog';
 import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
@@ -31,7 +33,7 @@ import {
   conversationPlanFromTaskPlanState,
   extractActiveTurnConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
-import { MessageList } from '@/features/chat/messages/message-list';
+import { MessageList, type ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import { chatScrollBehavior, chatTimelineAnchorIndex } from '@/features/chat/scroll/chat-scroll-geometry';
 import { usePersonalSendTransition } from '@/features/chat/messages/use-personal-send-transition';
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -62,6 +64,7 @@ import {
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { appendNoteContent, createTaskNote, getNote, quickCapture } from '@/features/notes/notes-api';
 import { noteDetailHref } from '@/features/notes/note-detail-route';
+import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
@@ -95,8 +98,10 @@ type EditingUserTurn = {
   turnId: string;
 };
 
-export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome }: {
+export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome, automationWorkspace = false, automationTimelineEntries }: {
   embedded?: boolean;
+  automationWorkspace?: boolean;
+  automationTimelineEntries?: ChatTimelineEntry[];
   conversationId?: string;
   taskId?: string;
   personal?: boolean;
@@ -132,8 +137,19 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     personal,
   });
 
+  useLayoutEffect(() => {
+    if (!automationWorkspace || !session.conversationId) return;
+    const id = session.conversationId;
+    useWorkspacePanelStore.setState({ conversationIdOverride: id });
+    return () => {
+      if (useWorkspacePanelStore.getState().conversationIdOverride === id) {
+        useWorkspacePanelStore.setState({ conversationIdOverride: null });
+      }
+    };
+  }, [automationWorkspace, session.conversationId]);
+
   const skillDiscovery = !personal && !embedded && !taskId && searchParams.get('scene') === 'find-skills';
-  const automationSetup = searchParams.get('setup') === 'automation';
+  const automationSetupRequested = automationWorkspace || searchParams.get('setup') === 'automation';
   const agentSetup = !embedded && !taskId && searchParams.get('agentSetup') === '1';
   const skillQuery = personal ? '' : searchParams.get('skill')?.trim() ?? '';
   const slashQuery = personal ? '' : searchParams.get('slash')?.trim() ?? '';
@@ -145,7 +161,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     setSearchParams(next, { replace: true });
   }, [personal, searchParams, setSearchParams]);
 
-  const draftQuery = searchParams.get('draft') ?? '';
+  const draftQuery = searchParams.get(automationWorkspace ? 'chatDraft' : 'draft') ?? '';
   const autoSendQuery = searchParams.get('autoSend') === '1';
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
   const attachmentsHandoffId = searchParams.get('attachmentsHandoff');
@@ -172,6 +188,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     if (chatConversationId && chatRunUnread) markChatRunViewed(chatConversationId);
   }, [chatConversationId, chatRunUnread, markChatRunViewed]);
   const { data: sessionMetadata } = useChatSessionMetadata(chatConversationId);
+  const automationSetup = automationSetupRequested || Boolean(sessionMetadata?.identity?.customData?.automationSetup);
+  const automationSetupBound = Boolean((sessionMetadata?.identity?.customData?.automationSetup as { automationId?: string } | undefined)?.automationId);
   const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
     if (!chatConversationId) return;
     try {
@@ -225,7 +243,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       const next = new URLSearchParams(searchParams);
       next.delete('skill');
       next.delete('slash');
-      next.delete('draft');
+      next.delete(automationWorkspace ? 'chatDraft' : 'draft');
       if (session.projectPreparation) {
         next.delete('autoSend');
         next.delete('attachmentsHandoff');
@@ -291,6 +309,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     });
   }, [
     auth.hasToken,
+    automationWorkspace,
     skillQuery,
     slashQuery,
     draftQuery,
@@ -324,6 +343,11 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     loadingMore: session.loadingMore,
     loadMoreMessages: session.loadMoreMessages,
   });
+  useEffect(() => {
+    if (!automationWorkspace || !atBottom || !automationTimelineEntries?.length) return;
+    const frame = requestAnimationFrame(() => scrollToBottom(false));
+    return () => cancelAnimationFrame(frame);
+  }, [automationWorkspace, automationTimelineEntries, atBottom, scrollToBottom]);
   const onPersonalSendDispatched = usePersonalSendTransition({
     enabled: personal,
     conversationId: session.conversationId,
@@ -487,7 +511,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
   const showConversationLoading = isLoadingHistory;
   const compactWelcomeLayout =
-    !showConversationLoading && msgSlice.items.length === 0 && !stream.streaming;
+    !showConversationLoading && msgSlice.items.length === 0 && !automationTimelineEntries?.length && !stream.streaming;
   const latestConversationPlan = useMemo(
     () => {
       if (stream.taskPlan) {
@@ -967,13 +991,15 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
+    <AutomationConfigurationContext value={automationSetup}>
+    <div className={cn('flex h-full min-h-0 flex-1 flex-col bg-surface-panel', automationWorkspace ? 'overflow-clip' : 'overflow-hidden')}>
       <ChatRealtimeStatus />
 
-      {!embedded ? <ChatPageHeaderRegistration
+      {!embedded || automationWorkspace ? <ChatPageHeaderRegistration
+        inline={automationWorkspace}
         chatHeadline={skillDiscovery && msgSlice.items.length === 0 ? m.skills.findTitle : chatHeadline}
         chatAgents={agents.chatAgents?.items ?? []}
-        showChatAgentSelector={!agentSetup && agents.showChatAgentSelector}
+        showChatAgentSelector={!automationWorkspace && !agentSetup && agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
         chatAgentDisabled={projectComposer.busy || updatingContext || (isSessionTransitioning && !session.projectPreparation)}
@@ -1062,7 +1088,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             onNext={chatFind.next}
             onClose={chatFind.close}
           />
-          {!embedded ? (
+          {!embedded || automationWorkspace ? (
             <div className="pointer-events-none absolute inset-y-0 left-1/2 z-20 hidden w-full max-w-[calc(var(--max-width-chat-frame)+8rem)] -translate-x-1/2 xl:block">
               <div className="pointer-events-auto absolute inset-y-0 right-0">
                 <ChatTimelineRail
@@ -1078,7 +1104,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             ref={scrollRef}
             data-chat-scroll-viewport
             className={cn(
-              'chat-messages chat-messages--wide-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
+              'chat-messages chat-messages--wide-viewport relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
               compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
             )}
             onScroll={handleChatScroll}
@@ -1087,7 +1113,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             <div className={embedded && !personal ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
               <div
                 data-chat-message-frame
-                className={cn('mx-auto w-full min-w-0', (!embedded || personal) && 'max-w-[var(--max-width-chat-frame)]')}
+                className={cn('mx-auto w-full min-w-0', (!embedded || personal || automationWorkspace) && 'max-w-[var(--max-width-chat-frame)]')}
               >
               {isLoadingHistory ? (
                 <div className="flex min-h-[min(40vh,20rem)] w-full flex-col gap-10 py-8" aria-busy="true">
@@ -1119,7 +1145,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                       <AgentRunErrorBanner errorText={stream.error} />
                     </div>
                   ) : null}
-                  {automationSetup ? <section className="mb-4 rounded-xl border border-edge bg-surface-panel p-4"><h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '一起安排好你的任务' : 'Let’s plan your task'}</h2><p className="mt-1 text-sm text-fg-muted">{msgSlice.items.length === 0 ? (language === 'zh' ? '从你想做的事开始，时间、频率和结果形式都可以慢慢聊。发送下面的内容开始，安排好后再由你确认。' : 'Start with what you want done. We can work out timing, frequency, and results together. Send the message below to begin, then confirm the plan when it’s ready.') : (language === 'zh' ? '继续告诉我你的想法。已安排的任务和每次运行的结果，都可以回到定时任务页查看。' : 'Keep sharing what you have in mind. Visit scheduled tasks to see what’s been arranged and the results of each run.')}</p><Link className="mt-2 inline-block text-sm text-accent" to="/automations">{language === 'zh' ? '查看定时任务' : 'View scheduled tasks'}</Link></section> : null}
+                  {automationSetup && !automationWorkspace && chatConversationId ? <AutomationConfigurationPanel conversationId={chatConversationId} language={language} running={stream.streaming || stream.sending} /> : null}
+                  {automationSetup && !automationWorkspace && msgSlice.items.length > 0 ? <Link className="mb-4 inline-block rounded-md px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover" to="/automations">{language === 'zh' ? '← 定时任务' : '← Scheduled tasks'}</Link> : null}
                   {!embedded && taskId ? (
                     <div className="hidden md:block">
                       <TaskSessionBanner taskId={taskId} />
@@ -1140,6 +1167,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     key={chatConversationId}
                     scrollRef={scrollRef}
                     messages={msgSlice.items}
+                    timelineEntries={automationTimelineEntries}
                     personal={personal}
                     authToken={token ?? undefined}
                     conversationId={session.decodedKey ?? session.conversationId}
@@ -1160,6 +1188,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                           <h2 className="text-2xl font-semibold">{language === 'zh' ? `你好${personalWelcome.addressAs ? `，${personalWelcome.addressAs}` : ''}。我们从哪里开始？` : `Hello${personalWelcome.addressAs ? `, ${personalWelcome.addressAs}` : ''}. Where should we start?`}</h2>
                           <p className="max-w-xl text-sm leading-relaxed text-fg-muted">{personalWelcome.opening ?? (language === 'zh' ? '想讨论问题、整理思路或推进工作，都可以直接说。' : 'Bring a question, an idea, or work to move forward.')}</p>
 
+                        </div>
+                      ) : automationSetup ? (
+                        <div className="mx-auto max-w-xl px-4 py-10 text-center">
+                          <h2 className="text-xl font-semibold text-fg">{automationSetupBound ? (language === 'zh' ? '想怎么调整这个任务？' : 'What would you like to change?') : (language === 'zh' ? '你想安排什么任务？' : 'What would you like to schedule?')}</h2>
+                          <p className="mt-2 text-sm leading-6 text-fg-muted">{automationSetupBound ? (language === 'zh' ? '直接说要改的内容、时间，或告诉我暂停、恢复。' : 'Change what it does or when it runs, or ask to pause or resume.') : (language === 'zh' ? '说说要做的事，时间和细节我们一起确定。' : 'Tell us what to do. We’ll work out the timing and details together.')}</p>
+                          {!automationWorkspace ? <Link className="mt-4 inline-block text-xs text-fg-muted hover:text-fg" to="/automations">{language === 'zh' ? '← 返回定时任务' : '← Back to scheduled tasks'}</Link> : null}
                         </div>
                       ) : agentSetup ? (
                         <AgentSetupWelcome
@@ -1229,7 +1263,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 data-chat-composer-frame
                 className={cn(
                   'pointer-events-auto relative mx-auto w-full min-w-0 pb-[var(--chat-composer-bottom-space)]',
-                  (!embedded || personal) && 'max-w-[calc(var(--max-width-chat-frame)+14px)]',
+                  (!embedded || personal || automationWorkspace) && 'max-w-[calc(var(--max-width-chat-frame)+14px)]',
                   compactWelcomeLayout ? 'pt-2.5' : 'pt-2 sm:pt-4',
                 )}
               >
@@ -1241,7 +1275,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
               <div
                 className="absolute bottom-full right-0 z-20 mb-2 flex items-center rounded-full border border-edge-subtle bg-surface-overlay p-1 shadow-elevated backdrop-blur-sm empty:hidden xl:hidden"
               >
-                {!embedded ? <ChatTimelinePanel
+                {!embedded || automationWorkspace ? <ChatTimelinePanel
                   items={timeline.items}
                   activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
                   labels={timelineLabels}
@@ -1367,7 +1401,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
           </div>
         </div>
       </div>
-      {!embedded && chatConversationId && window.electronAPI?.terminal ? (
+      {(!embedded || automationWorkspace) && chatConversationId && window.electronAPI?.terminal ? (
         <Suspense fallback={null}>
           <ChatTerminalDock key={chatConversationId} conversationId={chatConversationId} />
         </Suspense>
@@ -1444,5 +1478,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       </Dialog.Root>
 
     </div>
+    </AutomationConfigurationContext>
   );
 }

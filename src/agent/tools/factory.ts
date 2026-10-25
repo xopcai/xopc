@@ -703,6 +703,7 @@ export class AgentToolsFactory {
       ...(this.deps.getAutomationService
         ? [
             createAutomationTool({
+              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
               getAutomationService: this.deps.getAutomationService,
               getCurrentAgentId: () => options.agentId,
               getProjectService: this.deps.getProjectService,

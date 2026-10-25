@@ -1,3 +1,4 @@
+import { deliverAutomationCompletion } from './automation-completion-delivery.js';
 import { createPhoneSetupService } from './hono/routes/phone-setup.js';
 import { BrowserSetupService } from '../browser/setup/service.js';
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
@@ -824,6 +825,7 @@ export class GatewayService {
     this.automationService.setDeps({
       agentService: this._agentService,
       getDefaultAgentId: () => getDefaultAgentId(),
+      isAgentAvailable: id => listAgentEntries().some(agent => agent.id === id && agent.enabled !== false),
       prepareAgentSession: (input) => prepareAutomationAgentSession(
         this.sessionIndex.getStore(),
         this.projects,
@@ -1537,6 +1539,7 @@ export class GatewayService {
     this.automationService.setDeps({
       agentService: this.agentService,
       getDefaultAgentId: () => getDefaultAgentId(),
+      isAgentAvailable: id => listAgentEntries().some(agent => agent.id === id && agent.enabled !== false),
       prepareAgentSession: (input) => prepareAutomationAgentSession(
         this.sessionIndex.getStore(),
         this.projects,
@@ -2264,10 +2267,7 @@ export class GatewayService {
     run: AutomationRun,
     context: import('../automations/index.js').AutomationRunDeliveryContext,
   ): Promise<void> {
-    this.emit('automation.run.completed', {
-      run,
-      ...context,
-    });
+    deliverAutomationCompletion(run, context, this.createNotificationService(), (type, payload) => this.emit(type, payload));
   }
 
   private startSessionTranscriptEventIngestion(): void {
