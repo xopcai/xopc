@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ComputerSessionDiagnostics, classifyComputerFailure } from '../diagnostics.js';
 import { ComputerOperationError } from '../errors.js';
+import { computerRecovery } from '../errors.js';
 import { computerReportMeasurements } from '../evaluation.js';
 
 describe('private computer session diagnostics', () => {
+  it('requires local recovery instead of alternate injection after native key refusal', () => {
+    const recovery = computerRecovery('COMPUTER_DRIVER_HOTKEY_REFUSED');
+    expect(recovery).toContain('stopped'); expect(recovery).toContain('Never replay'); expect(recovery).toContain('manually');
+  });
   it('keeps bounded metadata, deduplicates receipts and never equates unchanged input with task failure', async () => {
     let now = 100;
     const report = new ComputerSessionDiagnostics(() => now);
@@ -52,7 +57,7 @@ describe('private computer session diagnostics', () => {
     ['COMPUTER_WINDOWS_TEXT_INPUT_UNVERIFIED', 'permission'], ['COMPUTER_PLATFORM_UNSUPPORTED', 'permission'],
     ['COMPUTER_WINDOWS_KEY_TARGET_REQUIRED', 'permission'], ['COMPUTER_WINDOWS_KEY_TARGET_CHANGED', 'native'],
     ['COMPUTER_WINDOWS_EDIT_TARGET_CHANGED', 'native'], ['COMPUTER_DRIVER_PRESS_KEY_REFUSED', 'native'],
-    ['COMPUTER_DRIVER_HOTKEY_REFUSED', 'native'],
+    ['COMPUTER_DRIVER_HOTKEY_REFUSED', 'native'], ['COMPUTER_DRIVER_CLEANUP_UNCONFIRMED', 'native'],
     ['COMPUTER_WINDOW_APP_CHANGED', 'target'], ['COMPUTER_NATIVE_IDENTITY_UNAVAILABLE', 'target'],
     ['COMPUTER_MODEL_HTTP_429', 'model'], ['COMPUTER_NO_PROGRESS', 'no_progress'], ['COMPUTER_ACTION_BUDGET', 'budget'],
     ['COMPUTER_SEMANTIC_ACTION_UNCONFIRMED', 'native'], ['COMPUTER_EVALUATION_TIMEOUT', 'harness'],

@@ -82,6 +82,13 @@ function host() {
   hosts.push(value); return value;
 }
 const revoked = () => Response.json({ error: { code: 'PRINCIPAL_REVOKED' } }, { status: 403 });
+it('contains background cleanup failures when visibility revokes a driver', async () => {
+  const desktop = host(); state.visible = false;
+  const stop = vi.spyOn(desktop.broker, 'stop').mockRejectedValueOnce(new Error('COMPUTER_DRIVER_CLEANUP_UNCONFIRMED'));
+  desktop.visibilityChanged(); await Promise.resolve(); await Promise.resolve();
+  expect(desktop.snapshot().error).toBe('COMPUTER_DRIVER_CLEANUP_UNCONFIRMED');
+  stop.mockRestore();
+});
 beforeEach(() => {
   state.compatibility.mockResolvedValue(undefined);
   state.language = 'zh';

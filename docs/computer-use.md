@@ -20,6 +20,8 @@ See [Windows input validation evidence](https://github.com/xopcai/xopc/blob/main
 
 The [installed Windows validation](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-windows-installed-validation.md) additionally exercises the production NSIS installer, normal packaged app and bundled Gateway, authenticated session input, signed desktop WebSocket, screenshot uploads, real chat/GUI models, restart and uninstall. Run `node --import tsx scripts/run-computer-windows-installed-validation.mts` after building the installer, in a clean interactive Windows account. Authenticode signing remains a separate release check.
 
+The opt-in [Windows reliability matrix](https://github.com/xopcai/xopc/blob/main/docs/design/technical/windows-computer-reliability.md) covers lost action results, private-driver crashes, hidden control UI and abrupt Gateway exit, plus WinForms/WPF fixtures, Calculator and a limited Notepad case. It records phase timings and stops on unsupported native keys without retrying through global input. CI publishing requirements are unchanged.
+
 ## Set up
 
 1. Install a desktop build that includes Computer Use for your platform.
