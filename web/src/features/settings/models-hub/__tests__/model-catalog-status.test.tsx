@@ -76,13 +76,14 @@ afterEach(async () => {
   });
 });
 
-it.each(['darwin', 'win32', 'linux', undefined])('shows computer setup and its warning only on macOS desktop: %s', async platform => {
+it.each(['darwin', 'win32', 'linux', undefined])('shows computer setup and its warning on supported desktops: %s', async platform => {
   window.electronAPI = platform ? { platform } as Window['electronAPI'] : undefined;
   const container = document.createElement('div');
   root = createRoot(container);
   await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>));
-  expect(Boolean(container.querySelector('a[href="/settings/computer-use"]'))).toBe(platform === 'darwin');
-  expect(Boolean(container.querySelector('.lucide-triangle-alert'))).toBe(platform === 'darwin');
+  const supported = platform === 'darwin' || platform === 'win32';
+  expect(Boolean(container.querySelector('a[href="/settings/computer-use"]'))).toBe(supported);
+  expect(Boolean(container.querySelector('.lucide-triangle-alert'))).toBe(supported);
   expect(container.textContent).toMatch(/Vision|图片理解/);
 });
 

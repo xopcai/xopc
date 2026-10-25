@@ -1,11 +1,10 @@
-import { execFile } from 'node:child_process';
 import { chmod, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
+
+import { runProcessChecked } from '../process/run-process.js';
 
 import { PhoneError } from './contracts.js';
 
-const execute = promisify(execFile);
 const protectWindowsCredential = `
 $ErrorActionPreference = 'Stop'
 $target = $env:XOPC_PHONE_CREDENTIAL_TARGET
@@ -37,9 +36,10 @@ export async function protectPhoneCredential(path: string, directory: boolean): 
     if (info.isSymbolicLink() || (directory ? !info.isDirectory() : !info.isFile())) throw new Error('Invalid credential path');
     if (process.platform === 'win32') {
       // Windows PowerShell must not inherit PowerShell 7's incompatible module path.
-      await execute(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-        ['-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-EncodedCommand', Buffer.from(protectWindowsCredential, 'utf16le').toString('base64')],
-        { windowsHide: true, timeout: 15_000, maxBuffer: 64 * 1024,
+      await runProcessChecked({
+        program: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+        args: ['-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-EncodedCommand', Buffer.from(protectWindowsCredential, 'utf16le').toString('base64')],
+        windowsHide: true, timeoutMs: 15_000, maxOutputBytes: 64 * 1024,
           env: { ...Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toLowerCase() !== 'psmodulepath')), PSModulePath: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'Modules'), XOPC_PHONE_CREDENTIAL_TARGET: path, XOPC_PHONE_CREDENTIAL_DIRECTORY: directory ? '1' : '0' } });
     } else {
       const mode = directory ? 0o700 : 0o600;

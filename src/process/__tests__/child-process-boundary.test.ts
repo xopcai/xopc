@@ -63,7 +63,7 @@ it('keeps new child process launches behind the process runtime boundary', async
   for (const path of await sourceFiles(resolve(repositoryRoot, 'src'))) {
     const source = await readFile(path, 'utf8');
     if (!/^import\s+(?!type\b).*from ['"]node:child_process['"];?$/m.test(source)) continue;
-    const name = relative(repositoryRoot, path);
+    const name = relative(repositoryRoot, path).replaceAll('\\', '/');
     if (!name.startsWith('src/process/') && !allowed.has(name)) violations.push(name);
   }
   expect(violations).toEqual([]);
