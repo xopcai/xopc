@@ -33,6 +33,7 @@ type ActivityState = {
   items: ActivityItem[];
   add: (input: ActivityInput) => void;
   markAllRead: () => void;
+  markRead: (id: string) => void;
   remove: (id: string) => void;
   clearFinished: () => void;
   clear: () => void;
@@ -122,6 +123,11 @@ export const useActivityStore = create<ActivityState>((set) => ({
       persistItems(items);
       return { items };
     }),
+  markRead: (id) => set(state => {
+    const items = state.items.map(item => item.id === id ? { ...item, read: true } : item);
+    persistItems(items);
+    return { items };
+  }),
   remove: (id) =>
     set((state) => {
       const items = state.items.filter((item) => item.id !== id);

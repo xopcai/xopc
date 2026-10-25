@@ -3,7 +3,7 @@ import useSWR from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { automationApi } from '@/features/automations/automation-api';
-import { automationTriggerLabel } from '@/features/automations/automation-display';
+import { automationTriggerLabel, isCompletedOneTimeTask } from '@/features/automations/automation-display';
 import { getLocalApp, getLocalAppSnapshot } from '@/features/local-apps/api';
 import { localAppOpenRoute } from '@/features/local-apps/open-route';
 import { fetchProject } from '@/features/projects/api';
@@ -12,6 +12,7 @@ import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
+import { AutomationRunPreview } from './automation-run-preview';
 import { ProductPreviewSkeleton } from './product-preview-modal';
 import type { ProductPreviewTarget } from './product-preview-route';
 
@@ -37,6 +38,11 @@ const STATES: Record<string, [string, string]> = {
 };
 
 export default function ProductPreviewContent({ target }: { target: ProductPreviewTarget }) {
+  if (target.kind === 'automation' && target.view === 'run') return <AutomationRunPreview automationId={target.id} runId={target.runId} />;
+  return <ProductDetailsPreview target={target} />;
+}
+
+function ProductDetailsPreview({ target }: { target: ProductPreviewTarget }) {
   const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
@@ -68,7 +74,7 @@ export default function ProductPreviewContent({ target }: { target: ProductPrevi
   if (data.kind === 'automation') {
     const automation = data.value;
     const instruction = automation.action.kind === 'agent' ? automation.action.instruction : undefined;
-    return <div className="space-y-6"><div className={sectionClass}><h2 className={headingClass}>{automation.name}</h2><p className={metaClass}>{automation.enabled ? (zh ? '已启用' : 'Enabled') : (zh ? '已停用' : 'Disabled')} · {automationTriggerLabel(automation.trigger, labels.automations, labels.cron, language)}</p>{markdown(automation.description)}{markdown(instruction)}
+    return <div className="space-y-6"><div className={sectionClass}><h2 className={headingClass}>{automation.name}</h2><p className={metaClass}>{isCompletedOneTimeTask(automation) ? (zh ? '已完成' : 'Completed') : automation.enabled ? (zh ? '已启用' : 'Enabled') : (zh ? '已暂停' : 'Paused')} · {automationTriggerLabel(automation.trigger, labels.automations, labels.cron, language)}</p>{markdown(automation.description)}{markdown(instruction)}
       {automation.state.nextRunAtMs && <p className={metaClass}>{zh ? '下次运行' : 'Next run'} · {new Date(automation.state.nextRunAtMs).toLocaleString(zh ? 'zh-CN' : 'en-US')}</p>}
       {automation.state.lastError && <p role="alert" className="text-sm text-danger">{automation.state.lastError}</p>}</div>
       <section className={sectionClass}><h3 className="font-medium text-fg">{zh ? '最近运行' : 'Recent runs'}</h3>{data.runs.length ? data.runs.map((run) => <div key={run.id} className="space-y-2 rounded-lg border border-edge p-3"><p className={metaClass}>{stateLabel(run.status)} · {new Date(run.createdAtMs).toLocaleString(zh ? 'zh-CN' : 'en-US')}</p>{markdown(run.summary)}{run.error && <p className="text-sm text-danger">{run.error}</p>}</div>) : <p className={metaClass}>{zh ? '暂无运行记录。' : 'No runs yet.'}</p>}</section>

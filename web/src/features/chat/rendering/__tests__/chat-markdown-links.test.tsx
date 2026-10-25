@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatMarkdownRenderer as MarkdownView } from '../markdown/chat-markdown-renderer';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
 import { useLocaleStore } from '@/stores/locale-store';
+import { AutomationRunLinkContext } from '../../product-delivery/automation-run-link-context';
 
 const mounted: Array<{ container: HTMLDivElement; unmount: () => void }> = [];
 
@@ -38,7 +39,7 @@ function renderMarkdown(
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[initialEntry]}>
-        <MarkdownView content={content} onWorkspaceFileOpen={onWorkspaceFileOpen} />
+        <AutomationRunLinkContext.Provider value={new Map([['bound-task', 'original-run']])}><MarkdownView content={content} onWorkspaceFileOpen={onWorkspaceFileOpen} /></AutomationRunLinkContext.Provider>
         <LocationProbe />
       </MemoryRouter>,
     );
@@ -48,6 +49,22 @@ function renderMarkdown(
 }
 
 describe('chat Markdown links', () => {
+  it('binds old message links to immutable tool results from the same turn', () => {
+    const container = renderMarkdown('[查看运行情况](xopc://open?kind=automation&id=bound-task)', undefined, '/chat/config');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#/automations?automation=bound-task&view=run&run=original-run');
+  });
+  it('preserves an explicit execution instead of replacing it with a turn binding', () => {
+    const container = renderMarkdown('[查看运行情况](xopc://open?kind=automation&id=bound-task&runId=another-run)');
+    expect(container.querySelector('a')?.getAttribute('href')).toContain('run=another-run');
+  });
+  it('opens legacy run links as execution progress rather than task editing', () => {
+    const container = renderMarkdown('[查看运行情况](xopc://open?kind=automation&id=a1)', undefined, '/chat/config');
+    const anchor = container.querySelector('a');
+    expect(anchor?.getAttribute('href')).toBe('#/automations?automation=a1&view=run');
+    act(() => anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(container.querySelector('[data-location]')?.textContent).toContain('preview=%2Fautomations%3Fautomation%3Da1%26view%3Drun');
+  });
+
   const key = 'agent:coder:webchat:default:direct:chat_801605448ec548c9b90d1c4eb5024727';
   const url = `xopc://open?kind=session&key=${key}`;
 

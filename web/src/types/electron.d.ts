@@ -201,7 +201,6 @@ export type SystemSettingsBehavior = {
   runInBackground: boolean;
   backgroundSupported: boolean;
   openAtLogin: boolean;
-  openAsHidden: boolean;
   keepAwakeEnabled: boolean;
   keepAwakePreferred: boolean;
   notifyEnabled: boolean;
@@ -542,7 +541,6 @@ export interface ElectronSystemSettingsAPI {
   setBehavior(patch: {
     runInBackground?: boolean;
     openAtLogin?: boolean;
-    openAsHidden?: boolean;
     keepAwakePreferred?: boolean;
     notifyEnabled?: boolean;
     notifySoundEnabled?: boolean;

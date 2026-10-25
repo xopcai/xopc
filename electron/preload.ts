@@ -538,7 +538,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     setBehavior: (patch: {
       runInBackground?: boolean;
       openAtLogin?: boolean;
-      openAsHidden?: boolean;
       keepAwakePreferred?: boolean;
       notifyEnabled?: boolean;
       notifySoundEnabled?: boolean;

@@ -101,6 +101,7 @@ import { AutomationQuickCreate } from './automation-quick-create';
 import {
   automationExecutionIssueMarker,
   automationHasExecutionIssue,
+  automationRunFailureSummary,
   latestAutomationRun,
 } from './automation-result-state';
 
@@ -389,6 +390,11 @@ export function AutomationsWorkspace({
     () => automationApi.runEvents(selectedRunId!),
     { refreshInterval: 5_000 },
   );
+  const exactRunSwr = useSWR(
+    selectedRunId ? ['automation-exact-run', selectedRunId] : null,
+    () => automationApi.getRun(selectedRunId!),
+    { refreshInterval: 3000 },
+  );
   const browserAutomationsSwr = useSWR('automation-browser-automations', () => browserAutomationApi.list());
   const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
   const tasksSwr = useSWR('automation-tasks', automationApi.tasks);
@@ -445,8 +451,8 @@ export function AutomationsWorkspace({
     [projectIdParam, runs, systemRuns],
   );
   const selectedRun = useMemo(
-    () => availableRuns.find((run) => run.id === selectedRunId) ?? selectedRunsSwr.data?.runs.find((run) => run.id === selectedRunId) ?? null,
-    [availableRuns, selectedRunId, selectedRunsSwr.data],
+    () => exactRunSwr.data?.run?.id === selectedRunId ? exactRunSwr.data.run : availableRuns.find((run) => run.id === selectedRunId) ?? selectedRunsSwr.data?.runs.find((run) => run.id === selectedRunId) ?? null,
+    [availableRuns, selectedRunId, selectedRunsSwr.data, exactRunSwr.data],
   );
   const selectedAutomation = useMemo(
     () => availableAutomations.find((automation) => automation.id === selectedAutomationId) ?? null,
@@ -1830,7 +1836,7 @@ function RunDiagnosticsPanel({
     );
   }
 
-  const result = run.error || run.summary;
+  const result = run.error ? automationRunFailureSummary(run, language) : run.summary;
   const processLink = run.conversationId
     ? `/chat/${encodeURIComponent(run.conversationId)}`
     : null;

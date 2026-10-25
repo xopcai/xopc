@@ -143,9 +143,10 @@ export function TimePicker({
             align="start"
             sideOffset={6}
             collisionPadding={12}
+            collisionBoundary={portalContainer ?? undefined}
             className={cn(
               popoverZ,
-              'w-[18rem] overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover outline-none',
+              'max-h-[var(--radix-popover-content-available-height)] w-[18rem] overflow-y-auto rounded-xl border border-edge bg-surface-overlay shadow-popover outline-none',
             )}
             onOpenAutoFocus={(event) => {
               event.preventDefault();

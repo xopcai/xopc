@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 
@@ -76,7 +77,7 @@ export async function cleanupStaleTemporaryPreviews(
   root: string,
   now = Date.now(),
 ): Promise<void> {
-  let entries: Awaited<ReturnType<typeof readdir>>;
+  let entries: Dirent<string>[];
   try {
     entries = await readdir(root, { withFileTypes: true, encoding: 'utf8' });
   } catch {

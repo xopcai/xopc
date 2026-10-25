@@ -76,7 +76,7 @@ describe('sidebar menu surfaces', () => {
       root.render(<MemoryRouter><SidebarFooter /></MemoryRouter>);
     });
 
-    expect(container.querySelectorAll('button')).toHaveLength(1);
+    expect(container.querySelector('button[aria-label*="Notifications"], button[aria-label*="通知"]')).not.toBeNull();
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')?.click();

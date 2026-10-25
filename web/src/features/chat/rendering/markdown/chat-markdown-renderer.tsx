@@ -11,7 +11,8 @@ import type { MarkdownViewProps } from '@/components/markdown/markdown-view';
 import { parseWorkspaceFileLinkTarget, type WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
 import { recordStreamingParse, recordStreamingShape } from '@/components/markdown/streaming-render-metrics';
 import { messages } from '@/i18n/messages';
-import { resolveAppLink } from '@/lib/app-link';
+import { resolveAppLink, withAppLinkLabel } from '@/lib/app-link';
+import { AutomationRunLinkContext } from '../../product-delivery/automation-run-link-context';
 import { useAppLinkOpener } from '@/lib/use-app-link-opener';
 import { useLocaleStore } from '@/stores/locale-store';
 import '@/components/markdown/markdown.css';
@@ -38,18 +39,28 @@ const BlockSourceContext = createContext('');
 
 function ChatLink({ node, href = '', children, className, ...props }: ComponentProps<'a'> & { node?: Element }) {
   const environment = useContext(EnvironmentContext)!;
+  const runBindings = useContext(AutomationRunLinkContext);
   const language = useLocaleStore(s => s.language);
   const labels = messages(language).chat.contentLinks;
   const fragment = href.startsWith('#') && !href.startsWith('#/');
-  const intent = resolveAppLink(href);
+  const text = node ? textIn(node).trim() : typeof children === 'string' ? children.trim() : '';
+  let intent = withAppLinkLabel(resolveAppLink(href), text);
+  if (intent.kind === 'internal-route' && intent.route.startsWith('/automations?')) {
+    const url = new URL(intent.route, 'https://xopc.local');
+    const runId = runBindings.get(url.searchParams.get('automation') ?? '');
+    if (url.searchParams.get('view') === 'run' && !url.searchParams.has('run') && runId) {
+      url.searchParams.set('run', runId);
+      intent = { kind: 'internal-route', route: `${url.pathname}${url.search}` };
+    }
+  }
   const target = !href.startsWith('#') && intent.kind !== 'internal-route' && environment.openFile ? parseWorkspaceFileLinkTarget(href) : null;
   if (!fragment && !target && intent.kind === 'blocked') return <>{children}</>;
-  const internal = intent.kind === 'internal-route';
-  const destination = internal ? intent.route.slice(1).split(/[/?#]/, 1)[0] : '';
+  const internalRoute = intent.kind === 'internal-route' ? intent.route : undefined;
+  const internal = Boolean(internalRoute);
+  const destination = internalRoute ? internalRoute.slice(1).split(/[/?#]/, 1)[0] : '';
   const label = (labels.destinations as Record<string, string>)[destination] ?? labels.open;
-  const text = node ? textIn(node).trim() : typeof children === 'string' ? children.trim() : '';
   const visibleLabel = internal && /^(?:xopc:\/\/|#\/|Open(?: in xopc)?$|打开$)/i.test(text) ? label : children;
-  const effectiveHref = internal ? `#${intent.route}` : href;
+  const effectiveHref = internalRoute ? `#${internalRoute}` : href;
   return <a {...props} href={effectiveHref} target={internal || target || fragment ? undefined : '_blank'} rel="noopener noreferrer"
     className={[className, target ? 'markdown-file-link' : ''].filter(Boolean).join(' ') || undefined}
     data-xopc-link-kind={fragment ? 'document-fragment' : target ? undefined : intent.kind}

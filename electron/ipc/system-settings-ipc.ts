@@ -22,6 +22,7 @@ import { openMacosPrivacyPane, openWinPrivacyPane } from './privacy-deep-links.j
 import { assertTrustedRenderer } from './trusted-renderer.js';
 import { hasSystemTray } from '../tray.js';
 import { normalizeElectronUiLanguage, type ElectronUiLanguage } from '../i18n.js';
+import { productNotificationActivationRoute, productNotificationToastXml } from '../product-notification-activation.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -631,7 +632,6 @@ function getBehaviorState(): SystemSettingsBehavior {
     runInBackground: prefs.runInBackground,
     backgroundSupported: hasSystemTray(),
     openAtLogin: login.openAtLogin,
-    openAsHidden: login.openAsHidden ?? false,
     keepAwakeEnabled: powerBlockerId != null,
     keepAwakePreferred: prefs.keepAwakePreferred,
     notifyEnabled: prefs.notifyEnabled,
@@ -648,6 +648,12 @@ export function registerSystemSettingsIpc(
     navigateMainWindow?: (route: string) => void;
   },
 ): void {
+  const nativeActivation = process.platform === 'win32' && typeof Notification.handleActivation === 'function';
+  if (nativeActivation) Notification.handleActivation(details => {
+    if (details.type !== 'click') return;
+    const route = productNotificationActivationRoute(details.arguments);
+    if (route) options?.navigateMainWindow?.(route);
+  });
   ipcMain.handle('system-settings:get-behavior', (event): SystemSettingsBehavior => {
     assertTrustedRenderer(event);
     return getBehaviorState();
@@ -696,18 +702,15 @@ export function registerSystemSettingsIpc(
       patch: Partial<{
         runInBackground: boolean;
         openAtLogin: boolean;
-        openAsHidden: boolean;
         keepAwakePreferred: boolean;
         notifyEnabled: boolean;
         notifySoundEnabled: boolean;
       }>,
     ): Promise<{ ok: true; behavior: SystemSettingsBehavior }> => {
       assertTrustedRenderer(_e);
-      if (typeof patch.openAtLogin === 'boolean' || typeof patch.openAsHidden === 'boolean') {
-        const cur = app.getLoginItemSettings();
+      if (typeof patch.openAtLogin === 'boolean') {
         app.setLoginItemSettings({
-          openAtLogin: typeof patch.openAtLogin === 'boolean' ? patch.openAtLogin : cur.openAtLogin,
-          openAsHidden: typeof patch.openAsHidden === 'boolean' ? patch.openAsHidden : (cur.openAsHidden ?? false),
+          openAtLogin: patch.openAtLogin,
         });
       }
       if (typeof patch.runInBackground === 'boolean') {
@@ -805,13 +808,14 @@ export function registerSystemSettingsIpc(
           title: notificationInput.title,
           body: notificationInput.body,
           silent: !prefs.notifySoundEnabled,
+          ...(nativeActivation ? { toastXml: productNotificationToastXml({ ...notificationInput, silent: !prefs.notifySoundEnabled }) } : {}),
         });
         activeProductNotifications.add(notification);
         const release = () => activeProductNotifications.delete(notification);
         notification.once('close', release);
         notification.once('click', () => {
           release();
-          options?.navigateMainWindow?.(notificationTargetRoute(notificationInput.target, 'web'));
+          if (!nativeActivation) options?.navigateMainWindow?.(notificationTargetRoute(notificationInput.target, 'web'));
         });
         const outcome = await new Promise<'shown' | 'failed' | 'timeout'>((resolve) => {
           let settled = false;

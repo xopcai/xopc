@@ -654,14 +654,14 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('file:read', async (event, filePath: string) => {
     assertTrustedRenderer(event);
     const validation = validateManagedPath(filePath, allowedRoots);
-    if (!validation.ok) throw new Error(validation.error);
+    if (validation.ok === false) throw new Error(validation.error);
     return readFile(filePath, 'utf-8');
   });
 
   ipcMain.handle('file:write', async (event, filePath: string, content: string) => {
     assertTrustedRenderer(event);
     const validation = validateManagedPath(filePath, allowedRoots);
-    if (!validation.ok) throw new Error(validation.error);
+    if (validation.ok === false) throw new Error(validation.error);
     await writeFile(filePath, content, 'utf-8');
     return { success: true as const };
   });
@@ -669,7 +669,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('file:list-dir', async (event, dirPath: string): Promise<FileEntry[]> => {
     assertTrustedRenderer(event);
     const validation = validateManagedPath(dirPath, allowedRoots);
-    if (!validation.ok) throw new Error(validation.error);
+    if (validation.ok === false) throw new Error(validation.error);
     const entries = await readdir(dirPath, { withFileTypes: true });
     const result: FileEntry[] = [];
 
@@ -773,7 +773,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:open-path', async (event, filePath: string) => {
     assertTrustedRenderer(event);
     const validation = await validateOpenPath(filePath);
-    if (!validation.ok) return validation;
+    if (validation.ok === false) return validation;
     const err = await shell.openPath(filePath);
     return err ? { ok: false as const, code: 'OPEN_FAILED' as const, error: err } : { ok: true as const };
   });
@@ -781,9 +781,9 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:open-file-resource', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
     const resolved = await resolveFileResourceHostPath(fileResourceId);
-    if (!resolved.ok) return resolved;
+    if (resolved.ok === false) return resolved;
     const validation = await validateOpenPath(resolved.path);
-    if (!validation.ok) return validation;
+    if (validation.ok === false) return validation;
     const error = await shell.openPath(resolved.path);
     return error ? { ok: false, code: 'OPEN_FAILED', error } : { ok: true };
   });
@@ -791,7 +791,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:open-temporary-file', async (event, input: unknown): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
     const validation = validateTemporarySpreadsheetInput(input);
-    if (!validation.ok) return validation;
+    if (validation.ok === false) return validation;
 
     let staged: Awaited<ReturnType<typeof stageTemporarySpreadsheet>>;
     try {
@@ -822,7 +822,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:show-item-in-folder', async (event, filePath: string) => {
     assertTrustedRenderer(event);
     const validation = await validateOpenPath(filePath);
-    if (!validation.ok) return { success: false as const };
+    if (validation.ok === false) return { success: false as const };
     shell.showItemInFolder(filePath);
     return { success: true as const };
   });
@@ -830,9 +830,9 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:show-file-resource-in-folder', async (event, fileResourceId: unknown) => {
     assertTrustedRenderer(event);
     const resolved = await resolveFileResourceHostPath(fileResourceId);
-    if (!resolved.ok) return { success: false as const, error: resolved.error };
+    if (resolved.ok === false) return { success: false as const, error: resolved.error };
     const validation = await validateOpenPath(resolved.path);
-    if (!validation.ok) return { success: false as const, error: validation.error };
+    if (validation.ok === false) return { success: false as const, error: validation.error };
     shell.showItemInFolder(resolved.path);
     return { success: true as const };
   });
@@ -840,9 +840,9 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:copy-file-resource-path', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
     const resolved = await resolveFileResourceHostPath(fileResourceId);
-    if (!resolved.ok) return resolved;
+    if (resolved.ok === false) return resolved;
     const validation = await validateOpenPath(resolved.path);
-    if (!validation.ok) return validation;
+    if (validation.ok === false) return validation;
     await clipboard.writeText(resolved.path);
     return { ok: true };
   });
@@ -850,9 +850,9 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:trash-file-resource', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
     const resolved = await resolveFileResourceHostPath(fileResourceId);
-    if (!resolved.ok) return resolved;
+    if (resolved.ok === false) return resolved;
     const validation = await validateOpenPath(resolved.path);
-    if (!validation.ok) return validation;
+    if (validation.ok === false) return validation;
     try {
       await shell.trashItem(resolved.path);
       return { ok: true };
@@ -868,7 +868,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:choose-app-and-open-path', async (event, filePath: string): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
     const validation = await validateOpenWithTargetPath(filePath);
-    if (!validation.ok) return validation;
+    if (validation.ok === false) return validation;
     const defaultPath =
       process.platform === 'darwin'
         ? '/Applications'
@@ -894,9 +894,9 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:choose-app-and-open-file-resource', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
     const resolved = await resolveFileResourceHostPath(fileResourceId);
-    if (!resolved.ok) return resolved;
+    if (resolved.ok === false) return resolved;
     const validation = await validateOpenWithTargetPath(resolved.path);
-    if (!validation.ok) return validation;
+    if (validation.ok === false) return validation;
     const defaultPath =
       process.platform === 'darwin'
         ? '/Applications'
@@ -930,7 +930,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     async (event, fileResourceId: unknown, appPath: string): Promise<ShellOpenResult> => {
       assertTrustedRenderer(event);
       const resolved = await resolveFileResourceHostPath(fileResourceId);
-      if (!resolved.ok) return resolved;
+      if (resolved.ok === false) return resolved;
       return spawnOpenWithApp(resolved.path, appPath);
     },
   );
@@ -943,7 +943,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:get-open-with-apps-for-path', async (event, filePath: string) => {
     assertTrustedRenderer(event);
     const validation = await validateOpenWithTargetPath(filePath);
-    if (!validation.ok) return { recommended: [], recent: [] };
+    if (validation.ok === false) return { recommended: [], recent: [] };
     const [recommended, recent] = await Promise.all([
       getRecommendedOpenWithAppsForPath(filePath),
       readRecentOpenWithApps(),
@@ -958,9 +958,9 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('shell:get-open-with-apps-for-file-resource', async (event, fileResourceId: unknown) => {
     assertTrustedRenderer(event);
     const resolved = await resolveFileResourceHostPath(fileResourceId);
-    if (!resolved.ok) return { recommended: [], recent: [] };
+    if (resolved.ok === false) return { recommended: [], recent: [] };
     const validation = await validateOpenWithTargetPath(resolved.path);
-    if (!validation.ok) return { recommended: [], recent: [] };
+    if (validation.ok === false) return { recommended: [], recent: [] };
     const [recommended, recent] = await Promise.all([
       getRecommendedOpenWithAppsForPath(resolved.path),
       readRecentOpenWithApps(),
@@ -982,7 +982,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
   ipcMain.handle('file:watch', async (event, filePath: string) => {
     assertTrustedRenderer(event);
     const validation = validateManagedPath(filePath, allowedRoots);
-    if (!validation.ok) throw new Error(validation.error);
+    if (validation.ok === false) throw new Error(validation.error);
     if (watchers.has(filePath)) return;
     const w = fsWatch(filePath, async () => {
       try {

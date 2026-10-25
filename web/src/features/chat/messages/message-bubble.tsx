@@ -1,4 +1,5 @@
 import { PersonalProvenanceTail } from './personal-provenance-tail';
+import { AutomationRunLinkContext, automationRunBindings } from '../product-delivery/automation-run-link-context';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { AlertCircle, Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
@@ -569,6 +570,7 @@ export const MessageBubble = memo(function MessageBubble({
     : null;
 
   return (
+    <AutomationRunLinkContext.Provider value={automationRunBindings(assistantTurnView?.deliveries ?? [])}>
     <article className={cn(
       'group/msg flex w-full min-w-0',
       isUser ? 'justify-end' : 'justify-start',
@@ -1130,5 +1132,6 @@ export const MessageBubble = memo(function MessageBubble({
         onClose={() => setInlineImagePreview(null)}
       />
     </article>
+    </AutomationRunLinkContext.Provider>
   );
 });

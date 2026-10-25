@@ -81,14 +81,14 @@ export function productDeliveryReferences(
         : [delivery.primary, ...(delivery.related ?? [])];
     return candidates.flatMap((reference, index) => {
       if (!reference) return [];
-      const referenceKey = `${reference.kind}:${reference.id}`;
+      const referenceKey = `${reference.kind}:${reference.id}${reference.runId ? `:${reference.runId}` : ''}`;
       return excludedReferenceKeys?.has(referenceKey)
         ? []
         : [{ key: `${key}:${index}:${referenceKey}`, delivery, reference }];
     });
   });
   const byId = [...new Map(references.map((item) => (
-    [`${item.reference.kind}:${item.reference.id}`, item] as const
+    [`${item.reference.kind}:${item.reference.id}:${item.reference.runId ?? ''}`, item] as const
   ))).values()];
   const taskTitleKeys = new Map<string, string>();
   for (const item of byId) {

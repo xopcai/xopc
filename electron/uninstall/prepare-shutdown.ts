@@ -13,7 +13,6 @@ export function disableOpenAtLogin(): void {
   if (cur.openAtLogin) {
     app.setLoginItemSettings({
       openAtLogin: false,
-      openAsHidden: cur.openAsHidden ?? false,
     });
   }
 }

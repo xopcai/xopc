@@ -23,6 +23,15 @@ const delivery: ProductDeliveryEnvelope = {
 };
 
 describe('product delivery contract', () => {
+  it('round trips an automation execution identity through model links and persisted deliveries', () => {
+    const reference = { kind: 'automation' as const, id: 'task/one', runId: 'run/first', title: 'Progress', capabilities: ['open' as const] };
+    const link = productReferenceDeepLink(reference);
+    expect(parseProductReferenceDeepLink(link)).toEqual({ kind: 'automation', id: 'task/one', runId: 'run/first' });
+    expect(productReferenceRoute(reference)).toBe('/automations?automation=task%2Fone&view=run&run=run%2Ffirst');
+    const result = { version: 2 as const, operation: 'started' as const, primary: reference };
+    expect(parseProductDeliveryText(appendProductDeliveryText('Queued', result))).toEqual(result);
+    expect(appendProductDeliveryText('Queued', result)).toContain('runId=run%2Ffirst');
+  });
   it('validates bounded read-only table and proposed edit presentations', () => {
     const table: ProductDeliveryEnvelope = { version: 2, operation: 'opened', presentation: { kind: 'table', items: [delivery.primary!], truncated: false } };
     expect(parseProductDeliveryText(appendProductDeliveryText('Rows', table))).toEqual(table);

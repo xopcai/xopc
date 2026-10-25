@@ -153,7 +153,7 @@ export function createDesktopEndpointToolDefinitions(desktopApi: () => DesktopTo
       const system = desktopApi().system;
       if (!system) throw new Error('Desktop notifications are unavailable');
       const result = await system.showEndpointNotification({ title, body });
-      if (!result.ok) {
+      if (result.ok === false) {
         if (result.error === 'PERMISSION_DENIED' || result.error === 'NOTIFICATIONS_DISABLED') {
           throw new DOMException('Desktop notification permission is not granted', 'NotAllowedError');
         }
@@ -232,7 +232,7 @@ export function createDesktopEndpointToolDefinitions(desktopApi: () => DesktopTo
       const shell = desktopApi().shell;
       if (!shell?.openExternalUrl) throw new Error('External URL opening is unavailable');
       const result = await shell.openExternalUrl(url.href);
-      if (!result.ok) throw new Error(result.error);
+      if (result.ok === false) throw new Error(result.error);
       return textResult(`Opened ${url.href}`);
     },
   },

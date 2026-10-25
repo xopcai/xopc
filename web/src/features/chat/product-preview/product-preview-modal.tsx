@@ -2,10 +2,14 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ExternalLink, X } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
+import useSWR from 'swr';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { withReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
+import { automationApi } from '@/features/automations/automation-api';
+import { AutomationEditDialog } from '@/features/automations/automation-task-card';
+import { Button } from '@/components/ui/button';
 
 import type { ProductPreviewTarget } from './product-preview-route';
 
@@ -21,9 +25,33 @@ export function ProductPreviewSkeleton() {
 }
 
 export function ProductPreviewModal({ target, backgroundPath, onClose }: { target: ProductPreviewTarget; backgroundPath: string; onClose: () => void }) {
+  if (target.kind === 'automation' && target.view !== 'run') return <AutomationTaskDetailsDialog target={target} backgroundPath={backgroundPath} onClose={onClose} />;
+  return <ReadOnlyProductPreviewModal target={target} backgroundPath={backgroundPath} onClose={onClose} />;
+}
+
+function AutomationTaskDetailsDialog({ target, backgroundPath, onClose }: { target: ProductPreviewTarget; backgroundPath: string; onClose: () => void }) {
+  const language = useLocaleStore(state => state.language);
+  const { data, error, mutate } = useSWR(['automation-card', target.id], () => automationApi.get(target.id), { revalidateOnFocus: false, shouldRetryOnError: false });
+  if (data?.automation) {
+    if (data.automation.action.kind === 'agent' && !data.automation.management) return <AutomationEditDialog automation={data.automation} language={language} onClose={onClose} />;
+    return <ReadOnlyProductPreviewModal target={target} backgroundPath={backgroundPath} onClose={onClose} />;
+  }
+  const zh = language === 'zh';
+  return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}><Dialog.Portal>
+    <Dialog.Overlay className="fixed inset-0 z-65 bg-scrim" />
+    <Dialog.Content className="fixed left-1/2 top-1/2 z-70 flex h-[min(600px,calc(100dvh-2rem))] w-[min(680px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay p-5">
+      <Dialog.Title className="mb-5 font-medium">{zh ? '定时任务详情' : 'Scheduled task details'}</Dialog.Title>
+      <Dialog.Description className="sr-only">{zh ? '查看和编辑定时任务。' : 'View and edit the scheduled task.'}</Dialog.Description>
+      {error ? <div role="alert" className="text-sm text-fg-muted"><p>{zh ? '任务已不存在或暂时无法读取。' : 'This task is unavailable.'}</p><Button variant="secondary" onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></div> : <ProductPreviewSkeleton />}
+      <Button className="mt-auto self-end" variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button>
+    </Dialog.Content>
+  </Dialog.Portal></Dialog.Root>;
+}
+
+function ReadOnlyProductPreviewModal({ target, backgroundPath, onClose }: { target: ProductPreviewTarget; backgroundPath: string; onClose: () => void }) {
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
-  const title = LABELS[target.kind][zh ? 0 : 1];
+  const title = target.kind === 'automation' && target.view === 'run' ? (zh ? '运行情况' : 'Run progress') : LABELS[target.kind][zh ? 0 : 1];
   return <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-[1px]" />
@@ -31,7 +59,7 @@ export function ProductPreviewModal({ target, backgroundPath, onClose }: { targe
         <header className="flex shrink-0 items-center gap-3 border-b border-edge bg-surface-panel px-5 py-3.5">
           <Dialog.Title className="min-w-0 flex-1 truncate font-medium text-fg">{title}</Dialog.Title>
           <Dialog.Description className="sr-only">{zh ? '查看关联内容，或打开独立页面。' : 'Preview related content or open its full page.'}</Dialog.Description>
-          <Link to={withReturnTo(target.href, backgroundPath)} className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink className="size-4" aria-hidden />{zh ? '打开独立页面' : 'Open full page'}</Link>
+          {target.view !== 'run' && <Link to={withReturnTo(target.href, backgroundPath)} className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink className="size-4" aria-hidden />{zh ? '打开独立页面' : 'Open full page'}</Link>}
           <Dialog.Close title={zh ? '关闭预览' : 'Close preview'} aria-label={zh ? '关闭预览' : 'Close preview'} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><X className="size-4" aria-hidden /></Dialog.Close>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8">

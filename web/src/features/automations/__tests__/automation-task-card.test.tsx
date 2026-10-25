@@ -23,6 +23,7 @@ function Location() { const location = useLocation(); return <output>{location.p
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 beforeEach(() => {
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
   vi.mocked(automationApi.get).mockResolvedValue({ automation: task });
@@ -33,6 +34,22 @@ afterEach(() => { act(() => root.unmount()); container.remove(); });
 const button = (text: string) => Array.from(container.querySelectorAll('button')).find(element => element.textContent === text)!;
 
 describe('scheduled task card and shared editor', () => {
+  it('keeps a run card attached to its execution even when task state points to a newer run', async () => {
+    vi.mocked(automationApi.get).mockResolvedValue({ automation: { ...task, state: { ...task.state, lastRunId: 'newer-run' } } as Automation });
+    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><AutomationTaskCard automationId="weekly" runId="original-run" language="zh" /></MemoryRouter></SWRConfig>));
+    const link = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent === '查看运行情况');
+    expect(link?.getAttribute('href')).toBe('/automations?automation=weekly&view=run&run=original-run');
+  });
+  it('saves a completed task without rescheduling or losing its original seconds', async () => {
+    vi.mocked(automationApi.update).mockResolvedValue({ automation: task });
+    const completed = { ...task, enabled: false, trigger: { kind: 'schedule' as const, schedule: { kind: 'once' as const, at: '2020-01-01T01:00:33Z' } } };
+    await act(async () => root.render(<AutomationEditDialog automation={completed} language="zh" onClose={vi.fn()} />));
+    await act(async () => Array.from(document.querySelectorAll('button')).find(element => element.textContent === '保存')!.click());
+    expect(automationApi.update).toHaveBeenCalled();
+    const patch = vi.mocked(automationApi.update).mock.calls.at(-1)![1];
+    expect(patch).not.toHaveProperty('trigger');
+    expect(patch).not.toHaveProperty('enabled');
+  });
   it('saves the execution assistant from advanced settings while preserving the task action', async () => {
     vi.mocked(automationApi.update).mockResolvedValue({ automation: task });
     await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><AutomationEditDialog automation={task} language="zh" onClose={vi.fn()} /></SWRConfig>));
@@ -127,19 +144,19 @@ describe('scheduled task card and shared editor', () => {
     const once = { ...task, trigger: { kind: 'schedule' as const, schedule: { kind: 'once' as const, at: '2099-01-01T09:00:00Z' } } };
     vi.mocked(automationApi.update).mockResolvedValue({ automation: task });
     await act(async () => root.render(<AutomationEditDialog automation={once} language="zh" onClose={vi.fn()} />));
-    const date = document.querySelector<HTMLInputElement>('#automation-once-at')!;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(date, '2099-01-02T10:30');
-      date.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+    await act(async () => (document.querySelector('[aria-label="运行日期"]') as HTMLButtonElement).click());
+    const dateLabel = new Intl.DateTimeFormat('en', { dateStyle: 'full' }).format(new Date(2099, 0, 2, 12));
+    const day = Array.from(document.querySelectorAll<HTMLElement>('[role="gridcell"]')).find(element => element.getAttribute('aria-label') === dateLabel)!;
+    await act(async () => day.click());
     const description = document.querySelector('textarea')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(description, 'Updated description');
       description.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    expect(date.value).toBe('2099-01-02T10:30');
+    expect(document.querySelector('[aria-label="运行日期"]')?.textContent).toContain('2099');
     await act(async () => Array.from(document.querySelectorAll('button')).find(element => element.textContent === '保存')!.click());
-    expect(automationApi.update).toHaveBeenCalledWith(task.id, expect.objectContaining({ trigger: { kind: 'schedule', schedule: { kind: 'once', at: new Date('2099-01-02T10:30').toISOString() } } }));
+    expect(automationApi.update).toHaveBeenCalledWith(task.id, expect.objectContaining({ trigger: { kind: 'schedule', schedule: { kind: 'once', at: new Date(`2099-01-02T${String(new Date('2099-01-01T09:00:00Z').getHours()).padStart(2, '0')}:00`).toISOString() } } }));
   });
 
 });

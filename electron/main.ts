@@ -828,9 +828,13 @@ function createWindow(): void {
   });
 
   mainWindow = win;
-  for (const event of ['hide', 'minimize', 'blur', 'focus', 'show', 'restore'] as const) {
-    win.on(event, () => desktopEndpointHost?.visibilityChanged());
-  }
+  const visibilityChanged = () => desktopEndpointHost?.visibilityChanged();
+  win.on('hide', visibilityChanged);
+  win.on('minimize', visibilityChanged);
+  win.on('blur', visibilityChanged);
+  win.on('focus', visibilityChanged);
+  win.on('show', visibilityChanged);
+  win.on('restore', visibilityChanged);
   win.webContents.on('render-process-gone', () => { void desktopEndpointHost?.broker.stop(); });
   mainWindowNavigationReady = false;
   registerMainWindowStatePersistence(win);

@@ -341,6 +341,7 @@ export const automationApi = {
     if (input.status) params.set('status', input.status);
     return fetchJson<{ items: AutomationResultDeliveryRecord[] }>(apiUrl(`/api/automation-deliveries?${params.toString()}`));
   },
+  getRun: (runId: string) => fetchJson<{ run: AutomationRun }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}`)),
   runEvents: (runId: string) =>
     fetchJson<{ events: AutomationRunEvent[] }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/events`)),
   rerun: (runId: string) =>

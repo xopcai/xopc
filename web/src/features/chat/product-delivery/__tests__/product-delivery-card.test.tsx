@@ -24,6 +24,7 @@ import type { AssistantTurnViewModel } from '@/features/chat/messages/assistant-
 import { productDeliveryReferences } from '@/features/chat/product-delivery/product-delivery-model';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
 
 function LocationProbe() {
   const location = useLocation();
@@ -46,6 +47,15 @@ function renderDelivery(delivery: ProductDeliveryEnvelope, conversationId?: stri
 describe('AssistantResultTail product deliveries', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
+
+  it('keeps the execution card visible inside configuration chat and opens that execution', async () => {
+    const delivery: ProductDeliveryEnvelope = { version: 2, operation: 'started', primary: { kind: 'automation', id: 'automation-1', runId: 'original-run', title: 'Progress', capabilities: ['open'] } };
+    await act(async () => root.render(<MemoryRouter initialEntries={['/chat/config']}><AutomationConfigurationContext.Provider value={true}>{renderDelivery(delivery)}</AutomationConfigurationContext.Provider><LocationProbe /></MemoryRouter>));
+    const link = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent === '查看运行情况');
+    expect(link).toBeDefined();
+    await act(async () => link!.click());
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toContain('run%3Doriginal-run');
+  });
 
   it('shows only the latest task when one turn created duplicate tasks with the same title', () => {
     const deliveries = [
