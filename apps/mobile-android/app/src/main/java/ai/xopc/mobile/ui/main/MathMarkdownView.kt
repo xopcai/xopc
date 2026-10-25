@@ -96,57 +96,60 @@ internal fun MathMarkdownView(source: String, streaming: Boolean, modifier: Modi
   val dark = MaterialTheme.colorScheme.background.luminance() < .5f
   var height by remember { mutableStateOf(48f) }
   Column(modifier = modifier) {
-    if (!enabled) Text(source, modifier = Modifier.fillMaxWidth()) else
-    AndroidView(modifier = Modifier.fillMaxWidth().height(height.dp).testTag("markdown-math"),
-      factory = { androidContext ->
-        WebView(androidContext).apply {
-          setBackgroundColor(android.graphics.Color.TRANSPARENT)
-          settings.javaScriptEnabled = true
-          settings.domStorageEnabled = false
-          settings.blockNetworkLoads = true
-          settings.allowContentAccess = false
-          settings.allowFileAccess = true
-          isVerticalScrollBarEnabled = false
-          addJavascriptInterface(MathBridge { message ->
-            post {
-              val data = runCatching { JSONObject(message) }.getOrNull() ?: return@post
-              val current = tag as? JSONObject ?: return@post
-              if (data.optInt("revision", -1) != current.optInt("revision")) return@post
-              if (data.has("href")) {
-                val href = data.optString("href")
-                if (href.startsWith("https://") || href.startsWith("http://") || href.startsWith("xopc://")) latestLink?.invoke(href)
-              } else {
-                val measured = data.optDouble("height", 48.0)
-                if (measured.isFinite()) height = measured.toFloat().coerceIn(24f, 8192f)
+    if (!enabled) {
+      Text(source, modifier = Modifier.fillMaxWidth())
+    } else {
+      AndroidView(modifier = Modifier.fillMaxWidth().height(height.dp).testTag("markdown-math"),
+        factory = { androidContext ->
+          WebView(androidContext).apply {
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = false
+            settings.blockNetworkLoads = true
+            settings.allowContentAccess = false
+            settings.allowFileAccess = true
+            isVerticalScrollBarEnabled = false
+            addJavascriptInterface(MathBridge { message ->
+              post {
+                val data = runCatching { JSONObject(message) }.getOrNull() ?: return@post
+                val current = tag as? JSONObject ?: return@post
+                if (data.optInt("revision", -1) != current.optInt("revision")) return@post
+                if (data.has("href")) {
+                  val href = data.optString("href")
+                  if (href.startsWith("https://") || href.startsWith("http://") || href.startsWith("xopc://")) latestLink?.invoke(href)
+                } else {
+                  val measured = data.optDouble("height", 48.0)
+                  if (measured.isFinite()) height = measured.toFloat().coerceIn(24f, 8192f)
+                }
+              }
+            }, "XopcMathBridge")
+            webViewClient = object : WebViewClient() {
+              override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                !request.url.toString().startsWith("file:///android_asset/math/")
+              override fun onPageFinished(view: WebView, url: String) {
+                val payload = view.tag as? JSONObject ?: return
+                view.evaluateJavascript("window.xopcMath.update(${payload});", null)
               }
             }
-          }, "XopcMathBridge")
-          webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-              !request.url.toString().startsWith("file:///android_asset/math/")
-            override fun onPageFinished(view: WebView, url: String) {
-              val payload = view.tag as? JSONObject ?: return
-              view.evaluateJavascript("window.xopcMath.update(${payload});", null)
-            }
+            loadUrl("file:///android_asset/math/index.html")
           }
-          loadUrl("file:///android_asset/math/index.html")
-        }
-      },
-      update = { view ->
-        view.setOnLongClickListener { !selectable }
-        view.isLongClickable = selectable
-        val previous = view.tag as? JSONObject
-        val next = JSONObject().put("markdown", source).put("streaming", streaming).put("dark", dark)
-          .put("fontSize", fontSize * density.fontScale)
-        if (previous == null || previous.optString("markdown") != source || previous.optBoolean("streaming") != streaming ||
-          previous.optBoolean("dark") != dark || previous.optDouble("fontSize") != next.optDouble("fontSize")) {
-          next.put("revision", (previous?.optInt("revision") ?: 0) + 1)
-          view.tag = next
-          // JSONObject encodes strings as data; no source interpolation or Gateway credentials.
-          view.evaluateJavascript("window.xopcMath?.update(${next});", null)
-        }
-      },
-      onRelease = { view -> view.removeJavascriptInterface("XopcMathBridge"); view.stopLoading(); view.destroy() })
+        },
+        update = { view ->
+          view.setOnLongClickListener { !selectable }
+          view.isLongClickable = selectable
+          val previous = view.tag as? JSONObject
+          val next = JSONObject().put("markdown", source).put("streaming", streaming).put("dark", dark)
+            .put("fontSize", fontSize * density.fontScale)
+          if (previous == null || previous.optString("markdown") != source || previous.optBoolean("streaming") != streaming ||
+            previous.optBoolean("dark") != dark || previous.optDouble("fontSize") != next.optDouble("fontSize")) {
+            next.put("revision", (previous?.optInt("revision") ?: 0) + 1)
+            view.tag = next
+            // JSONObject encodes strings as data; no source interpolation or Gateway credentials.
+            view.evaluateJavascript("window.xopcMath?.update(${next});", null)
+          }
+        },
+        onRelease = { view -> view.removeJavascriptInterface("XopcMathBridge"); view.stopLoading(); view.destroy() })
+    }
     if (display) TextButton(onClick = {
       if (onCopy != null) onCopy(source) else (context.getSystemService(ClipboardManager::class.java))
         .setPrimaryClip(ClipData.newPlainText("LaTeX", source))
