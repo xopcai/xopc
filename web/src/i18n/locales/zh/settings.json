@@ -169,6 +169,8 @@
         "statusUnavailable": "暂时无法确认连接状态，正在自动重试。请勿关闭此窗口。",
         "readinessFailed": "暂时无法检查远程连接状态。",
         "routeSetupFailed": "安全连接未能建立。请重试，或选择 Tailscale / 自有 HTTPS 连接。",
+        "routeAuthorizationRequired": "已保存的连接密钥被服务拒绝。请重新授权连接，以获取新的密钥。",
+        "routeRecoveryRequired": "此网关的云端租约仍有效，但本机缺少匹配的恢复凭证。请等待租约过期或联系管理员释放该网关的租约，也可选择 Tailscale / 自有 HTTPS 连接。",
         "routeKeyLimitTitle": "XOPC Secure Link 接入密钥已满",
         "routeKeyLimitHint": "当前账号已保留 10 个接入密钥。请在客户端管理页撤销不再使用的旧密钥，返回后重试；这不会影响仍在使用的其它密钥。也可以选择 Tailscale 或自有 HTTPS。",
         "manageTunnelKeys": "管理接入密钥",
