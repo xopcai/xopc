@@ -7,10 +7,23 @@ export function tunnelApiErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== 'object') return undefined;
   const body = (error as { body?: unknown }).body;
   if (!body || typeof body !== 'object') return undefined;
+  const topLevelCode = (body as { code?: unknown }).code;
+  if (typeof topLevelCode === 'string') return topLevelCode;
   const responseError = (body as { error?: unknown }).error;
   if (!responseError || typeof responseError !== 'object') return undefined;
   const code = (responseError as { code?: unknown }).code;
   return typeof code === 'string' ? code : undefined;
+}
+
+/** Older gateways report the broker's rejected registration key as plain text. */
+export function tunnelRegistrationKeyRejected(error: unknown): boolean {
+  return tunnelApiErrorCode(error) === 'TUNNEL_REGISTRATION_KEY_REJECTED'
+    || (error instanceof Error && /\bTunnel register failed: 401\b/.test(error.message));
+}
+
+export function tunnelRecoveryProofRejected(error: unknown): boolean {
+  return tunnelApiErrorCode(error) === 'TUNNEL_RECOVERY_PROOF_REJECTED'
+    || (error instanceof Error && error.message === 'Active lease ownership proof required');
 }
 
 export function tunnelApiRequiresAuthorization(error: unknown): boolean {

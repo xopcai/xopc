@@ -18,6 +18,24 @@ export class TunnelBrokerError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
+export class TunnelRegistrationKeyRejectedError extends TunnelBrokerError {
+  readonly code = 'TUNNEL_REGISTRATION_KEY_REJECTED';
+
+  constructor() {
+    super(401, 'Tunnel register failed: 401');
+    this.name = 'TunnelRegistrationKeyRejectedError';
+  }
+}
+
+export class TunnelRecoveryProofRejectedError extends TunnelBrokerError {
+  readonly code = 'TUNNEL_RECOVERY_PROOF_REJECTED';
+
+  constructor() {
+    super(403, 'Active lease ownership proof required');
+    this.name = 'TunnelRecoveryProofRejectedError';
+  }
+}
+
 const registrationResponseSchema = z.object({
   tunnelId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), tunnelToken: z.string().min(1).max(256),
   subdomain: z.string().regex(/^[a-z0-9]{4,16}$/), publicUrl: z.url(),
@@ -52,6 +70,11 @@ export class TunnelBrokerClient {
     });
     if (!res.ok) {
       log.error({ status: res.status, url }, 'Tunnel register failed');
+      const body = await res.json().catch(() => null) as { code?: unknown; error?: unknown } | null;
+      if (res.status === 403 && body?.code === 'REGISTRATION_DENIED' && body.error === 'Active lease ownership proof required') {
+        throw new TunnelRecoveryProofRejectedError();
+      }
+      if (res.status === 401) throw new TunnelRegistrationKeyRejectedError();
       throw new TunnelBrokerError(res.status, `Tunnel register failed: ${res.status}`);
     }
     const registration = registrationResponseSchema.parse(await res.json());
