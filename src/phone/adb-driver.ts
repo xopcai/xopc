@@ -7,11 +7,16 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { DOMParser } from 'linkedom';
 import sharp from 'sharp';
 
-import { runPhoneCommandBuffer, runPhoneCommandText } from '../process/phone-process.js';
+import { runPhoneCommandText } from '../process/phone-process.js';
 import { managedPhoneAdbPath } from '../runtime-tools/phone-dependency-catalog.js';
 import { parsePhoneApplications, phoneApplicationsCommand } from './applications.js';
 import { readScrcpyServer, scrcpyServerPath } from './scrcpy-assets.js';
 import { PhoneError, type PhoneApplication, type PhoneTextInputStatus, type DiscoveredPhone, type PhoneAction, type PhoneElement, type PhoneObservation } from './contracts.js';
+
+import { readPhoneForeground } from './foreground.js';
+import { runAdb } from './adb-command.js';
+
+export { runAdb } from './adb-command.js';
 
 export function resolveAdbPath(configured?: string, stateDir?: string): string {
   if (configured) return configured;
@@ -22,14 +27,6 @@ export function resolveAdbPath(configured?: string, stateDir?: string): string {
   }
   const managed = managedPhoneAdbPath(stateDir);
   return existsSync(managed) ? managed : 'adb';
-}
-
-export function runAdb(path: string, args: string[], signal?: AbortSignal, timeout = 15_000): Promise<Buffer> {
-  signal?.throwIfAborted();
-  return runPhoneCommandBuffer(path, args, signal, timeout).catch(() => {
-    throw new PhoneError(signal?.aborted ? 'PHONE_CANCELLED' : 'PHONE_ADB_FAILED',
-      signal?.aborted ? 'Phone operation stopped' : `ADB command failed (${args.includes('screencap') ? 'screenshot' : args.includes('devices') ? 'discovery' : 'device operation'}). Check ADB, device authorization and connection.`);
-  });
 }
 
 export function parseAdbDevices(text: string): DiscoveredPhone[] {
@@ -134,12 +131,9 @@ export class AdbPhoneDriver implements PhoneDriver {
     } finally { await this.shell(serial, ['rm', '-f', remote], AbortSignal.timeout(3000)).catch(() => {}); }
   }
   async foreground(serial: string, signal: AbortSignal): Promise<string> {
-    // Filter on Android so cloud foreground sampling does not compete with video bandwidth.
-    const activity = await this.shell(serial, ['sh', '-c', 'dumpsys activity activities | grep -m 1 -E "mResumedActivity|topResumedActivity"'], signal);
-    const app = /(?:mResumedActivity|topResumedActivity)[^\n]*?\s([\w.]+)\//.exec(activity)?.[1];
-    if (!app) throw new PhoneError('PHONE_APP_UNKNOWN', 'Unable to identify the foreground app');
-    return app;
+    return readPhoneForeground(this.command, this.adbPath, serial, signal);
   }
+
   private async shell(serial: string, args: string[], signal: AbortSignal): Promise<string> {
     return (await this.command(this.adbPath, ['-s', serial, 'shell', ...args], signal)).toString();
   }

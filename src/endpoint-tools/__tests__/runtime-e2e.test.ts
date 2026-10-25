@@ -22,12 +22,14 @@ import type { WebSocket as WebSocketType } from 'ws';
 
 import { RealtimeRuntime } from '../../realtime/runtime.js';
 import { EndpointToolRuntime } from '../runtime.js';
+import { openXopcDatabase, closeXopcDatabase } from '../../storage/sqlite/connection.js';
 
 const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
 
 describe('endpoint tools over realtime', () => {
   const roots: string[] = [];
   afterEach(() => {
+    closeXopcDatabase();
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
   });
 
@@ -36,6 +38,7 @@ describe('endpoint tools over realtime', () => {
     const encodedPublicKey = publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
     const root = mkdtempSync(join(tmpdir(), 'xopc-endpoint-e2e-'));
     roots.push(root);
+    openXopcDatabase({ path: join(root, 'xopc.db') });
     const endpoints = new EndpointToolRuntime({
       uploadRoot: root,
       auth: {
@@ -76,7 +79,7 @@ describe('endpoint tools over realtime', () => {
       'sha256', Buffer.from(endpointHelloSigningPayload(unsigned)),
       { key: privateKey, dsaEncoding: 'ieee-p1363' },
     ).toString('base64url');
-    const issued = runtime.tickets.issue('client-1', 'web');
+    const issued = runtime.tickets.issue('client-1', 'web', { principalId: 'principal-1', scopes: ['gateway.admin'] });
     const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`) as WebSocketType;
     await new Promise<void>((resolve, reject) => {
       socket.once('open', resolve);

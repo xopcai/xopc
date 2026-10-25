@@ -4,7 +4,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { AdbSocket } from '@yume-chan/adb';
 import { ReadableStream } from '@yume-chan/stream-extra';
 
-import { CloudAdbConnection } from './cloud-adb.js';
+import { CloudAdbConnection } from './cloud-adb-connection.js';
+import { readPhoneForeground } from './foreground.js';
 import { PhoneError } from './contracts.js';
 import { readScrcpyServer, SCRCPY_VERSION, ScrcpyProvider, ScrcpyVideoParser } from './scrcpy.js';
 
@@ -21,7 +22,7 @@ export class CloudScrcpyProvider extends ScrcpyProvider {
     connect = (address: string, credential: Buffer) => new CloudAdbConnection(address, credential), private textOnly = false) {
     super(onFailure); this.connection = connect(endpoint, key);
   }
-  foreground(signal: AbortSignal): Promise<string> { return this.connection.driver().foreground(this.endpoint, signal); }
+  foreground(signal: AbortSignal): Promise<string> { return readPhoneForeground(this.connection.command.bind(this.connection), '', this.endpoint, signal); }
   protected async startTransport(): Promise<void> {
     const timer = setTimeout(() => this.connection.close(), 20_000);
     try {

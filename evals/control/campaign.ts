@@ -4,7 +4,6 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { TaskScheduler, type ScheduleSnapshot } from '../coder/packages/runner/src/scheduler.js';
 import { RequestPool, startPool, type PoolEndpoint } from './request-pool.js';
@@ -133,7 +132,7 @@ export async function runCampaign(plan: CampaignPlan, root: string, output: stri
         const attemptRoot = attempt === 1 ? directory : join(directory, 'attempts', attemptId);
         if (attempt > 1) mkdirSync(attemptRoot, { recursive: true, mode: 0o700 });
         const args = job.args.map(arg => arg.replaceAll('{output}', attemptRoot));
-        const preload = fileURLToPath(new URL('./request-preload.mjs', import.meta.url));
+        const preload = new URL('./request-preload.mjs', import.meta.url).href;
         const code = await new Promise<number | null>((resolveCode, reject) => {
           const child = spawn(process.execPath, args, { cwd: root, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'],
             env: { ...process.env, XOPC_EVAL_AUDIT_PATH: join(attemptRoot, `${job.id}-model-requests.jsonl`), XOPC_EVAL_POOL_URL: broker.url, XOPC_EVAL_POOL_TOKEN: broker.token,

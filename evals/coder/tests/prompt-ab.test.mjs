@@ -1,3 +1,4 @@
+import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {cpSync,mkdirSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -39,7 +40,7 @@ it('calibrates every new deterministic grader, keeps subjective style pending, a
     if(e.artifact?.startsWith('doc'))events.push({type:'tool.finished',payload:{payload:{toolName:'read_file',status:'success'}}});
    }
    const trace=join(dir,'.xopc-eval-hidden/trace.json');writeFileSync(trace,JSON.stringify({events}));
-   const run=()=>execFileSync('/bin/sh',['-c',c.graders[0].command],{cwd:dir,encoding:'utf8',stdio:'pipe'});
+   const run=()=>execFileSync(process.execPath,['.xopc-eval-hidden/check.mjs',c.id],{cwd:dir,encoding:'utf8',stdio:'pipe'});
    const result=JSON.parse(run().split('DIMENSIONS_JSON=')[1]);
    expect(result.caseId).toBe(c.id);
    if(c.scenario.expectations.some(e=>e.tone))expect(result.manualReviewRequired).toBe(true);
@@ -81,8 +82,8 @@ it('forwards with the actual runtime-installed HTTP dispatcher and automatic con
  const script=`
  import {createServer,request} from 'node:http';
  import {mkdtempSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
- await import(${JSON.stringify(runtimePath)});
- const {createRecorder}=await import(${JSON.stringify(recorderPath)});
+ await import(${JSON.stringify(pathToFileURL(runtimePath).href)});
+ const {createRecorder}=await import(${JSON.stringify(pathToFileURL(recorderPath).href)});
  const upstream=createServer(async(req,res)=>{for await(const chunk of req){}res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({id:'runtime-dispatcher-calibration',model:'deepseek-flash',choices:[],usage:{prompt_tokens:1,completion_tokens:1}}));});
  await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
  const output=mkdtempSync(join(tmpdir(),'prompt-runtime-transport-'));

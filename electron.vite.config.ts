@@ -13,9 +13,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ELECTRON_ESM_CJS_SHIM = `
 // -- CommonJS Shims --
 import __cjs_mod__ from 'node:module';
-const __filename = import.meta.filename;
-const __dirname = import.meta.dirname;
-const require = __cjs_mod__.createRequire(import.meta.url);
+var __filename = import.meta.filename;
+var __dirname = import.meta.dirname;
+var require = __cjs_mod__.createRequire(import.meta.url);
 `;
 
 function tryGitSha(): string {
@@ -31,6 +31,13 @@ const skipRenderer = process.env['ELECTRON_VITE_SKIP_RENDERER'] === '1';
 
 export default defineConfig({
   main: {
+    plugins: [{
+      name: 'xopc:explicit-esm-shim',
+      configResolved(config) {
+        // The banner supplies the shim without scanning bundled strings as imports.
+        config.plugins = config.plugins.filter(plugin => plugin.name !== 'vite:esm-shim');
+      },
+    }],
     build: {
       // Packaged asar only ships minimal node_modules for the gateway subprocess (see
       // scripts/electron-runtime-externals.mjs). Main-process deps (zod, pino, dotenv, …) must

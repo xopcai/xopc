@@ -46,6 +46,9 @@ jobs:
           node-version: 26.12.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build bundled Gateway for Windows integration
+        if: runner.os == 'Windows'
+        run: pnpm run build:node && pnpm run electron:server:build
       - run: pnpm run eval:coder:check
 
   smoke:
