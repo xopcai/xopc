@@ -307,6 +307,7 @@ export class GatewayService {
   private _browserSetup?: BrowserSetupService;
   get browserSetup(): BrowserSetupService {
     return this._browserSetup ??= new BrowserSetupService({
+      verificationOrigin: () => `http://127.0.0.1:${this.getEffectiveListenPort()}`,
       getConfig: () => this.currentConfig,
       saveConfig: (next, expected) => this.saveConfig(next, expected),
       endpoints: this.endpointTools,
@@ -776,6 +777,7 @@ export class GatewayService {
       getBrowserAutomationService: () => this.browserAutomations,
       getBrowserSetupService: () => this.browserSetup,
       getPhoneSetupService: () => this.phoneSetup,
+      canConfigureEndpoint: endpointId => this.realtime.canConfigureEndpoint(endpointId),
       emitBrowserEvent: (type, payload) => this.emit(type, payload),
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,

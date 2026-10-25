@@ -3,11 +3,11 @@
 - Existing installation repair: inspect installation health and toolPermission, even if an older
   setup completed. If files need repair, start a new reviewed setup in this conversation;
   keep the existing endpoint and pairing identity. Never reinstall or re-pair a healthy connection.
-- Files missing or INSTALLATION_REQUIRED: use the panel's preparation action after owner approval.
+- Files missing or INSTALLATION_REQUIRED: use prepare with the latest expectedRevision in this authorized conversation.
 - Files prepared but no endpoint: guide Chrome loading and opening its side panel, then recheck.
 - Old extension: reload xopc in chrome://extensions, open the side panel and recheck.
 - LOCAL_OWNER_REQUIRED: open setup on the Gateway computer; use Device access for remote pairing.
-- Multiple endpoints: let the owner select the correct Chrome in the panel.
+- Multiple endpoints: ask which Chrome the user intends, then pass its exact endpointId to begin_verification.
 - CONFIG_CHANGED: preserve the latest manual configuration and start a reviewed replacement plan.
 - TAB_ALREADY_ATTACHED: ask the user to release the current tab before the independent demo.
 - Verification stopped, timeout, action failure or target changed: close the verification session

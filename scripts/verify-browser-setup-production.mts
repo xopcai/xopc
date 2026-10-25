@@ -1,3 +1,4 @@
+// Historical panel-based acceptance for d03530103; current setup uses verify-conversational-setup-live.mts.
 // Real-model, production pairing + Realtime acceptance. All App and Chrome state is isolated.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';

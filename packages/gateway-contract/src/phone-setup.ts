@@ -7,7 +7,7 @@ export interface PhoneSetupView {
     model: { ref?: string; chatRef?: string; source?: 'system' | 'global' | 'agent'; supported: boolean; configured: boolean };
     dependencies: Array<{ kind: 'adb' | 'scrcpy'; state: string; version?: string; canInstall: boolean }>;
     devices: Array<{ id: string; name: string; source: 'local' | 'aliyun'; enabled: boolean; settingsAllowed: boolean }>;
-    localDiscovery: Array<{ name: string; state: string; emulator: boolean }>;
+    localDiscovery: Array<{ serial?: string; name: string; state: string; emulator: boolean }>;
     diagnostic?: string;
   };
   checks: { configured: boolean; read: boolean; operated: boolean; verified: boolean; released: boolean };

@@ -1,22 +1,19 @@
 # Browser setup
 
-Read tool_manual({tool:"xopc_use",topic:"browser_setup"}); if tool_search is available, discover
-the exact xopc_use tool before its first invocation. Then call
-xopc_use({mode:"browser_setup",command:"inspect"}). Configuration is shared across the Gateway;
-actual browser actions still obey the current Agent's tool and action policy.
+Read tool_manual({tool:"xopc_use",topic:"browser_setup"}), discover xopc_use if needed, then
+call browser_setup inspect. Explain the intended outcome and carry out missing preparation
+with tools; all guidance and progress in chat are ordinary text, never an embedded setup UI.
 
-After inspect selects the extension route, read chrome-extension.md before start or explaining
-installation steps. For the user's current Chrome this is the supported branch. Other modes remain in Settings → Browser;
-remote Chrome pairing is in Device access. Do not install Gateway-host files as though they were
-on another computer. Use existing connections when appropriate; never switch a working driver
-without explaining the shared impact.
+For the user's signed-in local Chrome, read chrome-extension.md. Reuse a healthy extension
+and pairing. Other browser modes remain available in existing Browser settings; explain any
+shared driver change and get the user's choice before switching a working configuration.
+The setup runs on the Gateway computer, which may differ from the computer displaying chat.
 
-start {} creates/reuses a setup tied to this conversation and Agent. Its settingsPath opens the
-owner setup panel, also shown in chat. Owner approval permits preparing files and enabling the
-extension configuration. If tools are unavailable, provide the returned settings entry and the
-remaining action rather than shell/file fallbacks. No arbitrary config paths are accepted.
+start creates or reuses the conversation's setup. After preparation, recheck actual connection,
+identify the intended Chrome, then use begin_verification and the normal browser_use tool.
+Report prepared files, connected extension, actual interaction and release separately.
+If human intervention is needed, give the exact step and relevant settingsPath as an ordinary
+link to the existing settings page. Resume this conversation after the user returns.
 
-For repair requests, inspect installation health even when an earlier run completed. Load
-troubleshooting.md on missing files, denied toolPermission or interrupted verification. Reuse
-the saved run while unfinished; a completed run can be followed by a new repair plan in the
-same conversation. Never reuse successful evidence for a new verification attempt.
+On interruption inspect the saved run and real state; never reuse old successful evidence for
+a new attempt. Browser policy and native permission refusals remain authoritative.

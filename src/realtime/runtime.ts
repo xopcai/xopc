@@ -68,6 +68,15 @@ function isAuthorizedTopic(topic: string, scopes: readonly GatewayScope[]): bool
 }
 
 export class RealtimeRuntime {
+  private readonly setupAuthorities = new Map<string, { connectionId: string; principalId: string; connected: () => boolean }>();
+
+  /** Configuration writes require a live endpoint authenticated with Gateway administrator scope. */
+  canConfigureEndpoint(endpointId: string): boolean {
+    const grant = this.setupAuthorities.get(endpointId);
+    return Boolean(!this.closed && grant && grant.connected() && this.isPrincipalActive(grant.principalId)
+      && this.endpointTools?.registry.isCurrentConnection(endpointId, grant.connectionId));
+  }
+
   readonly broker = new RealtimeBroker(undefined, (error, topic) => {
     log.warn({ err: error, topic }, 'Realtime subscriber failed');
   });
@@ -123,6 +132,7 @@ export class RealtimeRuntime {
     this.topicCleanupTimers.clear();
     this.wss.close();
     this.socketsByPrincipal.clear();
+    this.setupAuthorities.clear();
   }
 
   disconnectPrincipal(principalId: string): void {
@@ -295,6 +305,8 @@ export class RealtimeRuntime {
               transport,
             );
             endpointId = message.payload.endpoint.endpointId;
+            this.setupAuthorities.delete(endpointId);
+            if (hasGatewayScope(claim.scopes, 'gateway.admin')) this.setupAuthorities.set(endpointId, { connectionId, principalId: claim.principalId, connected: () => socket.readyState === 1 });
             endpointReady = { endpointId, turnToken: registration.turnToken };
           } catch (error) {
             if (error instanceof EndpointToolPolicyError) {
@@ -356,6 +368,7 @@ export class RealtimeRuntime {
       writer.close();
       for (const handle of subscriptions.values()) handle.unsubscribe();
       subscriptions.clear();
+      if (endpointId && this.setupAuthorities.get(endpointId)?.connectionId === connectionId) this.setupAuthorities.delete(endpointId);
       guardConnection('endpoint_remove', () => {
         if (endpointId && connectionId) this.endpointTools?.remove(endpointId, connectionId);
       });

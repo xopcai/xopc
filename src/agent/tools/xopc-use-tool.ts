@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+
+import { getEmbeddedExecutionRunId } from '../embedded/execution-context.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import { localAppCapabilities } from '../../local-apps/capabilities/runtime.js';
 import { CapabilityCallSchema } from '@xopcai/gateway-contract';
@@ -108,6 +110,7 @@ export interface XopcUseToolInput {
 }
 
 export interface XopcUseToolDeps {
+  canConfigureFromConversation?: () => boolean;
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   authorizeCapability?: CapabilityContext['authorize'];
@@ -1302,7 +1305,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
         if (!service || !conversationId || !agentId) return errorText('Phone setup requires a Gateway conversation. Open Settings → Phone Use.', details);
         if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.phone_setup.${command}`, args)) return errorText('Phone setup access denied', details);
         try {
-          return okText({ ...details, result: await service.command(command, args, { conversationId, agentId }, dryRun) });
+          return okText({ ...details, result: await service.command(command, args, { conversationId, agentId, canConfigure: deps.canConfigureFromConversation?.() === true, runId: getEmbeddedExecutionRunId() }, dryRun) });
         } catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
       }
       if (mode === 'browser_setup') {
@@ -1312,7 +1315,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
         if (!service || !conversationId || !agentId) return errorText('Browser setup requires a Gateway conversation. Open Settings → Browser.', details);
         if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.browser_setup.${command}`, args)) return errorText('Browser setup access denied', details);
         try {
-          return okText({ ...details, result: await service.command(command, args, { conversationId, agentId }, dryRun) });
+          return okText({ ...details, result: await service.command(command, args, { conversationId, agentId, canConfigure: deps.canConfigureFromConversation?.() === true }, dryRun) });
         } catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
       }
       if (mode === 'local_app' && (command === 'capabilities' || command === 'invoke')) {

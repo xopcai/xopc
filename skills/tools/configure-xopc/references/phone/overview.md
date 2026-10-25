@@ -1,30 +1,25 @@
 # Phone setup
 
-Read tool_manual({tool:"xopc_use",topic:"phone_setup"}). Discover xopc_use if not already
-loaded. Call mode phone_setup inspect, then start to create/reuse a setup in this conversation.
-Inspect before asking questions; reuse healthy registrations and matching model configuration.
-Read models.md only for missing/unsupported models, dependencies.md for missing dependencies,
-then only the owner's chosen local.md or aliyun.md branch. Missing scrcpy only limits video
-and Unicode input; it does not block the Settings screenshot/navigation acceptance. State this
-when reporting dependencies instead of asking the owner to install an optional prerequisite. Load troubleshooting.md on refusal
-or failure, acceptance.md only when the owner starts a test.
+Read tool_manual({tool:"xopc_use",topic:"phone_setup"}), discover xopc_use if needed, then
+inspect and start. Carry out missing configuration through tools; use ordinary conversation
+for guidance, choices, progress and results. Never ask for an embedded chat configuration UI.
+Reuse healthy registrations, model configuration and the user's prior device/source choices.
 
-Explain outcomes: xopc can observe and operate the explicitly selected Android phone through
-a dedicated action model. Chat model, Phone model, software dependencies, connection, actual
-UI verification and release are distinct. A registered/enabled phone is not proof of a live
-connection; describe it as registered until a connection check or actual PhoneRuntime operation
-confirms it is online. Setup configuration is shared on the Gateway host;
-a USB cable to the browser computer cannot connect a different remote Gateway.
+Use source {setupId,source:"local"|"aliyun",expectedRevision} after identifying the desired
+route. Ask only if it is unclear. Use configure {setupId,enabled:true,expectedRevision} when
+Phone Use is disabled. This does not enable a denied Agent tool or widen device app access.
+Read models.md for a missing model, dependencies.md for missing software, then local.md or
+aliyun.md for the selected route. scrcpy is optional for basic screenshot/navigation testing.
 
-Use the chat setup panel. The owner chooses local or Aliyun and the exact registered phone;
-do not silently choose the first/default device or buy a phone. Configuration writes, downloads,
-private-key upload, app access and paid tests remain in existing product controls. Model tools
-can inspect/start/get/recheck/cancel/report; begin_verification returns the owner action.
-After saving configuration, direct the user to “授权并开始安全验收” / “Approve and start safe test”
-in this chat. That button sends the continuation itself; do not require an additional “好了”
-message after the owner starts the test.
-Do not write config, credentials, durable_state, Android keys or cloud account settings yourself.
+The Phone action model is separate from chat. A registered/enabled device is not yet a proven
+live connection. Connections and dependency installation run on the Gateway computer.
+When configuration is ready, explain the exact phone, Settings-only goal, screenshot sharing
+and possible model cost. Reuse existing user authorization; ask if the device or scope is
+ambiguous. Use begin_verification {setupId,deviceId,expectedRevision} and carry out acceptance.md
+with phone_use, then close and read verification_report. No chat test button is needed.
 
-A conversation may show other phone tasks: never replace or close those sessions. Setup uses
-its own narrowly scoped test owner; cancellation and release operate only that test. If the
-Agent's phone_use policy is denied, do not change identity or permission to bypass it.
+Only human-only work should be handed back: connect/unlock a physical phone, accept its RSA
+prompt, supply credentials through the secure existing settings page, perform OAuth/login,
+or review and purchase a cloud phone. Give a precise next action and ordinary link when
+needed, then recheck and resume the same conversation. Never ask for keys in chat, purchase
+an instance, edit config files directly, or replace another phone task's session.

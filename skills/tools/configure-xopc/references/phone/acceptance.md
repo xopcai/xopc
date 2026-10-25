@@ -1,6 +1,8 @@
 # Phone basic acceptance
 
-Read phone_setup get {setupId}. Only a verifying, non-stale attempt is approved. Otherwise
+After explaining the test and resolving the intended phone with the user, call phone_setup
+begin_verification {setupId,deviceId,expectedRevision}, then get {setupId}. Only a verifying,
+non-stale attempt is approved. Otherwise
 explain the remaining owner action. Read tool_manual phone_use; discover that exact tool only
 if not already declared. Use only the attempt's selected device, goal, completion and budget.
 
@@ -17,8 +19,8 @@ if not already declared. Use only the attempt's selected device, goal, completio
 For interruption, inspect status and saved setup before any action; do not open over an active
 session or replay an uncertain action. A resumed test still uses the same pinned owner/device.
 If already verified, only close and report. If paused, stopped, stale, expired, failed or a Gateway restart
-lost the runtime session, use the owner's Release test phone action, confirm lease expiry if
-needed, then let the owner begin a new test. Never adopt another phone or prior session report.
+lost the runtime session, use phone_setup release {setupId}, confirm lease expiry if
+needed, then begin a new test after the cause is resolved and the user still wants to continue. Never adopt another phone or prior session report.
 
 This test verifies screenshot observation, model-driven Settings navigation, native UI matching
 and control release. It does not verify payment, login, arbitrary apps, typing or live video.

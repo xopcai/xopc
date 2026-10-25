@@ -8,7 +8,6 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { BrowserSettingsDisclosure } from './browser-settings-disclosure';
-import { BrowserSetupPanel } from './browser-setup-panel';
 import { BrowserStatusPanel } from './browser-status-panel';
 import { AgentDefaultsRouteLayout } from './browser-settings-route-layout';
 import { useAgentDefaultsForm } from './use-browser-settings-form';
@@ -48,7 +47,6 @@ export function AgentBrowserSettingsPage() {
     >
       {form ? <>
 
-        {searchParams.get('browserSetup') && searchParams.get('conversationId') && <BrowserSetupPanel conversationId={searchParams.get('conversationId')!} requested />}
 
         <section className="rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5" aria-label={zh ? '浏览器控制设置' : 'Browser control settings'}>
           <div className="flex items-center gap-3">

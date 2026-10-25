@@ -20,6 +20,7 @@ export const browserConfigRevision = (config: Config) => createHash('sha256').up
 
 export interface BrowserSetupDeps {
   getConfig: () => Config;
+  verificationOrigin?: () => string;
   saveConfig: (next: Config, expected: Config) => Promise<{ saved: boolean; error?: string }>;
   endpoints: EndpointToolRuntime;
   canUseBrowser: (agentId: string) => boolean;
@@ -31,7 +32,7 @@ export interface BrowserSetupDeps {
   doctor: () => Promise<{ installed: boolean; needsRefresh?: boolean; extensionDir?: string; nativeHost?: { installed: boolean } }>;
 }
 
-/** Mutations require a local-owner grant created by the product UI, never model-supplied identity. */
+/** Setup writes use host-authorized interactive turns or existing owner grants. */
 export class BrowserSetupService {
   private readonly preparing = new Set<string>();
   constructor(private readonly deps: BrowserSetupDeps) {}
@@ -61,7 +62,9 @@ export class BrowserSetupService {
       checks: { configured: this.deps.getConfig().browser.enabled && this.deps.getConfig().browser.driver.kind === 'extension',
         read: setup.attempt?.read ?? false, clicked: setup.attempt?.clicked ?? false, filled: setup.attempt?.filled ?? false, released: setup.attempt?.released ?? false },
       guidanceRefs: [ref(setup.state === 'verifying' || setup.state === 'completed' ? 'acceptance' : setup.error ? 'troubleshooting' : 'chrome-extension')],
-      allowedActions: setup.state === 'cancelled' ? ['get'] : setup.state === 'completed' ? ['get', 'verification_report'] : ['get', 'recheck', 'cancel', ...(setup.approvedBy && !changed ? ['advance'] : [])],
+      allowedActions: setup.state === 'cancelled' ? ['get', 'release'] : setup.state === 'completed' ? ['get', 'verification_report']
+        : ['get', 'recheck', 'cancel', 'release', ...(!changed && setup.state !== 'verifying' ? ['prepare', 'advance'] : []),
+          ...(setup.approvedBy ? ['open'] : []), ...(setup.state === 'ready_for_verification' && !changed ? ['begin_verification'] : [])],
     };
   }
 
@@ -70,17 +73,17 @@ export class BrowserSetupService {
     const existing = findBrowserSetup(conversationId, agentId);
     const installation = await this.deps.doctor();
     return { sceneId: 'browser', supportedConnection: 'extension', configRevision: browserConfigRevision(config),
-      installation: { installed: installation.installed, needsRefresh: installation.needsRefresh ?? false, nativeHostInstalled: installation.nativeHost?.installed === true },
+      installation: { installed: installation.installed, needsRefresh: installation.needsRefresh ?? false, nativeHostInstalled: installation.nativeHost?.installed === true, extensionDir: installation.extensionDir },
       toolPermission: this.deps.canUseBrowser(agentId) ? 'allowed' : 'denied',
       enabled: config.browser.enabled, driverKind: config.browser.driver.kind, sharedScope: 'gateway', endpoints: this.endpoints(),
       setup: existing ? this.view(existing) : null, guidanceRefs: [ref('overview')],
-      ownerActionRequired: true, supportedActions: ['inspect', 'preview', 'start', 'get', 'advance', 'recheck', 'request_interaction', 'begin_verification', 'verification_report', 'cancel'],
+      interaction: 'conversation', supportedActions: ['inspect', 'preview', 'start', 'get', 'prepare', 'advance', 'open', 'release', 'recheck', 'request_interaction', 'begin_verification', 'verification_report', 'cancel'],
     };
   }
 
-  async command(command: string, args: Record<string, unknown>, context: { conversationId: string; agentId: string }, dryRun = false) {
+  async command(command: string, args: Record<string, unknown>, context: { conversationId: string; agentId: string; canConfigure?: boolean }, dryRun = false) {
     if (command === 'inspect' || command === 'preview') return this.inspect(context.conversationId, context.agentId);
-    if (dryRun) return { dryRun: true, ...(await this.inspect(context.conversationId, context.agentId)), message: 'No changes made. Open the product setup panel to approve installation.' };
+    if (dryRun) return { dryRun: true, ...(await this.inspect(context.conversationId, context.agentId)), message: 'No changes made. Explain the proposed setup steps in the conversation.' };
     if (command === 'start') {
       const previous = findBrowserSetup(context.conversationId, context.agentId);
       if (previous?.attempt && !previous.attempt.released) return this.view(previous);
@@ -88,14 +91,31 @@ export class BrowserSetupService {
       return this.view(createBrowserSetup(context.conversationId, context.agentId, browserConfigRevision(this.deps.getConfig())));
     }
     if (typeof args.setupId !== 'string') throw new Error('setupId is required');
-    const setup = this.owned(args.setupId, context.conversationId, context.agentId);
+    let setup = this.owned(args.setupId, context.conversationId, context.agentId);
     if (command === 'get' || command === 'verification_report' || command === 'request_interaction') return this.view(setup);
     if (command === 'recheck') return this.view(await this.recheck(setup));
-    if (command === 'advance') {
-      if (!setup.approvedBy) return { ...this.view(setup), message: 'Approve this plan in the local-owner setup panel first.' };
-      return this.view(await this.prepare(setup));
+    if (command === 'release') return this.view(await this.release(setup));
+    if (['prepare', 'advance', 'open', 'begin_verification'].includes(command)) {
+      if (!context.canConfigure) throw new Error('SETUP_INTERACTIVE_REQUIRED: Continue in an authorized interactive conversation.');
+      if (!Number.isInteger(args.expectedRevision) || args.expectedRevision !== setup.revision) throw new Error('SETUP_CONFLICT: Read the current progress.');
+      if (!this.deps.canUseBrowser(context.agentId)) throw new Error('AGENT_BROWSER_DENIED: Review this Agent tool permission in settings.');
+      if (command === 'prepare' || command === 'advance') {
+        const config = this.deps.getConfig();
+        if (config.browser.enabled && config.browser.driver.kind !== 'extension' && args.switchDriver !== true) throw new Error('DRIVER_CHANGE_REQUIRED: Explain the shared driver change and confirm it with the user first.');
+        if (!setup.approvedBy) setup = this.approve(setup, `conversation:${context.conversationId}:${context.agentId}`, setup.revision);
+        const prepared = await this.prepare(setup);
+        return { ...this.view(prepared), extensionDir: (await this.deps.doctor()).extensionDir };
+      }
+      if (command === 'open') {
+        if (args.target !== undefined && !['chrome', 'folder', 'both'].includes(String(args.target))) throw new Error('Choose chrome, folder or both');
+        if (!setup.approvedBy) throw new Error('SETUP_NOT_READY: Prepare the extension first.');
+        await this.open(setup, (args.target ?? 'both') as 'chrome' | 'folder' | 'both');
+        return this.view(readBrowserSetup(setup.id)!);
+      }
+      if (typeof args.endpointId !== 'string') throw new Error('Select the exact Chrome with the user before testing');
+      if (!this.deps.verificationOrigin) throw new Error('Verification requires a running Gateway');
+      return this.view(this.begin(setup, args.endpointId, this.deps.verificationOrigin(), setup.revision));
     }
-    if (command === 'begin_verification') return { ...this.view(setup), message: 'Select Chrome and start the test in the local-owner setup panel. The test uses normal browser_use calls.' };
     if (command === 'cancel') return this.view(this.cancel(setup));
     throw new Error('Unsupported browser_setup command');
   }

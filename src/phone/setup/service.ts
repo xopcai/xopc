@@ -6,9 +6,9 @@ import { DurableState } from '../../storage/sqlite/durable-state.js';
 import type { PhoneInput } from '../contracts.js';
 import type { PhoneRuntime } from '../runtime.js';
 
-type Context = { conversationId: string; agentId: string };
+type Context = { conversationId: string; agentId: string; canConfigure?: boolean; runId?: string };
 type Setup = Omit<PhoneSetupView, 'readiness' | 'stale' | 'settingsPath' | 'guidanceRefs'> & {
-  environmentRevision?: string; calls: number; owner?: string;
+  verificationRunId?: string; automaticAttempts?: number; environmentRevision?: string; calls: number; owner?: string;
 };
 export interface PhoneSetupDeps {
   runtime: PhoneRuntime;
@@ -16,9 +16,14 @@ export interface PhoneSetupDeps {
   revision(context: Context, deviceId: string): string;
   connected(deviceId: string, signal?: AbortSignal): Promise<boolean>;
   leaseActive(deviceId: string): boolean;
+  setModel?: (agentId: string, ref: string) => Promise<void>;
+  models?: () => Array<{ ref: string; name: string; configured: boolean }>;
+  configure?: (enabled: boolean) => Promise<void>;
+  install?: (kind: 'adb' | 'scrcpy', repair: boolean) => Promise<void>;
+  registerLocal?: (serial: string, name?: string) => Promise<void>;
 }
 
-/** Setup only orchestrates existing settings; secrets and configuration writes stay in product forms. */
+/** Bounded product actions automate setup; credentials remain in secure product forms. */
 export class PhoneSetupService {
   constructor(private readonly deps: PhoneSetupDeps) {}
   private store(context: Context) { return new DurableState<Setup>('phone.setup', context.conversationId); }
@@ -36,7 +41,7 @@ export class PhoneSetupService {
     return setup;
   }
   async view(context: Context, setup: Setup): Promise<PhoneSetupView> {
-    const { owner: _owner, calls: _calls, environmentRevision: _revision, ...summary } = setup;
+    const { owner: _owner, calls: _calls, verificationRunId: _run, automaticAttempts: _attempts, environmentRevision: _revision, ...summary } = setup;
     const stale = Boolean(setup.attempt && setup.environmentRevision !== this.deps.revision(context, setup.attempt.deviceId));
     const interrupted = setup.state === 'verifying' && (Date.now() > setup.attempt!.expiresAt || Boolean(setup.attempt?.sessionId && !this.deps.runtime.status(setup.owner!)));
     return { ...summary, stale, state: interrupted ? 'needs_attention' : setup.state,
@@ -56,15 +61,53 @@ export class PhoneSetupService {
     };
     if (command === 'start') {
       if (!setup || ['completed', 'cancelled'].includes(setup.state) && (!setup.attempt || setup.attempt.released)) {
-        setup = this.save(context, { id: randomUUID(), ...context, state: 'configuring', revision: setup?.revision ?? 0, calls: 0,
+        setup = this.save(context, { id: randomUUID(), conversationId: context.conversationId, agentId: context.agentId, state: 'configuring', revision: setup?.revision ?? 0, calls: 0,
           checks: { configured: false, read: false, operated: false, verified: false, released: false } });
       }
       return this.view(context, setup);
     }
+    if (command === 'models') return { models: this.deps.models?.() ?? [] };
     if (typeof args.setupId !== 'string') throw new Error('setupId is required');
     setup = this.owned(context, args.setupId);
     if (['get', 'recheck', 'verification_report'].includes(command)) return this.view(context, setup);
-    if (command === 'begin_verification') return { ...await this.view(context, setup), message: 'Choose the phone and approve the Settings-only test in the original conversation panel.' };
+    if (command === 'release') return this.release(context, setup.id);
+    if (['source', 'configure', 'set_model', 'install_dependency', 'register_local', 'begin_verification'].includes(command)) {
+      if (!context.canConfigure) throw new Error('PHONE_SETUP_INTERACTIVE_REQUIRED: Continue in an authorized interactive conversation.');
+      if (!Number.isInteger(args.expectedRevision) || args.expectedRevision !== setup.revision) throw new Error('PHONE_SETUP_CONFLICT: Re-read current progress.');
+      if (command === 'source') {
+        if (args.source !== 'local' && args.source !== 'aliyun') throw new Error('Choose local or aliyun');
+        return this.source(context, setup.id, args.source, setup.revision);
+      }
+      if (command === 'begin_verification') {
+        if (typeof args.deviceId !== 'string') throw new Error('Select the exact registered phone with the user before testing');
+        return this.begin(context, setup.id, args.deviceId, setup.revision);
+      }
+      if (setup.attempt && !setup.attempt.released || ['completed', 'cancelled'].includes(setup.state)) throw new Error('PHONE_SETUP_CONFLICT: Release the test or start a fresh setup first.');
+      if (command === 'configure') {
+        if (!this.deps.configure || typeof args.enabled !== 'boolean') throw new Error('Phone configuration is unavailable');
+        if ((await this.deps.inspect(context, setup.source)).enabled !== args.enabled) await this.deps.configure(args.enabled);
+      } else if (command === 'set_model') {
+        if (!this.deps.setModel || typeof args.modelRef !== 'string') throw new Error('Choose a compatible configured Phone model');
+        const current = (await this.deps.inspect(context, setup.source)).model;
+        if (current.ref !== args.modelRef) {
+          if (current.ref && current.supported && current.configured && args.replaceExisting !== true) throw new Error('PHONE_SETUP_MODEL_CHANGE_REQUIRED: A working Phone model is already configured. Confirm the intended replacement with the user.');
+          await this.deps.setModel(context.agentId, args.modelRef);
+        }
+      } else if (command === 'install_dependency') {
+        if (!this.deps.install || args.kind !== 'adb' && args.kind !== 'scrcpy' || args.repair !== undefined && typeof args.repair !== 'boolean') throw new Error('Choose a managed Phone dependency');
+        if (args.kind === 'adb' && setup.source === 'aliyun') throw new Error('Cloud direct connections do not need local ADB');
+        const readiness = await this.deps.inspect(context, setup.source);
+        const dependency = readiness.dependencies.find(item => item.kind === args.kind);
+        if (dependency?.state !== 'ready' || args.repair === true) {
+          if (!dependency?.canInstall) throw new Error('PHONE_SETUP_INSTALL_UNAVAILABLE: Use an existing verified dependency or review runtime download settings.');
+          await this.deps.install(args.kind, args.repair === true);
+        }
+      } else {
+        if (!this.deps.registerLocal || setup.source !== 'local' || typeof args.serial !== 'string' || args.name !== undefined && (typeof args.name !== 'string' || args.name.length > 100)) throw new Error('Select a discovered local phone');
+        await this.deps.registerLocal(args.serial, args.name as string | undefined);
+      }
+      return this.view(context, this.owned(context, setup.id));
+    }
     if (command === 'cancel') {
       setup = this.save(context, { ...setup, state: 'cancelled' });
       return this.release(context, setup.id);
@@ -79,6 +122,7 @@ export class PhoneSetupService {
   }
   async begin(context: Context, id: string, deviceId: string, revision: number, signal?: AbortSignal) {
     let setup = this.owned(context, id);
+    if (context.runId && setup.verificationRunId === context.runId && (setup.automaticAttempts ?? 0) >= 2) throw new Error('PHONE_SETUP_RETRY_LIMIT: Two attempts in this turn failed. Release control and report the external blocker; wait for a fresh user request.');
     if (setup.revision !== revision || setup.state === 'cancelled' || setup.attempt && !setup.attempt.released) throw new Error('PHONE_SETUP_CONFLICT: Refresh progress and release the old test.');
     const environmentRevision = this.deps.revision(context, deviceId);
     const readiness = await this.deps.inspect(context, setup.source);
@@ -97,6 +141,7 @@ export class PhoneSetupService {
       maxActions: 6, expiresAt: Date.now() + 300_000, released: false };
     setup = this.save(context, { ...latest, state: 'verifying', source: device.source, error: undefined, attempt,
       owner: `phone-setup:${latest.id}:${attempt.id}`, environmentRevision, calls: 0,
+      verificationRunId: context.runId, automaticAttempts: context.runId && latest.verificationRunId === context.runId ? (latest.automaticAttempts ?? 0) + 1 : 1,
       checks: { configured: true, read: false, operated: false, verified: false, released: false } });
     return this.view(context, setup);
   }
