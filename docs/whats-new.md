@@ -1,6 +1,14 @@
 # What's new
 
-These are user-facing entry points as of October 10, 2026. See [GitHub Releases](https://github.com/xopcai/xopc/releases) for exact versions and artifacts, and [Update xopc](./update.md) for upgrade steps. Desktop, Gateway, mobile, and browser extension builds are distributed separately; updating the core package does not update every client.
+These are user-facing entry points as of October 25, 2026. See [GitHub Releases](https://github.com/xopcai/xopc/releases) for exact versions and artifacts, and [Update xopc](./update.md) for upgrade steps. Desktop, Gateway, mobile, and browser extension builds are distributed separately; updating the core package does not update every client.
+
+## v0.0.417: Windows Computer Use and wireless phones
+
+- Computer Use now includes a Windows x64 desktop preview for window observation, native button activation, text entry and keyboard input. It requires an interactive desktop, authorized application and compatible GUI model; ARM64 and fully signed installers remain separate release checks.
+- Android 11+ phones can pair over a private IPv4 LAN using a QR or pairing code. Saved phones support reconnection with identity verification. Install Android SDK Platform Tools on the Gateway host.
+- Phone connections persist across restarts, and the workspace phone view can be resized.
+
+[Computer Use](./computer-use.md) · [Phone Use setup and limits](./phone-use.md) · [Version diff](https://github.com/xopcai/xopc/compare/v0.0.416...v0.0.417). Node.js 26.12.1 or later is required for the npm package. Updating core does not install native mobile or browser clients.
 
 ## Personal Agent and task delivery
 
@@ -29,7 +37,7 @@ Follow selected topics, inspect why an update arrived, delay or stop attention, 
 
 Recent updates improve XOPC Cloud model setup, voice selection and call handling, and image generation and editing support. Choose models from the current catalog; capabilities depend on provider, credentials, and client version.
 
-[Models](./models.md) · [Voice](./voice.md) · [Images and vision](./image-multimodal.md). [Computer Use](./computer-use.md) remains a macOS preview requiring a dedicated compatible GUI model and native permissions.
+[Models](./models.md) · [Voice](./voice.md) · [Images and vision](./image-multimodal.md). [Computer Use](./computer-use.md) is a macOS and Windows x64 desktop preview requiring a dedicated compatible GUI model and local application access.
 
 ## Check after upgrading
 
