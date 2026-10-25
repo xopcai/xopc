@@ -814,6 +814,4 @@
     <string name="assistant_connection_interrupted">Connection interrupted · Reconnecting…</string>
     <string name="assistant_select_text">Select text</string>
     <string name="progress_change_log">Change log</string>
-    <string name="home_mode_life">Life</string>
-    <string name="home_mode_work">Work</string>
 </resources>

@@ -960,6 +960,3 @@
 
 "变更记录" = "Change log";
 "调整阶段不会启动或停止执行，每次变更都会记录。" = "Changing phase does not start or stop a run. Every change is recorded.";
-
-"无法打开生活模式" = "Could not open Life mode";
-"暂时无法打开生活模式，请重试。" = "Life mode is temporarily unavailable. Please try again.";

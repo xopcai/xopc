@@ -229,10 +229,6 @@ final class AppState {
         }
     }
 
-    func restoreConversation(_ conversation: ConversationSelection?) {
-        selectedConversation = conversation
-    }
-
     func updateConversation(_ conversation: ConversationSelection) {
         selectedConversation = conversation
     }

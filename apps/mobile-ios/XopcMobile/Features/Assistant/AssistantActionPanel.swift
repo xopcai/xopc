@@ -266,7 +266,6 @@ enum AssistantAction: String, CaseIterable, Identifiable {
 struct AssistantActionPanel: View {
     let canReferenceFiles: Bool
     let canStartRealtimeVoice: Bool
-    var canCreateConversation = true
     let onSelect: (AssistantAction) -> Void
     let onRealtimeVoice: (RealtimeVoiceMode) -> Void
 
@@ -286,8 +285,7 @@ struct AssistantActionPanel: View {
                         tile(title: Text(action.title), image: action.systemImage)
                     }
                     .buttonStyle(.plain)
-                    .disabled((action == .fileReference && !canReferenceFiles)
-                        || (action == .newConversation && !canCreateConversation))
+                    .disabled(action == .fileReference && !canReferenceFiles)
                     .accessibilityLabel(action.title)
                     .accessibilityHint(action == .fileReference && !canReferenceFiles
                         ? AppLocalization.string("发送第一条消息后可引用文件", locale: AppLocalization.selectedLocale)
