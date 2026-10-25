@@ -24,6 +24,7 @@ export default class EntryAbility extends UIAbility {
   };
   onWindowStageDestroy(): void {
     cancelAllDeviceLocations(); cancelAllDevicePersonalTools();
+    appSettings.onColorModeChanged = undefined;
     try { this.mainWindow?.off('avoidAreaChange', this.onAvoidArea); }
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Window listener cleanup failed'); }
     this.mainWindow = undefined; layoutState.keyboardVisible = false; layoutState.systemTopInsetPx = 0;
@@ -48,6 +49,12 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(stage: window.WindowStage): void {
     this.restoreAndLoad(stage);
   }
+  private updateStatusBar(dark: boolean): void {
+    void this.mainWindow?.setWindowSystemBarProperties({
+      statusBarColor: '#00000000',
+      statusBarContentColor: dark ? '#FFFFFFFF' : '#FF1B1B1F',
+    }).catch((): void => { hilog.warn(0x0000, 'XopcApp', 'Status bar color update failed'); });
+  }
   private async restoreAndLoad(stage: window.WindowStage): Promise<void> {
     await localSessionStore.initialize(this.context);
     try { await appSettings.restore(this.context); }
@@ -63,8 +70,8 @@ export default class EntryAbility extends UIAbility {
           this.mainWindow.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
           this.mainWindow.on('avoidAreaChange', this.onAvoidArea);
           layoutState.systemTopInsetPx = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height;
-          void this.mainWindow.setWindowSystemBarProperties({ statusBarColor: '#00000000' })
-            .catch((): void => { hilog.warn(0x0000, 'XopcApp', 'Status bar transparency initialization failed'); });
+          appSettings.onColorModeChanged = (dark: boolean): void => { this.updateStatusBar(dark); };
+          this.updateStatusBar(appSettings.isDark(this.context));
           layoutState.keyboardVisible = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD).bottomRect.height > 0;
         } catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Keyboard layout initialization failed'); }
         pushNotifications.onWindowReady();

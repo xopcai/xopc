@@ -14,12 +14,17 @@ export class XopcSettings {
   @Trace language: string = '';
   @Trace theme: string = 'system';
   @Trace colorScheme: XopcColorScheme = 'default';
+  onColorModeChanged?: (dark: boolean) => void;
   private store: XopcSecureStore = new XopcSecureStore();
 
   effectiveLanguage(): string { return this.language || i18n.System.getSystemLanguage(); }
   customTheme(): CustomTheme { return xopcCustomTheme(this.colorScheme); }
   themeColorMode(): ThemeColorMode {
     return this.theme === 'dark' ? ThemeColorMode.DARK : this.theme === 'light' ? ThemeColorMode.LIGHT : ThemeColorMode.SYSTEM;
+  }
+  isDark(context: common.Context): boolean {
+    return this.theme === 'dark' || (this.theme === 'system'
+      && context.resourceManager.getConfigurationSync().colorMode === resourceManager.ColorMode.DARK);
   }
 
   async restore(context: common.Context): Promise<void> {
@@ -50,9 +55,9 @@ export class XopcSettings {
   }
   private apply(context: common.Context): void {
     const application = context.getApplicationContext();
-    const systemMode = context.resourceManager.getConfigurationSync().colorMode;
-    appThemeColors.apply(this.colorScheme, this.theme === 'dark'
-      || (this.theme === 'system' && systemMode === resourceManager.ColorMode.DARK));
+    const dark = this.isDark(context);
+    appThemeColors.apply(this.colorScheme, dark);
+    this.onColorModeChanged?.(dark);
     application.setColorMode(this.theme === 'dark' ? ConfigurationConstant.ColorMode.COLOR_MODE_DARK
       : this.theme === 'light' ? ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT : ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
     application.setLanguage(this.language);
@@ -60,7 +65,9 @@ export class XopcSettings {
 
   syncSystemColorMode(colorMode: ConfigurationConstant.ColorMode | undefined): void {
     if (this.theme === 'system') {
-      appThemeColors.apply(this.colorScheme, colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
+      const dark = colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
+      appThemeColors.apply(this.colorScheme, dark);
+      this.onColorModeChanged?.(dark);
     }
   }
 }
