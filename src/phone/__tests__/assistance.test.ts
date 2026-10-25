@@ -128,6 +128,20 @@ it('recovers a queued continuation after restart with a fresh observation and th
   });
   await coordinator(run).drain(owner); expect(run).toHaveBeenCalledOnce(); expect(execute).not.toHaveBeenCalled();
 });
+it('completes assistance when a resumed Agent finishes with close and deduplicates later completion clicks', async () => {
+  await suspend(); const saved = phoneAssistance(owner)!;
+  const run = vi.fn(async (input: { runId: string }) => {
+    const tool = createPhoneUseTool({ runtime, context: () => ({ ...context, owner }) });
+    await runWithEmbeddedExecutionSession(owner, () => tool.execute('finished', { op: 'close' }), input.runId);
+    expect(phoneAssistance(owner)?.status).toBe('resuming');
+    return { status: 'ok', summary: 'Login inspected' };
+  });
+  const inputs = coordinator(run);
+  inputs.resumePhone(owner, saved.id); await inputs.drain(owner);
+  await vi.waitFor(() => expect(phoneAssistance(owner)?.status).toBe('completed'));
+  inputs.resumePhone(owner, saved.id); await inputs.drain(owner);
+  expect(run).toHaveBeenCalledOnce();
+});
 it('requires explicit user action after an interrupted continuation and rejects stale transcript requests', async () => {
   await suspend(); const saved = phoneAssistance(owner)!;
   const queued = queuePhoneAssistance(owner, saved.id);
