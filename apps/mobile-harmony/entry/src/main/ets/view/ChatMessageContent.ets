@@ -21,6 +21,7 @@ export struct XopcChatMessageContent {
   @Param runStartedAtMs: number = 0;
   @Param connection: string = 'connected';
   @Param showWaiting: boolean = true;
+  @Param showFailure: boolean = true;
   @Param textSelectable: boolean = false;
   @Param previewEligible: boolean = false;
   @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
@@ -95,7 +96,7 @@ export struct XopcChatMessageContent {
         XopcChatStepsView({ row: this.row, runStartedAtMs: this.runStartedAtMs,
           connection: this.connection, animateDots: this.animateStreaming, onShowDetail: this.onShowExecution })
       }
-      if (this.row.outcome?.status === 'failed') {
+      if (this.showFailure && this.row.outcome?.status === 'failed') {
         Text($r('app.string.chat_response_failed')).fontSize(13).fontColor(this.colors.danger)
       }
       if (this.showPreview) {

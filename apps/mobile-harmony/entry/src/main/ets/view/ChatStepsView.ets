@@ -1,6 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcChatRow } from '../model/chat';
-import { chatLiveElapsedSeconds, chatLiveNarration } from '../common/chatLiveActivity';
+import { XopcChatBlock, XopcChatRow } from '../model/chat';
+import { chatLiveElapsedSeconds, chatLiveNarration, chatLiveStages, chatStageStatus } from '../common/chatLiveActivity';
 
 @ComponentV2
 export struct XopcChatStepsView {
@@ -9,6 +9,8 @@ export struct XopcChatStepsView {
   @Param runStartedAtMs: number = 0;
   @Param connection: string = 'connected';
   @Param animateDots: boolean = true;
+  @Param staged: boolean = false;
+  @Param paused: boolean = false;
   @Event onShowDetail: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
   @Local nowMs: number = Date.now();
   private appearedAtMs: number = Date.now();
@@ -26,9 +28,22 @@ export struct XopcChatStepsView {
   @Computed get narration(): string {
     return this.elapsedSeconds >= 10 ? chatLiveNarration(this.row) : '';
   }
+  @Computed get stages(): XopcChatBlock[] { return this.staged ? chatLiveStages(this.row) : []; }
+  @Computed get stageStatus(): string { return this.staged ? (this.paused ? 'waiting' : chatStageStatus(this.row)) : ''; }
   build() {
     Column({ space: 8 }) {
-      if (this.connection !== 'connected') {
+      if (this.staged) {
+        ForEach(this.stages, (stage: XopcChatBlock) => {
+          Text(stage.text).id('chat-stage-' + stage.id).fontSize(13).lineHeight(20)
+            .fontColor(this.colors.secondary).width('100%').textAlign(TextAlign.Start)
+        }, (stage: XopcChatBlock): string => stage.id)
+      }
+      if (this.stageStatus) {
+        Text(this.stageStatus === 'failed' ? $r('app.string.chat_response_failed')
+          : this.stageStatus === 'waiting' ? $r('app.string.chat_response_waiting') : $r('app.string.chat_response_interrupted'))
+          .fontSize(13).fontColor(this.stageStatus === 'failed' ? this.colors.danger : this.colors.secondary)
+          .width('100%').textAlign(TextAlign.Start)
+      } else if (this.connection !== 'connected') {
         Text($r('app.string.chat_activity_reconnecting')).fontSize(13).fontColor(this.colors.secondary)
           .width('100%').textAlign(TextAlign.Start)
       } else {
@@ -39,7 +54,7 @@ export struct XopcChatStepsView {
         }.id('chat-waiting-dots-' + this.row.id).width(72).height(44).justifyContent(FlexAlign.Center)
           .borderRadius(22).backgroundColor(this.colors.input)
           .accessibilityText($r('app.string.chat_steps_working'))
-        if (this.narration) {
+        if (!this.staged && this.narration) {
           Text(this.narration).fontSize(13).fontColor(this.colors.secondary).maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%').textAlign(TextAlign.Start)
         }

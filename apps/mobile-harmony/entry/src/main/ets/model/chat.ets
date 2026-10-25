@@ -88,7 +88,7 @@ export interface XopcChatRow { id: string; role: string; text: string; thinking?
   sendState?: string;
   toolCalls?: XopcChatTool[]; toolResultId?: string; toolResultError?: boolean; toolResultDetails?: Object;
   blocks?: XopcChatBlock[]; outcome?: XopcTurnOutcome; turnId?: string; live?: boolean; progress?: string; sourceIds?: string[];
-  activity?: string; activityTools?: XopcLiveActivityTool[]; activityUpdatedAtMs?: number; executionActivity?: boolean;
+  activity?: string; activityTools?: XopcLiveActivityTool[]; activityUpdatedAtMs?: number; executionActivity?: boolean; runStatus?: string;
 }
 export interface XopcDrawerProfile { profile?: XopcProfileFields; suggestedCallName?: string; }
 export interface XopcProfileFields { callName?: string; role?: string; }

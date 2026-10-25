@@ -323,6 +323,11 @@ export class XopcChatViewModel {
       const confirmed = mergeAssistantRows(historyRows(combined));
       confirmed.forEach((row: XopcChatRow): void => {
         if (this.executionAssistantIds.has(row.id)) row.executionActivity = true;
+        if (row.role === 'assistant' && row.turnId) {
+          const previous = this.liveRow?.turnId === row.turnId ? this.liveRow
+            : this.rows.find((item: XopcChatRow): boolean => item.role === 'assistant' && item.turnId === row.turnId);
+          row.runStatus = previous?.runStatus;
+        }
       });
       this.executionInputIds.forEach((inputId: string): void => {
         const userIndex = confirmed.findIndex((row: XopcChatRow): boolean => row.role === 'user' && row.id === inputId);
