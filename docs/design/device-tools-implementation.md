@@ -13,7 +13,7 @@
 
 ## Bridge 接入
 
-在仓库根目录运行（Node >= 22.22.3，已安装 pnpm 依赖）：
+在仓库根目录运行（Node >= 26.12.1，已安装 pnpm 依赖）：
 
 ```sh
 export XOPC_GATEWAY_URL=http://127.0.0.1:18790

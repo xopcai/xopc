@@ -12,11 +12,11 @@ describe('runtime catalog', () => {
   it('builds pinned Node distribution URLs', () => {
     expect(resolveRuntimeAsset({
       runtime: 'node',
-      version: '22.23.2',
+      version: '26.12.1',
       platform: 'darwin-arm64',
     })).toMatchObject({
-      archiveFile: 'node-v22.23.2-darwin-arm64.tar.gz',
-      url: 'https://nodejs.org/download/release/v22.23.2/node-v22.23.2-darwin-arm64.tar.gz',
+      archiveFile: 'node-v26.12.1-darwin-arm64.tar.gz',
+      url: 'https://nodejs.org/download/release/v26.12.1/node-v26.12.1-darwin-arm64.tar.gz',
       archiveType: 'tar.gz',
     });
   });

@@ -1,8 +1,8 @@
 import type { RuntimeKind } from './types.js';
 
-export const RUNTIME_CATALOG_VERSION = '2026-08-23';
+export const RUNTIME_CATALOG_VERSION = '2026-10-25';
 export const DEFAULT_RUNTIME_VERSIONS: Record<RuntimeKind, string> = {
-  node: '22.23.2',
+  node: '26.12.1',
   uv: '0.8.12',
   python: '3.12.11',
 };

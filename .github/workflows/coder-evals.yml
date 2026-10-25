@@ -43,7 +43,7 @@ jobs:
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 26.12.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run eval:coder:check
@@ -56,7 +56,7 @@ jobs:
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 26.12.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run eval:coder:smoke

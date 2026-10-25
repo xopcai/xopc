@@ -28,7 +28,7 @@ export function acquireProofBodyBudget(deviceId: string): (() => void) | undefin
   };
 }
 
-export function proofDigest(bytes: crypto.BinaryLike): string {
+export function proofDigest(bytes: string | NodeJS.ArrayBufferView): string {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 

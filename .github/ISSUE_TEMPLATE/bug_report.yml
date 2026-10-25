@@ -33,7 +33,7 @@ body:
     id: node-version
     attributes:
       label: Node.js version
-      description: For CLI/source installations, output of `node --version` (requires Node ≥ 22.22.3). Desktop and mobile users can leave this blank.
+      description: For CLI/source installations, output of `node --version` (requires Node ≥ 26.12.1). Desktop and mobile users can leave this blank.
       placeholder: "v22.x.x"
     validations:
       required: false

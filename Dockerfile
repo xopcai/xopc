@@ -2,8 +2,8 @@
 
 # Multi-stage image for xopc gateway and CLI.
 # The build stage uses full Debian for native packages; runtime uses slim and runs as non-root.
-ARG XOPC_NODE_IMAGE=docker.io/library/node:22-bookworm
-ARG XOPC_NODE_SLIM_IMAGE=docker.io/library/node:22-bookworm-slim
+ARG XOPC_NODE_IMAGE=docker.io/library/node:26.12.1-bookworm
+ARG XOPC_NODE_SLIM_IMAGE=docker.io/library/node:26.12.1-bookworm-slim
 ARG XOPC_PNPM_VERSION=11.9.0
 
 FROM ${XOPC_NODE_IMAGE} AS build

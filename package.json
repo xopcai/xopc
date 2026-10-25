@@ -187,7 +187,7 @@
   },
   "homepage": "https://xopc.ai",
   "engines": {
-    "node": ">=22.22.3"
+    "node": ">=26.12.1"
   },
   "dependencies": {
     "@composio/core": "0.21.0",
@@ -269,7 +269,7 @@
     "@types/jsdom": "^28.0.3",
     "@types/luxon": "^3.7.5",
     "@types/markdown-it": "^14.1.2",
-    "@types/node": "^25.9.1",
+    "@types/node": "^26.6.5",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react-swc": "^4.3.1",

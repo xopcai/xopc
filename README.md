@@ -98,7 +98,7 @@ xopc onboard --quick
 xopc
 ```
 
-With Node.js **22.22.3+** already installed, use `pnpm add -g @xopcai/xopc`. The [terminal quick start](https://xopcai.github.io/xopc/first-5-minutes) includes mirror and troubleshooting guidance.
+With Node.js **26.12.1+** already installed, use `pnpm add -g @xopcai/xopc`. The [terminal quick start](https://xopcai.github.io/xopc/first-5-minutes) includes mirror and troubleshooting guidance.
 
 ### Continue on mobile
 
@@ -184,7 +184,7 @@ pnpm run build && pnpm run test:all && pnpm run lint
 
 **Issues:** [Bug report](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) · [Feature request](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) · [Q&A Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) · [Security advisory](https://github.com/xopcai/xopc/security/advisories/new) (not public issues)
 
-**Tech stack:** TypeScript, Node.js ≥ 22.22.3, pnpm workspace. Built-in LLM layer via `@earendil-works/pi-ai`, React gateway console, Electron desktop.
+**Tech stack:** TypeScript, Node.js ≥ 26.12.1, pnpm workspace. Built-in LLM layer via `@earendil-works/pi-ai`, React gateway console, Electron desktop.
 
 ## Credits
 

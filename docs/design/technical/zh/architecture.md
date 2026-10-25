@@ -135,7 +135,7 @@ update、voice、workspace 以及相关设置页面。
 
 ## 构建与分发
 
-这个包是运行在 Node.js 22+ 上的 ESM TypeScript 项目。`tsdown` 以 unbundle
+这个包是运行在 Node.js 26.12.1+ 上的 ESM TypeScript 项目。`tsdown` 以 unbundle
 方式将 Node 输出构建到 `dist/src/**`，将扩展输出构建到 `dist/extensions/**`。
 声明文件由 `tsc` 生成。Web 控制台是 `web/` 下独立的 Vite/React 包；生产构建会
 复制到 Gateway 静态根目录。
@@ -152,7 +152,7 @@ update、voice、workspace 以及相关设置页面。
 
 | 层级 | 技术 |
 |------|------|
-| 运行时 | Node.js 22+ |
+| 运行时 | Node.js 26.12.1+ |
 | 语言 | TypeScript |
 | LLM SDK | `@earendil-works/pi-ai` |
 | 智能体框架 | `@earendil-works/pi-agent-core` |

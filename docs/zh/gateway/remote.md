@@ -6,7 +6,7 @@ SSH 隧道把远程主机上的本地 Gateway 端口安全转发到当前电脑�
 
 在 Hetzner 等具有持久存储的 VPS 上：
 
-1. 按[安装指南](../getting-started.md)安装 Node.js >= 22.22.3 和 xopc。
+1. 按[安装指南](../getting-started.md)安装 Node.js >= 26.12.1 和 xopc。
 2. 将 `gateway.bind` 设置为 `loopback`，并配置强 Gateway Token。
 3. 安装并启动 Gateway 服务：
 
