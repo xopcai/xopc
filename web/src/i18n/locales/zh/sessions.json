@@ -22,7 +22,7 @@
     "tokens": "tokens",
     "cost": "估算费用",
     "costPartial": "仅显示已知费用，部分调用无法计价",
-    "costUnknown": "费用未知",
+    "costUnknown": "费用待确认",
     "noUsage": "暂无用量记录",
     "loadMore": "加载更多",
     "noSessions": "暂无会话",

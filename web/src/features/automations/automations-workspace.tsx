@@ -1,3 +1,5 @@
+import { scheduledRunPreview, SchedulePreview } from './schedule-preview';
+import { FormField as Field } from '@/components/ui/form-field';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as Popover from '@radix-ui/react-popover';
@@ -521,7 +523,7 @@ export function AutomationsWorkspace({
     && (!['daily', 'weekly'].includes(form.triggerMode) || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.time))
     && (form.triggerMode !== 'interval' || automationIntervalMs(form.intervalValue, form.intervalUnit) >= 60_000)
     && (form.triggerMode !== 'cron' || Boolean(form.cronExpr.trim()));
-  const formCanSubmit = managedTriggerEdit
+  const baseFormCanSubmit = managedTriggerEdit
     ? managedTriggerValid
     : Boolean(form.name.trim()) &&
     (form.triggerMode !== 'once' || (Number.isFinite(new Date(form.onceAt).getTime()) && (Boolean(editingAutomation) || new Date(form.onceAt).getTime() > Date.now()))) &&
@@ -532,6 +534,9 @@ export function AutomationsWorkspace({
         : form.actionMode === 'task_command'
           ? Boolean(form.taskId.trim() && form.agentId.trim())
         : Boolean(form.instruction.trim()));
+  let scheduleValid = true;
+  try { if (['daily', 'weekly', 'cron'].includes(form.triggerMode)) scheduledRunPreview(form); } catch { scheduleValid = false; }
+  const formCanSubmit = baseFormCanSubmit && scheduleValid;
   const templates = useMemo(() => automationScenarios(labels), [labels]);
   const executionIssues = useMemo(
     () => userAutomations.filter((automation) => automationHasExecutionIssue(automation, userRuns)),
@@ -1003,8 +1008,9 @@ export function AutomationsWorkspace({
             onClick={openChatCreate}
           >
             <Plus className="size-4" aria-hidden />
-            {labels.create}
+            {labels.createWithAssistant}
           </Button>
+          <Button variant="secondary" className="ml-2 h-9" onClick={() => openCreate('blank')}>{labels.setUpManually}</Button>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <Button
@@ -1462,6 +1468,7 @@ export function AutomationsWorkspace({
                   language={language}
                   projectLocked={projectLocked}
                 />}
+                <div className="max-h-40 shrink-0 overflow-y-auto px-5 pb-4"><SchedulePreview form={form} onChange={patch => setForm(previous => ({ ...previous, ...patch }))} language={language} /></div>
                 <div className="flex flex-wrap justify-end gap-2 border-t border-edge px-5 py-4">
                   {createMode === 'quick' ? <Button variant="ghost" onClick={() => setCreateMode('blank')}>{labels.draft.advancedCreate}</Button> : null}
                   {editingDraft ? (
@@ -1570,7 +1577,7 @@ function ManagedScheduleForm({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
       <Section step="1" title={labels.form.trigger} description={labels.form.triggerStepDescription} />
-      <Select className={inputClass} value={form.triggerMode} onChange={(event) => update({ triggerMode: event.target.value as TriggerMode })}>
+      <Select aria-label={labels.form.trigger} className={inputClass} value={form.triggerMode} onChange={(event) => update({ triggerMode: event.target.value as TriggerMode })}>
         <SelectOption value="daily">{labels.trigger.daily}</SelectOption>
         <SelectOption value="weekly">{labels.trigger.weekly}</SelectOption>
         <SelectOption value="interval">{labels.trigger.interval}</SelectOption>
@@ -2793,7 +2800,7 @@ function AutomationForm({
           </div>
         </div>
         <Section step="1" title={labels.form.trigger} description={labels.form.triggerStepDescription} />
-        <Select className={inputClass} value={form.triggerMode} onChange={(e) => update({ triggerMode: e.target.value as TriggerMode })}>
+        <Select aria-label={labels.form.trigger} className={inputClass} value={form.triggerMode} onChange={(e) => update({ triggerMode: e.target.value as TriggerMode })}>
           <SelectOption value="manual">{labels.trigger.manual}</SelectOption>
           <SelectOption value="once">{labels.trigger.once}</SelectOption>
           <SelectOption value="daily">{labels.trigger.daily}</SelectOption>
@@ -2844,11 +2851,13 @@ function AutomationForm({
                   min={60_000 / automationIntervalMs(1, form.intervalUnit)}
                   step="any"
                   inputMode="decimal"
+                  aria-label={labels.form.intervalEvery}
                   value={form.intervalValue}
                   onChange={(event) => update({ intervalValue: event.target.value })}
                 />
                 <Select
                   className={inputClass}
+                  aria-label={language === 'zh' ? '间隔单位' : 'Interval unit'}
                   value={form.intervalUnit}
                   onChange={(event) => {
                     const intervalUnit = event.target.value as AutomationIntervalUnit;
@@ -2936,6 +2945,7 @@ function AutomationForm({
         <Section step="2" title={labels.form.action} description={labels.form.actionStepDescription} />
         <Select
           className={inputClass}
+          aria-label={labels.form.action}
           value={form.actionMode}
           onChange={(e) => {
             const actionMode = e.target.value as ActionMode;
@@ -3107,8 +3117,8 @@ function AutomationForm({
         </Field>
         <Field label={labels.form.resultWebhookEndpoint}>
           <div className="grid gap-2">
-            <input className={inputClass} value={form.resultWebhookEndpoint} onChange={(e) => update({ resultWebhookEndpoint: e.target.value })} />
-            <input className={inputClass} value={form.resultWebhookSecretId} onChange={(e) => update({ resultWebhookSecretId: e.target.value })} placeholder={labels.form.resultWebhookSecretId} />
+            <input aria-label={labels.form.resultWebhookEndpoint} className={inputClass} value={form.resultWebhookEndpoint} onChange={(e) => update({ resultWebhookEndpoint: e.target.value })} />
+            <input aria-label={labels.form.resultWebhookSecretId} className={inputClass} value={form.resultWebhookSecretId} onChange={(e) => update({ resultWebhookSecretId: e.target.value })} placeholder={labels.form.resultWebhookSecretId} />
           </div>
         </Field>
 
@@ -3139,14 +3149,6 @@ function AutomationForm({
 
 const inputClass = 'min-h-11 w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-base sm:min-h-0 sm:text-sm text-fg outline-none focus:border-accent';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid gap-1.5">
-      <span className="text-xs font-medium text-fg-muted">{label}</span>
-      {children}
-    </div>
-  );
-}
 
 function Section({ title, step, description }: { title: string; step?: string; description?: string }) {
   return (

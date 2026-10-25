@@ -1,3 +1,4 @@
+import { taskDescriptionForDisplay } from '@xopcai/gateway-contract';
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -15,6 +16,7 @@ export function TaskExpandableContent({ content, contentKey, language, markdown 
   className?: string;
   children?: ReactNode;
 }) {
+  content = taskDescriptionForDisplay(content);
   const id = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);

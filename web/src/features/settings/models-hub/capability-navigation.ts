@@ -16,7 +16,7 @@ export function parseCapabilityUse(value: string | null): ModelSetupUse | undefi
   return value && Object.hasOwn(capabilityLabels, value) ? value as ModelSetupUse : undefined;
 }
 export function capabilityReturnPath(value: string | null): string | undefined {
-  return value && (value.startsWith('/chat/') || value === '/personal') ? value : undefined;
+  return value && !/[\\\r\n]/.test(value) && (value.startsWith('/chat/') || value === '/personal' || value === '/settings/phone-use' || value.startsWith('/automations')) ? value : undefined;
 }
 export function modelCapabilityPath(use?: ModelSetupUse, services = false, returnTo?: string): string {
   const query = new URLSearchParams();

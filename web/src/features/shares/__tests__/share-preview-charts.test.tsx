@@ -66,4 +66,18 @@ describe('public share chart rendering', () => {
     expect(container.querySelector('[data-chart-pending]')).not.toBeNull();
     expect(runtime.init).not.toHaveBeenCalled();
   });
+  it.each([404, 410, 503, 200])('recovers from unavailable share responses without exposing parser details (HTTP %s)', async status => {
+    const fetchMock = vi.fn(async () => new Response('<!doctype html>private diagnostic', { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    await act(async () => root.render(<MemoryRouter initialEntries={['/s/public/preview']}><Routes><Route path="/s/:token/preview" element={<SharePreviewPage />} /></Routes></MemoryRouter>));
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(container.textContent).not.toMatch(/Unexpected token|private diagnostic|SyntaxError/);
+    const retry = container.querySelector<HTMLButtonElement>('[role="alert"] button')!;
+    expect(retry).not.toBeNull();
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ kind: 'directory', fileName: 'Recovered', valid: true, fileSize: 0, expiresAt: '2027-01-01' })));
+    await act(async () => retry.click());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.textContent).toContain('Recovered');
+  });
+
 });

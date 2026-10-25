@@ -1,3 +1,4 @@
+import { ServiceGoalGuide } from './service-goal-guide';
 import { pluginDetailPath } from './capability-links';
 import { CapabilitySectionIntro } from './capability-section-intro';
 import { lazy, Suspense, useCallback, useLayoutEffect, useState } from 'react';
@@ -77,6 +78,7 @@ export function CapabilitiesPage() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       {!detailId ? <CapabilitySectionIntro section={section} zh={language.startsWith('zh')} /> : null}
+      {['extensions', 'connectors', 'channels'].includes(section) ? <ServiceGoalGuide zh={language === 'zh'} /> : null}
       {/* Reset the boundary so route transitions show the new section's skeleton immediately. */}
       <Suspense key={section} fallback={<CapabilityContentFallback label={copy.discoverLoading} />}>
         {section === 'agents' ? <AgentsPage agentId={detailId} onHeaderActionChange={onHeaderActionChange} /> : null}

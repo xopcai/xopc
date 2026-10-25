@@ -156,7 +156,7 @@ export function ProjectsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [autoUnderstand, setAutoUnderstand] = useState(true);
+  const [autoUnderstand, setAutoUnderstand] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
@@ -219,21 +219,21 @@ export function ProjectsPage() {
     event.preventDefault();
     const trimmedName = name.trim();
     const trimmedWorkspaceRoot = workspaceRoot.trim();
-    if (!trimmedName || !trimmedWorkspaceRoot || creating) return;
+    if (!trimmedName || creating) return;
     setCreating(true);
     setCreateError(null);
     try {
       const project = await createProject({
-        autoUnderstand,
+        autoUnderstand: Boolean(workspaceRoot.trim()) && autoUnderstand,
         name: trimmedName,
         ...(description.trim() ? { description: description.trim() } : {}),
-        workspaceRoot: trimmedWorkspaceRoot,
+        ...(trimmedWorkspaceRoot ? { workspaceRoot: trimmedWorkspaceRoot } : {}),
       });
       setProjects((current) => [project, ...current.filter((item) => item.id !== project.id)]);
       setName('');
       setDescription('');
       setWorkspaceRoot('');
-      setAutoUnderstand(true);
+      setAutoUnderstand(false);
       setCreateOpen(false);
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
     } catch (cause) {
@@ -331,16 +331,16 @@ export function ProjectsPage() {
                       </span>
                     </span>
                   </button>
-                  <p className="text-xs font-normal text-fg-subtle">{t.workspaceSelectionHint}</p>
+                  <p className="text-xs font-normal text-fg-muted">{t.workspaceSelectionHint}</p>
                 </div>
-                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creating} />
+                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creating || !workspaceRoot.trim()} />
                 {createError ? (
                   <p className="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">{createError}</p>
                 ) : null}
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
                 <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" disabled={creating || !name.trim() || !workspaceRoot.trim()}>
+                <Button type="submit" variant="primary" disabled={creating || !name.trim()}>
                   {creating ? t.home.creating : t.create}
                 </Button>
               </div>
@@ -433,11 +433,12 @@ export function ProjectsPage() {
             />
           ))}
         </section>
-      ) : (
+      ) : error ? null : (
         <section className="py-16 text-center">
           <FolderKanban className="mx-auto size-7 text-fg-subtle" aria-hidden />
-          <h2 className="mt-3 text-sm font-semibold text-fg">{management.emptyTitle}</h2>
-          <p className="mt-1 text-sm text-fg-muted">{management.emptyHint}</p>
+          <h2 className="mt-3 text-sm font-semibold text-fg">{projects.length === 0 ? (language === 'zh' ? '创建第一个项目' : 'Create your first project') : management.emptyTitle}</h2>
+          <p className="mt-1 text-sm text-fg-muted">{projects.length === 0 ? (language === 'zh' ? '把相关对话、任务和资料放在一起。' : 'Keep related conversations, tasks and materials together.') : management.emptyHint}</p>
+          <Button className="mt-4" onClick={() => { if (projects.length === 0) setCreateOpen(true); else { setSearch(''); setFilter('all'); } }}>{projects.length === 0 ? t.create : (language === 'zh' ? '清除筛选' : 'Clear filters')}</Button>
         </section>
       )}
     </main>

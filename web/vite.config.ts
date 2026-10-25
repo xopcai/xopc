@@ -67,6 +67,7 @@ export default defineConfig(({ mode }) => ({
     port: 3000,
     open: false,
     proxy: {
+      '^/s(?:/|$)': { target: gatewayTarget, changeOrigin: true },
       '/api': {
         target: gatewayTarget,
         // Phone tickets bind to the browser-facing origin, including the dev proxy port.

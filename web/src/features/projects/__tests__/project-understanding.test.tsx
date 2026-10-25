@@ -33,7 +33,7 @@ describe('quiet project understanding controls', () => {
   });
   const renderPanel = async () => act(async () => root.render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <ProjectUnderstandingPanel projectId="project-1" />
+      <ProjectUnderstandingPanel projectId="project-1" hasProjectFolder />
     </SWRConfig>,
   ));
 
@@ -74,4 +74,22 @@ describe('quiet project understanding controls', () => {
     expect(container.textContent).toContain('Learning about this project');
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
+  it('explains folder reading, cloud processing and usage charges beside the optional control', async () => {
+    await act(async () => root.render(<ProjectUnderstandingCheckbox checked={false} onChange={vi.fn()} />));
+    const checkbox = container.querySelector('input')!;
+    const description = document.getElementById(checkbox.getAttribute('aria-describedby')!)!;
+    expect(description.textContent).toMatch(/read project materials/);
+    expect(description.textContent).toMatch(/cloud model service/);
+    expect(description.textContent).toMatch(/usage charges/);
+    expect(checkbox.checked).toBe(false);
+    expect(startProjectUnderstanding).not.toHaveBeenCalled();
+  });
+
+  it('does not offer project analysis without a bound folder', async () => {
+    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><ProjectUnderstandingPanel projectId="no-folder" hasProjectFolder={false} /></SWRConfig>));
+    expect(container.textContent).toContain('Link a folder');
+    expect(container.querySelector('button')).toBeNull();
+    expect(startProjectUnderstanding).not.toHaveBeenCalled();
+  });
+
 });

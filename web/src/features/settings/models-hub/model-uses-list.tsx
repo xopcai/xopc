@@ -1,3 +1,4 @@
+import { modelDisplayName } from '@/lib/model-display-name';
 import useSWR from 'swr';
 import { fetchVoiceProviders, fetchVoiceSttProviders } from '@/features/settings/voice-config-api';
 import { modelsJsonPresetKeyForProviderId } from '@/features/settings/models/models-settings-lib';
@@ -108,7 +109,7 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
       <div className={onlyUse ? "divide-y divide-edge-subtle" : "divide-y divide-edge-subtle px-4"}>{group.uses.filter(id => !onlyUse || id === onlyUse).map(id => {
       const row = rows.find(row => row.id === id)!;
       const options = modelUseOptions(catalog?.previews ?? [], row.id, zh);
-      const current = row.id === 'conversation' && voice?.voice.realtime.enabled && voice.voice.realtime.defaultEngine === 'agent' ? (zh ? '语音助手 · 使用对话、听写和语音输出配置' : 'Voice assistant · Uses chat, dictation and voice output') : row.ref ? data.allModels.find(model => model.id === row.ref)?.name ?? row.ref : undefined;
+      const current = row.id === 'conversation' && voice?.voice.realtime.enabled && voice.voice.realtime.defaultEngine === 'agent' ? (zh ? '语音助手 · 使用对话、听写和语音输出配置' : 'Voice assistant · Uses chat, dictation and voice output') : row.ref ? ((model) => model ? modelDisplayName(model, zh ? 'zh' : 'en') : row.ref)(data.allModels.find(model => model.id === row.ref)) : undefined;
       return <div key={row.id} data-capability={row.id}><div className={onlyUse ? 'py-2' : `grid grid-cols-1 items-center gap-x-3 gap-y-2 py-3 @min-[40rem]:gap-x-4 ${onSettings ? '@min-[40rem]:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_auto]' : '@min-[40rem]:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]'}`}>
         <div className={onlyUse ? 'hidden' : 'col-start-1 row-start-1 min-w-0'}><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><p className="text-sm font-medium text-fg">{capabilityLabels[row.id][zh ? 0 : 1]}</p><span className="text-xs text-fg-subtle">{row.ref ? (options.some(option => option.value === row.ref || (row.ref?.endsWith('/default') && option.value.split('/')[0] === row.ref.split('/')[0])) || row.ref === 'agent' ? null : (zh ? '待连接' : 'Connection needed')) : (zh ? '未配置' : 'Not set up')}</span></div><p className="mt-1 text-xs leading-relaxed text-fg-muted">{capabilityDescriptions[row.id][zh ? 0 : 1]}</p>
           {row.inherited ? <p className="mt-1 text-xs text-fg-muted">{zh ? '继承默认对话' : 'Inherits chat default'}</p> : null}

@@ -64,7 +64,7 @@ export function LocalAppsPage() {
           <div className="px-6 py-16 text-center">
             <Box className="mx-auto size-8 text-fg-subtle" />
             <h3 className="mt-4 text-sm font-semibold text-fg">{zh ? '还没有应用' : 'No apps yet'}</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-fg-muted">{zh ? '描述你想解决的问题，XOPC 会创建应用骨架和可持续开发的 Project。' : 'Describe the problem and XOPC will create an app scaffold and an ongoing Project.'}</p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-fg-muted">{zh ? '描述你想解决的问题，XOPC 会创建应用草稿，并用项目保存后续开发记录。' : 'Describe the problem and XOPC will create an app scaffold and an ongoing Project.'}</p>
             <Button asChild variant="primary" className="mt-5"><Link to="/local-apps/new"><Plus className="size-4" />{zh ? '创建第一个应用' : 'Create your first app'}</Link></Button>
           </div>
         )}

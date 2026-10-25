@@ -94,6 +94,7 @@ export function PopoverSelect({
   id,
   ariaLabel,
   ariaLabelledBy,
+  ariaDescribedBy,
   title,
   triggerClassName,
   triggerIcon,
@@ -119,6 +120,7 @@ export function PopoverSelect({
   id?: string;
   ariaLabel?: string;
   ariaLabelledBy?: string;
+  ariaDescribedBy?: string;
   title?: string;
   triggerClassName?: string;
   triggerIcon?: ReactNode;
@@ -151,6 +153,7 @@ export function PopoverSelect({
           type="button"
           aria-label={ariaLabel}
           aria-labelledby={ariaLabelledBy}
+          aria-describedby={ariaDescribedBy}
           title={title}
           disabled={disabled}
           className={cn(
@@ -360,6 +363,7 @@ export function Select({
         disabled={disabled}
         ariaLabel={rest['aria-label']}
         ariaLabelledBy={rest['aria-labelledby']}
+        ariaDescribedBy={rest['aria-describedby']}
         title={rest.title}
         side={side}
         align={align}

@@ -22,7 +22,7 @@
     "tokens": "tokens",
     "cost": "Estimated cost",
     "costPartial": "Known cost only; some calls could not be priced",
-    "costUnknown": "Cost unknown",
+    "costUnknown": "Cost pending",
     "noUsage": "No usage recorded",
     "loadMore": "Load more",
     "noSessions": "No sessions yet",

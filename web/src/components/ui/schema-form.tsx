@@ -1,7 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useId, useMemo } from 'react';
 
 import { NumberInput } from '@/components/ui/number-input';
-import { SecretInput } from '@/components/ui/secret-input';
+import { SecretInput, type SecretInputLabels } from '@/components/ui/secret-input';
 import { cn } from '@/lib/cn';
 import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -9,6 +9,7 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 export type JsonSchema = Record<string, unknown>;
 
 export type SchemaFormLabels = {
+  secretInputLabels?: SecretInputLabels;
   defaultBooleanLabel?: string;
   unsupportedArrayType?: string;
   arrayAddPlaceholder?: string;
@@ -80,12 +81,16 @@ function groupFields(fields: FieldDef[]): Map<string, FieldDef[]> {
 }
 
 function StringField({
+  labels,
+  id,
   name,
   s,
   value,
   onChange,
   disabled,
 }: {
+  labels?: SchemaFormLabels;
+  id: string;
   name: string;
   s: JsonSchema;
   value: string;
@@ -99,8 +104,10 @@ function StringField({
   if (Array.isArray(s.enum) && s.enum.every((x) => typeof x === 'string')) {
     return (
       <div className="flex flex-col gap-1.5">
-        {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
+        {desc ? <p id={`${id}-help`} className="text-xs text-fg-muted">{desc}</p> : null}
         <Select
+          id={id}
+          aria-describedby={desc ? `${id}-help` : undefined}
           name={name}
           className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2 text-sm text-fg"
           value={value}
@@ -119,12 +126,14 @@ function StringField({
   if (fmt === 'password') {
     return (
       <div className="flex flex-col gap-1.5">
-        {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
+        {desc ? <p id={`${id}-help`} className="text-xs text-fg-muted">{desc}</p> : null}
         <SecretInput
+          id={id}
+          ariaDescribedBy={desc ? `${id}-help` : undefined}
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          labels={DEFAULT_SECRET_INPUT_LABELS}
+          labels={labels?.secretInputLabels ?? DEFAULT_SECRET_INPUT_LABELS}
           disabled={disabled}
           inputClassName="ui-input h-9 rounded-md border border-edge bg-surface-base px-2.5 text-sm text-fg placeholder:text-fg-muted/70"
         />
@@ -133,8 +142,10 @@ function StringField({
   }
   return (
     <div className="flex flex-col gap-1.5">
-      {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
+      {desc ? <p id={`${id}-help`} className="text-xs text-fg-muted">{desc}</p> : null}
       <input
+        id={id}
+        aria-describedby={desc ? `${id}-help` : undefined}
         name={name}
         type="text"
         className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2.5 text-sm text-fg placeholder:text-fg-muted/70"
@@ -148,11 +159,13 @@ function StringField({
 }
 
 function NumberField({
+  id,
   s,
   value,
   onChange,
   disabled,
 }: {
+  id: string;
   s: JsonSchema;
   value: number;
   onChange: (v: number) => void;
@@ -161,8 +174,10 @@ function NumberField({
   const desc = typeof s.description === 'string' ? s.description : undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
+      {desc ? <p id={`${id}-help`} className="text-xs text-fg-muted">{desc}</p> : null}
       <NumberInput
+        id={id}
+        aria-describedby={desc ? `${id}-help` : undefined}
         type="number"
         className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2.5 text-sm text-fg"
         value={Number.isFinite(value) ? value : 0}
@@ -174,12 +189,14 @@ function NumberField({
 }
 
 function BooleanField({
+  id,
   s,
   value,
   onChange,
   disabled,
   labels,
 }: {
+  id: string;
   s: JsonSchema;
   value: boolean;
   onChange: (v: boolean) => void;
@@ -192,6 +209,8 @@ function BooleanField({
   return (
     <label className="flex items-center gap-2 text-sm text-fg">
       <input
+        id={id}
+        aria-labelledby={`${id}-label`}
         type="checkbox"
         className="size-4 rounded border border-edge"
         checked={value}
@@ -204,12 +223,14 @@ function BooleanField({
 }
 
 function ArrayStringField({
+  id,
   s,
   value,
   onChange,
   disabled,
   labels,
 }: {
+  id: string;
   s: JsonSchema;
   value: string[];
   onChange: (v: string[]) => void;
@@ -231,7 +252,7 @@ function ArrayStringField({
   };
   return (
     <div className="flex flex-col gap-1.5">
-      {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
+      {desc ? <p id={`${id}-help`} className="text-xs text-fg-muted">{desc}</p> : null}
       <div className="flex flex-wrap gap-1">
         {normalizedValue.map((t) => (
           <span
@@ -251,6 +272,8 @@ function ArrayStringField({
         ))}
       </div>
       <input
+        id={id}
+        aria-describedby={desc ? `${id}-help` : undefined}
         className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2.5 text-sm"
         disabled={disabled}
         placeholder={labels?.arrayAddPlaceholder ?? 'Add and press Enter'}
@@ -281,14 +304,16 @@ function FieldRow({
   disabled: boolean;
   labels?: SchemaFormLabels;
 }) {
+  const id = useId();
   const t = sub.type;
   const title =
     (typeof sub.title === 'string' && sub.title.length > 0 ? sub.title : null) ?? k;
   if (t === 'boolean') {
     return (
       <div className="space-y-1.5">
-        <p className="text-sm font-medium text-fg">{title}</p>
+        <label id={`${id}-label`} htmlFor={id} className="text-sm font-medium text-fg">{title}</label>
         <BooleanField
+          id={id}
           s={sub}
           value={value === true}
           disabled={disabled}
@@ -301,8 +326,9 @@ function FieldRow({
   if (t === 'number' || t === 'integer') {
     return (
       <div className="space-y-1.5">
-        <p className="text-sm font-medium text-fg">{title}</p>
+        <label htmlFor={id} className="text-sm font-medium text-fg">{title}</label>
         <NumberField
+          id={id}
           s={sub}
           value={typeof value === 'number' ? value : 0}
           disabled={disabled}
@@ -314,8 +340,10 @@ function FieldRow({
   if (t === 'string') {
     return (
       <div className="space-y-1.5">
-        <p className="text-sm font-medium text-fg">{title}</p>
+        <label htmlFor={id} className="text-sm font-medium text-fg">{title}</label>
         <StringField
+          labels={labels}
+          id={id}
           name={k}
           s={sub}
           value={typeof value === 'string' ? value : ''}
@@ -332,8 +360,9 @@ function FieldRow({
     if (acceptsString) {
       return (
         <div className="space-y-1.5">
-          <p className="text-sm font-medium text-fg">{title}</p>
+          <label htmlFor={id} className="text-sm font-medium text-fg">{title}</label>
           <ArrayStringField
+            id={id}
             s={sub}
             value={Array.isArray(value) && value.every((x) => typeof x === 'string' || typeof x === 'number') ? value.map(String) : []}
             disabled={disabled}

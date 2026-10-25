@@ -144,10 +144,10 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
         locale: language === 'zh' ? 'zh-CN' : 'en-US',
       });
       dispatch({ type: 'patch', patch: { step: 'provider' } });
-    } catch (cause) {
+    } catch {
       dispatch({
         type: 'patch',
-        patch: { error: cause instanceof Error ? cause.message : String(cause) },
+        patch: { error: language === 'zh' ? '称呼暂未保存，可重试或稍后设置并继续连接模型。若登录已失效，请先重新连接本机服务。' : 'Your name was not saved. Retry or set it later and continue to model setup. Reconnect the service if your sign-in has expired.' },
       });
     } finally {
       dispatch({ type: 'patch', patch: { busy: false } });
@@ -240,6 +240,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
                 <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
                   <span />
                   <OnboardingProgress step={step} label={stepLabel} />
+                  <Button variant="ghost" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>{language === 'zh' ? '稍后设置称呼' : 'Set name later'}</Button>
                   <Button variant="primary" className="h-11 justify-self-end px-5" disabled={busy} onClick={() => void continueFromCallName()}>
                     {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
                     {busy ? o.savingProfile : o.continue}
@@ -320,9 +321,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
             void finishCloudSetup();
             return;
           }
-          void updateUserProfile({ ...(callName.trim() ? { callName: callName.trim() } : {}), timezone: detectBrowserTimezone(), locale: language === 'zh' ? 'zh-CN' : 'en-US' })
-            .then(() => { setProviderDialogOpen(false); dispatch({ type: 'patch', patch: { step: 'success', error: null } }); })
-            .catch(cause => dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } }));
+          setProviderDialogOpen(false);
+          dispatch({ type: 'patch', patch: { step: 'success', error: null } });
         }}
       /> : null}
     </div>

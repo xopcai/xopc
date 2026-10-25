@@ -1,3 +1,4 @@
+import { searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
 import { describe, expect, it } from 'vitest';
 
 import { messages } from '@/i18n/messages';
@@ -31,4 +32,14 @@ describe('automation chat creation navigation', () => {
     expect(chinese).toContain('何时运行');
     expect(chinese).not.toBe(english);
   });
+});
+
+it('retains the creation scene when the new route receives its conversation ID, without enabling auto-send', () => {
+  const href = automationChatCreateHref('Create a draft', 'project-1');
+  const handoff = new URLSearchParams(searchParamsForComposerHandoff(href.split('?')[1]));
+  expect(handoff.get('setup')).toBe('automation');
+  expect(handoff.get('draft')).toBe('Create a draft');
+  expect(handoff.has('projectId')).toBe(false);
+  expect(handoff.has('autoSend')).toBe(false);
+  expect(searchParamsForComposerHandoff('?setup=arbitrary')).toBe('');
 });

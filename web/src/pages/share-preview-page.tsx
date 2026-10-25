@@ -17,6 +17,7 @@ import {
   type PreviewFileDescriptor,
   type PreviewRuntimeRenderProps,
 } from '@/features/preview-runtime';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import type { MarkdownChartBlock } from '@/components/markdown/parse-markdown';
@@ -115,6 +116,7 @@ export function SharePreviewPage() {
   const [meta, setMeta] = useState<ShareMeta | null>(null);
   const [load, setLoad] = useState<SharePreviewLoad>(emptyLoad);
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [noteView, setNoteView] = useState<SharedNoteView | null>(null);
   const [sessionView, setSessionView] = useState<SharedSessionView | null>(null);
@@ -144,16 +146,18 @@ export function SharePreviewPage() {
       try {
         setLoading(true);
         setError(null);
+        setMeta(null);
         setLoad(emptyLoad());
         setNoteView(null);
         setSessionView(null);
         const metaRes = await fetch(apiUrl(`/s/${encodeURIComponent(token)}/meta`));
         if (!metaRes.ok) {
-          if (!cancelled) setError(metaRes.status === 404 ? t.notFound : t.expired);
+          if (!cancelled) setError(metaRes.status === 404 ? t.notFound : metaRes.status === 410 ? t.expired : t.unavailable);
           return;
         }
         const m = (await metaRes.json()) as ShareMeta;
         if (cancelled) return;
+        if (!m || !['file', 'directory', 'note', 'session'].includes(m.kind) || typeof m.valid !== 'boolean') throw new Error('Invalid share metadata');
         setMeta(m);
         if (!m.valid) {
           setError(t.expired);
@@ -162,10 +166,11 @@ export function SharePreviewPage() {
         if (m.kind === 'note' || m.kind === 'session') {
           const viewRes = await fetch(apiUrl(`/s/${encodeURIComponent(token)}/view`), { method: 'POST' });
           if (!viewRes.ok) {
-            setError(viewRes.status === 404 ? t.notFound : t.expired);
+            setError(viewRes.status === 404 ? t.notFound : viewRes.status === 410 ? t.expired : t.unavailable);
             return;
           }
           const view = await viewRes.json() as { payload?: SharedNoteView | SharedSessionView };
+          if (view.payload?.kind !== m.kind) throw new Error('Invalid share content');
           if (!cancelled && view.payload?.kind === 'note') setNoteView(view.payload);
           if (!cancelled && view.payload?.kind === 'session') setSessionView(view.payload);
           return;
@@ -184,7 +189,7 @@ export function SharePreviewPage() {
           }
           const res = await fetch(contentUrl);
           if (!res.ok) {
-            setError(t.expired);
+            setError(res.status === 404 ? t.notFound : res.status === 410 ? t.expired : t.unavailable);
             return;
           }
           const text = await res.text();
@@ -199,7 +204,7 @@ export function SharePreviewPage() {
           }
           const res = await fetch(contentUrl);
           if (!res.ok) {
-            setError(t.expired);
+            setError(res.status === 404 ? t.notFound : res.status === 410 ? t.expired : t.unavailable);
             return;
           }
           const binaryBuffer = await res.arrayBuffer();
@@ -218,8 +223,8 @@ export function SharePreviewPage() {
           }
           setLoad({ ...emptyLoad(), binaryBuffer });
         }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      } catch {
+        if (!cancelled) setError(t.unavailable);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -227,12 +232,12 @@ export function SharePreviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, t.expired, t.invalidLink, t.notFound, t.tooLarge]);
+  }, [token, attempt, t.expired, t.invalidLink, t.notFound, t.tooLarge, t.unavailable]);
 
   const downloadUrl = token ? apiUrl(`/s/${encodeURIComponent(token)}?dl=1`) : '#';
   const openInlineUrl = token ? apiUrl(`/s/${encodeURIComponent(token)}?inline=1`) : '#';
 
-  if (descriptor && meta && token) {
+  if (descriptor && meta && token && !error) {
     return (
       <SharedFilePreview
         language={language}
@@ -295,9 +300,12 @@ export function SharePreviewPage() {
             <Skeleton className="mt-6 min-h-0 flex-1 rounded-lg" />
           </div>
         ) : error ? (
-          <div className="rounded-lg bg-surface-panel p-6 shadow-surface text-sm text-fg">
+          <div role="alert" className="rounded-lg bg-surface-panel p-6 shadow-surface text-sm text-fg">
             <p className="font-medium">{t.error}</p>
             <p className="mt-1 text-fg-muted">{error}</p>
+            <p className="mt-2 text-fg-muted">{t.recovery}</p>
+            <Button className="mt-4" onClick={() => setAttempt((value) => value + 1)}>{t.retry}</Button>
+            {meta?.kind === 'file' && error === t.tooLarge ? <a className="ml-4 text-accent hover:underline" href={downloadUrl}>{t.download}</a> : null}
           </div>
         ) : meta?.kind === 'directory' ? (
           <div className="rounded-lg bg-surface-panel p-6 shadow-surface text-sm text-fg-muted">
@@ -382,7 +390,11 @@ function formatBytes(n: number): string {
 }
 
 const PREVIEW_LABELS_ZH = {
-  error: '加载失败',
+  error: '暂时无法打开分享',
+  unavailable: '分享服务暂时不可用，请稍后重试。',
+  recovery: '如果链接已失效或仍无法打开，请向分享者索取新链接。',
+  retry: '重试',
+  download: '下载文件',
   expired: '链接已失效',
   notFound: '链接不存在',
   invalidLink: '链接无效',
@@ -399,7 +411,11 @@ const PREVIEW_LABELS_ZH = {
 } as const;
 
 const PREVIEW_LABELS_EN = {
-  error: 'Failed to load',
+  error: 'Unable to open this share',
+  unavailable: 'The sharing service is temporarily unavailable. Please try again.',
+  recovery: 'If the link has expired or still cannot be opened, ask the sender for a new link.',
+  retry: 'Try again',
+  download: 'Download file',
   expired: 'Link no longer valid',
   notFound: 'Link not found',
   invalidLink: 'Invalid link',

@@ -55,3 +55,5 @@ export * from './recording-outcome.js';
 export * from './browser-setup.js';
 
 export * from './phone-setup.js';
+
+export * from './task-display.js';

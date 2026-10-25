@@ -107,3 +107,14 @@ it('finishes with partial capabilities and reports unsupported uses without subm
   expect(api.apply).toHaveBeenCalledExactlyOnceWith('xopc-cloud', { mode: 'replace', selected: ['chat'] }, 'partial');
   expect(container.textContent).toContain('部分能力暂无可用模型');
 });
+
+it.each(['network timeout', 'HTTP 500', 'HTTP 401'])('lets optional name setup recover without losing the provider step (%s)', async reason => {
+  api.profile.mockRejectedValueOnce(new Error(reason));
+  await click('继续');
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('称呼暂未保存');
+  expect(container.querySelector('[role="alert"]')?.textContent).not.toContain(reason);
+  await click('稍后设置称呼');
+  expect(container.textContent).toContain('连接 XOPC Cloud');
+  expect(api.apply).not.toHaveBeenCalled();
+  expect(api.complete).not.toHaveBeenCalled();
+});

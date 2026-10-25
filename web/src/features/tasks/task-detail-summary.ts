@@ -42,3 +42,40 @@ export function summarizeTaskCriteria(detail: TaskDetail): CriterionSummary[] {
       : automatic;
   });
 }
+
+/** Read the newest receipt for the current task contract, never an older objective. */
+export function currentTaskReceipt(detail: TaskDetail) {
+  const runIds = new Set(detail.runs.filter((run) => run.contractVersion === detail.task.latestContractVersion).map((run) => run.id));
+  return detail.receipts.filter((receipt) => runIds.has(receipt.runId)).sort((a, b) => b.finalizedAt - a.finalizedAt)[0];
+}
+
+export function summarizeTaskResult(detail: TaskDetail) {
+  const receipt = currentTaskReceipt(detail);
+  const criteria = summarizeTaskCriteria(detail);
+  return {
+    receipt,
+    verified: criteria.filter((criterion) => criterion.status === 'passed').length,
+    criteria: criteria.length,
+    deliverables: detail.context.filter((item) => item.role === 'deliverable').length,
+  };
+}
+
+export type DetailStatusKey = 'allocating' | 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'failed' | 'cancelled' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
+export function detailStatusKey(detail: TaskDetail): DetailStatusKey {
+  if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
+  if (detail.waits.some((wait) => wait.kind === 'paused')) return 'paused';
+  if (detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) return 'needsUser';
+  if (detail.operationalState !== 'idle') return detail.operationalState;
+  if (detail.task.phase === 'backlog') return 'captured';
+  if (detail.task.phase === 'ready') return 'ready';
+  if (detail.task.phase === 'review') return 'review';
+  return 'ready';
+}
+
+export function detailStatusTone(status: DetailStatusKey): string {
+  if (status === 'failed') return 'bg-danger/10 text-danger';
+  if (status === 'needsUser' || status === 'blocked') return 'bg-warning/10 text-warning';
+  if (status === 'completed') return 'bg-success-soft text-success';
+  if (status === 'running' || status === 'verifying' || status === 'review') return 'bg-accent-soft text-accent-fg';
+  return 'bg-surface-hover text-fg-muted';
+}

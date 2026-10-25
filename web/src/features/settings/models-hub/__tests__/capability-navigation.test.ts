@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { modelCapabilityPath, withCapabilityReturnContext } from '../capability-navigation';
+import { capabilityReturnPath, modelCapabilityPath, withCapabilityReturnContext } from '../capability-navigation';
 it('uses one canonical page and a modal command for capability configuration',()=>{
   expect(modelCapabilityPath('speech',true)).toBe('/settings/capabilities/models?configure=speech&tab=services');
 });
@@ -10,4 +10,11 @@ it.each(['/chat/test?mode=voice','/personal'])('preserves the internal return de
 });
 it('does not forward external return destinations',()=>{
   expect(withCapabilityReturnContext(modelCapabilityPath('speech'),new URLSearchParams({returnTo:'https://example.test'}))).toBe(modelCapabilityPath('speech'));
+});
+
+it.each(['/settings/phone-use', '/automations?projectId=sample'])('retains the task context for %s', path => {
+  expect(capabilityReturnPath(path)).toBe(path);
+});
+it.each(['//evil.example', '/settings/phone-use\\evil', 'javascript:alert(1)'])('rejects unsafe return paths %s', path => {
+  expect(capabilityReturnPath(path)).toBeUndefined();
 });

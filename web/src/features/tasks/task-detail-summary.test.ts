@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TaskDetail } from './home-api';
-import { summarizeTaskCriteria } from './task-detail-summary';
+import { currentTaskReceipt, summarizeTaskCriteria, summarizeTaskResult } from './task-detail-summary';
 
 function detail(): TaskDetail {
   return {
@@ -41,4 +41,22 @@ describe('summarizeTaskCriteria', () => {
     task.runs.push({ id: 'latest', contractVersion: 2 } as unknown as TaskDetail['runs'][number]);
     expect(summarizeTaskCriteria(task)[0]).toMatchObject({ status: 'unverified', runId: 'latest', note: 'Missing source evidence', method: 'model_reviewed' });
   });
+});
+
+it('keeps a failed run, acceptance and linked delivery independent', () => {
+  const task = detail();
+  task.context = [];
+  task.receipts[0].status = 'succeeded';
+  task.receipts[1].status = 'failed';
+  expect(currentTaskReceipt(task)?.runId).toBe('current');
+  expect(summarizeTaskResult(task)).toMatchObject({ receipt: { status: 'failed' }, verified: 1, criteria: 1, deliverables: 0 });
+  task.context = [{ role: 'deliverable' }] as TaskDetail['context'];
+  expect(summarizeTaskResult(task).deliverables).toBe(1);
+});
+it('never borrows a previous contract result when the current one has not run', () => {
+  const task = detail();
+  task.task.latestContractVersion = 3;
+  task.context = [];
+  expect(currentTaskReceipt(task)).toBeUndefined();
+  expect(summarizeTaskResult(task)).toMatchObject({ verified: 0, deliverables: 0 });
 });

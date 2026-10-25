@@ -1,3 +1,4 @@
+import { PluginScopePreview } from './plugin-scope-preview';
 import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import { useLocation, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -187,7 +188,7 @@ export function AgentPluginDialog({
   const startingAutomatically = autoInstall && !currentExtension && storeSource && !autoInstallStarted.current;
   return <Dialog.Root defaultOpen onOpenChange={open => !open && onClose()}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-[130] bg-scrim" />
-    <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex max-h-[min(42rem,calc(100dvh-2rem))] w-[min(38rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
+    <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex h-[min(42rem,calc(100dvh-2rem))] w-[min(38rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
       <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><div className="flex min-w-0 items-center gap-3"><CapabilityIcon iconUrl={currentExtension?.branding?.iconUrl ?? marketplace?.branding?.iconUrl} fallback={Package} /><Dialog.Title className="font-semibold">{currentExtension?.name ?? marketplaceName ?? (zh ? '安装插件' : 'Install plugin')}</Dialog.Title></div><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
       <Dialog.Description className="sr-only">{zh ? '安装、组件、账号连接和权限' : 'Installation, components, connections and permissions'}</Dialog.Description>
       <div className="min-h-0 flex-auto space-y-4 overflow-y-auto overscroll-contain p-4">
@@ -199,11 +200,12 @@ export function AgentPluginDialog({
               {marketplaceDescription ? <p className="mt-1 text-sm leading-relaxed text-fg-muted">{marketplaceDescription}</p> : null}
               <p className="mt-2 text-xs text-fg-muted">
                 {marketplace?.publisher?.verification === 'verified'
-                  ? (zh ? '已认证发布者 · 安装后所有 Agent 均可使用' : 'Verified publisher · available to all agents after installation')
+                  ? (zh ? '已认证发布者 · 安装后所有智能体均可使用' : 'Verified publisher · available to all agents after installation')
                   : (zh ? '安装前会检查来源和所需权限' : 'Source and required permissions are checked before installation')}
               </p>
             </div>
           </div>
+          {marketplace ? <PluginScopePreview data={marketplace} zh={zh} /> : null}
           {!plan ? <Button
             className="w-full"
             disabled={busy || startingAutomatically}
@@ -216,7 +218,7 @@ export function AgentPluginDialog({
         {currentExtension ? <>
           {installComplete ? <div role="status" className="flex items-start gap-3 rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-4">
             <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-            <div><p className="font-medium text-fg">{zh ? '插件已安装并启用' : 'Plugin installed and enabled'}</p><p className="mt-1 text-sm text-fg-muted">{zh ? '现在可以直接在对话中使用它。' : 'It is ready to use in your conversations.'}</p></div>
+            <div><p className="font-medium text-fg">{zh ? '插件已安装并启用' : 'Plugin installed and enabled'}</p><p className="mt-1 text-sm text-fg-muted">{zh ? '请继续检查账号连接、依赖与可用状态，再在对话中试用。' : 'It is ready to use in your conversations.'}</p></div>
           </div> : null}
           {(!currentExtension.setup || currentExtension.readiness !== 'setup_required') && !currentExtension.activationEligible ? <div role="status" className="space-y-3 rounded-lg border border-accent/25 bg-accent-soft p-4">
             <div><p className="font-medium text-accent-fg">{zh ? '插件已安装，当前尚未启用' : 'Plugin installed. It is not enabled yet.'}</p><p className="mt-1 text-sm text-fg-muted">{zh ? '启用后，Skills 和 MCP 才会加入 Agent 运行时。' : 'Enable it to make its skills and MCP servers available to the Agent runtime.'}</p></div>
@@ -310,7 +312,7 @@ export function AgentPluginDialog({
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
             <div>
               <p id="plugin-authorization-title" className="font-medium text-fg">{zh ? '需要你的授权' : 'Your authorization is required'}</p>
-              <p className="mt-1 text-fg-muted">{zh ? '此插件需要以下新增能力。确认后自动准备资源，按需登录账号，所有 Agent 均可使用。' : 'Review these capabilities. Resources are prepared automatically; sign in if needed. Available to all agents.'}</p>
+              <p className="mt-1 text-fg-muted">{zh ? '此插件需要以下新增能力。确认后自动准备资源，按需登录账号，所有智能体均可使用。' : 'Review these capabilities. Resources are prepared automatically; sign in if needed. Available to all agents.'}</p>
             </div>
           </div>
           <ul tabIndex={0} aria-label={zh ? '插件新增能力' : 'Added plugin capabilities'} className="max-h-[min(28vh,14rem)] space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-edge bg-surface-panel p-3 break-words focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{plan.addedCapabilities.map(c => <li key={c} className="flex gap-2"><span aria-hidden>•</span><span>{capabilityLabel(c, zh)}</span></li>)}</ul>
