@@ -169,7 +169,7 @@ actor DeviceEndpointHost {
 
     private func environmentRequest(_ path: String, body: Data? = nil) async throws -> EnvironmentAck {
         let response: GatewayEnvelope<EnvironmentAck> = try await client.request(path: path,
-            method: body == nil ? "GET" : "POST", body: body)
+                                                                                 method: body == nil ? "GET" : "POST", body: body)
         try Task.checkCancellation()
         guard response.isSuccessful, let payload = response.payload else { throw GatewayClientError.invalidResponse }
         return payload
@@ -181,7 +181,7 @@ actor DeviceEndpointHost {
         var sequence = 0
         var heartbeatSequence = 0
         var nextReport: Int64 = 0
-        while !Task.isCancelled && claim?.token == origin.token {
+        while !Task.isCancelled, claim?.token == origin.token {
             do {
                 if epoch == nil {
                     guard let endpoint = origin.endpointId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) else { return }
@@ -192,19 +192,23 @@ actor DeviceEndpointHost {
                 heartbeatSequence += 1
                 let source: [String: Any] = ["type": "endpoint", "endpointId": origin.endpointId, "token": origin.token]
                 _ = try await environmentRequest(root + "/heartbeats", body: Self.json(["origin": source, "heartbeat": [
-                    "connectionEpoch": epoch, "sequence": heartbeatSequence, "availability": foreground ? "foreground" : "background"]]))
+                    "connectionEpoch": epoch, "sequence": heartbeatSequence, "availability": foreground ? "foreground" : "background"
+                ]]))
                 let now = Self.now()
-                if foreground && now >= nextReport {
+                if foreground, now >= nextReport {
                     sequence += 1
                     _ = try await environmentRequest(root + "/reports", body: Self.json(["origin": source, "report": [
                         "version": 1, "reportId": UUID().uuidString, "connectionEpoch": epoch, "sequence": sequence,
                         "baseRevision": NSNull(), "mode": "full", "capturedAt": now,
                         "values": ["environment.timezone": TimeZone.current.identifier,
-                                   "environment.locale": Locale.current.identifier.replacingOccurrences(of: "_", with: "-")]]]))
-                    nextReport = now + 60_000
+                                   "environment.locale": Locale.current.identifier.replacingOccurrences(of: "_", with: "-")]
+                    ]]))
+                    nextReport = now + 60000
                 }
             } catch {
-                if Task.isCancelled { return }
+                if Task.isCancelled {
+                    return
+                }
                 epoch = nil; nextReport = 0
             }
             do { try await Task.sleep(for: .seconds(15)) } catch { return }
