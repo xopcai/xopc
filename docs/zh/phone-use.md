@@ -80,6 +80,8 @@ pnpm exec tsx scripts/verify-phone-use.mts
 
 ### 执行可靠性与完成证据
 
+阿里云手机通过内置的只读无障碍采集程序获取节点，不等待全局界面空闲，避免动态设置页面导致 `uiautomator dump` 失败。程序通过已认证的 ADB 临时运行，采集后删除，不安装 APK；Gateway 同时检查节点和截图是否属于同一个前台应用。本地 ADB 固定使用压缩节点模式并进行有界重试。采集失败明确返回 `PHONE_UI_UNAVAILABLE`，不再伪装成界面变化或空节点；动作新鲜度检查仍然保留。修改 Java 源码后，使用 JDK 17、Android platform 36 和 build-tools 36.0.0，执行 `node scripts/build-phone-ui.mjs <Android SDK 目录>` 重建内置程序。
+
 手机模型会收到有界的会话内动作轨迹、原生 UI 节点和执行变化反馈。AutoGLM 保留已验证的单个 JSON 用户观察消息；真实 App 对照中回退的对话重排、中心点提示及采样试验已撤回。轨迹与输入内容不保存到运行报告。格式错误最多允许每次 run 修复一次，计入模型请求预算；同一页面状态反复执行相同动作时以 `no_progress` 暂停，需要查看手机并显式交还后继续。
 
 AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重新确认字段身份，在支持时选中原内容，只输入一次，并验证最终准确值。结构化 `typeText` 默认仍为插入，可指定 `mode: "replace"`。延迟验证只重新观察，不重发输入。

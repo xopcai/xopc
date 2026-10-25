@@ -113,7 +113,8 @@ function sameTextEditor(target: PhoneElement, node: PhoneElement): boolean {
 export class AdbPhoneDriver implements PhoneDriver {
   constructor(private readonly adbPath = resolveAdbPath(), private readonly command = runAdb, private readonly useAndroidCli = true,
     private readonly readApplications?: (signal: AbortSignal) => Promise<PhoneApplication[]>,
-    private readonly pasteText?: (text: string, signal: AbortSignal) => Promise<void>) {}
+    private readonly pasteText?: (text: string, signal: AbortSignal) => Promise<void>,
+    private readonly readHierarchy?: (signal: AbortSignal) => Promise<string>) {}
   async textInputStatus(serial: string, signal: AbortSignal): Promise<PhoneTextInputStatus> {
     const androidSdk = Number((await this.shell(serial, ['getprop', 'ro.build.version.sdk'], signal)).trim()) || 0;
     let ready = false;
@@ -138,6 +139,17 @@ export class AdbPhoneDriver implements PhoneDriver {
     return (await this.command(this.adbPath, ['-s', serial, 'shell', ...args], signal)).toString();
   }
   async observe(serial: string, signal: AbortSignal): Promise<PhoneObservation> {
+    if (this.readHierarchy) {
+      const xml = await this.readHierarchy(signal);
+      const elements = parsePhoneUi(xml);
+      const app = new DOMParser().parseFromString(xml, 'text/xml').querySelector('node')?.getAttribute('package');
+      const observation = await this.capture(serial, signal);
+      if (!app || app !== observation.package) {
+        observation.frame.fill(0);
+        throw new PhoneError('PHONE_FRAME_CHANGED', 'Application changed between the UI hierarchy and screenshot; retry');
+      }
+      return { ...observation, elements };
+    }
     // Dump first: screenshots represent the UI after the accessibility snapshot.
     let elements: PhoneElement[] = [];
     const android = this.useAndroidCli ? androidCliPath() : undefined;
@@ -151,16 +163,24 @@ export class AdbPhoneDriver implements PhoneDriver {
         if (!elements.length) await delay(350, undefined, { signal });
       }
     }
-    // Some cloud builds need compressed nodes when a full hierarchy never reaches idle.
-    if (!elements.length) for (const flags of [[], ['--compressed']]) {
+    // Keep the hierarchy mode stable across captures; switching modes changes container nodes.
+    if (!elements.length) for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const path = `/data/local/tmp/xopc-phone-${randomUUID()}.xml`;
         try {
-          await this.shell(serial, ['uiautomator', 'dump', ...flags, path], signal);
-          elements = parsePhoneUi(await this.shell(serial, ['cat', path], signal));
+          const result = await this.shell(serial, ['uiautomator', 'dump', '--compressed', path], signal);
+          if (!result.includes(path)) throw new Error('UI hierarchy dump did not complete');
+          const xml = await this.shell(serial, ['cat', path], signal);
+          if (!xml.includes('<hierarchy') || (!xml.includes('</hierarchy>') && !/<hierarchy\b[^>]*\/>/.test(xml))) throw new Error('UI hierarchy dump is incomplete');
+          elements = parsePhoneUi(xml);
         } finally { await this.shell(serial, ['rm', '-f', path], signal).catch(() => {}); }
-      } catch (error) { signal.throwIfAborted(); if (error instanceof Error && error.message === 'PHONE_UI_INVALID') throw error; }
-      if (elements.length) break;
+        break;
+      } catch (error) {
+        signal.throwIfAborted();
+        if (error instanceof Error && error.message === 'PHONE_UI_INVALID') throw error;
+        if (attempt === 2) throw new PhoneError('PHONE_UI_UNAVAILABLE', 'Unable to capture the phone UI hierarchy; retry observation before controlling the phone', 502);
+        await delay(1000, undefined, { signal });
+      }
     }
     return { ...await this.capture(serial, signal), elements };
   }
