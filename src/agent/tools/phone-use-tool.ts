@@ -77,7 +77,7 @@ export function createPhoneUseTool(deps: {
       }
       finally { unsubscribe?.(); }
       if (resume && (input.op === 'run' || input.op === 'step')) restoredRunId = runId;
-      if (input.op === 'cancel' || input.op === 'close') cancelPhoneAssistance(owner);
+      if (input.op === 'cancel' || input.op === 'close' && !resume) cancelPhoneAssistance(owner);
       if (setupOwner) setup!.afterInput(setupContext, setupOwner.owner, input.op);
       return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result };
     },

@@ -32,7 +32,8 @@ export function registerLocationSharingRoutes(parent: Hono, deps: AuthenticatedR
   const authorize = (c: Context, origin: z.infer<typeof endpointTurnClaimSchema>) =>
     endpointClaimBelongsToPrincipal(runtime.registry, origin.endpointId, getGatewayPrincipal(c))
       && runtime.registry.verifyTurnClaim(origin.endpointId, origin.token);
-  for (const path of [root, `${root}/*`]) app.use(path, bodyLimit({ maxSize: 4096 }), async (c, next) => {
+  for (const path of [root, `${root}/*`]) app.use(path, bodyLimit({ maxSize: 4096,
+    onError: c => c.json({ ok: false, error: { code: 'LOCATION_TOO_LARGE', message: 'Location request exceeds 4 KB' } }, 413) }), async (c, next) => {
     c.header('Cache-Control', 'no-store');
     await next();
   });

@@ -76,10 +76,11 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   const seenPhones = useRef(new Set<string>());
   useEffect(() => {
     const report = phone.data?.report;
-    if (!report || phoneEnded(report.status) || seenPhones.current.has(report.sessionId)) return;
-    seenPhones.current.add(report.sessionId);
+    const phoneId = report?.deviceId ?? report?.sessionId;
+    if (!report || !phoneId || phoneEnded(report.status) || seenPhones.current.has(phoneId)) return;
+    seenPhones.current.add(phoneId);
     const current = useRightWorkspaceStore.getState().panes[scope];
-    useRightWorkspaceStore.getState().openPhone(report.sessionId, report.deviceName, scope,
+    useRightWorkspaceStore.getState().openPhone(phoneId, report.deviceName, scope,
       available >= 900 && (!current?.open || current.tabs.find(t => t.id === current.activeId)?.kind === 'home'));
   }, [phone.data, scope, available]);
   const phoneLayout = active?.kind === 'phone';
