@@ -23,11 +23,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +67,33 @@ internal fun AssistantWaitingBubble(runId: String, narration: String?, connected
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
+  }
+}
+
+@Composable
+internal fun AssistantStagesView(progress: AssistantRunProgress, answerStarted: Boolean,
+  connected: Boolean, paused: Boolean) {
+  var expanded by remember(progress.runId) { mutableStateOf(false) }
+  val stages = progress.visibleStages(answerStarted)
+  val status = if (paused) "suspended" else progress.terminalStatus
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("assistant-stages")) {
+    if (stages.size > 3) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.testTag("assistant-stages-toggle")) {
+      Text(if (expanded) stringResource(R.string.assistant_stages_collapse)
+        else stringResource(R.string.assistant_stages_expand, stages.size - 3))
+    }
+    (if (expanded) stages else stages.takeLast(3)).forEach { stage -> key(stage.id) {
+      Text(stage.text, style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.testTag("assistant-stage-${stage.id}"))
+    } }
+    if (status != null) Text(stringResource(when (status) {
+      "error" -> R.string.assistant_run_error
+      "suspended" -> R.string.assistant_stages_waiting
+      else -> R.string.assistant_stages_interrupted
+    }), style = MaterialTheme.typography.bodySmall,
+      color = if (status == "error") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+      modifier = Modifier.testTag("assistant-stages-status"))
+    else AssistantWaitingBubble(progress.runId ?: "sending", narration = null, connected = connected)
   }
 }
 

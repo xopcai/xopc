@@ -153,6 +153,7 @@ private extension String {
 
 struct MessageBlock: Decodable, Sendable {
     var presentation: String?
+    var segmentId: String?
     let type: String
     let text: String?
     let thinking: String?

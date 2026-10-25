@@ -65,7 +65,8 @@ struct AssistantView<Dock: View>: View {
         PhoneConversationPages(showingPhone: showingPhone, canPage: phone.summary?.available == true && phone.live?.ownControl != true,
                                onPage: { showingPhone = $0 }, phone: phone) { chatBody }
             .task(id: PhoneObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                          active: isActive && scenePhase == .active, visible: showingPhone)) {
+                                          active: isActive && scenePhase == .active, visible: showingPhone))
+            {
                 guard isActive, scenePhase == .active, let conversation, !conversation.isDraft else { phone.leave(); return }
                 await phone.observe(configuration: configuration, conversationID: conversation.id, visible: showingPhone)
             }
@@ -308,7 +309,7 @@ struct AssistantView<Dock: View>: View {
         } else if state.isLoadingHistory {
             ProgressView("正在读取消息…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if state.messages.isEmpty {
+        } else if state.messages.isEmpty, !showsStagedProgress {
             GeometryReader { viewport in
                 ScrollView {
                     LazyVStack(spacing: 16) {
@@ -394,8 +395,19 @@ struct AssistantView<Dock: View>: View {
                                 }
                             }
                         }
-                        if state.isRunActive, state.errorMessage == nil, state.clarification == nil,
-                           !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
+                        if showsStagedProgress {
+                            AssistantStagesView(progress: state.runProgress,
+                                                answerStarted: state.messages.contains {
+                                                    $0.role == "assistant" && $0.turnId == state.runProgress.runID && $0.answerConfirmed && !$0.text.isEmpty
+                                                }, paused: state.clarification != nil)
+                                .id(state.runProgress.runID ?? "sending")
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                                    activityHeight = height
+                                    updateReplySpace()
+                                }
+                                .onDisappear { activityHeight = 0; updateReplySpace() }
+                        } else if isPersonalConversation, state.isRunActive, state.errorMessage == nil, state.clarification == nil,
+                                  !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
                         {
                             AssistantActivityView(narration: state.executionActivity.last(where: { $0.id.hasPrefix("narration:") })?.title)
                                 .id(state.runID ?? "sending")
@@ -512,7 +524,7 @@ struct AssistantView<Dock: View>: View {
         let replyRows = state.messages.dropFirst(anchor + 1)
         let replyHeight = replyRows.reduce(CGFloat.zero) { height, row in
             height + (replyRowHeights[row.id] ?? 0) + 14
-        } + (state.isRunActive ? activityHeight + 14 : 0)
+        } + (state.isRunActive || showsStagedProgress ? activityHeight + 14 : 0)
         replySpace.consume(replyHeight: replyHeight, availableHeight: messageViewportHeight - bottomDockHeight - 24,
                            following: followingBottom)
     }
@@ -534,6 +546,10 @@ struct AssistantView<Dock: View>: View {
 
     private var isPersonalConversation: Bool {
         personalAgent?.isReady == true && conversation?.id == personalAgent?.conversationId
+    }
+
+    private var showsStagedProgress: Bool {
+        !isPersonalConversation && (state.isRunActive || state.runProgress.terminalStatus != nil)
     }
 
     private var currentAgentName: String {
@@ -758,7 +774,9 @@ struct AssistantView<Dock: View>: View {
                     Button { showingPhone = true } label: {
                         Image(systemName: "iphone").font(.system(size: 22)).frame(width: 44, height: 44)
                             .overlay(alignment: .topTrailing) {
-                                if phone.summary?.needsUser == true { Circle().fill(.blue).frame(width: 6, height: 6).padding(6) }
+                                if phone.summary?.needsUser == true {
+                                    Circle().fill(.blue).frame(width: 6, height: 6).padding(6)
+                                }
                             }
                     }.accessibilityLabel("查看手机").accessibilityIdentifier("chat-header-phone")
                 }

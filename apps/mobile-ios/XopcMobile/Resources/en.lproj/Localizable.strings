@@ -993,3 +993,13 @@
 "结束控制，保持暂停" = "End control, keep paused";
 
 "手机连接已结束，返回对话继续。" = "The phone connection has ended. Return to chat to continue.";
+
+"收起较早进展" = "Collapse earlier stages";
+
+"展开前 %lld 条进展" = "Show %lld earlier stages";
+
+"助手执行失败，请重试。" = "The assistant could not complete this task. Please try again.";
+
+"等待你的操作，完成确认或补充信息后继续。" = "Waiting for your input. Complete the requested action to continue.";
+
+"执行已中断，已完成的操作会保留。" = "Execution stopped. Completed work is retained.";

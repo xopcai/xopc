@@ -1,10 +1,46 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.gateway.ConversationMessage
+import ai.xopc.mobile.gateway.ConversationNarration
 import org.junit.Assert.*
 import org.junit.Test
 
 class ChatRenderingTest {
+  @Test fun stagesStayOrderedWhileDraftsArePendingAndDisappearWithTheFinalAnswer() {
+    var progress = AssistantRunProgress("run")
+    (1..4).forEach { progress = progress.record("stage-$it", "阶段 $it") }
+    progress = progress.record("stage-4", "重放")
+    assertEquals(listOf("阶段 1", "阶段 2", "阶段 3", "阶段 4"), progress.visibleStages(false).map { it.text })
+    assertEquals(listOf("stage-2", "stage-3", "stage-4"), progress.visibleStages(false).takeLast(3).map { it.id })
+    assertTrue(progress.visibleStages(true).isEmpty())
+    assertTrue(progress.copy(status = "success").visibleStages(false).isEmpty())
+    assertEquals(4, progress.stages.size)
+  }
+
+  @Test fun terminalStatesRetainStagesAndNewRunsStartClean() {
+    val progress = AssistantRunProgress("run").record("stage", "正在安装")
+    listOf("error", "cancelled", "suspended").forEach { status ->
+      val stopped = progress.copy(status = status)
+      assertEquals(status, stopped.terminalStatus)
+      assertEquals("正在安装", stopped.visibleStages(true).single().text)
+      assertEquals(stopped, stopped.forRun("run"))
+      assertTrue(stopped.forRun("next").stages.isEmpty())
+      assertEquals(null, stopped.forRun("next").terminalStatus)
+    }
+  }
+
+  @Test fun historyRecoveryRestoresPublicStagesWithoutDuplicatingReplayOrMixingTurns() {
+    val progress = AssistantRunProgress("run").record("stage-2", "安装中")
+    val history = listOf(
+      ConversationMessage("saved", "assistant", "", "run", narrations = listOf(
+        ConversationNarration("stage-1", "确认连接"), ConversationNarration("stage-2", "安装中"))),
+      ConversationMessage("other", "assistant", "", "old", narrations = listOf(ConversationNarration("private", "其他会话"))),
+    )
+    val restored = progress.restore(history)
+    assertEquals(listOf("确认连接", "安装中"), restored.visibleStages(false).map { it.text })
+    assertEquals(restored, restored.restore(history))
+  }
+
   @Test fun transportDraftsWaitForAnswerClassification() {
     val buffer = ChatStreamBuffer()
     assertTrue(buffer.append("draft", "run", emptyList(), "Checking the sources", 0))

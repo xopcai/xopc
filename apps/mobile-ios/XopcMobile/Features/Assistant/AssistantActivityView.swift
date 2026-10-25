@@ -30,6 +30,62 @@ struct AssistantActivityView: View {
     }
 }
 
+struct AssistantStagesView: View {
+    let progress: AssistantRunProgress
+    let answerStarted: Bool
+    let paused: Bool
+    @State private var expanded = false
+
+    private var status: String? {
+        paused ? "suspended" : progress.terminalStatus
+    }
+
+    private var stages: [ExecutionActivityItem] {
+        progress.visibleStages(answerStarted: answerStarted)
+    }
+
+    private var statusLabel: LocalizedStringKey {
+        switch status {
+        case "error": "助手执行失败，请重试。"
+        case "suspended": "等待你的操作，完成确认或补充信息后继续。"
+        default: "执行已中断，已完成的操作会保留。"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if stages.count > 3 {
+                Button {
+                    expanded.toggle()
+                } label: {
+                    if expanded {
+                        Text("收起较早进展")
+                    } else {
+                        Text("展开前 \(stages.count - 3) 条进展")
+                    }
+                }
+                .font(.subheadline)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("assistant-stages-toggle")
+            }
+            ForEach(expanded ? stages : Array(stages.suffix(3))) { stage in
+                Text(verbatim: stage.title)
+                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                    .accessibilityIdentifier("assistant-stage-\(stage.id)")
+            }
+            if status != nil {
+                Text(statusLabel).font(.subheadline)
+                    .foregroundStyle(status == "error" ? Color.red : Color.secondary)
+                    .accessibilityIdentifier("assistant-stages-status")
+            } else {
+                AssistantActivityView(narration: nil)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("assistant-stages")
+    }
+}
+
 private struct WaitingReplyDot: View {
     let index: Int
     let animate: Bool
