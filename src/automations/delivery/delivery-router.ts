@@ -148,6 +148,7 @@ function toResult(run: AutomationRun, artifacts: AutomationArtifact[]): Automati
 
 export class AutomationDeliveryRouter {
   private active?: Promise<number>;
+  private backgroundFailureReported = false;
   private timer?: ReturnType<typeof setInterval>;
   private readonly handlers = new Map<string, AutomationDeliveryHandler>();
   private readonly owner = `automation-delivery:${process.pid}:${randomUUID()}`;
@@ -158,11 +159,14 @@ export class AutomationDeliveryRouter {
     onDeadLetter?: (input: { phase: 'result_delivery'; runId: string; destinationKey: string; error: string }) => void;
     fetch?: typeof fetch;
   } = {}) {
-    this.register('gateway_event', ({ run, config }) => this.options.deliverGatewayEvent?.(run, {
+    this.register('gateway_event', ({ run, config }) => {
+      if (!this.options.deliverGatewayEvent) throw new Error('Notification service is unavailable. Delivery will retry.');
+      return this.options.deliverGatewayEvent(run, {
       notificationPolicy: config.notificationPolicy as AutomationRunDeliveryContext['notificationPolicy'],
       requiresAttention: config.requiresAttention === true,
       ...(typeof config.projectId === 'string' ? { projectId: config.projectId } : {}),
-    }));
+      });
+    });
     this.register('webhook', input => this.postWebhook(input));
   }
 
@@ -183,6 +187,12 @@ export class AutomationDeliveryRouter {
         ? [{ id: `summary:${run.id}`, kind: 'text' as const, text: run.summary, mediaType: 'text/plain' as const }]
         : [];
     const result = toResult(run, artifacts);
+    const destinations = [...automation.delivery.destinations];
+    if (automation.delivery.notificationPolicy !== 'none' && !destinations.some(destination => destination.kind === 'gateway_event')) {
+      let key = 'gateway_event';
+      while (destinations.some(destination => destination.key === key)) key = `_${key}`;
+      destinations.push({ key, kind: 'gateway_event' });
+    }
     runSqliteWriteTransaction((db) => {
       db.prepare(`INSERT INTO automation_results (run_id, result_id, result_json, created_at_ms)
         VALUES (?, ?, ?, ?)`).run(run.id, result.resultId, JSON.stringify(result), now);
@@ -190,7 +200,7 @@ export class AutomationDeliveryRouter {
         delivery_id, run_id, destination_key, kind, status, config_json, attempts,
         next_attempt_at_ms, created_at_ms, updated_at_ms
       ) VALUES (?, ?, ?, ?, 'pending', ?, 0, ?, ?, ?)`);
-      for (const destination of automation.delivery.destinations) {
+      for (const destination of destinations) {
         const config = destination.kind === 'gateway_event'
           ? {
               ...destination,
@@ -207,8 +217,8 @@ export class AutomationDeliveryRouter {
 
   start(): void {
     if (this.timer) return;
-    void this.dispatch();
-    this.timer = setInterval(() => void this.dispatch(), 1_000);
+    this.dispatchInBackground();
+    this.timer = setInterval(() => this.dispatchInBackground(), 1_000);
     this.timer.unref?.();
   }
 
@@ -217,6 +227,13 @@ export class AutomationDeliveryRouter {
     this.timer = undefined;
     this.abortController.abort(new Error('Automation delivery router stopped'));
     await this.active?.catch(() => undefined);
+  }
+
+  dispatchInBackground(): void {
+    void this.dispatch().then(() => { this.backgroundFailureReported = false; }).catch(err => {
+      if (!this.backgroundFailureReported) log.error({ err }, 'Result delivery pass failed; durable work will retry');
+      this.backgroundFailureReported = true;
+    });
   }
 
   dispatch(): Promise<number> {

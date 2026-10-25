@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { getAutomationSetup } from '../../automations/configuration-conversation.js';
 import { getEmbeddedExecutionRunId } from '../embedded/execution-context.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import { localAppCapabilities } from '../../local-apps/capabilities/runtime.js';
@@ -625,7 +626,7 @@ async function handleAutomation(
   if (!automations) return { ok: false, error: 'Automation service is unavailable' };
   const invoke = async (operation: string, input: unknown) => {
     const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
-      surface: 'agent', scopes: ['automations.write'], authorize: deps.authorizeCapability ?? (() => true) };
+      surface: 'agent', conversationId: deps.getCurrentConversationId?.(), scopes: ['automations.write'], authorize: deps.authorizeCapability ?? (() => true) };
     try {
       return (operation === 'xopc.automations.delete' ? AutomationDeleteOutputSchema
         : operation === 'xopc.automations.cancel' ? AutomationCancelOutputSchema
@@ -697,7 +698,7 @@ async function handleAutomation(
       if (projectError) return { ok: false, error: projectError };
     }
     if (dryRun) return { ok: true, dryRun: true, action: 'update_automation', automationId: id, patch };
-    if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) {
+    if ((args.idempotencyKey !== undefined || getAutomationSetup(deps.getCurrentConversationId?.())?.automationId) && args.expectedRevision === undefined) {
       return { ok: false, error: 'Idempotent automation changes require expectedRevision from the original read' };
     }
     const expectedRevision = args.expectedRevision !== undefined ? args.expectedRevision : (await automations.get(id))?.updatedAtMs;
@@ -720,14 +721,14 @@ async function handleAutomation(
   if (!id) return { ok: false, error: 'automationId is required' };
   if (!dryRun && command === 'run') return invoke('xopc.automations.run', { id });
   if (!dryRun && command === 'delete') {
-    if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) {
+    if ((args.idempotencyKey !== undefined || getAutomationSetup(deps.getCurrentConversationId?.())?.automationId) && args.expectedRevision === undefined) {
       return { ok: false, error: 'Idempotent deletion requires the original expectedRevision' };
     }
     const expectedRevision = args.expectedRevision !== undefined ? args.expectedRevision : (await automations.get(id))?.updatedAtMs ?? null;
     return invoke('xopc.automations.delete', { id, expectedRevision });
   }
   if (!dryRun && (command === 'pause' || command === 'resume')) {
-    if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) {
+    if ((args.idempotencyKey !== undefined || getAutomationSetup(deps.getCurrentConversationId?.())?.automationId) && args.expectedRevision === undefined) {
       return { ok: false, error: 'Idempotent automation changes require expectedRevision from the original read' };
     }
     const expectedRevision = args.expectedRevision !== undefined ? args.expectedRevision : (await automations.get(id))?.updatedAtMs;

@@ -255,6 +255,9 @@ export interface AutomationRepairDraft {
 }
 
 export const automationApi = {
+  get: (id: string) => fetchJson<{ automation: Automation }>(apiUrl(`/api/automations/${encodeURIComponent(id)}`)),
+  configuration: (conversationId: string) => fetchJson<{ automation: Automation | null; deleted: boolean }>(apiUrl(`/api/automations/configuration-conversations/${encodeURIComponent(conversationId)}`)),
+  openConfiguration: (input: { automationId?: string; projectId?: string; runId?: string }) => fetchJson<{ conversationId: string }>(apiUrl('/api/automations/configuration-conversations'), { method: 'POST', body: JSON.stringify(input) }),
   tasks: () => fetchJson<{
     items: Array<{ task: AutomationTaskOption }>;
   }>(apiUrl('/api/tasks?limit=200')),
@@ -281,7 +284,7 @@ export const automationApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  update: (id: string, input: Partial<AutomationInput> & { enabled?: boolean }) =>
+  update: (id: string, input: Partial<AutomationInput> & { enabled?: boolean; expectedRevision?: number }) =>
     fetchJson<{ automation: Automation }>(apiUrl(`/api/automations/${encodeURIComponent(id)}`), {
       method: 'PATCH',
       body: JSON.stringify(input),

@@ -1,9 +1,10 @@
 import { AutomationCancelOutputSchema, AutomationReadOutputSchema, AutomationReadAllInputSchema, AutomationReadAllOutputSchema, AutomationDeleteInputSchema, AutomationDeleteOutputSchema, AutomationMutationOutputSchema, AutomationRunMutationOutputSchema, AutomationSetEnabledInputSchema, CapabilityResourceInputSchema, AutomationReplayEventInputSchema, AutomationRetryDeliveryInputSchema, AutomationRecoveryOutputSchema } from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
+import { assertAutomationSetupTarget, bindAutomationSetup } from '../configuration-conversation.js';
 import { CapabilityError, defineAtomicCapability, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import { getAutomation, getAutomationRun, markAutomationRunRead, markAllAutomationRunsRead } from '../storage/index.js';
-import { AutomationAlreadyExistsError, AutomationAlreadyRunningError, type AutomationService } from '../service/automation-service.js';
+import { AutomationInvalidAgentError, AutomationInvalidScheduleError, AutomationAlreadyExistsError, AutomationAlreadyRunningError, type AutomationService } from '../service/automation-service.js';
 import { CreateAutomationSchema, UpdateAutomationSchema } from '../domain/validation.js';
 import type { ProjectService } from '../../projects/project-service.js';
 import { getAutomationEventForRun } from '../events/index.js';
@@ -35,6 +36,14 @@ function assertManagedOperation(
   const forbidden = changedFields.filter(field => !management.editable.includes(field as 'enabled' | 'trigger'));
   if (forbidden.length > 0) {
     throw new CapabilityError('FORBIDDEN', `Managed fields cannot be changed: ${forbidden.join(', ')}`);
+  }
+}
+
+function validateSchedule<T>(operation: () => T): T {
+  try { return operation(); }
+  catch (error) {
+    if (error instanceof AutomationInvalidScheduleError || error instanceof AutomationInvalidAgentError) throw new CapabilityError('INVALID_INPUT', error.message);
+    throw error;
   }
 }
 
@@ -130,7 +139,8 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.automations.delete', description: 'Delete an automation at an exact revision and persist cancellation intent for its active run.',
     input: AutomationDeleteInputSchema, output: AutomationDeleteOutputSchema,
-    execute({ id, expectedRevision }) {
+    execute({ id, expectedRevision }, context) {
+      assertAutomationSetupTarget(context.conversationId, id);
       const current = getAutomation(id);
       if (current && current.updatedAtMs !== expectedRevision) throw new CapabilityError('REVISION_CONFLICT', 'Automation changed');
       if (current) assertManagedOperation(current, 'delete');
@@ -142,9 +152,15 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.automations.create', description: 'Create an automation without replacing an existing identity.',
     input: AutomationCreateCapabilityInputSchema,
-    execute(input) {
+    requestScope: context => context.conversationId ?? '',
+    execute(input, context) {
       requireProject(input.projectId);
-      try { return { ok: true as const, automation: { ...service.createAtomically(input) } }; }
+      assertAutomationSetupTarget(context.conversationId);
+      try {
+        const automation = validateSchedule(() => service.createAtomically(input));
+        bindAutomationSetup(context.conversationId, automation.id);
+        return { ok: true as const, automation: { ...automation } };
+      }
       catch (error) {
         if (error instanceof AutomationAlreadyExistsError) throw new CapabilityError('REVISION_CONFLICT', error.message);
         throw error;
@@ -155,13 +171,14 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
     ...policy, id: 'xopc.automations.update', description: 'Edit automation configuration at an exact revision.',
     input: z.strictObject({ id: z.string().trim().min(1).max(100), expectedRevision: z.number().int().nonnegative(),
       patch: AutomationUpdatePatchSchema }),
-    execute({ id, expectedRevision, patch }) {
+    execute({ id, expectedRevision, patch }, context) {
+      assertAutomationSetupTarget(context.conversationId, id);
       const current = getAutomation(id);
       if (!current) throw new CapabilityError('NOT_FOUND', 'Automation not found');
       if (current.updatedAtMs !== expectedRevision) throw new CapabilityError('REVISION_CONFLICT', 'Automation changed');
       assertManagedOperation(current, 'update', patch);
       requireProject(patch.projectId);
-      return { ok: true as const, automation: { ...service.updateAtomically(id, patch)! } };
+      return { ok: true as const, automation: { ...validateSchedule(() => service.updateAtomically(id, patch))! } };
     },
   }));
   dispatcher.register(defineAtomicCapability({
@@ -169,12 +186,13 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
     description: 'Pause or resume future automation scheduling at an exact revision; does not cancel an active run.',
     effect: 'local-write', surfaces: ['http', 'agent'], scopes: ['automations.write'],
     input: AutomationSetEnabledInputSchema, output: AutomationMutationOutputSchema,
-    execute({ id, enabled, expectedRevision }) {
+    execute({ id, enabled, expectedRevision }, context) {
+      assertAutomationSetupTarget(context.conversationId, id);
       const current = getAutomation(id);
       if (!current) throw new CapabilityError('NOT_FOUND', 'Automation not found');
       if (current.updatedAtMs !== expectedRevision) throw new CapabilityError('REVISION_CONFLICT', 'Automation changed');
       assertManagedOperation(current, 'update', { enabled });
-      const automation = service.updateAtomically(id, { enabled });
+      const automation = validateSchedule(() => service.updateAtomically(id, { enabled }));
       if (!automation) throw new CapabilityError('NOT_FOUND', 'Automation not found');
       return { ok: true as const, automation: { ...automation } };
     },

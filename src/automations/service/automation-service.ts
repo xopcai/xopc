@@ -69,10 +69,12 @@ const log = createLogger('AutomationService');
 type TimerHandle = ReturnType<typeof setTimeout> & { unref?: () => void };
 
 const DEFAULT_MAX_CONCURRENT_RUNS = 5;
-const MISSED_RUN_STAGGER_MS = 5_000;
 const RUN_HEARTBEAT_INTERVAL_MS = 10_000;
 const RUN_LEASE_DURATION_MS = 30_000;
 const RETRY_BASE_DELAY_MS = 1_000;
+
+export class AutomationInvalidScheduleError extends Error {}
+export class AutomationInvalidAgentError extends Error {}
 
 export class AutomationAlreadyRunningError extends Error {
   constructor(readonly automationId: string, readonly runningRunId?: string) {
@@ -95,7 +97,10 @@ export class AutomationService {
     onDeadLetter: input => this.deps.onReliabilityAttention?.(input),
   });
   private readonly deliveryRouter = new AutomationDeliveryRouter({
-    deliverGatewayEvent: (run, context) => this.deps.onRunCompleted?.(run, context),
+    deliverGatewayEvent: (run, context) => {
+      if (!this.deps.onRunCompleted) throw new Error('Notification service is unavailable. Delivery will retry.');
+      return this.deps.onRunCompleted(run, context);
+    },
     onDeadLetter: input => this.deps.onReliabilityAttention?.(input),
   });
   private timer: TimerHandle | null = null;
@@ -169,12 +174,32 @@ export class AutomationService {
       createdAtMs: now,
       updatedAtMs: now,
     }) as Automation;
+    this.assertExecutionAgent(automation);
+    this.prepareSchedule(automation, now);
     this.pinBrowserVersion(automation);
     if (getAutomation(automation.id)) throw new AutomationAlreadyExistsError(automation.id);
     automation.updatedAtMs = Math.max(automation.updatedAtMs, (getDeletedAutomationRevision(automation.id) ?? -1) + 1);
     automation.state.nextRunAtMs = computeNextAutomationRunAtMs(automation, now);
     saveAutomation(automation);
     return automation;
+  }
+
+  private assertExecutionAgent(automation: Automation): void {
+    if (automation.action.kind !== 'agent' || !automation.action.agentId || !this.deps.isAgentAvailable) return;
+    if (!this.deps.isAgentAvailable(automation.action.agentId)) throw new AutomationInvalidAgentError('Execution assistant is unavailable. Choose an available assistant or use the default.');
+  }
+
+  private prepareSchedule(automation: Automation, now: number): void {
+    if (automation.trigger.kind !== 'schedule') return;
+    const schedule = automation.trigger.schedule;
+    if (schedule.kind === 'interval') schedule.anchorMs ??= automation.createdAtMs || now;
+    if (schedule.kind === 'once' && (!Number.isFinite(Date.parse(schedule.at)) || Date.parse(schedule.at) <= now)) throw new AutomationInvalidScheduleError('Choose a future run date and time.');
+    if (schedule.kind === 'cron') {
+      schedule.tz ??= Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      try { new Intl.DateTimeFormat('en-US', { timeZone: schedule.tz }); }
+      catch { throw new AutomationInvalidScheduleError('Choose a valid timezone, such as Asia/Shanghai or America/New_York.'); }
+      if (computeNextAutomationRunAtMs({ enabled: true, trigger: automation.trigger }, now) === undefined) throw new AutomationInvalidScheduleError('The schedule has no upcoming run. Check its time rule.');
+    }
   }
 
   private pinBrowserVersion(automation: Automation): void {
@@ -228,6 +253,8 @@ export class AutomationService {
         ...(parsed.state ?? {}),
       },
     }) as Automation;
+    if (parsed.action) this.assertExecutionAgent(next);
+    if (parsed.trigger || (parsed.enabled === true && next.trigger.kind === 'schedule' && next.trigger.schedule.kind === 'once')) this.prepareSchedule(next, now);
     this.pinBrowserVersion(next);
     if ('enabled' in parsed || 'trigger' in parsed) {
       next.state.nextRunAtMs = computeNextAutomationRunAtMs(next, now);
@@ -317,7 +344,7 @@ export class AutomationService {
 
   dispatchRecoveryWork(): void {
     void this.eventDispatcher.dispatch();
-    void this.deliveryRouter.dispatch();
+    this.deliveryRouter.dispatchInBackground();
   }
 
   listEventRecords(input?: { type?: string; source?: string; limit?: number }) {
@@ -508,7 +535,7 @@ export class AutomationService {
 
   private async recomputeNextRuns(options?: { catchUp?: boolean }): Promise<void> {
     const now = Date.now();
-    const automations = listAutomations().map((automation, index) => {
+    const automations = listAutomations().map((automation) => {
       const next: Automation = {
         ...automation,
         state: { ...automation.state },
@@ -519,11 +546,15 @@ export class AutomationService {
         next.state.consecutiveFailures = (next.state.consecutiveFailures ?? 0) + 1;
         delete next.state.runningRunId;
       }
+      const previousDue = next.state.nextRunAtMs;
+      if (next.trigger.kind === 'schedule' && next.trigger.schedule.kind === 'interval') next.trigger.schedule.anchorMs ??= next.createdAtMs;
       const computed = computeNextAutomationRunAtMs(next, now);
-      next.state.nextRunAtMs =
-        options?.catchUp && computed != null && computed <= now
-          ? now + index * MISSED_RUN_STAGGER_MS
-          : computed;
+      const missed = next.enabled && next.trigger.kind === 'schedule'
+        && previousDue != null && previousDue <= now;
+      // Coalesce missed occurrences into one run; never replay already-started work.
+      next.state.nextRunAtMs = options?.catchUp && missed && !next.state.runningRunId
+        ? previousDue
+        : computed;
       return next;
     });
     saveAutomations(automations);
@@ -535,6 +566,7 @@ export class AutomationService {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    if (this.availableRunSlots() === 0) return;
     const next = listAutomations()
       .filter((automation) => automation.enabled && automation.state.nextRunAtMs != null && !automation.state.runningRunId)
       .toSorted((a, b) => (a.state.nextRunAtMs ?? 0) - (b.state.nextRunAtMs ?? 0))[0];
@@ -563,7 +595,7 @@ export class AutomationService {
             automation.state.nextRunAtMs <= now &&
             !automation.state.runningRunId,
         )
-        .slice(0, this.maxConcurrentRuns);
+        .slice(0, this.availableRunSlots());
       await Promise.all(due.map((automation) => this.ingestTargetedTrigger(automation.id, {
         id: `schedule:${automation.id}:${automation.state.nextRunAtMs}`,
         type: 'automation.schedule.due',
@@ -797,7 +829,7 @@ export class AutomationService {
       });
       this.refreshSchedule();
       this.eventDispatcher.runCompleted(run);
-      void this.deliveryRouter.dispatch();
+      this.deliveryRouter.dispatchInBackground();
     }
   }
 
@@ -892,9 +924,11 @@ export class AutomationService {
     const consecutiveFailures = failed ? (current.state.consecutiveFailures ?? 0) + 1 : 0;
     const disableAfter = current.reliability?.disableAfterConsecutiveFailures;
     const shouldDisable = disableAfter != null && consecutiveFailures >= disableAfter;
+    const completedOnce = current.trigger.kind === 'schedule' && current.trigger.schedule.kind === 'once'
+      && getAutomationRun(runId)?.manual === false;
     const next: Automation = {
       ...current,
-      enabled: shouldDisable ? false : current.enabled,
+      enabled: shouldDisable || completedOnce ? false : current.enabled,
       state: {
         ...current.state,
         lastRunAtMs: finishedAtMs,
@@ -902,7 +936,7 @@ export class AutomationService {
         lastError: error,
         consecutiveFailures,
       },
-      updatedAtMs: shouldDisable ? Math.max(finishedAtMs, current.updatedAtMs + 1) : current.updatedAtMs,
+      updatedAtMs: shouldDisable || completedOnce ? Math.max(finishedAtMs, current.updatedAtMs + 1) : current.updatedAtMs,
     };
     delete next.state.runningRunId;
     next.state.nextRunAtMs = computeNextAutomationRunAtMs(next, finishedAtMs);

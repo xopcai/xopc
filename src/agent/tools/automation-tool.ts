@@ -16,6 +16,7 @@ import {
   type ProductDeliveryEnvelope,
 } from '@xopcai/gateway-contract';
 
+import { getAutomationSetup } from '../../automations/configuration-conversation.js';
 import type { Automation, AutomationService } from '../../automations/index.js';
 import type { ProjectService } from '../../projects/project-service.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
@@ -24,6 +25,7 @@ import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js
 const AutomationToolSchema = Type.Object({
   action: Type.Union([
     Type.Literal('list'),
+    Type.Literal('get'),
     Type.Literal('create'),
     Type.Literal('update'),
     Type.Literal('delete'),
@@ -62,7 +64,7 @@ const AutomationToolSchema = Type.Object({
 });
 
 type AutomationToolInput = {
-  action: 'list' | 'create' | 'update' | 'delete' | 'run' | 'rerun' | 'cancel' | 'read' | 'read_all' | 'pause' | 'resume' | 'history' | 'get_run' | 'run_events' | 'metrics' | 'events' | 'deliveries' | 'product_events' | 'replay_event' | 'retry_delivery';
+  action: 'get' | 'list' | 'create' | 'update' | 'delete' | 'run' | 'rerun' | 'cancel' | 'read' | 'read_all' | 'pause' | 'resume' | 'history' | 'get_run' | 'run_events' | 'metrics' | 'events' | 'deliveries' | 'product_events' | 'replay_event' | 'retry_delivery';
   eventType?: string;
   eventId?: string;
   destinationKey?: string;
@@ -82,6 +84,7 @@ type AutomationToolInput = {
 
 export interface AutomationToolDeps {
   getAutomationService: () => AutomationService | undefined;
+  getCurrentConversationId?: () => string | undefined;
   getCurrentAgentId?: () => string | undefined;
   getProjectService?: () => ProjectService | undefined;
 }
@@ -150,13 +153,17 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
       const call = async (operation: string, input: unknown, scope: 'automations.read' | 'automations.write' = 'automations.write') => {
         const capabilities = createProductDispatcher(undefined, { getAutomations: () => service, getProjects: deps.getProjectService });
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
-          surface: 'agent', scopes: [scope], authorize: () => true, signal };
+          surface: 'agent', conversationId: deps.getCurrentConversationId?.(), scopes: [scope], authorize: () => true, signal };
         return capabilities.call(operation, input, caller,
           { ...capabilities.describe(operation, caller), idempotencyKey: params.idempotencyKey ?? randomUUID() });
       };
       const invoke = async (operation: string, input: unknown) => AutomationMutationOutputSchema.parse(await call(operation, input));
 
       switch (params.action) {
+        case 'get': {
+          const result = ProductReadContracts['xopc.automations.get'].output.parse(await call('xopc.automations.get', { id: params.automationId }, 'automations.read'));
+          return textResult(JSON.stringify(result.automation), result);
+        }
         case 'list': {
           const { items: automations } = ProductReadContracts['xopc.automations.list'].output.parse(await call('xopc.automations.list', { projectId: params.projectId }, 'automations.read'));
           const body = automations.length > 0
@@ -180,7 +187,7 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
           if (!params.patch || typeof params.patch !== 'object') {
             return textResult('patch payload is required for update.', { ok: false });
           }
-          if (params.idempotencyKey !== undefined && params.expectedRevision === undefined) {
+          if ((params.idempotencyKey !== undefined || getAutomationSetup(deps.getCurrentConversationId?.())?.automationId) && params.expectedRevision === undefined) {
             return textResult('Idempotent automation changes require expectedRevision from the original read.', { ok: false });
           }
           const expectedRevision = params.expectedRevision !== undefined ? params.expectedRevision : (await service.get(id))?.updatedAtMs;
@@ -194,7 +201,7 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
         case 'delete': {
           const id = params.automationId?.trim();
           if (!id) return textResult('automationId is required for delete.', { ok: false });
-          if (params.idempotencyKey !== undefined && params.expectedRevision === undefined) {
+          if ((params.idempotencyKey !== undefined || getAutomationSetup(deps.getCurrentConversationId?.())?.automationId) && params.expectedRevision === undefined) {
             return textResult('Idempotent deletion requires the original expectedRevision.', { ok: false });
           }
           const expectedRevision = params.expectedRevision !== undefined ? params.expectedRevision : (await service.get(id))?.updatedAtMs ?? null;
@@ -246,7 +253,7 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
         case 'resume': {
           const id = params.automationId?.trim();
           if (!id) return textResult(`automationId is required for ${params.action}.`, { ok: false });
-          if (params.idempotencyKey !== undefined && params.expectedRevision === undefined) {
+          if ((params.idempotencyKey !== undefined || getAutomationSetup(deps.getCurrentConversationId?.())?.automationId) && params.expectedRevision === undefined) {
             return textResult('Idempotent automation changes require expectedRevision from the original read.', { ok: false });
           }
           const expectedRevision = params.expectedRevision !== undefined ? params.expectedRevision : (await service.get(id))?.updatedAtMs;

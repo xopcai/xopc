@@ -65,7 +65,9 @@ export function restartGatewayProcessWithFreshPid(): GatewayRespawnResult {
     const child = spawn(process.execPath, args, {
       env: process.env,
       detached: true,
-      stdio: "inherit",
+      // A detached Windows child cannot retain the parent console descriptors.
+      stdio: process.platform === "win32" ? "ignore" : "inherit",
+      windowsHide: true,
     });
 
     child.unref();

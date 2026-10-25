@@ -394,3 +394,10 @@ it('maps phone execution strategy changes without capturing neighboring routes',
   expect(findAuthenticatedLazyRouteBundle('/api/phone/conversations/id/session/execution-mode')?.id).toBe('phone');
   expect(findAuthenticatedLazyRouteBundle('/api/phone-other/conversations/id/session/execution-mode')).toBeUndefined();
 });
+
+it('maps task configuration conversations without matching neighboring automation prefixes', () => {
+  for (const path of ['/api/automations/configuration-conversations', '/api/automations/configuration-conversations/session-id']) {
+    expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('automations');
+  }
+  expect(findAuthenticatedLazyRouteBundle('/api/automations-other/configuration-conversations')).toBeUndefined();
+});

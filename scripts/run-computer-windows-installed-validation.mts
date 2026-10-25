@@ -46,7 +46,9 @@ const env = { ...process.env, XOPC_STATE_DIR: root, XOPC_CONFIG_PATH: join(root,
   XOPC_ELECTRON_USER_DATA_DIR: userData, XOPC_LOG_LEVEL: 'debug', XOPC_LOG_CONSOLE: 'false',
   XOPC_UPDATE_FEED_URL: 'https://updates.invalid.example/installed-validation' };
 delete env.ELECTRON_RUN_AS_NODE;
-await writeFile(join(root, 'xopc.json'), JSON.stringify({ computer: { enabled: true, maxModelRequests: 14, maxActionsPerSession: 12 },
+// This computer-only validation must not replace the account's browser native host
+// registration with a disposable executable that the cleanup uninstalls.
+await writeFile(join(root, 'xopc.json'), JSON.stringify({ browser: { enabled: false }, computer: { enabled: true, maxModelRequests: 14, maxActionsPerSession: 12 },
   gateway: { port: gatewayPort, bind: 'loopback', auth: { mode: 'token', token } } }));
 const source = getModelCatalogStore().getSource('xopc-cloud'); assert.ok(source);
 await new ModelCatalogPersistence(join(root, 'cache/model-catalog/xopc-cloud-v1.json')).save(source);

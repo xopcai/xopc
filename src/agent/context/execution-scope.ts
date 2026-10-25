@@ -1,3 +1,4 @@
+import { buildAutomationSetupContext } from '../../automations/configuration-conversation.js';
 import { getSessionMetadata, isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
@@ -110,6 +111,7 @@ export function buildExecutionScopeContextForPrompt(
       knowledgePolicy: options.knowledgePolicy,
     }),
     formatCurrentWorkForPrompt(scope),
+    buildAutomationSetupContext(conversationId),
   ].filter((section): section is string => Boolean(section?.trim()));
   return sections.join('\n\n') || undefined;
 }

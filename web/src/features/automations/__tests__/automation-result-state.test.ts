@@ -5,6 +5,7 @@ import {
   automationExecutionIssueMarker,
   automationHasExecutionIssue,
   latestAutomationRun,
+  automationRunFailureSummary,
 } from '../automation-result-state';
 
 const automation = { id: 'a', state: {} } as Automation;
@@ -13,6 +14,12 @@ const run = (status: AutomationRun['status'], createdAtMs: number, automationId 
 );
 
 describe('automation result state', () => {
+  it('presents an actionable localized model failure while keeping the raw diagnostic on the run', () => {
+    const failed = { status: 'failed' as const, error: 'The selected model is unavailable: missing. Choose an available model or use the default model.' };
+    expect(automationRunFailureSummary(failed, 'zh')).toBe('所选模型不可用，请更换模型或恢复默认模型后重试。');
+    expect(failed.error).toContain('missing');
+    expect(automationRunFailureSummary({ status: 'failed', error: 'Quota exceeded' }, 'en')).toBe('Quota exceeded');
+  });
   it('uses chronological order rather than the operations list priority', () => {
     const runs = [run('failed', 10), run('succeeded', 20), run('failed', 30, 'other')];
     expect(latestAutomationRun('a', runs)?.status).toBe('succeeded');

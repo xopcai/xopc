@@ -25,3 +25,9 @@ it('preserves an unspecified legacy service timezone when editing unrelated fiel
 it('rejects invalid timezone input rather than inventing a run preview', () => {
   expect(() => scheduledRunPreview({ ...initialForm, timezone: 'Not/A_Zone' })).toThrow();
 });
+
+it('does not skip the daily run on the spring-forward date', () => {
+  expect(scheduledRunPreview({ ...initialForm, triggerMode: 'daily', timezone: 'America/New_York', time: '09:00' }, new Date('2026-03-07T15:00:00Z'))).toEqual([
+    '2026-03-08T13:00:00.000Z', '2026-03-09T13:00:00.000Z', '2026-03-10T13:00:00.000Z',
+  ]);
+});

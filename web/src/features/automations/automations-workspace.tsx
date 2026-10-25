@@ -1,8 +1,14 @@
+import { AutomationConversation } from './automation-conversation';
+import { AutomationItemMenu } from './automation-item-menu';
+import { isCompletedOneTimeTask } from './automation-display';
+import { AutomationDeliveryStatus } from './automation-delivery-status';
+import { AutomationListToolbar } from './automation-list-toolbar';
+import { AutomationContinueButton, AutomationEditDialog } from './automation-task-card';
+import { AutomationDiscovery } from './automation-discovery';
 import { scheduledRunPreview, SchedulePreview } from './schedule-preview';
 import { FormField as Field } from '@/components/ui/form-field';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import * as Popover from '@radix-ui/react-popover';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
@@ -20,15 +26,13 @@ import {
   Play,
   Plus,
   RefreshCw,
-  Search,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
   Trash2,
   X,
   Zap,
 } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
@@ -94,7 +98,6 @@ import {
 
 import { automationScenarios, type AutomationTemplate } from './automation-scenarios';
 import { AutomationQuickCreate } from './automation-quick-create';
-import { automationChatCreateHref } from './automation-create-navigation';
 import {
   automationExecutionIssueMarker,
   automationHasExecutionIssue,
@@ -102,7 +105,7 @@ import {
 } from './automation-result-state';
 
 type CreateMode = 'blank' | 'draft' | 'quick';
-type AutomationFilter = 'all' | 'active' | 'paused' | 'running' | 'attention';
+type AutomationFilter = 'all' | 'active' | 'paused' | 'completed' | 'running' | 'attention';
 type AutomationOwnership = 'user' | 'system';
 type AutomationSourceFilter = 'all' | AutomationAction['kind'];
 type AutomationsMessages = MessageBundle['automations'];
@@ -142,33 +145,11 @@ function actionLabel(action: AutomationAction, labels: AutomationsMessages): str
   return action.agentId ? labels.action.agentWithId.replace('{id}', action.agentId) : labels.action.agent;
 }
 
-function actionKindLabel(action: AutomationAction, labels: AutomationsMessages): string {
-  if (action.kind === 'system') return 'System';
-
-  if (action.kind === 'browser_automation') return labels.sources.browser;
-  if (action.kind === 'task_command') return labels.sources.task;
-  return labels.sources.agent;
-}
-
 function actionModeLabel(mode: ActionMode, labels: AutomationsMessages): string {
 
   if (mode === 'browser_automation') return labels.sources.browser;
   if (mode === 'task_command') return labels.action.runTask;
   return labels.action.runAgent;
-}
-
-function triggerModeLabel(mode: TriggerMode, labels: AutomationsMessages): string {
-  if (mode === 'cron') return labels.trigger.customCron;
-  if (mode === 'event') return labels.trigger.customEvent;
-  return labels.trigger[mode];
-}
-
-function AutomationSourceIcon({ kind, className }: { kind: AutomationAction['kind']; className?: string }) {
-  if (kind === 'system') return <Zap className={className} aria-hidden />;
-
-  if (kind === 'browser_automation') return <ListTree className={className} aria-hidden />;
-  if (kind === 'task_command') return <CheckCircle2 className={className} aria-hidden />;
-  return <Sparkles className={className} aria-hidden />;
 }
 
 function safetyMode(automation: Automation): AutomationSafetyMode {
@@ -228,7 +209,7 @@ function sortRunsForOperations(runs: AutomationRun[]): AutomationRun[] {
 
 function AutomationsPageSkeleton() {
   return (
-    <div className="grid gap-4" aria-hidden="true">
+    <div className="flex min-h-0 flex-1 flex-col gap-4" aria-hidden="true">
       <section className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-edge-subtle bg-edge-subtle xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex min-h-12 items-center gap-2.5 bg-surface-base px-3 py-2.5">
@@ -238,7 +219,7 @@ function AutomationsPageSkeleton() {
             </div>
           ))}
       </section>
-      <div className="grid min-h-0 items-start gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.5fr)]">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1 lg:grid-cols-[17rem_minmax(0,1fr)]">
         <section className="rounded-xl bg-surface-panel p-4 shadow-surface">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 space-y-2">
@@ -300,11 +281,12 @@ export function AutomationsWorkspace({
   const cronLabels = messageBundle.cron;
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activityView = !embedded && searchParams.get('view') === 'activity';
   const runParam = searchParams.get('run')?.trim() ?? '';
   const automationParam = searchParams.get('automation')?.trim() ?? '';
+  const newTaskView = searchParams.get('new') === '1';
+  const setupChat = searchParams.get('setupChat') ?? undefined;
   const draftParam = searchParams.get('draft')?.trim() ?? '';
   const actionParam = searchParams.get('action')?.trim() ?? '';
   const taskIdParam = searchParams.get('taskId')?.trim() ?? '';
@@ -314,7 +296,7 @@ export function AutomationsWorkspace({
   const autogenerateDraft = searchParams.get('autogenerate') === '1';
   const draftSeedRef = useRef('');
   const filterParam = searchParams.get('status');
-  const filter: AutomationFilter = filterParam === 'active' || filterParam === 'paused' || filterParam === 'running' || filterParam === 'attention' ? filterParam : 'all';
+  const filter: AutomationFilter = filterParam === 'active' || filterParam === 'paused' || filterParam === 'completed' || filterParam === 'running' || filterParam === 'attention' ? filterParam : 'all';
   const ownership: AutomationOwnership = searchParams.get('ownership') === 'system' ? 'system' : 'user';
   const sourceParam = searchParams.get('source');
   const sourceFilter: AutomationSourceFilter = sourceParam === 'agent' || sourceParam === 'task_command' || sourceParam === 'browser_automation' ? sourceParam : 'all';
@@ -354,6 +336,8 @@ export function AutomationsWorkspace({
   const [quickTemplate, setQuickTemplate] = useState<AutomationTemplate | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState<CreateMode>('blank');
+  const [simpleCreateOpen, setSimpleCreateOpen] = useState(false);
+  const [simpleEditing, setSimpleEditing] = useState<Automation | null>(null);
   const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState(false);
   const [form, setForm] = useState<FormState>(initialForm);
@@ -494,7 +478,8 @@ export function AutomationsWorkspace({
     if (filter === 'attention' && !automationHasExecutionIssue(automation, ownershipRuns)) return false;
     if (filter === 'running' && !runningAutomationIds.has(automation.id)) return false;
     if (filter === 'active' && !automation.enabled) return false;
-    if (filter === 'paused' && automation.enabled) return false;
+    if (filter === 'paused' && (automation.enabled || isCompletedOneTimeTask(automation))) return false;
+    if (filter === 'completed' && !isCompletedOneTimeTask(automation)) return false;
     if (sourceFilter !== 'all' && automation.action.kind !== sourceFilter) return false;
     if (!normalizedSearch) return true;
     return [
@@ -542,26 +527,10 @@ export function AutomationsWorkspace({
     () => userAutomations.filter((automation) => automationHasExecutionIssue(automation, userRuns)),
     [userAutomations, userRuns],
   );
-  const ownershipExecutionIssues = useMemo(
-    () => ownershipAutomations.filter((automation) => automationHasExecutionIssue(automation, ownershipRuns)),
-    [ownershipAutomations, ownershipRuns],
-  );
   const hasUndismissedExecutionIssues = executionIssues.some((automation) => {
     const marker = automationExecutionIssueMarker(automation, userRuns);
     return marker !== null && dismissedExecutionIssues[automation.id] !== marker;
   });
-  const runningRunCount = ownershipRuns.filter(isActiveRun).length;
-  const nextAutomation = ownershipAutomations
-    .filter((automation) => automation.enabled && automation.state.nextRunAtMs)
-    .sort((a, b) => (a.state.nextRunAtMs ?? Number.POSITIVE_INFINITY) - (b.state.nextRunAtMs ?? Number.POSITIVE_INFINITY))[0];
-  const sourceCounts = useMemo(() => ({
-    all: ownershipAutomations.length,
-    agent: ownershipAutomations.filter((automation) => automation.action.kind === 'agent').length,
-    task_command: ownershipAutomations.filter((automation) => automation.action.kind === 'task_command').length,
-    browser_automation: ownershipAutomations.filter((automation) => automation.action.kind === 'browser_automation').length,
-  }), [ownershipAutomations]);
-  const appliedFilterCount = Number(filter !== 'all') + Number(sourceFilter !== 'all');
-
   const dismissExecutionIssues = useCallback(() => {
     setDismissedExecutionIssues((current) => {
       const next = { ...current };
@@ -580,6 +549,7 @@ export function AutomationsWorkspace({
 
   useEffect(() => {
     if (scopeLoading) return;
+    if (newTaskView) { setSelectedAutomationId(null); return; }
     if (filteredAutomations.length === 0) {
       setSelectedAutomationId(null);
       return;
@@ -589,8 +559,8 @@ export function AutomationsWorkspace({
       return;
     }
     if (selectedAutomationId && filteredAutomations.some((automation) => automation.id === selectedAutomationId)) return;
-    setSelectedAutomationId(filteredAutomations[0].id);
-  }, [automationParam, filteredAutomations, scopeLoading, selectedAutomationId]);
+    setSelectedAutomationId(null);
+  }, [automationParam, filteredAutomations, newTaskView, scopeLoading, selectedAutomationId]);
 
   const reload = useCallback(async () => {
     await Promise.all([
@@ -630,6 +600,7 @@ export function AutomationsWorkspace({
   }, [projectIdParam, projectLocked]);
 
   const openCreate = useCallback((mode: CreateMode) => {
+    if (mode === 'blank' && !taskIdParam) { setSimpleCreateOpen(true); return; }
     setEditingAutomationId(null);
     setEditingDraft(false);
     setError(null);
@@ -645,11 +616,7 @@ export function AutomationsWorkspace({
     setDraftProjectId(projectIdParam);
     setDraftConversationMode('new_session');
     setDraftNotificationPolicy('attention');
-  }, [projectIdParam]);
-
-  const openChatCreate = useCallback(() => {
-    navigate(automationChatCreateHref(labels.createWithAssistantPrompt, projectIdParam));
-  }, [labels.createWithAssistantPrompt, navigate, projectIdParam]);
+  }, [projectIdParam, taskIdParam]);
 
   const selectTemplate = (template: AutomationTemplate) => {
     setQuickTemplate(template);
@@ -662,6 +629,7 @@ export function AutomationsWorkspace({
   };
 
   const openAutomationEditor = useCallback((automation: Automation) => {
+    if (automation.action.kind === 'agent' && !automation.management) { setSimpleEditing(automation); return; }
     setForm(formFromAutomation(automation));
     setEditingAutomationId(automation.id);
     setEditingDraft(false);
@@ -784,24 +752,9 @@ export function AutomationsWorkspace({
   const openAutomationDetails = useCallback((automationId: string) => {
     setSelectedAutomationId(automationId);
     const latestRun = latestAutomationRun(automationId, availableRuns);
-    setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('automation', automationId); return next; }, { replace: true });
+    setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('automation', automationId); next.delete('new'); next.delete('setupChat'); next.delete('chatDraft'); return next; }, { replace: true });
     if (latestRun && latestRun.readAtMs == null && !isActiveRun(latestRun)) markRunRead(latestRun.id);
   }, [availableRuns, markRunRead, setSearchParams]);
-
-  const openNextAutomation = useCallback(() => {
-    if (!nextAutomation) return;
-    setSelectedAutomationId(nextAutomation.id);
-    const latestRun = latestAutomationRun(nextAutomation.id, availableRuns);
-    setSearchParams((previous) => {
-      const next = new URLSearchParams(previous);
-      next.delete('status');
-      next.delete('source');
-      next.delete('q');
-      next.set('automation', nextAutomation.id);
-      return next;
-    }, { replace: true });
-    if (latestRun && latestRun.readAtMs == null && !isActiveRun(latestRun)) markRunRead(latestRun.id);
-  }, [availableRuns, markRunRead, nextAutomation, setSearchParams]);
 
   useEffect(() => {
     if (!runParam) return;
@@ -846,9 +799,12 @@ export function AutomationsWorkspace({
     if (editingAutomation) {
       const automationId = editingAutomation.id;
       const updated = await mutateAutomation(`automation:${automationId}:edit`, () => (
-        automationApi.update(automationId, managedTriggerEdit
-          ? { trigger: buildAutomationEditInput(editingAutomation, { ...form, instruction: 'managed' }).trigger }
-          : buildAutomationEditInput(editingAutomation, form))
+        automationApi.update(automationId, {
+          ...(managedTriggerEdit
+            ? { trigger: buildAutomationEditInput(editingAutomation, { ...form, instruction: 'managed' }).trigger }
+            : buildAutomationEditInput(editingAutomation, form)),
+          expectedRevision: editingAutomation.updatedAtMs,
+        })
       ));
       if (updated) {
         setCreateOpen(false);
@@ -865,7 +821,7 @@ export function AutomationsWorkspace({
       setCreateOpen(false);
       setSearchParams((previous) => {
         const next = new URLSearchParams(previous);
-        next.delete('status'); next.delete('q'); next.delete('run');
+        next.delete('status'); next.delete('q'); next.delete('run'); next.delete('new');
         next.set('automation', automation.id);
         if (!projectLocked) { if (automation.projectId) next.set('projectId', automation.projectId); else next.delete('projectId'); }
         return next;
@@ -938,7 +894,7 @@ export function AutomationsWorkspace({
     });
     if (published && createdId) {
       selectProject(createdProjectId);
-      setSelectedAutomationId(createdId);
+      openAutomationDetails(createdId);
     }
   }
 
@@ -968,7 +924,7 @@ export function AutomationsWorkspace({
     });
     if (tested && createdId && runId) {
       selectProject(createdProjectId);
-      setSelectedAutomationId(createdId);
+      openAutomationDetails(createdId);
       selectRun(runId);
     }
   }
@@ -998,57 +954,8 @@ export function AutomationsWorkspace({
   }
 
   const headerEnd = useMemo(
-    () => (
-      <div className="flex items-center gap-2">
-        <RefreshButton className="size-9 shrink-0 p-0" loading={refreshBusy} label={labels.refresh} onClick={refreshNow} />
-        <div className="inline-flex h-9 shrink-0" role="group" aria-label={labels.createOptions}>
-          <Button
-            variant="primary"
-            className="h-9 rounded-r-none pr-2.5"
-            onClick={openChatCreate}
-          >
-            <Plus className="size-4" aria-hidden />
-            {labels.createWithAssistant}
-          </Button>
-          <Button variant="secondary" className="ml-2 h-9" onClick={() => openCreate('blank')}>{labels.setUpManually}</Button>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <Button
-                variant="primary"
-                className="h-9 w-9 rounded-l-none border-l border-white/20 px-0"
-                aria-label={labels.createOptions}
-                title={labels.createOptions}
-              >
-                <ChevronDown className="size-4" aria-hidden />
-              </Button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                align="end"
-                sideOffset={6}
-                className="z-70 min-w-52 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover"
-              >
-                <DropdownMenu.Item
-                  className="touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover"
-                  onSelect={openChatCreate}
-                >
-                  <MessageCircle className="size-4 text-fg-muted" aria-hidden />
-                  {labels.createWithAssistant}
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  className="touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover"
-                  onSelect={() => openCreate('blank')}
-                >
-                  <Pencil className="size-4 text-fg-muted" aria-hidden />
-                  {labels.setUpManually}
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-        </div>
-      </div>
-    ),
-    [labels.create, labels.createOptions, labels.createWithAssistant, labels.refresh, labels.setUpManually, openChatCreate, openCreate, refreshBusy, refreshNow],
+    () => <RefreshButton className="size-9 shrink-0 p-0" loading={refreshBusy} label={labels.refresh} onClick={refreshNow} />,
+    [labels.refresh, refreshBusy, refreshNow],
   );
 
   useLayoutEffect(() => {
@@ -1063,7 +970,7 @@ export function AutomationsWorkspace({
 
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', embedded ? 'bg-transparent' : 'bg-surface-panel')}>
-      <div className={cn('flex w-full flex-col gap-4', embedded ? 'py-1' : 'mx-auto max-w-[96rem] px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4')}>
+      <div className={cn('flex min-h-0 w-full flex-1 flex-col gap-4', embedded ? 'py-1' : 'mx-auto max-w-[96rem] px-4 pt-3 sm:px-6 lg:px-8 lg:pt-4', !embedded && (activityView ? 'overflow-y-auto' : 'overflow-hidden'))}>
         {embedded ? (
           <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-base px-4 py-3 shadow-surface">
             <div className="min-w-0">
@@ -1097,42 +1004,6 @@ export function AutomationsWorkspace({
             />
           )
         ) : <>
-        {!initialLoading ? (
-          <section aria-labelledby="automation-overview-title">
-            <h2 id="automation-overview-title" className="sr-only">{labels.overview.title}</h2>
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-edge-subtle bg-edge-subtle xl:grid-cols-4">
-              <OverviewMetric
-                icon={<Zap className="size-4" aria-hidden />}
-                label={labels.metrics.enabled}
-                value={String(ownershipAutomations.filter((automation) => automation.enabled).length)}
-                active={filter === 'active'}
-                onClick={() => setFilter('active')}
-              />
-              <OverviewMetric
-                icon={<Activity className="size-4" aria-hidden />}
-                label={labels.metrics.running}
-                value={String(runningRunCount)}
-                active={filter === 'running'}
-                onClick={() => setFilter('running')}
-              />
-              <OverviewMetric
-                icon={<CircleAlert className="size-4" aria-hidden />}
-                label={labels.dashboard.needsAttention}
-                value={String(ownershipExecutionIssues.length)}
-                tone={ownershipExecutionIssues.length > 0 ? 'danger' : 'default'}
-                active={filter === 'attention'}
-                onClick={() => setFilter('attention')}
-              />
-              <OverviewMetric
-                icon={<CalendarClock className="size-4" aria-hidden />}
-                label={labels.metrics.next}
-                value={nextAutomation ? formatAutomationRelativeDateTime(nextAutomation.state.nextRunAtMs!, language) : '—'}
-                onClick={nextAutomation ? openNextAutomation : undefined}
-              />
-            </div>
-          </section>
-        ) : null}
-
         {!initialLoading && hasUndismissedExecutionIssues && ownership === 'user' ? (
           <div className="flex items-center rounded-lg border border-red-500/20 bg-red-500/5">
             <button type="button" onClick={() => setFilter('attention')} className="flex min-w-0 flex-1 items-center gap-3 rounded-l-lg px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-accent">
@@ -1154,165 +1025,17 @@ export function AutomationsWorkspace({
           <AutomationsPageSkeleton />
         ) : (
           <section
-            className="grid min-h-0 items-start gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.5fr)]"
+            className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1 lg:grid-cols-[17rem_minmax(0,1fr)]"
             aria-busy={scopeLoading}
           >
-            <aside className="flex max-h-[42rem] flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface xl:sticky xl:top-20 xl:max-h-[calc(100vh-7rem)]">
-              <div className="shrink-0 border-b border-edge-subtle p-3">
-                {!projectLocked ? (
-                  <Select
-                    aria-label={labels.filters.project}
-                    className={inputClass}
-                    value={projectIdParam}
-                    onChange={(event) => selectProject(event.target.value)}
-                  >
-                    <SelectOption value="">{labels.filters.allProjects}</SelectOption>
-                    {projects.map((project) => (
-                      <SelectOption key={project.id} value={project.id}>{project.name}</SelectOption>
-                    ))}
-                  </Select>
-                ) : null}
-                <div className={cn('flex items-center gap-2', !projectLocked && 'mt-2')}>
-                  <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg-muted focus-within:border-accent">
-                    <Search className="size-4 shrink-0" aria-hidden />
-                    <input
-                      className="min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-fg-subtle"
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder={labels.filters.search}
-                      aria-label={labels.filters.search}
-                    />
-                  </label>
-                  <Popover.Root>
-                    <Popover.Trigger asChild>
-                      <button
-                        type="button"
-                        className={cn(
-                          'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-3 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                          appliedFilterCount > 0 && 'border-accent/40 bg-accent/8 text-accent-fg',
-                        )}
-                        aria-label={labels.filters.more}
-                      >
-                        <SlidersHorizontal className="size-4" aria-hidden />
-                        <span>{labels.filters.more}</span>
-                        {appliedFilterCount > 0 ? (
-                          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] leading-5 text-on-accent">
-                            {appliedFilterCount}
-                          </span>
-                        ) : null}
-                      </button>
-                    </Popover.Trigger>
-                    <Popover.Portal>
-                      <Popover.Content
-                        align="end"
-                        sideOffset={6}
-                        className="z-[90] w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-3 shadow-popover outline-none"
-                      >
-                        <div className="text-xs font-medium text-fg-muted">{labels.filters.status}</div>
-                        <SlidingTabList className="mt-2 flex flex-wrap gap-1" role="group" aria-label={labels.filters.status} indicatorClassName="rounded-md bg-surface-active">
-                          {([
-                            { id: 'all' as const, label: labels.filters.all },
-                            { id: 'active' as const, label: labels.filters.active },
-                            { id: 'running' as const, label: labels.metrics.running },
-                            { id: 'paused' as const, label: labels.paused },
-                            { id: 'attention' as const, label: labels.experience.executionIssues },
-                          ]).map((item) => (
-                            <button
-                              type="button"
-                              key={item.id}
-                              className={cn(
-                                'rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg',
-                                filter === item.id && 'bg-surface-active text-fg',
-                              )}
-                              onClick={() => setFilter(item.id)}
-                              aria-pressed={filter === item.id}
-                            >
-                              {item.label}
-                            </button>
-                          ))}
-                        </SlidingTabList>
-                        <div className="mt-3 border-t border-edge-subtle pt-3">
-                          <div className="text-xs font-medium text-fg-muted">{labels.filters.executor}</div>
-                          <SlidingTabList className="mt-2 flex flex-wrap gap-1" role="group" aria-label={labels.filters.executor} indicatorClassName="rounded-md border border-edge bg-surface-active">
-                            {([
-                              { id: 'all' as const, label: labels.filters.allSources, icon: Zap },
-                              { id: 'agent' as const, label: labels.sources.agent, icon: Sparkles },
-                              { id: 'task_command' as const, label: labels.sources.task, icon: CheckCircle2 },
-                              { id: 'browser_automation' as const, label: labels.sources.browser, icon: ListTree },
-                            ]).map((item) => (
-                              <button
-                                type="button"
-                                key={item.id}
-                                className={cn(
-                                  'flex min-h-8 items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg',
-                                  sourceFilter === item.id && 'border-edge bg-surface-active text-fg',
-                                )}
-                                onClick={() => setSourceFilter(item.id)}
-                                aria-pressed={sourceFilter === item.id}
-                              >
-                                <item.icon className="size-3.5" aria-hidden />
-                                <span>{item.label}</span>
-                                <span className="text-fg-subtle">{sourceCounts[item.id]}</span>
-                              </button>
-                            ))}
-                          </SlidingTabList>
-                        </div>
-                        {appliedFilterCount > 0 ? (
-                          <div className="mt-3 flex justify-end border-t border-edge-subtle pt-3">
-                            <button type="button" className="text-xs font-medium text-accent-fg hover:underline" onClick={clearListFilters}>
-                              {labels.filters.clear}
-                            </button>
-                          </div>
-                        ) : null}
-                      </Popover.Content>
-                    </Popover.Portal>
-                  </Popover.Root>
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="text-xs font-medium text-fg-muted">{labels.filters.ownership}</span>
-                  <SlidingTabList className="flex rounded-lg bg-surface-panel p-0.5" role="group" aria-label={labels.filters.ownership} indicatorClassName="rounded-md bg-surface-base shadow-sm">
-                    <button
-                      type="button"
-                      className={cn('rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:text-fg', ownership === 'user' && 'bg-surface-base text-fg shadow-sm')}
-                      onClick={() => setOwnership('user')}
-                      aria-pressed={ownership === 'user'}
-                    >
-                      {labels.filters.userManaged} · {userAutomations.length}
-                    </button>
-                    <button
-                      type="button"
-                      className={cn('rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:text-fg', ownership === 'system' && 'bg-surface-base text-fg shadow-sm')}
-                      onClick={() => setOwnership('system')}
-                      aria-pressed={ownership === 'system'}
-                    >
-                      {labels.system.title} · {systemAutomations.length}
-                    </button>
-                  </SlidingTabList>
-                </div>
-                {unreadRuns.length > 0 && ownership === 'user' ? (
-                  <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-accent/8 px-2.5 py-1.5 text-xs text-accent-fg">
-                    <span>{labels.filters.unread} · {unreadRuns.length}</span>
-                    <button
-                      type="button"
-                      className="font-medium hover:underline"
-                      disabled={busyAction === 'runs:read-all'}
-                      onClick={() => void markAllRead()}
-                    >
-                      {labels.filters.markAllRead}
-                    </button>
-                  </div>
-                ) : null}
-                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-fg-muted">
-                  <span className="inline-flex items-center gap-1.5">
-                    {scopeLoading ? <RefreshCw className="size-3 animate-spin" aria-hidden /> : null}
-                    {scopeLoading ? labels.loading : labels.filters.results.replace('{count}', String(filteredAutomations.length))}
-                  </span>
-                  {filter !== 'all' || sourceFilter !== 'all' || normalizedSearch ? (
-                    <button type="button" className="font-medium text-accent-fg hover:underline" onClick={clearListFilters}>
-                      {labels.filters.clear}
-                    </button>
-                  ) : null}
-                </div>
+            <aside className="flex max-h-[28vh] min-h-0 flex-col overflow-hidden rounded-xl bg-surface-base md:h-full md:max-h-none">
+              <div className="shrink-0 p-3">
+                <AutomationListToolbar language={language} labels={labels} filter={filter} ownership={ownership} source={sourceFilter}
+                  projectId={projectIdParam} projects={projects} projectLocked={projectLocked} query={searchQuery}
+                  unreadCount={ownership === 'user' ? unreadRuns.length : 0} markReadBusy={busyAction === 'runs:read-all'}
+                  onFilter={setFilter} onOwnership={setOwnership} onSource={setSourceFilter} onProject={selectProject} onQuery={setSearchQuery}
+                  onClear={() => { clearListFilters(); setOwnership('user'); if (!projectLocked) selectProject(''); }} onMarkAllRead={() => void markAllRead()} />
+                <button type="button" onClick={() => setSimpleCreateOpen(true)} className="mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><Plus className="size-4" aria-hidden />{language === 'zh' ? '新建任务' : 'New task'}</button>
               </div>
               <AutomationList
                 automations={filteredAutomations}
@@ -1320,11 +1043,16 @@ export function AutomationsWorkspace({
                 labels={labels}
                 cronLabels={cronLabels}
                 language={language}
-                selectedAutomationId={selectedAutomationId}
+                selectedAutomationId={newTaskView ? null : selectedAutomationId}
                 onOpenDetails={openAutomationDetails}
+                busy={busyAction !== null} onEdit={openAutomationEditor} onAction={mutateAutomation}
               />
             </aside>
-            {selectedAutomation ? (
+            {!newTaskView && selectedAutomation && !selectedAutomation.management && selectedAutomation.action.kind !== 'system' ? (
+              <AutomationConversation key={selectedAutomation.id} automation={selectedAutomation} runs={selectedAutomationRuns} language={language} onSelectRun={selectRun} />
+            ) : setupChat ? (
+              <AutomationConversation key={setupChat} conversationId={setupChat} runs={[]} language={language} onSelectRun={selectRun} onConfigured={openAutomationDetails} />
+            ) : !newTaskView && selectedAutomation ? (
               <AutomationDetails
                 key={selectedAutomation.id}
                 automation={selectedAutomation}
@@ -1341,36 +1069,19 @@ export function AutomationsWorkspace({
                 onAction={mutateAutomation}
               />
             ) : (
-              <div className="min-h-[28rem] overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
-                {ownership === 'user' && ownershipAutomations.length === 0 ? (
-                  <div className="p-5">
-                    <h2 className="text-sm font-semibold text-fg">{labels.experience.starterTemplates}</h2>
-                    <p className="mt-1 text-sm text-fg-muted">{labels.experience.starterTemplatesDescription}</p>
-                    <ScenarioCards templates={templates} labels={labels} onSelect={selectTemplate} />
-                    <Button className="mt-4" variant="ghost" onClick={() => openCreate('draft')}>{labels.experience.custom}</Button>
-                  </div>
-                ) : (
-                  <>
-                    <EmptyState
-                      className="min-h-56 rounded-none border-0 shadow-none"
-                      icon={<Zap className="size-5" />}
-                      title={ownershipAutomations.length === 0 ? labels.empty.automations : labels.empty.filtered}
-                    />
-                    {ownershipAutomations.length > 0 ? (
-                      <div className="flex justify-center border-t border-edge-subtle p-4">
-                        <Button variant="ghost" onClick={clearListFilters}>{labels.filters.clear}</Button>
-                      </div>
-                    ) : null}
-                  </>
-                )}
-              </div>
+              <div className="min-h-0 overflow-y-auto"><AutomationDiscovery key={projectIdParam} language={language} projectId={projectIdParam} onOpenConversation={href => {
+                const target = new URL(href, window.location.origin);
+                const id = target.searchParams.get('setupChat')!;
+                setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('new', '1'); next.delete('automation'); next.set('setupChat', id); const prompt = target.searchParams.get('chatDraft'); if (prompt) next.set('chatDraft', prompt); else next.delete('chatDraft'); return next; });
+              }} /></div>
             )}
           </section>
         )}
-        {!initialLoading && userAutomations.length > 0 ? <div><Button variant="ghost" onClick={() => openCreate('draft')}><Plus className="size-4" aria-hidden />{labels.experience.discover}</Button></div> : null}
         </>}
       </div>
 
+      {simpleCreateOpen ? <AutomationEditDialog language={language} projectId={projectIdParam} onClose={() => setSimpleCreateOpen(false)} onCreated={automation => { setOwnership('user'); clearListFilters(); openAutomationDetails(automation.id); }} /> : null}
+      {simpleEditing ? <AutomationEditDialog automation={simpleEditing} language={language} onClose={() => setSimpleEditing(null)} /> : null}
       <Dialog.Root
         open={createOpen}
         onOpenChange={(open) => {
@@ -1383,7 +1094,7 @@ export function AutomationsWorkspace({
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-5 py-4">
               <div className="min-w-0">
                 <Dialog.Title className="text-base font-semibold text-fg">
@@ -1468,7 +1179,7 @@ export function AutomationsWorkspace({
                   language={language}
                   projectLocked={projectLocked}
                 />}
-                <div className="max-h-40 shrink-0 overflow-y-auto px-5 pb-4"><SchedulePreview form={form} onChange={patch => setForm(previous => ({ ...previous, ...patch }))} language={language} /></div>
+                {managedTriggerEdit || createMode === 'quick' ? <div className="max-h-40 shrink-0 overflow-y-auto px-5 pb-4"><SchedulePreview form={form} onChange={patch => setForm(previous => ({ ...previous, ...patch }))} language={language} /></div> : null}
                 <div className="flex flex-wrap justify-end gap-2 border-t border-edge px-5 py-4">
                   {createMode === 'quick' ? <Button variant="ghost" onClick={() => setCreateMode('blank')}>{labels.draft.advancedCreate}</Button> : null}
                   {editingDraft ? (
@@ -1553,17 +1264,6 @@ export function AutomationsWorkspace({
   );
 }
 
-function ScenarioCards({ templates, labels, onSelect }: { templates: AutomationTemplate[]; labels: AutomationsMessages; onSelect: (template: AutomationTemplate) => void }) {
-  return <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{templates.map((template) => (
-    <button type="button" key={template.name} onClick={() => onSelect(template)} className="rounded-lg border border-edge-subtle bg-surface-panel p-4 text-left hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent">
-      <CalendarClock className="mb-3 size-4 text-accent-fg" aria-hidden />
-      <div className="text-sm font-medium text-fg">{template.name}</div>
-      <p className="mt-1 text-sm text-fg-muted">{template.description}</p>
-      <p className="mt-3 text-xs text-fg-muted">{labels.experience.source}: {template.source}</p>
-    </button>
-  ))}</div>;
-}
-
 function ManagedScheduleForm({
   form,
   setForm,
@@ -1576,7 +1276,7 @@ function ManagedScheduleForm({
   const update = (patch: Partial<FormState>) => setForm(previous => ({ ...previous, ...patch }));
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
-      <Section step="1" title={labels.form.trigger} description={labels.form.triggerStepDescription} />
+      <Section title={labels.form.trigger} />
       <Select aria-label={labels.form.trigger} className={inputClass} value={form.triggerMode} onChange={(event) => update({ triggerMode: event.target.value as TriggerMode })}>
         <SelectOption value="daily">{labels.trigger.daily}</SelectOption>
         <SelectOption value="weekly">{labels.trigger.weekly}</SelectOption>
@@ -1946,6 +1646,7 @@ function AutomationList({
   language,
   selectedAutomationId,
   onOpenDetails,
+  busy, onEdit, onAction,
 }: {
   automations: Automation[];
   runs: AutomationRun[];
@@ -1954,6 +1655,8 @@ function AutomationList({
   language: StoredLanguage;
   selectedAutomationId: string | null;
   onOpenDetails: (automationId: string) => void;
+  busy: boolean; onEdit: (automation: Automation) => void;
+  onAction: (key: string, action: () => Promise<unknown>, title?: string) => Promise<boolean>;
 }) {
   if (automations.length === 0) {
     return (
@@ -1973,14 +1676,14 @@ function AutomationList({
         const activeRun = recentRuns.find(isActiveRun);
         const latestRunForAutomation = recentRuns[0];
         return (
+          <div key={automation.id} className="group relative">
           <button
             type="button"
-            key={automation.id}
             className={cn(
-              'block w-full p-3 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+              'block w-full p-3 pr-10 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
               selectedAutomationId === automation.id && 'bg-surface-hover',
             )}
-            style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 130px' }}
+            style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 76px' }}
             aria-current={selectedAutomationId === automation.id ? 'true' : undefined}
             onClick={() => onOpenDetails(automation.id)}
           >
@@ -1996,40 +1699,21 @@ function AutomationList({
                       : 'bg-fg-subtle',
               )} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{automation.name}</span>
-              <span className="shrink-0 text-xs text-fg-muted">{automation.enabled ? labels.enabled : labels.paused}</span>
+              <span className="shrink-0 text-xs text-fg-muted">{isCompletedOneTimeTask(automation) ? (language === 'zh' ? '已完成' : 'Completed') : automation.enabled ? labels.enabled : labels.paused}</span>
               {latestRunForAutomation && latestRunForAutomation.readAtMs == null && !isActiveRun(latestRunForAutomation) ? (
                 <span className="ml-auto size-2 shrink-0 rounded-full bg-blue-500">
                   <span className="sr-only">{labels.filters.unread}</span>
                 </span>
               ) : null}
             </div>
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 pl-4 text-xs">
-              <span className="inline-flex items-center gap-1 rounded-md border border-edge-subtle bg-surface-panel px-1.5 py-0.5 text-fg-muted">
-                <AutomationSourceIcon kind={automation.action.kind} className="size-3" />
-                {actionKindLabel(automation.action, labels)}
-              </span>
-              <span className="inline-flex min-w-0 items-center gap-1 rounded-md bg-surface-panel px-1.5 py-0.5 text-fg-muted">
-                <CalendarClock className="size-3 shrink-0" aria-hidden />
-                <span className="truncate">{automationTriggerLabel(automation.trigger, labels, cronLabels, language)}</span>
-              </span>
-            </div>
-            <div className="mt-2 flex min-w-0 items-center justify-between gap-2 pl-4 text-xs text-fg-subtle">
-              <span className={cn('line-clamp-2', latestRunForAutomation?.error && 'text-red-700 dark:text-red-300')}>
-                {latestRunForAutomation
-                  ? latestRunForAutomation.error || latestRunForAutomation.summary || labels.status[latestRunForAutomation.status]
-                  : automation.state.lastError || (automation.state.lastRunStatus ? labels.status[automation.state.lastRunStatus] : labels.experience.noRuns)}
-              </span>
-              {latestRunForAutomation?.status ? (
-                <span className={cn('shrink-0 rounded-full px-1.5 py-0.5', statusClass(latestRunForAutomation.status))}>
-                  {labels.status[latestRunForAutomation.status]}
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-2 space-y-1 pl-4 text-xs text-fg-muted">
-              {latestRunForAutomation ? <div>{labels.last}: {formatDate(latestRunForAutomation.createdAtMs, labels, language)}</div> : null}
-              <div>{automation.enabled ? `${labels.next}: ${automationNextRunLabel(automation, labels, language)}` : labels.paused}</div>
-            </div>
+            <p className="mt-1 truncate pl-4 text-xs leading-5 text-fg-muted">
+              {automation.enabled ? <>{automationNextRunLabel(automation, labels, language)}<span className="mx-1.5">·</span></> : null}
+              {automationTriggerLabel(automation.trigger, labels, cronLabels, language)}
+            </p>
+            {automationHasExecutionIssue(automation, recentRuns) ? <p className="mt-1 pl-4 text-xs text-red-700 dark:text-red-300">{labels.dashboard.needsAttention}</p> : null}
           </button>
+          <div className="absolute right-1 top-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"><AutomationItemMenu automation={automation} language={language} busy={busy} onEdit={onEdit} onAction={onAction} /></div>
+          </div>
         );
       })}
     </div>
@@ -2173,10 +1857,10 @@ function RunDiagnosticsPanel({
         </div>
         {run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled' ? (
           <div className="mt-3 flex justify-end">
-            <Button variant="secondary" onClick={() => onSuggestRepair(run)} disabled={repairLoading}>
+            {run.actionSnapshot.kind !== 'system' ? <AutomationContinueButton automationId={run.automationId} runId={run.id} language={language} /> : <Button variant="secondary" onClick={() => onSuggestRepair(run)} disabled={repairLoading}>
               <Sparkles className="size-4" />
               {repairLoading ? labels.repair.generating : labels.repair.suggest}
-            </Button>
+            </Button>}
           </div>
         ) : null}
       </div>
@@ -2345,13 +2029,13 @@ function AutomationDetails({
   const runBusy = busyAction === `automation:${automation.id}:run`;
   const toggleBusy = busyAction === `automation:${automation.id}:toggle`;
   const deleteBusy = busyAction === `automation:${automation.id}:delete`;
-  const canToggle = !automation.management || automation.management.editable.includes('enabled');
+  const canToggle = !isCompletedOneTimeTask(automation) && (!automation.management || automation.management.editable.includes('enabled'));
   const canRun = !automation.management || automation.management.runnable;
   const canEdit = !automation.management || automation.management.editable.includes('trigger');
   const canDelete = !automation.management || automation.management.deletable;
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel shadow-surface">
+    <article className="min-w-0 overflow-hidden bg-surface-panel">
       <header className="flex flex-col items-start gap-3 border-b border-edge px-5 py-4">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
@@ -2360,7 +2044,7 @@ function AutomationDetails({
               'shrink-0 rounded-full px-2 py-0.5 text-xs',
               automation.enabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-surface-hover text-fg-muted',
             )}>
-              {automation.enabled ? labels.enabled : labels.paused}
+              {isCompletedOneTimeTask(automation) ? (language === 'zh' ? '已完成' : 'Completed') : automation.enabled ? labels.enabled : labels.paused}
             </span>
           </div>
           {visibleAutomationDescription(automation) ? (
@@ -2368,21 +2052,15 @@ function AutomationDetails({
           ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
             <span className="inline-flex items-center gap-1.5 rounded-md border border-edge-subtle bg-surface-base px-2 py-1">
-              <AutomationSourceIcon kind={automation.action.kind} className="size-3.5" />
-              {actionKindLabel(automation.action, labels)}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-edge-subtle bg-surface-base px-2 py-1">
               <CalendarClock className="size-3.5" aria-hidden />
               {automationTriggerLabel(automation.trigger, labels, cronLabels, language)}
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-edge-subtle bg-surface-base px-2 py-1">
-              <GitBranch className="size-3.5" aria-hidden />
-              {projects.find((project) => project.id === automation.projectId)?.name ?? labels.info.noProject}
-            </span>
+
           </div>
         </div>
         {canToggle || canRun || canEdit || canDelete ? (
           <div className="flex w-full flex-wrap items-center gap-2">
+            {canEdit && !isSystemManagedAutomation(automation) ? <AutomationContinueButton automationId={automation.id} language={language} runId={runs[0] && ['failed', 'timeout'].includes(runs[0].status) ? runs[0].id : undefined} /> : null}
             {canToggle ? <Button
               variant="secondary"
               disabled={busyAction !== null}
@@ -2396,7 +2074,7 @@ function AutomationDetails({
               {automation.enabled ? labels.dashboard.pause : labels.dashboard.resume}
             </Button> : null}
             {canRun ? <Button
-              variant="primary"
+              variant="secondary"
               disabled={busyAction !== null}
               onClick={() => void onAction(
                 `automation:${automation.id}:run`,
@@ -2433,6 +2111,10 @@ function AutomationDetails({
       </header>
 
       <div className="grid gap-5 p-5">
+        {automation.action.kind === 'agent' ? <section aria-label={language === 'zh' ? '要做的事' : 'What this task does'}>
+          <h3 className="mb-2 text-sm font-semibold text-fg">{language === 'zh' ? '要做的事' : 'What this task does'}</h3>
+          <div className="max-h-48 overflow-y-auto text-sm leading-6 text-fg-muted"><MarkdownView content={automation.action.instruction} compact /></div>
+        </section> : null}
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-fg">{labels.dashboard.latestResult}</h3>
@@ -2442,7 +2124,8 @@ function AutomationDetails({
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted"><span className={cn('rounded-full px-2 py-0.5', statusClass(runs[0].status))}>{labels.status[runs[0].status]}</span>{formatDate(runs[0].createdAtMs, labels, language)}</div>
             <MarkdownView content={runs[0].error || runs[0].summary || (isActiveRun(runs[0]) ? labels.runDetail.resultPending : labels.runDetail.noResult)} compact />
           </div> : <p className="text-sm text-fg-muted">{labels.experience.noRuns}</p>}
-          <p className="mt-3 text-xs text-fg-muted">{automation.enabled ? `${labels.next}: ${automationNextRunLabel(automation, labels, language)}` : labels.paused}</p>
+          {runs[0] && !isActiveRun(runs[0]) ? <AutomationDeliveryStatus runId={runs[0].id} language={language} /> : null}
+          <p className="mt-3 text-xs text-fg-muted">{automation.enabled ? `${labels.next}: ${automationNextRunLabel(automation, labels, language)}` : isCompletedOneTimeTask(automation) ? (language === 'zh' ? '已按计划完成' : 'Completed as scheduled') : labels.paused}</p>
         </section>
         <div className="grid gap-5">
           <section className="min-w-0">
@@ -2453,9 +2136,7 @@ function AutomationDetails({
               </div>
               <span className="rounded-full bg-surface-base px-2.5 py-1 text-xs text-fg-muted">{runs.length}</span>
             </div>
-            {runsLoading ? <Skeleton className="h-24 w-full" /> : runs.length === 0 ? (
-              <EmptyState className="min-h-24 py-6" icon={<Activity className="size-5" />} title={labels.empty.runs} />
-            ) : (
+            {runsLoading ? <Skeleton className="h-24 w-full" /> : runs.length === 0 ? null : (
               <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge-subtle bg-surface-base">
                 {runs.slice(0, 8).map((run) => (
                   <button key={run.id} type="button" className="block w-full p-3 text-left hover:bg-surface-hover" onClick={() => onSelectRun(run.id)}>
@@ -2778,28 +2459,32 @@ function AutomationForm({
         <Field label={labels.form.name}>
           <input className={inputClass} value={form.name} onChange={(e) => update({ name: e.target.value })} />
         </Field>
-        <Field label={labels.form.description}>
-          <input className={inputClass} value={form.description} onChange={(e) => update({ description: e.target.value })} />
-        </Field>
-        {!projectLocked ? (
-          <Field label={labels.form.project}>
-            <Select className={inputClass} value={form.projectId} onChange={(event) => update({ projectId: event.target.value })}>
-              <SelectOption value="">{labels.form.noProject}</SelectOption>
-              {projects.map((project) => <SelectOption key={project.id} value={project.id}>{project.name}</SelectOption>)}
-            </Select>
-          </Field>
+        {form.actionMode === 'agent' ? (
+            <section aria-label={labels.form.instruction} className="space-y-2">
+              <div><h2 className="text-sm font-semibold text-fg">{labels.form.instruction}</h2><p className="mt-1 text-xs leading-5 text-fg-muted">{language === 'zh' ? '写下希望它完成的事情，以及你期待收到的结果。' : 'Describe what to do and the result you expect.'}</p></div>
+              <div className="flex justify-end">
+                <AiTextAssistButton
+                  value={form.instruction}
+                  onApply={(instruction) => update({ instruction })}
+                  fieldId="automation.instruction"
+                  fieldLabel={labels.form.instruction}
+                  scenario="automation.instruction"
+                  locale={language}
+                  context={{
+                    automationName: form.name,
+                    automationDescription: form.description,
+                    triggerMode: form.triggerMode,
+                    agentId: form.agentId,
+                    model: form.model,
+                  }}
+                  showLabel={false}
+                />
+              </div>
+              <textarea aria-label={labels.form.instruction} className={cn(inputClass, 'min-h-36 resize-y leading-6')} value={form.instruction} onChange={event => update({ instruction: event.target.value })} />
+            </section>
         ) : null}
-        <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3" aria-label={labels.form.rulePreview}>
-          <div className="text-xs font-medium text-accent-fg">{labels.form.rulePreview}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-fg">
-            <span>{triggerModeLabel(form.triggerMode, labels)}</span>
-            <ChevronRight className="size-4 text-fg-subtle" aria-hidden />
-            <span>{actionModeLabel(form.actionMode, labels)}</span>
-            <ChevronRight className="size-4 text-fg-subtle" aria-hidden />
-            <span>{form.projectId ? projects.find((project) => project.id === form.projectId)?.name ?? labels.form.project : labels.form.noProject}</span>
-          </div>
-        </div>
-        <Section step="1" title={labels.form.trigger} description={labels.form.triggerStepDescription} />
+        <section className="grid gap-3 rounded-xl border border-edge p-4">
+        <Section title={labels.form.trigger} />
         <Select aria-label={labels.form.trigger} className={inputClass} value={form.triggerMode} onChange={(e) => update({ triggerMode: e.target.value as TriggerMode })}>
           <SelectOption value="manual">{labels.trigger.manual}</SelectOption>
           <SelectOption value="once">{labels.trigger.once}</SelectOption>
@@ -2942,7 +2627,25 @@ function AutomationForm({
           </div>
         ) : null}
 
-        <Section step="2" title={labels.form.action} description={labels.form.actionStepDescription} />
+        <SchedulePreview form={form} onChange={update} language={language} />
+        </section>
+        <details className="group rounded-xl border border-edge">
+          <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-fg focus-visible:outline-accent">
+            <span>{language === 'zh' ? '执行设置' : 'Execution settings'}<span className="ml-2 text-xs font-normal text-fg-muted">{actionModeLabel(form.actionMode, labels)}</span></span>
+          </summary>
+          <div className="grid gap-4 border-t border-edge p-4">
+        <Field label={labels.form.description}>
+          <input className={inputClass} value={form.description} onChange={(e) => update({ description: e.target.value })} />
+        </Field>
+        {!projectLocked ? (
+          <Field label={labels.form.project}>
+            <Select className={inputClass} value={form.projectId} onChange={(event) => update({ projectId: event.target.value })}>
+              <SelectOption value="">{labels.form.noProject}</SelectOption>
+              {projects.map((project) => <SelectOption key={project.id} value={project.id}>{project.name}</SelectOption>)}
+            </Select>
+          </Field>
+        ) : null}
+
         <Select
           className={inputClass}
           aria-label={labels.form.action}
@@ -2999,27 +2702,7 @@ function AutomationForm({
               />
               <span className="text-xs text-fg-subtle">{labels.form.modelHint}</span>
             </Field>
-            <Field label={labels.form.instruction}>
-              <div className="flex justify-end">
-                <AiTextAssistButton
-                  value={form.instruction}
-                  onApply={(instruction) => update({ instruction })}
-                  fieldId="automation.instruction"
-                  fieldLabel={labels.form.instruction}
-                  scenario="automation.instruction"
-                  locale={language}
-                  context={{
-                    automationName: form.name,
-                    automationDescription: form.description,
-                    triggerMode: form.triggerMode,
-                    agentId: form.agentId,
-                    model: form.model,
-                  }}
-                  showLabel={false}
-                />
-              </div>
-              <textarea className={cn(inputClass, 'min-h-32 resize-y')} value={form.instruction} onChange={(e) => update({ instruction: e.target.value })} />
-            </Field>
+
           </>
         ) : form.actionMode === 'task_command' ? (
           <>
@@ -3066,10 +2749,13 @@ function AutomationForm({
           </>
         )}
 
+          </div>
+        </details>
+
         <details className="group rounded-xl border border-edge-subtle bg-surface-base">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs text-fg-muted">3</span>
+
               <span>
                 {labels.form.advanced}
                 <span className="ml-2 text-xs font-normal text-fg-muted">{labels.form.advancedDescription}</span>

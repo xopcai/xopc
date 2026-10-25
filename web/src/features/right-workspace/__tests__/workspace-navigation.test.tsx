@@ -20,7 +20,15 @@ beforeEach(() => {
   workspace.getState().reset(); workspace.getState().setScope('parent');
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
-afterEach(() => { act(() => root.unmount()); container.remove(); });
+afterEach(() => { act(() => root.unmount()); container.remove(); window.history.replaceState(null, '', window.location.pathname); });
+
+it('does not overwrite a newer hash route with a delayed workspace update', async () => {
+  await act(async () => root.render(<MemoryRouter initialEntries={['/automations?automation=old']}><Harness /></MemoryRouter>));
+  window.history.replaceState(null, '', '#/automations?automation=new');
+  await act(async () => workspace.getState().openTools());
+  expect(container.querySelector('output')?.textContent).toBe('?automation=old');
+  expect(window.location.hash).toBe('#/automations?automation=new');
+});
 
 it('keeps collapse closed when its own URL update arrives', async () => {
   await act(async () => root.render(<MemoryRouter initialEntries={['/chat/parent']}><Harness /></MemoryRouter>));

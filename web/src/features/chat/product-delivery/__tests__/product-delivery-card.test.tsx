@@ -6,6 +6,15 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/features/automations/automation-api', () => ({
+  automationApi: { get: vi.fn(async () => ({ automation: {
+    id: 'automation-1', name: 'Memory daily reconciliation', enabled: true,
+    action: { kind: 'agent', instruction: 'Review.' }, trigger: { kind: 'manual' },
+    state: {}, conversationMode: 'new_session', delivery: { notificationPolicy: 'attention', destinations: [] },
+    createdAtMs: 1, updatedAtMs: 1,
+  } })) },
+}));
+
 vi.mock('@/features/tasks/home-api', () => ({
   fetchTask: vi.fn(async () => ({ task: {} })),
 }));
@@ -164,7 +173,7 @@ describe('AssistantResultTail product deliveries', () => {
     );
   });
 
-  it('presents an automation as a localized result row with a secondary continue action', () => {
+  it('presents the current saved automation with edit and continue actions', async () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 2,
       operation: 'started',
@@ -178,7 +187,7 @@ describe('AssistantResultTail product deliveries', () => {
       },
     };
 
-    act(() => {
+    await act(async () => {
       root.render(
         <MemoryRouter initialEntries={['/chat/session-1']}>
           {renderDelivery(delivery)}
@@ -187,7 +196,6 @@ describe('AssistantResultTail product deliveries', () => {
     });
 
     expect(container.textContent).toContain('Memory daily reconciliation');
-    expect(container.textContent).toContain('自动化');
     expect(container.textContent).toContain('已启用');
     expect(container.textContent).toContain('继续');
     expect(container.textContent).not.toContain('继续在对话中处理');

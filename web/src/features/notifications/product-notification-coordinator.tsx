@@ -93,6 +93,9 @@ export function ProductNotificationCoordinator() {
     window.addEventListener('clarification-updated', onClarification);
     window.addEventListener('notification-created', onNotification);
     window.addEventListener('realtime-gap', onRealtimeGap);
+    window.addEventListener('gateway-realtime-connected', onRealtimeGap);
+    window.addEventListener('online', onRealtimeGap);
+    window.addEventListener('focus', onRealtimeGap);
     void runCatchUp();
 
     const onServiceWorkerMessage = (raw: MessageEvent<unknown>) => {
@@ -108,6 +111,9 @@ export function ProductNotificationCoordinator() {
       window.removeEventListener('clarification-updated', onClarification);
       window.removeEventListener('notification-created', onNotification);
       window.removeEventListener('realtime-gap', onRealtimeGap);
+      window.removeEventListener('gateway-realtime-connected', onRealtimeGap);
+      window.removeEventListener('online', onRealtimeGap);
+      window.removeEventListener('focus', onRealtimeGap);
       navigator.serviceWorker?.removeEventListener('message', onServiceWorkerMessage);
     };
   }, [language]);

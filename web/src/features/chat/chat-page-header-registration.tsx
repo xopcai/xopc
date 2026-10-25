@@ -1,6 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal, Plus, Search, Share2 } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -31,6 +31,7 @@ import { SessionShareButton } from '@/features/shares/session-share-button';
 const MAX_MD = '(max-width: 767px)';
 
 type ChatPageHeaderRegistrationProps = {
+  inline?: boolean;
   chatHeadline: string;
   chatAgents: ChatAgentOption[];
   showChatAgentSelector: boolean;
@@ -53,9 +54,10 @@ type ChatPageHeaderRegistrationProps = {
 };
 
 /**
- * Registers chat title / agent / new-task link into `page-header-store` for {@link PrimaryAppHeader}.
+ * Shares chat chrome between the shell header and embedded conversation headers.
  */
 export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistration({
+  inline = false,
   chatHeadline,
   chatAgents,
   showChatAgentSelector,
@@ -136,7 +138,9 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   // Header details change as a session is created. Clear only when this page
   // actually leaves; clearing during an in-place replacement visibly remounts
   // the shell chrome.
-  useLayoutEffect(() => () => clearPageHeader(), [clearPageHeader]);
+  useLayoutEffect(() => {
+    if (!inline) return () => clearPageHeader();
+  }, [clearPageHeader, inline]);
 
   useEffect(() => {
     if (!terminalAvailable) return;
@@ -161,8 +165,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeConversationId, handleSideChatToggle, hasMessages, terminalPlatform]);
 
-  useLayoutEffect(() => {
-    setPageHeader({
+  const header = useMemo(() => ({
       className: 'bg-surface-panel',
       startExtra: showNewChatLink ? (
         <Link
@@ -254,8 +257,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
 
         </div>
       ),
-    });
-  }, [
+  }), [
     shareOpen,
     language,
     terminalPlatform,
@@ -292,8 +294,14 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     onWorkspaceChange,
     handleTerminalToggle,
     handleSideChatToggle,
-    setPageHeader,
   ]);
 
-  return null;
+  useLayoutEffect(() => {
+    if (!inline) setPageHeader(header);
+  }, [header, inline, setPageHeader]);
+
+  return inline ? <header aria-label={language === 'zh' ? '聊天工具栏' : 'Chat toolbar'} className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-edge-subtle px-3 py-2">
+    <div className="min-w-0 flex-1">{header.main}</div>
+    {header.end}
+  </header> : null;
 });

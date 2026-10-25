@@ -28,6 +28,20 @@ describe('automation result delivery router', () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  it.each(['all', 'attention', 'none'] as const)('honors %s notifications without requiring an explicit destination', async notificationPolicy => {
+    const automation = await service.create({ name: 'Inbox notification', trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'Hello' }, delivery: { notificationPolicy, destinations: [] } });
+    const queued = service.queueRunAtomically(automation.id);
+    const completed = { ...queued, status: 'failed' as const, endedAtMs: Date.now(), error: 'Provider unavailable' };
+    saveAutomationRun(completed);
+    const deliver = vi.fn();
+    const router = new AutomationDeliveryRouter({ deliverGatewayEvent: deliver });
+    router.enqueue(completed, automation);
+    await router.dispatch();
+    expect(deliver).toHaveBeenCalledTimes(notificationPolicy === 'none' ? 0 : 1);
+    expect(listAutomationResultDeliveries({ runId: queued.id })).toHaveLength(notificationPolicy === 'none' ? 0 : 1);
+  });
+
   it('claims a destination before external delivery so concurrent routers do not both send it', async () => {
     const automation = await service.create({
       name: 'Delivery claim', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'done' },
@@ -190,4 +204,15 @@ describe('automation result delivery router', () => {
       { id: 'card-1', kind: 'card', schema: 'xopc.summary.v1', data: { title: 'Done' } },
     ]]);
   });
+  it('retries when the notification destination has no handler instead of claiming delivery', async () => {
+    const automation = await service.create({ name: 'Missing notification handler', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'done' } });
+    const queued = service.queueRunAtomically(automation.id);
+    const completed = { ...queued, status: 'succeeded' as const, currentPhase: 'completed' as const, endedAtMs: Date.now() };
+    saveAutomationRun(completed);
+    const router = new AutomationDeliveryRouter();
+    router.enqueue(completed, automation);
+    expect(await router.dispatch()).toBe(0);
+    expect(listAutomationResultDeliveries({ runId: queued.id })).toEqual([expect.objectContaining({ status: 'retrying' })]);
+  });
+
 });

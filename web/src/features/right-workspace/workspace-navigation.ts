@@ -32,6 +32,8 @@ export function useWorkspaceNavigation(scope: string, pane: WorkspacePane, enabl
   useEffect(() => {
     if (!enabled) return;
     if (applying.current) { applying.current = false; return; }
+    // A delayed panel effect must not replace a newer task/chat navigation.
+    if (window.location.hash.startsWith('#/') && window.location.hash.slice(1) !== `${pathname}${search}`) return;
     const params = new URLSearchParams(search);
     if (pane.open && pane.activeId) params.set('workspaceTab', pane.activeId);
     else params.delete('workspaceTab');

@@ -54,6 +54,51 @@ describe('AutomationService', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
+  it('keeps an accepted run on its original assistant and hands off future continuous runs', async () => {
+    const calls: { message: string; conversationId: string }[] = [];
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    service.setDeps({ agentService: { turnDispatcher: { processDirect: async (message, conversationId) => {
+      calls.push({ message, conversationId });
+      if (calls.length === 1) await blocked;
+      return `Completed step ${calls.length}`;
+    } } } });
+    const task = await service.create({ name: 'Assistant handoff', trigger: { kind: 'manual' }, conversationMode: 'continuous',
+      action: { kind: 'agent', agentId: 'main', instruction: 'Continue the work' }, delivery: { notificationPolicy: 'none', destinations: [] } });
+    const first = await service.runNow(task.id);
+    await waitFor(() => calls.length, count => count === 1);
+    try {
+      await service.update(task.id, { action: { kind: 'agent', agentId: 'research', instruction: 'Continue the work' } });
+      expect((await service.getRun(first.id))?.actionSnapshot).toMatchObject({ agentId: 'main' });
+    } finally { release(); }
+    await waitFor(() => service.getRun(first.id), run => run?.status === 'succeeded');
+    const runNext = async () => {
+      const run = await service.runNow(task.id);
+      const completed = await waitFor(() => service.getRun(run.id), value => value?.status === 'succeeded');
+      expect(completed?.status).toBe('succeeded');
+      return completed!;
+    };
+    const second = await runNext();
+    expect(second.actionSnapshot).toMatchObject({ agentId: 'research' });
+    expect(second.conversationId).not.toBe(first.conversationId);
+    expect(calls[1].message).toContain('Completed step 1');
+    expect(calls[1].message).toContain('<automation_handoff>');
+    const third = await runNext();
+    expect(third.conversationId).toBe(second.conversationId);
+    expect(calls[2].message).not.toContain('<automation_handoff>');
+    await service.update(task.id, { action: { kind: 'agent', agentId: 'main', instruction: 'Continue the work' } });
+    const fourth = await runNext();
+    expect(fourth.conversationId).not.toBe(first.conversationId);
+    expect(calls[3].message).toContain('Completed step 3');
+  });
+
+  it('rejects unavailable execution assistants without changing the saved task', async () => {
+    const task = await service.create({ name: 'Available assistant', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Hello' } });
+    service.setDeps({ isAgentAvailable: id => id === 'main' });
+    await expect(service.update(task.id, { action: { kind: 'agent', agentId: 'missing', instruction: 'Hello' } })).rejects.toThrow('Execution assistant is unavailable');
+    expect((await service.get(task.id))?.action).toEqual(task.action);
+  });
+
   it('aborts a deleted run after commit without letting its completion mutate a recreated automation', async () => {
     let signal: AbortSignal | undefined;
     let release!: () => void;
@@ -240,6 +285,7 @@ describe('AutomationService', () => {
   });
 
   it('keeps result delivery failure separate from execution status', async () => {
+    service.setDeps({ onRunCompleted: () => undefined });
     const fetchMock = vi.fn(async () => new Response('offline', { status: 503 }));
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('XOPC_AUTOMATION_WEBHOOK_SECRETS', JSON.stringify({ primary: '0123456789abcdef' }));
@@ -599,4 +645,17 @@ describe('AutomationService', () => {
       LEFT JOIN automation_runs ar ON ar.run_id = d.run_id WHERE ar.run_id IS NULL`).get()).toEqual({ count: 0 });
     expect(db.prepare('SELECT MIN(created_at_ms) AS oldest FROM automation_runs').get()).toEqual({ oldest: 502 });
   });
+  it('fails explicitly when a selected model cannot be applied, without invoking another model', async () => {
+    const processDirect = vi.fn(async () => 'Must not run');
+    service.setDeps({ agentService: { turnDispatcher: { processDirect }, sessionConfig: {
+      applyAutomationModelOverride: async () => false,
+    } } });
+    const automation = await service.create({ name: 'Invalid selected model', trigger: { kind: 'manual' },
+      action: { kind: 'agent', model: 'missing-model', instruction: 'Hello' } });
+    const run = await service.runNow(automation.id);
+    const failed = await waitFor(() => service.getRun(run.id), value => value?.status === 'failed');
+    expect(failed?.error).toContain('The selected model is unavailable');
+    expect(processDirect).not.toHaveBeenCalled();
+  });
+
 });

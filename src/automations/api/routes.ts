@@ -5,6 +5,8 @@ import { CapabilityError } from '../../capabilities/runtime/dispatcher.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import { capabilityHttpContext, capabilityHttpError } from '../../capabilities/adapters/http.js';
 
+import { getAutomationSetup, openAutomationConfiguration } from '../configuration-conversation.js';
+import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import type { AuthenticatedRouteDeps } from '../../gateway/hono/routes/deps.js';
 
 function parseProjectId(raw: string | undefined): string | undefined {
@@ -24,6 +26,32 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
       return c.json({ run }, command === 'rerun' ? 201 : 200);
     } catch (error) { return capabilityHttpError(c, error); }
   };
+
+  authenticated.post('/api/automations/configuration-conversations', async (c) => {
+    try {
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      if (!body || typeof body !== 'object' || Array.isArray(body)
+        || Object.keys(body).some(key => !['automationId', 'projectId', 'runId'].includes(key))
+        || (body.automationId !== undefined && typeof body.automationId !== 'string')
+        || (body.projectId !== undefined && typeof body.projectId !== 'string')
+        || (body.runId !== undefined && typeof body.runId !== 'string')) {
+        throw new CapabilityError('INVALID_INPUT', 'Expected automationId or projectId');
+      }
+      if (body.projectId && !service.projects?.get(body.projectId)) throw new CapabilityError('NOT_FOUND', 'Project not found');
+      const conversationId = openAutomationConfiguration({ agentId: resolveDefaultAgentId(),
+        automationId: body.automationId?.trim() || undefined, projectId: body.projectId?.trim() || undefined, runId: body.runId?.trim() || undefined });
+      return c.json({ conversationId }, 200);
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  authenticated.get('/api/automations/configuration-conversations/:conversationId', async (c) => {
+    try {
+      const setup = getAutomationSetup(c.req.param('conversationId'));
+      if (!setup) throw new CapabilityError('NOT_FOUND', 'Configuration conversation not found');
+      const automation = setup.automationId ? await service.automationServiceInstance.get(setup.automationId) : null;
+      return c.json({ automation, deleted: Boolean(setup.automationId && !automation) });
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
 
   authenticated.get('/api/automations', async (c) => {
     try {

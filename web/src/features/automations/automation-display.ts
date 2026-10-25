@@ -228,3 +228,10 @@ export function automationLastRunLabel(
   const status = automation.state.lastRunStatus;
   return status ? `${moment} · ${labels.status[status]}` : moment;
 }
+
+export function isCompletedOneTimeTask(automation: Automation): boolean {
+  return !automation.enabled && automation.trigger.kind === 'schedule' && automation.trigger.schedule.kind === 'once'
+    && automation.state.lastRunStatus === 'succeeded'
+    && (automation.state.lastRunAtMs ?? 0) >= Date.parse(automation.trigger.schedule.at)
+    && !automation.state.runningRunId;
+}
