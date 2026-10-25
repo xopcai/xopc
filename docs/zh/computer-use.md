@@ -2,7 +2,7 @@
 
 通过 macOS 或 Windows x64 桌面应用，让 xopc 读取或操作一个应用窗口。预览功能需要兼容的 GUI 模型与本机应用授权，建议从小范围、有人看护的任务开始。
 
-Windows 的 [安装后完整验证](../design/technical/computer-use-windows-installed-validation.md) 覆盖正式 NSIS 安装、正常应用与包内 Gateway、认证会话 API、签名桌面 WebSocket、截图上传、真实聊天/GUI 模型、重启和卸载。在没有安装或运行 xopc 的交互账户构建安装包后，可运行 `node --import tsx scripts/run-computer-windows-installed-validation.mts` 复现；Authenticode 签名分发另行验收。
+Windows 的 [安装后完整验证](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-windows-installed-validation.md) 覆盖正式 NSIS 安装、正常应用与包内 Gateway、认证会话 API、签名桌面 WebSocket、截图上传、真实聊天/GUI 模型、重启和卸载。在没有安装或运行 xopc 的交互账户构建安装包后，可运行 `node --import tsx scripts/run-computer-windows-installed-validation.mts` 复现；Authenticode 签名分发另行验收。
 
 ## Windows x64 预览
 
@@ -18,7 +18,7 @@ Windows 通过与 macOS 相同的本地 Broker 支持窗口观察、原生 UIA �
 
 文字与真实模型验证使用 `pnpm exec tsx scripts/run-computer-windows-input-validation.mts [provider/model]`，默认沿用现有 `xopc-cloud/computer`。脚本创建并关闭独立 WinForms 窗口，先验证中文、emoji、多行追加、字段替换、End、Backspace 和密码框／只读拒绝，再让真实模型通过 ComputerRuntime 与本地 Broker 替换已有示例、按 End 并点击 Verify。应用必须同时读到准确文字和键盘事件，才会返回 PASS。GUI-Plus 可使用受控的 `set_value` 原生扩展，提供当前字段 ref 和完整替换文字。仅该临时窗口会发送给模型，调用按现有服务规则计费；凭据保留在原有存储中，会话、配置、数据库和证据隔离在 `.cache/computer-windows-input-validation/<run-id>/`。不伪造模型响应；端点传输使用进程内适配，因此不代表 Gateway 网络、其他应用或安装包已完成认证。
 
-实测版本、模型请求次数与验证边界见 [Windows 输入验证记录](../design/technical/computer-use-windows-input-validation.md)。
+实测版本、模型请求次数与验证边界见 [Windows 输入验证记录](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-windows-input-validation.md)。
 
 ## 完成设置
 
