@@ -18,30 +18,34 @@ inspect first and retain the original idempotency key. A permission denial is no
 do not switch identity, target or tools to bypass it. Inspect returned product ok and saved
 fields before reporting success. A saved model reference does not prove it can be called.`,
   phone_setup: `# Phone setup
-Use configure-xopc and references/phone/overview.md. mode phone_setup commands inspect/preview,
-start, get/recheck/verification_report/cancel {setupId}. Only inspect readiness and orchestrate;
-configure models, install managed ADB/scrcpy, and upload cloud adbkey in existing product forms.
-Never paste keys into chat or modify permissions or cloud billing yourself. Phone model is
-independent of chat model. Cloud ADB does not need local adb; scrcpy provides video/Unicode.
-Owner selects local/aliyun and the exact registered device in the same chat panel. Only the
-owner can start a test. Get returns attempt.goal/completion/maxActions. Discover phone_use if
-not declared, open this device in control mode with appPackage com.android.settings, observe,
-run the exact returned goal and completion, then close and read verification_report. Host
-records actual PhoneRuntime evidence; mock or model finish alone cannot pass. On cancellation,
-unknown outcome or restart, release first. Keep the original conversation and never substitute
-another phone, widen app access, replay input or claim control released from cancellation.`,
+Use configure-xopc and references/phone/overview.md. Use plain conversation, never embedded chat
+configuration panels. mode phone_setup inspect/preview/start inspect or resume; models lists
+compatible models. get/recheck/verification_report/cancel/release take {setupId}.
+Automate source {setupId,source:local|aliyun,expectedRevision}, configure {setupId,enabled:true,
+expectedRevision}, install_dependency {setupId,kind:adb|scrcpy,repair?:true,expectedRevision},
+set_model {setupId,modelRef:<listed compatible ref>,expectedRevision,replaceExisting?:true},
+register_local {setupId,serial:<discovered online serial>,name?,expectedRevision}, and
+begin_verification {setupId,deviceId,expectedRevision}. Writes require a host-authorized
+interactive turn and preserve current policy. dryRun never writes. Do not silently select a
+phone, change the chat model, widen app access, use shell installs or submit keys in chat.
+Use set_model for the dedicated Phone model only; it cannot change the chat model; credentials use secure settings.
+Explain the Settings-only goal, screenshot sharing and model costs before testing. Get provides
+attempt.goal/completion/maxActions. Use phone_use open, observe, run, close, then verification_report.
+User-only work is physical USB/RSA, login/OAuth, private-key entry/upload and cloud purchase.
+After interruption recheck, release the old test, resolve the cause and continue here.`,
   browser_setup: `# Browser setup
-Use configure-xopc and its Browser references. Commands on xopc_use mode browser_setup:
-inspect/preview {} read current shared configuration and available endpoints; start {} creates
-or reuses this Agent conversation's setup. get/recheck/advance/request_interaction/
-begin_verification/verification_report/cancel take {setupId}. dryRun never creates or mutates.
-Mutations require local-owner approval in the returned settingsPath. The UI selects the Chrome
-endpoint and begins verification; never bypass that step with file writes or shell commands.
-During verification get returns attempt.fixtureUrl, sample and evidence. Use normal browser_use
-navigate, observe, click, fill, close; the host binds these calls to the approved test endpoint.
-Read guidanceRefs progressively with skill_view(name:"configure-xopc",path:<returned path>).
-Report completed only when all checks and control release pass. No API Key is needed for Chrome.
-settingsPath is navigation; opening it is not proof of installation or connection.`,
+Use configure-xopc and its Browser references. Plain conversation only; no configuration panel
+inside chat. mode browser_setup inspect/preview/start inspect or resume. get/recheck/
+verification_report/cancel/release take {setupId}. prepare/advance {setupId,expectedRevision}
+automatically prepares the managed extension/native host and enables the extension route in
+an authorized interactive turn. Explain and confirm a shared driver change before switchDriver:true.
+open {setupId,target:chrome|folder|both,expectedRevision} opens the existing Chrome page/folder.
+Only the user loads the unpacked extension and accepts native permissions. Recheck connection,
+resolve the intended Chrome with the user, explain the bounded read/click/fill demo, then use
+begin_verification {setupId,endpointId,expectedRevision}. The host derives the fixture origin.
+Use normal browser_use calls on the returned attempt; close and read verification_report.
+No API Key is needed. Preserve policy refusals and existing pairing; only manual steps need
+an ordinary link to settingsPath. dryRun never writes; opening a page is not proof of success.`,
   settings: `# xopc settings and capability checks
 settings open is navigation only; it does not read, apply or verify configuration.
 Voice: {section:"capabilities/voice",title:"语音设置"}; models: section:"capabilities/models";

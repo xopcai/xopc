@@ -135,3 +135,51 @@ it('preserves a model-quota blocker after confirmed release instead of blaming t
   const report = await f.service.release(f.context, start.id);
   expect(report).toMatchObject({ state: 'needs_attention', checks: { released: true, verified: false }, error: expect.stringContaining('PHONE_MODEL_QUOTA_EXHAUSTED') });
 });
+
+it('automates configuration, dependency repair, registration and verification through the conversation commands', async () => {
+  const f = fixture(); const context = { ...f.context, canConfigure: true };
+  f.deps.configure = vi.fn(async enabled => { f.ready.enabled = enabled; });
+  f.deps.install = vi.fn(async () => { f.ready.dependencies[0].state = 'ready'; });
+  f.deps.registerLocal = vi.fn(async () => {});
+  f.deps.models = () => [{ ref: 'real/phone', name: 'Phone model', configured: true }];
+  let setup = await f.service.command('start', {}, context) as PhoneSetupView;
+  expect(f.service.current(context)).not.toHaveProperty('canConfigure');
+  setup = await f.service.command('source', { setupId: setup.id, source: 'local', expectedRevision: setup.revision }, context) as PhoneSetupView;
+  f.ready.enabled = false;
+  await f.service.command('configure', { setupId: setup.id, enabled: true, expectedRevision: setup.revision }, context);
+  expect(f.deps.configure).toHaveBeenCalledWith(true);
+  await f.service.command('install_dependency', { setupId: setup.id, kind: 'adb', expectedRevision: setup.revision }, context);
+  expect(f.deps.install).not.toHaveBeenCalled();
+  f.ready.dependencies[0].state = 'corrupted';
+  await f.service.command('install_dependency', { setupId: setup.id, kind: 'adb', repair: true, expectedRevision: setup.revision }, context);
+  expect(f.deps.install).toHaveBeenCalledWith('adb', true);
+  await f.service.command('register_local', { setupId: setup.id, serial: 'discovered-serial', expectedRevision: setup.revision }, context);
+  expect(f.deps.registerLocal).toHaveBeenCalledWith('discovered-serial', undefined);
+  expect(await f.service.command('models', {}, context)).toMatchObject({ models: [{ ref: 'real/phone' }] });
+  const attempt = await f.service.command('begin_verification', { setupId: setup.id, deviceId: 'device-one', expectedRevision: setup.revision }, context) as PhoneSetupView;
+  expect(attempt.state).toBe('verifying');
+  expect(await f.service.command('release', { setupId: setup.id }, context)).toMatchObject({ attempt: { released: true } });
+});
+it('does not grant configuration authority from model arguments, stale revisions or unsupported dependency requests', async () => {
+  const f = fixture(); f.deps.configure = vi.fn(); f.deps.install = vi.fn();
+  const setup = await f.service.command('start', {}, f.context) as PhoneSetupView;
+  const args = { setupId: setup.id, enabled: true, expectedRevision: setup.revision, canConfigure: true };
+  await expect(f.service.command('configure', args, f.context)).rejects.toThrow('INTERACTIVE_REQUIRED');
+  await f.service.command('configure', args, { ...f.context, canConfigure: true }, true);
+  expect(f.deps.configure).not.toHaveBeenCalled();
+  await expect(f.service.command('configure', { ...args, expectedRevision: 999 }, { ...f.context, canConfigure: true })).rejects.toThrow('CONFLICT');
+  await expect(f.service.command('install_dependency', { ...args, kind: 'arbitrary-url' }, { ...f.context, canConfigure: true })).rejects.toThrow('dependency');
+  expect(f.deps.install).not.toHaveBeenCalled();
+});
+
+it('caps automatic verification retries within a host run without exposing the run grant', async () => {
+  const f = fixture(); const context = { ...f.context, canConfigure: true, runId: 'host-run' };
+  let setup = await f.service.command('start', {}, context) as PhoneSetupView;
+  for (let i = 0; i < 2; i++) {
+    setup = await f.service.command('begin_verification', { setupId: setup.id, expectedRevision: setup.revision, deviceId: 'device-one' }, context) as PhoneSetupView;
+    expect(setup).not.toHaveProperty('verificationRunId');
+    setup = await f.service.command('release', { setupId: setup.id }, context) as PhoneSetupView;
+  }
+  await expect(f.service.command('begin_verification', { setupId: setup.id, expectedRevision: setup.revision, deviceId: 'device-one' }, context)).rejects.toThrow('RETRY_LIMIT');
+  expect((await f.service.command('begin_verification', { setupId: setup.id, expectedRevision: setup.revision, deviceId: 'device-one' }, { ...context, runId: 'fresh-user-turn' }) as PhoneSetupView).state).toBe('verifying');
+});

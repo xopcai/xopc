@@ -1146,3 +1146,13 @@ describe('xopc_use tool', () => {
   });
 
 });
+
+it('uses host conversation authority for setup commands rather than model-supplied authorization', async () => {
+  const command = vi.fn(async () => ({ ok: true }));
+  const deps = { getCurrentAgentId: () => 'main', getCurrentConversationId: () => 'actual-conversation',
+    getPhoneSetupService: () => ({ command }) as any, canConfigureFromConversation: () => false };
+  await createXopcUseTool(deps).execute('denied', { mode: 'phone_setup', command: 'configure', args: { canConfigure: true, conversationId: 'forged', enabled: true } });
+  expect(command).toHaveBeenLastCalledWith('configure', expect.any(Object), { conversationId: 'actual-conversation', agentId: 'main', canConfigure: false, runId: undefined }, false);
+  await createXopcUseTool({ ...deps, canConfigureFromConversation: () => true }).execute('authorized', { mode: 'phone_setup', command: 'configure', args: { enabled: true } });
+  expect(command).toHaveBeenLastCalledWith('configure', expect.any(Object), { conversationId: 'actual-conversation', agentId: 'main', canConfigure: true, runId: undefined }, false);
+});

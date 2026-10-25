@@ -16,7 +16,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { PhoneDependenciesCard } from '@/features/settings/runtime-tools/phone-dependencies-card';
 
 import { AddPhoneDialog } from './add-phone-dialog';
-import { PhoneSetupPanel } from './phone-setup-panel';
 import { PhoneScreenDialog } from './phone-screen-dialog';
 import { PhoneAppPicker } from './phone-app-picker';
 import { PhoneTextInput } from './phone-text-input';
@@ -135,7 +134,6 @@ export function PhoneSettingsPage() {
   return <SettingsPageFrame gap="gap-6" className="max-w-[48rem]">
     <SettingsPageHeader aiSetup="phone" title={<span className="inline-flex items-center gap-2">{zh ? '手机控制' : 'Phone Use'}<BetaBadge /></span>} subtitle={zh ? '让 AI 帮你操作 Android 手机。' : 'Let AI work with your Android phone.'} />
 
-    {searchParams.get('conversationId') && <PhoneSetupPanel conversationId={searchParams.get('conversationId')!} />}
 
     {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{error}</p>}
     {notice && <p role="status" className="text-sm text-fg-muted">{notice}</p>}

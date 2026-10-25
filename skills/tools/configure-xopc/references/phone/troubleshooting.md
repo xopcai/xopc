@@ -9,6 +9,9 @@ configuration and healthy registrations. Explain the one next owner action, not 
   failure. Explain the returned retry delay, preserve configuration, close this test and confirm
   release. The owner can wait for reset or select an already configured compatible Phone model
   in product settings. Never silently switch providers, enable billing or buy credits.
+- Temporary model HTTP 503: close and inspect actual dispatch first. If no uncertain input
+  remains, at most one new test may be retried in this turn. After the second failed attempt,
+  stop and report the external service problem. Never loop begin_verification to hide failures.
 - ADB absent/corrupted/download failure: dependencies.md and actual progress diagnostics.
 - USB unauthorized/offline/no device: local.md; the phone owner decides on the RSA prompt.
 - Cloud authentication/timeout: aliyun.md; check key binding and endpoint reachability from

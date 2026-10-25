@@ -25,7 +25,12 @@ Load the guidance before choosing actions; do not guess installation commands.
 
 Explain what the user will be able to do, inspect current state, guide only missing steps,
 and verify the outcome. Reuse existing configuration and unfinished setup runs.
-Keep the user-facing explanation focused on the product panel and one next action; avoid
+Carry out supported configuration actions yourself through product tools. Use plain conversation
+for progress, choices and the result; never render or request a setup panel, form, card or page
+inside chat. Ask short ordinary text questions, not selection widgets or clarify forms.
+Ask the user only for missing information or actions the Agent cannot perform. For required
+manual settings use ordinary Markdown links, not actions that inject a settings card.
+Keep the user-facing explanation focused on one next action; avoid
 exposing setup IDs, internal state keys, or narrating every document/tool read.
 
 Read [the scene index](references/scene-index.md) when the target is unclear. For Browser Use,
@@ -34,8 +39,10 @@ read [Phone overview](references/phone/overview.md) directly. Load only the sele
 read matching troubleshooting guidance on failure and acceptance guidance before testing.
 Other configuration areas currently use their existing settings; do not invent setup tools.
 
-Use product tools for configuration writes. Product-owner approval, credentials, installation,
-progress and success checks belong to the product service. References and scripts grant no
+Use the bounded setup commands for configuration writes, dependency installation and tests.
+An explicit setup request authorizes routine preparation; explain shared driver changes and
+test scope before acting, and preserve any existing refusal. Credentials stay in secure settings,
+while progress and success checks belong to the product service. References and scripts grant no
 permissions. Never modify xopc.json, databases or environment files to bypass product tools.
 Do not ask for keys, tokens or invitations in ordinary chat. Chrome extension setup needs no key.
 

@@ -1,5 +1,3 @@
-import { PhoneSetupPanel } from '@/features/settings/phone/phone-setup-panel';
-import { BrowserSetupPanel } from '@/features/settings/browser/browser-setup-panel';
 import { chatVirtualScroll, pauseChatTailFollowing } from '@/features/chat/scroll/chat-virtual-scroll';
 import * as Dialog from '@radix-ui/react-dialog';
 import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
@@ -11,7 +9,6 @@ import { ReadAloudDock } from '@/features/voice/read-aloud-dock';
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkillDiscoveryWelcome } from '@/features/skills/skill-discovery-welcome';
-import { BrowserExtensionNudge } from '@/features/chat/browser/browser-extension-nudge';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { PageContextPreview } from '@/features/chat/context/page-context-preview';
 import { pageContextDrafts, pageContextDraftKey } from '@/features/chat/context/page-context-draft';
@@ -70,10 +67,6 @@ import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presen
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { AgentSetupWelcome } from '@/features/chat/agent-setup-welcome';
 import { parseAgentRunError } from '@/features/chat/messages/agent-run-error-parser';
-import { BrowserSetupRequiredCard } from '@/features/chat/tool-results/browser-setup-required-card';
-import {
-  findLatestBrowserSetupRequired,
-} from '@/features/chat/tool-results/browser-setup-required-parser';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { showActivity } from '@/stores/activity-store';
@@ -209,22 +202,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: draft });
     }
   };
-  const latestBrowserSetup = latestMessage?.role === 'assistant'
-    ? findLatestBrowserSetupRequired(latestMessage.content)
-    : null;
-  const phoneSetupRequested = searchParams.get('scene') === 'configure-phone'
-    || msgSlice.items.some(message => message.role === 'assistant' && message.content.some(block =>
-      block.type === 'tool_use' && block.name === 'xopc_use' && block.details && typeof block.details === 'object'
-      && (block.details as Record<string, unknown>).mode === 'phone_setup'));
-  const browserSetupRequested = searchParams.get('scene') === 'configure-xopc'
-    || msgSlice.items.some(message => message.role === 'assistant' && message.content.some(block => {
-      if (block.type !== 'tool_use' || block.name !== 'xopc_use' || !block.details || typeof block.details !== 'object') return false;
-      return (block.details as Record<string, unknown>).mode === 'browser_setup';
-    }));
-  const showBrowserSetupPrompt = !embedded
-    && !stream.streaming
-    && !stream.sending
-    && latestBrowserSetup !== null;
+
 
 
 
@@ -1215,17 +1193,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                         ? handleForkAssistantTurn
                         : undefined
                     }
-                    trailingContent={phoneSetupRequested && session.conversationId ? (
-                      <PhoneSetupPanel conversationId={session.conversationId} disabled={stream.streaming || stream.sending}
-                        onContinue={prompt => { void handleComposerSend(prompt); }} />
-                    ) : browserSetupRequested && session.conversationId ? (
-                      <BrowserSetupPanel conversationId={session.conversationId} requested disabled={stream.streaming || stream.sending}
-                        onContinue={prompt => { void handleComposerSend(prompt); }} />
-                    ) : latestBrowserSetup?.driver === 'extension' ? (
-                      <BrowserExtensionNudge enabled={showBrowserSetupPrompt} onConfigure={() => { void handleComposerSend('Use configure-xopc to configure and verify Browser Use for this conversation, then continue my original request if verification succeeds.'); }} />
-                    ) : showBrowserSetupPrompt && latestBrowserSetup ? (
-                      <BrowserSetupRequiredCard payload={latestBrowserSetup} />
-                    ) : showPersonalCalibration ? (
+                    trailingContent={showPersonalCalibration ? (
                       <div className="mx-auto w-full max-w-2xl rounded-2xl border border-edge-subtle bg-surface-panel px-4 py-3 text-sm">
                         <p className="text-fg-muted">{language === 'zh' ? '这个回答合适吗？点选后可以在输入框修改，再发给我。' : 'Did that response work for you? Pick an adjustment, edit it, then send.'}</p>
                         <div className="mt-3 flex flex-wrap gap-2">

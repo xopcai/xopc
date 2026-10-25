@@ -274,3 +274,28 @@ it('keeps Chrome revocation distinct from cleanup and requires new verification 
   expect(fresh.attempt!.id).not.toBe(testing.attempt!.id);
   expect(f.service.view(fresh).checks).toMatchObject({ read: false, clicked: false, filled: false, released: false });
 });
+
+it('prepares and begins the bounded Browser test directly through authorized conversational commands', async () => {
+  const f = fixture(); f.deps.verificationOrigin = () => 'http://127.0.0.1:18790';
+  const context = { ...f.context, canConfigure: true }; const start = await f.start();
+  expect(f.service.view(start).allowedActions).toContain('prepare');
+  const prepared = await f.service.command('prepare', { setupId: start.id, expectedRevision: start.revision }, context) as any;
+  expect(f.deps.prepare).toHaveBeenCalledOnce(); expect(prepared.state).toBe('ready_for_verification');
+  expect(prepared.allowedActions).toContain('begin_verification');
+  await f.service.command('open', { setupId: prepared.id, expectedRevision: prepared.revision, target: 'both' }, context);
+  expect(f.deps.open).toHaveBeenCalledWith('both');
+  const attempt = await f.service.command('begin_verification', { setupId: prepared.id, expectedRevision: prepared.revision, endpointId: f.endpoint.endpointId, origin: 'https://untrusted.example' }, context) as any;
+  expect(attempt.state).toBe('verifying'); expect(attempt.attempt.fixtureUrl).toContain('http://127.0.0.1:18790/');
+  const released = await f.service.command('release', { setupId: prepared.id }, context) as any;
+  expect(released.checks.released).toBe(true);
+});
+it('requires host interactive authority and current revisions without allowing tool-denial bypass', async () => {
+  const f = fixture(); const start = await f.start();
+  await expect(f.service.command('prepare', { setupId: start.id, expectedRevision: start.revision, canConfigure: true }, f.context)).rejects.toThrow('INTERACTIVE_REQUIRED');
+  await f.service.command('prepare', { setupId: start.id, expectedRevision: start.revision }, { ...f.context, canConfigure: true }, true);
+  expect(f.deps.prepare).not.toHaveBeenCalled();
+  await expect(f.service.command('prepare', { setupId: start.id, expectedRevision: 999 }, { ...f.context, canConfigure: true })).rejects.toThrow('CONFLICT');
+  f.deny();
+  await expect(f.service.command('prepare', { setupId: start.id, expectedRevision: start.revision }, { ...f.context, canConfigure: true })).rejects.toThrow('AGENT_BROWSER_DENIED');
+  expect(f.deps.prepare).not.toHaveBeenCalled();
+});

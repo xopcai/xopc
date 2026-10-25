@@ -1,6 +1,7 @@
 # Browser acceptance
 
-The owner selects Chrome and starts the test in the panel. Read browser_setup get {setupId}.
+Confirm the intended Chrome and explain the bounded demo in conversation. Use browser_setup
+begin_verification {setupId,endpointId,expectedRevision}, then read get {setupId}.
 If state is not verifying, follow the recovery rules below or explain the next product action. Never claim verification from
 connection tests. For a verifying attempt, first discover the exact browser_use declaration
 with tool_search({query:"browser_use",limit:1}) only if its declaration is not already present.
@@ -11,8 +12,8 @@ For recovery, use the persisted attempt and checks, not the earlier chat summary
 already has a tabId/read check, do not navigate again: observe its session to obtain fresh
 refs and continue only unchecked click/fill steps. If read/click/fill already passed, only
 close and read verification_report. Never replay a passed click or fill. If the attempt is
-expired, stopped, stale, or needs_attention, release its session first (the owner panel can
-release even when browser_use is denied); recheck and let the owner start a fresh test.
+expired, stopped, stale, or needs_attention, release its session first (browser_setup release can
+clean up even when browser_use is denied); recheck and start a fresh test after resolving the cause with the user.
 Do not treat cancellation as permission to restart; wait for a new user request.
 
 1. For a new attempt only, browser_use navigate to the exact attempt.fixtureUrl. The host pins the selected endpoint

@@ -162,6 +162,7 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  canConfigureEndpoint?: (endpointId: string) => boolean;
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getBrowserAutomationService?: () => BrowserAutomationService | undefined;
@@ -459,6 +460,11 @@ export class AgentToolsFactory {
     const find = createFindTool(workspace);
 
     const productToolDeps = {
+      canConfigureFromConversation: () => {
+        const origin = this.deps.getCurrentContext()?.origin;
+        return origin?.type === 'system' && origin.source === 'cli'
+          || origin?.type === 'endpoint' && this.deps.canConfigureEndpoint?.(origin.endpointId) === true;
+      },
       getAgentToolAvailability: this.deps.getAgentToolAvailability ?? ((candidateId: string, name: string) => this.getAgentToolAvailability(candidateId, name)),
       getAgentSkillAvailability: this.deps.getAgentSkillAvailability,
       getWorkspace: () => this.deps.workspace,
@@ -726,7 +732,7 @@ export class AgentToolsFactory {
             ] : []),
           ]
         : []),
-      ...(cfg?.phone?.enabled ? [createPhoneUseTool({
+      ...((cfg?.phone?.enabled || this.deps.getPhoneSetupService) ? [createPhoneUseTool({
         runtime: getPhoneRuntime(),
         getSetupService: this.deps.getPhoneSetupService,
         context: () => {
@@ -747,7 +753,7 @@ export class AgentToolsFactory {
             },
           })]
         : []),
-      ...(browserEnabled
+      ...((browserEnabled || this.deps.getBrowserSetupService)
         ? [
             createBrowserUseTool({
               getRuntime: () => this.ensureBrowserRuntime(),

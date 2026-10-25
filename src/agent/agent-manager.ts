@@ -193,6 +193,7 @@ export interface AgentManagerConfig {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: exposes AutomationService for the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  canConfigureEndpoint?: (endpointId: string) => boolean;
   getPhoneSetupService?: () => import('../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../browser/setup/service.js').BrowserSetupService | undefined;
   getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
@@ -494,6 +495,7 @@ export class AgentManager implements AgentInstanceGateway {
       getBrowserAutomationService: this.config.getBrowserAutomationService,
       getBrowserSetupService: this.config.getBrowserSetupService,
       getPhoneSetupService: this.config.getPhoneSetupService,
+      canConfigureEndpoint: this.config.canConfigureEndpoint,
       emitBrowserEvent: this.config.emitBrowserEvent,
       getNotesService: this.config.getNotesService,
       getProjectService: this.config.getProjectService,

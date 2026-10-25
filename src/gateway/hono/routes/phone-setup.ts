@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
+import { AgentCatalogService } from '../../../agent-catalog/service.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../../config/agent-profile.js';
 import { resolveStateDir } from '../../../config/paths.js';
 import { phoneAllowsApp } from '../../../phone/app-access.js';
@@ -11,14 +13,48 @@ import { getPhoneRuntime } from '../../../phone/runtime.js';
 import { PhoneSetupService } from '../../../phone/setup/service.js';
 import { getModelRegistry } from '../../../providers/model-registry.js';
 import { isProviderConfiguredSync } from '../../../providers/index.js';
-import { PhoneDependencyManager } from '../../../runtime-tools/phone-dependencies.js';
+import { PhoneDependencyManager, probePhoneAdb } from '../../../runtime-tools/phone-dependencies.js';
+import { managedPhoneAdbPath } from '../../../runtime-tools/phone-dependency-catalog.js';
 import { getSessionMetadata } from '../../../storage/sqlite/session-read-repository.js';
 import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function createPhoneSetupService(service: GatewayService): PhoneSetupService {
   const runtime = getPhoneRuntime();
+  const manager = () => new PhoneDependencyManager({ stateDir: resolveStateDir(), config: service.currentConfig.runtimeTools, adbPath: service.currentConfig.phone.adbPath });
+  const requireIdle = () => {
+    if (runtime.reports().some(report => !['closed', 'cancelled', 'failed', 'outcome_unknown'].includes(report.status))) throw new Error('PHONE_SETUP_BUSY: Close active phone sessions before changing shared configuration.');
+  };
   return new PhoneSetupService({ runtime,
+    models: () => getModelRegistry().getAll().filter(model => phoneModelProfile(model)).map(model => ({ ref: `${model.provider}/${model.id}`, name: model.name, configured: isProviderConfiguredSync(model.provider) })),
+    setModel: async (agentId, ref) => {
+      requireIdle();
+      const model = getModelRegistry().resolve(ref);
+      if (!model || !phoneModelProfile(model) || !isProviderConfiguredSync(model.provider)) throw new Error('PHONE_SETUP_MODEL_REQUIRED: Choose a compatible model with configured credentials.');
+      const repository = new AgentCatalogRepository(); const agent = repository.get(agentId);
+      if (!agent) throw new Error('Phone setup Agent not found');
+      await new AgentCatalogService(repository).update(agentId, { models: { ...agent.models, phoneUse: { primary: ref, fallbacks: [] } } }, agent.revision);
+      service.refreshAgentCatalog();
+    },
+    configure: async enabled => {
+      requireIdle(); const config = service.currentConfig; const next = structuredClone(config); next.phone.enabled = enabled;
+      const result = await service.saveConfig(next, config); if (!result.saved) throw new Error('PHONE_SETUP_CONFIG_CONFLICT');
+    },
+    install: async (kind, repair) => {
+      if (kind === 'adb') requireIdle();
+      const config = service.currentConfig;
+      await manager().install(kind, { repair });
+      if (kind === 'adb' && config.phone.adbPath) {
+        const path = managedPhoneAdbPath(resolveStateDir()); await probePhoneAdb(path);
+        const next = structuredClone(config); next.phone.adbPath = path;
+        if (!(await service.saveConfig(next, config)).saved) throw new Error('PHONE_SETUP_CONFIG_CONFLICT');
+      }
+    },
+    registerLocal: async (serial, name) => {
+      const discovered = (await runtime.discover(service.currentConfig)).find(phone => phone.serial === serial && phone.state === 'device');
+      if (!discovered) throw new Error('PHONE_SETUP_DEVICE_OFFLINE: Select an online discovered local phone.');
+      if (!runtime.repository.list().some(phone => phone.serial === serial)) runtime.repository.save({ serial, name: name?.trim() || discovered.name, enabled: true, appAccess: 'selected', allowedApps: ['com.android.settings'] });
+    },
     revision: (context, deviceId) => {
       const agent = resolveEffectiveAgentConfigForAgent(context.agentId).config;
       const device = runtime.repository.list().find(device => device.id === deviceId);
@@ -37,9 +73,9 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
       const ref = agent.models.phoneUse?.primary;
       const model = ref ? getModelRegistry().resolve(ref) : undefined;
       const dependencies = await new PhoneDependencyManager({ stateDir: resolveStateDir(), config: config.runtimeTools, adbPath: config.phone.adbPath }).status();
-      let localDiscovery: Array<{ name: string; state: string; emulator: boolean }> = []; let diagnostic: string | undefined;
+      let localDiscovery: Array<{ serial?: string; name: string; state: string; emulator: boolean }> = []; let diagnostic: string | undefined;
       if (source === 'local' && dependencies.some(item => item.kind === 'adb' && item.state === 'ready')) {
-        try { localDiscovery = (await runtime.discover(config)).map(({ name, state, emulator }) => ({ name, state, emulator })); }
+        try { localDiscovery = (await runtime.discover(config)).map(({ serial, name, state, emulator }) => ({ serial, name, state, emulator })); }
         catch { diagnostic = 'PHONE_SETUP_DISCOVERY_FAILED'; }
       }
       return { enabled: config.phone.enabled,

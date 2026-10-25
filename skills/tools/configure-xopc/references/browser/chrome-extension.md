@@ -1,19 +1,23 @@
 # Local Chrome extension
 
-Explain: after setup, xopc can read and interact with pages assigned to the conversation.
-Call browser_setup start, then present the setup panel. It handles local-owner approval,
-shared-driver changes, file preparation, and opening Chrome's extension page and folder. Present the returned settingsPath exactly
-when a settings link is needed; do not replace it with a generic settings open call, which
-loses this setup's identity. Prefer the existing configuration panel in the conversation.
-advance {setupId} can prepare only after product-owner approval; get reads saved progress.
+Explain that configured Browser Use can read and operate pages assigned to this conversation.
+Call start, then prepare {setupId,expectedRevision}. The product tool enables the extension
+route and prepares managed files and the native host. It does not require a configuration UI
+or a separate approval button. Re-read after revision conflicts; do not overwrite manual edits.
+If changing an enabled non-extension driver, explain the shared change and obtain the user's
+choice before prepare with switchDriver:true. Do not switch on the user's behalf silently.
 
-Files prepared does not mean Chrome has loaded the extension. Guide the user through:
-1. Open chrome://extensions and enable Developer mode.
-2. Choose Load unpacked and select the prepared directory itself.
-3. Open the xopc extension side panel so it connects to the local Gateway.
+Use open {setupId,expectedRevision,target:"both"} to open Chrome's extension page and the
+prepared folder. Only these manual browser steps belong to the user:
+1. Enable Developer mode in chrome://extensions, choose Load unpacked and the exact returned
+   extensionDir. Give that directory as plain text; do not invent a folder-opening button in settings.
+2. Open the xopc extension side panel and accept any native/browser permission they want.
 
-Use recheck after user actions. A connected endpoint must be selected by the owner in the
-setup panel before starting the test. Do not choose the first connected computer implicitly.
-The test creates its own browser session; an attached user tab must be released first.
-Read acceptance.md before operating. If a user is on another computer, direct them to Device
-access's pairing flow; local installation controls must not bypass local-owner restrictions.
+Recheck after the user returns. If already installed and connected, skip manual installation.
+Describe available Chrome names and ask only when the intended endpoint is ambiguous. Explain
+the independent read/click/fill demo, then begin_verification with the chosen endpointId and
+current expectedRevision. Read acceptance.md and perform the test yourself using browser_use.
+The user never needs to find or click a test button inside this chat.
+
+For another computer, use existing Device access pairing and guide the user there. Never
+install Gateway-host files as if they belonged to a different computer, or bypass refusal.

@@ -50,7 +50,7 @@ describe('RealtimeRuntime', () => {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   });
 
-  it.each(['compatible', 'old-contract', 'bad-signature'])('handles desktop %s without confusing protocol and auth failures', async (variant) => {
+  it.each(['compatible', 'non-admin', 'old-contract', 'bad-signature'])('handles desktop %s without confusing protocol and auth failures', async (variant) => {
     const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const principal = { id: 'desktop-test', kind: 'desktop' as const, displayName: 'Desktop', platform: 'darwin',
       publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64url'), createdAt: Date.now() };
@@ -75,7 +75,7 @@ describe('RealtimeRuntime', () => {
     hello.signature = sign('sha256', Buffer.from(endpointHelloSigningPayload(hello)),
       { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
     if (variant === 'bad-signature') hello.signature = 'x'.repeat(86);
-    const issued = runtime.tickets.issue('desktop-client', 'desktop', { principalId: 'owner', scopes: ['gateway.admin'] });
+    const issued = runtime.tickets.issue('desktop-client', 'desktop', { principalId: 'owner', scopes: variant === 'non-admin' ? ['agents.run'] : ['gateway.admin'] });
     socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
     await waitForOpen(socket);
     const messages = collectMessages(socket);
@@ -85,8 +85,11 @@ describe('RealtimeRuntime', () => {
         kind: 'realtime.hello', sentAt: Date.now(), payload: {
           ticket: issued.ticket, clientId: 'desktop-client', clientKind: 'desktop', subscriptions: [], endpoint: hello,
         } }));
-      if (variant === 'compatible') {
+      if (variant === 'compatible' || variant === 'non-admin') {
         await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready', payload: { endpoint: { endpointId: hello.endpointId } } });
+        expect(runtime.canConfigureEndpoint(hello.endpointId)).toBe(variant === 'compatible');
+        socket.close(); await closed;
+        expect(runtime.canConfigureEndpoint(hello.endpointId)).toBe(false);
       } else {
         await expect(closed).resolves.toEqual(variant === 'old-contract'
           ? { code: 4409, reason: 'GATEWAY_PROTOCOL_INCOMPATIBLE' }

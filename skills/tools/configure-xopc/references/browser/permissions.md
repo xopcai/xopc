@@ -5,14 +5,12 @@ has a Cancel control: cancelling revokes control across tabs until the user expl
 Resume browser control in the xopc extension. This stop survives worker restarts. Neither a
 model request nor opening a new test tab is consent to resume. Do not repeatedly retry.
 
-After a stop, read setup get and close only its demo session (or use the owner's Release demo
-control button). Report release separately. Ask the user to review the extension's stopped
-notice and resume only if they want to. Then recheck; the owner starts a new independent test
-in the original chat. Old checks must not mark the new test passed. Read acceptance.md and
+After a stop, read setup get and close only its demo session (or use browser_setup release). Report release separately. Ask the user to review the extension's stopped
+notice and resume only if they want to. Then recheck; start a new independent test in the original conversation after the user has restored permission. Old checks must not mark the new test passed. Read acceptance.md and
 verify real reading, clicking, typing and release again.
 
 If the native host cannot start, no pairing or browser control is proven. Inspect installation
-health; the owner can use Repair preparation to restore xopc's managed executable and manifest,
+health; use prepare to repair xopc's managed executable and manifest in this conversation,
 then Retry local connection in the extension. Preserve an existing pairing if it is healthy.
 If an OS or managed-browser security policy blocks execution, explain the observed failure and
 let the user review that specific permission through normal settings. Never disable Gatekeeper,
