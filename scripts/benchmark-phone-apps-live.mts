@@ -43,7 +43,7 @@ assert(['all', 'core', 'development', 'heldout', 'transfer'].includes(split), 'S
 const splitTasks = tasks.filter(task => split === 'all' || split === 'core' && task.split !== 'transfer' || (task.split ?? 'development') === split);
 const selectedTasks = requestedTasks ? requestedTasks.map(id => { const task = tasks.find(candidate => candidate.id === id); assert(task, `Unknown task ${id}`); return task; }) : splitTasks;
 const selectedArms = (option('--arms')?.split(',') ?? ['baseline', 'semantic', 'planning', 'combined']) as ArmName[];
-assert(selectedArms.length > 0 && selectedArms.every(arm => ['reference', 'baseline', 'semantic', 'planning', 'combined', 'optimized', 'before-planning', 'after-planning', 'before-combined', 'after-combined'].includes(arm)), 'Select supported baseline, feature or before/after recovery arms');
+assert(selectedArms.length > 0 && selectedArms.every(arm => ['efficiency', 'protocol', 'prompt', 'sampling', 'upstream', 'stream', 'reference', 'baseline', 'semantic', 'planning', 'combined', 'optimized', 'before-planning', 'after-planning', 'before-combined', 'after-combined'].includes(arm)), 'Select supported baseline, feature or before/after recovery arms');
 assert(new Set(selectedArms).size === selectedArms.length && new Set(selectedTasks.map(task => task.id)).size === selectedTasks.length, 'Do not repeat an arm or task identifier');
 const stableInitial = process.argv.includes('--stable-initial');
 const warmReset = process.argv.includes('--warm-reset');
@@ -295,6 +295,11 @@ globalThis.fetch = async (input, init) => {
   }
   const request = actualRequests;
   const response = await nativeFetch(input, init);
+  if (modelRequest && response.headers.get('content-type')?.includes('text/event-stream')) {
+    // Reading a clone to completion here would buffer tokens and defeat stream timing/cancellation.
+    activeTrace?.push({ event: 'model_stream', request, at: Date.now(), httpStatus: response.status });
+    return response;
+  }
   if (modelRequest && (responseMetadata || protocolEnvelopeMetadata)) {
     const format = response.ok ? await readResponseMetadata(response, undefined, protocolEnvelopeMetadata ? raw => {
       const validate = (candidate: string) => currentModel.parseAutoGlmResponse(candidate, [], { appAccess: 'all' });
@@ -311,8 +316,9 @@ globalThis.fetch = async (input, init) => {
 const optimizedDefinition = { Runtime: (candidate?.runtime.PhoneRuntime ?? currentRuntime.PhoneRuntime) as typeof currentRuntime.PhoneRuntime,
   modelFactory: (candidate?.model.createPhoneModel ?? currentModel.createPhoneModel) as typeof currentModel.createPhoneModel,
   Driver: (candidate?.driver.AdbPhoneDriver ?? currentDriver.AdbPhoneDriver) as typeof currentDriver.AdbPhoneDriver };
-const featureFlags = { reference: { semanticControls: false, hierarchicalPlanning: false }, baseline: { semanticControls: false, hierarchicalPlanning: false }, semantic: { semanticControls: true, hierarchicalPlanning: false }, planning: { semanticControls: false, hierarchicalPlanning: true }, combined: { semanticControls: true, hierarchicalPlanning: true }, optimized: { semanticControls: true, hierarchicalPlanning: true }, 'before-planning': { semanticControls: false, hierarchicalPlanning: true }, 'after-planning': { semanticControls: false, hierarchicalPlanning: true }, 'before-combined': { semanticControls: true, hierarchicalPlanning: true }, 'after-combined': { semanticControls: true, hierarchicalPlanning: true } };
+const featureFlags = { efficiency: { semanticControls: false, hierarchicalPlanning: false }, protocol: { semanticControls: false, hierarchicalPlanning: false, autoGlmProtocol: 'upstream' }, prompt: { semanticControls: false, hierarchicalPlanning: false, autoGlmPrompt: 'upstream' }, sampling: { semanticControls: false, hierarchicalPlanning: false, autoGlmSampling: 'upstream' }, upstream: { semanticControls: false, hierarchicalPlanning: false, autoGlmProtocol: 'upstream', autoGlmPrompt: 'upstream', autoGlmSampling: 'upstream' }, stream: { semanticControls: false, hierarchicalPlanning: false, modelResponseMode: 'stream', modelRepetitionGuard: true }, reference: { semanticControls: false, hierarchicalPlanning: false }, baseline: { semanticControls: false, hierarchicalPlanning: false }, semantic: { semanticControls: true, hierarchicalPlanning: false }, planning: { semanticControls: false, hierarchicalPlanning: true }, combined: { semanticControls: true, hierarchicalPlanning: true }, optimized: { semanticControls: true, hierarchicalPlanning: true }, 'before-planning': { semanticControls: false, hierarchicalPlanning: true }, 'after-planning': { semanticControls: false, hierarchicalPlanning: true }, 'before-combined': { semanticControls: true, hierarchicalPlanning: true }, 'after-combined': { semanticControls: true, hierarchicalPlanning: true } };
 const definitions = {
+  efficiency: optimizedDefinition, protocol: optimizedDefinition, prompt: optimizedDefinition, sampling: optimizedDefinition, upstream: optimizedDefinition, stream: optimizedDefinition,
   reference: { Runtime: baseline.runtime.PhoneRuntime, modelFactory: baseline.model.createPhoneModel, Driver: baseline.driver.AdbPhoneDriver },
   baseline: { Runtime: baseline.runtime.PhoneRuntime as typeof currentRuntime.PhoneRuntime,
     modelFactory: baseline.model.createPhoneModel as typeof currentModel.createPhoneModel,
@@ -409,7 +415,7 @@ async function runTrial(task: Task, arm: ArmName, repeat: number) {
   } }) as PhoneDriver;
   const factory = async (...args: Parameters<typeof currentModel.createPhoneModel>): Promise<PhoneModelAdapter> => {
     const adapter = await definition.modelFactory(...args);
-    return { async predict(input: PhonePrediction, signal: AbortSignal): Promise<PhoneDecision> {
+    return { ...adapter, async predict(input: PhonePrediction, signal: AbortSignal): Promise<PhoneDecision> {
       modelStep++;
       const native = nativeFacts(input.observation);
       if (saveFrames) await writeFile(join(evidence, `${trialId}-${modelStep}.png`), input.observation.frame);
@@ -452,7 +458,7 @@ async function runTrial(task: Task, arm: ArmName, repeat: number) {
     falseVerified: report?.verified === true && !completed, status: report?.status, stopReason: report?.stopReason,
     errorCode: failureCode ?? report?.errorCode, scopeViolation, settingsUnchanged, filesUnchanged, actions: report?.actions ?? 0,
     modelRequests: report?.modelRequests ?? 0, actualModelRequests: actualRequests - requestsBefore, observationCount,
-    durationMs: Date.now() - startedAt, diagnostics: report?.diagnostics, traceFile: `${trialId}.json` };
+    durationMs: Date.now() - startedAt, diagnostics: report?.diagnostics, performance: report?.performance, traceFile: `${trialId}.json` };
   trialResults.push(result);
   if (!settingsUnchanged && settingsBefore) for (const [key, value] of Object.entries(settingsBefore) as Array<[string, string]>) {
     await shell(value === 'null' ? ['settings', 'delete', 'system', key] : ['settings', 'put', 'system', key, value]);

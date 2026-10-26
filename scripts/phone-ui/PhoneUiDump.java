@@ -43,6 +43,8 @@ public final class PhoneUiDump {
     }
 
     public static void main(String[] args) throws Exception {
+        // Newer Android accessibility clients create handlers on the main looper.
+        if (Looper.getMainLooper() == null) Looper.prepareMainLooper();
         HandlerThread thread = new HandlerThread("xopc-phone-observation");
         thread.start();
         UiAutomation automation = null;

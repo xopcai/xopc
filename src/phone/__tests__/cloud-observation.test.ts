@@ -1,35 +1,60 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CloudAdbConnection } from '../cloud-adb.js';
 import { PHONE_UI_DEX } from '../ui-dump-binary.js';
 
+function fixture() {
+  const connection = new CloudAdbConnection('phone.example:10001', Buffer.from('fixture'));
+  const hash = createHash('sha256').update(Buffer.from(PHONE_UI_DEX, 'base64')).digest('hex');
+  const files = new Map<string, string>();
+  const sync = { write: vi.fn(async ({ filename }: { filename: string }) => { files.set(filename, hash); }), dispose: vi.fn(async () => {}) };
+  vi.spyOn(connection, 'client').mockResolvedValue({ sync: async () => sync } as never);
+  const command = vi.spyOn(connection, 'command').mockImplementation(async (_path, args) => {
+    if (args.includes('sha256sum')) return Buffer.from(files.get(args.at(-1)!) ?? '');
+    if (args.includes('mv')) files.set(args.at(-1)!, files.get(args.at(-2)!)!);
+    if (args.includes('rm')) files.delete(args.at(-1)!);
+    return Buffer.from(args.includes('app_process') ? '<hierarchy><node/></hierarchy>' : '');
+  });
+  return { connection, hash, files, sync, command, signal: AbortSignal.timeout(10000) };
+}
+
 describe('cloud non-idle hierarchy capture', () => {
-  it('uploads the bundled one-shot helper, reads XML, and removes the device file', async () => {
-    const connection = new CloudAdbConnection('phone.example:10001', Buffer.from('fixture'));
-    const sync = { write: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
-    vi.spyOn(connection, 'client').mockResolvedValue({ sync: async () => sync } as never);
-    const command = vi.spyOn(connection, 'command').mockImplementation(async (_path, args) => Buffer.from(args.includes('app_process') ? '<hierarchy><node/></hierarchy>' : ''));
+  it('verifies and reuses the deployed read-only helper without repeated uploads', async () => {
+    const f = fixture();
     try {
-      expect(await connection.hierarchy(AbortSignal.timeout(10_000))).toBe('<hierarchy><node/></hierarchy>');
-      expect(Buffer.from(PHONE_UI_DEX, 'base64').subarray(0, 4).toString()).toBe('dex\n');
-      expect(sync.write).toHaveBeenCalledWith(expect.objectContaining({ permission: 0o600 }));
-      expect(command.mock.calls[0][1]).toEqual(expect.arrayContaining(['env', 'app_process', 'ai.xopc.phone.PhoneUiDump']));
-      expect(command.mock.calls.at(-1)?.[1]).toEqual(expect.arrayContaining(['rm', '-f']));
-      expect(sync.dispose).toHaveBeenCalled();
-    } finally { connection.dispose(); }
+      await f.connection.hierarchy(f.signal); await f.connection.hierarchy(f.signal);
+      expect(f.sync.write).toHaveBeenCalledOnce();
+      expect(f.sync.write).toHaveBeenCalledWith(expect.objectContaining({ permission: 0o600 }));
+      expect(f.command.mock.calls.filter(call => call[1].includes('chmod'))[0][1]).toContain('400');
+      expect(f.command.mock.calls.filter(call => call[1].includes('app_process'))).toHaveLength(2);
+      expect([...f.files.keys()]).toEqual([`/data/local/tmp/xopc-ui-${f.hash}.dex`]);
+      f.files.set(`/data/local/tmp/xopc-ui-${f.hash}.dex`, 'corrupted');
+      await f.connection.hierarchy(f.signal);
+      expect(f.sync.write).toHaveBeenCalledTimes(2);
+      f.files.clear(); await f.connection.hierarchy(f.signal);
+      expect(f.sync.write).toHaveBeenCalledTimes(3);
+    } finally { f.connection.dispose(); }
   });
 
-  it('does not turn a failed helper into an empty native hierarchy and cleans up failed uploads', async () => {
-    const connection = new CloudAdbConnection('phone.example:10001', Buffer.from('fixture'));
-    const sync = { write: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
-    vi.spyOn(connection, 'client').mockResolvedValue({ sync: async () => sync } as never);
-    const command = vi.spyOn(connection, 'command').mockResolvedValue(Buffer.from('Killed'));
+  it('does not launch an unverified upload and cleans temporary files on failure', async () => {
+    const f = fixture(); f.sync.write.mockImplementation(async ({ filename }) => { f.files.set(filename, 'corrupted'); });
     try {
-      await expect(connection.hierarchy(AbortSignal.timeout(10_000))).rejects.toMatchObject({ code: 'PHONE_UI_UNAVAILABLE' });
-      sync.write.mockRejectedValueOnce(new Error('upload failed'));
-      await expect(connection.hierarchy(AbortSignal.timeout(10_000))).rejects.toThrow('upload failed');
-      expect(sync.dispose).toHaveBeenCalledTimes(2);
-      expect(command.mock.calls.at(-1)?.[1]).toEqual(expect.arrayContaining(['rm', '-f']));
-    } finally { connection.dispose(); }
+      await expect(f.connection.hierarchy(f.signal)).rejects.toMatchObject({ code: 'PHONE_UI_UNAVAILABLE' });
+      expect(f.command.mock.calls.some(call => call[1].includes('app_process'))).toBe(false);
+      expect([...f.files.keys()].some(path => path.endsWith('.tmp'))).toBe(false);
+      f.sync.write.mockRejectedValueOnce(new Error('upload failed'));
+      await expect(f.connection.hierarchy(f.signal)).rejects.toThrow('upload failed');
+      expect(f.sync.dispose).toHaveBeenCalledTimes(2);
+    } finally { f.connection.dispose(); }
+  });
+
+  it('fails closed when the deployed helper cannot read the UI', async () => {
+    const f = fixture(); f.files.set(`/data/local/tmp/xopc-ui-${f.hash}.dex`, f.hash);
+    f.command.mockImplementation(async (_path, args) => Buffer.from(args.includes('sha256sum') ? f.hash : 'Killed'));
+    try {
+      await expect(f.connection.hierarchy(f.signal)).rejects.toMatchObject({ code: 'PHONE_UI_UNAVAILABLE' });
+      expect(f.sync.write).not.toHaveBeenCalled();
+    } finally { f.connection.dispose(); }
   });
 });

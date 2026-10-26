@@ -32,6 +32,17 @@ const Schema = Type.Object({
   maxActions: Type.Optional(Type.Integer({ minimum: 1, maximum: 12 })),
 }, { additionalProperties: false });
 
+/** Keep operational timing in UI details without adding telemetry tokens to the planning model. */
+function phoneToolContent(result: unknown): unknown {
+  if (!result || typeof result !== 'object') return result;
+  const { performance: _performance, ...content } = result as Record<string, unknown>;
+  if (content.report && typeof content.report === 'object') {
+    const { performance: _reportPerformance, ...report } = content.report as Record<string, unknown>;
+    content.report = report;
+  }
+  return content;
+}
+
 export function createPhoneUseTool(deps: {
   runtime: PhoneRuntime;
   getSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
@@ -73,13 +84,13 @@ export function createPhoneUseTool(deps: {
       catch (error) {
         if (!(error instanceof PhoneError)) throw error;
         result = { ok: false, feedback: deps.runtime.status(setupOwner?.owner ?? owner)?.feedback, error: { code: error.code, message: error.message, ...error.details } };
-        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result };
+        return { content: [{ type: 'text', text: JSON.stringify(phoneToolContent(result)) }], details: result };
       }
       finally { unsubscribe?.(); }
       if (resume && (input.op === 'run' || input.op === 'step')) restoredRunId = runId;
       if (input.op === 'cancel' || input.op === 'close' && !resume) cancelPhoneAssistance(owner);
       if (setupOwner) setup!.afterInput(setupContext, setupOwner.owner, input.op);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result };
+      return { content: [{ type: 'text', text: JSON.stringify(phoneToolContent(result)) }], details: result };
     },
   };
 }

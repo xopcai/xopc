@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { PhonePerformance } from './execution-trace.js';
+
 export const PhoneProfileSchema = z.enum(['autoglm-phone-v1', 'structured-phone-v1']);
 export const PhoneModelMetadataSchema = z.object({ profile: PhoneProfileSchema }).strict();
 export const MOCK_PHONE_MODEL = 'phone-mock/settings-about';
@@ -12,6 +14,12 @@ export const PhoneConfigSchema = z.object({
   enabled: z.boolean().default(false),
   executionMode: PhoneExecutionModeSchema.default('collaborative'),
   adbPath: z.string().min(1).optional(),
+  autoGlmPrompt: z.enum(['current', 'upstream']).default('current'),
+  autoGlmProtocol: z.enum(['current', 'upstream']).default('current'),
+  autoGlmSampling: z.enum(['current', 'upstream']).default('current'),
+  modelResponseMode: z.enum(['json', 'stream']).default('json'),
+  batchReadings: z.boolean().default(false),
+  modelRepetitionGuard: z.boolean().default(false),
   semanticControls: z.boolean().default(false),
   hierarchicalPlanning: z.boolean().default(false),
   maxActionsPerSession: z.number().int().min(1).max(80).default(40),
@@ -147,6 +155,7 @@ export type PhoneReport = {
   task?: PhoneTaskContract; feedback?: PhoneTaskFeedback;
   sourceConversationId?: string;
   readings?: PhoneReading[];
+  performance?: PhonePerformance;
   steps: Array<{ action: PhoneAction['type']; at: number; dispatch: 'completed' | 'unknown'; actor?: 'agent' | 'human' }>;
   controlOwner?: 'agent' | 'human' | 'none'; controlEpoch?: number; handoff?: 'idle' | 'acquiring' | 'returning';
   currentAction?: PhoneAction['type'];

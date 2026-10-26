@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": { "noEmit": true },
-  "include": ["../benchmark-phone-apps-live.mts", "./*.ts"],
+  "include": ["../benchmark-phone-apps-live.mts", "../verify-phone-efficiency-live.mts", "./*.ts"],
   "exclude": []
 }

@@ -6,8 +6,8 @@ import { createPhoneUseTool } from '../../agent/tools/phone-use-tool.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import type { PhoneDriver } from '../adb-driver.js';
-import { PhoneInputSchema, PhoneError, type PhoneElement, type PhoneObservation, type PhoneReport } from '../contracts.js';
-import type { PhoneModelAdapter, PhonePrediction } from '../model-adapter.js';
+import { PhoneInputSchema, type PhoneElement, type PhoneObservation, type PhoneReport } from '../contracts.js';
+import type { PhoneModelAdapter } from '../model-adapter.js';
 import { PhoneRepository } from '../repository.js';
 import { PhoneRuntime } from '../runtime.js';
 
@@ -22,7 +22,7 @@ function observation(elements: PhoneElement[], app = 'com.test.editor'): PhoneOb
   return { frameId: randomUUID(), capturedAt: Date.now(), width: 1000, height: 1000, rotation: 0,
     package: app, frame: Buffer.from('synthetic-pixels'), elements };
 }
-function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests?: number; readScreen?: PhoneModelAdapter['readScreen']; semanticControls?: boolean; hierarchicalPlanning?: boolean } = {}) {
+function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests?: number; readScreen?: PhoneModelAdapter['readScreen']; readFields?: PhoneModelAdapter['readFields']; batchReadings?: boolean; semanticControls?: boolean; hierarchicalPlanning?: boolean } = {}) {
   const repository = new PhoneRepository();
   const device = repository.save({ serial: 'reliability-editor', name: 'Synthetic editor', enabled: true, allowedApps: ['com.test.editor', 'com.test.other'] });
   repository.setDefault(device.id);
@@ -32,10 +32,10 @@ function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests
     observe: vi.fn(async () => ({ ...current, frameId: randomUUID(), frame: Buffer.from(current.frame) })),
     execute: vi.fn(async () => {}),
   };
-  const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict, readScreen: options.readScreen }));
+  const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict, readScreen: options.readScreen, readFields: options.readFields }));
   runtimes.push(runtime);
   const context = { config: ConfigSchema.parse({ phone: { enabled: true, maxModelRequests: options.modelRequests ?? 10,
-    semanticControls: options.semanticControls, hierarchicalPlanning: options.hierarchicalPlanning } }), agentId: 'main', modelRef: 'test/reliability' };
+    batchReadings: options.batchReadings, semanticControls: options.semanticControls, hierarchicalPlanning: options.hierarchicalPlanning } }), agentId: 'main', modelRef: 'test/reliability' };
   return { repository, runtime, driver, context, set: (next: PhoneObservation) => { current = next; },
     open: () => runtime.execute('reliability', { op: 'open', mode: 'control' }, context),
   };
@@ -79,7 +79,9 @@ describe('phone task contract and execution strategies', () => {
     expect(result.details).toMatchObject({ feedback: { outcome: 'completed', verified: true, nextAction: 'done',
       outputs: [{ key: 'price', value: '25.50', source: 'native_ui', verification: 'observed', frameId: expect.any(String), capturedAt: expect.any(Number) }],
       usage: { actions: 0, modelRequests: 0 } } });
-    expect(JSON.parse((result.content[0] as { text: string }).text)).toEqual(result.details);
+    const { performance: _timing, ...modelResult } = result.details as PhoneReport;
+    expect(JSON.parse((result.content[0] as { text: string }).text)).toEqual(modelResult);
+    expect(result.details).toHaveProperty('performance');
     expect(predict).not.toHaveBeenCalled(); expect(f.driver.execute).not.toHaveBeenCalled();
     const saved = f.repository.history()[0];
     expect(saved.task).toBeUndefined(); expect(saved.feedback).toBeUndefined(); expect(saved.readings).toBeUndefined();
@@ -176,4 +178,21 @@ describe('phone task contract and execution strategies', () => {
     expect(f.repository.executionMode('reliability')).toBeUndefined();
   });
 
+});
+
+
+it('combines named visual outputs into one budgeted reading without a redundant finish transcription', async () => {
+  const readFields = vi.fn(async () => ({ price: '25.50', delivery: null }));
+  const readScreen = vi.fn(async () => 'Should not run');
+  const f = fixture(async () => ({ kind: 'complete', summary: 'At destination' }), { readFields, readScreen, modelRequests: 2, batchReadings: true });
+  await f.open();
+  const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read price and delivery', maxActions: 6,
+    requestedOutputs: [{ key: 'price', description: 'Price' }, { key: 'delivery', description: 'Delivery' }] }, f.context) as PhoneReport;
+  expect(result.modelRequests).toBe(2); expect(readFields).toHaveBeenCalledOnce(); expect(readScreen).not.toHaveBeenCalled();
+  expect(result.feedback?.outputs).toMatchObject([
+    { key: 'price', value: '25.50', source: 'screenshot', verification: 'unverified' },
+    { key: 'delivery', source: 'screenshot', verification: 'unavailable', reason: 'screen_unreadable' },
+  ]);
+  expect(result.verified).toBe(false);
+  expect(result.performance?.phases.screen_reading?.count).toBe(1);
 });

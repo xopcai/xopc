@@ -1,0 +1,392 @@
+{
+  "date": "2026-10-27",
+  "baseHead": "0e9c738200df2448c2cf6c0c7bd80136634612df",
+  "regression": {
+    "baseline": {
+      "completed": 8,
+      "total": 13,
+      "modelRequests": 50,
+      "trialTotalMs": 450685,
+      "trialMedianMs": 23975
+    },
+    "efficiency": {
+      "completed": 9,
+      "total": 13,
+      "modelRequests": 43,
+      "trialTotalMs": 378460,
+      "trialMedianMs": 19145
+    }
+  },
+  "regressionNotes": [
+    "One unmatched Clock pair excluded.",
+    "Local ASCII tasks do not exercise cloud DEX reuse, Unicode reuse or grouped readings. Timing differences are descriptive, not causal estimates of those optimizations.",
+    "Final tree adds metadata/cleanup, helper compatibility and opt-in grouping changes after the frozen regression snapshot. Full local evidence and source archives are not committed; source hashes are retained here."
+  ],
+  "ablation": [
+    {
+      "arm": "efficiency",
+      "completed": 2,
+      "total": 2,
+      "actualModelRequests": 4
+    },
+    {
+      "arm": "protocol",
+      "completed": 0,
+      "total": 2,
+      "actualModelRequests": 10
+    },
+    {
+      "arm": "prompt",
+      "completed": 1,
+      "total": 2,
+      "actualModelRequests": 8
+    },
+    {
+      "arm": "sampling",
+      "completed": 2,
+      "total": 2,
+      "actualModelRequests": 4
+    },
+    {
+      "arm": "upstream",
+      "completed": 0,
+      "total": 2,
+      "actualModelRequests": 10
+    },
+    {
+      "arm": "stream",
+      "completed": 2,
+      "total": 2,
+      "actualModelRequests": 4
+    }
+  ],
+  "longTail": {
+    "pairedComparisonAvailable": false,
+    "standaloneCompleted": false,
+    "standaloneRequests": 7,
+    "earlyStopsMs": [
+      4889,
+      8681
+    ],
+    "note": "The paired stream trial had unmatched initialization; standalone diagnostic is not a speed or completion-rate comparison. Canceled streams may omit token usage."
+  },
+  "actualRequests": {
+    "pilot": 15,
+    "regression": 94,
+    "ablation": 40,
+    "stream-tail": 8,
+    "stream-diagnostic": 7,
+    "fieldChecks": 2,
+    "total": 166
+  },
+  "validation": {
+    "testFiles": 37,
+    "passed": 471,
+    "skipped": 1,
+    "coreAndElectronTypes": true,
+    "benchmarkTypes": true,
+    "nodeBuild": true,
+    "declarationBuild": true,
+    "webBuild": true,
+    "electronServerBundle": true
+  },
+  "defaults": {
+    "autoGlmPrompt": "current",
+    "autoGlmProtocol": "current",
+    "autoGlmSampling": "current",
+    "modelResponseMode": "json",
+    "modelRepetitionGuard": false,
+    "batchReadings": false
+  },
+  "userConfigurationModified": false,
+  "published": false,
+  "mechanisms": {
+    "helperTransport": "Local ADB bridge exercising real Android 15; not public cloud latency",
+    "helperSamples": [
+      {
+        "arm": "one-shot",
+        "repeat": 1,
+        "durationMs": 993,
+        "uploads": 1
+      },
+      {
+        "arm": "cached",
+        "repeat": 1,
+        "durationMs": 1099,
+        "uploads": 1
+      },
+      {
+        "arm": "cached",
+        "repeat": 2,
+        "durationMs": 944,
+        "uploads": 0
+      },
+      {
+        "arm": "one-shot",
+        "repeat": 2,
+        "durationMs": 984,
+        "uploads": 1
+      },
+      {
+        "arm": "one-shot",
+        "repeat": 3,
+        "durationMs": 1056,
+        "uploads": 1
+      },
+      {
+        "arm": "cached",
+        "repeat": 3,
+        "durationMs": 1024,
+        "uploads": 0
+      }
+    ],
+    "cloudDriverObservation": {
+      "nativeNodes": 21,
+      "width": 1080,
+      "height": 2400,
+      "validPackageAssociation": true
+    },
+    "unicodeSamples": [
+      {
+        "arm": "baseline",
+        "durationMs": 15413,
+        "samples": [
+          {
+            "text": "咖啡",
+            "durationMs": 3314
+          },
+          {
+            "text": "地图",
+            "durationMs": 3224
+          },
+          {
+            "text": "咖啡😀",
+            "durationMs": 3185
+          }
+        ]
+      },
+      {
+        "arm": "efficiency",
+        "durationMs": 14975,
+        "samples": [
+          {
+            "text": "咖啡",
+            "durationMs": 3232
+          },
+          {
+            "text": "地图",
+            "durationMs": 3034
+          },
+          {
+            "text": "咖啡😀",
+            "durationMs": 3031
+          }
+        ]
+      }
+    ],
+    "fieldChecks": {
+      "attempts": 2,
+      "completed": 0,
+      "errors": [
+        {
+          "name": "Error",
+          "message": "Phone model returned invalid field readings"
+        },
+        {
+          "name": "Error",
+          "code": "PHONE_MODEL_TRUNCATED",
+          "message": "Phone model response was truncated before a complete decision; no action was dispatched"
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "regression": {
+      "sourcesByArm": {
+        "baseline": {
+          "implementation": "baseline-snapshot",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "sourceHashSet": "0cc873d432b2880e"
+        },
+        "efficiency": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "sourceHashSet": "311b4da283149ff9"
+        }
+      },
+      "harnessSourceHashSet": "13e539de82c87d1d"
+    },
+    "ablation": {
+      "sourcesByArm": {
+        "efficiency": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "sourceHashSet": "478db83ff5f9f5c5"
+        },
+        "protocol": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false,
+            "autoGlmProtocol": "upstream"
+          },
+          "sourceHashSet": "478db83ff5f9f5c5"
+        },
+        "prompt": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false,
+            "autoGlmPrompt": "upstream"
+          },
+          "sourceHashSet": "478db83ff5f9f5c5"
+        },
+        "sampling": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false,
+            "autoGlmSampling": "upstream"
+          },
+          "sourceHashSet": "478db83ff5f9f5c5"
+        },
+        "upstream": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false,
+            "autoGlmProtocol": "upstream",
+            "autoGlmPrompt": "upstream",
+            "autoGlmSampling": "upstream"
+          },
+          "sourceHashSet": "478db83ff5f9f5c5"
+        },
+        "stream": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false,
+            "modelResponseMode": "stream",
+            "modelRepetitionGuard": true
+          },
+          "sourceHashSet": "478db83ff5f9f5c5"
+        }
+      },
+      "harnessSourceHashSet": "5dc43c16c94ca759"
+    },
+    "stream-diagnostic": {
+      "sourcesByArm": {
+        "stream": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false,
+            "modelResponseMode": "stream",
+            "modelRepetitionGuard": true
+          },
+          "sourceHashSet": "829f8bf1a20fb0b2"
+        }
+      },
+      "harnessSourceHashSet": "5dc43c16c94ca759"
+    }
+  },
+  "evidencePolicy": "Commit compact summaries and source hashes; retain full traces, fixture failures and source copies only in the local research directory.",
+  "sourceHashSets": {
+    "0cc873d432b2880e": {
+      "runtime.ts": "6d3eb3c38935099800db5c901695e51374c868aebcdd2e5d07c08254803c84f6",
+      "model-adapter.ts": "54e71f20b40b1e4913d7801eab7c7da2224c9e53bb9ae2a1d051cd89b0917238",
+      "adb-driver.ts": "4c7e3ef299a3149131383dc4b2996dbc7eabb925693b508af3ba2b3cab164b43",
+      "contracts.ts": "8d1544bab231d21b39a689c4d404311b745241ec470a01cfaa619ac18b630249",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1"
+    },
+    "311b4da283149ff9": {
+      "runtime.ts": "3b5f5a4bb343eb965f032fef02b918cb67029a32df422e3a080cd6facc4749dd",
+      "model-adapter.ts": "d2f2658ecd5d1b5cf1c6be27d20427650ed11d4573ca492854536dcc4ada5f65",
+      "adb-driver.ts": "9ee6fcd19082ce936133cd572bdc95508c2207a0f492a2c2dde8ee6b724d820b",
+      "contracts.ts": "7fd301e06a6ac840ad3f8a3d0a9310cc127a7633f30312bf4d5c3644cfecfc88",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1",
+      "execution-trace.ts": "40885bf52ea7ab821650822922f53de8204b3dccb0a61b587afdf59c85aa4fcc",
+      "model-response.ts": "b2b6d0b5b290bc114a979ec0506231169b52b586a2eb829c51867f47cb3638e0",
+      "autoglm-protocol.ts": "f9280634748a3d5e9968b9c2feea1f0788230f9be0ffb4f55d70dcd5f9dd2e37",
+      "autoglm-upstream-prompt.ts": "2e9a57b0cf486b58bc5db1a7220b547a130cd2824a06fb886bdc417ff23334d8",
+      "text-session.ts": "9df0daefe60259dca2e51036b2b4d816ffdb2c9307d98f9b485dc65a1ed87c0a",
+      "cloud-adb-connection.ts": "8ba642fb6d754e8cea3b8518ee1e807e109ab83eeab6b57eee050162885c8207",
+      "cloud-adb.ts": "14826c8032caa52c1127c96e7576073a69faa2f8663f9706be7339784d4cba92"
+    },
+    "13e539de82c87d1d": {
+      "scripts/benchmark-phone-apps-live.mts": "a4baf15f2fe919859e26151724f64eab921f8bc85284967e8408aa0d2b2267f8",
+      "scripts/phone-apps-live/tasks.ts": "e7eb9ec479a28a90634ee7ab8205ef1b010126248b2b39436c514a716f5e0cc7",
+      "scripts/phone-apps-live/support.ts": "b9039f3f6e3edefd0b08d789f6236f8f25d6070ac8cb76786f192325f210e3b7",
+      "scripts/phone-apps-live/initial-state.ts": "42f69168743377ae03caa7125a49ea366ccaab037f54e91d5a7b5784ef48aa6d",
+      "scripts/phone-apps-live/response-metadata.ts": "f8fbbf68a1e88614ec9856148d1b8e5816cb428a71a6c1182a8f4c7af8b9c661",
+      "scripts/phone-apps-live/response-reader.ts": "e6e27af37526714e1ff1880d07ec2b01d05f9eeb794b7e924d30a30c11202815",
+      "scripts/phone-apps-live/protocol-envelope-diagnostics.ts": "7284c09eaf90faeafb65017c63d56d4379a712004dbbc2ae56292b1fe941ad34",
+      "scripts/phone-apps-live/protocol-alternatives.ts": "58e50a5714b9c607fd90a7e7718088dff6ea2db3650ded58720c7914353e7713"
+    },
+    "478db83ff5f9f5c5": {
+      "runtime.ts": "770932254b9a03b4899e478467e9814c3f308723b2ef081b674a682ec660b615",
+      "model-adapter.ts": "2ea1ef0150f3154809d9c8e90fc8b5daa23da09aafd087bfff9578bdeaafa780",
+      "adb-driver.ts": "239aca48fecf0eee8a69f5c1782843079babf0e10cd8a892fc584dcffa350013",
+      "contracts.ts": "382da1db570d559df4f6ee2c9fa6caf1ed38106c1fab96429880b3b23d279e0c",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1",
+      "execution-trace.ts": "11ebfc3613847c736b2c21b9570af90baffb14886716c70336bff43ee55ecfbe",
+      "model-response.ts": "197a3e4c8e384fb091a8ca4a75b40cc957af57536a01d92ac35dece603c564ab",
+      "autoglm-protocol.ts": "f9280634748a3d5e9968b9c2feea1f0788230f9be0ffb4f55d70dcd5f9dd2e37",
+      "autoglm-upstream-prompt.ts": "2e9a57b0cf486b58bc5db1a7220b547a130cd2824a06fb886bdc417ff23334d8",
+      "text-session.ts": "9df0daefe60259dca2e51036b2b4d816ffdb2c9307d98f9b485dc65a1ed87c0a",
+      "cloud-adb-connection.ts": "8ba642fb6d754e8cea3b8518ee1e807e109ab83eeab6b57eee050162885c8207",
+      "cloud-adb.ts": "14826c8032caa52c1127c96e7576073a69faa2f8663f9706be7339784d4cba92",
+      "ui-dump-binary.ts": "6f0a93c8ae0f0514e60256566af5f02c1ee607ea19bf745486391d2ff4e7bfc5"
+    },
+    "5dc43c16c94ca759": {
+      "scripts/benchmark-phone-apps-live.mts": "9febcef85e7a91e807f06e1c09721e003f65f6e44250fe412c340af6c0ed50f6",
+      "scripts/phone-apps-live/tasks.ts": "e7eb9ec479a28a90634ee7ab8205ef1b010126248b2b39436c514a716f5e0cc7",
+      "scripts/phone-apps-live/support.ts": "639caad15438fa84af0aed0b0d9cb1f64c1d1a9f666d46a91f2d511153d3e810",
+      "scripts/phone-apps-live/initial-state.ts": "42f69168743377ae03caa7125a49ea366ccaab037f54e91d5a7b5784ef48aa6d",
+      "scripts/phone-apps-live/response-metadata.ts": "f8fbbf68a1e88614ec9856148d1b8e5816cb428a71a6c1182a8f4c7af8b9c661",
+      "scripts/phone-apps-live/response-reader.ts": "e6e27af37526714e1ff1880d07ec2b01d05f9eeb794b7e924d30a30c11202815",
+      "scripts/phone-apps-live/protocol-envelope-diagnostics.ts": "7284c09eaf90faeafb65017c63d56d4379a712004dbbc2ae56292b1fe941ad34",
+      "scripts/phone-apps-live/protocol-alternatives.ts": "58e50a5714b9c607fd90a7e7718088dff6ea2db3650ded58720c7914353e7713"
+    },
+    "829f8bf1a20fb0b2": {
+      "runtime.ts": "0674d2055543b370a8b9c6ca92228b63df9b948fca4637528f2838c229129993",
+      "model-adapter.ts": "2ea1ef0150f3154809d9c8e90fc8b5daa23da09aafd087bfff9578bdeaafa780",
+      "adb-driver.ts": "239aca48fecf0eee8a69f5c1782843079babf0e10cd8a892fc584dcffa350013",
+      "contracts.ts": "382da1db570d559df4f6ee2c9fa6caf1ed38106c1fab96429880b3b23d279e0c",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1",
+      "execution-trace.ts": "11ebfc3613847c736b2c21b9570af90baffb14886716c70336bff43ee55ecfbe",
+      "model-response.ts": "197a3e4c8e384fb091a8ca4a75b40cc957af57536a01d92ac35dece603c564ab",
+      "autoglm-protocol.ts": "f9280634748a3d5e9968b9c2feea1f0788230f9be0ffb4f55d70dcd5f9dd2e37",
+      "autoglm-upstream-prompt.ts": "2e9a57b0cf486b58bc5db1a7220b547a130cd2824a06fb886bdc417ff23334d8",
+      "text-session.ts": "9df0daefe60259dca2e51036b2b4d816ffdb2c9307d98f9b485dc65a1ed87c0a",
+      "cloud-adb-connection.ts": "8ba642fb6d754e8cea3b8518ee1e807e109ab83eeab6b57eee050162885c8207",
+      "cloud-adb.ts": "14826c8032caa52c1127c96e7576073a69faa2f8663f9706be7339784d4cba92",
+      "ui-dump-binary.ts": "6f0a93c8ae0f0514e60256566af5f02c1ee607ea19bf745486391d2ff4e7bfc5"
+    }
+  }
+}

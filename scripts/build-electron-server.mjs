@@ -16,6 +16,8 @@ import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
 import { electronPiCredentialsPlugin } from './electron-pi-credentials.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+mkdirSync(dirname(join(root, 'out/server/autoglm-upstream.LICENSE')), { recursive: true });
+cpSync(join(root, 'src/phone/autoglm-upstream.LICENSE'), join(root, 'out/server/autoglm-upstream.LICENSE'));
 const entry = join(root, 'src/cli/bin.ts');
 const outfile = join(root, 'out/server/index.js');
 const retiredVoiceRuntimeOutfile = join(root, 'out/server/voice-runtime.js');

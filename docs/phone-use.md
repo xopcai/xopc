@@ -216,3 +216,30 @@ On a compatible Gateway, the HarmonyOS conversation header shows a phone icon wh
 New Android, iOS and HarmonyOS pairings include cloud phone viewing and control by default; no separate phone authorization is needed. In Gateway paired-device details, **Cloud phone access** can be changed to **View only** or **Not allowed** while preserving other device capabilities. Revoking the device also disconnects its phone streams and invalidates its credentials. Explicitly disabled or restricted existing grants remain unchanged. Registration, ADB keys and phone settings remain administrator-only. Permission to control does not acquire ownership: the user still selects **Take over** to pause the Agent and operate the phone.
 
 The phone page uses native H.264 video with an explicit snapshot fallback. Takeover pauses the Agent and waits for outstanding input. **Done, continue task** hands back and re-observes before continuing. Returning to chat or backgrounding releases manual ownership and leaves the task paused. A persisted assistance request can be reconnected with Take over. Reconnect does not reboot a cloud instance or replay inputs. Text entry remains subject to the existing non-password-field policy.
+
+## Execution diagnostics and controlled model experiments
+
+Phone operation reports expose bounded `performance` details: an operation ID, elapsed time, phase counts/durations, and numeric model-request metadata. The `PhoneRuntime` log entry with `phase=execution_timing` carries the same timing summary. UI hierarchy, capture, model requests, dispatch, input confirmation and settling are measured separately. Phases can overlap or nest; do not sum them as wall-clock percentages. JSON responses provide first-byte timing; token timing is available when the service streams tokens. Screen text, prompts, raw model responses and credentials are excluded from these diagnostics. Timing stays in tool details and logs instead of the main Agent's planning context.
+
+Advanced experiments can be configured in `xopc.json` without changing the selected phone model:
+
+```json
+{
+  "phone": {
+    "autoGlmPrompt": "current",
+    "autoGlmProtocol": "current",
+    "autoGlmSampling": "current",
+    "modelResponseMode": "json",
+    "modelRepetitionGuard": false,
+    "batchReadings": false
+  }
+}
+```
+
+These are the defaults. Each AutoGLM option can independently use `upstream`: the pinned upstream Chinese prompt with xopc host rules, image-first conversation turns, or upstream sampling defaults. Conversation history contains at most eight confirmed action turns in volatile adapter memory; rejected proposals and human actions are not represented as successful model actions. Task changes and human takeover clear that history. Host permissions, cancellation, text confirmation and completion validation continue to apply. This is a bounded host adaptation, not the unchanged standalone Python runtime.
+
+`modelResponseMode: "stream"` requests SSE and records token timing. The service must support the streaming contract; incomplete streams never dispatch an action. `modelRepetitionGuard: true` can terminate substantial exact repetition while reading a stream. Both settings are experimental and remain opt-in. Compare real task completion, protocol errors, costs and latency before changing defaults; streaming alone does not establish faster action execution.
+
+Cloud UI helpers are deployed by content hash and verified before reuse. Unicode input reuses its text-only channel within an operation and releases it on operation completion, takeover or cancellation. The experimental `batchReadings` option can combine visual outputs into one read-only request and defaults to false; missing values remain unavailable, and visual readings remain unverified.
+
+Developers can use `scripts/benchmark-phone-apps-live.mts` with `baseline`, `efficiency`, `prompt`, `protocol`, `sampling`, `upstream`, or `stream` arms. It requires the dedicated test emulator, explicit real-model opt-in and a request cap. `scripts/verify-phone-efficiency-live.mts` checks helper deployment and Unicode input on that same dedicated emulator; its local ADB bridge does not measure cloud-network latency.
