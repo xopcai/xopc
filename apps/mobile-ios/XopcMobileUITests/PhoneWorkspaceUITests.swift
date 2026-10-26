@@ -3,16 +3,7 @@ import XCTest
 /// Runs against the dedicated Settings-only Phone Use acceptance conversation.
 @MainActor final class PhoneWorkspaceUITests: XCTestCase {
     func testLivePhoneWorkspaceAndSingleControlAction() throws {
-        continueAfterFailure = false
-        guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"], !token.isEmpty else {
-            throw XCTSkip("Requires a local acceptance Gateway and the dedicated test conversation")
-        }
-        let app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
-        app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
-        app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = token
-        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18790"
-        app.launch()
+        let app = try launchAcceptanceApp()
         XCTAssertTrue(app.buttons["home-tab-conversations"].waitForExistence(timeout: 15))
         app.buttons["home-tab-conversations"].tap()
         let search = app.textFields["conversations-search-field"]
@@ -59,5 +50,19 @@ import XCTest
         XCTAssertTrue(composer.exists)
         XCTAssertEqual(composer.value as? String, "xopc-local-unsent")
         composer.tap(); composer.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "xopc-local-unsent".count))
+    }
+
+    private func launchAcceptanceApp() throws -> XCUIApplication {
+        continueAfterFailure = false
+        guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"], !token.isEmpty else {
+            throw XCTSkip("Requires a local acceptance Gateway and the dedicated test conversation")
+        }
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
+        app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = token
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18790"
+        app.launch()
+        return app
     }
 }

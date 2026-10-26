@@ -266,8 +266,8 @@ private struct ClarificationWizard: View {
             draft.index = max(0, min(draft.index, questions.count - 1))
             ready = true
         }
-        .onChange(of: draft) {
-            _, _ in if ready {
+        .onChange(of: draft) { _, _ in
+            if ready {
                 save()
             }
         }
