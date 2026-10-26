@@ -92,7 +92,7 @@ it('keeps releasing control and handing back to the Agent as separate actions', 
   await act(async () => button('仅查看').click());
   expect(container!.querySelector('[aria-label="发送到手机的文本"]')).toBeNull();
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'release', expect.any(Object));
-  await act(async () => button('交还手机').click());
+  await act(async () => button('恢复 AI 操作').click());
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'handback', expect.any(Object));
   expect(container!.querySelector('[data-phone-device-shell]')?.getAttribute('style')).toContain('0.5625');
 });
@@ -123,7 +123,7 @@ it('renders a shared global preview without manual controls or control side effe
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   const state = session({ status: 'running', controlOwner: 'human' }, true);
   await act(async () => root!.render(<PhoneLivePanel conversationId="device:phone" state={state} onChange={vi.fn()} readOnly />));
-  expect([...container.querySelectorAll('button')].some(b => /接管手机|交还手机|手机输入|手机返回/.test(b.textContent ?? ''))).toBe(false);
+  expect([...container.querySelectorAll('button')].some(b => /接管手机|恢复 AI 操作|手机输入|手机返回/.test(b.textContent ?? ''))).toBe(false);
   await act(async () => root!.unmount()); root = undefined;
   expect(controlPhone).not.toHaveBeenCalled();
 });
@@ -174,4 +174,28 @@ it('opens controls over the phone without sending input and disables manual cont
   await act(async () => button('收起控制中心').click());
   expect(container!.querySelector('.phone-control-shade')).toBeNull();
   expect(button('手机返回').disabled).toBe(false);
+});
+
+it('keeps manual control alive when the browser page is hidden', async () => {
+  vi.useFakeTimers();
+  const state = session({ controlOwner: 'human' }, true);
+  vi.mocked(controlPhone).mockReset().mockResolvedValue(state);
+  await mountPanel(state);
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+  await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+  expect(vi.mocked(controlPhone).mock.calls.filter(call => call[2] === 'heartbeat')).toHaveLength(4);
+  expect(vi.mocked(controlPhone).mock.calls.some(call => call[2] === 'release')).toBe(false);
+});
+
+it('renews control even when status polling replaces the change callback every second', async () => {
+  vi.useFakeTimers();
+  const state = session({ controlOwner: 'human' }, true);
+  vi.mocked(controlPhone).mockReset().mockResolvedValue(state);
+  await mountPanel(state);
+  for (let index = 0; index < 20; index++) {
+    await act(async () => root!.render(<PhoneLivePanel conversationId="conversation" state={state} onChange={vi.fn()} />));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  }
+  expect(vi.mocked(controlPhone).mock.calls.filter(call => call[2] === 'heartbeat')).toHaveLength(4);
 });

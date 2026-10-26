@@ -64,13 +64,15 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
     try {
       if (!repository.supported()) return
       while (currentCoroutineContext().isActive) {
-        val next = pageVisible()
-        if (visible && !next) leave()
-        visible = next
+        setVisible(pageVisible())
         refresh()
         delay(if (visible) 1200 else 4000)
       }
     } finally { active = false; visible = false; leave() }
+  }
+  fun setVisible(next: Boolean) {
+    if (visible && !next) { video?.pointer("cancel", 0, 0); touchStart = null }
+    visible = next
   }
   private suspend fun refresh() {
     if (mutable.value.busy) return
@@ -82,16 +84,16 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
       if (summary.binding != mutable.value.summary?.binding) { leave(); mutable.value = PhoneUiState(summary = summary) }
       else mutable.value = mutable.value.copy(summary = summary)
       if (!summary.available || summary.access == "none") { leave(); mutable.value = PhoneUiState(summary = summary); return }
-      if (!visible || summary.binding == null) return
+      if (summary.binding == null || (!visible && mutable.value.live == null)) return
       val live = repository.state(conversationId)
-      if (revision != generation || operationRevision != operations || !active || !visible) return
+      if (revision != generation || operationRevision != operations || !active) return
       mutable.value = mutable.value.copy(live = live)
       if (live == null) return
       if (live.ownControl && !mutable.value.busy && System.currentTimeMillis() - heartbeatAt > 4000) {
         heartbeatAt = System.currentTimeMillis(); commandNow("heartbeat")
       }
       ensureVideo()
-      if (mutable.value.fallback && touchStart == null) {
+      if (visible && mutable.value.fallback && touchStart == null) {
         val frame = repository.frame(summary.binding)
         if (revision == generation && operationRevision == operations && touchStart == null && active && visible && mutable.value.summary?.binding == summary.binding) mutable.value = mutable.value.copy(frame = frame)
       }
@@ -103,7 +105,8 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
   private suspend fun ensureVideo() {
     val current = mutable.value; val binding = current.summary?.binding ?: return; val live = current.live ?: return
     val target = surface ?: return
-    if (!active || !visible || live.restore || current.fallback) return
+    if (live.status == "closed") { stopVideo(); return }
+    if (!active || live.restore || current.fallback) return
     val key = "${binding.sessionId}:${if (live.ownControl) live.epoch else 0}"
     if (key == streamKey) return
     stopVideo(); streamKey = key
@@ -111,7 +114,7 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
     val mediaRevision = streamRevision
     try {
       val (url, ticket) = repository.video(binding, live)
-      if (revision != generation || !active || !visible || surface !== target || mediaRevision != streamRevision) return
+      if (revision != generation || !active || surface !== target || mediaRevision != streamRevision) return
       val next = PhoneVideo(target, if (live.ownControl) live.epoch else 0, { width, height, geometry -> scope.launch {
         if (streamKey == key && mediaRevision == streamRevision) mutable.value = mutable.value.copy(width = width, height = height, geometry = geometry)
       } }, { scope.launch { if (streamKey == key && mediaRevision == streamRevision) mutable.value = mutable.value.copy(playing = true, error = false) } }, {
@@ -125,12 +128,12 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
   fun command(op: String, action: JSONObject? = null) { scope.launch { commandNow(op, action) } }
   private suspend fun commandNow(op: String, action: JSONObject? = null) {
     val current = mutable.value; val binding = current.summary?.binding ?: return; val live = current.live ?: return
-    if (!active || !visible || current.busy) return
+    if (!active || (!visible && op != "heartbeat") || current.busy) return
     val revision = generation
     if (op != "heartbeat") { operations++; video?.pointer("cancel", 0, 0); touchStart = null; mutable.value = current.copy(busy = true, error = false) }
     try {
       val result = withContext(NonCancellable) { repository.command(binding, live, op, action, current.geometry.takeIf { current.playing }, current.frame?.seq) }
-      if (revision != generation || !visible || !active || !currentCoroutineContext().isActive) {
+      if (revision != generation || !active || !currentCoroutineContext().isActive) {
         if (result.ownControl) withContext(NonCancellable) { repository.command(binding, result, "release") }
         return
       }
@@ -179,6 +182,7 @@ internal fun rememberPhoneWorkspace(repository: PhoneRepository?, conversationId
     if (repository != null && conversationId != null) PhoneWorkspaceController(repository, conversationId, scope) else null
   }
   val visible by rememberUpdatedState(pageVisible)
+  SideEffect { controller?.setVisible(pageVisible) }
   LaunchedEffect(controller, lifecycle, active) {
     if (active) lifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { controller?.observe { visible } }
   }

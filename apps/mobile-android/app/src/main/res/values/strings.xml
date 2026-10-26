@@ -836,7 +836,7 @@
   <string name="phone_send">Send</string>
   <string name="phone_back">Back</string>
   <string name="phone_text">Enter text</string>
-  <string name="phone_handback">Return to AI</string>
+  <string name="phone_handback">Resume AI control</string>
   <string name="phone_takeover">Take over phone</string>
   <string name="phone_view_only">This device can only view the phone</string>
   <string name="phone_continue">Continue task</string>

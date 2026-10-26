@@ -1403,7 +1403,7 @@
     {"name":"phone_send","value":"发送"},
     {"name":"phone_back","value":"返回键"},
     {"name":"phone_text","value":"输入文字"},
-    {"name":"phone_handback","value":"交回 AI"},
+    {"name":"phone_handback","value":"恢复 AI 操作"},
     {"name":"phone_takeover","value":"接管手机"},
     {"name":"phone_view_only","value":"当前设备仅可查看"},
     {"name":"phone_continue","value":"继续任务"},

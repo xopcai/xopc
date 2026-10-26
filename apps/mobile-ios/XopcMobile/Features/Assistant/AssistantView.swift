@@ -65,11 +65,12 @@ struct AssistantView<Dock: View>: View {
         PhoneConversationPages(showingPhone: showingPhone, canPage: phone.summary?.available == true && phone.live?.ownControl != true,
                                onPage: { showingPhone = $0 }, phone: phone) { chatBody }
             .task(id: PhoneObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                          active: isActive && scenePhase == .active, visible: showingPhone))
+                                          active: isActive && scenePhase == .active))
             {
                 guard isActive, scenePhase == .active, let conversation, !conversation.isDraft else { phone.leave(); return }
                 await phone.observe(configuration: configuration, conversationID: conversation.id, visible: showingPhone)
             }
+            .onChange(of: showingPhone) { phone.setVisible(showingPhone) }
             .onChange(of: conversation?.id) { showingPhone = false }
             .onDisappear { phone.leave() }
     }
@@ -1192,5 +1193,4 @@ private struct PhoneObservationKey: Equatable {
     let configuration: GatewayConfiguration
     let conversationID: String?
     let active: Bool
-    let visible: Bool
 }

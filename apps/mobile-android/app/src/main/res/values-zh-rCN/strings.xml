@@ -836,7 +836,7 @@
   <string name="phone_send">发送</string>
   <string name="phone_back">返回键</string>
   <string name="phone_text">输入文字</string>
-  <string name="phone_handback">交回 AI</string>
+  <string name="phone_handback">恢复 AI 操作</string>
   <string name="phone_takeover">接管手机</string>
   <string name="phone_view_only">当前设备仅可查看</string>
   <string name="phone_continue">继续任务</string>

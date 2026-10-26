@@ -951,7 +951,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
 
       if (phoneStopped) {
         const wait = phoneAssistance(conversationId);
-        const text = `需要你在手机上完成一步操作。${phoneNotice ? ` ${phoneNotice}\n` : '\n'}请点击“接管手机”，完成后点击“已完成，继续任务”，我会从当前页面继续原任务。`;
+        const text = `需要你在手机上完成一步操作。${phoneNotice ? ` ${phoneNotice}\n` : '\n'}请点击“接管手机”，完成后点击“恢复 AI 操作”，我会从当前页面继续原任务。`;
         const notice: AssistantMessage = { role: 'assistant', content: [{ type: 'text', text }],
           api: resolvedModel.api, provider: resolvedModel.provider, model: resolvedModel.id,
           usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },

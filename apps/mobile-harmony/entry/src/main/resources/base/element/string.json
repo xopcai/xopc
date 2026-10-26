@@ -1405,7 +1405,7 @@
     {"name":"phone_send","value":"Send"},
     {"name":"phone_back","value":"Back"},
     {"name":"phone_text","value":"Enter text"},
-    {"name":"phone_handback","value":"Return to AI"},
+    {"name":"phone_handback","value":"Resume AI control"},
     {"name":"phone_takeover","value":"Take over phone"},
     {"name":"phone_view_only","value":"This device can only view the phone"},
     {"name":"phone_continue","value":"Continue task"},
