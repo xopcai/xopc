@@ -480,7 +480,8 @@ extension AssistantState {
     }
 
     private func prepareClarificationCommand(_ prompt: ClarificationRequest, action: String,
-                                             submission: ClarificationSubmission?) throws -> ClarificationResponseCommand? {
+                                             submission: ClarificationSubmission?) throws -> ClarificationResponseCommand?
+    {
         let previous = clarificationAttempt
         let candidate = ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
                                                      expectedVersion: prompt.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
@@ -490,8 +491,12 @@ extension AssistantState {
         guard prompt.schemaVersion == 2 else { return command }
         command.schemaVersion = 2
         command.answers = action == "answer" ? submission?.answers : nil
-        if action == "answer" && !prompt.accepts(command.answers ?? []) { return nil }
-        if let pending: ClarificationResponseCommand = ClarificationPersistence.read(prompt, "attempt", as: ClarificationResponseCommand.self) { return pending }
+        if action == "answer", !prompt.accepts(command.answers ?? []) {
+            return nil
+        }
+        if let pending: ClarificationResponseCommand = ClarificationPersistence.read(prompt, "attempt", as: ClarificationResponseCommand.self) {
+            return pending
+        }
         try ClarificationPersistence.write(prompt, "attempt", command)
         return command
     }
@@ -503,10 +508,10 @@ extension AssistantState {
         using gateway: any GatewayServing
     ) async {
         guard let clarification, !isRespondingToClarification, !clarification.isExpired else { return }
-        if action == "answer" && submission == nil {
+        if action == "answer", submission == nil {
             return
         }
-        if clarification.kind == "approval" && action == "agent_decide" {
+        if clarification.kind == "approval", action == "agent_decide" {
             return
         }
         let frozenCommand: ClarificationResponseCommand
@@ -523,7 +528,9 @@ extension AssistantState {
                 clarification,
                 command: frozenCommand
             )
-            if clarification.schemaVersion == 2 { try? ClarificationPersistence.clear(clarification) }
+            if clarification.schemaVersion == 2 {
+                try? ClarificationPersistence.clear(clarification)
+            }
             guard self.clarification?.id == clarification.id else { isRespondingToClarification = false; return }
             self.clarification = nil
             clarificationAttempt = nil

@@ -58,7 +58,7 @@ struct PhoneControlRequest: Encodable {
     // swiftlint:disable:next identifier_name
     let op: String
     let assistanceId: String?
-    var assistanceVersion: Int? = nil
+    var assistanceVersion: Int?
     let action: PhoneAction?
     let geometry: Int?
     let frameSeq: Int?

@@ -12,17 +12,34 @@ struct PhoneWorkspaceView: View {
         model.live?.ownControl == true
     }
 
-    private var pendingTask: Bool { model.live?.report.hasPendingTask ?? (model.live?.report.assistanceId != nil || model.live?.report.status == "running") }
-    private var otherControl: Bool { model.live?.report.controlOwner == "human" && !ownControl }
+    private var pendingTask: Bool {
+        model.live?.report.hasPendingTask ?? (model.live?.report.assistanceId != nil || model.live?.report.status == "running")
+    }
+
+    private var otherControl: Bool {
+        model.live?.report.controlOwner == "human" && !ownControl
+    }
+
     private var primaryOperation: String {
-        if ownControl { return pendingTask ? "handback" : "release" }
-        if model.live?.report.status == "paused", pendingTask, model.live?.report.assistanceId == nil { return "handback" }
+        if ownControl {
+            return pendingTask ? "handback" : "release"
+        }
+        if model.live?.report.status == "paused", pendingTask, model.live?.report.assistanceId == nil {
+            return "handback"
+        }
         return "takeover"
     }
+
     private var primaryTitle: LocalizedStringKey {
-        if model.busy { return "正在交接控制权…" }
-        if ownControl { return pendingTask ? "完成，继续任务" : "结束手动操作" }
-        if primaryOperation == "handback" { return "继续任务" }
+        if model.busy {
+            return "正在交接控制权…"
+        }
+        if ownControl {
+            return pendingTask ? "完成，继续任务" : "结束手动操作"
+        }
+        if primaryOperation == "handback" {
+            return "继续任务"
+        }
         return pendingTask || model.live?.report.status == "needs_user" ? "接管手机" : "手动操作"
     }
 

@@ -71,7 +71,9 @@ struct ClarificationAnswer: Codable, Equatable, Sendable {
     let questionId: String
     var choiceId: String?
     var text: String?
-    var valid: Bool { (choiceId != nil || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).utf16.count <= 2000 }
+    var valid: Bool {
+        (choiceId != nil || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).utf16.count <= 2000
+    }
 }
 
 struct ClarificationPrincipal: Decodable { let deviceId: String? }
@@ -114,18 +116,20 @@ struct ClarificationRequest: Decodable, Equatable, Identifiable, Sendable {
             ["text", "single_choice"].contains(question.type) && (question.type != "single_choice" || (2 ... 10).contains(question.choices?.count ?? 0))
         }
     }
+
     func accepts(_ answers: [ClarificationAnswer]) -> Bool {
         guard validQuestions, let questions, answers.count == questions.count, Set(answers.map(\.questionId)).count == answers.count else { return false }
         let summary = questions.map { question in
             let answer = answers.first { $0.questionId == question.id }
             let label = question.choices?.first { $0.id == answer?.choiceId }?.label
-            return "\(question.header): \(question.question)\n" + [label, answer?.text?.trimmingCharacters(in: .whitespacesAndNewlines)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
+            return "\(question.header): \(question.question)\n" + [label, answer?.text?.trimmingCharacters(in: .whitespacesAndNewlines)].compactMap(\.self).filter { !$0.isEmpty }.joined(separator: "\n")
         }.joined(separator: "\n\n")
         return summary.utf16.count <= 8000 && questions.allSatisfy { question in
             guard let answer = answers.first(where: { $0.questionId == question.id }), answer.valid else { return false }
             return answer.choiceId == nil || (question.type == "single_choice" && question.choices?.contains(where: { $0.id == answer.choiceId }) == true)
         }
     }
+
     var isOpen: Bool {
         status == "open"
     }
@@ -326,18 +330,22 @@ enum ClarificationPersistence {
     nonisolated static func scope(_ identity: String) -> String {
         SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
     }
+
     static func key(_ prompt: ClarificationRequest, _ kind: String) -> String {
         "clarify.\(prompt.scope ?? "local").\(prompt.conversationId).\(prompt.id).\(prompt.version).\(kind)"
     }
-    static func read<T: Decodable>(_ prompt: ClarificationRequest, _ kind: String, as recordType: T.Type, store: any GatewayTokenStoring = SystemGatewayTokenStore()) -> T? {
+
+    static func read<T: Decodable>(_ prompt: ClarificationRequest, _ kind: String, as _: T.Type, store: any GatewayTokenStoring = SystemGatewayTokenStore()) -> T? {
         guard let raw = store.load(account: key(prompt, kind)), let data = raw.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
     }
-    static func write<T: Encodable>(_ prompt: ClarificationRequest, _ kind: String, _ record: T, store: any GatewayTokenStoring = SystemGatewayTokenStore()) throws {
+
+    static func write(_ prompt: ClarificationRequest, _ kind: String, _ record: some Encodable, store: any GatewayTokenStoring = SystemGatewayTokenStore()) throws {
         let data = try JSONEncoder().encode(record)
         guard let text = String(data: data, encoding: .utf8) else { throw CocoaError(.fileWriteInapplicableStringEncoding) }
         try store.save(text, account: key(prompt, kind))
     }
+
     static func clear(_ prompt: ClarificationRequest, store: any GatewayTokenStoring = SystemGatewayTokenStore()) throws {
         try store.save("", account: key(prompt, "draft"))
         try store.save("", account: key(prompt, "attempt"))
