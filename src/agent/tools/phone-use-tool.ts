@@ -61,7 +61,7 @@ export function createPhoneUseTool(deps: {
         notifiedEpoch = report.controlEpoch;
         const progress = { status: 'needs_user', sessionId: report.sessionId, deviceId: report.deviceId,
           reason: report.message, nextAction: 'user_takeover',
-          message: '请接管手机，完成登录、验证码等操作后点击“已完成，继续任务”，原任务会从当前页面继续。' };
+          message: '请接管手机，完成登录、验证码等操作后点击“恢复 AI 操作”，原任务会从当前页面继续。' };
         onUpdate({ content: [{ type: 'text', text: JSON.stringify(progress) }], details: progress });
       }) : undefined;
       let result: unknown;

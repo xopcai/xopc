@@ -35,7 +35,7 @@ it('discovers the icon without opening video or changing the selected page', asy
   model.surface('surface'); model.bind('one', true, true); await settle();
   expect(mocks.open).toHaveBeenCalledOnce();
 });
-it('releases a takeover that finishes after the user has left the phone page', async () => {
+it('keeps a takeover that finishes after paging back to chat', async () => {
   model.bind('one', true, true); await settle();
   let resolve!: (value: object) => void;
   mocks.control.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
@@ -43,8 +43,8 @@ it('releases a takeover that finishes after the user has left the phone page', a
   model.bind('one', true, false);
   resolve({ ...state, ownControl: true, report: { ...state.report, controlEpoch: 2 } });
   await pending;
-  expect(mocks.control).toHaveBeenLastCalledWith(binding, expect.objectContaining({ ownControl: true }), 'release');
-  expect(model.state?.ownControl).not.toBe(true);
+  expect(mocks.control).toHaveBeenCalledTimes(1);
+  expect(model.state?.ownControl).toBe(true);
 });
 it('ignores stale discovery responses after switching conversations', async () => {
   let resolve!: (value: object) => void;
@@ -77,4 +77,31 @@ it('clears obsolete operation errors and pixels when phone access is withdrawn',
   model.bind('one', true, true); await settle(); model.error = 'PHONE_PERMISSION_REQUIRED';
   mocks.summary.mockResolvedValue({ available: true, access: 'none', needsUser: false });
   await model.refresh(); expect(model.error).toBe(''); expect(model.state).toBeUndefined(); expect(model.snapshot).toBeUndefined();
+});
+
+it('keeps video and the manual control heartbeat alive across repeated page changes', async () => {
+  const human = { ...state, ownControl: true, report: { ...state.report, controlEpoch: 2, controlOwner: 'human' } };
+  mocks.control.mockResolvedValue(human);
+  model.bind('one', true, true); model.surface('surface'); await settle();
+  await model.command('takeover'); mocks.state.mockResolvedValue(human);
+  const opens = mocks.open.mock.calls.length; const closes = mocks.close.mock.calls.length;
+  for (let index = 0; index < 3; index++) {
+    model.bind('one', true, false); await vi.advanceTimersByTimeAsync(20000);
+    expect(model.state?.ownControl).toBe(true);
+    model.bind('one', true, true); await settle();
+  }
+  expect(mocks.open).toHaveBeenCalledTimes(opens); expect(mocks.close).toHaveBeenCalledTimes(closes);
+  expect(mocks.control.mock.calls.filter(call => call[2] === 'heartbeat').length).toBeGreaterThanOrEqual(9);
+  expect(mocks.control.mock.calls.some(call => call[2] === 'release')).toBe(false);
+  model.dispose();
+  expect(mocks.control).toHaveBeenLastCalledWith(binding, expect.any(Object), 'release');
+});
+it('releases a pending takeover after switching to another conversation', async () => {
+  model.bind('one', true, true); await settle();
+  let resolve!: (value: object) => void;
+  mocks.control.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  const pending = model.command('takeover'); await settle();
+  model.bind('two', true, false); await settle();
+  resolve({ ...state, ownControl: true }); await pending;
+  expect(mocks.control).toHaveBeenLastCalledWith(binding, expect.objectContaining({ ownControl: true }), 'release');
 });

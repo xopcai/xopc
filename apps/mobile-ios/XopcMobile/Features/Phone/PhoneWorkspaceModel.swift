@@ -46,7 +46,7 @@ import Observation
             guard try await repository.supported() else { summary = nil; active = false; return }
             while !Task.isCancelled, revision == generation {
                 await refresh()
-                try await Task.sleep(for: .milliseconds(visible ? 1200 : 4000))
+                try await Task.sleep(for: .milliseconds(self.visible ? 1200 : 4000))
             }
         } catch is CancellationError {} catch {
             if revision == generation {
@@ -75,17 +75,18 @@ import Observation
             guard next.available, next.access != "none", let binding = next.binding else {
                 releaseOld(); stopVideo(); live = nil; frame = nil; failed = false; return
             }
-            guard visible else { return }
+            guard visible || live != nil else { return }
             let state = try await repository.state(conversationID)
-            guard revision == generation, operationRevision == operations, active, visible, !Task.isCancelled else { return }
+            guard revision == generation, operationRevision == operations, active, !Task.isCancelled else { return }
             if live != state {
                 live = state
             }
             if state?.ownControl == true, !busy, Date().timeIntervalSince(heartbeatAt) > 4 {
                 heartbeatAt = Date(); await command("heartbeat")
             }
+            if state?.report.status == "closed" { stopVideo(); return }
             ensureVideo()
-            if fallback, touchStart == nil {
+            if visible, fallback, touchStart == nil {
                 let nextFrame = try await repository.frame(binding)
                 if revision == generation, operationRevision == operations, touchStart == nil, visible, !Task.isCancelled {
                     frame = nextFrame
@@ -99,7 +100,7 @@ import Observation
     }
 
     func command(_ operation: String, action: PhoneAction? = nil) async {
-        guard let repository, let binding = summary?.binding, let state = live, active, visible, !busy else { return }
+        guard let repository, let binding = summary?.binding, let state = live, active, (visible || operation == "heartbeat"), !busy else { return }
         let revision = generation
         if operation != "heartbeat" {
             operations += 1; busy = true; failed = false; video?.pointer("cancel", x: 0, y: 0)
@@ -112,7 +113,7 @@ import Observation
         do {
             let result = try await repository.command(binding, state: state, op: operation, action: action,
                                                       geometry: playing ? geometry : nil, frameSeq: fallback ? frame?.seq : nil)
-            guard revision == generation, visible, active else {
+            guard revision == generation, active else {
                 if result.ownControl {
                     Task { _ = try? await repository.command(binding, state: result, op: "release") }
                 }
@@ -133,8 +134,8 @@ import Observation
     }
 
     private func ensureVideo() {
-        guard let repository, let binding = summary?.binding, let state = live, active, visible,
-              state.report.reconnectRequired != true, !fallback else { return }
+        guard let repository, let binding = summary?.binding, let state = live, active,
+              state.report.status != "closed", state.report.reconnectRequired != true, !fallback else { return }
         let key = "\(binding.phoneSessionId):\(state.ownControl ? state.report.controlEpoch : 0)"
         guard streamKey != key else { return }
         stopVideo(); streamKey = key
@@ -161,6 +162,13 @@ import Observation
     private func releaseOld() {
         if let repository, let binding = summary?.binding, let state = live, state.ownControl {
             Task { _ = try? await repository.command(binding, state: state, op: "release") }
+        }
+    }
+
+    func setVisible(_ visible: Bool) {
+        self.visible = visible
+        if !visible {
+            video?.pointer("cancel", x: 0, y: 0); touchStart = nil
         }
     }
 

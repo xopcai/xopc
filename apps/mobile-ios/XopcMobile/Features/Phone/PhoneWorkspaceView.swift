@@ -102,7 +102,7 @@ struct PhoneWorkspaceView: View {
             }
             if model.canControl {
                 Button { command(ownControl ? "handback" : "takeover") } label: {
-                    Text(ownControl ? "交回 AI" : "接管手机").font(.headline).frame(maxWidth: .infinity).frame(height: 52)
+                    Text(ownControl ? "恢复 AI 操作" : "接管手机").font(.headline).frame(maxWidth: .infinity).frame(height: 52)
                         .foregroundStyle(ownControl ? Color.primary : Color.white)
                         .background(ownControl ? Color(uiColor: .tertiarySystemFill) : Color.accentColor, in: Capsule())
                 }.buttonStyle(.plain).accessibilityIdentifier("phone-control")

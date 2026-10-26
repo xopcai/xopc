@@ -17,7 +17,9 @@ export const usePhoneWorkspaceStore = create<{
   show: (id, activate = true, controlConversationId) => set(state => ({
     activation: state.activation + (activate ? 1 : 0),
     selected: activate || !state.selected ? id ?? state.selected : state.selected, open: activate || state.open,
-    controlConversationId: activate || !state.open ? controlConversationId ?? null : state.controlConversationId,
+    controlConversationId: activate || !state.open
+      ? controlConversationId ?? (id === undefined || id === state.selected ? state.controlConversationId : null)
+      : state.controlConversationId,
   })),
   hide: () => set({ open: false }),
 }));

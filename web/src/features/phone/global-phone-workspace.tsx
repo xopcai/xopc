@@ -33,6 +33,8 @@ export function GlobalPhoneWorkspace() {
   const identity = useGatewayStore(s => `${s.baseUrl}:${s.conversationId}`);
   const { activation, open, selected, controlConversationId, displayMode, position, floatingWidth, setDisplayMode, show, hide } = usePhoneWorkspaceStore();
   const floating = displayMode === 'floating';
+  const [hasOpened, setHasOpened] = useState(false);
+  useEffect(() => { if (open) setHasOpened(true); }, [open]);
   const scope = useRightWorkspaceStore(state => state.scope);
   const pane = useRightWorkspaceStore(state => state.panes[scope]);
   const workspaceVisible = Boolean(pane?.open && pane.tabs.find(t => t.id === pane.activeId)?.kind === 'phone');
@@ -68,11 +70,11 @@ export function GlobalPhoneWorkspace() {
   }, [activation, open, floating, active?.sessionId, active?.deviceId, active?.deviceName, selected, reports]);
   const canControl = Boolean(active && controlConversationId === active.owner);
   const phoneAddress = active ? canControl ? active.owner : `device:${active.deviceId}` : '';
-  const phone = useConversationPhone(phoneAddress, open && Boolean(active));
+  const phone = useConversationPhone(phoneAddress, (open || hasOpened) && Boolean(active));
   const [disconnecting, setDisconnecting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { hide(); }, [identity, hide]);
+  useEffect(() => { hide(); setHasOpened(false); }, [identity, hide]);
   useEffect(() => {
     const pending = reports.find(report => report.status === 'needs_user' && report.controlOwner !== 'human'
       && (report.sourceConversationId ?? report.owner) === scope);
@@ -109,7 +111,7 @@ export function GlobalPhoneWorkspace() {
       {assistance.map(report => <div key={report.sessionId} className="space-y-2">
         <p className="flex items-center gap-2 font-medium"><Hand className="size-4 shrink-0 text-accent" aria-hidden />{report.deviceName} · {zh ? '需要你操作' : 'Your help is needed'}</p>
         {report.message && <p className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-fg-muted">{report.message}</p>}
-        <p className="text-xs text-fg-muted">{zh ? '任务已暂停。请接管手机完成操作，再点击“已完成，继续任务”。' : 'The task is paused. Take over, complete the requested action, then hand back control to continue.'}</p>
+        <p className="text-xs text-fg-muted">{zh ? '任务已暂停。请接管手机完成操作，再点击“恢复 AI 操作”。' : 'The task is paused. Take over, complete the requested action, then hand back control to continue.'}</p>
         <PhoneAssistanceActions conversationId={report.sourceConversationId ?? report.owner} state={{ report, ownControl: false, frame: null }} onChange={() => { void connections.mutate(); void phone.mutate(); }} />
       </div>)}
     </div>}
@@ -117,8 +119,8 @@ export function GlobalPhoneWorkspace() {
       <Smartphone className="size-4" /><span>{zh ? '手机' : 'Phones'} · {reports.length}{reports.some(r => r.controlOwner === 'agent' || r.controlOwner === 'human') ? (zh ? ' · 操作中' : ' · In use') : ''}</span>
       {reports.some(r => r.controlOwner === 'agent') && <span className="size-2 rounded-full bg-accent" aria-label={zh ? '操作中' : 'In use'} />}
     </Button>}
-    {createPortal(open && <aside ref={panelRef} aria-label={zh ? '手机连接' : 'Phone connections'} data-phone-window data-display-mode={displayMode}
-      className={cn('flex min-h-0 shrink-0 flex-col overflow-hidden text-fg', floating
+    {createPortal((open || hasOpened) && <aside ref={panelRef} aria-label={zh ? '手机连接' : 'Phone connections'} data-phone-window data-display-mode={displayMode}
+      className={cn('flex min-h-0 shrink-0 flex-col overflow-hidden text-fg', !open && 'hidden', floating
         ? 'fixed z-[81] max-h-[calc(100dvh-1.5rem)] w-[min(18rem,calc(100vw-1.5rem))] rounded-2xl border border-edge bg-surface-panel shadow-popover'
         : 'relative h-full max-h-full w-full bg-surface-panel')}
       style={floating ? { width: floatingWidth, height: floatingWidth * 640 / 288, left: position?.x, right: position ? undefined : 16, top: position?.y ?? 80 } : undefined}>

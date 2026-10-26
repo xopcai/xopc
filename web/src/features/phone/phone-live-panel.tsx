@@ -33,15 +33,17 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
   const refreshFrame = useRef<(() => void) | undefined>(undefined);
   const [visible, setVisible] = useState(document.visibilityState === 'visible');
   const latest = useRef(state); latest.current = state;
+  const changeRef = useRef(onChange); changeRef.current = onChange;
   const busyRef = useRef(false); const urlRef = useRef('');
   const gesture = useRef<{ point: number[]; at: number; seq: number } | null>(null);
   const ended = phoneEnded(state.report.status);
   const working = state.report.handoff !== undefined && state.report.handoff !== 'idle';
   const human = !readOnly && state.ownControl && state.report.controlOwner === 'human';
   const canvas = useRef<HTMLCanvasElement>(null);
-  const video = usePhoneVideo(conversationId, state.report.sessionId, !ended && !state.report.reconnectRequired && visible, canvas, state.report.controlEpoch);
+  const video = usePhoneVideo(conversationId, state.report.sessionId, !ended && !state.report.reconnectRequired, canvas, state.report.controlEpoch);
   const floating = Boolean(onHeaderPointerDown);
   useEffect(() => { video.cancel(); gesture.current = null; }, [floating, video.cancel]);
+  useEffect(() => { if (!visible) { video.cancel(); gesture.current = null; } }, [visible, video.cancel]);
   const videoPlaying = video.status === 'playing';
   const snapshot = video.status === 'fallback';
   const inspection = ['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(state.report.status);
@@ -56,15 +58,15 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
       const current = latest.current;
       if (!readOnly && current.ownControl && !phoneEnded(current.report.status)) void controlPhone(conversationId, current, 'release', {}, true).catch(() => {});
     };
-    const visibility = () => { setVisible(document.visibilityState === 'visible'); if (document.hidden) release(); };
+    const visibility = () => { setVisible(document.visibilityState === 'visible'); };
     window.addEventListener('pagehide', release); document.addEventListener('visibilitychange', visibility);
     return () => { release(); window.removeEventListener('pagehide', release); document.removeEventListener('visibilitychange', visibility); };
   }, [conversationId, readOnly]);
   useEffect(() => {
-    if (!human || !visible) return;
-    const heartbeat = setInterval(() => { void controlPhone(conversationId, latest.current, 'heartbeat').catch(() => onChange()); }, 5000);
+    if (!human || ended) return;
+    const heartbeat = setInterval(() => { void controlPhone(conversationId, latest.current, 'heartbeat').catch(() => changeRef.current()); }, 5000);
     return () => clearInterval(heartbeat);
-  }, [conversationId, human, visible, onChange]);
+  }, [conversationId, human, ended]);
   useEffect(() => {
     if (ended || state.report.reconnectRequired || !visible || !snapshot) { setFrame(undefined); if (urlRef.current) URL.revokeObjectURL(urlRef.current); urlRef.current = ''; return; }
     const abort = new AbortController(); let disposed = false; let timer: ReturnType<typeof setTimeout>; let inFlight = false;
@@ -122,7 +124,7 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
   const disabled = Boolean(busy) || working || ended || otherHuman || showControls;
   const title = ended ? (zh ? '连接已断开' : 'Disconnected')
     : busy === 'takeover' || state.report.handoff === 'acquiring' ? (zh ? '正在接管…' : 'Taking control…')
-      : busy === 'handback' || state.report.handoff === 'returning' ? (zh ? '正在交还…' : 'Returning control…')
+      : busy === 'handback' || state.report.handoff === 'returning' ? (zh ? '正在恢复…' : 'Resuming AI control…')
         : working ? (zh ? '正在交接控制权…' : 'Transferring control…')
           : human ? (zh ? '你正在操作' : 'You control the phone')
             : otherHuman ? (zh ? '另一窗口正在操作' : 'Controlled in another window')
@@ -137,9 +139,9 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
         : snapshot ? (age !== null && age > 4 ? (zh ? '画面更新较慢' : 'Preview delayed') : (zh ? '定时更新画面' : 'Snapshot preview'))
           : connected ? (zh ? '已连接' : 'Connected') : (zh ? '正在连接…' : 'Connecting…');
   const helper = ended ? (zh ? '在聊天中让 Agent 重新打开手机，即可继续使用。' : 'Ask the Agent in chat to reopen the phone to continue.')
-    : state.report.stopReason === 'user_takeover' ? (human ? (zh ? '完成登录、验证码等操作后，点击“已完成，继续任务”。' : 'Complete the login or verification, then hand back control to continue the task.') : (zh ? '任务已暂停。请接管手机完成所需操作，再交还手机继续。' : 'The task is paused. Take over and complete the requested action, then hand back control.'))
+    : state.report.stopReason === 'user_takeover' ? (human ? (zh ? '完成登录、验证码等操作后，点击“恢复 AI 操作”。' : 'Complete the login or verification, then hand back control to continue the task.') : (zh ? '任务已暂停。请接管手机完成所需操作，再点击“恢复 AI 操作”。' : 'The task is paused. Take over and complete the requested action, then hand back control.'))
     : state.report.status === 'outcome_unknown' || state.report.stopReason === 'inspect_before_retry' ? (zh ? '上一步的结果尚未确认。请接管检查，避免重复操作。' : 'The last result is unconfirmed. Take over to inspect before repeating any action.')
-    : state.report.stopReason === 'text_input_required' ? (human ? (zh ? '请使用手机自带键盘输入，完成后交还手机。' : 'Type with the phone keyboard, then hand back control.') : (zh ? '请接管并使用手机自带键盘输入，完成后交还手机。' : 'Take over, type with the phone keyboard, then hand back control.'))
+    : state.report.stopReason === 'text_input_required' ? (human ? (zh ? '请使用手机自带键盘输入，完成后点击“恢复 AI 操作”。' : 'Type with the phone keyboard, then hand back control.') : (zh ? '请接管并使用手机自带键盘输入，完成后点击“恢复 AI 操作”。' : 'Take over, type with the phone keyboard, then hand back control.'))
       : state.report.stopReason === 'text_input_unconfirmed' ? (human ? (zh ? '请检查输入框，避免重复输入；确认后交还 Agent。' : 'Inspect the field to avoid duplicate text, then hand back to the Agent.') : (zh ? '请先接管检查输入框，避免重复输入；确认后交还 Agent。' : 'Take over and inspect the field before retrying to avoid duplicate text. Then hand back to the Agent.'))
     : video.status === 'blocked' ? (zh ? '当前页面不在授权范围内，请先返回授权应用。' : 'This page is outside the allowed apps. Return to an authorized app first.')
       : working || busy === 'takeover' || busy === 'handback' ? (zh ? '控制权交接完成后，即可继续操作。' : 'Controls become available once the handoff completes.')
@@ -153,8 +155,8 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
   const ratio = dimensions ? dimensions.width / dimensions.height : 9 / 20;
   const primaryLabel = ended ? (zh ? '会话已结束' : 'Session ended')
     : busy === 'takeover' ? (zh ? '正在接管…' : 'Taking control…')
-      : busy === 'handback' ? (zh ? '正在交还…' : 'Returning control…')
-        : human ? (state.report.assistanceId ? (zh ? '已完成，继续任务' : 'Done, continue task') : (zh ? '交还手机' : 'Hand back control')) : (zh ? '接管手机' : 'Take over phone');
+      : busy === 'handback' ? (zh ? '正在恢复…' : 'Resuming AI control…')
+        : human ? (zh ? '恢复 AI 操作' : 'Resume AI control') : (zh ? '接管手机' : 'Take over phone');
   const previewProblem = video.status === 'blocked' || snapshot && (Boolean(frameError) || !frame || (age ?? 0) > 4);
   const showHelper = ended || human || inspection || working || otherHuman || video.status === 'blocked';
   const showFooter = controlMode && !ended || showHelper || Boolean(error);
@@ -278,7 +280,7 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
             {busy || working ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> : human ? <Play className="size-4" aria-hidden /> : <Hand className="size-4" aria-hidden />}{primaryLabel}
           </Button> : null}
           {!otherHuman && controlMode && !idle ? <Button variant="ghost" className="min-h-11 rounded-lg" disabled={disabled} onClick={() => void command(human ? 'release' : paused ? 'handback' : 'pause')}>
-            {!human && !paused ? <Pause className="size-4" aria-hidden /> : null}{human ? (zh ? '仅查看' : 'View only') : paused ? (state.report.assistanceId ? (zh ? '已完成，继续任务' : 'Done, continue task') : (zh ? '继续任务' : 'Continue task')) : (zh ? '暂停任务' : 'Pause task')}
+            {!human && !paused ? <Pause className="size-4" aria-hidden /> : null}{human ? (zh ? '仅查看' : 'View only') : paused ? (state.report.assistanceId ? (zh ? '恢复 AI 操作' : 'Resume AI control') : (zh ? '继续任务' : 'Continue task')) : (zh ? '暂停任务' : 'Pause task')}
           </Button> : null}
         </div> : null}
         {human ? <div className="mt-2 flex flex-wrap items-center gap-1.5">

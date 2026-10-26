@@ -26,7 +26,7 @@ export function PhoneAssistanceActions({ conversationId, state, onChange }: {
   return <div className="space-y-2">
     <div className="flex flex-wrap gap-2">
       {!state.ownControl && <Button variant="primary" disabled={busy || otherHuman} onClick={() => void act('takeover')}>{zh ? '接管手机' : 'Take over phone'}</Button>}
-      <Button variant={state.ownControl ? 'primary' : 'secondary'} disabled={busy || otherHuman} onClick={() => void act('handback')}>{zh ? '已完成，继续任务' : 'Done, continue task'}</Button>
+      <Button variant={state.ownControl ? 'primary' : 'secondary'} disabled={busy || otherHuman} onClick={() => void act('handback')}>{zh ? '恢复 AI 操作' : 'Resume AI control'}</Button>
     </div>
     {otherHuman && <p className="text-xs text-fg-muted">{zh ? '另一窗口正在操作手机' : 'Another window controls the phone'}</p>}
     {error && <p role="alert" className="text-xs text-danger">{error}</p>}

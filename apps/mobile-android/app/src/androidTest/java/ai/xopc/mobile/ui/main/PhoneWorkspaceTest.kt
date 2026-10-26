@@ -78,6 +78,10 @@ class PhoneWorkspaceTest {
     output.outputStream().use { capture.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     compose.onNodeWithTag("phone-video-live").performTouchInput { swipeUp() }
     compose.onNodeWithText(text(R.string.phone_handback)).assertIsDisplayed()
+    compose.onNodeWithTag("phone-return").performClick()
+    compose.onNodeWithTag("chat-header-phone").assertIsDisplayed().performClick()
+    compose.onNodeWithText(text(R.string.phone_handback)).assertIsDisplayed()
+    compose.onNodeWithTag("phone-video-live").assertExists()
     openMore()
     compose.onNodeWithText(text(R.string.phone_text)).performClick()
     compose.onNodeWithTag("phone-text-input").performTextInput("xopc-local-draft")

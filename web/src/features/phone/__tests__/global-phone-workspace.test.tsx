@@ -151,3 +151,18 @@ it('reuses the same phone workspace tab when restart recovery creates a new sess
   expect(tabs).toHaveLength(1);
   expect(tabs[0]).toMatchObject({ id: `phone:${report.deviceId}`, phoneSessionId: report.deviceId });
 });
+
+it('retains the mounted phone and source control when hiding and reopening it', async () => {
+  vi.mocked(useSWR).mockReturnValue({ data: [report], mutate: vi.fn(), isLoading: false } as unknown as ReturnType<typeof useSWR>);
+  vi.mocked(useConversationPhone).mockReturnValue({ data: { report, ownControl: true, frame: null }, mutate: vi.fn() } as unknown as ReturnType<typeof useConversationPhone>);
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><GlobalPhoneWorkspace /></MemoryRouter>));
+  await act(async () => usePhoneWorkspaceStore.getState().show(report.deviceId, true, report.owner));
+  const preview = document.querySelector('[data-phone-window]')!.querySelector('div');
+  await act(async () => usePhoneWorkspaceStore.getState().hide());
+  expect(document.querySelector('[data-phone-window]')!.querySelector('div')).toBe(preview);
+  expect(useConversationPhone).toHaveBeenLastCalledWith(report.owner, true);
+  await act(async () => usePhoneWorkspaceStore.getState().show());
+  expect(document.querySelector('[data-phone-window]')!.querySelector('div')).toBe(preview);
+  expect(usePhoneWorkspaceStore.getState().controlConversationId).toBe(report.owner);
+});

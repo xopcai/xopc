@@ -42,7 +42,7 @@ it('opens the phone and acquires manual control in one action, suppressing doubl
 it('allows completion on the physical phone without first acquiring browser control', async () => {
   await mount();
   vi.mocked(controlPhone).mockResolvedValue({ ...state, report: { ...state.report, status: 'ready' } });
-  await act(async () => button('已完成，继续任务').click());
+  await act(async () => button('恢复 AI 操作').click());
   expect(controlPhone).toHaveBeenCalledOnce();
   expect(controlPhone).toHaveBeenCalledWith('chat', state, 'handback');
   expect(usePhoneWorkspaceStore.getState().open).toBe(false);
@@ -51,8 +51,8 @@ it('allows completion on the physical phone without first acquiring browser cont
 it('keeps the request actionable after a failed handback', async () => {
   await mount();
   vi.mocked(controlPhone).mockRejectedValueOnce(new Error('手机暂未连接，进度已保留'));
-  await act(async () => button('已完成，继续任务').click());
+  await act(async () => button('恢复 AI 操作').click());
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('进度已保留');
-  expect(button('已完成，继续任务').disabled).toBe(false);
+  expect(button('恢复 AI 操作').disabled).toBe(false);
   expect(container.textContent).toContain('请在手机上完成登录');
 });
