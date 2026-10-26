@@ -83,6 +83,31 @@ describe('PATCH /api/config tunnel key', () => {
     expect(await response.json()).toEqual({ error: 'Active lease ownership proof required', code: 'TUNNEL_RECOVERY_PROOF_REJECTED' });
   });
 
+  it('passes explicit lease recovery through the authenticated lazy route', async () => {
+    const start = vi.spyOn(getTunnelService(), 'start').mockResolvedValue();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ brokerUrl: 'https://frp.xopc.ai/api' }));
+    const app = createHonoApp({ service: mockService(), token: 'gateway-secret-token' });
+    const response = await app.request('/api/tunnel/start', { method: 'POST',
+      headers: { Authorization: 'Bearer gateway-secret-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recoverActiveLease: true }),
+    });
+    expect(response.status).toBe(200);
+    expect(start).toHaveBeenCalledWith(18790, 'gateway-secret-token', { recoverActiveLease: true });
+  });
+
+  it('reports an unconfirmed cloud release instead of claiming success', async () => {
+    vi.spyOn(getTunnelService(), 'stop').mockResolvedValue({ released: false });
+    const service = mockService();
+    const app = createHonoApp({ service, token: 'gateway-secret-token' });
+    const response = await app.request('/api/tunnel/stop', { method: 'POST',
+      headers: { Authorization: 'Bearer gateway-secret-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ release: true }),
+    });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ ok: false, released: false, code: 'TUNNEL_RELEASE_FAILED' });
+    expect(service.currentConfig.tunnel.enabled).toBe(false);
+  });
+
   it('stops the runtime and disables startup flags before clearing the key', async () => {
     const stop = vi.spyOn(getTunnelService(), 'stop').mockResolvedValue({ released: false });
     const service = mockService();

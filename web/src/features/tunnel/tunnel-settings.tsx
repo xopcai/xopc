@@ -32,6 +32,7 @@ import {
   recordTunnelConsent,
   startTunnel,
   stopTunnel,
+  tunnelRecoveryProofRejected,
 } from '@/features/tunnel/tunnel-api';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -154,7 +155,8 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     dispatchUi({ type: 'patch', patch: { actionError: null } });
     dispatchUi({ type: 'patch', patch: { starting: true } });
     try {
-      await startTunnel();
+      const recoverActiveLease = status?.state === 'error' && tunnelRecoveryProofRejected(new Error(status.lastError ?? ''));
+      await startTunnel(recoverActiveLease ? { recoverActiveLease: true } : undefined);
       await mutStatus();
       void revalidateGatewayConfig();
     } catch (e) {
@@ -165,7 +167,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     } finally {
       dispatchUi({ type: 'patch', patch: { starting: false } });
     }
-  }, [mutStatus]);
+  }, [mutStatus, status]);
 
   const handleStartClick = useCallback(() => {
     if (!brokerReady) {

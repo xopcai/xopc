@@ -40,6 +40,9 @@ export function DevicePairingRouteSetup() {
   const [authorizationUrl, setAuthorizationUrl] = useState('');
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    if (data?.state === 'connected') { setError(null); setErrorDetail(''); }
+  }, [data?.state]);
   const registrationRejected = error ? error === 'registration-rejected'
     : data?.state === 'error' && tunnelRegistrationKeyRejected(new Error(data.lastError ?? ''));
   const recoveryRejected = error ? error === 'recovery-rejected'
@@ -92,7 +95,7 @@ export function DevicePairingRouteSetup() {
       }
       if (!alive.current) return;
       setPhase('starting');
-      await startTunnel();
+      await startTunnel(recoveryRejected ? { recoverActiveLease: true } : undefined);
       if (autoStart) await patchTunnelConfig({ autoStart: true });
       await mutate();
       terminal = true;
@@ -139,7 +142,7 @@ export function DevicePairingRouteSetup() {
     <label className="my-5 flex items-center gap-3 text-sm text-fg-muted"><input type="checkbox" checked={autoStart} disabled={phase !== 'idle'} onChange={e => setAutoStart(e.target.checked)} className="size-4 accent-accent" />{f.autoStart}</label>
     {statusError && !data ? <Button className="w-full" variant="primary" onClick={() => void mutate().catch(() => {})}>{f.retry}</Button> :
       <Button className="w-full" variant="primary" disabled={!data || phase !== 'idle' || preparing || (showConsent && !consent)} onClick={() => void enable()}>
-        {phase === 'authorizing' ? f.authorizing : preparing ? f.preparing : registrationRejected ? f.authorize : failed ? f.retry : f.enable}
+        {phase === 'authorizing' ? f.authorizing : preparing ? f.preparing : registrationRejected ? f.authorize : recoveryRejected ? f.recoverRoute : failed ? f.retry : f.enable}
       </Button>}
   </div>;
 }

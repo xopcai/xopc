@@ -106,9 +106,21 @@ export class TunnelService extends EventEmitter {
     this.emit('tunnel:progress');
   }
 
-  async start(gatewayPort: number, gatewayToken: string): Promise<void> {
+  private startTask: Promise<void> | null = null;
+
+  async start(gatewayPort: number, gatewayToken: string, options?: { recoverActiveLease?: boolean }): Promise<void> {
+    if (this.startTask) return this.startTask;
+    const task = this.startOnce(gatewayPort, gatewayToken, options).finally(() => {
+      if (this.startTask === task) this.startTask = null;
+    });
+    this.startTask = task;
+    return task;
+  }
+
+  private async startOnce(gatewayPort: number, gatewayToken: string, options?: { recoverActiveLease?: boolean }): Promise<void> {
     const cfg = this.serviceConfig;
     if (!cfg) throw new Error('Tunnel service not configured');
+    if (options?.recoverActiveLease) await this.stop();
 
     this.stopping = false;
     this.startContext = { gatewayPort, gatewayToken };
@@ -144,7 +156,7 @@ export class TunnelService extends EventEmitter {
     let registration: TunnelRegistration;
     try {
       this.setStartPhase('registering');
-      registration = await this.resolveRegistration(broker, cfg, gatewayToken, persisted);
+      registration = await this.resolveRegistration(broker, cfg, gatewayToken, persisted, options?.recoverActiveLease === true);
     } catch (err) {
       this.clearStartProgress();
       this.state = 'error';
@@ -154,10 +166,9 @@ export class TunnelService extends EventEmitter {
     }
 
     const state = persistedFromRegistration(registration);
-    saveTunnelState(state);
-    this.setStartPhase('registering', { publicUrl: registration.publicUrl });
-
     try {
+      saveTunnelState(state);
+      this.setStartPhase('registering', { publicUrl: registration.publicUrl });
       const configPath = writeFrpcConfig(registration, gatewayPort, '127.0.0.1');
       this.setStartPhase('starting_frpc', { publicUrl: registration.publicUrl });
       await this.spawnAndWait(frpcBin, configPath, broker, state, registration.heartbeatIntervalMs);
@@ -182,6 +193,7 @@ export class TunnelService extends EventEmitter {
         publicUrl: registration.publicUrl,
         tunnelId: registration.tunnelId,
         gatewayTokenHash: hashGatewayToken(gatewayToken).slice(0, 12),
+        recoveredActiveLease: options?.recoverActiveLease === true,
       },
       'Remote access tunnel started',
     );
@@ -210,12 +222,16 @@ export class TunnelService extends EventEmitter {
         const em = err instanceof Error ? err.message : String(err);
         log.warn({ err, tunnelId: persisted.tunnelId, phase: 'tunnel_release' }, `Tunnel deregister failed: ${em}`);
       }
-      clearTunnelState();
-      logTunnelAudit(
-        'tunnel.release',
-        { tunnelId: persisted.tunnelId, subdomain: persisted.subdomain },
-        'Released tunnel registration and cleared local credentials',
-      );
+      if (released) {
+        clearTunnelState();
+        logTunnelAudit(
+          'tunnel.release',
+          { tunnelId: persisted.tunnelId, subdomain: persisted.subdomain },
+          'Released tunnel registration and cleared local credentials',
+        );
+      } else {
+        updateTunnelState({ enabled: false });
+      }
     } else {
       updateTunnelState({ enabled: false });
       logTunnelAudit(
@@ -238,8 +254,9 @@ export class TunnelService extends EventEmitter {
     cfg: TunnelServiceConfig,
     gatewayToken: string,
     persisted: PersistedTunnelState | null,
+    recoverActiveLease = false,
   ): Promise<TunnelRegistration> {
-    if (canResumePersistedTunnel(persisted)) {
+    if (!recoverActiveLease && canResumePersistedTunnel(persisted)) {
       try {
         await broker.heartbeat(persisted.tunnelId, persisted.tunnelToken);
         const resumed = registrationFromPersisted(persisted);
@@ -251,7 +268,7 @@ export class TunnelService extends EventEmitter {
           return resumed;
         }
       } catch (err) {
-        if (!(err instanceof TunnelBrokerError) || err.status !== 410) throw err;
+        if (!(err instanceof TunnelBrokerError) || ![401, 403, 410].includes(err.status)) throw err;
         log.info(
           { err, tunnelId: persisted.tunnelId, phase: 'tunnel_resume' },
           'Persisted tunnel not resumable — registering again',
@@ -263,7 +280,7 @@ export class TunnelService extends EventEmitter {
       throw new TunnelRegistrationSecretError(cfg.brokerUrl);
     }
 
-    return broker.register({
+    return (recoverActiveLease ? broker.recover.bind(broker) : broker.register.bind(broker))({
       brokerUrl: resolveBrokerApiBase(cfg.brokerUrl),
       registrationSecret: cfg.registrationSecret,
       gatewayVersion: PACKAGE_VERSION,

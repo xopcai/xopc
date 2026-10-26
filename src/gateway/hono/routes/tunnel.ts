@@ -243,6 +243,8 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.post('/api/tunnel/start', tunnelMutationLimit, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as { recoverActiveLease?: unknown };
+    const recoverActiveLease = body?.recoverActiveLease === true;
     let token: string;
     try {
       token = requireTunnelGatewayToken(deps.service.getResolvedAuth());
@@ -269,7 +271,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     const gateway = config.gateway;
     const port = gateway.port ?? 18790;
     try {
-      await tunnel.start(port, token);
+      await tunnel.start(port, token, { recoverActiveLease });
       setTunnelEnabledInConfig(config, true);
       const saved = await deps.service.saveConfig(config);
       if (!saved.saved) {
@@ -313,6 +315,10 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     const saved = await deps.service.saveConfig(config);
     if (!saved.saved) {
       return c.json({ error: saved.error ?? 'Failed to save tunnel state' }, 500);
+    }
+    if (release && !released) {
+      return c.json({ ok: false, released: false, code: 'TUNNEL_RELEASE_FAILED',
+        error: 'Cloud lease release was not confirmed. Retry or recover the connection.' }, 502);
     }
     return c.json({ ok: true, released });
   });

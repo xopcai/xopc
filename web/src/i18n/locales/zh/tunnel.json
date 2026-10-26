@@ -48,6 +48,8 @@
     "stepReconnectDetail": "frpc 中断后正在重连",
     "uptime": "运行时间",
     "start": "开启远程访问",
+    "recoverConnection": "恢复连接",
+    "recoverConnectionHint": "验证原网关身份后立即替换旧租约，保留公网地址。旧连接将断开，无需等待租约到期。",
     "stop": "断开连接",
     "release": "释放公网地址",
     "releaseHint": "在 Broker 上注销子域；下次开启将获得新的公网 URL。",

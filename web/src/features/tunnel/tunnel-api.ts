@@ -91,10 +91,10 @@ export async function provisionTunnelRegistrationKey(): Promise<void> {
   });
 }
 
-export async function startTunnel(): Promise<TunnelStartResponse> {
+export async function startTunnel(options?: { recoverActiveLease?: boolean }): Promise<TunnelStartResponse> {
   return fetchJson<TunnelStartResponse>(apiUrl('/api/tunnel/start'), {
     method: 'POST',
-    body: JSON.stringify({}),
+    body: JSON.stringify({ recoverActiveLease: options?.recoverActiveLease === true }),
   });
 }
 
