@@ -151,7 +151,7 @@ export function finishPhoneAssistance(input: SessionInput, succeeded: boolean): 
 }
 
 export function phoneAssistanceReport(wait: PhoneAssistance): PhoneReport {
-  return { ...wait.checkpoint.report, assistanceId: wait.id, reconnectRequired: true, mock: false, mode: 'control', status: wait.status === 'completed' ? 'completed' : 'needs_user',
+  return { ...wait.checkpoint.report, assistanceId: wait.id, assistanceVersion: wait.version, transcriptId: wait.transcriptId, hasPendingTask: true, reconnectRequired: true, mock: false, mode: 'control', status: wait.status === 'completed' ? 'completed' : 'needs_user',
     controlOwner: 'none', controlEpoch: 1, handoff: 'idle', actions: wait.checkpoint.usage.actions,
     modelRequests: wait.checkpoint.usage.modelRequests, createdAt: wait.createdAt, updatedAt: wait.createdAt,
     verified: false, verificationLevel: 'none', steps: [], stopReason: 'user_takeover',

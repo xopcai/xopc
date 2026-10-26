@@ -226,6 +226,10 @@ it('treats an explicit login-completion message as the same user handback and qu
   texts = ['Android version', '15'];
   const run = vi.fn(async () => ({ status: 'ok', summary: '' })); const inputs = coordinator(run);
   const message = { conversationId: owner, clientMessageId: 'login-done', content: '我已登录，继续', delivery: 'next' as const, origin: { type: 'channel' as const, channel: 'webchat' } };
+  await expect(inputs.submit(message)).rejects.toMatchObject({ code: 'PHONE_CONTROL_BUSY' });
+  expect(phoneAssistance(owner)?.status).toBe('open');
+  expect(run).not.toHaveBeenCalled();
+  await runtime.liveControl(owner, report.sessionId, context, 'browser', { op: 'release', epoch: runtime.status(owner)!.controlEpoch!, operationId: randomUUID() });
   expect((await inputs.submit(message)).ok).toBe(true);
   await vi.waitFor(() => expect(phoneAssistance(owner)?.status).toBe('completed'));
   expect((await inputs.submit(message)).ok).toBe(true);

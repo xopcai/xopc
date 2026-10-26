@@ -12,12 +12,26 @@ struct PhoneWorkspaceView: View {
         model.live?.ownControl == true
     }
 
+    private var pendingTask: Bool { model.live?.report.hasPendingTask ?? (model.live?.report.assistanceId != nil || model.live?.report.status == "running") }
+    private var otherControl: Bool { model.live?.report.controlOwner == "human" && !ownControl }
+    private var primaryOperation: String {
+        if ownControl { return pendingTask ? "handback" : "release" }
+        if model.live?.report.status == "paused", pendingTask, model.live?.report.assistanceId == nil { return "handback" }
+        return "takeover"
+    }
+    private var primaryTitle: LocalizedStringKey {
+        if model.busy { return "正在交接控制权…" }
+        if ownControl { return pendingTask ? "完成，继续任务" : "结束手动操作" }
+        if primaryOperation == "handback" { return "继续任务" }
+        return pendingTask || model.live?.report.status == "needs_user" ? "接管手机" : "手动操作"
+    }
+
     private var status: LocalizedStringKey {
         if model.busy {
             return "正在交接控制权…"
         }
         if ownControl {
-            return "你正在操作 · AI 已暂停"
+            return pendingTask ? "你正在操作 · AI 已暂停" : "你正在操作"
         }
         if model.live?.report.controlOwner == "human" {
             return "其他客户端正在操作"
@@ -100,14 +114,26 @@ struct PhoneWorkspaceView: View {
             if model.failed, model.live != nil {
                 Text("操作尚未确认，请检查手机状态后再试。").font(.footnote).foregroundStyle(.red)
             }
+            if ownControl {
+                HStack {
+                    Button("返回键", systemImage: "arrow.uturn.backward") { command("input", action: PhoneAction(type: "back")) }
+                    Button("输入文字", systemImage: "keyboard") { draft = ""; textOpen = true }.disabled(model.live?.textInput == "manual")
+                    Spacer()
+                }.buttonStyle(.bordered).disabled(model.busy || !(model.playing || freshFrame))
+            }
             if model.canControl {
-                Button { command(ownControl ? "handback" : "takeover") } label: {
-                    Text(ownControl ? "恢复 AI 操作" : "接管手机").font(.headline).frame(maxWidth: .infinity).frame(height: 52)
-                        .foregroundStyle(ownControl ? Color.primary : Color.white)
-                        .background(ownControl ? Color(uiColor: .tertiarySystemFill) : Color.accentColor, in: Capsule())
+                Button { command(primaryOperation) } label: {
+                    Text(primaryTitle).font(.headline).frame(maxWidth: .infinity).frame(height: 52)
+                        .foregroundStyle(Color.white)
+                        .background(Color.accentColor, in: Capsule())
                 }.buttonStyle(.plain).accessibilityIdentifier("phone-control")
                     .disabled(model.busy || !(ownControl || model.live?.report.reconnectRequired == true || model.playing || freshFrame))
                     .opacity(model.busy ? 0.5 : 1)
+                if !ownControl, model.live?.report.assistanceId != nil {
+                    Button("我已处理，继续") { command("handback") }.disabled(model.busy)
+                }
+            } else if otherControl {
+                Button("另一设备正在操作") {}.buttonStyle(.bordered).disabled(true)
             } else if model.summary?.access == "view" {
                 Text("当前设备仅可查看").font(.footnote).foregroundStyle(.secondary)
             }

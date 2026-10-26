@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { ConnectionActionBar } from '../connections/connection-action-bar';
-import { PhoneAssistanceCard } from '@/features/phone/phone-assistance-card';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
 import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -698,7 +697,6 @@ export const ChatComposer = memo(function ChatComposer({
   return (
     <div className="relative flex min-h-0 w-full flex-col">
       {conversationId ? <ConnectionActionBar key={conversationId} conversationId={conversationId} /> : null}
-      {conversationId ? <PhoneAssistanceCard key={`phone:${conversationId}`} conversationId={conversationId} /> : null}
       {composerContext ? <ComposerContextBar {...composerContext} conversationId={conversationId} disabled={(composerContext.disabled ?? disabled) || sending || streaming} /> : null}
     <ComposerFrame
       className={personal ? 'rounded-[1.65rem]' : undefined}

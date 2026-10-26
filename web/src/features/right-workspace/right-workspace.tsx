@@ -73,16 +73,16 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     }
   }, [visible]);
   const phone = useConversationPhone(scope, enabled);
-  const seenPhones = useRef(new Set<string>());
   useEffect(() => {
+    if (!enabled || phone.isLoading || phone.error) return;
     const report = phone.data?.report;
-    const phoneId = report?.deviceId ?? report?.sessionId;
-    if (!report || !phoneId || phoneEnded(report.status) || seenPhones.current.has(phoneId)) return;
-    seenPhones.current.add(phoneId);
-    const current = useRightWorkspaceStore.getState().panes[scope];
-    useRightWorkspaceStore.getState().openPhone(phoneId, report.deviceName, scope,
-      available >= 900 && (!current?.open || current.tabs.find(t => t.id === current.activeId)?.kind === 'home'));
-  }, [phone.data, scope, available]);
+    const phoneId = report && !phoneEnded(report.status) ? report.deviceId ?? report.sessionId : undefined;
+    const state = useRightWorkspaceStore.getState();
+    for (const tab of state.panes[scope]?.tabs ?? []) {
+      if (tab.kind === 'phone' && tab.phoneSessionId !== phoneId) state.remove(tab.id, scope);
+    }
+    if (report && phoneId) state.openPhone(phoneId, report.deviceName, scope, false, false);
+  }, [phone.data, phone.isLoading, phone.error, scope, enabled]);
   const phoneLayout = active?.kind === 'phone';
   const minPanelWidth = phoneLayout ? 360 : 460;
   const chatMinimum = phoneLayout ? 420 : 380;
@@ -275,7 +275,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     <WorkspaceTreeControlContext.Provider value={treeControl ? { button: treeControl, label: zh ? (treeShown ? '隐藏文件树' : '显示文件树') : (treeShown ? 'Hide file tree' : 'Show file tree'), active: treeShown, onToggle: toggleTree } : null}>
     <div id="workspace-content" role="tabpanel" aria-labelledby={active ? `workspace-tab-${active.id}` : undefined} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <div className={cn('min-h-0 min-w-0 flex-1 flex-col overflow-hidden', !treeOnly ? 'flex' : 'hidden')}>
-        {visible && phoneLayout ? <div id="phone-workspace-slot" className="flex min-h-0 flex-1 flex-col overflow-hidden" /> : null}
+        {visible && phoneLayout ? <div id="phone-workspace-slot" data-phone-conversation-id={scope} className="flex min-h-0 flex-1 flex-col overflow-hidden" /> : null}
         {treeHome && !treeOnly ? <div data-workspace-file-placeholder className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <FileText className="size-9 text-fg-muted" strokeWidth={1.25} aria-hidden />
           <p className="text-sm font-medium text-fg">{zh ? '选择文件预览' : 'Select a file to preview'}</p>

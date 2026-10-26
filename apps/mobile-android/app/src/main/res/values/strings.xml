@@ -836,7 +836,7 @@
   <string name="phone_send">Send</string>
   <string name="phone_back">Back</string>
   <string name="phone_text">Enter text</string>
-  <string name="phone_handback">Resume AI control</string>
+  <string name="phone_handback">Done, continue task</string>
   <string name="phone_takeover">Take over phone</string>
   <string name="phone_view_only">This device can only view the phone</string>
   <string name="phone_continue">Continue task</string>
@@ -852,6 +852,9 @@
     <string name="assistant_stages_collapse">Collapse earlier stages</string>
     <string name="assistant_stages_waiting">Waiting for your input. Complete the requested action to continue.</string>
     <string name="assistant_stages_interrupted">Execution stopped. Completed work is retained.</string>
+  <string name="phone_end_manual">End manual control</string>
+  <string name="phone_manual">Control phone</string>
+  <string name="phone_already_done">Already done, continue</string>
     <string name="clarify_previous">Previous</string>
     <string name="clarify_next">Next</string>
     <string name="clarify_retry">Retry submission</string>

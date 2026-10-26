@@ -7,12 +7,15 @@ struct PhoneBinding: Decodable, Equatable, Sendable {
     let phoneSessionId: String
 }
 
+struct PhoneAssistanceReference: Decodable, Equatable, Sendable { let id: String; let version: Int }
+
 struct PhoneSummary: Decodable, Equatable, Sendable {
     let available: Bool
     let access: String
     let needsUser: Bool
     let binding: PhoneBinding?
     let deviceName: String?
+    var assistance: PhoneAssistanceReference? = nil
 }
 
 struct PhoneReport: Decodable, Equatable, Sendable {
@@ -22,7 +25,10 @@ struct PhoneReport: Decodable, Equatable, Sendable {
     let status: String
     let controlOwner: String?
     let assistanceId: String?
+    var assistanceVersion: Int? = nil
     let reconnectRequired: Bool?
+    var hasPendingTask: Bool? = nil
+    var revision: Int? = nil
 }
 
 struct PhoneLiveState: Decodable, Equatable, Sendable {
@@ -52,6 +58,7 @@ struct PhoneControlRequest: Encodable {
     // swiftlint:disable:next identifier_name
     let op: String
     let assistanceId: String?
+    var assistanceVersion: Int? = nil
     let action: PhoneAction?
     let geometry: Int?
     let frameSeq: Int?
@@ -95,7 +102,7 @@ struct PhoneRepository: Sendable {
     {
         let body = PhoneControlRequest(clientId: clientID, operationId: UUID().uuidString.lowercased(), epoch: state.report.controlEpoch,
                                        expectedTranscriptId: binding.transcriptId, op: operation, assistanceId: state.report.assistanceId,
-                                       action: action, geometry: geometry, frameSeq: frameSeq)
+                                       assistanceVersion: state.report.assistanceVersion, action: action, geometry: geometry, frameSeq: frameSeq)
         let result: PhoneEnvelope<PhoneLiveState> = try await client.request(path: base(binding.conversationId) + "/\(state.report.sessionId)/control",
                                                                              method: "POST", body: client.encoder.encode(body))
         guard result.ok else { throw GatewayClientError.invalidResponse }

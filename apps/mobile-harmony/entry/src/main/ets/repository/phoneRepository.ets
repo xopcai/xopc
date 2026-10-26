@@ -27,7 +27,7 @@ export class XopcPhoneRepository {
   }
   async control(binding: XopcPhoneBinding, state: XopcPhoneLiveState, op: string, action?: XopcPhoneAction,
     frameSeq?: number, geometry?: number): Promise<XopcPhoneLiveState> {
-    const body: XopcPhoneControlRequest = { clientId: this.clientId, assistanceId: state.report.assistanceId,
+    const body: XopcPhoneControlRequest = { clientId: this.clientId, assistanceId: state.report.assistanceId, assistanceVersion: state.report.assistanceVersion,
       operationId: this.crypto.uuid(), epoch: state.report.controlEpoch, expectedTranscriptId: binding.transcriptId,
       op, action, frameSeq, geometry };
     const result = JSON.parse(await gatewaySession.request(this.base(binding.conversationId) + '/' + state.report.sessionId + '/control',

@@ -10,9 +10,9 @@ import kotlinx.coroutines.runInterruptible
 import org.json.JSONObject
 
 data class PhoneBinding(val conversationId: String, val transcriptId: String, val sessionId: String)
-data class PhoneSummary(val available: Boolean, val access: String, val name: String, val needsUser: Boolean, val binding: PhoneBinding?)
+data class PhoneSummary(val available: Boolean, val access: String, val name: String, val needsUser: Boolean, val binding: PhoneBinding?, val assistanceId: String? = null, val assistanceVersion: Int = 1)
 data class PhoneState(val sessionId: String, val epoch: Int, val ownControl: Boolean, val mode: String,
-  val owner: String, val status: String, val assistanceId: String?, val restore: Boolean, val manualText: Boolean)
+  val owner: String, val status: String, val assistanceId: String?, val restore: Boolean, val manualText: Boolean, val pendingTask: Boolean? = null, val revision: Long = 0, val assistanceVersion: Int? = null)
 data class PhoneFrame(val bitmap: Bitmap, val seq: Long, val capturedAt: Long)
 
 class PhoneRepository(private val session: GatewaySession) {
@@ -38,7 +38,7 @@ class PhoneRepository(private val session: GatewaySession) {
     val binding = value.optJSONObject("binding")?.let {
       PhoneBinding(it.getString("conversationId"), it.getString("transcriptId"), it.getString("phoneSessionId"))
     }
-    return PhoneSummary(value.getBoolean("available"), value.getString("access"), value.optString("deviceName"), value.optBoolean("needsUser"), binding)
+    return PhoneSummary(value.getBoolean("available"), value.getString("access"), value.optString("deviceName"), value.optBoolean("needsUser"), binding, value.optJSONObject("assistance")?.optString("id"), value.optJSONObject("assistance")?.optInt("version", 1) ?: 1)
   }
   suspend fun state(id: String): PhoneState? = request(base(id) + "?clientId=$clientId")
     .optJSONObject("payload")?.let(::parseState)
@@ -46,6 +46,7 @@ class PhoneRepository(private val session: GatewaySession) {
     geometry: Int? = null, frameSeq: Long? = null): PhoneState {
     val body = JSONObject().put("clientId", clientId).put("operationId", UUID.randomUUID().toString())
       .put("epoch", state.epoch).put("expectedTranscriptId", binding.transcriptId).put("op", op)
+    state.assistanceVersion?.let { body.put("assistanceVersion", it) }
     state.assistanceId?.let { body.put("assistanceId", it) }
     action?.let { body.put("action", it) }; geometry?.let { body.put("geometry", it) }
     frameSeq?.let { body.put("frameSeq", it) }
@@ -88,7 +89,7 @@ class PhoneRepository(private val session: GatewaySession) {
       val report = value.getJSONObject("report")
       return PhoneState(report.getString("sessionId"), report.getInt("controlEpoch"), value.optBoolean("ownControl"),
         report.getString("mode"), report.optString("controlOwner"), report.getString("status"),
-        report.optString("assistanceId").takeIf { it.isNotEmpty() }, report.optBoolean("reconnectRequired"), value.optString("textInput") == "manual")
+        report.optString("assistanceId").takeIf { it.isNotEmpty() }, report.optBoolean("reconnectRequired"), value.optString("textInput") == "manual", if (report.has("hasPendingTask")) report.optBoolean("hasPendingTask") else null, report.optLong("revision"), if (report.has("assistanceVersion")) report.optInt("assistanceVersion") else null)
     }
   }
 }

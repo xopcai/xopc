@@ -70,17 +70,18 @@ class PhoneWorkspaceTest {
     compose.onNodeWithTag("chat-header-phone").performClick()
     compose.waitUntil(30_000) { compose.onAllNodesWithTag("phone-video-live").fetchSemanticsNodes().isNotEmpty() }
     compose.onNodeWithTag("phone-control").assertIsDisplayed().assertIsEnabled().performClick()
-    compose.waitUntil(20_000) { compose.onAllNodesWithText(text(R.string.phone_handback)).fetchSemanticsNodes().isNotEmpty() }
+    compose.waitUntil(20_000) { (compose.onAllNodesWithText(text(R.string.phone_handback)).fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithText(text(R.string.phone_end_manual)).fetchSemanticsNodes().isNotEmpty()) }
     compose.onAllNodesWithTag("phone-control").assertCountEquals(1)
     compose.waitUntil(30_000) { compose.onAllNodesWithTag("phone-video-live").fetchSemanticsNodes().isNotEmpty() }
     val capture = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
     val output = ApplicationProvider.getApplicationContext<Context>().cacheDir.resolve("phone-acceptance.png")
     output.outputStream().use { capture.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     compose.onNodeWithTag("phone-video-live").performTouchInput { swipeUp() }
-    compose.onNodeWithText(text(R.string.phone_handback)).assertIsDisplayed()
+    compose.onNodeWithTag("phone-control").assertIsDisplayed()
     compose.onNodeWithTag("phone-return").performClick()
     compose.onNodeWithTag("chat-header-phone").assertIsDisplayed().performClick()
-    compose.onNodeWithText(text(R.string.phone_handback)).assertIsDisplayed()
+    compose.waitUntil(20_000) { compose.onAllNodesWithText(text(R.string.phone_handback)).fetchSemanticsNodes().isEmpty() && compose.onAllNodesWithText(text(R.string.phone_end_manual)).fetchSemanticsNodes().isEmpty() }
+    compose.onNodeWithTag("phone-control").assertIsDisplayed().performClick()
     compose.onNodeWithTag("phone-video-live").assertExists()
     openMore()
     compose.onNodeWithText(text(R.string.phone_text)).performClick()
@@ -89,7 +90,7 @@ class PhoneWorkspaceTest {
     androidx.test.espresso.Espresso.pressBack()
     openMore()
     compose.onNodeWithText(text(R.string.phone_release)).performClick()
-    compose.waitUntil(20_000) { compose.onAllNodesWithText(text(R.string.phone_takeover)).fetchSemanticsNodes().isNotEmpty() }
+    compose.waitUntil(20_000) { (compose.onAllNodesWithText(text(R.string.phone_takeover)).fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithText(text(R.string.phone_continue)).fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithText(text(R.string.phone_manual)).fetchSemanticsNodes().isNotEmpty()) }
     openMore()
     compose.onNodeWithText(text(R.string.phone_stop)).performClick()
     compose.waitUntil(5000) { compose.onAllNodesWithText(text(R.string.phone_cancel)).fetchSemanticsNodes().isNotEmpty() }
@@ -99,7 +100,7 @@ class PhoneWorkspaceTest {
     compose.waitUntil(20_000) { compose.onAllNodesWithText(text(R.string.phone_handback)).fetchSemanticsNodes().isNotEmpty() }
     compose.waitUntil(20_000) { compose.onAllNodes(hasTestTag("phone-control") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
     compose.onNodeWithTag("phone-control").performClick()
-    compose.waitUntil(20_000) { compose.onAllNodesWithText(text(R.string.phone_takeover)).fetchSemanticsNodes().isNotEmpty() }
+    compose.waitUntil(20_000) { (compose.onAllNodesWithText(text(R.string.phone_takeover)).fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithText(text(R.string.phone_continue)).fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithText(text(R.string.phone_manual)).fetchSemanticsNodes().isNotEmpty()) }
     compose.onNodeWithTag("phone-return").performClick()
     compose.onNodeWithTag("chat-header-phone").assertIsDisplayed()
   }

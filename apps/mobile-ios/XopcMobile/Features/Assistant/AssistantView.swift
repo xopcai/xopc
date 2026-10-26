@@ -775,7 +775,7 @@ struct AssistantView<Dock: View>: View {
                     Button { showingPhone = true } label: {
                         Image(systemName: "iphone").font(.system(size: 22)).frame(width: 44, height: 44)
                             .overlay(alignment: .topTrailing) {
-                                if phone.summary?.needsUser == true {
+                                if phone.needsAttention {
                                     Circle().fill(.blue).frame(width: 6, height: 6).padding(6)
                                 }
                             }

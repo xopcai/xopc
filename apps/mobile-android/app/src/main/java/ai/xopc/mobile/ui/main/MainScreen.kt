@@ -1603,7 +1603,7 @@ internal fun MainContent(
           assistantReferenceQuery, { assistantReferenceQuery = it },
           { assistantActionsOpen = it }, onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
           onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, personalModelRequestRevision, { personalModelRequestRevision = 0 },
-          phoneAvailable = phoneUi.summary?.available == true, phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.summary?.needsUser == true,
+          phoneAvailable = phoneUi.summary?.available == true, phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.attention,
           onOpenPhone = { phonePage = true })
         }
         else ConversationsScreen(connection, rootInsets, bottomChromeHeight,

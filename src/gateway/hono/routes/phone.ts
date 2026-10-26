@@ -5,6 +5,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import type { ConversationPhoneSummary } from '@xopcai/gateway-contract';
 
+import { getSessionMetadata } from '../../../storage/sqlite/session-repository.js';
 import { setDevicePhoneAccess } from '../../../storage/sqlite/device-access-repository.js';
 import { authorizePhoneAccess, phoneAdministrator } from '../../security/phone-access.js';
 
@@ -51,10 +52,10 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
       const report = body.payload?.report;
       if (report && body.payload) {
         const { sessionId, deviceId, deviceName, status, mode, controlOwner, controlEpoch, handoff, assistanceId,
-          reconnectRequired, stopReason, currentAction, updatedAt } = report;
+          reconnectRequired, stopReason, currentAction, updatedAt, revision, hasPendingTask, assistanceVersion, transcriptId } = report;
         body.payload = { ownControl: body.payload.ownControl, textInput: body.payload.textInput,
           report: { sessionId, deviceId, deviceName, status, mode, controlOwner, controlEpoch, handoff, assistanceId,
-            reconnectRequired, stopReason, currentAction, updatedAt } };
+            reconnectRequired, stopReason, currentAction, updatedAt, revision, hasPendingTask, assistanceVersion, transcriptId } };
         c.res = c.json(body);
         c.header('Cache-Control', 'no-store');
       }
@@ -94,13 +95,15 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     }
     return reports.map(report => {
       const wait = phoneAssistance(report.owner);
-      return wait && ['open', 'queued'].includes(wait.status) ? { ...report, assistanceId: wait.id, ...(wait.status === 'open' && report.controlOwner !== 'human' ? { status: 'needs_user' as const } : {}) } : report;
+      return wait && ['open', 'queued'].includes(wait.status) ? { ...report, assistanceId: wait.id, assistanceVersion: wait.version, transcriptId: wait.transcriptId, hasPendingTask: true, ...(wait.status === 'open' && report.controlOwner !== 'human' ? { status: 'needs_user' as const } : {}) } : report;
     });
   };
   const liveStatus = (owner: string, id: string, context: ReturnType<typeof phoneExecutionContext>, client: string) => {
     const state = runtime.liveStatus(owner, id, context, client);
+    state.report.transcriptId = getSessionMetadata(owner)?.transcriptId;
     const wait = phoneAssistance(owner);
-    return wait && ['open', 'queued'].includes(wait.status) ? { ...state, report: { ...state.report, assistanceId: wait.id, ...(wait.status === 'open' && state.report.controlOwner !== 'human' ? { status: 'needs_user' as const } : {}) } } : state;
+    if (!wait || !['open', 'queued'].includes(wait.status)) { state.report.assistanceId = undefined; state.report.assistanceVersion = undefined; }
+    return wait && ['open', 'queued'].includes(wait.status) ? { ...state, report: { ...state.report, assistanceId: wait.id, assistanceVersion: wait.version, transcriptId: wait.transcriptId, hasPendingTask: true, ...(wait.status === 'open' && state.report.controlOwner !== 'human' ? { status: 'needs_user' as const } : {}) } } : state;
   };
   app.get('/api/phone/connections', async c => {
     c.header('Cache-Control', 'no-store');
@@ -238,7 +241,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   const liveClient = z.string().uuid();
   const liveControlInput = z.object({
     clientId: liveClient, operationId: z.string().uuid(), epoch: z.number().int().positive(),
-    assistanceId: z.string().uuid().optional(),
+    assistanceId: z.string().uuid().optional(), assistanceVersion: z.number().int().positive().optional(),
     op: z.enum(['takeover', 'release', 'handback', 'pause', 'cancel', 'heartbeat', 'input', 'recover']),
     expectedTranscriptId: z.uuid().optional(),
     frameSeq: z.number().int().positive().optional(), geometry: z.number().int().positive().optional(), action: PhoneActionSchema.optional(),
@@ -268,8 +271,10 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     let access: ConversationPhoneSummary['access'] = 'none';
     try { authorizePhoneAccess(principal); access = 'view'; } catch { /* Summary carries no private phone metadata without a grant. */ }
     if (access === 'view') { try { authorizePhoneAccess(principal, true); access = 'control'; } catch { /* Read-only grant. */ } }
-    const payload: ConversationPhoneSummary = { available: Boolean(report), access, needsUser: Boolean(report && access !== 'none' && report.status === 'needs_user') };
+    const assistance = phoneAssistance(id);
+    const payload: ConversationPhoneSummary = { available: Boolean(report), access, needsUser: Boolean(report && access !== 'none' && (assistance?.status === 'open' || report.status === 'needs_user')) };
     if (report && access !== 'none') {
+      if (assistance?.status === 'open') payload.assistance = { id: assistance.id, version: assistance.version };
       payload.deviceName = report.deviceName; payload.taskState = report.status; payload.updatedAt = report.updatedAt;
       if (transcriptId && report.deviceId) payload.binding = { conversationId: id, transcriptId, phoneSessionId: report.sessionId, phoneDeviceId: report.deviceId };
     }
@@ -308,7 +313,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     const address = c.req.param('conversationId'); const id = c.req.param('sessionId');
     const { clientId, purpose, expectedTranscriptId, epoch } = z.object({ clientId: liveClient, purpose: z.enum(['view', 'control']).optional(), expectedTranscriptId: z.uuid().optional(), epoch: z.number().int().positive().optional() }).strict().parse(await c.req.json());
     const initial = await conversationPhone(address, id);
-    const principal = getGatewayPrincipal(c); const client = `${principal.principalId}:${clientId}${address.startsWith('device:') || principal.kind === 'device' && purpose !== 'control' ? ':viewer' : ''}`;
+    const principal = getGatewayPrincipal(c); const client = `${principal.principalId}:${clientId}${address.startsWith('device:') || purpose === 'view' || principal.kind === 'device' && purpose !== 'control' ? ':viewer' : ''}`;
     const native = principal.kind === 'device';
     const interactive = native ? purpose === 'control' : purpose !== 'view' && !address.startsWith('device:');
     if (native && (!expectedTranscriptId || expectedTranscriptId !== initial.transcriptId)) throw new PhoneError('PHONE_BINDING_CHANGED', 'Conversation changed; refresh the phone', 409);
@@ -332,15 +337,17 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     if (c.req.param('conversationId').startsWith('device:')) throw new PhoneError('PHONE_OBSERVE_ONLY', 'The global phone viewer is read only. Use the controlling conversation for input.', 403);
     let owner = c.req.param('conversationId'); const id = c.req.param('sessionId');
     const actor = getGatewayPrincipal(c);
-    const { clientId, assistanceId, expectedTranscriptId, ...input } = liveControlInput.parse(await c.req.json());
+    const { clientId, assistanceId, assistanceVersion, expectedTranscriptId, ...input } = liveControlInput.parse(await c.req.json());
     const requestedWait = phoneAssistance(owner);
     const allowRecovery = assistanceId && requestedWait?.id === assistanceId
       && requestedWait.checkpoint.report.sessionId === id && ['takeover', 'handback'].includes(input.op);
     const { context, transcriptId, owner: resolvedOwner } = await conversationPhone(owner, allowRecovery ? undefined : id); owner = resolvedOwner;
-    if (getGatewayPrincipal(c).kind === 'device' && (!expectedTranscriptId || expectedTranscriptId !== transcriptId)) throw new PhoneError('PHONE_BINDING_CHANGED', 'Conversation changed; refresh the phone', 409);
+    if ((getGatewayPrincipal(c).kind === 'device' && !expectedTranscriptId) || expectedTranscriptId && expectedTranscriptId !== transcriptId) throw new PhoneError('PHONE_BINDING_CHANGED', 'Conversation changed; refresh the phone', 409);
     const wait = phoneAssistance(owner);
     if (assistanceId && (!wait || wait.id !== assistanceId || !['open', 'queued', 'resuming', 'completed'].includes(wait.status)))
       throw new PhoneError('PHONE_ASSISTANCE_CHANGED', 'The phone task changed. Refresh before continuing.', 409);
+    if (assistanceVersion !== undefined && wait?.status === 'open' && wait.version !== assistanceVersion)
+      throw new PhoneError('PHONE_ASSISTANCE_CHANGED', 'The phone assistance request changed. Refresh before continuing.', 409);
     // A retried completion must not repeat handback or enqueue another run.
     if (input.op === 'handback' && assistanceId && wait?.status !== 'open') {
       service.resumePhoneAssistance(owner, assistanceId);

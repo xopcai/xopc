@@ -3,6 +3,7 @@ import { XopcPhoneBinding, XopcPhoneLiveState, XopcPhoneSummary, XopcPhoneAction
 import { XopcPhoneRepository } from '../repository/phoneRepository';
 import { XopcPhoneStream } from '../service/phoneStream';
 import { gatewaySession } from '../service/gatewaySession';
+import { XopcSecureStore } from '../service/secureStore';
 import { XopcHttpError } from '../service/transport';
 
 @ObservedV2
@@ -10,6 +11,7 @@ export class XopcPhoneViewModel {
   @Trace summary?: XopcPhoneSummary;
   @Trace state?: XopcPhoneLiveState;
   @Trace phase: string = 'idle';
+  @Trace needsAttention: boolean = false;
   @Trace busy: boolean = false;
   @Trace error: string = '';
   @Trace imageWidth: number = 1;
@@ -17,6 +19,9 @@ export class XopcPhoneViewModel {
   @Trace snapshot?: image.PixelMap;
   @Trace geometry: number = 0;
   @Trace touching: boolean = false;
+  private attentionStore: XopcSecureStore = new XopcSecureStore();
+  private seenRequests: string[] = [];
+  private seenLoaded: boolean = false;
   private repository: XopcPhoneRepository = new XopcPhoneRepository();
   private stream: XopcPhoneStream = new XopcPhoneStream();
   private id: string = '';
@@ -61,7 +66,7 @@ export class XopcPhoneViewModel {
       this.generation++; this.refreshing = false; this.busy = false;
     }
     this.active = nextActive; this.visible = nextVisible;
-    if (wasVisible && !this.visible) { this.cancel(); this.touching = false; }
+    if (wasVisible && !this.visible) { this.operations++; this.leave(); this.state = undefined; this.busy = false; }
     if (!this.active) this.leave();
     if (this.active && this.timer === -1) this.timer = setInterval((): void => {
       if (Date.now() - this.lastRefresh >= (this.visible ? 1200 : 5000)) void this.refresh();
@@ -84,6 +89,21 @@ export class XopcPhoneViewModel {
     }
     this.phase = 'idle';
   }
+  private async updateAttention(): Promise<void> {
+    if (!this.seenLoaded) {
+      const raw = await this.attentionStore.read('phone-attention-v1');
+      this.seenRequests = raw ? JSON.parse(raw) as string[] : []; this.seenLoaded = true;
+    }
+    const binding = this.summary?.binding; const request = this.summary?.assistance;
+    if (!binding || !request || !this.summary?.needsUser) { this.needsAttention = false; return; }
+    const profile = gatewaySession.currentProfile();
+    const key = (profile?.gatewayId ?? '') + ':' + (profile?.deviceId ?? '') + ':' + binding.conversationId + ':' + binding.transcriptId + ':' + request.id + ':' + request.version;
+    if (this.visible && this.state && !this.error && !this.seenRequests.includes(key)) {
+      this.seenRequests = this.seenRequests.slice(-99); this.seenRequests.push(key);
+      void this.attentionStore.write('phone-attention-v1', JSON.stringify(this.seenRequests)).catch((): void => {});
+    }
+    this.needsAttention = !this.seenRequests.includes(key);
+  }
   async refresh(): Promise<void> {
     if (!this.active || this.busy || this.refreshing || this.supported === false) return;
     const generation = this.generation; const id = this.id; const connection = this.connection;
@@ -105,12 +125,15 @@ export class XopcPhoneViewModel {
       }
       this.summary = summary;
       if (!summary.available || summary.access === 'none') { this.leave(); this.state = undefined; this.error = ''; return; }
-      if (!this.visible && !this.state) return;
+      await this.updateAttention();
+      if (generation !== this.generation || operationRevision !== this.operations || !this.visible) return;
       const state = await this.repository.state(id);
       if (generation !== this.generation || operationRevision !== this.operations || !this.active) return;
       gatewaySession.assertConnection(connection);
       if (!state || state.report.sessionId !== summary.binding?.phoneSessionId) { this.leave(); this.state = undefined; return; }
+      if (this.state?.report.sessionId === state.report.sessionId && (this.state.report.revision ?? 0) > (state.report.revision ?? 0)) return;
       this.state = state;
+      await this.updateAttention();
       this.updateHeartbeat(); this.ensureStream();
       if (this.visible && this.phase === 'fallback' && !this.busy) await this.loadFrame(generation);
     } catch (error) {
@@ -126,16 +149,16 @@ export class XopcPhoneViewModel {
     const binding = this.summary?.binding; const state = this.state;
     if (state?.report.status === 'closed') { this.stream.close(); this.streamKey = ''; return; }
     if (state?.report.reconnectRequired) { this.phase = 'restore'; return; }
-    if (!this.active || !this.surfaceId || !binding || !state || this.phase === 'fallback' || this.phase === 'blocked') return;
+    if (!this.active || !this.visible || !this.surfaceId || !binding || !state || this.phase === 'fallback' || this.phase === 'blocked') return;
     const key = binding.phoneSessionId + ':' + (state.ownControl ? state.report.controlEpoch.toString() : 'view');
     if (this.streamKey === key) return;
     this.streamKey = key; this.stream.setSurface(this.surfaceId);
     void this.stream.open(this.repository, binding, state);
   }
   private updateHeartbeat(): void {
-    if (this.state?.ownControl && this.active && this.heartbeat === -1) {
+    if (this.state?.ownControl && this.active && this.visible && this.heartbeat === -1) {
       this.heartbeat = setInterval((): void => { void this.command('heartbeat'); }, 5000);
-    } else if (!this.state?.ownControl || !this.active) { clearInterval(this.heartbeat); this.heartbeat = -1; }
+    } else if (!this.state?.ownControl || !this.active || !this.visible) { clearInterval(this.heartbeat); this.heartbeat = -1; }
   }
   async command(op: string, action?: XopcPhoneAction): Promise<void> {
     const binding = this.summary?.binding; const state = this.state;
@@ -143,10 +166,11 @@ export class XopcPhoneViewModel {
     const generation = this.generation;
     const heartbeat = op === 'heartbeat';
     if (!heartbeat) { this.operations++; this.busy = true; this.error = ''; this.cancel(); }
+    const operationRevision = this.operations;
     try {
       const result = await this.repository.control(binding, state, op, action,
         this.phase === 'fallback' ? this.frameSeq : undefined, this.phase === 'playing' ? this.geometry : undefined);
-      if (generation !== this.generation || !this.active) {
+      if (generation !== this.generation || operationRevision !== this.operations || !this.active || !this.visible) {
         if (result.ownControl && this.connection === gatewaySession.connectionRevision()) {
           void this.repository.control(binding, result, 'release').catch((): void => {});
         }
