@@ -1,4 +1,3 @@
-import { RuntimeImpact } from './runtime-impact';
 import { CheckCircle2, CircleAlert, Download, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
@@ -134,7 +133,6 @@ export function RuntimeToolsSettingsPanel() {
         )}
       />
 
-      <RuntimeImpact statuses={data?.payload.statuses ?? []} zh={language === 'zh'} />
       {actionError ? (
         <div className="rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
           {actionError}

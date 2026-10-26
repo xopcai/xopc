@@ -976,7 +976,7 @@ export function AutomationsWorkspace({
 
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', embedded ? 'bg-transparent' : 'bg-surface-panel')}>
-      <div className={cn('flex min-h-0 w-full flex-1 flex-col gap-4', embedded ? 'py-1' : 'mx-auto max-w-[96rem] px-4 pt-3 sm:px-6 lg:px-8 lg:pt-4', !embedded && (activityView ? 'overflow-y-auto' : 'overflow-hidden'))}>
+      <div className={cn('flex min-h-0 w-full flex-1 flex-col gap-4', embedded ? 'py-1' : 'px-4 pt-3 sm:px-9 lg:pt-4 xl:px-10', !embedded && (activityView ? 'overflow-y-auto' : 'overflow-hidden'))}>
         {embedded ? (
           <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-base px-4 py-3 shadow-surface">
             <div className="min-w-0">
