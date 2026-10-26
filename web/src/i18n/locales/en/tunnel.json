@@ -48,6 +48,8 @@
     "stepReconnectDetail": "Reconnecting frpc after interruption",
     "uptime": "Uptime",
     "start": "Start remote access",
+    "recoverConnection": "Recover connection",
+    "recoverConnectionHint": "Verify this gateway and replace its old lease immediately, keeping the public address. The old connection will disconnect.",
     "stop": "Disconnect",
     "release": "Release public URL",
     "releaseHint": "Revokes the subdomain on the broker. Your next start will get a new public URL.",

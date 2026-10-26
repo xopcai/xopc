@@ -3,6 +3,7 @@ import { AlertTriangle, Globe, Loader2, Power } from 'lucide-react';
 import { CopyTextRow } from '@/components/ui/copy-text-row';
 import { Button } from '@/components/ui/button';
 import { settingsFormSectionClassName } from '@/features/settings/settings-form-section.utils';
+import { tunnelRecoveryProofRejected } from '@/features/tunnel/tunnel-api';
 import type { TunnelStatusResponse } from '@/features/tunnel/tunnel-api';
 import { TunnelStartProgressPanel } from '@/features/tunnel/tunnel-start-progress';
 import { cn } from '@/lib/cn';
@@ -88,6 +89,7 @@ export function TunnelControlCard({
   onStart,
   onStop,
 }: Props) {
+  const recoveryRequired = st.state === 'error' && tunnelRecoveryProofRejected(new Error(st.lastError ?? ''));
   const tone = statusTone(st);
   const active = st.enabled || starting;
   const showProgress =
@@ -145,6 +147,8 @@ export function TunnelControlCard({
         </p>
       ) : null}
 
+      {recoveryRequired ? <p role="alert" className="text-sm text-fg-muted">{t.recoverConnectionHint}</p> : null}
+
       {!active ? (
         <div className="space-y-4">
           {stepLabel ? <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{stepLabel}</p> : null}
@@ -166,7 +170,7 @@ export function TunnelControlCard({
             className="w-full sm:w-auto"
           >
             {starting ? <Loader2 className="size-4 animate-spin" /> : <Power className="size-4" />}
-            {t.start}
+            {recoveryRequired ? t.recoverConnection : t.start}
           </Button>
         </div>
       ) : (
@@ -192,7 +196,7 @@ export function TunnelControlCard({
             ) : (
               <Button type="button" disabled={starting} onClick={onStart}>
                 {starting ? <Loader2 className="size-4 animate-spin" /> : <Power className="size-4" />}
-                {t.start}
+                {recoveryRequired ? t.recoverConnection : t.start}
               </Button>
             )}
           </div>

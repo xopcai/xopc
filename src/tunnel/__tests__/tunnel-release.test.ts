@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TunnelBrokerClient } from '../broker-client.js';
+import { TunnelBrokerClient, TunnelBrokerError } from '../broker-client.js';
 
 describe('tunnel stop --release', () => {
   let prevStateDir: string | undefined;
@@ -53,4 +53,18 @@ describe('tunnel stop --release', () => {
 
     expect(existsSync(resolveTunnelStatePath())).toBe(false);
   });
+  it.each([404, 403, 503])('retains recovery credentials when release fails with %s', async (status) => {
+    vi.spyOn(TunnelBrokerClient.prototype, 'deregister').mockRejectedValue(new TunnelBrokerError(status, 'Release failed'));
+    const { saveTunnelState, loadTunnelState } = await import('../tunnel-state.js');
+    const { TunnelService } = await import('../tunnel-service.js');
+    saveTunnelState({ tunnelId: 'retained', tunnelToken: 'recovery-token', subdomain: 'retained',
+      publicUrl: 'https://retained.frp.xopc.ai', frpcAuthToken: 'frpc', registeredAt: new Date().toISOString(), enabled: true });
+    const service = new TunnelService();
+    service.configure({ brokerUrl: 'https://frp.xopc.ai/api', registrationSecret: 'secret', autoStart: false,
+      gatewayHost: '127.0.0.1', frpSubdomainHost: 'frp.xopc.ai' });
+    expect(await service.stop({ release: true })).toEqual({ released: false });
+    expect(loadTunnelState()).toMatchObject({ tunnelToken: 'recovery-token', enabled: false });
+    expect(service.getStatus().state).toBe('disconnected');
+  });
+
 });

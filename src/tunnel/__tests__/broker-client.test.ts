@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createTunnelRegistrationProof } from '../registration-proof.js';
 import { TunnelBrokerClient, TunnelBrokerError, TunnelRecoveryProofRejectedError, TunnelRegistrationKeyRejectedError } from '../broker-client.js';
 
-vi.mock('../registration-proof.js', () => ({ createTunnelRegistrationProof: () => ({ version: 2 }) }));
+vi.mock('../registration-proof.js', () => ({ createTunnelRegistrationProof: vi.fn(() => ({ version: 2 })) }));
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -29,4 +30,16 @@ describe('TunnelBrokerClient registration failures', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 401 }));
     await expect(client.heartbeat('tunnel-id', 'revoked-token')).rejects.not.toBeInstanceOf(TunnelRegistrationKeyRejectedError);
   });
+  it('signs recovery for its own endpoint instead of reusing a registration proof', async () => {
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ error: 'unavailable' }, { status: 503 }));
+    await expect(client.recover(input)).rejects.toBeInstanceOf(TunnelBrokerError);
+    expect(createTunnelRegistrationProof).toHaveBeenLastCalledWith({ ...input, brokerUrl: 'https://broker.example/api/tunnels/recover' });
+    expect(request).toHaveBeenLastCalledWith('https://broker.example/api/tunnels/recover', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it.each([403, 404, 503])('does not report a failed release (%s) as successful', async (status) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status }));
+    await expect(client.deregister('lease', 'token')).rejects.toBeInstanceOf(TunnelBrokerError);
+  });
+
 });

@@ -57,7 +57,16 @@ export class TunnelBrokerClient {
   }
 
   async register(input: BrokerRegisterInput): Promise<TunnelRegistration> {
-    const url = this.apiUrl('/tunnels/register');
+    return this.requestRegistration(input, false);
+  }
+
+  /** Explicit takeover requires a separately signed recovery audience. */
+  async recover(input: BrokerRegisterInput): Promise<TunnelRegistration> {
+    return this.requestRegistration(input, true);
+  }
+
+  private async requestRegistration(input: BrokerRegisterInput, recovering: boolean): Promise<TunnelRegistration> {
+    const url = this.apiUrl(recovering ? '/tunnels/recover' : '/tunnels/register');
     const res = await fetch(url, {
       redirect: 'error',
       signal: AbortSignal.timeout(15_000),
@@ -66,13 +75,16 @@ export class TunnelBrokerClient {
         'Content-Type': 'application/json',
         'X-Registration-Secret': input.registrationSecret,
       },
-      body: JSON.stringify(createTunnelRegistrationProof(input)),
+      body: JSON.stringify(createTunnelRegistrationProof({ ...input, brokerUrl: recovering ? url : this.baseUrl })),
     });
     if (!res.ok) {
       log.error({ status: res.status, url }, 'Tunnel register failed');
       const body = await res.json().catch(() => null) as { code?: unknown; error?: unknown } | null;
       if (res.status === 403 && body?.code === 'REGISTRATION_DENIED' && body.error === 'Active lease ownership proof required') {
         throw new TunnelRecoveryProofRejectedError();
+      }
+      if (recovering && res.status === 404) {
+        throw new TunnelBrokerError(404, 'Immediate recovery requires an updated cloud tunnel broker');
       }
       if (res.status === 401) throw new TunnelRegistrationKeyRejectedError();
       throw new TunnelBrokerError(res.status, `Tunnel register failed: ${res.status}`);
@@ -104,8 +116,8 @@ export class TunnelBrokerClient {
       method: 'DELETE',
       headers: { 'X-Tunnel-Token': tunnelToken },
     });
-    if (!res.ok && res.status !== 404) {
-      log.warn({ tunnelId, status: res.status }, 'Tunnel deregister returned non-OK');
+    if (!res.ok) {
+      throw new TunnelBrokerError(res.status, `Tunnel deregister failed: ${res.status}`);
     }
   }
 

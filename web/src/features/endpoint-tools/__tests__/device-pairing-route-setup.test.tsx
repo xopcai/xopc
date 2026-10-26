@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { SWRConfig } from 'swr';
+import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DevicePairingRouteSetup } from '../device-pairing-route-setup';
@@ -25,6 +25,13 @@ vi.mock('@/features/settings/oauth-authorization-window', () => ({
   openOAuthAuthorizationUrl: vi.fn(),
 }));
 
+let revalidate: () => Promise<unknown>;
+function CacheControl() {
+  const { mutate } = useSWRConfig();
+  revalidate = () => mutate('tunnel-status');
+  return null;
+}
+
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const copy = () => messages(useLocaleStore.getState().language).endpointToolsSettings.deviceAccess.flow;
@@ -40,7 +47,7 @@ async function render() {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(<SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false }}><DevicePairingRouteSetup /></SWRConfig>);
+    root.render(<SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false }}><CacheControl /><DevicePairingRouteSetup /></SWRConfig>);
   });
 }
 
@@ -51,13 +58,30 @@ afterEach(() => {
 });
 
 describe('device pairing route recovery', () => {
-  it('does not replace a valid registration key when lease recovery needs intervention', async () => {
+  it('recovers the lease explicitly without replacing a valid registration key', async () => {
     vi.mocked(fetchTunnelStatus).mockResolvedValue({ ...status('error'), lastError: 'Active lease ownership proof required' });
     await render();
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(copy().routeRecoveryRequired);
+    expect(container.querySelector('button')?.textContent).toBe(copy().recoverRoute);
+    await act(async () => { container.querySelector('button')!.click(); });
+    expect(startTunnel).toHaveBeenCalledWith({ recoverActiveLease: true });
     expect(provisionTunnelRegistrationKey).not.toHaveBeenCalled();
-    expect(patchTunnelConfig).not.toHaveBeenCalled();
+    expect(patchTunnelConfig).toHaveBeenCalledWith({ autoStart: true });
   });
+  it('clears an earlier recovery failure when status confirms the gateway is connected', async () => {
+    vi.mocked(fetchTunnelStatus).mockResolvedValue(status('disconnected'));
+    vi.mocked(startTunnel).mockRejectedValueOnce(Object.assign(new Error('Active lease ownership proof required'), {
+      body: { code: 'TUNNEL_RECOVERY_PROOF_REJECTED' },
+    }));
+    await render();
+    await act(async () => { container.querySelector('button')!.click(); });
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    vi.mocked(fetchTunnelStatus).mockResolvedValue(status('connected'));
+    await act(async () => { await revalidate(); });
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(startTunnel).toHaveBeenCalledOnce();
+  });
+
   it('replaces a rejected saved key before retrying instead of reusing it', async () => {
     vi.mocked(fetchTunnelStatus).mockResolvedValueOnce({ ...status('error'), lastError: 'Tunnel register failed: 401' })
       .mockResolvedValue(status('disconnected'));
