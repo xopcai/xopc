@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 struct ClarificationSnapshot: Decodable, Sendable {
@@ -57,10 +58,31 @@ struct ClarificationApproval: Codable, Equatable, Sendable {
     }
 }
 
+struct ClarificationQuestion: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let header: String
+    let question: String
+    let type: String
+    let choices: [ClarificationChoice]?
+    let recommendedChoiceId: String?
+}
+
+struct ClarificationAnswer: Codable, Equatable, Sendable {
+    let questionId: String
+    var choiceId: String?
+    var text: String?
+    var valid: Bool { (choiceId != nil || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).utf16.count <= 2000 }
+}
+
+struct ClarificationPrincipal: Decodable { let deviceId: String? }
+struct ClarificationHealth: Decodable { let clarificationVersions: [Int]? }
+struct ClarificationCapabilities: Codable, Equatable, Sendable { var clarificationVersions = [1, 2] }
+
 struct ClarificationSubmission: Codable, Equatable, Sendable {
     struct Response: Codable, Equatable, Sendable { let choiceId: String?; let text: String? }
     let response: Response?
     let decision: String?
+    var answers: [ClarificationAnswer]?
     static func input(choiceId: String? = nil, text: String? = nil) -> Self {
         .init(response: .init(choiceId: choiceId, text: text), decision: nil)
     }
@@ -82,12 +104,34 @@ struct ClarificationRequest: Decodable, Equatable, Identifiable, Sendable {
     let approval: ClarificationApproval?
     let version: Int
     let expiresAt: Int?
+    var schemaVersion: Int?
+    var questions: [ClarificationQuestion]?
+    var scope: String?
+    var clockOffset: Int?
+    var validQuestions: Bool {
+        guard let questions, kind == "input", (1 ... 3).contains(questions.count), Set(questions.map(\.id)).count == questions.count else { return false }
+        return questions.allSatisfy { question in
+            ["text", "single_choice"].contains(question.type) && (question.type != "single_choice" || (2 ... 10).contains(question.choices?.count ?? 0))
+        }
+    }
+    func accepts(_ answers: [ClarificationAnswer]) -> Bool {
+        guard validQuestions, let questions, answers.count == questions.count, Set(answers.map(\.questionId)).count == answers.count else { return false }
+        let summary = questions.map { question in
+            let answer = answers.first { $0.questionId == question.id }
+            let label = question.choices?.first { $0.id == answer?.choiceId }?.label
+            return "\(question.header): \(question.question)\n" + [label, answer?.text?.trimmingCharacters(in: .whitespacesAndNewlines)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
+        }.joined(separator: "\n\n")
+        return summary.utf16.count <= 8000 && questions.allSatisfy { question in
+            guard let answer = answers.first(where: { $0.questionId == question.id }), answer.valid else { return false }
+            return answer.choiceId == nil || (question.type == "single_choice" && question.choices?.contains(where: { $0.id == answer.choiceId }) == true)
+        }
+    }
     var isOpen: Bool {
         status == "open"
     }
 
     var isExpired: Bool {
-        expiresAt.map { Double($0) <= Date().timeIntervalSince1970 * 1000 } ?? false
+        expiresAt.map { Double($0) <= Date().timeIntervalSince1970 * 1000 + Double(clockOffset ?? 0) } ?? false
     }
 }
 
@@ -274,5 +318,28 @@ extension HistoryAttachment {
             ?? container.decodeIfPresent(Double.self, forKey: .durationSeconds)
         workspaceRelativePath = try container.decodeIfPresent(String.self, forKey: .workspaceRelativePath)
         extractedText = try container.decodeIfPresent(String.self, forKey: .extractedText)
+    }
+}
+
+@MainActor
+enum ClarificationPersistence {
+    nonisolated static func scope(_ identity: String) -> String {
+        SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    static func key(_ prompt: ClarificationRequest, _ kind: String) -> String {
+        "clarify.\(prompt.scope ?? "local").\(prompt.conversationId).\(prompt.id).\(prompt.version).\(kind)"
+    }
+    static func read<T: Decodable>(_ prompt: ClarificationRequest, _ kind: String, as recordType: T.Type, store: any GatewayTokenStoring = SystemGatewayTokenStore()) -> T? {
+        guard let raw = store.load(account: key(prompt, kind)), let data = raw.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
+    }
+    static func write<T: Encodable>(_ prompt: ClarificationRequest, _ kind: String, _ record: T, store: any GatewayTokenStoring = SystemGatewayTokenStore()) throws {
+        let data = try JSONEncoder().encode(record)
+        guard let text = String(data: data, encoding: .utf8) else { throw CocoaError(.fileWriteInapplicableStringEncoding) }
+        try store.save(text, account: key(prompt, kind))
+    }
+    static func clear(_ prompt: ClarificationRequest, store: any GatewayTokenStoring = SystemGatewayTokenStore()) throws {
+        try store.save("", account: key(prompt, "draft"))
+        try store.save("", account: key(prompt, "attempt"))
     }
 }

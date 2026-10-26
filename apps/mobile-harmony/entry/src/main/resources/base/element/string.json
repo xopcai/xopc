@@ -1414,6 +1414,10 @@
     {"name": "phone_stop", "value": "Stop task"},
     {"name": "phone_stop_confirm", "value": "Stop this phone task? Inputs already delivered cannot be undone."},
     {"name": "phone_more", "value": "More phone actions"},
-    {"name": "phone_release", "value": "End control, keep paused"}
+    {"name": "phone_release", "value": "End control, keep paused"},
+    {"name":"clarify_previous","value":"Previous"},
+    {"name":"clarify_next","value":"Next"},
+    {"name":"clarify_retry","value":"Retry submission"},
+    {"name":"clarify_too_long","value":"Answers are too long. Shorten them before submitting."}
   ]
 }

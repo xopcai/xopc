@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import batchFixture from '../../../../../packages/gateway-contract/fixtures/clarification-v2.json';
 import {
   hasPendingAgentRunForChat,
   MessageSender,
@@ -452,6 +453,23 @@ describe('MessageSender terminal state', () => {
 
     expect(onReplayGap).toHaveBeenCalledOnce();
     expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: 'success' }));
+  });
+
+  it('recovers a durable clarification when a fast run suspends before stream subscription', async () => {
+    const sender = new MessageSender();
+    const onClarifyRequest = vi.fn(), onResult = vi.fn();
+    vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+      if (String(url).endsWith('/clarification')) return new Response(JSON.stringify({ payload: { clarification: {
+        ...batchFixture, id: 'batch-wait', question: 'Publish content', kind: 'input', status: 'open', version: 1, createdAt: 100,
+      } } }), { status: 200 });
+      return acceptedInput(conversationId, JSON.parse(String(init?.body)).clientMessageId);
+    });
+    await sender.send('hello', conversationId, undefined, 'off', {
+      onStreamStart: vi.fn(), onToken: vi.fn(), onThinking: vi.fn(), onThinkingEnd: vi.fn(),
+      onToolStart: vi.fn(), onToolEnd: vi.fn(), onProgress: vi.fn(), onResult, onError: vi.fn(), onClarifyRequest,
+    });
+    expect(onClarifyRequest).toHaveBeenCalledWith(expect.objectContaining({ schemaVersion: 2, requestId: 'batch-wait', questions: batchFixture.questions }));
+    expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: 'suspended' }));
   });
 
   it('follows an accepted queued first input until it finishes', async () => {

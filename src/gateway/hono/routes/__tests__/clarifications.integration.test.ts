@@ -1,3 +1,4 @@
+import { clarifyToolInputV2Schema } from '@xopcai/gateway-contract';
 import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,6 +7,7 @@ import { join } from 'node:path';
 import { serve } from '@hono/node-server';
 import { expect, it } from 'vitest';
 
+import batchFixture from '../../../../../packages/gateway-contract/fixtures/clarification-v2.json';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { createClarifyTool } from '../../../../agent/tools/clarify-tool.js';
 import {
@@ -95,6 +97,28 @@ it('runs structured clarification lifecycles through a listening authenticated G
     finishSessionInputRun(customId, customId + '-run', 'suspended');
     expect((await request(`/api/clarifications/${custom.id}/responses`, 'POST', { action: 'answer', response: { text: 'Custom answer' }, expectedVersion: custom.version, idempotencyKey: 'custom-response' })).status).toBe(202);
     expect(claimNextSessionInput(customId, 'custom-resume')!.content).toContain('Custom answer');
+
+    const batchId = '5f8923f9-52c1-47a6-8174-bfe092661684'; begin(batchId);
+    const batch = createClarificationWait({ conversationId: batchId, runId: batchId + '-run', toolCallId: 'batch', kind: 'input',
+      question: 'Publish content', ...clarifyToolInputV2Schema.parse(batchFixture) });
+    finishSessionInputRun(batchId, batchId + '-run', 'suspended');
+    const batchPath = `/api/clarifications/${batch.id}/responses`;
+    const batchCommand = { schemaVersion: 2, action: 'answer', expectedVersion: batch.version, idempotencyKey: 'batch-submit',
+      answers: [{ questionId: 'channel', choiceId: 'blog' }, { questionId: 'frequency', choiceId: 'weekly' }, { questionId: 'direction', text: 'Engineering notes' }] };
+    expect((await request(batchPath, 'POST', { ...batchCommand, answers: batchCommand.answers.slice(1) })).status).toBe(400);
+    expect(getClarification(batch.id)?.status).toBe('open');
+    expect((await request(batchPath, 'POST', batchCommand)).status).toBe(202);
+    closeXopcDatabase(); openXopcDatabase({ path: dbPath });
+    expect((await request(batchPath, 'POST', { ...batchCommand, answers: [...batchCommand.answers].reverse() })).data.payload.idempotent).toBe(true);
+    expect((await request(batchPath, 'POST', { ...batchCommand, answers: [{ questionId: 'channel', choiceId: 'social' }, ...batchCommand.answers.slice(1)] })).status).toBe(409);
+    expect((await request(batchPath, 'POST', { ...batchCommand, idempotencyKey: 'second-device' })).status).toBe(409);
+    const batchResume = claimNextSessionInput(batchId, 'batch-resume')!;
+    expect(batchResume.content).toContain('Engineering notes');
+    expect(consumeClarificationResume(batchResume)).toBe(true);
+    expect(consumeClarificationResume(batchResume)).toBe(false);
+    expect((await request(batchPath, 'POST', batchCommand)).data.payload.idempotent).toBe(true);
+    finishSessionInputRun(batchId, 'batch-resume', 'completed');
+    expect(claimNextSessionInput(batchId, 'duplicate-resume')).toBeUndefined();
 
     const approvalId = '5f8923f9-52c1-47a6-8174-bfe092661683'; begin(approvalId);
     const approval = createClarificationWait({ conversationId: approvalId, runId: approvalId + '-run', toolCallId: 'approve-tool', kind: 'approval', question: 'Run once?', approvalKey: 'exact-operation', approval: { operation: 'deploy' } });

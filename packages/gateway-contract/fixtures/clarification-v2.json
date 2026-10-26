@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "questions": [
+    { "id": "channel", "header": "Channel", "question": "Where should we publish?", "type": "single_choice", "choices": [ { "id": "blog", "label": "Blog", "description": "Long-form content" }, { "id": "social", "label": "Social", "description": "Short updates" } ], "recommendedChoiceId": "blog" },
+    { "id": "frequency", "header": "Frequency", "question": "How often should we publish?", "type": "single_choice", "choices": [ { "id": "weekly", "label": "Weekly" }, { "id": "daily", "label": "Daily" } ] },
+    { "id": "direction", "header": "Direction", "question": "Describe the content direction.", "type": "text" }
+  ]
+}

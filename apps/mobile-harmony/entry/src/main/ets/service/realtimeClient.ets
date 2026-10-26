@@ -23,6 +23,7 @@ interface XopcDeviceEndpointMessage { type: string; payload: Object; }
 interface XopcDeviceCancellation { invocationId: string; }
 interface XopcDeviceEndpointFrame { protocolVersion: number; messageId: string; type: string; sentAt: number; payload: Object; }
 class XopcEmptyPayload {}
+interface XopcClarificationHealth { clarificationVersions?: number[]; }
 interface XopcDeviceCompatibility { turnDeviceContextV1?: boolean; endpointEnvironmentV1?: boolean; deviceStateToolsV1?: boolean; deviceLocationTasksV1?: boolean; mobilePersonalToolsV1?: boolean; }
 
 export class XopcRealtimeClient {
@@ -37,6 +38,8 @@ export class XopcRealtimeClient {
   private lastReceived: number = 0;
   private claim?: XopcTurnClaim;
   private supportsDeviceContext: boolean = false;
+  private clarificationV2: boolean = false;
+  supportsClarificationV2(): boolean { return !!this.claim && this.clarificationV2; }
   private supportsEnvironment: boolean = false;
   private contextPublisher: XopcEndpointContextPublisher = new XopcEndpointContextPublisher((): string => this.crypto.uuid());
 
@@ -122,6 +125,11 @@ export class XopcRealtimeClient {
       phase = 'compatibility';
       const compatibility = JSON.parse(await gatewaySession.request('/api/endpoint-tools/compatibility')) as XopcPayload<XopcDeviceCompatibility>;
       this.supportsDeviceContext = compatibility.payload?.turnDeviceContextV1 === true;
+      this.clarificationV2 = false;
+      try {
+        const health = JSON.parse(await gatewaySession.request('/api/health')) as XopcClarificationHealth;
+        this.clarificationV2 = health.clarificationVersions?.includes(2) === true;
+      } catch (_error) {}
       this.supportsEnvironment = compatibility.payload?.endpointEnvironmentV1 === true;
       phase = 'register';
       await gatewaySession.request('/api/endpoint-tools/principals', 'POST', JSON.stringify(registration));

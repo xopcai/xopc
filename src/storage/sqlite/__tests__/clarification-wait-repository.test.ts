@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { buildSessionContextForLlm, buildSessionDisplayMessages } from '../../../session/session-context-for-llm.js';
+import { loadTranscriptRowsForSession } from '../transcript-repository.js';
+import { getSqliteDatabase } from '../transaction.js';
 
 import {
   claimNextSessionInput,
@@ -45,6 +48,29 @@ describe('clarification wait repository', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('uses structured choice identity even with identical labels and persists a display-only answer summary', () => {
+    const wait = createClarificationWait({ conversationId, runId: 'origin-run', toolCallId: 'batch', kind: 'input', question: 'Choose', schemaVersion: 2,
+      questions: [{ id: 'q', type: 'single_choice', header: 'Choice', question: 'Choose the target', choices: [{ id: 'a', label: 'Same' }, { id: 'b', label: 'Same' }] }] });
+    finishSessionInputRun(conversationId, 'origin-run', 'suspended');
+    const command = { id: wait.id, schemaVersion: 2 as const, action: 'answer' as const, expectedVersion: wait.version, idempotencyKey: 'batch-key', answers: [{ questionId: 'q', choiceId: 'a' }] };
+    expect(resolveClarification(command).ok).toBe(true);
+    expect(resolveClarification({ ...command, answers: [{ questionId: 'q', choiceId: 'b' }] })).toMatchObject({ ok: false, code: 'CONFLICT' });
+    expect(resolveClarification(command)).toMatchObject({ ok: true, idempotent: true });
+    const rows = loadTranscriptRowsForSession(conversationId);
+    expect(buildSessionDisplayMessages(rows).some(message => JSON.stringify(message).includes('Choose the target'))).toBe(true);
+    expect(buildSessionContextForLlm(rows).some(message => JSON.stringify(message).includes('Choose the target'))).toBe(false);
+  });
+
+  it('rolls back the wait and summary if creating the resume input fails', () => {
+    const wait = createClarificationWait({ conversationId, runId: 'origin-run', toolCallId: 'batch', kind: 'input', question: 'Details', schemaVersion: 2,
+      questions: [{ id: 'details', type: 'text', header: 'Details', question: 'What should we create?' }] });
+    finishSessionInputRun(conversationId, 'origin-run', 'suspended');
+    getSqliteDatabase().exec("CREATE TEMP TRIGGER fail_clarify_resume BEFORE INSERT ON session_inputs WHEN NEW.kind = 'clarification_resume' BEGIN SELECT RAISE(ABORT, 'injected resume failure'); END");
+    expect(() => resolveClarification({ id: wait.id, schemaVersion: 2, action: 'answer', expectedVersion: wait.version, idempotencyKey: 'rollback', answers: [{ questionId: 'details', text: 'A report' }] })).toThrow('injected resume failure');
+    expect(getClarification(wait.id)).toMatchObject({ status: 'open', version: wait.version });
+    expect(loadTranscriptRowsForSession(conversationId).some(row => 'customType' in row && row.customType === 'clarification_answers')).toBe(false);
   });
 
   it('persists an input wait and resumes it after an arbitrarily late answer', () => {

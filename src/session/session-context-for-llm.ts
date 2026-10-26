@@ -565,6 +565,7 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       continue;
     }
     if (isTranscriptCustomMessageEntry(r)) {
+      if (r.customType === 'clarification_answers') continue;
       if (r.customType === 'task_allocation_status' && isRoutineTaskAllocationStatus(r.details)) continue;
       if (r.customType === 'personal_request_status' || r.customType === 'connection_control_status') continue;
       if (r.customType === PERSONAL_PROACTIVE_MESSAGE_TYPE) {

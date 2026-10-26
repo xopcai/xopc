@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { interactionCapabilitiesSchema } from './clarification-questions.js';
 
 import { AppContextEnvelopeSchema } from './app-context.js';
 import { browserPageContextsInputSchema } from './browser-page-context.js';
@@ -39,6 +40,7 @@ export type EndpointContext = z.infer<typeof endpointContextSchema>;
 export const sessionInputContentSchema = z.strictObject({
   content: z.string(),
   endpointContext: endpointContextSchema.optional(),
+  interactionCapabilities: interactionCapabilitiesSchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
   contextRefs: z.array(z.strictObject({
     kind: z.enum(['note', 'task', 'file', 'session', 'browser_tab', 'user_assertion', 'result']),

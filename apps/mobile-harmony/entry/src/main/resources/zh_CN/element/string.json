@@ -1412,6 +1412,10 @@
     {"name": "phone_stop", "value": "停止任务"},
     {"name": "phone_stop_confirm", "value": "停止当前手机任务？已经执行的操作无法撤回。"},
     {"name": "phone_more", "value": "更多手机操作"},
-    {"name": "phone_release", "value": "结束控制，保持暂停"}
+    {"name": "phone_release", "value": "结束控制，保持暂停"},
+    {"name":"clarify_previous","value":"上一题"},
+    {"name":"clarify_next","value":"下一题"},
+    {"name":"clarify_retry","value":"重试提交"},
+    {"name":"clarify_too_long","value":"回答内容过长，请精简后再提交"}
   ]
 }

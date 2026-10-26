@@ -57,7 +57,14 @@ extension GatewayClient {
         guard envelope.isSuccessful, let snapshot = envelope.payload else {
             throw GatewayClientError.server(envelope.error?.message ?? "无法读取澄清请求")
         }
-        return snapshot.clarification?.isOpen == true ? snapshot.clarification : nil
+        guard var prompt = snapshot.clarification, prompt.isOpen else { return nil }
+        guard [1, 2].contains(prompt.schemaVersion ?? 1), prompt.schemaVersion != 2 || prompt.validQuestions else { throw GatewayClientError.server("不支持的澄清请求") }
+        prompt.clockOffset = snapshot.serverTime - Int(Date().timeIntervalSince1970 * 1000)
+        if prompt.schemaVersion == 2 {
+            let identity: GatewayEnvelope<ClarificationPrincipal> = try await request(path: "/api/endpoint-tools/compatibility")
+            prompt.scope = ClarificationPersistence.scope(configuration.baseURL.absoluteString + ":" + (identity.payload?.deviceId ?? configuration.token))
+        }
+        return prompt
     }
 
     func respondToClarification(

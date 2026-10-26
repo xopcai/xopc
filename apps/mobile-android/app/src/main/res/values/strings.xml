@@ -852,4 +852,8 @@
     <string name="assistant_stages_collapse">Collapse earlier stages</string>
     <string name="assistant_stages_waiting">Waiting for your input. Complete the requested action to continue.</string>
     <string name="assistant_stages_interrupted">Execution stopped. Completed work is retained.</string>
+    <string name="clarify_previous">Previous</string>
+    <string name="clarify_next">Next</string>
+    <string name="clarify_retry">Retry submission</string>
+    <string name="clarify_too_long">Answers are too long. Shorten them before submitting.</string>
 </resources>

@@ -134,6 +134,9 @@ extension GatewayClient {
             }
         )
         input.endpointContext = await DeviceEndpointPool.shared.environment(for: self)
+        if let health: ClarificationHealth = try? await request(path: "/api/health"), health.clarificationVersions?.contains(2) == true {
+            input.interactionCapabilities = ClarificationCapabilities()
+        }
         return input
     }
 }

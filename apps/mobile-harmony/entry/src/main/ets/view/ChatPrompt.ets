@@ -8,7 +8,8 @@ export struct XopcChatPrompt {
   build() {
     Column() {
       if (this.model.prompt) {
-        XopcClarificationCard({ prompt: this.model.prompt, submitting: this.model.busy, errorMessage: this.model.error,
+        XopcClarificationCard({ prompt: this.model.prompt, draftRecord: this.model.draftRecord,
+          onDraft: (record: string): void => { this.model.updateDraft(record); }, submitting: this.model.busy, errorMessage: this.model.error,
           onRespond: (command: XopcClarificationCommand): void => { this.model.respond(command); } })
       }
     }.width('92%').margin({ bottom: 8 })

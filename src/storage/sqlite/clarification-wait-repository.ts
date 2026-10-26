@@ -9,6 +9,8 @@ import type {
   ClarificationWaitSnapshot,
 } from '@xopcai/gateway-contract';
 
+import { appendTranscriptEntry } from './transcript-repository.js';
+import { estimateTextTokens } from '../../agent/memory/context-budget.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { isXopcDatabaseOpen } from './connection.js';
 import { readCurrentTranscriptId } from './session-instance-repository.js';
@@ -57,7 +59,8 @@ export type ResolveClarificationResult =
   | { ok: false; code: 'NOT_FOUND' | 'CONFLICT' | 'EXPIRED' | 'INVALID'; clarification?: ClarificationWait };
 
 function rowToWait(row: ClarificationRow): ClarificationWait {
-  return JSON.parse(row.data_json) as ClarificationWait;
+  const wait = JSON.parse(row.data_json) as ClarificationWait;
+  return wait.schemaVersion === 2 ? normalizeClarificationQuestion(wait) : wait;
 }
 
 function getRow(id: string): ClarificationRow | undefined {
@@ -230,6 +233,8 @@ export function createClarificationWait(input: CreateClarificationInput): Clarif
       kind: input.kind,
       status: 'open',
       question: input.question.trim(),
+      schemaVersion: input.schemaVersion,
+      questions: input.questions,
       interactionMode: input.interactionMode,
       choiceDetails: input.choiceDetails,
       recommendedChoiceId: input.recommendedChoiceId,
@@ -300,9 +305,12 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
     const now = input.now ?? Date.now();
     let normalized: ReturnType<typeof normalizeClarificationSubmission> | undefined;
     try {
-      if (input.action === 'answer') normalized = normalizeClarificationSubmission(wait, { response: input.response, decision: input.decision });
-      else if (input.response !== undefined || input.decision !== undefined) return { ok: false, code: 'INVALID' };
+      if (input.action === 'answer') normalized = normalizeClarificationSubmission(wait, { schemaVersion: input.schemaVersion, answers: input.answers, response: input.response, decision: input.decision });
+      else if (input.response !== undefined || input.decision !== undefined || input.answers !== undefined) return { ok: false, code: 'INVALID' };
     } catch { return { ok: false, code: 'INVALID' }; }
+    if (wait.schemaVersion === 2 && normalized && estimateTextTokens(normalized.answer) > 2000) return { ok: false, code: 'INVALID' };
+    if ((wait.schemaVersion === 2) !== (input.schemaVersion === 2)) return { ok: false, code: 'INVALID' };
+    const responseIdentity = JSON.stringify({ schemaVersion: wait.schemaVersion ?? 1, action: input.action, answers: normalized?.answers, response: normalized?.response, decision: normalized?.decision });
     if (input.action === 'agent_decide' && wait.kind === 'approval') return { ok: false, code: 'INVALID' };
     const resolution: ClarificationResolution = input.action === 'answer'
       ? 'answered'
@@ -310,7 +318,7 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
         ? 'agent_decide'
         : 'cancelled';
     if (wait.responseIdempotencyKey === input.idempotencyKey) {
-      if (wait.resolution !== resolution || (normalized && wait.answer !== normalized.answer)) {
+      if (wait.resolution !== resolution || (wait.schemaVersion === 2 ? wait.responseIdentity !== responseIdentity : normalized && wait.answer !== normalized.answer)) {
         return { ok: false, code: 'CONFLICT', clarification: wait };
       }
       return { ok: true, clarification: wait, idempotent: true, queued: wait.status === 'queued' };
@@ -331,6 +339,7 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
         status: 'cancelled',
         resolution,
         responseIdempotencyKey: input.idempotencyKey,
+        responseIdentity,
         resolvedAt: now,
         updatedAt: now,
       }, wait.version);
@@ -344,10 +353,14 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
     const answer = input.action === 'agent_decide'
       ? 'Use your best judgment and continue without additional user input.'
       : normalized!.answer;
+    const resumeInputId = randomUUID();
     const queued = writeWait({
       ...wait,
       status: 'queued',
       response: normalized?.response,
+      answers: normalized?.answers,
+      responseIdentity,
+      resumeInputId,
       decision: normalized?.decision,
       answer,
       resolution,
@@ -367,7 +380,7 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
     ].filter(Boolean).join('\n');
     const origin = getSessionInputById(wait.conversationId, wait.originInputId);
     insertSessionInput({
-      id: randomUUID(),
+      id: resumeInputId,
       conversationId: wait.conversationId,
       expectedTranscriptId: wait.transcriptId,
       clientMessageId: input.idempotencyKey,
@@ -383,6 +396,10 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
       thinking: origin?.thinking,
       origin: { type: 'system', source: 'internal' },
     });
+    if (wait.schemaVersion === 2) appendTranscriptEntry(wait.conversationId, {
+      role: 'custom', customType: 'clarification_answers', display: true,
+      content: answer, details: { waitId: wait.id, schemaVersion: 2, questions: wait.questions, answers: normalized?.answers, resolution }, timestamp: now,
+    }, { transcriptId: wait.transcriptId });
     return { ok: true, clarification: queued, idempotent: false, queued: true };
   });
 }

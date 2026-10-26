@@ -18,6 +18,10 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun ClarificationCard(request: ClarificationRequest, submitting: Boolean, error: String?,
   onCommand: (ClarificationCommand) -> Unit, modifier: Modifier = Modifier) {
+  if (request.schemaVersion == 2) {
+    ClarificationWizard(request, submitting, error, onCommand, modifier)
+    return
+  }
   var draft by rememberSaveable(request.id) { mutableStateOf("") }
   var selected by rememberSaveable(request.id) { mutableStateOf<String?>(null) }
   var editing by rememberSaveable(request.id) { mutableStateOf(false) }

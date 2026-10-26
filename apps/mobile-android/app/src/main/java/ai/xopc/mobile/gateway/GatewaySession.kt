@@ -27,6 +27,15 @@ class GatewaySession(
   private val identity: DeviceIdentity = DeviceIdentity(),
   private val store: AndroidSecureStore = AndroidSecureStore(context),
 ) {
+  internal fun clarificationRecord(key: String): String? = store.read(clarificationScope(key))
+  internal fun writeClarificationRecord(key: String, value: String?) {
+    val scoped = clarificationScope(key)
+    if (value == null) store.remove(scoped) else store.write(scoped, value)
+  }
+  private fun clarificationScope(key: String): String {
+    val current = currentProfile() ?: error("NOT_PAIRED")
+    return clarificationRecordKey("${current.gatewayId}.${current.deviceId}", key)
+  }
   private val verifiedRoutes = mutableMapOf<String, Long>()
   private var clockOffsetMs: Long = 0
 

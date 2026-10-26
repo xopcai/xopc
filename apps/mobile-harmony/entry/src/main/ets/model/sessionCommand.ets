@@ -8,7 +8,8 @@ export interface XopcSessionCreation {
 }
 export interface XopcInputAttachment { type: string; name: string; mimeType: string; size: number; data: string; workspaceRelativePath?: string; uri?: string; durationSeconds?: number; }
 export interface XopcEndpointContext { version: number; capturedAt: number; timezone: string; locale: string; }
-export interface XopcSessionInputContent { content: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; endpointContext?: XopcEndpointContext; }
+export interface XopcInteractionCapabilities { clarificationVersions: number[]; }
+export interface XopcSessionInputContent { interactionCapabilities?: XopcInteractionCapabilities; content: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; endpointContext?: XopcEndpointContext; }
 export interface XopcMaterialization { commandId: string; purpose: string; }
 export interface XopcMaterializeCommand { commandId: string; purpose: string; creation: XopcSessionCreation; }
 export interface XopcSessionCommand {

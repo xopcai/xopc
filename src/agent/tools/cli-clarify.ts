@@ -5,6 +5,7 @@ import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 
 export function createCliReadlineClarifyRequestFn(): GatewayClarifyRequestFn {
   return async (_context, request) => {
+    if (request.schemaVersion === 2) throw new Error('CLARIFICATION_VERSION_UNSUPPORTED: CLI supports single questions');
     const rl = readline.createInterface({ input, output });
     try {
       output.write(`\n${request.question}\n`);

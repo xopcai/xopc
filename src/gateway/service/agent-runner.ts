@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ClarificationResponseAction } from '@xopcai/gateway-contract';
 
+import { findSessionInputByRunId } from '../../storage/sqlite/session-input-repository.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
@@ -426,7 +427,7 @@ export class GatewayAgentRunner {
 
   answerClarificationText(conversationId: string, text: string, idempotencyKey: string): boolean {
     const wait = getClarificationSnapshot(conversationId)?.clarification;
-    if (!wait || wait.kind === 'approval' || wait.status !== 'open' || !text.trim()) return false;
+    if (!wait || wait.schemaVersion === 2 || wait.kind === 'approval' || wait.status !== 'open' || !text.trim()) return false;
     return this.resolveClarificationResponse({ id: wait.id, expectedVersion: wait.version,
       idempotencyKey, action: 'answer', response: { text } }).ok;
   }
@@ -478,6 +479,13 @@ export class GatewayAgentRunner {
     publishStreamFor: (runId: string) => (event: ClarificationStreamEvent) => void;
   }): Promise<ClarifyRequestResult> {
     const { conversationId, request, publishStreamFor } = opts;
+    if (request.schemaVersion === 2) {
+      const input = findSessionInputByRunId(conversationId, opts.runId);
+      const capable = input?.contextSnapshots?.some(context => context.kind === 'device_context' && context.interactionCapabilities?.clarificationVersions.includes(2));
+      if (process.env.XOPC_CLARIFY_MULTI_QUESTION === 'false' || !capable || this.externalStreamBySession.has(conversationId) || new TaskConversationRepository().resolveActiveExecutionSession(conversationId)) {
+        throw new Error('CLARIFICATION_VERSION_UNSUPPORTED: use single-question clarify in this environment');
+      }
+    }
     const taskSession = request.kind !== 'approval'
       ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId)
       : undefined;
