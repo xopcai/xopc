@@ -7,6 +7,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { DOMParser } from 'linkedom';
 import sharp from 'sharp';
 
+import { measurePhonePhase } from './execution-trace.js';
+import { PhoneTextSession, type PhoneTextProvider } from './text-session.js';
+
 import { runPhoneCommandText } from '../process/phone-process.js';
 import { managedPhoneAdbPath } from '../runtime-tools/phone-dependency-catalog.js';
 import { parsePhoneApplications, phoneApplicationsCommand } from './applications.js';
@@ -78,6 +81,7 @@ export interface PhoneDriver {
   applications?(serial: string, signal: AbortSignal): Promise<PhoneApplication[]>;
   textInputStatus?(serial: string, signal: AbortSignal): Promise<PhoneTextInputStatus>;
   observe(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
+  releaseInput?(): Promise<void>;
   capture?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   observeForText?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   execute(serial: string, action: PhoneAction, observation: PhoneObservation, signal: AbortSignal, options?: { settleMs: number; resetTask?: boolean; settingsPage?: 'about-phone' }): Promise<void>;
@@ -111,10 +115,28 @@ function sameTextEditor(target: PhoneElement, node: PhoneElement): boolean {
 }
 
 export class AdbPhoneDriver implements PhoneDriver {
+  private textSessions = new Map<string, PhoneTextSession>();
+  async releaseInput(): Promise<void> {
+    const sessions = [...this.textSessions.values()]; this.textSessions.clear();
+    await Promise.all(sessions.map(session => session.close()));
+  }
+  private async paste(serial: string, text: string, signal: AbortSignal): Promise<void> {
+    let session = this.textSessions.get(serial);
+    if (!session) {
+      session = new PhoneTextSession(async failed => {
+        if (this.createTextProvider) return this.createTextProvider(serial, failed);
+        const { LocalScrcpyProvider } = await import('./scrcpy.js');
+        return new LocalScrcpyProvider(this.adbPath, serial, failed, undefined, true);
+      });
+      this.textSessions.set(serial, session);
+    }
+    await session.paste(text, signal);
+  }
   constructor(private readonly adbPath = resolveAdbPath(), private readonly command = runAdb, private readonly useAndroidCli = true,
     private readonly readApplications?: (signal: AbortSignal) => Promise<PhoneApplication[]>,
     private readonly pasteText?: (text: string, signal: AbortSignal) => Promise<void>,
-    private readonly readHierarchy?: (signal: AbortSignal) => Promise<string>) {}
+    private readonly readHierarchy?: (signal: AbortSignal) => Promise<string>,
+    private readonly createTextProvider?: (serial: string, failed: () => void) => Promise<PhoneTextProvider>) {}
   async textInputStatus(serial: string, signal: AbortSignal): Promise<PhoneTextInputStatus> {
     const androidSdk = Number((await this.shell(serial, ['getprop', 'ro.build.version.sdk'], signal)).trim()) || 0;
     let ready = false;
@@ -139,16 +161,20 @@ export class AdbPhoneDriver implements PhoneDriver {
     return (await this.command(this.adbPath, ['-s', serial, 'shell', ...args], signal)).toString();
   }
   async observe(serial: string, signal: AbortSignal): Promise<PhoneObservation> {
+    const native = await measurePhonePhase('hierarchy', () => this.hierarchy(serial, signal));
+    const observation = await this.capture(serial, signal);
+    if (native.app && native.app !== observation.package) {
+      observation.frame.fill(0);
+      throw new PhoneError('PHONE_FRAME_CHANGED', 'Application changed between the UI hierarchy and screenshot; retry');
+    }
+    return { ...observation, elements: native.elements };
+  }
+  private async hierarchy(serial: string, signal: AbortSignal): Promise<{ elements: PhoneElement[]; app?: string }> {
     if (this.readHierarchy) {
       const xml = await this.readHierarchy(signal);
-      const elements = parsePhoneUi(xml);
       const app = new DOMParser().parseFromString(xml, 'text/xml').querySelector('node')?.getAttribute('package');
-      const observation = await this.capture(serial, signal);
-      if (!app || app !== observation.package) {
-        observation.frame.fill(0);
-        throw new PhoneError('PHONE_FRAME_CHANGED', 'Application changed between the UI hierarchy and screenshot; retry');
-      }
-      return { ...observation, elements };
+      if (!app) throw new PhoneError('PHONE_FRAME_CHANGED', 'Unable to identify the UI hierarchy application');
+      return { app, elements: parsePhoneUi(xml) };
     }
     // Dump first: screenshots represent the UI after the accessibility snapshot.
     let elements: PhoneElement[] = [];
@@ -182,7 +208,7 @@ export class AdbPhoneDriver implements PhoneDriver {
         await delay(1000, undefined, { signal });
       }
     }
-    return { ...await this.capture(serial, signal), elements };
+    return { elements };
   }
   async observeForText(serial: string, signal: AbortSignal): Promise<PhoneObservation> {
     const observation = await this.capture(serial, signal);
@@ -197,8 +223,11 @@ export class AdbPhoneDriver implements PhoneDriver {
   }
   /** Pixel capture avoids accessibility dumps on the human interaction path. */
   async capture(serial: string, signal: AbortSignal): Promise<PhoneObservation> {
+    return measurePhonePhase('capture', () => this.captureRaw(serial, signal));
+  }
+  private async captureRaw(serial: string, signal: AbortSignal): Promise<PhoneObservation> {
     const foreground = async () => {
-      const activity = await this.shell(serial, ['dumpsys', 'activity', 'activities'], signal);
+      const activity = await measurePhonePhase('foreground', () => this.shell(serial, ['dumpsys', 'activity', 'activities'], signal));
       const app = /(?:mResumedActivity|topResumedActivity)[^\n]*?\s([\w.]+)\//.exec(activity)?.[1];
       if (!app) throw new PhoneError('PHONE_APP_UNKNOWN', 'Unable to identify the foreground app');
       return app;
@@ -206,8 +235,8 @@ export class AdbPhoneDriver implements PhoneDriver {
     const app = await foreground();
     const capturedAt = Date.now();
     const results = await Promise.allSettled([
-      this.command(this.adbPath, ['-s', serial, 'exec-out', 'screencap', '-p'], signal),
-      this.shell(serial, ['dumpsys', 'input'], signal),
+      measurePhonePhase('screenshot', () => this.command(this.adbPath, ['-s', serial, 'exec-out', 'screencap', '-p'], signal)),
+      measurePhonePhase('display', () => this.shell(serial, ['dumpsys', 'input'], signal)),
     ]);
     const pixels = results[0]; const display = results[1];
     if (pixels.status === 'rejected') throw pixels.reason;
@@ -237,7 +266,7 @@ export class AdbPhoneDriver implements PhoneDriver {
   }
   async execute(serial: string, action: PhoneAction, observation: PhoneObservation, signal: AbortSignal, options?: { settleMs: number; resetTask?: boolean; settingsPage?: 'about-phone' }): Promise<void> {
     const point = ([x, y]: number[]) => [String(Math.min(observation.width - 1, Math.round(x * observation.width / 1000))), String(Math.min(observation.height - 1, Math.round(y * observation.height / 1000)))];
-    const input = (args: string[]) => this.shell(serial, ['input', ...args], signal);
+    const input = (args: string[]) => measurePhonePhase('input', () => this.shell(serial, ['input', ...args], signal));
     switch (action.type) {
       case 'tapElement': throw new PhoneError('PHONE_SEMANTIC_UNRESOLVED', 'Resolve the native element against a fresh observation before dispatch', 409);
       case 'launch': {
@@ -295,15 +324,11 @@ export class AdbPhoneDriver implements PhoneDriver {
         try {
           // The remote adb shell still parses arguments. Only a conservative ASCII subset uses input text.
           if (ascii) await input(['text', action.text.replaceAll(' ', '%s')]);
-          else if (this.pasteText) await this.pasteText(action.text, signal);
-          else {
-            const { LocalScrcpyProvider } = await import('./scrcpy.js');
-            const provider = new LocalScrcpyProvider(this.adbPath, serial, () => {}, undefined, true);
-            try { await provider.pasteText(action.text, signal); } finally { await provider.close(); }
-          }
+          else if (this.pasteText) await measurePhonePhase('input', () => this.pasteText!(action.text, signal));
+          else await measurePhonePhase('input', () => this.paste(serial, action.text, signal));
           // Transport receipt does not prove insertion. Poll observations, never repeat input.
-          await this.confirmText(serial, observation.package, target,
-            text => action.mode === 'replace' ? text === action.text : text.includes(action.text), signal);
+          await measurePhonePhase('input_confirmation', () => this.confirmText(serial, observation.package, target,
+            text => action.mode === 'replace' ? text === action.text : text.includes(action.text), signal));
         } catch (error) {
           signal.throwIfAborted();
           if (error instanceof PhoneError && error.code === 'PHONE_TEXT_INPUT_UNCONFIRMED') throw error;
@@ -315,6 +340,6 @@ export class AdbPhoneDriver implements PhoneDriver {
       case 'back': await input(['keyevent', 'KEYCODE_BACK']); break;
       case 'wait': await delay(action.durationMs, undefined, { signal }); return;
     }
-    if (options?.settleMs !== 0) await delay(options?.settleMs ?? 350, undefined, { signal });
+    if (options?.settleMs !== 0) await measurePhonePhase('settle', () => delay(options?.settleMs ?? 350, undefined, { signal }));
   }
 }

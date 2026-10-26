@@ -1,0 +1,68 @@
+[
+  {
+    "repo": "zai-org/Open-AutoGLM",
+    "revision": "86f55382982fb054e8fc98ca80609dff8a2cdc3c",
+    "files": [
+      {
+        "path": "phone_agent/actions/handler.py",
+        "sha256": "1553261c277f768e013737cfa6e9bc5a952e197d10725b4147d2efd30164160a"
+      },
+      {
+        "path": "phone_agent/adb/device.py",
+        "sha256": "bd86ba77ba210c781c3dedf08c7a0920f357f2e2158034471cc04738edd84af3"
+      },
+      {
+        "path": "phone_agent/adb/screenshot.py",
+        "sha256": "f4c14ebe800a5745371f9ce39fc990caa80b5aa430212b7196bff88ad14ef9c7"
+      },
+      {
+        "path": "phone_agent/agent.py",
+        "sha256": "686f1f11064b89ff0ea4f604ece20045bb77cd8183f0953e3da910c0878cab1f"
+      },
+      {
+        "path": "phone_agent/config/prompts.py",
+        "sha256": "e78ec332ef38f6729028bfcf3b44d6320bd2696ed0a3ff8357c1ecc767d4590e"
+      },
+      {
+        "path": "phone_agent/config/timing.py",
+        "sha256": "6d3fb91ca1a8bf363ff79c31446221987cab2083ea8568afb1783ed0b59cda93"
+      },
+      {
+        "path": "phone_agent/model/client.py",
+        "sha256": "be9916a2a2541137786bd3f67d01c900c76154342800bc81c9bf5ba538033df6"
+      }
+    ]
+  },
+  {
+    "repo": "X-PLUG/MobileAgent",
+    "revision": "11cea575561fb7800b5fb6b6cafa56f7a91de11f",
+    "files": [
+      {
+        "path": "Mobile-Agent-v3.5/README.md",
+        "sha256": "57eb604dc5e20b92ca52f8a7c9197a7fe5fb6e09a3be982314394563f302259e"
+      },
+      {
+        "path": "Mobile-Agent-v3.5/mobile_use/run_gui_owl_1_5_for_mobile.py",
+        "sha256": "f796a792bd9eb041b8e8daf178c1bf23e350d335d22da05a73801e5f4c0bae5f"
+      },
+      {
+        "path": "Mobile-Agent-v3.5/mobile_use/utils.py",
+        "sha256": "1cd5414943f379ddd6a46e279fd11b4cf6317e7e568cf1e94cb7749fc5732e3d"
+      }
+    ]
+  },
+  {
+    "repo": "agentbay-ai/wuying-agentbay-sdk",
+    "revision": "8e2fa8f20981c826eb5d247bc6701d52570e104a",
+    "files": [
+      {
+        "path": "typescript/src/agent/agent.ts",
+        "sha256": "30c3b90bd4d0889bfb54a86bd84cd49fcfae7827b778c529212c43775a3f3f16"
+      },
+      {
+        "path": "typescript/src/mobile/mobile.ts",
+        "sha256": "fb446ae2c56f4fb35eb592027a41cd7cf96956641f6cacf8443e5632b576407c"
+      }
+    ]
+  }
+]

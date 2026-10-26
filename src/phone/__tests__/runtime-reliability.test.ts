@@ -22,7 +22,7 @@ function observation(elements: PhoneElement[], app = 'com.test.editor'): PhoneOb
   return { frameId: randomUUID(), capturedAt: Date.now(), width: 1000, height: 1000, rotation: 0,
     package: app, frame: Buffer.from('synthetic-pixels'), elements };
 }
-function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests?: number; readScreen?: PhoneModelAdapter['readScreen']; semanticControls?: boolean; hierarchicalPlanning?: boolean } = {}) {
+function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests?: number; readScreen?: PhoneModelAdapter['readScreen']; reset?: PhoneModelAdapter['reset']; semanticControls?: boolean; hierarchicalPlanning?: boolean } = {}) {
   const repository = new PhoneRepository();
   const device = repository.save({ serial: 'reliability-editor', name: 'Synthetic editor', enabled: true, allowedApps: ['com.test.editor', 'com.test.other'] });
   repository.setDefault(device.id);
@@ -32,7 +32,7 @@ function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests
     observe: vi.fn(async () => ({ ...current, frameId: randomUUID(), frame: Buffer.from(current.frame) })),
     execute: vi.fn(async () => {}),
   };
-  const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict, readScreen: options.readScreen }));
+  const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict, readScreen: options.readScreen, reset: options.reset }));
   runtimes.push(runtime);
   const context = { config: ConfigSchema.parse({ phone: { enabled: true, maxModelRequests: options.modelRequests ?? 10,
     semanticControls: options.semanticControls, hierarchicalPlanning: options.hierarchicalPlanning } }), agentId: 'main', modelRef: 'test/reliability' };
@@ -91,7 +91,9 @@ describe('phone runtime reliability integration', () => {
       { source: 'native_ui' }, { source: 'screenshot', verification: 'unverified', text: ['Android version: 15'] }] });
     const content = result.content[0];
     expect(content.type).toBe('text');
-    if (content.type === 'text') expect(JSON.parse(content.text)).toEqual(result.details);
+    const { performance: _performance, ...modelDetails } = result.details as PhoneReport;
+    if (content.type === 'text') expect(JSON.parse(content.text)).toEqual(JSON.parse(JSON.stringify(modelDetails)));
+    expect(result.details).toHaveProperty('performance');
     expect(predict).not.toHaveBeenCalled(); expect(f.driver.execute).not.toHaveBeenCalled();
   });
 
@@ -488,4 +490,19 @@ describe('phone runtime reliability integration', () => {
     expect(f.runtime.status('reliability')).toMatchObject({ verified: false, status: 'failed' });
     expect(predict).not.toHaveBeenCalled();
   });
+});
+
+
+it('clears adapter state written by a late prediction after cancellation and never dispatches it', async () => {
+  let finish!: () => void; let retained = false;
+  const predict = vi.fn<PhoneModelAdapter['predict']>(async () => {
+    await new Promise<void>(resolve => { finish = resolve; }); retained = true;
+    return { kind: 'action', action: { type: 'tap', point: [200, 300] } };
+  });
+  const f = fixture(predict, { reset: () => { retained = false; } }); await f.open();
+  const pending = f.runtime.execute('reliability', { op: 'run', goal: 'Inspect', maxActions: 6 }, f.context).catch(error => error);
+  await vi.waitFor(() => expect(predict).toHaveBeenCalledOnce());
+  const stopped = f.runtime.stop('reliability', 'pause'); finish();
+  await stopped; await pending;
+  expect(retained).toBe(false); expect(f.driver.execute).not.toHaveBeenCalled();
 });

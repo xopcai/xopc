@@ -28,6 +28,8 @@ if (code !== 0) {
 // Bundled Markdown workspace templates (used by workspace-seed.ts at runtime)
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
+mkdirSync(dirname(join(root, 'dist/src/phone/autoglm-upstream.LICENSE')), { recursive: true });
+cpSync(join(root, 'src/phone/autoglm-upstream.LICENSE'), join(root, 'dist/src/phone/autoglm-upstream.LICENSE'));
 
 await buildPersonalResultWorker(root, join(root, 'dist/src/personal-agent/result-extraction.js'));
 

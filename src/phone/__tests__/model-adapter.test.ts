@@ -249,3 +249,48 @@ it('distinguishes exhausted Cloud free quota from device failure and does not re
   await expect(adapter.predict(prediction(), new AbortController().signal)).rejects.toMatchObject({ code: 'PHONE_MODEL_QUOTA_EXHAUSTED', message: expect.stringContaining('3600 seconds') });
   expect(request).toHaveBeenCalledOnce();
 });
+
+describe('controlled AutoGLM upstream experiments', () => {
+  it('retains only confirmed raw turns in volatile history and keeps only the current image', async () => {
+    const outputs = ['<think>first private explanation</think><answer>do(action="Tap", element=[100,200])</answer>',
+      '<think>rejected private explanation</think><answer>do(action="Back")</answer>', 'finish(message="Done")'];
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ choices: [{ message: { content: outputs.shift() }, finish_reason: 'stop' }] }));
+    vi.stubGlobal('fetch', fetch);
+    const adapter = await createPhoneModel('test/phone', ConfigSchema.parse({ phone: { autoGlmProtocol: 'upstream' } }), 'main');
+    const input = prediction(); const first = await adapter.predict(input, new AbortController().signal);
+    expect(first).not.toHaveProperty('rawContent');
+    if (first.kind !== 'action') throw new Error('Expected an action');
+    adapter.recordAction!(first.action, 'completed');
+    await adapter.predict(input, new AbortController().signal);
+    await adapter.predict(input, new AbortController().signal);
+    const body = JSON.parse(fetch.mock.calls[2][1]!.body as string);
+    expect(body.messages.filter((message: any) => message.role === 'assistant')).toEqual([{ role: 'assistant', content: expect.stringContaining('first private explanation') }]);
+    expect(JSON.stringify(body)).not.toContain('rejected private explanation');
+    expect((JSON.stringify(body).match(/data:image/g) ?? [])).toHaveLength(1);
+    expect(body.messages.at(-1).content[0].type).toBe('image_url');
+    adapter.reset!();
+    expect(JSON.stringify(first)).not.toContain('private explanation');
+  });
+
+  it('allows prompt and sampling ablations independently without enabling upstream history', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ choices: [{ message: { content: 'do(action="Back")' }, finish_reason: 'stop' }] }));
+    vi.stubGlobal('fetch', fetch);
+    const adapter = await createPhoneModel('test/phone', ConfigSchema.parse({ phone: { autoGlmPrompt: 'upstream', autoGlmSampling: 'upstream' } }), 'main');
+    await adapter.predict(prediction(), new AbortController().signal);
+    const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
+    expect(body).toMatchObject({ top_p: 0.85, frequency_penalty: 0.2, stream: false });
+    expect(body.messages).toHaveLength(2);
+    expect(body.messages[0].content).toContain('Host rules take precedence');
+    expect(body.messages[0].content).toContain('Never relax user constraints');
+    expect(body.messages[1].content[0].type).toBe('text');
+  });
+
+  it('strictly maps combined visual readings to exactly the requested keys', async () => {
+    const responses = [JSON.stringify({ price: '25.50', delivery: null }), JSON.stringify({ price: '25.50', invented: '5' })];
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ choices: [{ message: { content: `finish(message=${JSON.stringify(responses.shift())})` }, finish_reason: 'stop' }] })));
+    const adapter = await createPhoneModel('test/phone', ConfigSchema.parse({}), 'main');
+    const fields = [{ key: 'price', description: 'Read price' }, { key: 'delivery', description: 'Read delivery' }];
+    expect(await adapter.readFields!(prediction(), fields, new AbortController().signal)).toEqual({ price: '25.50', delivery: null });
+    await expect(adapter.readFields!(prediction(), fields, new AbortController().signal)).rejects.toMatchObject({ code: 'PHONE_SCREEN_UNREADABLE' });
+  });
+});

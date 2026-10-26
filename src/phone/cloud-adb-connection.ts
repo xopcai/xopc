@@ -1,4 +1,4 @@
-import { createPrivateKey, randomUUID } from 'node:crypto';
+import { createHash, createPrivateKey, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { connect, type Socket } from 'node:net';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ import { observeAdbConsumption } from './cloud-adb-writable.js';
 import { readScrcpyServer } from './scrcpy-assets.js';
 import { PhoneError } from './contracts.js';
 import { protectPhoneCredential } from './cloud-key-permissions.js';
+import { measurePhonePhase } from './execution-trace.js';
 import { PHONE_UI_DEX } from './ui-dump-binary.js';
 
 /** Accept only an explicit TCP endpoint, never URLs, paths or ADB commands. */
@@ -139,21 +140,33 @@ export class CloudAdbConnection {
   async hierarchy(signal: AbortSignal): Promise<string> {
     const combined = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
     const abort = () => this.close(); combined.addEventListener('abort', abort, { once: true });
-    const remote = `/data/local/tmp/xopc-ui-${randomUUID()}.dex`;
+    const binary = Buffer.from(PHONE_UI_DEX, 'base64');
+    const hash = createHash('sha256').update(binary).digest('hex');
+    const remote = `/data/local/tmp/xopc-ui-${hash}.dex`;
+    let staging: string | undefined;
     try {
       combined.throwIfAborted();
-      const adb = await this.client(); combined.throwIfAborted();
-      const sync = await adb.sync();
-      try {
-        const binary = Buffer.from(PHONE_UI_DEX, 'base64');
-        await sync.write({ filename: remote, permission: 0o600, file: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(binary); controller.close(); } }) });
-      } finally { await sync.dispose(); }
+      const existing = (await this.command('', ['-s', this.endpoint, 'shell', 'sha256sum', remote], combined)).toString().trim().split(/\s+/)[0];
+      if (existing !== hash) {
+        staging = `${remote}.${randomUUID()}.tmp`;
+        await measurePhonePhase('dex_upload', async () => {
+          const adb = await this.client(); combined.throwIfAborted();
+          const sync = await adb.sync();
+          try {
+            await sync.write({ filename: staging!, permission: 0o600, file: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(binary); controller.close(); } }) });
+          } finally { await sync.dispose(); }
+          await this.command('', ['-s', this.endpoint, 'shell', 'chmod', '400', staging!], combined);
+          await this.command('', ['-s', this.endpoint, 'shell', 'mv', '-f', staging!, remote], combined);
+          const deployed = (await this.command('', ['-s', this.endpoint, 'shell', 'sha256sum', remote], combined)).toString().trim().split(/\s+/)[0];
+          if (deployed !== hash) throw new PhoneError('PHONE_UI_UNAVAILABLE', 'Phone UI helper verification failed', 502);
+        });
+      }
       const result = (await this.command('', ['-s', this.endpoint, 'shell', 'env', `CLASSPATH=${remote}`, 'app_process', '/', 'ai.xopc.phone.PhoneUiDump'], combined)).toString();
       if (!result.includes('<hierarchy') || !result.includes('</hierarchy>')) throw new PhoneError('PHONE_UI_UNAVAILABLE', 'Unable to capture the active phone UI hierarchy', 502);
       return result;
     } finally {
       combined.removeEventListener('abort', abort);
-      await this.command('', ['-s', this.endpoint, 'shell', 'rm', '-f', remote], undefined, 3000).catch(() => {});
+      if (staging) await this.command('', ['-s', this.endpoint, 'shell', 'rm', '-f', staging], undefined, 3000).catch(() => {});
     }
   }
   async applications(signal: AbortSignal) {

@@ -1,0 +1,169 @@
+{
+  "date": "2026-10-27",
+  "device": "XOPC_Android_Test_API_35 / emulator-5554",
+  "scope": "Read-only fixed current page; no model requests or input actions; n=3 per mode; not a production cloud latency estimate",
+  "rows": [
+    {
+      "iteration": 1,
+      "mode": "capture",
+      "ms": 238,
+      "width": 1080,
+      "height": 2400,
+      "frameBytes": 167629,
+      "nodes": 0,
+      "commands": [
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 46
+        },
+        {
+          "command": "shell dumpsys input",
+          "ms": 32
+        },
+        {
+          "command": "exec-out screencap -p",
+          "ms": 169
+        },
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 20
+        }
+      ]
+    },
+    {
+      "iteration": 1,
+      "mode": "observe",
+      "ms": 2842,
+      "width": 1080,
+      "height": 2400,
+      "frameBytes": 167629,
+      "nodes": 8,
+      "commands": [
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 36
+        },
+        {
+          "command": "shell dumpsys input",
+          "ms": 29
+        },
+        {
+          "command": "exec-out screencap -p",
+          "ms": 136
+        },
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 24
+        }
+      ]
+    },
+    {
+      "iteration": 2,
+      "mode": "capture",
+      "ms": 149,
+      "width": 1080,
+      "height": 2400,
+      "frameBytes": 167629,
+      "nodes": 0,
+      "commands": [
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 19
+        },
+        {
+          "command": "shell dumpsys input",
+          "ms": 18
+        },
+        {
+          "command": "exec-out screencap -p",
+          "ms": 110
+        },
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 19
+        }
+      ]
+    },
+    {
+      "iteration": 2,
+      "mode": "observe",
+      "ms": 940,
+      "width": 1080,
+      "height": 2400,
+      "frameBytes": 167629,
+      "nodes": 8,
+      "commands": [
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 34
+        },
+        {
+          "command": "shell dumpsys input",
+          "ms": 31
+        },
+        {
+          "command": "exec-out screencap -p",
+          "ms": 139
+        },
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 22
+        }
+      ]
+    },
+    {
+      "iteration": 3,
+      "mode": "capture",
+      "ms": 141,
+      "width": 1080,
+      "height": 2400,
+      "frameBytes": 167629,
+      "nodes": 0,
+      "commands": [
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 18
+        },
+        {
+          "command": "shell dumpsys input",
+          "ms": 18
+        },
+        {
+          "command": "exec-out screencap -p",
+          "ms": 106
+        },
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 17
+        }
+      ]
+    },
+    {
+      "iteration": 3,
+      "mode": "observe",
+      "ms": 923,
+      "width": 1080,
+      "height": 2400,
+      "frameBytes": 167629,
+      "nodes": 8,
+      "commands": [
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 44
+        },
+        {
+          "command": "shell dumpsys input",
+          "ms": 29
+        },
+        {
+          "command": "exec-out screencap -p",
+          "ms": 131
+        },
+        {
+          "command": "shell dumpsys activity activities",
+          "ms": 21
+        }
+      ]
+    }
+  ]
+}

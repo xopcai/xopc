@@ -111,3 +111,28 @@ it('rejects manual semantic actions before capture or dispatch without poisoning
     expect(runtime.status('manual')).toMatchObject({ status: 'paused', controlOwner: 'human', actions: 1, steps: [{ action: 'back', dispatch: 'completed' }] });
   } finally { await runtime.shutdown(); closeXopcDatabase(); }
 });
+
+
+it.each(['release', 'handback'] as const)('drains the text-only input channel on manual %s', async op => {
+  closeXopcDatabase(); openXopcDatabase({ path: ':memory:' });
+  const repository = new PhoneRepository();
+  const device = repository.save({ serial: 'text-channel-lifecycle', name: 'Test phone', enabled: true, allowedApps: ['com.android.settings'] });
+  repository.setDefault(device.id);
+  const driver: PhoneDriver = {
+    discover: async () => [{ serial: device.serial, name: device.name, state: 'device', emulator: true }],
+    observe: async () => ({ frameId: randomUUID(), capturedAt: Date.now(), width: 1000, height: 1000,
+      rotation: 0, package: 'com.android.settings', frame: Buffer.from('pixels'), elements: [] }),
+    execute: vi.fn(async () => {}), releaseInput: vi.fn(async () => {}),
+  };
+  const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict: async () => ({ kind: 'complete', summary: 'unused' }) }));
+  const context = { config: ConfigSchema.parse({ phone: { enabled: true } }), agentId: 'main', modelRef: 'test/manual' };
+  try {
+    await runtime.execute('manual', { op: 'open', mode: 'control' }, context);
+    const id = runtime.status('manual')!.sessionId;
+    await runtime.liveControl('manual', id, context, 'human', { op: 'takeover', epoch: 1, operationId: randomUUID() });
+    vi.mocked(driver.releaseInput!).mockClear();
+    await runtime.liveControl('manual', id, context, 'human', { op, epoch: 2, operationId: randomUUID() });
+    expect(driver.releaseInput).toHaveBeenCalledOnce();
+    expect(runtime.status('manual')!.controlOwner).toBe('none');
+  } finally { await runtime.shutdown(); closeXopcDatabase(); }
+});

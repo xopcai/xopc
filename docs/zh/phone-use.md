@@ -189,3 +189,28 @@ AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重�
 切换当前任务：先选择下一任务方式，再点击「切换当前任务 → 暂停并切换」。Runtime 暂停并等待已派发输入结束，清除旧预测和坐标，重新观察；保留 taskId、原限制与已消耗预算，等待用户在手机面板明确交还。交还后复用同一 taskId 继续剩余目标。人工接管、过期控制版本及未知派发结果不能通过切换绕过；全局只读查看入口不能修改来源聊天。
 
 用户通过聊天明确要求切换时，可用 `set_mode` 指定 executionMode；默认仅修改后续任务，`applyCurrent: true` 执行相同的暂停切换流程。切换后的人工交还不能用工具 resume 绕过。
+
+## 执行耗时诊断与模型对照
+
+操作报告的 `performance` 详情包含 operationId、总耗时、各阶段计数与耗时，以及模型请求的数值元数据。日志 `PhoneRuntime` 的 `phase=execution_timing` 提供同一类记录，可区分 UI 树、截图、模型等待、动作派发、输入确认和稳定等待。阶段可能嵌套或并行，不能直接相加作为总耗时占比。普通 JSON 响应只记录首字节时间；服务提供流式 token 时才记录首 token 时间。诊断不保存屏幕文字、提示词、模型原文或凭据，也不进入主 Agent 的规划上下文。
+
+可在 `xopc.json` 中分别设置以下实验项，默认值如下：
+
+```json
+{
+  "phone": {
+    "autoGlmPrompt": "current",
+    "autoGlmProtocol": "current",
+    "autoGlmSampling": "current",
+    "modelResponseMode": "json",
+    "modelRepetitionGuard": false,
+    "batchReadings": false
+  }
+}
+```
+
+三个 AutoGLM 项可分别改为 `upstream`，独立对照上游中文提示、图片优先的对话轮次和采样参数。上游提示追加 xopc 主机约束；最多八轮已确认派发的动作历史只保存在适配器内存中，被丢弃的预测不会冒充已执行动作，任务改变或人工接管会清理历史。它是有界的主机适配，并非原样运行官方 Python 执行器，权限、取消、输入确认与完成验证继续生效。
+
+`modelResponseMode: "stream"` 请求 SSE 并测量首 token；未完整结束的流不会派发动作。开启 `modelRepetitionGuard` 可在流读取期间中止大段精确重复。流式和重复检测保持默认关闭，需对照真实完成率、错误率、费用和总耗时后决定是否采用。
+
+云端 UI helper 按内容哈希校验复用；Unicode 输入在一次操作内复用专用通道，在结束、接管或取消时释放。实验项 `batchReadings` 可将多个视觉输出合并为一次只读请求，默认关闭；缺失字段保持 unavailable，截图读数保持 unverified。
