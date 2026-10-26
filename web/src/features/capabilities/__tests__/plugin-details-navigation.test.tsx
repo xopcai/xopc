@@ -8,7 +8,6 @@ import { pluginDetailPath } from '../capability-links';
 
 const state = vi.hoisted(() => ({ mounts: 0 }));
 vi.mock('@/features/capabilities/capability-header-actions', () => ({ CapabilityHeaderActions: () => null }));
-vi.mock('@/features/capabilities/capability-section-intro', () => ({ CapabilitySectionIntro: () => null }));
 function List() {
   useEffect(() => { state.mounts++; }, []);
   return <p>Original filtered list</p>;

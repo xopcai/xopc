@@ -8,7 +8,6 @@ import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/setti
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
 import { messages } from '@/i18n/messages';
-import { isComputerUseAvailable } from '@/lib/electron-env';
 import { docsGuidePageUrl } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -95,7 +94,6 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
       {providerData.cards.some(row => row.id === 'xopc-cloud' && !row.isCustom) ? <XopcCloudAccountCard labels={c.xopcCloudAccount} /> : null}
       <ConnectedProvidersGrid labels={c.connectedProviders} data={providerData} onAdd={() => setAddDialogOpen(true)} onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })} />
       {providerData.cards.length > 0 ? <ModelCatalogStatus showCapabilities={false} /> : null}
-      {isComputerUseAvailable() ? <Link className="inline-block text-sm text-accent-fg hover:underline" to="/settings/computer-use">{zh ? '电脑操作设置' : 'Computer use settings'}</Link> : null}
     </section>
     <AddProviderDialog open={addDialogOpen} connectOnly onOpenChange={setAddDialogOpen} builtinRows={providerData.builtinRows} customConfig={providerData.customConfig} labels={c.addProviderDialog} language={language} onSaved={() => { handleSaved(); setAddDialogOpen(false); }} />
     {manageTarget ? <ProviderManageDialog open onOpenChange={open => { if (!open) setManageTarget(null); }} providerId={manageTarget.providerId} isCustom={manageTarget.isCustom} builtinRows={providerData.builtinRows} customConfig={providerData.customConfig} allModels={providerData.allModels} labels={c.manageProviderDialog} language={language} onSaved={handleSaved} /> : null}
