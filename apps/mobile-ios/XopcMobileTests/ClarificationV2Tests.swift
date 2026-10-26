@@ -22,7 +22,7 @@ struct ClarificationV2Tests {
         #expect(!prompt.accepts([answers[0], answers[0], answers[2]]))
         var long = prompt
         long.questions = prompt.questions?.map { ClarificationQuestion(id: $0.id, header: $0.header, question: String(repeating: "x", count: 1000),
-                                                                      type: $0.type, choices: $0.choices, recommendedChoiceId: $0.recommendedChoiceId) }
+                                                                       type: $0.type, choices: $0.choices, recommendedChoiceId: $0.recommendedChoiceId) }
         #expect(!long.accepts((long.questions ?? []).map { ClarificationAnswer(questionId: $0.id, text: String(repeating: "y", count: 2000)) }))
         var command = ClarificationResponseCommand(action: "answer", response: nil, decision: nil, expectedVersion: 4, idempotencyKey: "attempt")
         command.schemaVersion = 2; command.answers = answers
@@ -51,12 +51,16 @@ struct ClarificationV2Tests {
         #expect(ClarificationPersistence.read(next, "attempt", as: ClarificationResponseCommand.self, store: store) == nil)
         #expect(ClarificationPersistence.key(prompt, "attempt") != ClarificationPersistence.key(prompt, "draft"))
     }
-
 }
 
 @MainActor
 private final class ClarificationMemoryTokenStore: GatewayTokenStoring {
     private var records: [String: String] = [:]
-    func load(account: String) -> String? { records[account] }
-    func save(_ token: String, account: String) { records[account] = token.isEmpty ? nil : token }
+    func load(account: String) -> String? {
+        records[account]
+    }
+
+    func save(_ token: String, account: String) {
+        records[account] = token.isEmpty ? nil : token
+    }
 }

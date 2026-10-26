@@ -91,7 +91,10 @@ import Observation
             let state = try await repository.state(conversationID)
             guard revision == generation, operationRevision == operations, active, !Task.isCancelled else { return }
             if let incoming = state, let current = live, incoming.report.sessionId == current.report.sessionId,
-               let nextRevision = incoming.report.revision, let currentRevision = current.report.revision, nextRevision < currentRevision { return }
+               let nextRevision = incoming.report.revision, let currentRevision = current.report.revision, nextRevision < currentRevision
+            {
+                return
+            }
             if live != state {
                 live = state
             }
@@ -99,7 +102,9 @@ import Observation
             if visible, state?.ownControl == true, !busy, Date().timeIntervalSince(heartbeatAt) > 4 {
                 heartbeatAt = Date(); await command("heartbeat")
             }
-            if state?.report.status == "closed" { stopVideo(); return }
+            if state?.report.status == "closed" {
+                stopVideo(); return
+            }
             ensureVideo()
             if visible, fallback, touchStart == nil {
                 let nextFrame = try await repository.frame(binding)
@@ -115,7 +120,7 @@ import Observation
     }
 
     func command(_ operation: String, action: PhoneAction? = nil) async {
-        guard let repository, let binding = summary?.binding, let state = live, active, (visible || operation == "heartbeat"), !busy else { return }
+        guard let repository, let binding = summary?.binding, let state = live, active, visible || operation == "heartbeat", !busy else { return }
         let revision = generation
         if operation != "heartbeat" {
             operations += 1; busy = true; failed = false; video?.pointer("cancel", x: 0, y: 0)
