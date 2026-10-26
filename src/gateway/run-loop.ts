@@ -3,7 +3,7 @@
  */
 
 import { isRestartEnabled } from '../config/commands.flags.js';
-import { loadConfig } from '../config/index.js';
+import { loadConfig } from '../config/loader.js';
 import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import type { GatewayServer } from './server.js';
 import { acquireGatewayLock } from './lock.js';

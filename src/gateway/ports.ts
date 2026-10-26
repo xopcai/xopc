@@ -178,7 +178,7 @@ function listPortListenersViaNetstat(port: number): PortProcess[] {
   try {
     out = execFileSync("netstat", ["-ano", "-p", "TCP"], {
       encoding: "utf-8",
-      shell: true,
+      windowsHide: true,
       timeout: 5000,
     });
   } catch {
@@ -243,6 +243,9 @@ export async function forceFreePortAndWait(
   // 1. Get listener list
   const listeners = listPortListeners(port);
   const killed: PortProcess[] = [...listeners];
+  if (listeners.length === 0) {
+    return { killed, waitedMs: 0, escalatedToSigkill: false };
+  }
 
   // 2. Send SIGTERM
   for (const proc of listeners) {

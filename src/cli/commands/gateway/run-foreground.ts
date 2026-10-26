@@ -68,7 +68,7 @@ export async function runGatewayFromCliOptions(
   }
 
   const [{ loadConfig }, { resolveConfigPath }, { runGatewayLoop }, gatewayPorts, bootstrap] = await Promise.all([
-    import('../../../config/index.js'),
+    import('../../../config/loader.js'),
     import('../../../config/paths.js'),
     import('../../../gateway/run-loop.js'),
     import('../../../gateway/ports.js'),
@@ -168,7 +168,7 @@ export async function runGatewayFromCliOptions(
     configPath: ctx.configPath || resolveConfigPath(),
     port,
     start: async () => {
-      const { GatewayServer } = await import('../../../gateway/index.js');
+      const { GatewayServer } = await import('../../../gateway/server.js');
       const server = new GatewayServer({
         bindHost: listenPlan.bindHost,
         bind: listenPlan.bindMode,
