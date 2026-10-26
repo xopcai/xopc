@@ -9,7 +9,7 @@ vi.mock('../../config/commands.flags.js', () => ({
   isRestartEnabled: vi.fn(() => false),
 }));
 
-vi.mock('../../config/index.js', () => ({
+vi.mock('../../config/loader.js', () => ({
   loadConfig: vi.fn(() => ({})),
 }));
 
