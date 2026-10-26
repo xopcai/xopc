@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ClarificationWizard } from '../clarification/clarification-wizard';
 import { Check } from 'lucide-react';
 import {
   CLARIFICATION_ANSWER_LIMIT,
@@ -13,6 +14,7 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
 export type ClarifyPromptState = ClarificationPresentation & {
+  conversationId?: string;
   requestId: string;
   kind: 'input' | 'approval';
   question: string;
@@ -24,7 +26,7 @@ export type ClarifyPromptState = ClarificationPresentation & {
 };
 
 type ClarifyPromptView = ClarificationPresentation & Pick<ClarifyPromptState,
-  'requestId' | 'question' | 'expiresAt' | 'serverTime'>
+  'requestId' | 'question' | 'expiresAt' | 'serverTime' | 'conversationId'>
   & Partial<Pick<ClarifyPromptState, 'kind' | 'version' | 'createdAt'>>
   & { durable?: boolean };
 
@@ -37,7 +39,7 @@ export type ClarifyPromptCopy = Pick<ChatMessages,
   | 'clarifyApprove' | 'clarifyDeny' | 'clarifyOperation' | 'clarifyTarget' | 'clarifyImpact'
   | 'clarifyDetails' | 'clarifyOnce' | 'clarifyExpired' | 'clarifyAnswerTooLong' | 'clarifySubmitting'>;
 
-type ClarifyPromptProps = {
+export type ClarifyPromptProps = {
   prompt: ClarifyPromptView | null;
   submitting: boolean;
   submitError: string | null;
@@ -48,6 +50,7 @@ type ClarifyPromptProps = {
 };
 
 export function ClarifyPrompt(props: ClarifyPromptProps) {
+  if (props.prompt?.schemaVersion === 2 && props.prompt.kind !== 'approval') return <ClarificationWizard key={`${props.prompt.requestId}:${props.prompt.version}`} {...props} />;
   return props.prompt ? <ClarifyPromptBody key={props.prompt.requestId} {...props} prompt={props.prompt} /> : null;
 }
 

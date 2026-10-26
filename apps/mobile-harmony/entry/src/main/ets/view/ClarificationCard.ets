@@ -1,3 +1,4 @@
+import { XopcClarificationWizard } from './ClarificationWizard';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcClarification, XopcClarificationChoice, XopcClarificationCommand } from '../model/clarification';
 
@@ -8,6 +9,8 @@ export struct XopcClarificationCard {
   @Param submitting: boolean = false;
   @Param errorMessage: string = '';
   @Event onRespond: (command: XopcClarificationCommand) => void = (command: XopcClarificationCommand): void => {};
+  @Param draftRecord: string = '';
+  @Event onDraft: (record: string) => void = (_record: string): void => {};
   @Local draft: string = '';
   @Local selectedId: string = '';
   @Local editing: boolean = false;
@@ -31,6 +34,13 @@ export struct XopcClarificationCard {
     this.onRespond(command);
   }
   build() {
+    if (this.prompt.schemaVersion === 2) {
+      XopcClarificationWizard({ prompt: this.prompt, submitting: this.submitting, errorMessage: this.errorMessage,
+        draftRecord: this.draftRecord, onDraft: this.onDraft, onRespond: this.onRespond })
+    } else { this.legacyCard() }
+  }
+  @Builder
+  legacyCard() {
     Scroll() {
       Column({ space: 8 }) {
         Text(this.prompt.kind === 'approval' ? $r('app.string.clarify_approval_title') : $r('app.string.clarify_title'))

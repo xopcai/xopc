@@ -64,6 +64,7 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
       const endpoint = command.origin.type === 'endpoint' ? deps.service.endpointTools.registry.get(command.origin.endpointId) : undefined;
       const contexts = endpoint ? [deviceTurnSourceContext(endpoint, command.input.endpointContext,
         deps.service.endpointTools.contexts?.view(endpoint.endpointId), deps.service.endpointTools.locations?.list(endpoint.endpointId, id.data))] : [];
+      if (contexts[0] && command.input.interactionCapabilities) contexts[0].interactionCapabilities = command.input.interactionCapabilities;
       contexts.push(...(command.input.browserContexts ?? []).map(browserPageContextToAgentContext));
       if (command.input.appContext) contexts.push(await deps.service.prepareSessionAppContext(command.input.appContext, principal, id.data, command.clientMessageId));
       return contexts;

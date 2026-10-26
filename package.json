@@ -81,6 +81,7 @@
     "test:plugins:store:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-store-plugin-e2e.mts",
     "test:plugins:fixtures": "tsx scripts/build-store-plugin-lab.mts",
     "test:plugins:browser": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-plugin-setup-browser.mts",
+    "test:web:clarification:e2e": "pnpm run build:node && pnpm run build:web && tsx scripts/verify-clarification-browser.mts",
     "test:web:onboarding-visual": "node scripts/test-onboarding-visual.mjs",
     "test:web:onboarding-visual:update": "node scripts/test-onboarding-visual.mjs --update",
     "test:quick-understanding": "XOPC_LOG_LEVEL=fatal vitest run src/work-discovery/__tests__/evaluation.test.ts src/user-context/sources/__tests__/activity-clustering.test.ts src/knowledge/__tests__/quick-understanding.e2e.test.ts src/connectors/__tests__/content-enrichment.test.ts src/connectors/__tests__/connected-source-ingestion.test.ts",

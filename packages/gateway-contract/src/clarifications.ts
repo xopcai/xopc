@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { assertClarificationSize, clarificationAnswersSchema, clarificationQuestionsSchema, normalizeQuestionAnswers } from './clarification-questions.js';
+export * from './clarification-questions.js';
 
 export type ClarificationKind = 'input' | 'approval';
 export type ClarificationStatus =
@@ -41,6 +43,9 @@ export type ClarificationWait = ClarificationPresentation & {
   approvalKey?: string;
   approvalConsumedAt?: number;
   responseIdempotencyKey?: string;
+  responseIdentity?: string;
+  resumeInputId?: string;
+  answers?: import('./clarification-questions.js').ClarificationQuestionAnswer[];
   version: number;
   createdAt: number;
   updatedAt: number;
@@ -58,6 +63,8 @@ export type ClarificationResponseAction = 'answer' | 'agent_decide' | 'cancel';
 
 export const CLARIFICATION_ANSWER_LIMIT = 8_000;
 export const clarificationPresentationSchema = z.object({
+  schemaVersion: z.union([z.literal(1), z.literal(2)]).optional(),
+  questions: clarificationQuestionsSchema.optional(),
   interactionMode: z.enum(['quick', 'compose']).optional(),
   choiceDetails: z.array(z.object({
     id: z.string().min(1).max(160),
@@ -74,6 +81,8 @@ export const clarificationPresentationSchema = z.object({
 });
 export type ClarificationPresentation = z.infer<typeof clarificationPresentationSchema>;
 export const clarificationSubmissionSchema = z.object({
+  schemaVersion: z.union([z.literal(1), z.literal(2)]).optional(),
+  answers: clarificationAnswersSchema.optional(),
   response: z.object({
     choiceId: z.string().min(1).max(160).optional(),
     text: z.string().trim().max(CLARIFICATION_ANSWER_LIMIT).optional(),
@@ -102,6 +111,10 @@ export function readClarificationPresentation(value: unknown): ClarificationPres
 export function normalizeClarificationQuestion<T extends Question>(question: T): T {
   if ('choices' in question || 'suggestedAnswer' in question) throw new Error('Unsupported clarification fields');
   const fields = clarificationPresentationSchema.parse(question);
+  if (fields.schemaVersion === 2) {
+    if (question.kind === 'approval' || fields.approval || fields.choiceDetails || fields.interactionMode || fields.recommendedChoiceId || !fields.questions) throw new Error('Invalid multi-question presentation');
+    assertClarificationSize(fields);
+  } else if (fields.questions !== undefined) throw new Error('Questions require schemaVersion 2');
   if (fields.choiceDetails && new Set(fields.choiceDetails.map(choice => choice.id)).size !== fields.choiceDetails.length) {
     throw new Error('Duplicate clarification choice IDs');
   }
@@ -117,6 +130,11 @@ export function normalizeClarificationQuestion<T extends Question>(question: T):
 /** Canonicalize answers on the host; never trust a submitted option label. */
 export function normalizeClarificationSubmission(question: Question, raw: unknown): ClarificationSubmission & { answer: string } {
   const input = clarificationSubmissionSchema.parse(raw);
+  if (question.schemaVersion === 2) {
+    if (question.kind === 'approval' || input.schemaVersion !== 2 || input.response || input.decision || !question.questions) throw new Error('Multi-question response requires schemaVersion 2');
+    return { schemaVersion: 2, ...normalizeQuestionAnswers(question.questions, input.answers) };
+  }
+  if (input.schemaVersion === 2 || input.answers !== undefined) throw new Error('Unexpected multi-question response');
   if (question.kind === 'approval') {
     if (input.response || !input.decision) throw new Error('An explicit approval decision is required');
     return { answer: input.decision, decision: input.decision };

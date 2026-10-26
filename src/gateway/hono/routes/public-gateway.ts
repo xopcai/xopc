@@ -53,6 +53,7 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
     return c.json({
       status: health.ready ? 'ok' : 'starting',
       ready: health.ready,
+      clarificationVersions: process.env.XOPC_CLARIFY_MULTI_QUESTION === 'false' ? [1] : [1, 2],
     });
   });
 

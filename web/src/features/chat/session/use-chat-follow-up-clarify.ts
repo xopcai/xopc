@@ -1,3 +1,4 @@
+import { submitQuestionBatch } from '../clarification/clarification-submission';
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { readClarificationPresentation } from '@xopcai/gateway-contract';
 import type { AppContextEnvelope } from '@xopcai/gateway-contract';
@@ -80,6 +81,7 @@ function parseClarification(raw: unknown, expectedConversationId?: string): Clar
   return {
     ...readClarificationPresentation(value),
     requestId: requestId.trim(),
+    conversationId: expectedConversationId,
     kind,
     question: question.trim(),
 
@@ -116,6 +118,7 @@ export function useChatFollowUpClarify(options: {
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
   const [clarifySubmitError, setClarifySubmitError] = useState<string | null>(null);
   const clarifyPromptRef = useRef<ClarifyPromptState | null>(null);
+  const clarificationRefreshRef = useRef(0);
   const clarificationAttemptRef = useRef<{ signature: string; idempotencyKey: string } | null>(null);
 
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
@@ -154,10 +157,12 @@ export function useChatFollowUpClarify(options: {
   }, [applyState, conversationIdRef]);
 
   const refreshClarification = useCallback(async (key: string) => {
+    const generation = ++clarificationRefreshRef.current;
     if (await readLocalSessionDraft(key)) return;
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/clarification`)).catch(() => null);
     if (!res?.ok || conversationIdRef.current !== key) return;
     const json = await res.json().catch(() => null) as { payload?: unknown } | null;
+    if (generation !== clarificationRefreshRef.current || conversationIdRef.current !== key) return;
     setClarifySubmitError(null);
     setClarifyPrompt(parseClarification(json?.payload, key));
     clarificationAttemptRef.current = null;
@@ -192,6 +197,7 @@ export function useChatFollowUpClarify(options: {
         if (typeof eventConversationId === 'string' && eventConversationId !== key) return;
       }
       setClarifySubmitError(null);
+      clarificationRefreshRef.current++;
       setClarifyPrompt(parseClarification(detail, key));
       clarificationAttemptRef.current = null;
     };
@@ -262,7 +268,8 @@ export function useChatFollowUpClarify(options: {
       useChatSessionStore.getState().setSessionFlags(chatId, { sending: false, streaming: false });
       useChatSessionStore.getState().setSessionProgress(chatId, null);
       setClarifySubmitError(null);
-      setClarifyPrompt(payload);
+      clarificationRefreshRef.current++;
+      setClarifyPrompt({ ...payload, conversationId: chatId });
       clarificationAttemptRef.current = null;
     },
     [shouldApplyStreamUpdate, sendingRef, streamingRef],
@@ -445,7 +452,9 @@ export function useChatFollowUpClarify(options: {
     setClarifySubmitting(true);
     setClarifySubmitError(null);
     try {
-      const res = await apiFetch(apiUrl(`/api/clarifications/${encodeURIComponent(p.requestId)}/responses`), {
+      const res = p.schemaVersion === 2
+        ? await submitQuestionBatch(p.requestId, p.version, action, submission, conversationIdRef.current ?? undefined)
+        : await apiFetch(apiUrl(`/api/clarifications/${encodeURIComponent(p.requestId)}/responses`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...submission, expectedVersion: p.version, idempotencyKey }),

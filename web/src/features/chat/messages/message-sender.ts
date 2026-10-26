@@ -1,3 +1,4 @@
+import { readClarificationCapabilities } from '@/features/chat/clarification/clarification-capabilities';
 import { readClarificationPresentation } from '@xopcai/gateway-contract';
 import { captureTurnEnvironment } from '@/features/endpoint-tools/turn-environment';
 import { useChatSessionStore } from '../session/chat-session-store';
@@ -302,7 +303,7 @@ export type MessagingCallbacks = {
     messageId?: string;
   }) => void;
   /** Durable agent clarification projected from the gateway. */
-  onClarifyRequest?: (payload: {
+  onClarifyRequest?: (payload: import('@xopcai/gateway-contract').ClarificationPresentation & {
     requestId: string;
     kind: 'input' | 'approval';
     question: string;
@@ -404,7 +405,7 @@ export class MessageSender {
       const origin = await waitForEndpointTurnClaim(controller.signal);
       const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs, appContext: capturedContext })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
       let clientMessageId = claimSubmissionId(chatId, fingerprint);
-      const input = { content, attachments: capped, contextRefs, appContext: capturedContext, endpointContext: undefined as import('@xopcai/gateway-contract').EndpointContext | undefined };
+      const input = { content, attachments: capped, contextRefs, appContext: capturedContext, endpointContext: undefined as import('@xopcai/gateway-contract').EndpointContext | undefined, interactionCapabilities: undefined as import('@xopcai/gateway-contract').InteractionCapabilities | undefined };
       let body: object;
       if (taskId || replaceTurnId) {
         if (!replaceTurnId) input.endpointContext = await captureTurnEnvironment();
@@ -432,6 +433,7 @@ export class MessageSender {
           patchSessionAgentConfigView(chatId, agentConfig);
           configVersion = agentConfig.configVersion;
         }
+        input.interactionCapabilities = pending ? pending.input.interactionCapabilities : draft?.submission ? draft.submission.input.interactionCapabilities : await readClarificationCapabilities();
         if (pending) {
           input.endpointContext = pending.input.endpointContext;
           if (canonicalSessionCommand(pending.input) !== canonicalSessionCommand(input)) throw new Error('The previous input is awaiting confirmation');
@@ -541,6 +543,21 @@ export class MessageSender {
           }
         }
         await callbacks?.onReplayGap?.();
+        // A fast run can suspend before the first input-state poll sees it.
+        // Recover the durable wait instead of reporting a synthetic success.
+        if (callbacks?.onClarifyRequest) try {
+          const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(resolvedChatId)}/clarification`), { signal: controller.signal });
+          const snapshot = response?.ok ? await response.json() : null;
+          const wait = snapshot?.payload?.clarification;
+          assertScope();
+          if (wait?.status === 'open' && typeof wait.id === 'string') {
+            callbacks?.onClarifyRequest?.({ ...readClarificationPresentation(wait), requestId: wait.id,
+              question: wait.question, kind: wait.kind === 'approval' ? 'approval' : 'input', version: wait.version,
+              createdAt: wait.createdAt, expiresAt: wait.expiresAt });
+            callbacks?.onResult({ runId: '', conversationId: resolvedChatId, status: 'suspended' });
+            return;
+          }
+        } catch (error) { if (controller.signal.aborted) throw error; }
         callbacks?.onResult({ runId: '', conversationId: resolvedChatId, status: 'success' });
         return;
       }

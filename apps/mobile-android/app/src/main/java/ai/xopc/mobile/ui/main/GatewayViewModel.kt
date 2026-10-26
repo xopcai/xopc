@@ -3422,6 +3422,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       catch (failure: Exception) {
         if (mutableState.value.profile?.gatewayId == gatewayId && mutableState.value.clarification?.id == prompt.id)
           mutableState.update { it.copy(clarificationBusy = false, clarificationError = failure.message) }
+        refreshClarification()
       }
     }
   }

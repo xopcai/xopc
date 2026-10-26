@@ -40,15 +40,16 @@ function scope(): string {
 function key(id: string): string { return `${scope()}:${id}`; }
 
 /** Capture identity before asynchronous hydration or navigation. */
-export function composerDraftStorage<T>(id: string): { read(): Promise<T | undefined>; write(draft: T | undefined): Promise<void> } {
+export function composerDraftStorage<T>(id: string, ownerConversationId = id): { read(): Promise<T | undefined>; write(draft: T | undefined): Promise<void> } {
   const storageKey = key(id);
+  const ownerKey = key(ownerConversationId);
   return {
     async read() {
-      if (temporarySessions.has(storageKey)) return structuredClone(memoryComposers.get(storageKey)) as T | undefined;
+      if (temporarySessions.has(ownerKey)) return structuredClone(memoryComposers.get(storageKey)) as T | undefined;
       return transaction('readonly', store => store.get(storageKey), 'composers');
     },
     async write(draft) {
-      if (temporarySessions.has(storageKey)) {
+      if (temporarySessions.has(ownerKey)) {
         if (draft === undefined) memoryComposers.delete(storageKey);
         else memoryComposers.set(storageKey, structuredClone(draft));
         return;

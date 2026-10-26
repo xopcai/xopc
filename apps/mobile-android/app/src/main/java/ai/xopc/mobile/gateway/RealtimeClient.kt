@@ -20,7 +20,7 @@ import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class TurnClaim(val endpointId: String, val token: String, val supportsDeviceContext: Boolean = false) {
+data class TurnClaim(val endpointId: String, val token: String, val supportsDeviceContext: Boolean = false, val supportsClarificationV2: Boolean = false) {
   fun json(): JSONObject = JSONObject().put("type", "endpoint").put("endpointId", endpointId).put("token", token)
 }
 
@@ -108,6 +108,11 @@ internal class RealtimeClient(
     val supportsLocationTools = compatibility.optJSONObject("payload")?.optBoolean("deviceLocationTasksV1") == true
     val supportsDeviceTools = compatibility.optJSONObject("payload")?.optBoolean("deviceStateToolsV1") == true
     val supportsDeviceContext = compatibility.optJSONObject("payload")?.optBoolean("turnDeviceContextV1") == true
+    val supportsClarificationV2 = runInterruptible(Dispatchers.IO) {
+      runCatching { JSONObject(gateway.request("/api/health")).optJSONArray("clarificationVersions")?.let { versions ->
+        (0 until versions.length()).any { versions.optInt(it) == 2 }
+      } == true }.getOrDefault(false)
+    }
     val supportsEnvironment = compatibility.optJSONObject("payload")?.optBoolean("endpointEnvironmentV1") == true
     val ticketResponse = runInterruptible(Dispatchers.IO) {
       val registered = JSONObject(gateway.request("/api/endpoint-tools/principals", "POST", registration.toString()))
@@ -151,7 +156,7 @@ internal class RealtimeClient(
       require(endpointReady.getString("endpointId") == clientId && endpointReady.getString("turnToken").length >= 32) {
         "MISSING_ENDPOINT_CLAIM"
       }
-      claim = TurnClaim(clientId, endpointReady.getString("turnToken"), supportsDeviceContext)
+      claim = TurnClaim(clientId, endpointReady.getString("turnToken"), supportsDeviceContext, supportsClarificationV2)
       if (supportsEnvironment) {
         val contextClaim = claim!!
         environmentJob = CoroutineScope(currentCoroutineContext()).launch { publishEnvironment(contextClaim) }

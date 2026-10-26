@@ -1,8 +1,9 @@
 import type { ClarificationPresentation } from '@xopcai/gateway-contract';
+import { clarifyToolInputV2Schema, normalizeClarificationQuestion } from '@xopcai/gateway-contract';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
-const ClarifySchema = Type.Object({
+const SingleClarifySchema = Type.Object({
   question: Type.String({
     description: 'The question to ask the user. Be specific and concise.',
   }),
@@ -10,6 +11,15 @@ const ClarifySchema = Type.Object({
   choiceDetails: Type.Optional(Type.Array(Type.Object({ id: Type.String(), label: Type.String(), description: Type.Optional(Type.String()) }), { minItems: 2, maxItems: 10, description: 'Answer choices with stable unique IDs and optional descriptions.' })),
   recommendedChoiceId: Type.Optional(Type.String()),
 }, { additionalProperties: false });
+
+const ChoiceSchema = Type.Object({ id: Type.String(), label: Type.String(), description: Type.Optional(Type.String()) }, { additionalProperties: false });
+const QuestionSchema = Type.Union([
+  Type.Object({ id: Type.String(), header: Type.String(), question: Type.String(), type: Type.Literal('text') }, { additionalProperties: false }),
+  Type.Object({ id: Type.String(), header: Type.String(), question: Type.String(), type: Type.Literal('single_choice'),
+    choices: Type.Array(ChoiceSchema, { minItems: 2, maxItems: 10 }), recommendedChoiceId: Type.Optional(Type.String()) }, { additionalProperties: false }),
+]);
+const ClarifySchema = Type.Union([SingleClarifySchema, Type.Object({ schemaVersion: Type.Literal(2),
+  questions: Type.Array(QuestionSchema, { minItems: 1, maxItems: 3, description: 'Independent questions answered together. Only supported by capable Web/Electron main chats. Never use for approvals.' }) }, { additionalProperties: false })]);
 
 export type ClarifyRequestPayload = ClarificationPresentation & {
   kind?: 'approval';
@@ -90,12 +100,15 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
         };
       }
 
-      const payload: ClarifyRequestPayload = {
+      const batch = params?.schemaVersion === 2 ? clarifyToolInputV2Schema.parse(params) : undefined;
+      const payload: ClarifyRequestPayload = normalizeClarificationQuestion(batch ? {
+        ...batch, question: batch.questions.map(q => q.header).join(' / '),
+      } : {
         interactionMode: p.interactionMode,
         choiceDetails: p.choiceDetails,
         recommendedChoiceId: p.recommendedChoiceId,
         question: p.question,
-      };
+      });
 
       try {
         const result = await Promise.race([

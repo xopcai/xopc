@@ -22,6 +22,7 @@ export class EphemeralClarificationWaiter {
     request: ClarifyRequestPayload;
     beforeResponse?: () => boolean;
   }): Promise<string> {
+    if (input.request.schemaVersion === 2) return Promise.reject(new Error('CLARIFICATION_VERSION_UNSUPPORTED: ephemeral runs support single questions'));
     const request = normalizeClarificationQuestion(input.request);
     const requestId = crypto.randomUUID();
     const expiresAt = request.kind === 'approval' ? Date.now() + 10 * 60_000 : undefined;

@@ -743,6 +743,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         .put("delivery", "next").put("input", JSONObject().put("content", content)
           .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) })
     }).also {
+      if (claim.supportsClarificationV2) it.getJSONObject("input").put("interactionCapabilities", JSONObject().put("clarificationVersions", JSONArray(listOf(1, 2))))
       if (claim.supportsDeviceContext) it.getJSONObject("input").put("endpointContext", JSONObject()
         .put("version", 1).put("capturedAt", System.currentTimeMillis())
         .put("locale", java.util.Locale.getDefault().toLanguageTag()).put("timezone", java.util.TimeZone.getDefault().id))

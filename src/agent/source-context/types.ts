@@ -49,6 +49,7 @@ export interface AgentSourceContext {
   capturedAt?: number;
   documentId?: string;
   fileKind?: 'file' | 'directory';
+  interactionCapabilities?: import('@xopcai/gateway-contract').InteractionCapabilities;
   appContext?: AppContextEnvelope;
   appContextGrant?: AppContextGrant;
 }

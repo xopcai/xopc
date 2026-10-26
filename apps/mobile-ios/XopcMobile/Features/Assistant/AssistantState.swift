@@ -479,6 +479,23 @@ extension AssistantState {
         }
     }
 
+    private func prepareClarificationCommand(_ prompt: ClarificationRequest, action: String,
+                                             submission: ClarificationSubmission?) throws -> ClarificationResponseCommand? {
+        let previous = clarificationAttempt
+        let candidate = ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
+                                                     expectedVersion: prompt.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
+        var command = previous?.id == prompt.id && previous?.command == candidate ? candidate
+            : ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
+                                           expectedVersion: prompt.version, idempotencyKey: UUID().uuidString.lowercased())
+        guard prompt.schemaVersion == 2 else { return command }
+        command.schemaVersion = 2
+        command.answers = action == "answer" ? submission?.answers : nil
+        if action == "answer" && !prompt.accepts(command.answers ?? []) { return nil }
+        if let pending: ClarificationResponseCommand = ClarificationPersistence.read(prompt, "attempt", as: ClarificationResponseCommand.self) { return pending }
+        try ClarificationPersistence.write(prompt, "attempt", command)
+        return command
+    }
+
     func respondToClarification(
         action: String,
         submission: ClarificationSubmission?,
@@ -492,21 +509,21 @@ extension AssistantState {
         if clarification.kind == "approval" && action == "agent_decide" {
             return
         }
-        let previous = clarificationAttempt
-        let candidate = ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
-                                                     expectedVersion: clarification.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
-        let command = previous?.id == clarification.id && previous?.command == candidate ? candidate
-            : ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
-                                           expectedVersion: clarification.version, idempotencyKey: UUID().uuidString.lowercased())
-        clarificationAttempt = (clarification.id, command)
+        let frozenCommand: ClarificationResponseCommand
+        do {
+            guard let prepared = try prepareClarificationCommand(clarification, action: action, submission: submission) else { return }
+            frozenCommand = prepared
+        } catch { clarificationError = error.localizedDescription; return }
+        clarificationAttempt = (clarification.id, frozenCommand)
 
         isRespondingToClarification = true
         clarificationError = nil
         do {
             try await gateway.respondToClarification(
                 clarification,
-                command: command
+                command: frozenCommand
             )
+            if clarification.schemaVersion == 2 { try? ClarificationPersistence.clear(clarification) }
             guard self.clarification?.id == clarification.id else { isRespondingToClarification = false; return }
             self.clarification = nil
             clarificationAttempt = nil

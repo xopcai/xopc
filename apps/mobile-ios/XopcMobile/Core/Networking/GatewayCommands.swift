@@ -46,6 +46,7 @@ struct MessageInputCommand: Encodable {
     let attachments: [MessageAttachmentCommand]?
     let contextRefs: [ContextReferenceCommand]?
     var endpointContext: DeviceTurnEnvironment?
+    var interactionCapabilities: ClarificationCapabilities?
 }
 
 struct MessageAttachmentCommand: Encodable {
@@ -105,12 +106,14 @@ struct AgentConfigurationCommand: Encodable {
     let thinkingLevel: String
 }
 
-struct ClarificationResponseCommand: Encodable, Equatable {
+struct ClarificationResponseCommand: Codable, Equatable {
     let action: String
     let response: ClarificationSubmission.Response?
     let decision: String?
     let expectedVersion: Int
     let idempotencyKey: String
+    var schemaVersion: Int?
+    var answers: [ClarificationAnswer]?
 }
 
 struct QueuedInputUpdateCommand: Encodable {

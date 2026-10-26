@@ -1,3 +1,5 @@
+import batchFixture from '../../../../../../packages/gateway-contract/fixtures/clarification-v2.json';
+import { clarifyToolInputV2Schema } from '@xopcai/gateway-contract';
 // @vitest-environment jsdom
 import { act, type ComponentProps } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -70,6 +72,22 @@ describe('clarify prompt', () => {
     await render(); expect(button(labels.clarifySend).disabled).toBe(true);
     await type('a'.repeat(8001)); expect(button(labels.clarifySend).disabled).toBe(true);
     expect(container.querySelector('textarea')!.getAttribute('aria-invalid')).toBe('true');
+  });
+  it('collects three questions without auto-selecting the recommendation or submitting early', async () => {
+    props.prompt = { ...props.prompt!, ...clarifyToolInputV2Schema.parse(batchFixture), choiceDetails: undefined, recommendedChoiceId: undefined };
+    await render();
+    expect(container.textContent).toContain('0/3 answered');
+    expect(button('Next').disabled).toBe(true);
+    await click('Blog'); await type('Include diagrams');
+    await click('Next'); await click('Weekly'); await click('Next'); await type('Engineering notes');
+    expect(props.onSubmit).not.toHaveBeenCalled();
+    await click('Previous'); await click('Previous');
+    expect(container.querySelector('textarea')!.value).toBe('Include diagrams');
+    await click('Next'); await click('Next'); await click('Submit and continue');
+    expect(props.onSubmit).toHaveBeenCalledWith({ schemaVersion: 2, answers: [
+      { questionId: 'channel', choiceId: 'blog', text: 'Include diagrams' },
+      { questionId: 'frequency', choiceId: 'weekly' }, { questionId: 'direction', text: 'Engineering notes' },
+    ] });
   });
   it('shows only explicit decisions for approval and expires without approving', async () => {
     vi.useFakeTimers();

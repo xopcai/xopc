@@ -69,8 +69,8 @@ function connectionInputPayload(wait: ConnectionWait | undefined, control: 'cont
 }
 
 function sameAppContext(input: SubmitSessionInput, existing: SessionInput): boolean {
-  const identity = (sources?: AgentSourceContext[]) => sources?.filter(source => source.kind === 'app_context')
-    .map(source => ({ snapshot: source.appContext, principal: source.appContextGrant?.principal.principalId })) ?? [];
+  const identity = (sources?: AgentSourceContext[]) => sources?.filter(source => source.kind === 'app_context' || source.kind === 'device_context')
+    .map(source => ({ snapshot: source.appContext, principal: source.appContextGrant?.principal.principalId, interactionCapabilities: source.interactionCapabilities })) ?? [];
   return isDeepStrictEqual(input.origin, existing.origin)
     && isDeepStrictEqual(identity(input.sourceContexts), identity(existing.contextSnapshots));
 }
