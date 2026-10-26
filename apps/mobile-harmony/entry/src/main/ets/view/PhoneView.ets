@@ -32,6 +32,18 @@ export struct XopcPhoneView {
     return this.phone.summary?.access === 'control' && this.phone.state?.report.mode === 'control'
       && (this.phone.state?.report.controlOwner !== 'human' || this.phone.state?.ownControl === true);
   }
+  @Computed get pendingTask(): boolean { return this.phone.state?.report.hasPendingTask ?? !!this.phone.state?.report.assistanceId; }
+  @Computed get primaryOperation(): string {
+    if (this.phone.state?.ownControl) return this.pendingTask ? 'handback' : 'release';
+    if (this.phone.state?.report.status === 'paused' && this.pendingTask && !this.phone.state.report.assistanceId) return 'handback';
+    return 'takeover';
+  }
+  @Computed get primaryTitle(): Resource {
+    if (this.phone.busy) return $r('app.string.phone_handoff');
+    if (this.primaryOperation === 'release') return $r('app.string.phone_end_manual');
+    if (this.primaryOperation === 'handback') return this.phone.state?.ownControl ? $r('app.string.phone_handback') : $r('app.string.phone_continue');
+    return this.pendingTask || this.phone.state?.report.status === 'needs_user' ? $r('app.string.phone_takeover') : $r('app.string.phone_manual');
+  }
   private lastControlEpoch: number = 0;
   @Monitor('phone.state', 'phone.geometry')
   onControlChange(): void {
@@ -181,13 +193,29 @@ export struct XopcPhoneView {
       if (this.phone.error && this.phone.phase !== 'fallback' && this.phone.phase !== 'failed' && this.phone.phase !== 'blocked') {
         Text($r('app.string.phone_action_failed')).fontSize(14).fontColor(this.colors.danger)
       }
+      if (this.phone.state?.ownControl) {
+        Row({ space: 8 }) {
+          Button($r('app.string.phone_back')).height(44).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
+            .enabled(!this.phone.busy && (this.phone.phase === 'playing' || this.phone.snapshotReady()))
+            .onClick((): void => { void this.phone.command('input', { type: 'back' }); })
+          Button($r('app.string.phone_text')).height(44).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
+            .enabled(!this.phone.busy && this.phone.state?.textInput !== 'manual' && (this.phone.phase === 'playing' || this.phone.snapshotReady()))
+            .onClick((): void => { this.openText(); })
+        }.width('100%')
+      }
       if (this.canControl) {
-        Button(this.phone.state?.ownControl ? $r('app.string.phone_handback') : $r('app.string.phone_takeover'))
+        Button(this.primaryTitle)
           .id('phone-control').width('100%').height(52).borderRadius(26).fontSize(17).fontWeight(FontWeight.Medium)
-          .fontColor(this.phone.state?.ownControl ? this.colors.foreground : Color.White)
-          .backgroundColor(this.phone.state?.ownControl ? this.colors.input : this.colors.accent)
+          .fontColor(Color.White)
+          .backgroundColor(this.colors.accent)
           .enabled(!this.phone.busy && (this.phone.state?.ownControl || this.phone.state?.report.reconnectRequired || this.phone.phase === 'playing' || this.phone.phase === 'fallback' && this.phone.snapshotReady()))
-          .onClick((): void => { this.textDraft = ''; this.showText = false; void this.phone.command(this.phone.state?.ownControl ? 'handback' : 'takeover'); })
+          .onClick((): void => { this.textDraft = ''; this.showText = false; void this.phone.command(this.primaryOperation); })
+        if (!this.phone.state?.ownControl && this.phone.state?.report.assistanceId) {
+          Button($r('app.string.phone_already_done')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.foreground)
+            .enabled(!this.phone.busy).onClick((): void => { void this.phone.command('handback'); })
+        }
+      } else if (this.phone.state?.report.controlOwner === 'human') {
+        Button($r('app.string.phone_other_human')).width('100%').height(52).enabled(false)
       } else if (this.phone.summary?.access === 'view') {
         Text($r('app.string.phone_view_only')).fontSize(14).fontColor(this.colors.secondary)
       }

@@ -92,6 +92,12 @@ it('serves mobile phone discovery, grants and fenced control through authenticat
     expect(taken.status, await taken.clone().text()).toBe(200);
     const live = (await taken.json()).payload;
     expect(live.ownControl).toBe(true);
+    expect(live.report.revision).toBeGreaterThan(0);
+    const otherClientId = randomUUID();
+    expect(await (await mobile(path + '?clientId=' + otherClientId)).json()).toMatchObject({ payload: { ownControl: false, report: { controlOwner: 'human' } } });
+    const conflict = await mobile(controlPath, { ...input, clientId: otherClientId, epoch: live.report.controlEpoch, operationId: randomUUID() });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({ error: { code: 'PHONE_CONTROL_BUSY' } });
     expect((await mobile(controlPath, { ...input, operationId: randomUUID() })).status).toBe(409);
     const ticketPath = path + '/' + report.sessionId + '/video-ticket';
     expect((await mobile(ticketPath, { clientId, purpose: 'control', expectedTranscriptId: transcriptId, epoch: live.report.controlEpoch })).status).toBe(200);

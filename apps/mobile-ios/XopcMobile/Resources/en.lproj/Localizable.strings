@@ -1004,6 +1004,14 @@
 
 "执行已中断，已完成的操作会保留。" = "Execution stopped. Completed work is retained.";
 
+"完成，继续任务" = "Done, continue task";
+"结束手动操作" = "End manual control";
+"手动操作" = "Control phone";
+"我已处理，继续" = "Already done, continue";
+"正在检查手机…" = "Checking phone…";
+"你正在操作" = "You control the phone";
+"另一设备正在操作" = "Another device is operating";
+
 "上一题" = "Previous";
 "下一题" = "Next";
 "重试提交" = "Retry submission";

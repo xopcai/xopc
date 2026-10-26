@@ -13,7 +13,7 @@ it('maps the image rectangle without accepting letterbox clicks', () => {
   expect(phonePoint(rect, 200, 100, 300, 60)).toBeNull();
   expect(phonePoint(rect, 200, 100, 300, 250)).toEqual([500, 500]);
 });
-it('shares one global phone window across conversations without replacing their file tabs', () => {
+it('keeps phone tabs in their own conversation panes without replacing file tabs', () => {
   const s = workspace.getState();
   const file = s.openFile({ path: 'notes.md' }, 'chat-one');
   usePhoneWorkspaceStore.setState({ open: false, selected: null });
@@ -35,5 +35,16 @@ it('keeps a draft conversation pollable after its initial not-found response', a
     expect(await fetchConversationPhone('/api/phone/conversations/draft')).toBeNull();
     fetch.mockResolvedValueOnce(new Response(JSON.stringify({ payload: { report: { sessionId: 'live' } } }), { status: 200 }));
     expect(await fetchConversationPhone('/api/phone/conversations/draft')).toMatchObject({ report: { sessionId: 'live' } });
+  } finally { fetch.mockRestore(); }
+});
+
+it('ignores a state response older than an accepted control revision', async () => {
+  const fetch = vi.spyOn(globalThis, 'fetch');
+  const url = '/api/phone/conversations/revision-test?clientId=client';
+  try {
+    fetch.mockResolvedValueOnce(new Response(JSON.stringify({ payload: { report: { sessionId: 'revision-session', revision: 8 }, ownControl: false } }), { status: 200 }));
+    await fetchConversationPhone(url);
+    fetch.mockResolvedValueOnce(new Response(JSON.stringify({ payload: { report: { sessionId: 'revision-session', revision: 7 }, ownControl: true } }), { status: 200 }));
+    expect(await fetchConversationPhone(url)).toMatchObject({ report: { revision: 8 }, ownControl: false });
   } finally { fetch.mockRestore(); }
 });

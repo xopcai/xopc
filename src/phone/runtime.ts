@@ -256,6 +256,8 @@ export class PhoneRuntime {
       modelRequests: session.report.modelRequests - session.segmentUsage.modelRequests,
       activeDurationMs: session.segmentUsage.activeDurationMs + (session.budget?.elapsedMs ?? 0),
     }, session.report.feedback);
+    session.report.revision = (session.report.revision ?? 0) + 1;
+    session.report.hasPendingTask = Boolean(session.taskPending);
     session.report.updatedAt = Date.now();
     if (session.report.task) updatePhoneCheckpoint(session.report.owner, this.checkpoint(session));
     this.repository.report(session.report);
@@ -1063,9 +1065,7 @@ export class PhoneRuntime {
             void this.stopDevice(session.device.id); continue;
           }
           if (session.human && Date.now() > (session.humanExpiresAt ?? 0)) {
-            session.human = undefined; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
-            session.report.status = 'paused'; session.report.stopReason = 'control_disconnected'; this.publish(session);
-            void session.stream?.revoke().catch(() => this.stop(session.report.owner, 'cancel'));
+            void this.expireHuman(session).catch(() => this.stop(session.report.owner, 'cancel'));
           }
           if (Date.now() - session.viewedAt > 30_000) session.frames.clear();
         } catch { session.frames.clear(); void this.stopDevice(session.device.id); }
@@ -1138,15 +1138,26 @@ export class PhoneRuntime {
     try { await stream.start(); return stream; }
     catch (error) { await stream.close(); if (session.stream === stream) session.stream = undefined; throw error; }
   }
-  async disconnectVideo(owner: string, id: string, client: string, epoch?: number): Promise<void> {
+  async disconnectVideo(owner: string, id: string, _client: string, _epoch?: number): Promise<void> {
     const session = this.sessions.get(owner);
     if (!session || session.report.sessionId !== id) return;
-    if (session.human === client && (epoch === undefined || session.report.controlEpoch === epoch)) {
-      session.human = undefined; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
-      session.report.status = 'paused'; session.report.stopReason = 'control_disconnected'; this.publish(session);
-      try { await session.stream?.revoke(); } catch { await this.stop(owner, 'cancel'); }
-    }
+    // Media loss is independent of the control lease. Explicit release or lease
+    // expiry handles control; a late socket close must never revoke a new owner.
     if (session.stream?.viewerCount === 0) { const stream = session.stream; session.stream = undefined; await stream.close(); }
+  }
+  private async clearExpiredHuman(session: Session): Promise<void> {
+    if (!session.human || Date.now() <= (session.humanExpiresAt ?? 0)) return;
+    session.human = undefined; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+    session.report.status = 'paused'; session.report.stopReason = 'control_disconnected';
+    session.report.handoff = 'acquiring'; this.publish(session);
+    try { await session.stream?.revoke(); }
+    catch (error) { await this.stop(session.report.owner, 'cancel'); throw error; }
+    finally { session.report.handoff = 'idle'; this.publish(session); }
+  }
+  private expireHuman(session: Session): Promise<void> {
+    const work = session.commands.catch(() => {}).then(() => this.clearExpiredHuman(session));
+    session.commands = work.catch(() => {});
+    return work;
   }
   async liveFrame(owner: string, id: string, context: ExecutionContext, signal: AbortSignal) {
     const session = this.liveSession(owner, id, context);
@@ -1195,6 +1206,7 @@ export class PhoneRuntime {
       if (terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Phone session ended', 409);
       this.guard(session, context, input.op === 'handback');
       if (session.switching) throw new PhoneError('PHONE_SESSION_BUSY', 'Phone execution mode is changing', 409);
+      await this.clearExpiredHuman(session);
       if (input.epoch !== session.report.controlEpoch) throw new PhoneError('PHONE_CONTROL_CHANGED', 'Control changed. Refresh before trying again.', 409);
       if (session.human && session.human !== client) throw new PhoneError('PHONE_CONTROL_BUSY', 'Another browser window controls this phone', 409);
       if (input.op === 'cancel') { await this.stop(owner, 'cancel'); return this.liveStatus(owner, id, context, client); }
@@ -1283,7 +1295,8 @@ export class PhoneRuntime {
     if (!session) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Reconnect the phone before continuing', 409);
     this.guard(session, context);
     if (session.report.controlOwner === 'agent' && session.report.status === 'ready') return;
-    await this.liveControl(owner, session.report.sessionId, context, session.human ?? `phone-user:${owner}`,
+    if (session.human) throw new PhoneError('PHONE_CONTROL_BUSY', 'Another client is operating the phone. End manual control before continuing.', 409);
+    await this.liveControl(owner, session.report.sessionId, context, `phone-user:${owner}`,
       { op: 'handback', epoch: session.report.controlEpoch!, operationId: randomUUID() });
   }
   async stopDevice(id: string): Promise<void> { this.deviceOpenings.get(id)?.abort(); await Promise.all(this.reports().filter(report => report.deviceId === id).map(report => this.stop(report.owner, 'close'))); try { await this.locationEnvironment?.releaseDevice(id); } finally { this.cloudPhones?.disconnect(id); } }

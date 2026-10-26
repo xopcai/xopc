@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowLeft, CircleCheck, Hand, Info, Keyboard, Loader2, MoreHorizontal, Pause, Play, RefreshCw, Settings2, Smartphone, Square, X } from 'lucide-react';
+import { ArrowLeft, CircleCheck, Hand, Info, Keyboard, Loader2, MoreHorizontal, Play, RefreshCw, Settings2, Smartphone, Square, X } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,8 @@ import { PhoneLocationShare } from './phone-location-share';
 import './phone-live-panel.css';
 
 type Frame = { url: string; seq: number; capturedAt: number; width: number; height: number };
-export function PhoneLivePanel({ conversationId, state, onChange, readOnly = false, headerActions, connectionActions, connectionNotice, onControlsClose, onHeaderPointerDown, onHeaderKeyDown }: {
-  conversationId: string; state: PhoneLiveState; onChange: (state?: PhoneLiveState) => void; readOnly?: boolean;
+export function PhoneLivePanel({ conversationId, state, onChange, readOnly = false, active = true, sourceAction, headerActions, connectionActions, connectionNotice, onControlsClose, onHeaderPointerDown, onHeaderKeyDown }: {
+  conversationId: string; state: PhoneLiveState; onChange: (state?: PhoneLiveState) => void; readOnly?: boolean; active?: boolean; sourceAction?: ReactNode;
   headerActions?: ReactNode; connectionActions?: ReactNode; connectionNotice?: ReactNode; onControlsClose?: () => void;
   onHeaderPointerDown?: (event: PointerEvent<HTMLElement>) => void;
   onHeaderKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
@@ -38,12 +38,15 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
   const gesture = useRef<{ point: number[]; at: number; seq: number } | null>(null);
   const ended = phoneEnded(state.report.status);
   const working = state.report.handoff !== undefined && state.report.handoff !== 'idle';
+  const interactive = active && visible;
+  const lifecycle = useRef(0);
+  const activeRef = useRef(interactive); activeRef.current = interactive;
   const human = !readOnly && state.ownControl && state.report.controlOwner === 'human';
   const canvas = useRef<HTMLCanvasElement>(null);
-  const video = usePhoneVideo(conversationId, state.report.sessionId, !ended && !state.report.reconnectRequired, canvas, state.report.controlEpoch);
+  const video = usePhoneVideo(conversationId, state.report.sessionId, !ended && !state.report.reconnectRequired && interactive, canvas, state.report.controlEpoch, human);
   const floating = Boolean(onHeaderPointerDown);
   useEffect(() => { video.cancel(); gesture.current = null; }, [floating, video.cancel]);
-  useEffect(() => { if (!visible) { video.cancel(); gesture.current = null; } }, [visible, video.cancel]);
+  useEffect(() => { if (!interactive) { lifecycle.current++; video.cancel(); gesture.current = null; setShowText(false); setText(''); } }, [interactive, video.cancel]);
   const videoPlaying = video.status === 'playing';
   const snapshot = video.status === 'fallback';
   const inspection = ['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(state.report.status);
@@ -54,7 +57,9 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
+    activeRef.current = active && document.visibilityState === 'visible';
     const release = () => {
+      activeRef.current = false; lifecycle.current++;
       const current = latest.current;
       if (!readOnly && current.ownControl && !phoneEnded(current.report.status)) void controlPhone(conversationId, current, 'release', {}, true).catch(() => {});
     };
@@ -63,12 +68,17 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
     return () => { release(); window.removeEventListener('pagehide', release); document.removeEventListener('visibilitychange', visibility); };
   }, [conversationId, readOnly]);
   useEffect(() => {
-    if (!human || ended) return;
+    if (!interactive && !readOnly && latest.current.ownControl && !phoneEnded(latest.current.report.status)) {
+      void controlPhone(conversationId, latest.current, 'release', {}, true).then(value => changeRef.current(value)).catch(() => changeRef.current());
+    }
+  }, [interactive, conversationId, readOnly]);
+  useEffect(() => {
+    if (!human || ended || !interactive) return;
     const heartbeat = setInterval(() => { void controlPhone(conversationId, latest.current, 'heartbeat').catch(() => changeRef.current()); }, 5000);
     return () => clearInterval(heartbeat);
-  }, [conversationId, human, ended]);
+  }, [conversationId, human, ended, interactive]);
   useEffect(() => {
-    if (ended || state.report.reconnectRequired || !visible || !snapshot) { setFrame(undefined); if (urlRef.current) URL.revokeObjectURL(urlRef.current); urlRef.current = ''; return; }
+    if (ended || state.report.reconnectRequired || !interactive || !snapshot) { setFrame(undefined); if (urlRef.current) URL.revokeObjectURL(urlRef.current); urlRef.current = ''; return; }
     const abort = new AbortController(); let disposed = false; let timer: ReturnType<typeof setTimeout>; let inFlight = false;
     const update = async () => {
       if (disposed || inFlight) return;
@@ -93,13 +103,20 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
     const refresh = () => { void update(); }; refreshFrame.current = refresh;
     void update();
     return () => { if (refreshFrame.current === refresh) refreshFrame.current = undefined; disposed = true; abort.abort(); clearTimeout(timer); if (urlRef.current) URL.revokeObjectURL(urlRef.current); urlRef.current = ''; };
-  }, [conversationId, state.report.sessionId, state.report.reconnectRequired, ended, visible, zh, snapshot]);
+  }, [conversationId, state.report.sessionId, state.report.reconnectRequired, ended, interactive, zh, snapshot]);
   async function command(op: string, action?: PhoneAction, frameSeq?: number) {
-    if (readOnly) return false;
+    if (readOnly || !activeRef.current) return false;
     if (busyRef.current) return;
+    const generation = lifecycle.current;
     video.cancel(); gesture.current = null; busyRef.current = true; setBusy(op); setError('');
     if (['takeover', 'handback', 'release', 'pause', 'cancel'].includes(op)) { setShowText(false); setText(''); }
-    try { onChange(await controlPhone(conversationId, latest.current, op, { action, frameSeq, ...(videoPlaying && video.geometry ? { geometry: video.geometry.version } : {}) })); return true; }
+    try {
+      const next = await controlPhone(conversationId, latest.current, op, { action, frameSeq, ...(videoPlaying && video.geometry ? { geometry: video.geometry.version } : {}) });
+      if ((!activeRef.current || generation !== lifecycle.current) && next.ownControl) {
+        onChange(await controlPhone(conversationId, next, 'release'));
+      } else onChange(next);
+      return true;
+    }
     catch (failure) { setError(phoneErrorMessage(failure, zh)); onChange(); return false; }
     finally { busyRef.current = false; setBusy(''); refreshFrame.current?.(); }
   }
@@ -122,44 +139,32 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
   const otherHuman = state.report.controlOwner === 'human' && !human;
   const controlMode = !readOnly && state.report.mode === 'control';
   const disabled = Boolean(busy) || working || ended || otherHuman || showControls;
-  const title = ended ? (zh ? '连接已断开' : 'Disconnected')
+  const pendingTask = state.report.hasPendingTask ?? Boolean(state.report.task || state.report.assistanceId);
+  const title = ended ? (zh ? '连接已结束' : 'Connection ended')
     : busy === 'takeover' || state.report.handoff === 'acquiring' ? (zh ? '正在接管…' : 'Taking control…')
-      : busy === 'handback' || state.report.handoff === 'returning' ? (zh ? '正在恢复…' : 'Resuming AI control…')
-        : working ? (zh ? '正在交接控制权…' : 'Transferring control…')
-          : human ? (zh ? '你正在操作' : 'You control the phone')
-            : otherHuman ? (zh ? '另一窗口正在操作' : 'Controlled in another window')
-              : !controlMode ? (inspection ? (zh ? '等待处理 · 仅查看' : 'Needs attention · View only') : state.report.controlOwner === 'agent' ? (zh ? '聊天正在操作 · 仅查看' : 'Chat in control · View only') : (zh ? '已连接 · 仅查看' : 'Connected · View only'))
-                : idle ? (zh ? '已连接' : 'Connected')
-                : paused ? (zh ? '等待检查或接管' : 'Needs inspection or takeover')
-                  : (zh ? '聊天正在操作' : 'Chat is operating');
+      : busy === 'handback' || state.report.handoff === 'returning' ? (zh ? '正在检查手机…' : 'Checking phone…')
+        : human ? (pendingTask ? (zh ? '你正在操作 · AI 已暂停' : 'You control the phone · AI paused') : (zh ? '你正在操作' : 'You control the phone'))
+          : otherHuman ? (zh ? '另一设备正在操作' : 'Another device is operating')
+            : state.report.status === 'needs_user' ? (zh ? '等待你处理' : 'Your help is needed')
+              : inspection ? (zh ? '任务已暂停' : 'Task paused')
+                : state.report.controlOwner === 'agent' ? (zh ? 'AI 操作中' : 'AI is operating')
+                  : (zh ? '已连接' : 'Connected');
   const connected = !ended && (videoPlaying || Boolean(frame));
-  const connectionLabel = state.report.reconnectRequired ? (zh ? '进度已保留 · 等待重连' : 'Progress saved · Reconnect to continue') : ended ? (zh ? '画面已停止' : 'Preview stopped')
+  const connectionLabel = state.report.reconnectRequired ? (zh ? '进度已保留 · 等待重连' : 'Progress saved · Reconnect to continue')
     : video.status === 'blocked' ? (zh ? '画面受限' : 'Preview restricted')
-      : snapshot && !frame ? (frameError ? (zh ? '画面暂不可用' : 'Preview unavailable') : (zh ? '正在获取画面…' : 'Getting preview…'))
-        : snapshot ? (age !== null && age > 4 ? (zh ? '画面更新较慢' : 'Preview delayed') : (zh ? '定时更新画面' : 'Snapshot preview'))
-          : connected ? (zh ? '已连接' : 'Connected') : (zh ? '正在连接…' : 'Connecting…');
-  const helper = ended ? (zh ? '在聊天中让 Agent 重新打开手机，即可继续使用。' : 'Ask the Agent in chat to reopen the phone to continue.')
-    : state.report.stopReason === 'user_takeover' ? (human ? (zh ? '完成登录、验证码等操作后，点击“恢复 AI 操作”。' : 'Complete the login or verification, then hand back control to continue the task.') : (zh ? '任务已暂停。请接管手机完成所需操作，再点击“恢复 AI 操作”。' : 'The task is paused. Take over and complete the requested action, then hand back control.'))
-    : state.report.status === 'outcome_unknown' || state.report.stopReason === 'inspect_before_retry' ? (zh ? '上一步的结果尚未确认。请接管检查，避免重复操作。' : 'The last result is unconfirmed. Take over to inspect before repeating any action.')
-    : state.report.stopReason === 'text_input_required' ? (human ? (zh ? '请使用手机自带键盘输入，完成后点击“恢复 AI 操作”。' : 'Type with the phone keyboard, then hand back control.') : (zh ? '请接管并使用手机自带键盘输入，完成后点击“恢复 AI 操作”。' : 'Take over, type with the phone keyboard, then hand back control.'))
-      : state.report.stopReason === 'text_input_unconfirmed' ? (human ? (zh ? '请检查输入框，避免重复输入；确认后交还 Agent。' : 'Inspect the field to avoid duplicate text, then hand back to the Agent.') : (zh ? '请先接管检查输入框，避免重复输入；确认后交还 Agent。' : 'Take over and inspect the field before retrying to avoid duplicate text. Then hand back to the Agent.'))
-    : video.status === 'blocked' ? (zh ? '当前页面不在授权范围内，请先返回授权应用。' : 'This page is outside the allowed apps. Return to an authorized app first.')
-      : working || busy === 'takeover' || busy === 'handback' ? (zh ? '控制权交接完成后，即可继续操作。' : 'Controls become available once the handoff completes.')
-      : human ? (snapshot ? (zh ? '画面更新稍有延迟，操作后请稍候。' : 'The preview may be delayed. Wait briefly after input.') : (zh ? '可以点击、滑动和输入，任务已暂停。' : 'Click, swipe or type. The task is paused.'))
-        : otherHuman ? (zh ? '此窗口仅查看，操作由另一窗口控制。' : 'View only here. Another window controls the phone.')
-          : !controlMode ? (zh ? '当前会话仅查看，可在聊天中请求操作手机。' : 'This session is view only. Ask in chat to control the phone.')
-            : idle ? (zh ? '手机保持连接。可接管操作，或在任意聊天中发起新任务。' : 'Phone stays connected. Take over or start a task from any chat.')
-            : paused ? (zh ? '任务已暂停。接管检查后即可继续。' : 'Task paused. Take over to inspect before continuing.')
-              : (zh ? '随时接管，Agent 会先暂停操作。' : 'Take over at any time. The Agent will pause first.');
+      : snapshot ? (age !== null && age > 4 ? (zh ? '画面更新较慢' : 'Preview delayed') : (zh ? '截图模式' : 'Snapshot mode'))
+        : connected ? '' : (zh ? '正在连接画面…' : 'Connecting preview…');
+  const continuePaused = !human && paused && state.report.status !== 'needs_user' && pendingTask && !state.report.assistanceId;
+  const primaryOp = human ? pendingTask ? 'handback' : 'release' : continuePaused ? 'handback' : 'takeover';
   const dimensions = frame ?? video.geometry;
   const ratio = dimensions ? dimensions.width / dimensions.height : 9 / 20;
-  const primaryLabel = ended ? (zh ? '会话已结束' : 'Session ended')
-    : busy === 'takeover' ? (zh ? '正在接管…' : 'Taking control…')
-      : busy === 'handback' ? (zh ? '正在恢复…' : 'Resuming AI control…')
-        : human ? (zh ? '恢复 AI 操作' : 'Resume AI control') : (zh ? '接管手机' : 'Take over phone');
+  const primaryLabel = busy === 'takeover' ? (zh ? '正在接管…' : 'Taking control…')
+    : busy === 'handback' ? (zh ? '正在检查手机…' : 'Checking phone…')
+      : human ? (pendingTask ? (zh ? '完成，继续任务' : 'Done, continue task') : (zh ? '结束手动操作' : 'End manual control'))
+        : continuePaused ? (zh ? '继续任务' : 'Continue task')
+          : idle && !pendingTask ? (zh ? '手动操作' : 'Control phone') : (zh ? '接管手机' : 'Take over phone');
   const previewProblem = video.status === 'blocked' || snapshot && (Boolean(frameError) || !frame || (age ?? 0) > 4);
-  const showHelper = ended || human || inspection || working || otherHuman || video.status === 'blocked';
-  const showFooter = controlMode && !ended || showHelper || Boolean(error);
+  const showFooter = controlMode && !ended || Boolean(error) || Boolean(sourceAction);
   function changeControls(open: boolean) {
     if (open) { video.cancel(); gesture.current = null; }
     else { setConfirmMode(false); setConfirmStop(false); setShowSettings(false); setShowDetails(false); onControlsClose?.(); }
@@ -172,12 +177,13 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
       onPointerDown={onHeaderPointerDown} onKeyDown={onHeaderKeyDown}>
       <div className="min-w-0 flex-1" role="status" aria-live="polite">
         <h3 className="truncate text-[15px] font-semibold tracking-tight text-fg">{state.report.deviceName}</h3>
-        <p className="mt-1 flex items-center gap-1.5 text-xs text-fg-muted"><span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', connected && !previewProblem ? 'bg-success' : 'bg-fg-muted')} />{ended || connected && !previewProblem ? title : connectionLabel}</p>
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-fg-muted"><span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', connected && !previewProblem ? 'bg-success' : 'bg-fg-muted')} />{title}</p>
       </div>
       <Dialog.Trigger asChild><Button variant="ghost" className="size-8 shrink-0 rounded-full p-0 text-fg-muted" aria-label={zh ? '更多手机操作' : 'More phone actions'}><MoreHorizontal className="size-4" aria-hidden /></Button></Dialog.Trigger>
       {headerActions}
       {!readOnly && !ended && state.report.deviceId && <PhoneLocationShare key={`${state.report.deviceId}:${conversationId}`} phoneId={state.report.deviceId} conversationId={conversationId} />}
     </header>
+    {(snapshot || !connected || previewProblem) && <div role="status" className="flex shrink-0 items-center justify-center gap-2 px-3 text-xs text-fg-muted"><span>{connectionLabel}</span>{snapshot && <Button variant="ghost" className="min-h-8 px-2 text-xs" onClick={video.retry}>{zh ? '重连画面' : 'Reconnect preview'}</Button>}</div>}
     <div className="phone-live-stage relative flex min-h-0 items-center justify-center bg-surface-panel p-3">
       <div className={cn('phone-device-shell relative shrink-0 border border-phone-rim/60 bg-phone-shell', human && 'outline outline-2 outline-accent/60 outline-offset-4')} style={{ '--phone-screen-ratio': ratio } as CSSProperties} data-phone-device-shell>
         <div className="phone-device-screen relative w-full overflow-hidden bg-surface-base">
@@ -186,12 +192,12 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
             data-phone-video-status={video.status} data-phone-video-error={video.error} data-phone-video-frames={video.frames} data-phone-video-fps={video.fps.toFixed(1)} data-phone-input-ack-ms={video.ackMs?.toFixed(1)}
             className={cn('absolute inset-0 h-full w-full select-none object-contain', videoPlaying ? '' : 'hidden', human ? 'touch-none cursor-crosshair' : 'cursor-default')}
             onPointerDown={event => {
-              if (showControls || !human || busy || working || !videoPlaying || !video.geometry || event.button !== 0) return;
+              if (!interactive || showControls || !human || busy || working || !videoPlaying || !video.geometry || event.button !== 0) return;
               const p = phonePoint(event.currentTarget.getBoundingClientRect(), video.geometry.width, video.geometry.height, event.clientX, event.clientY);
               if (!p) return; event.currentTarget.setPointerCapture(event.pointerId); video.pointer('down', p);
             }}
             onPointerMove={event => {
-              if (showControls || !human || busy || working || !video.geometry || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              if (!interactive || showControls || !human || busy || working || !video.geometry || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
               const p = phonePoint(event.currentTarget.getBoundingClientRect(), video.geometry.width, video.geometry.height, event.clientX, event.clientY);
               if (p) video.pointer('move', p);
             }}
@@ -204,7 +210,7 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
           {frame ? <img src={frame.url} alt={zh ? '手机当前屏幕' : 'Current phone screen'} width={frame.width} height={frame.height} draggable={false}
             className={cn('absolute inset-0 h-full w-full select-none object-contain', human ? 'touch-none cursor-crosshair' : 'cursor-default')}
             onPointerDown={event => {
-              if (showControls || !human || busy || working || !frame || (age ?? 99) > 5) return;
+              if (!interactive || showControls || !human || busy || working || !frame || (age ?? 99) > 5) return;
               const p = point(event); if (!p) return;
               gesture.current = { point: p, at: Date.now(), seq: frame.seq }; event.currentTarget.setPointerCapture(event.pointerId);
             }} onPointerCancel={() => { gesture.current = null; }}
@@ -227,8 +233,10 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
               <Dialog.Close asChild><Button variant="ghost" className="size-8 rounded-full p-0" aria-label={zh ? '收起控制中心' : 'Close control center'}><X className="size-4" /></Button></Dialog.Close>
             </header>
             <div className="min-h-0 space-y-3 overflow-y-auto overscroll-contain px-3 pb-4">
-              <div className="rounded-2xl bg-surface-panel/80 p-4"><p className="text-sm font-medium">{state.report.deviceName}</p><p className="mt-1 text-xs text-fg-muted">{title}</p>{state.report.controlOwner === 'agent' && state.report.goalPreview && <p className="mt-2 text-xs leading-relaxed text-fg-muted">{state.report.goalPreview}</p>}</div>
+              <div className="rounded-2xl bg-surface-panel/80 p-4"><p className="text-sm font-medium">{state.report.deviceName}</p><p className="mt-1 text-xs text-fg-muted">{title}</p></div>
               <div className="grid grid-cols-2 gap-2">
+                {controlMode && human && <Button variant="secondary" disabled={Boolean(busy) || working} className="min-h-14 rounded-2xl text-xs" onClick={() => { changeControls(false); void command('release'); }}>{zh ? '结束控制，保持暂停' : 'Release, keep paused'}</Button>}
+                {controlMode && !human && !otherHuman && !idle && !ended && <Button variant="secondary" disabled={Boolean(busy) || working} className="min-h-14 rounded-2xl text-xs" onClick={() => void command(paused ? 'handback' : 'pause')}>{paused ? (zh ? '继续任务' : 'Continue task') : (zh ? '暂停任务' : 'Pause task')}</Button>}
                 {!readOnly && !ended && <Button variant="secondary" className="min-h-14 rounded-2xl text-xs" aria-expanded={showSettings} onClick={() => setShowSettings(value => !value)}><Settings2 className="size-4" />{zh ? '操作设置' : 'Control settings'}</Button>}
                 <Button variant="secondary" className="min-h-14 rounded-2xl text-xs" aria-expanded={showDetails} onClick={() => setShowDetails(value => !value)}><Info className="size-4" />{zh ? '连接详情' : 'Connection details'}</Button>
                 {connectionActions}
@@ -272,26 +280,26 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
     </div>
     {showFooter && <footer className="shrink-0 bg-surface-panel">
       <div className="mx-auto w-full max-w-xl px-5 py-4">
-        {state.report.stopReason === 'user_takeover' && state.report.message && <p role="status" className="mb-2 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-sm text-fg">{state.report.message}</p>}
-        {showHelper && <p className="mb-3 text-center text-xs leading-relaxed text-fg-muted">{helper}</p>}
         {error && !showControls ? <p role="alert" className="mb-2 text-xs text-danger">{error}</p> : null}
         {!ended ? <div className="flex flex-wrap justify-center gap-2">
-          {controlMode ? <Button variant={human ? 'primary' : 'secondary'} className="min-h-10 min-w-36 rounded-full px-5" disabled={disabled} onClick={() => void command(human ? 'handback' : 'takeover')}>
+          {controlMode ? <Button variant={human ? 'primary' : 'secondary'} className="min-h-10 min-w-36 rounded-full px-5" disabled={disabled} onClick={() => void command(primaryOp)}>
             {busy || working ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> : human ? <Play className="size-4" aria-hidden /> : <Hand className="size-4" aria-hidden />}{primaryLabel}
           </Button> : null}
-          {!otherHuman && controlMode && !idle ? <Button variant="ghost" className="min-h-11 rounded-lg" disabled={disabled} onClick={() => void command(human ? 'release' : paused ? 'handback' : 'pause')}>
-            {!human && !paused ? <Pause className="size-4" aria-hidden /> : null}{human ? (zh ? '仅查看' : 'View only') : paused ? (state.report.assistanceId ? (zh ? '恢复 AI 操作' : 'Resume AI control') : (zh ? '继续任务' : 'Continue task')) : (zh ? '暂停任务' : 'Pause task')}
-          </Button> : null}
+          {!human && !otherHuman && state.report.assistanceId && controlMode && <Button variant="ghost" disabled={disabled} onClick={() => void command('handback')}>{zh ? '我已处理，继续' : 'Already done, continue'}</Button>}
+          {sourceAction}
         </div> : null}
         {human ? <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机返回' : 'Phone back'} disabled={showControls || Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => void command('input', { type: 'back' }, frame?.seq)}><ArrowLeft className="size-4" aria-hidden /></Button>
           <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机输入' : 'Phone keyboard'} aria-expanded={showText} disabled={showControls || state.textInput === 'manual' || Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => setShowText(value => !value)}><Keyboard className="size-4" aria-hidden /></Button>
-          <span className="text-xs text-fg-muted">{state.textInput === 'manual' ? (zh ? '请使用手机自带键盘输入' : 'Use the phone keyboard to type') : (zh ? '仅查看会保持任务暂停' : 'View only keeps the task paused')}</span>
+          {state.textInput === 'manual' && <span className="text-xs text-fg-muted">{zh ? '请使用手机自带键盘输入' : 'Use the phone keyboard to type'}</span>}
         </div> : null}
-        {human && showText ? <form className="mt-2 flex gap-2" onSubmit={event => { event.preventDefault(); void sendText(); }}>
+        {human && <Dialog.Root open={showText} onOpenChange={setShowText}><Dialog.Content aria-describedby={undefined} onOpenAutoFocus={event => event.preventDefault()} className="fixed bottom-4 left-1/2 z-[90] flex h-[min(18rem,80dvh)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay p-5 shadow-popover">
+          <div className="mb-4 flex shrink-0 items-center justify-between"><Dialog.Title>{zh ? '输入文字' : 'Type on phone'}</Dialog.Title><Dialog.Close asChild><Button variant="ghost" aria-label={zh ? '关闭文字输入' : 'Close text input'}><X className="size-4" /></Button></Dialog.Close></div>
+          <form className="mt-2 flex gap-2" onSubmit={event => { event.preventDefault(); void sendText(); }}>
           <input aria-label={zh ? '发送到手机的文本' : 'Text to send to phone'} placeholder={zh ? '输入非密码文本…' : 'Type non-password text…'} autoComplete="off" value={text} disabled={showControls || Boolean(busy) || working || (!frame && !videoPlaying)} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault(); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 text-sm focus-visible:outline-2 focus-visible:outline-accent" />
           <Button type="submit" className="rounded-lg" disabled={showControls || Boolean(busy) || working || !text || (!frame && !videoPlaying)}>{zh ? '输入' : 'Type'}</Button>
-        </form> : null}
+          </form>
+        </Dialog.Content></Dialog.Root>}
       </div>
     </footer>}
   </section></Dialog.Root>;

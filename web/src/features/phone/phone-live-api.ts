@@ -1,13 +1,14 @@
 import useSWR from 'swr';
 
 import { apiFetch, fetchJson } from '@/lib/fetch';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { apiUrl } from '@/lib/url';
 
 export type PhoneAction = { type: 'tap' | 'longPress'; point: number[]; durationMs?: number }
   | { type: 'swipe'; start: number[]; end: number[]; durationMs: number }
   | { type: 'launch'; package: string } | { type: 'back' } | { type: 'typeText'; text: string };
 export type PhoneLiveState = {
-  report: { assistanceId?: string; reconnectRequired?: boolean; sessionId: string; deviceId?: string; owner?: string; deviceName: string; agentId: string; modelRef: string; status: string; mode: string;
+  report: { assistanceId?: string; assistanceVersion?: number; transcriptId?: string; revision?: number; hasPendingTask?: boolean; reconnectRequired?: boolean; sessionId: string; deviceId?: string; owner?: string; deviceName: string; agentId: string; modelRef: string; status: string; mode: string;
     executionMode?: 'collaborative' | 'direct'; nextExecutionMode?: 'collaborative' | 'direct'; task?: { taskId: string };
     feedback?: { outcome: string; nextAction: string };
     controlOwner?: 'agent' | 'human' | 'none'; controlEpoch?: number; handoff?: string; message?: string; stopReason?: string;
@@ -20,6 +21,7 @@ export function phoneErrorMessage(error: unknown, zh: boolean): string {
   const value = error as { code?: string; body?: { error?: { code?: string } }; message?: string };
   const code = value?.code ?? value?.body?.error?.code;
   const messages: Record<string, string> = {
+    PHONE_CONTROL_BUSY: '另一设备正在操作手机，请等待其结束控制。',
     PHONE_DEVICE_BUSY: '手机正被其他聊天或人工操作占用，本次操作尚未开始。请查看当前任务，等待或明确停止后再试。',
     PHONE_OBSERVE_ONLY: '此入口仅支持查看手机画面，请在来源聊天中操作或接管手机。',
     PHONE_CONTROL_CHANGED: '手机控制权已变化，本次操作未继续。请查看最新状态后重新接管。',
@@ -37,23 +39,38 @@ export function phoneErrorMessage(error: unknown, zh: boolean): string {
   return zh && code && messages[code] ? messages[code] : value?.message ?? (zh ? '无法完成手机操作，请检查连接状态。' : 'Phone operation failed. Check the connection.');
 }
 const base = (conversationId: string) => `/api/phone/conversations/${encodeURIComponent(conversationId)}`;
-export async function fetchConversationPhone(url: string): Promise<PhoneLiveState | null> {
+const latestStates = new Map<string, PhoneLiveState>();
+const gatewayIdentity = () => { const state = useGatewayStore.getState(); return `${state.baseUrl}:${state.conversationId}`; };
+function acceptPhoneState(conversationId: string, value: PhoneLiveState | null, identity = gatewayIdentity()) {
+  const key = `${identity}:${conversationId}`;
+  const previous = latestStates.get(key);
+  if (value && previous && value.report.sessionId === previous.report.sessionId
+    && (value.report.revision ?? 0) < (previous.report.revision ?? 0)) return previous;
+  if (value) { latestStates.set(key, value); if (latestStates.size > 100) latestStates.delete(latestStates.keys().next().value!); }
+  else latestStates.delete(key);
+  return value;
+}
+export async function fetchConversationPhone(url: string, identity = gatewayIdentity()): Promise<PhoneLiveState | null> {
   const response = await apiFetch(apiUrl(url));
   // Draft conversations materialize on the server only when the first input arrives.
-  if (response.status === 404) return null;
+  const conversationId = decodeURIComponent(url.split('/conversations/')[1]?.split('?')[0] ?? '');
+  if (response.status === 404) return acceptPhoneState(conversationId, null, identity);
+  if (response.status === 401 || response.status === 403) acceptPhoneState(conversationId, null, identity);
   if (!response.ok) throw Object.assign(new Error(`Phone view unavailable (HTTP ${response.status})`), { status: response.status });
-  return ((await response.json()) as { payload: PhoneLiveState | null }).payload;
+  return acceptPhoneState(conversationId, ((await response.json()) as { payload: PhoneLiveState | null }).payload, identity);
 }
 export function useConversationPhone(conversationId: string, enabled = true) {
-  return useSWR(enabled && /^(?:device:)?[\da-f]{8}-[\da-f-]{27}$/i.test(conversationId) ? `${base(conversationId)}?clientId=${phoneClientId}` : null,
-    fetchConversationPhone,
+  const identity = useGatewayStore(s => `${s.baseUrl}:${s.conversationId}`);
+  return useSWR(enabled && /^(?:device:)?[\da-f]{8}-[\da-f-]{27}$/i.test(conversationId) ? [`${base(conversationId)}?clientId=${phoneClientId}`, identity] : null,
+    ([url, scope]: [string, string]) => fetchConversationPhone(url, scope),
     { refreshInterval: 1200, revalidateOnFocus: true, shouldRetryOnError: (error: { status?: number }) => error.status !== 401 && error.status !== 403, errorRetryCount: 6, errorRetryInterval: 2000, refreshWhenHidden: false });
 }
 export async function controlPhone(conversationId: string, state: PhoneLiveState, op: string, extra: { action?: PhoneAction; frameSeq?: number; geometry?: number } = {}, keepalive = false) {
+  const identity = gatewayIdentity();
   const response = await fetchJson<{ payload: PhoneLiveState }>(apiUrl(`${base(conversationId)}/${state.report.sessionId}/control`), {
-    method: 'POST', keepalive, body: JSON.stringify({ clientId: phoneClientId, assistanceId: state.report.assistanceId, operationId: crypto.randomUUID(), epoch: state.report.controlEpoch, op, ...extra }),
+    method: 'POST', keepalive, body: JSON.stringify({ expectedTranscriptId: state.report.transcriptId, clientId: phoneClientId, assistanceId: state.report.assistanceId, assistanceVersion: state.report.assistanceVersion, operationId: crypto.randomUUID(), epoch: state.report.controlEpoch, op, ...extra }),
   });
-  return response.payload;
+  return acceptPhoneState(conversationId, response.payload, identity)!;
 }
 export async function phoneFrame(conversationId: string, sessionId: string, signal: AbortSignal) {
   const response = await apiFetch(apiUrl(`${base(conversationId)}/${sessionId}/frame`), { signal });

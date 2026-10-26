@@ -10,6 +10,7 @@ import Observation
 
     private(set) var summary: PhoneSummary?
     private(set) var live: PhoneLiveState?
+    private(set) var needsAttention = false
     private(set) var busy = false
     private(set) var failed = false
     private(set) var fallback = false
@@ -31,6 +32,16 @@ import Observation
     private var touchStart: TouchStart?
     var canControl: Bool {
         summary?.access == "control" && live?.report.mode == "control" && (live?.report.controlOwner != "human" || live?.ownControl == true)
+    }
+
+    private func updateAttention() {
+        guard let binding = summary?.binding, let request = summary?.assistance, summary?.needsUser == true else { needsAttention = false; return }
+        let key = "phone-attention:" + (repository?.client.configuration.baseURL.absoluteString ?? "") + ":" + binding.conversationId + ":" + binding.transcriptId + ":" + request.id + ":" + String(request.version)
+        var seen = UserDefaults.standard.stringArray(forKey: "phone-attention-v1") ?? []
+        if visible, live != nil, !failed, !seen.contains(key) {
+            seen = Array(seen.suffix(99)) + [key]; UserDefaults.standard.set(seen, forKey: "phone-attention-v1")
+        }
+        needsAttention = !seen.contains(key)
     }
 
     func observe(configuration: GatewayConfiguration, conversationID: String, visible: Bool) async {
@@ -75,13 +86,17 @@ import Observation
             guard next.available, next.access != "none", let binding = next.binding else {
                 releaseOld(); stopVideo(); live = nil; frame = nil; failed = false; return
             }
-            guard visible || live != nil else { return }
+            updateAttention()
+            guard visible else { return }
             let state = try await repository.state(conversationID)
             guard revision == generation, operationRevision == operations, active, !Task.isCancelled else { return }
+            if let incoming = state, let current = live, incoming.report.sessionId == current.report.sessionId,
+               let nextRevision = incoming.report.revision, let currentRevision = current.report.revision, nextRevision < currentRevision { return }
             if live != state {
                 live = state
             }
-            if state?.ownControl == true, !busy, Date().timeIntervalSince(heartbeatAt) > 4 {
+            updateAttention()
+            if visible, state?.ownControl == true, !busy, Date().timeIntervalSince(heartbeatAt) > 4 {
                 heartbeatAt = Date(); await command("heartbeat")
             }
             if state?.report.status == "closed" { stopVideo(); return }
@@ -105,6 +120,7 @@ import Observation
         if operation != "heartbeat" {
             operations += 1; busy = true; failed = false; video?.pointer("cancel", x: 0, y: 0)
         }
+        let operationRevision = operations
         defer {
             if revision == generation, operation != "heartbeat" {
                 busy = false
@@ -113,7 +129,7 @@ import Observation
         do {
             let result = try await repository.command(binding, state: state, op: operation, action: action,
                                                       geometry: playing ? geometry : nil, frameSeq: fallback ? frame?.seq : nil)
-            guard revision == generation, active else {
+            guard revision == generation, operationRevision == operations, active, visible else {
                 if result.ownControl {
                     Task { _ = try? await repository.command(binding, state: result, op: "release") }
                 }
@@ -134,7 +150,7 @@ import Observation
     }
 
     private func ensureVideo() {
-        guard let repository, let binding = summary?.binding, let state = live, active,
+        guard let repository, let binding = summary?.binding, let state = live, active, visible,
               state.report.status != "closed", state.report.reconnectRequired != true, !fallback else { return }
         let key = "\(binding.phoneSessionId):\(state.ownControl ? state.report.controlEpoch : 0)"
         guard streamKey != key else { return }
@@ -168,7 +184,7 @@ import Observation
     func setVisible(_ visible: Bool) {
         self.visible = visible
         if !visible {
-            video?.pointer("cancel", x: 0, y: 0); touchStart = nil
+            operations += 1; releaseOld(); stopVideo(); live = nil; frame = nil; busy = false; touchStart = nil
         }
     }
 

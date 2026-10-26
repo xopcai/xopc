@@ -3,6 +3,7 @@ const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { supported: vi.fn(), summary: vi.fn(), state: vi.fn(), control: vi.fn(), open: vi.fn(), close: vi.fn(), revision: 1, lastStream: undefined as { onFault: (code: string) => void } | undefined };
 });
+vi.mock('../entry/src/main/ets/service/secureStore.ets', () => ({ XopcSecureStore: class { read = vi.fn(async () => undefined); write = vi.fn(async () => {}); } }));
 vi.mock('@kit.ImageKit', () => ({ image: { createImageSource: vi.fn() } }));
 vi.mock('../entry/src/main/ets/repository/phoneRepository.ets', () => ({ XopcPhoneRepository: class {
   supported = mocks.supported; summary = mocks.summary; state = mocks.state; control = mocks.control;
@@ -13,7 +14,7 @@ vi.mock('../entry/src/main/ets/service/phoneStream.ets', () => ({ XopcPhoneStrea
   open = mocks.open; close = mocks.close; cancel() {} setSurface() {} pointer() {}
 } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
-  connectionRevision: () => mocks.revision, assertConnection: (revision: number) => { if (revision !== mocks.revision) throw new Error('Changed'); },
+  currentProfile: () => ({ gatewayId: 'gateway', deviceId: 'device' }), connectionRevision: () => mocks.revision, assertConnection: (revision: number) => { if (revision !== mocks.revision) throw new Error('Changed'); },
 } }));
 vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error {} }));
 import { XopcPhoneViewModel } from '../entry/src/main/ets/viewmodel/phoneViewModel.ets';
@@ -35,7 +36,7 @@ it('discovers the icon without opening video or changing the selected page', asy
   model.surface('surface'); model.bind('one', true, true); await settle();
   expect(mocks.open).toHaveBeenCalledOnce();
 });
-it('keeps a takeover that finishes after paging back to chat', async () => {
+it('releases a takeover that finishes after paging back to chat', async () => {
   model.bind('one', true, true); await settle();
   let resolve!: (value: object) => void;
   mocks.control.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
@@ -43,8 +44,9 @@ it('keeps a takeover that finishes after paging back to chat', async () => {
   model.bind('one', true, false);
   resolve({ ...state, ownControl: true, report: { ...state.report, controlEpoch: 2 } });
   await pending;
-  expect(mocks.control).toHaveBeenCalledTimes(1);
-  expect(model.state?.ownControl).toBe(true);
+  expect(mocks.control).toHaveBeenCalledTimes(2);
+  expect(mocks.control.mock.calls.at(-1)?.[2]).toBe('release');
+  expect(model.state?.ownControl).not.toBe(true);
 });
 it('ignores stale discovery responses after switching conversations', async () => {
   let resolve!: (value: object) => void;
@@ -79,22 +81,20 @@ it('clears obsolete operation errors and pixels when phone access is withdrawn',
   await model.refresh(); expect(model.error).toBe(''); expect(model.state).toBeUndefined(); expect(model.snapshot).toBeUndefined();
 });
 
-it('keeps video and the manual control heartbeat alive across repeated page changes', async () => {
+it('releases manual control and stops media and heartbeats when returning to chat', async () => {
   const human = { ...state, ownControl: true, report: { ...state.report, controlEpoch: 2, controlOwner: 'human' } };
   mocks.control.mockResolvedValue(human);
   model.bind('one', true, true); model.surface('surface'); await settle();
-  await model.command('takeover'); mocks.state.mockResolvedValue(human);
-  const opens = mocks.open.mock.calls.length; const closes = mocks.close.mock.calls.length;
-  for (let index = 0; index < 3; index++) {
-    model.bind('one', true, false); await vi.advanceTimersByTimeAsync(20000);
-    expect(model.state?.ownControl).toBe(true);
-    model.bind('one', true, true); await settle();
-  }
-  expect(mocks.open).toHaveBeenCalledTimes(opens); expect(mocks.close).toHaveBeenCalledTimes(closes);
-  expect(mocks.control.mock.calls.filter(call => call[2] === 'heartbeat').length).toBeGreaterThanOrEqual(9);
-  expect(mocks.control.mock.calls.some(call => call[2] === 'release')).toBe(false);
-  model.dispose();
-  expect(mocks.control).toHaveBeenLastCalledWith(binding, expect.any(Object), 'release');
+  await model.command('takeover');
+  const opens = mocks.open.mock.calls.length;
+  mocks.control.mockResolvedValue(state); mocks.state.mockResolvedValue(state);
+  model.bind('one', true, false); await vi.advanceTimersByTimeAsync(20000);
+  expect(model.state?.ownControl).not.toBe(true);
+  expect(mocks.control.mock.calls.filter(call => call[2] === 'heartbeat')).toHaveLength(0);
+  expect(mocks.control.mock.calls.filter(call => call[2] === 'release')).toHaveLength(1);
+  expect(mocks.open).toHaveBeenCalledTimes(opens);
+  model.bind('one', true, true); await settle();
+  expect(model.state?.ownControl).toBe(false);
 });
 it('releases a pending takeover after switching to another conversation', async () => {
   model.bind('one', true, true); await settle();
@@ -104,4 +104,17 @@ it('releases a pending takeover after switching to another conversation', async 
   model.bind('two', true, false); await settle();
   resolve({ ...state, ownControl: true }); await pending;
   expect(mocks.control).toHaveBeenLastCalledWith(binding, expect.objectContaining({ ownControl: true }), 'release');
+});
+
+it('marks an assistance request viewed only after loading visible phone state', async () => {
+  mocks.summary.mockResolvedValue({ ...summary, needsUser: true, assistance: { id: 'wait', version: 1 } });
+  model.bind('one', true, false); await settle();
+  expect(model.needsAttention).toBe(true);
+  model.bind('one', true, true); await settle();
+  expect(model.needsAttention).toBe(false);
+  model.bind('one', true, false); await settle();
+  expect(model.needsAttention).toBe(false);
+  mocks.summary.mockResolvedValue({ ...summary, needsUser: true, assistance: { id: 'new-wait', version: 1 } });
+  await model.refresh(); await settle();
+  expect(model.needsAttention).toBe(true);
 });

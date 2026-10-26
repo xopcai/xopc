@@ -2,6 +2,8 @@ package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.*
+import android.content.SharedPreferences
+import androidx.compose.ui.platform.LocalContext
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.TextureView
@@ -42,12 +44,12 @@ import kotlin.math.abs
 import kotlin.math.min
 
 internal data class PhoneUiState(val summary: PhoneSummary? = null, val live: PhoneState? = null,
-  val busy: Boolean = false, val error: Boolean = false, val playing: Boolean = false, val fallback: Boolean = false,
+  val attention: Boolean = false, val busy: Boolean = false, val error: Boolean = false, val playing: Boolean = false, val fallback: Boolean = false,
   val frame: PhoneFrame? = null, val width: Int = 1, val height: Int = 2, val geometry: Int = 0) {
   val canControl get() = summary?.access == "control" && live?.mode == "control" && (live.owner != "human" || live.ownControl)
 }
 internal class PhoneWorkspaceController(private val repository: PhoneRepository, private val conversationId: String,
-  private val scope: CoroutineScope) {
+  private val scope: CoroutineScope, private val seenPreferences: SharedPreferences) {
   private val mutable = MutableStateFlow(PhoneUiState())
   val state = mutable.asStateFlow()
   private var active = false
@@ -71,8 +73,18 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
     } finally { active = false; visible = false; leave() }
   }
   fun setVisible(next: Boolean) {
-    if (visible && !next) { video?.pointer("cancel", 0, 0); touchStart = null }
+    if (visible && !next) { leave() }
     visible = next
+  }
+  private fun updateAttention() {
+    val summary = mutable.value.summary
+    val binding = summary?.binding
+    val request = summary?.assistanceId
+    if (binding == null || request == null || !summary.needsUser) { mutable.value = mutable.value.copy(attention = false); return }
+    val key = "${repository.gatewayId}:${binding.conversationId}:${binding.transcriptId}:$request:${summary.assistanceVersion}"
+    val seen = seenPreferences.getStringSet("seen", emptySet()).orEmpty().toMutableSet()
+    if (visible && mutable.value.live != null && !mutable.value.error && seen.add(key)) seenPreferences.edit().putStringSet("seen", seen.toList().takeLast(100).toSet()).apply()
+    mutable.value = mutable.value.copy(attention = key !in seen)
   }
   private suspend fun refresh() {
     if (mutable.value.busy) return
@@ -84,10 +96,14 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
       if (summary.binding != mutable.value.summary?.binding) { leave(); mutable.value = PhoneUiState(summary = summary) }
       else mutable.value = mutable.value.copy(summary = summary)
       if (!summary.available || summary.access == "none") { leave(); mutable.value = PhoneUiState(summary = summary); return }
-      if (summary.binding == null || (!visible && mutable.value.live == null)) return
+      updateAttention()
+      if (summary.binding == null || !visible) return
       val live = repository.state(conversationId)
       if (revision != generation || operationRevision != operations || !active) return
+      val previous = mutable.value.live
+      if (live != null && previous != null && live.sessionId == previous.sessionId && live.revision < previous.revision) return
       mutable.value = mutable.value.copy(live = live)
+      updateAttention()
       if (live == null) return
       if (live.ownControl && !mutable.value.busy && System.currentTimeMillis() - heartbeatAt > 4000) {
         heartbeatAt = System.currentTimeMillis(); commandNow("heartbeat")
@@ -106,7 +122,7 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
     val current = mutable.value; val binding = current.summary?.binding ?: return; val live = current.live ?: return
     val target = surface ?: return
     if (live.status == "closed") { stopVideo(); return }
-    if (!active || live.restore || current.fallback) return
+    if (!active || !visible || live.restore || current.fallback) return
     val key = "${binding.sessionId}:${if (live.ownControl) live.epoch else 0}"
     if (key == streamKey) return
     stopVideo(); streamKey = key
@@ -133,7 +149,7 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
     if (op != "heartbeat") { operations++; video?.pointer("cancel", 0, 0); touchStart = null; mutable.value = current.copy(busy = true, error = false) }
     try {
       val result = withContext(NonCancellable) { repository.command(binding, live, op, action, current.geometry.takeIf { current.playing }, current.frame?.seq) }
-      if (revision != generation || !active || !currentCoroutineContext().isActive) {
+      if (revision != generation || !active || !visible || !currentCoroutineContext().isActive) {
         if (result.ownControl) withContext(NonCancellable) { repository.command(binding, result, "release") }
         return
       }
@@ -177,9 +193,10 @@ internal class PhoneWorkspaceController(private val repository: PhoneRepository,
 internal fun rememberPhoneWorkspace(repository: PhoneRepository?, conversationId: String?, gatewayId: String?,
   active: Boolean, pageVisible: Boolean): PhoneWorkspaceController? {
   val scope = rememberCoroutineScope()
+  val seenPreferences = LocalContext.current.applicationContext.getSharedPreferences("phone-attention-v1", android.content.Context.MODE_PRIVATE)
   val lifecycle = LocalLifecycleOwner.current
   val controller = remember(repository, conversationId, gatewayId) {
-    if (repository != null && conversationId != null) PhoneWorkspaceController(repository, conversationId, scope) else null
+    if (repository != null && conversationId != null) PhoneWorkspaceController(repository, conversationId, scope, seenPreferences) else null
   }
   val visible by rememberUpdatedState(pageVisible)
   SideEffect { controller?.setVisible(pageVisible) }
@@ -239,6 +256,8 @@ internal fun PhoneWorkspaceContent(ui: PhoneUiState, onReturn: () -> Unit, onCom
   var stopOpen by remember { mutableStateOf(false) }
   var stopSession by remember { mutableStateOf("") }
   LaunchedEffect(ui.live?.epoch, ui.live?.ownControl, ui.summary?.binding) { textOpen = false; draft = ""; more = false }
+  var textSending by remember { mutableStateOf(false) }
+  LaunchedEffect(ui.busy, ui.error) { if (textSending && !ui.busy) { if (!ui.error) { draft = ""; textOpen = false }; textSending = false } }
   LaunchedEffect(ui.summary?.binding) { stopOpen = false }
   Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding().padding(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -315,18 +334,29 @@ internal fun PhoneWorkspaceContent(ui: PhoneUiState, onReturn: () -> Unit, onCom
     }
     if (ui.fallback) Text(stringResource(R.string.phone_snapshot_mode), style = MaterialTheme.typography.labelSmall)
     if (ui.error && ui.live != null) Text(stringResource(R.string.phone_action_failed), color = MaterialTheme.colorScheme.error)
-    if (ui.canControl) Button(onClick = { onCommand(if (ui.live?.ownControl == true) "handback" else "takeover", null) },
+    if (ui.live?.ownControl == true) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      TextButton(onClick = { onCommand("input", JSONObject().put("type", "back")) }, enabled = !ui.busy && (ui.playing || ui.frame != null)) { Text(stringResource(R.string.phone_back)) }
+      TextButton(onClick = { draft = ""; textOpen = true }, enabled = !ui.busy && !ui.live.manualText && (ui.playing || ui.frame != null)) { Text(stringResource(R.string.phone_text)) }
+    }
+    val pending = ui.live?.pendingTask ?: (ui.live?.assistanceId != null || ui.live?.status == "running")
+    val op = if (ui.live?.ownControl == true) { if (pending) "handback" else "release" }
+      else if (ui.live?.status == "paused" && pending && ui.live.assistanceId == null) "handback" else "takeover"
+    if (ui.canControl) Button(onClick = { onCommand(op, null) },
       enabled = !ui.busy && (ui.live?.ownControl == true || ui.live?.restore == true || ui.playing || ui.frame?.let { System.currentTimeMillis() - it.capturedAt < 5000 } == true),
-      colors = if (ui.live?.ownControl == true) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface) else ButtonDefaults.buttonColors(),
       modifier = Modifier.fillMaxWidth().height(52.dp).testTag("phone-control")) {
-      Text(stringResource(if (ui.live?.ownControl == true) R.string.phone_handback else R.string.phone_takeover))
-    } else if (ui.summary?.access == "view") Text(stringResource(R.string.phone_view_only))
+      Text(stringResource(if (ui.busy) R.string.phone_handoff else if (op == "release") R.string.phone_end_manual
+        else if (op == "handback") { if (ui.live?.ownControl == true) R.string.phone_handback else R.string.phone_continue }
+        else if (pending || ui.live?.status == "needs_user") R.string.phone_takeover else R.string.phone_manual))
+    } else if (ui.live?.owner == "human") Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.phone_other_human)) }
+    else if (ui.summary?.access == "view") Text(stringResource(R.string.phone_view_only))
+    if (ui.canControl && ui.live?.ownControl != true && ui.live?.assistanceId != null) TextButton(onClick = { onCommand("handback", null) }, enabled = !ui.busy) { Text(stringResource(R.string.phone_already_done)) }
+
   }
   if (textOpen && ui.live?.ownControl == true) ModalBottomSheet(onDismissRequest = { textOpen = false; draft = "" }) {
     Column(Modifier.fillMaxWidth().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
       Text(stringResource(R.string.phone_text), style = MaterialTheme.typography.titleLarge)
       OutlinedTextField(draft, { draft = it }, Modifier.fillMaxWidth().testTag("phone-text-input"), placeholder = { Text(stringResource(R.string.phone_text_placeholder)) })
-      Button(onClick = { onCommand("input", JSONObject().put("type", "typeText").put("text", draft)); draft = ""; textOpen = false },
+      Button(onClick = { textSending = true; onCommand("input", JSONObject().put("type", "typeText").put("text", draft)) },
         enabled = draft.isNotBlank() && !ui.busy, modifier = Modifier.fillMaxWidth().testTag("phone-text-send")) { Text(stringResource(R.string.phone_send)) }
     }
   }

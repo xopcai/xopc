@@ -1798,7 +1798,7 @@ export struct XopcChatView {
               Button({ type: ButtonType.Circle }) {
                 Stack({ alignContent: Alignment.TopEnd }) {
                   SymbolGlyph($r('sys.symbol.phone_1')).fontSize(22).fontColor([this.colors.foreground])
-                  if (this.phone.summary.needsUser) { Circle().width(7).height(7).fill(this.colors.accent) }
+                  if (this.phone.needsAttention) { Circle().width(7).height(7).fill(this.colors.accent) }
                 }
               }.id('chat-header-phone').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
                 .accessibilityText($r('app.string.phone_open')).onClick((): void => { this.dismissComposer(); this.phonePage = 1; })

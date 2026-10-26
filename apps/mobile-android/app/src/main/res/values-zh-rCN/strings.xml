@@ -836,7 +836,7 @@
   <string name="phone_send">发送</string>
   <string name="phone_back">返回键</string>
   <string name="phone_text">输入文字</string>
-  <string name="phone_handback">恢复 AI 操作</string>
+  <string name="phone_handback">完成，继续任务</string>
   <string name="phone_takeover">接管手机</string>
   <string name="phone_view_only">当前设备仅可查看</string>
   <string name="phone_continue">继续任务</string>
@@ -852,6 +852,9 @@
     <string name="assistant_stages_collapse">收起较早进展</string>
     <string name="assistant_stages_waiting">等待你的操作，完成确认或补充信息后继续。</string>
     <string name="assistant_stages_interrupted">执行已中断，已完成的操作会保留。</string>
+  <string name="phone_end_manual">结束手动操作</string>
+  <string name="phone_manual">手动操作</string>
+  <string name="phone_already_done">我已处理，继续</string>
     <string name="clarify_previous">上一题</string>
     <string name="clarify_next">下一题</string>
     <string name="clarify_retry">重试提交</string>

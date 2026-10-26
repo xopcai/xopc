@@ -5,7 +5,7 @@ import { phoneClientId } from './phone-live-api';
 
 type Geometry = { width: number; height: number; version: number; codec: string };
 type VideoState = { status: 'connecting' | 'playing' | 'blocked' | 'fallback'; geometry?: Geometry; error?: string; fps: number; ackMs?: number; frames: number };
-export function usePhoneVideo(conversationId: string, sessionId: string, enabled: boolean, canvas: RefObject<HTMLCanvasElement | null>, epoch: number | undefined) {
+export function usePhoneVideo(conversationId: string, sessionId: string, enabled: boolean, canvas: RefObject<HTMLCanvasElement | null>, epoch: number | undefined, ownControl = false) {
   const [state, setState] = useState<VideoState>({ status: 'connecting', fps: 0, frames: 0 });
   const [attempt, setAttempt] = useState(0);
   const current = useRef({ epoch, geometry: undefined as Geometry | undefined }); current.current.epoch = epoch;
@@ -62,7 +62,7 @@ export function usePhoneVideo(conversationId: string, sessionId: string, enabled
     }, 2000);
     const connect = async () => {
       try {
-        const result = await fetchJson<{ payload: { ticket: string; path: string } }>(apiUrl(`/api/phone/conversations/${conversationId}/${sessionId}/video-ticket`), { method: 'POST', body: JSON.stringify({ clientId: phoneClientId }) });
+        const result = await fetchJson<{ payload: { ticket: string; path: string } }>(apiUrl(`/api/phone/conversations/${conversationId}/${sessionId}/video-ticket`), { method: 'POST', body: JSON.stringify({ clientId: phoneClientId, purpose: ownControl ? 'control' : 'view', epoch: ownControl ? epoch : undefined }) });
         if (disposed) return;
         const url = new URL(apiUrl(result.payload.path)); url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(url, ['xopc-phone-v1', result.payload.ticket]); socket.current = ws; ws.binaryType = 'arraybuffer';
@@ -117,6 +117,6 @@ export function usePhoneVideo(conversationId: string, sessionId: string, enabled
     void connect(); window.addEventListener('blur', cancel);
     return () => { disposed = true; cancel(); clearTimeout(firstTimer); clearInterval(statsTimer); window.removeEventListener('blur', cancel);
       socket.current?.close(); socket.current = null; current.current.geometry = undefined; sendTimes.current.clear(); if (decoder && decoder.state !== 'closed') decoder.close(); clear(); };
-  }, [conversationId, sessionId, enabled, canvas, cancel, flushMove, attempt]);
+  }, [conversationId, sessionId, enabled, canvas, cancel, flushMove, attempt, ownControl, ownControl ? epoch : 0]);
   return { ...state, pointer, cancel, retry: () => setAttempt(value => value + 1) };
 }

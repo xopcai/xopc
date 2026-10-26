@@ -358,8 +358,7 @@ describe('phone runtime', () => {
     const operation = f.runtime.execute('one', { op: 'run', goal: 'Read', scenario: 'settings-about', maxActions: 1 }, f.context);
     await dispatched;
     const acquire = f.runtime.liveControl('one', id, f.context, 'browser', { op: 'takeover', epoch: 1, operationId: randomUUID() });
-    await Promise.resolve(); await Promise.resolve();
-    expect(f.runtime.liveStatus('one', id, f.context, 'browser')).toMatchObject({ ownControl: false, report: { handoff: 'acquiring' } });
+    await vi.waitFor(() => expect(f.runtime.liveStatus('one', id, f.context, 'browser')).toMatchObject({ ownControl: false, report: { handoff: 'acquiring' } }));
     release(); expect(await acquire).toMatchObject({ ownControl: true });
     const epoch = f.runtime.status('one')!.controlEpoch!;
     await f.runtime.liveControl('one', id, f.context, 'browser', { op: 'release', epoch, operationId: randomUUID() });
@@ -384,7 +383,7 @@ describe('phone runtime', () => {
         .rejects.toMatchObject({ code: 'PHONE_PERMISSION_REQUIRED' });
       expect(f.driver.execute).not.toHaveBeenCalled();
       await f.runtime.disconnectVideo('one', id, 'mobile', epoch);
-      expect(f.runtime.liveStatus('one', id, f.context, 'mobile').ownControl).toBe(false);
+      expect(f.runtime.liveStatus('one', id, f.context, 'mobile').ownControl).toBe(true);
       frame.frame.fill(0);
     } finally { await f.runtime.shutdown(); }
   });
@@ -839,4 +838,37 @@ it('keeps manual takeover usable after an unconfirmed text paste and does not re
  await expect(f.runtime.liveControl('manual-inspect',id,f.context,'browser',{op:'input',epoch:2,operationId:randomUUID(),frameSeq:frame.seq,action:{type:'typeText',text:'高德地图'}})).rejects.toMatchObject({code:'PHONE_TEXT_INPUT_UNCONFIRMED'});
  expect(f.runtime.liveStatus('manual-inspect',id,f.context,'browser')).toMatchObject({ownControl:true,report:{status:'paused',controlOwner:'human',stopReason:'text_input_unconfirmed'}});
  expect(f.driver.execute).toHaveBeenCalledOnce();frame.frame.fill(0);await f.runtime.shutdown();
+});
+
+ it('allows only one concurrent takeover and fences the old owner after release', async () => {
+  const f = fixture();
+  try {
+    await f.runtime.execute('race', { op: 'open', mode: 'control' }, f.context);
+    const id = f.runtime.status('race')!.sessionId;
+    const take = (client: string, epoch: number) => f.runtime.liveControl('race', id, f.context, client, { op: 'takeover', epoch, operationId: randomUUID() });
+    const outcomes = await Promise.allSettled([take('first', 1), take('second', 1)]);
+    expect(outcomes.map(item => item.status)).toEqual(['fulfilled', 'rejected']);
+    const firstEpoch = f.runtime.status('race')!.controlEpoch!;
+    await f.runtime.liveControl('race', id, f.context, 'first', { op: 'release', epoch: firstEpoch, operationId: randomUUID() });
+    await take('second', f.runtime.status('race')!.controlEpoch!);
+    const current = f.runtime.status('race')!.controlEpoch!;
+    await expect(f.runtime.liveControl('race', id, f.context, 'first', { op: 'release', epoch: firstEpoch, operationId: randomUUID() })).rejects.toMatchObject({ code: 'PHONE_CONTROL_CHANGED' });
+    await f.runtime.disconnectVideo('race', id, 'first', firstEpoch);
+    expect(f.runtime.liveStatus('race', id, f.context, 'second')).toMatchObject({ ownControl: true, report: { controlEpoch: current } });
+    expect(f.driver.execute).not.toHaveBeenCalled();
+  } finally { await f.runtime.shutdown(); }
+});
+it('expires control inside the command queue before maintenance has run', async () => {
+  vi.useFakeTimers(); const f = fixture();
+  try {
+    await f.runtime.execute('race', { op: 'open', mode: 'control' }, f.context);
+    const id = f.runtime.status('race')!.sessionId;
+    await f.runtime.liveControl('race', id, f.context, 'old', { op: 'takeover', epoch: 1, operationId: randomUUID() });
+    const oldEpoch = f.runtime.status('race')!.controlEpoch!;
+    vi.setSystemTime(Date.now() + 16000);
+    await expect(f.runtime.liveControl('race', id, f.context, 'new', { op: 'takeover', epoch: oldEpoch, operationId: randomUUID() })).rejects.toMatchObject({ code: 'PHONE_CONTROL_CHANGED' });
+    expect(f.runtime.status('race')).toMatchObject({ controlOwner: 'none', status: 'paused' });
+    await f.runtime.liveControl('race', id, f.context, 'new', { op: 'takeover', epoch: f.runtime.status('race')!.controlEpoch!, operationId: randomUUID() });
+    expect(f.runtime.liveStatus('race', id, f.context, 'new').ownControl).toBe(true);
+  } finally { await f.runtime.shutdown(); vi.useRealTimers(); }
 });

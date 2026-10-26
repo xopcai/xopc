@@ -4,10 +4,12 @@ export interface XopcPhoneBinding {
   phoneSessionId: string;
   phoneDeviceId: string;
 }
+export interface XopcPhoneAssistanceReference { id: string; version: number; }
 export interface XopcPhoneSummary {
   available: boolean;
   access: string;
   needsUser: boolean;
+  assistance?: XopcPhoneAssistanceReference;
   binding?: XopcPhoneBinding;
   deviceName?: string;
   taskState?: string;
@@ -22,6 +24,9 @@ export interface XopcPhoneReport {
   controlEpoch: number;
   handoff?: string;
   assistanceId?: string;
+  assistanceVersion?: number;
+  hasPendingTask?: boolean;
+  revision?: number;
   reconnectRequired?: boolean;
   stopReason?: string;
   message?: string;
@@ -46,6 +51,7 @@ export interface XopcPhoneAction {
 export interface XopcPhoneControlRequest {
   clientId: string;
   assistanceId?: string;
+  assistanceVersion?: number;
   operationId: string;
   epoch: number;
   expectedTranscriptId: string;

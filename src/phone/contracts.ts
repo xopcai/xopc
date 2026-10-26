@@ -132,6 +132,10 @@ export type PhoneReading = {
 };
 export type PhoneReport = {
   assistanceId?: string;
+  assistanceVersion?: number;
+  transcriptId?: string;
+  revision?: number;
+  hasPendingTask?: boolean;
   reconnectRequired?: boolean;
   sessionId: string; deviceId: string; deviceName: string; owner: string; agentId: string;
   modelRef: string; mock: boolean; mode: 'observe' | 'control'; status: PhoneStatus;

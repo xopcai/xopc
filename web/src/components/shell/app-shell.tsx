@@ -207,7 +207,7 @@ function AppShellContent() {
       <ExtensionNavigateListener />
       <GlobalCommandPaletteHost />
       <GlobalQuickCaptureHost />
-      <GlobalPhoneWorkspace />
+      <GlobalPhoneWorkspace conversationId={workspaceScope === parentConversationId ? parentConversationId : null} />
       <GlobalDiscussionCaptureHost />
       <CapabilitySettingsSheet />
       <SupportReportHost />

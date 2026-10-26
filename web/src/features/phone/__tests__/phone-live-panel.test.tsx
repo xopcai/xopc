@@ -60,11 +60,11 @@ it('shows the saved task after restart without requesting unavailable video or s
   expect(button('接管手机').disabled).toBe(false);
 });
 
-it('shows the takeover reason and tells the user how to continue the original task', async () => {
+it('keeps the assistance explanation in chat and provides explicit takeover', async () => {
   const state = session({ status: 'needs_user', stopReason: 'user_takeover', message: '请在手机上完成验证码登录' });
   await mountPanel(state);
-  expect(container!.textContent).toContain('请在手机上完成验证码登录');
-  expect(container!.textContent).toContain('请接管手机完成所需操作');
+  expect(container!.textContent).not.toContain('请在手机上完成验证码登录');
+  expect(container!.textContent).toContain('等待你处理');
   vi.mocked(controlPhone).mockResolvedValue(state);
   await act(async () => button('接管手机').click());
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'takeover', expect.any(Object));
@@ -84,15 +84,15 @@ it('takes over a paused session instead of resuming the Agent and locks input un
 });
 
 it('keeps releasing control and handing back to the Agent as separate actions', async () => {
-  const state = session({ controlOwner: 'human' }, true);
+  const state = session({ controlOwner: 'human', hasPendingTask: true }, true);
   vi.mocked(controlPhone).mockResolvedValue(state);
   await mountPanel(state);
   await act(async () => button('手机输入').click());
   expect(container!.querySelector('[aria-label="发送到手机的文本"]')).not.toBeNull();
-  await act(async () => button('仅查看').click());
+  await menuItem('结束控制，保持暂停');
   expect(container!.querySelector('[aria-label="发送到手机的文本"]')).toBeNull();
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'release', expect.any(Object));
-  await act(async () => button('恢复 AI 操作').click());
+  await act(async () => button('完成，继续任务').click());
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'handback', expect.any(Object));
   expect(container!.querySelector('[data-phone-device-shell]')?.getAttribute('style')).toContain('0.5625');
 });
@@ -176,7 +176,7 @@ it('opens controls over the phone without sending input and disables manual cont
   expect(button('手机返回').disabled).toBe(false);
 });
 
-it('keeps manual control alive when the browser page is hidden', async () => {
+it('releases control and stops heartbeats when the browser page is hidden', async () => {
   vi.useFakeTimers();
   const state = session({ controlOwner: 'human' }, true);
   vi.mocked(controlPhone).mockReset().mockResolvedValue(state);
@@ -184,8 +184,8 @@ it('keeps manual control alive when the browser page is hidden', async () => {
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
   await act(async () => document.dispatchEvent(new Event('visibilitychange')));
   await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
-  expect(vi.mocked(controlPhone).mock.calls.filter(call => call[2] === 'heartbeat')).toHaveLength(4);
-  expect(vi.mocked(controlPhone).mock.calls.some(call => call[2] === 'release')).toBe(false);
+  expect(vi.mocked(controlPhone).mock.calls.filter(call => call[2] === 'heartbeat')).toHaveLength(0);
+  expect(vi.mocked(controlPhone).mock.calls.some(call => call[2] === 'release')).toBe(true);
 });
 
 it('renews control even when status polling replaces the change callback every second', async () => {
@@ -198,4 +198,16 @@ it('renews control even when status polling replaces the change callback every s
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
   }
   expect(vi.mocked(controlPhone).mock.calls.filter(call => call[2] === 'heartbeat')).toHaveLength(4);
+});
+
+it('releases a late takeover after its panel unmounts', async () => {
+  const state = session({ status: 'needs_user', hasPendingTask: true });
+  let finish!: (value: PhoneLiveState) => void;
+  vi.mocked(controlPhone).mockReset().mockImplementation(async (_id, value, op) => op === 'takeover' ? new Promise(resolve => { finish = resolve; }) : { ...value, ownControl: false });
+  await mountPanel(state);
+  await act(async () => button('接管手机').click());
+  await act(async () => root!.unmount()); root = undefined;
+  const acquired = { ...state, ownControl: true, report: { ...state.report, controlOwner: 'human' as const, controlEpoch: 3 } };
+  await act(async () => finish(acquired));
+  expect(controlPhone).toHaveBeenLastCalledWith('conversation', acquired, 'release');
 });
