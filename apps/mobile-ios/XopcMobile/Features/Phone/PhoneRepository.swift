@@ -15,6 +15,7 @@ struct PhoneSummary: Decodable, Equatable, Sendable {
     let needsUser: Bool
     let binding: PhoneBinding?
     let deviceName: String?
+    // swiftlint:disable:next implicit_optional_initialization
     var assistance: PhoneAssistanceReference? = nil
 }
 
@@ -25,9 +26,12 @@ struct PhoneReport: Decodable, Equatable, Sendable {
     let status: String
     let controlOwner: String?
     let assistanceId: String?
+    // swiftlint:disable:next implicit_optional_initialization
     var assistanceVersion: Int? = nil
     let reconnectRequired: Bool?
+    // swiftlint:disable:next implicit_optional_initialization
     var hasPendingTask: Bool? = nil
+    // swiftlint:disable:next implicit_optional_initialization
     var revision: Int? = nil
 }
 
