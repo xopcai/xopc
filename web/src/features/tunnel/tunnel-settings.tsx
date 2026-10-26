@@ -164,6 +164,8 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         type: 'patch',
         patch: { actionError: e instanceof Error ? e.message : String(e) },
       });
+      // Refresh immediately so a lease conflict exposes recovery on the next click.
+      await mutStatus().catch(() => {});
     } finally {
       dispatchUi({ type: 'patch', patch: { starting: false } });
     }

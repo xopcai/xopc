@@ -96,6 +96,25 @@ describe('TunnelService frpc lifecycle', () => {
     await service.stop();
   });
 
+  it('kills a child that fails login without starting a competing reconnect loop', async () => {
+    const handle = createHandle(301);
+    handle.waitForLoginSuccess = Promise.reject(new Error('frpc login timeout'));
+    mocks.spawnFrpcProcess.mockReturnValueOnce(handle);
+    const service = new TunnelService();
+    const reconnect = vi.fn();
+    const internal = service as unknown as {
+      spawnAndWait(bin: string, path: string, broker: { heartbeat: () => Promise<void> }, state: PersistedTunnelState, interval: number): Promise<void>;
+      scheduleReconnect: typeof reconnect;
+    };
+    internal.scheduleReconnect = reconnect;
+    await expect(internal.spawnAndWait('/tmp/frpc', '/tmp/config.toml',
+      { heartbeat: vi.fn() }, persistedState, 30_000)).rejects.toThrow('frpc login timeout');
+    expect(handle.kill).toHaveBeenCalledOnce();
+    expect(service.getStatus().frpcPid).toBeNull();
+    expect(reconnect).not.toHaveBeenCalled();
+    await service.stop();
+  });
+
   it('reconnects when the active frpc handle exits unexpectedly', async () => {
     const handle = createHandle(201);
     mocks.spawnFrpcProcess.mockReturnValueOnce(handle);
