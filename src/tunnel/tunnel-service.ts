@@ -306,18 +306,26 @@ export class TunnelService extends EventEmitter {
     const handle = spawnFrpcProcess(frpcBin, configPath);
     this.frpcHandle = handle;
 
+    let loggedIn = false;
     handle.onExit((code, signal) => {
       // Replacing frpc intentionally kills the previous handle. Ignore that
       // stale exit instead of turning it into another reconnect attempt.
-      if (this.stopping || this.frpcHandle !== handle) return;
+      if (this.stopping || this.frpcHandle !== handle || !loggedIn) return;
       log.warn({ code, signal, pid: handle.pid }, 'frpc process exited');
       this.clearHeartbeat();
       this.frpcHandle = null;
       void this.scheduleReconnect(frpcBin, configPath, broker, state, heartbeatIntervalMs);
     });
 
-    await handle.waitForLoginSuccess;
-    this.startHeartbeat(broker, state, heartbeatIntervalMs);
+    try {
+      await handle.waitForLoginSuccess;
+      loggedIn = true;
+      this.startHeartbeat(broker, state, heartbeatIntervalMs);
+    } catch (error) {
+      if (this.frpcHandle === handle) this.frpcHandle = null;
+      await handle.kill();
+      throw error;
+    }
   }
 
   private async scheduleReconnect(

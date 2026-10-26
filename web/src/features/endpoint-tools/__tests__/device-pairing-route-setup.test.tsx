@@ -58,6 +58,23 @@ afterEach(() => {
 });
 
 describe('device pairing route recovery', () => {
+  it('switches from a failed ordinary start to explicit recovery on the next click', async () => {
+    vi.mocked(fetchTunnelStatus).mockResolvedValue(status('disconnected'));
+    vi.mocked(startTunnel)
+      .mockRejectedValueOnce(Object.assign(new Error('Active lease ownership proof required'), {
+        body: { code: 'TUNNEL_RECOVERY_PROOF_REJECTED' },
+      }))
+      .mockResolvedValueOnce({ publicUrl: 'https://stable.frp.xopc.ai', subdomain: 'stable' });
+    await render();
+    await act(async () => { container.querySelector('button')!.click(); });
+    expect(startTunnel).toHaveBeenNthCalledWith(1, undefined);
+    expect(startTunnel).toHaveBeenCalledOnce();
+    expect(container.querySelector('button')?.textContent).toBe(copy().recoverRoute);
+    await act(async () => { container.querySelector('button')!.click(); });
+    expect(startTunnel).toHaveBeenNthCalledWith(2, { recoverActiveLease: true });
+    expect(provisionTunnelRegistrationKey).not.toHaveBeenCalled();
+  });
+
   it('recovers the lease explicitly without replacing a valid registration key', async () => {
     vi.mocked(fetchTunnelStatus).mockResolvedValue({ ...status('error'), lastError: 'Active lease ownership proof required' });
     await render();
