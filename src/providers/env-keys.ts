@@ -50,6 +50,8 @@ export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 	dashscope: ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],
 	'dashscope-cn': ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],
 	'dashscope-intl': ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],
+	modelscope: ['MODELSCOPE_TOKEN', 'MODELSCOPE_API_KEY'],
+	'dashscope-phone': ['DASHSCOPE_API_KEY'],
 	'volcengine-ark': ['ARK_API_KEY', 'VOLCENGINE_API_KEY'],
 	'volcengine-plan': ['ARK_API_KEY', 'VOLCENGINE_API_KEY'],
 	'byteplus-plan': ['BYTEPLUS_API_KEY', 'ARK_API_KEY'],

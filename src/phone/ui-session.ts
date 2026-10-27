@@ -15,6 +15,17 @@ export interface PhoneUiTransport {
   close(): Promise<void>;
 }
 
+/** Closing an ADB socket alone need not stop its remote app_process child. */
+export async function closePhoneUiProcess(write: (data: Uint8Array) => Promise<void>, exited: Promise<unknown>, terminate: () => Promise<void>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      (async () => { await write(Buffer.from('{"op":"close"}\n')); await exited; })(),
+      new Promise<void>(resolve => { timer = setTimeout(resolve, 3000); }),
+    ]).catch(() => {});
+  } finally { clearTimeout(timer); await terminate(); }
+}
+
 /** One request in flight, bounded framing, no replay after transport or confirmation failure. */
 export class PhoneUiSession {
   private sequence = 0;
@@ -101,12 +112,14 @@ export async function openLocalPhoneUi(adbPath: string, serial: string, signal: 
   const child = spawnPhoneInteractiveCommand(adbPath, [...args, 'shell', '-T', 'env', `CLASSPATH=${remote}`, 'app_process', '/', 'ai.xopc.phone.PhoneUiDump', '--resident']);
   child.on('error', () => {});
   child.stdin.on('error', () => {});
+  const exited = new Promise<void>(resolve => { child.once('close', resolve); });
+  const write = (data: Uint8Array) => new Promise<void>((resolve, reject) => child.stdin.write(data, error => error ? reject(error) : resolve()));
   return new PhoneUiSession({ readable: child.stdout,
-    write: data => new Promise((resolve, reject) => child.stdin.write(data, error => error ? reject(error) : resolve())),
-    close: async () => {
+    write,
+    close: () => closePhoneUiProcess(write, exited, async () => {
       child.stdin.destroy(); child.stdout.destroy();
       if (child.exitCode !== null || child.signalCode !== null) return;
       await new Promise<void>(resolve => { child.once('close', resolve); child.kill(); });
-    },
+    }),
   });
 }

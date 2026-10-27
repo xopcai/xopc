@@ -339,3 +339,11 @@ describe('XOPC Cloud capability setup', () => {
   expect(completeXopcCloudModelRoutes(models, cloud).phoneUse).toEqual(models.phoneUse);
   expect(completeXopcCloudModelRoutes(AgentModelsDefaultsSchema.parse({ chat: { primary: 'xopc-cloud/auto', fallbacks: [] } }), source([])).phoneUse).toBeUndefined();
 });
+
+it('prefers verified managed phone products when the legacy phone service is absent or also listed', () => {
+  const defaults = AgentModelsDefaultsSchema.parse({ chat: { primary: 'xopc-cloud/auto', fallbacks: [] } });
+  const pro = model({ id: 'phone-doubao', kind: 'language', input: ['text', 'image'], phoneUse: { profile: 'doubao-seed-phone-v1' } });
+  const bailian = model({ id: 'phone-gui-plus', kind: 'language', input: ['text', 'image'], phoneUse: { profile: 'gui-owl-phone-v1' } });
+  expect(completeXopcCloudModelRoutes(defaults, source([bailian, pro])).phoneUse?.primary).toBe('xopc-cloud/phone-doubao');
+  expect(completeXopcCloudModelRoutes(defaults, source([bailian])).phoneUse?.primary).toBe('xopc-cloud/phone-gui-plus');
+});

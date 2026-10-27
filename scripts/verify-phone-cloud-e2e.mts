@@ -38,11 +38,15 @@ const leases = JSON.parse(execFileSync('sqlite3', ['-readonly', '-json', join(or
 assert(!leases.some(row => row.key === selected.serial && JSON.parse(row.payload).expiresAt > Date.now()), 'Test phone has an active owner');
 const cloudToken = await getApiKey('xopc-cloud');
 assert(cloudToken, 'Connect XOPC Cloud before verification');
-assert(process.env.ZHIPU_API_KEY, 'Independent BigModel verification requires ZHIPU_API_KEY');
+const modelRefs = process.env.XOPC_PHONE_MODEL_REFS?.split(',').map(ref => ref.trim())
+  ?? ['volcengine-ark/doubao-seed-2-1-pro-260915', 'xopc-cloud/phone-gui-plus'];
+assert(modelRefs.length > 0 && modelRefs.length <= 6 && modelRefs.every(ref => ref.includes('/')), 'Provide one to six provider/model references');
+if (modelRefs.includes('phone-bigmodel/autoglm-phone')) assert(process.env.ZHIPU_API_KEY, 'Independent BigModel verification requires ZHIPU_API_KEY');
 const fetched = await new XopcCloudModelSource().fetch();
 assert.equal(fetched.status, 'fetched');
 if (fetched.status !== 'fetched') throw Error('Cloud catalog unavailable');
-assert(fetched.models.some(model => model.id === 'phone' && model.phoneUse?.profile === 'autoglm-phone-v1'));
+const preferredCloudPhone = ['phone-doubao', 'phone-gui-plus', 'phone'].find(id => fetched.models.some(model => model.id === id && model.phoneUse));
+assert(preferredCloudPhone, 'No managed phone model available');
 const connection = new CloudAdbConnection(selected.connection.endpoint, await new PhoneCloudKeyStore().load(selected.connection.credentialId));
 const driver = connection.driver();
 const command = (...args: string[]) => connection.command('', ['-s', selected.serial, ...args], AbortSignal.timeout(20_000), 20_000);
@@ -59,12 +63,12 @@ Object.assign(process.env, { XOPC_STATE_DIR: state, XOPC_CONFIG_PATH: configPath
   XOPC_WORKSPACE: state, XOPC_MODELS_JSON: join(state, 'models.json'), XOPC_CREDENTIALS_DIR: credentials,
   XOPC_LOG_CONSOLE: 'false', XOPC_LOG_FILE: 'false', XOPC_SKIP_CHANNELS: '1', XOPC_NO_RESPAWN: '1', PI_CODING_AGENT_DIR: join(state, 'pi') });
 let config = ConfigSchema.parse({ gateway: { bind: 'loopback', port, auth: { mode: 'token', token: gatewayToken } },
-  phone: { enabled: true }, browser: { enabled: false } });
+  phone: { enabled: true, modelRequestTimeoutMs: 120_000 }, browser: { enabled: false } });
 await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
-await writeFile(join(state, 'models.json'), JSON.stringify({ providers: { 'phone-bigmodel': {
+await writeFile(join(state, 'models.json'), JSON.stringify({ providers: modelRefs.includes('phone-bigmodel/autoglm-phone') ? { 'phone-bigmodel': {
   baseUrl: 'https://open.bigmodel.cn/api/paas/v4', api: 'openai-completions', apiKey: 'ZHIPU_API_KEY',
   models: [{ id: 'autoglm-phone', name: 'Independent BigModel Phone', input: ['text', 'image'], maxTokens: 2048, phoneUse: { profile: 'autoglm-phone-v1' } }],
-} } }), { mode: 0o600 });
+} } : {} }), { mode: 0o600 });
 closeXopcDatabase(); openXopcDatabase();
 seedTestAgentCatalog({ defaults: AgentDefaultsSchema.parse({ models: { chat: { primary: 'xopc-cloud/auto' } }, tools: { phone_use: { mode: 'allow' } } }), agents: [{ id: 'main', enabled: true, workspace: state }] });
 const store = getModelCatalogStore(); store.replaceSourceModels('xopc-cloud', fetched.source, fetched.models);
@@ -74,7 +78,7 @@ const service = { get currentConfig() { return config; }, saveConfig: async (nex
   config = next; await writeFile(configPath, JSON.stringify(config), { mode: 0o600 }); return { saved: true };
 } };
 assert.equal((await applyXopcCloudCapabilitySetup(service)).configured, true);
-assert.equal(new AgentCatalogRepository().getSettings().defaults.models.phoneUse?.primary, 'xopc-cloud/phone');
+assert.equal(new AgentCatalogRepository().getSettings().defaults.models.phoneUse?.primary, `xopc-cloud/${preferredCloudPhone}`);
 const device = new PhoneRepository().save({ ...selected, name: 'Cloud model E2E test', appAccess: 'selected', allowedApps: ['com.android.settings'] });
 new PhoneRepository().setDefault(device.id);
 closeXopcDatabase();
@@ -102,11 +106,11 @@ try {
   }
   assert(ready, `Gateway startup failed: ${logs.slice(-2000)}`);
   assert.equal((await fetch(`${base}/api/phone/devices`)).status, 401);
-  assert.equal((await request('/api/global-defaults')).defaults.models.phoneUse.primary, 'xopc-cloud/phone');
+  assert.equal((await request('/api/global-defaults')).defaults.models.phoneUse.primary, `xopc-cloud/${preferredCloudPhone}`);
   const choices = (await request('/api/phone/models')).models;
-  for (const id of ['xopc-cloud/phone', 'phone-bigmodel/autoglm-phone']) assert(choices.some((entry: any) => entry.id === id && entry.configured), `Missing configured model ${id}`);
-  for (const [index, ref] of ['xopc-cloud/phone', 'phone-bigmodel/autoglm-phone', 'xopc-cloud/phone'].entries()) {
-    if (index) {
+  for (const id of modelRefs) assert(choices.some((entry: any) => entry.id === id && entry.configured), `Missing configured model ${id}`);
+  for (const [index, ref] of modelRefs.entries()) {
+    {
       const current = await request('/api/global-defaults');
       await request('/api/global-defaults', { defaults: { ...current.defaults, models: { ...current.defaults.models, phoneUse: { primary: ref, fallbacks: [] } } }, scope: 'models', expectedModels: current.defaults.models }, 'PATCH');
     }
@@ -115,7 +119,8 @@ try {
     await delay(1200);
     const before = await driver.observe(selected.serial, AbortSignal.timeout(30_000));
     const chinese = before.elements.some(node => /显示|设置/.test(node.text)); before.frame.fill(0);
-    const targets = chinese ? ['字体大小', '自动旋转屏幕'] : ['Font size', 'Auto-rotate screen'];
+    await driver.releaseInput();
+    const targets = chinese ? ['字体大小', '显示大小'] : ['Font size', 'Display size'];
     const brightness = chinese ? '亮度' : 'Brightness level';
     const opened = await request('/api/phone/sessions', { deviceId: device.id, mode: 'control', agentId: 'main' });
     sessionId = opened.id;
@@ -127,16 +132,23 @@ try {
     for (let attempt = 0; attempt < 240; attempt++) {
       report = await request(`/api/phone/sessions/${sessionId}`); if (report.status !== 'running') break; await delay(500);
     }
+    console.log(JSON.stringify({ stage: 'goal_report', modelRef: ref, status: report.status,
+      verified: report.verified, errorCode: report.errorCode, actions: report.actions, modelRequests: report.modelRequests }));
+    // Drain the Gateway operation before an independent accessibility owner connects.
+    await request(`/api/phone/sessions/${sessionId}/execute`, { op: 'close' }); sessionId = undefined;
     const final = await driver.observe(selected.serial, AbortSignal.timeout(30_000));
     const visible = final.package === 'com.android.settings'
-      && targets.every(text => final.elements.some(node => node.text === text))
+      && targets.every(text => final.elements.some(node => node.text === text
+        && node.bounds[0] >= 0 && node.bounds[1] >= 0
+        && node.bounds[2] <= final.width && node.bounds[3] <= final.height
+        && node.bounds[2] > node.bounds[0] && node.bounds[3] > node.bounds[1]))
       && final.elements.some(node => node.resourceId === 'android:id/title' && node.text === brightness);
     const settingsUnchanged = JSON.stringify(await settingsSnapshot()) === JSON.stringify(initialSettings);
     await writeFile(join(evidence, `trial-${index + 1}.png`), final.frame); final.frame.fill(0);
+    await driver.releaseInput();
     const trial = { modelRef: ref, status: report.status, verified: report.verified, stopReason: report.stopReason,
-      errorCode: report.errorCode, actions: report.actions, modelRequests: report.modelRequests, independentNativeCheck: visible, settingsUnchanged };
+      errorCode: report.errorCode, ...(report.errorCode ? { message: report.message } : {}), actions: report.actions, modelRequests: report.modelRequests, independentNativeCheck: visible, settingsUnchanged };
     trials.push(trial); console.log(JSON.stringify(trial));
-    await request(`/api/phone/sessions/${sessionId}/execute`, { op: 'close' }); sessionId = undefined;
     assert(settingsUnchanged, 'Sampled Settings values changed');
     assert.equal(report.verified, true, JSON.stringify(trial)); assert(visible, 'Independent native UI check failed');
     assert(report.actions > 0 && report.modelRequests > 0, 'Actual inference and native action required');
@@ -145,9 +157,10 @@ try {
   child.kill('SIGTERM'); await once(child, 'exit');
   openXopcDatabase();
   const repo = new AgentCatalogRepository(); const current = repo.getSettings();
-  repo.updateDefaults({ ...current.defaults, models: { ...current.defaults.models, phoneUse: { primary: 'phone-bigmodel/autoglm-phone', fallbacks: [] } } }, current.revision);
+  const independentModel = modelRefs.find(ref => !ref.startsWith('xopc-cloud/')) ?? 'phone-bigmodel/autoglm-phone';
+  repo.updateDefaults({ ...current.defaults, models: { ...current.defaults.models, phoneUse: { primary: independentModel, fallbacks: [] } } }, current.revision);
   assert.equal((await applyXopcCloudCapabilitySetup(service)).configured, true);
-  assert.equal(repo.getSettings().defaults.models.phoneUse?.primary, 'phone-bigmodel/autoglm-phone'); closeXopcDatabase();
+  assert.equal(repo.getSettings().defaults.models.phoneUse?.primary, independentModel); closeXopcDatabase();
   const summary = { passed: true, device: name, deviceModel: model, authenticatedGateway: true,
     stateIsolated: true, cloudDefaultAfterConnection: true, independentModelPreservedAfterReconnect: true, trials };
   await writeFile(join(evidence, 'result.json'), JSON.stringify(summary, null, 2)); console.log(JSON.stringify(summary));
@@ -164,6 +177,6 @@ try {
       else await command('shell', 'settings', 'put', 'system', key, initialSettings[key]!);
     }
   } finally {
-    connection.dispose(); closeXopcDatabase(); await rm(state, { recursive: true, force: true });
+    await driver.releaseInput(); connection.dispose(); closeXopcDatabase(); await rm(state, { recursive: true, force: true });
   }
 }

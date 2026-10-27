@@ -1,11 +1,13 @@
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { getPhoneModels } from './phone-models.js';
 
 /**
- * Local catalog entries required by xopc's Computer Use providers.
+ * Local catalog entries required by xopc's Computer and Phone Use providers.
  * Keep this list narrow: full provider catalogs should come from pi-ai.
  */
 export function getSupplementalModels(): Model<Api>[] {
   return [
+    ...getPhoneModels(),
     {
       id: 'gui-plus-2026-02-26', name: 'GUI-Plus (2026-02-26)', provider: 'dashscope-cn',
       api: 'openai-completions', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',

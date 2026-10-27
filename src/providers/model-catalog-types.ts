@@ -3,7 +3,7 @@ import type { VoiceManifest } from '@xopcai/realtime-protocol/voice';
 export interface CatalogModel {
   voice?: VoiceManifest;
   computerUse?: { profile: ComputerProfile };
-  phoneUse?: { profile: 'autoglm-phone-v1' | 'structured-phone-v1' };
+  phoneUse?: { profile: 'autoglm-phone-v1' | 'structured-phone-v1' | 'doubao-seed-phone-v1' | 'gui-owl-phone-v1' };
   id: string;
   name: string;
   displayNames?: Partial<Record<'zh-CN' | 'en', string>>;

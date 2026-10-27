@@ -2,7 +2,28 @@ import { PassThrough } from 'node:stream';
 
 import { expect, it, vi } from 'vitest';
 
-import { PhoneUiSession } from '../ui-session.js';
+import { closePhoneUiProcess, PhoneUiSession } from '../ui-session.js';
+
+it('sends shutdown and waits for remote process exit before terminating its transport', async () => {
+  let finish!: () => void;
+  const exited = new Promise<void>(resolve => { finish = resolve; });
+  const write = vi.fn(async () => {}); const terminate = vi.fn(async () => {});
+  const closing = closePhoneUiProcess(write, exited, terminate);
+  await Promise.resolve(); await Promise.resolve();
+  expect(JSON.parse(Buffer.from(write.mock.calls[0][0]).toString())).toEqual({ op: 'close' });
+  expect(terminate).not.toHaveBeenCalled(); finish(); await closing;
+  expect(terminate).toHaveBeenCalledOnce();
+});
+
+it('bounds shutdown when the remote process is unresponsive', async () => {
+  vi.useFakeTimers();
+  try {
+    const terminate = vi.fn(async () => {});
+    const closing = closePhoneUiProcess(async () => {}, new Promise(() => {}), terminate);
+    await vi.advanceTimersByTimeAsync(3000); await closing;
+    expect(terminate).toHaveBeenCalledOnce();
+  } finally { vi.useRealTimers(); }
+});
 
 function fixture(reply: (request: Record<string, unknown>, stream: PassThrough) => void) {
   const stream = new PassThrough();

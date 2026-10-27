@@ -44,7 +44,36 @@ For BigModel, configure Zhipu GLM China with model ID `autoglm-phone`, image inp
 
 Select AutoGLM and save it as the phone model. **Test model connection** sends a synthetic test image, not the current phone screen, and reports protocol validity and button grounding separately. This is a real model request and may incur provider charges. A successful connection test is not a task-success benchmark.
 
-Other compatible models can be added in Models settings using image input, OpenAI Chat Completions and an explicit Phone Use profile. Supported profiles are `autoglm-phone-v1` and `structured-phone-v1`. No automatic model fallback is performed. Agent settings can override the global phone model without changing the chat model.
+Other compatible models can be added in Models settings using image input, OpenAI Chat Completions and an explicit Phone Use profile. Supported profiles are `autoglm-phone-v1`, `structured-phone-v1`, `doubao-seed-phone-v1`, and `gui-owl-phone-v1`. No automatic model fallback is performed. Agent settings can override the global phone model without changing the chat model.
+
+### Cloud models with your own key (BYOK)
+
+In **Intelligence → Models**, add **Volcengine Ark** or **Alibaba Bailian · Phone Use**. Enter your own API key, save the provider, then select the model in Phone Use. The presets retain image input and the native phone action profile. Existing providers can add these models manually. Existing phone selections are not changed.
+
+| Provider | Base URL | Preset model IDs | Phone profile |
+|---|---|---|---|
+| Volcengine Ark | `https://ark.cn-beijing.volces.com/api/v3` | `doubao-seed-2-1-pro-260915` | `doubao-seed-phone-v1` |
+| Bailian Phone Use | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `gui-plus-2026-02-26` | `gui-owl-phone-v1` |
+
+For Ark, sign in to the [Volcengine Ark console](https://console.volcengine.com/ark/), choose your project, create an API key under **API Key management**, and activate the chosen Seed model under model activation management. Follow the [official quick start](https://docs.volcengine.com/docs/ark/quick-start?lang=en). Use the exact model ID available to your account, or replace it with your `ep-...` inference endpoint ID while retaining the phone profile. Use the standard model service endpoint, not a Coding Plan credential/endpoint. The Gateway can also read `ARK_API_KEY` or `VOLCENGINE_API_KEY`.
+
+The unavailable ModelScope GUI-Owl presets and unverified Seed Lite preset were
+removed on 2026-10-27. ModelScope credentials remain usable for general inference.
+The phone list now retains only the verified Seed Pro and Bailian GUI-Plus routes.
+
+The [official GUI-Owl project](https://github.com/X-PLUG/MobileAgent/blob/main/README_zh.md)
+links its Bailian hosted API to `gui-plus-2026-02-26`. This is the vendor's
+GUI-Plus service name, not an alias for a particular open-weight 8B checkpoint.
+Its native mobile action prompt passed screenshot grounding and real Android
+navigation with xopc. Local BYOK uses
+`dashscope-phone/gui-plus-2026-02-26`; the managed service is
+`xopc-cloud/phone-gui-plus`. Use a **Beijing-region Bailian API key**, as required
+by the [GUI-Plus documentation](https://help.aliyun.com/zh/model-studio/gui-automation).
+The phone provider is separate from the existing computer provider so their
+control protocols remain scoped to the chosen capability. Obtain a key through
+the [Bailian API key guide](https://help.aliyun.com/zh/model-studio/get-api-key).
+
+Keys are resolved through the existing Gateway provider credential flow. BYOK requests go to the configured provider; they do not require XOPC Cloud. Adding a provider/model does not switch an active session. Run **Test model connection** first: it sends a synthetic image and dispatches no device input. Native GUI adapters accept one action, reject malformed/batched/truncated output, and preserve host app restrictions and completion verification. Account access, latency, cost and real-app success require validation with your key; catalog cost placeholders do not mean inference is free.
 
 When native UI text is empty, `observe` automatically makes a read-only screenshot transcription request to the configured phone model. Supply an optional `goal` on `observe` to read a specific value missing from otherwise populated native nodes. Unverified model completion in `run` / `step` also attempts one screenshot reading for the original goal. Reading uses the existing model-request and active-time budgets and never dispatches device input.
 
@@ -83,7 +112,7 @@ The four-arm real-app harness compares baseline, semantic execution, planning an
 - Device control is exclusive within the Gateway's SQLite state. Use one Gateway/runner for a phone; separate Gateway state directories are not coordinated.
 - App permissions are enforced before model requests and before dispatch. An app can still transition after a check; this is not an OS sandbox or a guarantee against all UI races.
 - If a requested exact input field is absent while its target value appears in other visible content, the next prediction receives a bounded reminder that the task is still unfinished. This does not generate input or add a model request. When explicit native completion conditions remain unmet, a model finish claim triggers a fresh observation and up to two bounded corrections. A delayed UI result can be verified without another prediction. Repeated unsupported finish claims pause the task as `completion_unmet`, without an extra reading request or automatic device input. Inspect before resuming.
-- Android observation reuses a device-side accessibility process during an operation. Each snapshot reads the current native tree; screenshots and pre-dispatch freshness checks remain required. The observer closes on operation completion, cancellation and human takeover. Another automation owner can prevent connection; xopc does not stop that owner automatically.
+- Android observation reuses a device-side accessibility process during an operation. Each snapshot reads the current native tree; screenshots and pre-dispatch freshness checks remain required. Completion, cancellation, human takeover and temporary previews send an explicit helper shutdown and wait for exit before handing off accessibility ownership. Another automation owner can prevent connection; xopc does not stop that owner automatically.
 - Explicit replacement of one focused, identifiable non-password native field uses a short accessibility transaction: check app, node identity, bounds and old value, set the requested value once, and verify the same native node. An unknown outcome pauses for inspection. Insert operations and legacy driver integrations retain the clipboard/input path.
 - Unicode text through the legacy path on Android 7+ uses a control-only scrcpy clipboard paste channel, without installing or switching input methods. Supplied text may remain on the phone clipboard; existing clipboard contents are never read or synced. Receipt ACKs are followed by native UI verification. Missing dependencies or unconfirmed insertion pauses for manual inspection; no automatic retry or APK installation occurs. Device settings can disable automatic text input. Password fields remain protected.
 - Arbitrary shell, APK installation, file extraction, cloud provisioning, vendor cloud SDKs, HDC and iOS control are outside this version.

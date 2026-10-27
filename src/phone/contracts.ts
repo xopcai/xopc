@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import type { PhonePerformance } from './execution-trace.js';
 
-export const PhoneProfileSchema = z.enum(['autoglm-phone-v1', 'structured-phone-v1']);
+export const PhoneProfileSchema = z.enum(['autoglm-phone-v1', 'structured-phone-v1', 'doubao-seed-phone-v1', 'gui-owl-phone-v1']);
 export const PhoneModelMetadataSchema = z.object({ profile: PhoneProfileSchema }).strict();
 export const MOCK_PHONE_MODEL = 'phone-mock/settings-about';
 export const MOCK_PHONE_GOAL = 'Open Android Settings and inspect About phone';

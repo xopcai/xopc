@@ -143,9 +143,11 @@ export function completeXopcCloudModelRoutes(models: AgentDefaults['models'], so
     && isComputerModel({ ...model, provider: source.providerId, api: source.api }))
     .sort((left, right) => compareCatalogModels(left, right))[0];
   if (computer) next.computerUse ??= route(computer);
+  const preferredPhone = ['phone-doubao', 'phone-gui-plus', 'phone'].find(id => source.models.some(model =>
+    model.id === id && model.availability === 'available' && phoneModelProfile({ ...model, api: source.api })));
   const phone = source.models.filter(model => model.availability === 'available'
     && phoneModelProfile({ ...model, api: source.api }))
-    .sort((left, right) => compareCatalogModels(left, right, 'phone'))[0];
+    .sort((left, right) => compareCatalogModels(left, right, preferredPhone))[0];
   if (phone) next.phoneUse ??= route(phone);
   return next;
 }
