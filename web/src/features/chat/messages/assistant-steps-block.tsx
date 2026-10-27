@@ -24,6 +24,7 @@ import { routeWheelThroughVerticalScrollChain } from '@/features/chat/scroll/whe
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import {
   getPublicToolExecutionTitle,
+  hasSpecificToolExecutionTitle,
   type ToolExecutionLabels,
 } from '@/features/chat/messages/tool-friendly-title';
 import {
@@ -321,7 +322,12 @@ export function AssistantStepsBlock({
       && (item.status === 'error' || item.activity?.status === 'failed'));
     const needsAttention = workLog.status === 'failed' || workLog.status === 'partial' || failedWithoutAnswer;
     const progress = (anyActive && !answerStarted) || needsAttention
-      ? publicAssistantProgress(workLog.items) : [];
+      ? publicAssistantProgress(workLog.items, block => {
+        if (block.status === 'error' || block.activity?.status === 'failed') return null;
+        if (!hasSpecificToolExecutionTitle(block.name) && classifyTool(block.name, block.activity) === 'other') return null;
+        return semanticTitle(block, anyActive && (block.status === 'running' || block.activity?.status === 'running')
+          ? 'running' : 'completed');
+      }) : [];
     return (
       <div data-assistant-work-log data-work-log-status={workLog.status} className="my-1 min-w-0 w-full text-left">
         {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (

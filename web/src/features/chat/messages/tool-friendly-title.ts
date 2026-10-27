@@ -21,6 +21,7 @@ export type ToolExecutionState = 'running' | 'completed';
 type ToolExecutionLabel = Record<ToolExecutionState, string>;
 
 export type ToolExecutionLabels = {
+  phone?: Record<'discover' | 'set_mode' | 'open' | 'observe' | 'step' | 'run' | 'status' | 'pause' | 'request_user' | 'resume' | 'cancel' | 'close' | 'default', ToolExecutionLabel>;
   builtins: Record<
     'automation' | 'browser' | 'clarification' | 'codeExecution' | 'toolSearch' | 'computer' | 'connection' | 'desktopPet' | 'delegation' | 'diagnostics' | 'imageGeneration' | 'imageInspection' | 'job' | 'manual' | 'mediaRead' | 'mediaSend' | 'memoryMaintenance' | 'memoryRead' | 'memoryUpdate' | 'message' | 'publish' | 'planning' | 'review' | 'sessionRecall' | 'sessionSearch' | 'sessionStatus' | 'share' | 'skillInstall' | 'skillManage' | 'skillSearch' | 'skillView' | 'speech' | 'structuredOutput' | 'todo' | 'webExtract',
     ToolExecutionLabel
@@ -121,7 +122,7 @@ const BUILTIN_SEMANTICS: Readonly<Record<string, keyof ToolExecutionLabels['buil
 
 export function hasSpecificToolExecutionTitle(name: string): boolean {
   const id = normalizedToolId(name);
-  return id === 'xopc_use' || id in BUILTIN_SEMANTICS;
+  return id === 'xopc_use' || id === 'phone_use' || id in BUILTIN_SEMANTICS;
 }
 
 /** Public activity titles never interpolate arbitrary tool names or input previews. */
@@ -133,7 +134,8 @@ export function getPublicToolExecutionTitle(
   runningLabels: Record<ToolDisplayKind, string>,
 ): string {
   if (hasSpecificToolExecutionTitle(block.name)) {
-    return getToolExecutionTitle(block.name, normalizedToolId(block.name) === 'xopc_use' ? block.input : undefined,
+    const id = normalizedToolId(block.name);
+    return getToolExecutionTitle(block.name, id === 'xopc_use' || id === 'phone_use' ? block.input : undefined,
       state, labels, friendlyLabels, block.activity);
   }
   const kind = classifyToolDisplay(block.name, block.activity);
@@ -229,6 +231,12 @@ export function getToolExecutionTitle(
   activity?: ToolActivity,
 ): string {
   const id = normalizedToolId(name);
+  if (id === 'phone_use' && labels.phone) {
+    const operation = asRecord(input)?.op;
+    const label = typeof operation === 'string' && Object.hasOwn(labels.phone, operation)
+      ? labels.phone[operation as keyof NonNullable<ToolExecutionLabels['phone']>] : labels.phone.default;
+    return label[state];
+  }
   if (id === 'xopc_use') {
     const record = asRecord(input);
     const mode = typeof record?.mode === 'string' ? record.mode.trim().toLowerCase() : '';

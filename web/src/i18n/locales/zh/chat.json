@@ -322,6 +322,21 @@
         "todo": { "running": "正在更新任务清单…", "completed": "更新了任务清单" },
         "webExtract": { "running": "正在提取网页内容…", "completed": "提取了网页内容" }
       },
+      "phone": {
+        "discover": {"running": "正在查找可用手机…", "completed": "已查询可用手机"},
+        "set_mode": {"running": "正在切换手机操作模式…", "completed": "已请求切换手机操作模式"},
+        "open": {"running": "正在连接手机…", "completed": "已检查手机连接"},
+        "observe": {"running": "正在查看手机当前画面…", "completed": "已查看手机当前画面"},
+        "step": {"running": "正在执行手机上的操作…", "completed": "已执行一项手机操作"},
+        "run": {"running": "正在执行手机任务…", "completed": "已运行手机任务"},
+        "status": {"running": "正在确认手机任务进度…", "completed": "已查询手机任务进度"},
+        "pause": {"running": "正在暂停手机任务…", "completed": "已请求暂停手机任务"},
+        "request_user": {"running": "正在请求你协助操作手机…", "completed": "已请求你协助操作手机"},
+        "resume": {"running": "正在继续手机任务…", "completed": "已请求继续手机任务"},
+        "cancel": {"running": "正在停止手机任务…", "completed": "已请求停止手机任务"},
+        "close": {"running": "正在结束手机操作…", "completed": "已请求结束手机操作"},
+        "default": {"running": "正在操作手机…", "completed": "已调用手机工具"}
+      },
       "actions": {
         "inspect": { "running": "正在查看{{object}}…", "completed": "查看了{{object}}" },
         "create": { "running": "正在创建{{object}}…", "completed": "创建了{{object}}" },

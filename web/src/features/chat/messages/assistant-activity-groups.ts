@@ -1,17 +1,22 @@
 import type { AssistantWorkLogItem } from './assistant-turn-view-model';
-import type { ToolUseContent } from './messages.types';
+import type { TextContent, ToolUseContent } from './messages.types';
 
-/** Only public narration belongs in the conversation; generic activity is conveyed by one indicator. */
-export function publicAssistantProgress(items: AssistantWorkLogItem[]) {
+/** Keep public narration and known operation summaries; generic activity uses one indicator. */
+export function publicAssistantProgress(items: AssistantWorkLogItem[], toolTitle?: (tool: ToolUseContent) => string | null): TextContent[] {
   const seen = new Set<string>();
-  return items.filter((item) => {
-    if (item.type !== 'text' || item.presentation !== 'narration') return false;
-    const text = item.text.replace(/\s+/g, ' ').trim();
+  const progress: TextContent[] = [];
+  for (const item of items) {
+    const title = item.type === 'tool_use' ? toolTitle?.(item) : null;
+    const block: TextContent | null = item.type === 'text' && item.presentation === 'narration' ? item
+      : title ? { type: 'text', text: title, presentation: 'narration', segmentId: `tool-progress:${item.type === 'tool_use' ? item.id : ''}` } : null;
+    if (!block) continue;
+    const text = block.text.replace(/\s+/g, ' ').trim();
     if (!text || /^(?:正在处理|正在执行操作|其他操作|处理中|working|processing|other operations?|running)[.。…\s]*$/i.test(text)
-      || seen.has(text)) return false;
+      || seen.has(text)) continue;
     seen.add(text);
-    return true;
-  });
+    progress.push(block);
+  }
+  return progress;
 }
 
 export type AssistantActivityGroup =

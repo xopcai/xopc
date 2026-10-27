@@ -322,6 +322,21 @@
         "todo": { "running": "Updating task list…", "completed": "Updated task list" },
         "webExtract": { "running": "Extracting webpage…", "completed": "Extracted webpage" }
       },
+      "phone": {
+        "discover": {"running": "Finding available phones…", "completed": "Checked available phones"},
+        "set_mode": {"running": "Switching phone operation mode…", "completed": "Requested phone mode change"},
+        "open": {"running": "Connecting to the phone…", "completed": "Checked phone connection"},
+        "observe": {"running": "Checking the current phone screen…", "completed": "Checked the current phone screen"},
+        "step": {"running": "Performing an action on the phone…", "completed": "Performed a phone action"},
+        "run": {"running": "Running the phone task…", "completed": "Ran the phone task"},
+        "status": {"running": "Checking phone task progress…", "completed": "Checked phone task progress"},
+        "pause": {"running": "Pausing the phone task…", "completed": "Requested phone task pause"},
+        "request_user": {"running": "Requesting your help on the phone…", "completed": "Requested your help on the phone"},
+        "resume": {"running": "Continuing the phone task…", "completed": "Requested phone task continuation"},
+        "cancel": {"running": "Stopping the phone task…", "completed": "Requested phone task stop"},
+        "close": {"running": "Ending phone operations…", "completed": "Requested phone operation end"},
+        "default": {"running": "Operating the phone…", "completed": "Called the phone tool"}
+      },
       "actions": {
         "inspect": { "running": "Inspecting {{object}}…", "completed": "Inspected {{object}}" },
         "create": { "running": "Creating {{object}}…", "completed": "Created {{object}}" },
