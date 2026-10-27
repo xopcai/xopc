@@ -85,11 +85,11 @@ describe('MessageList visible rows', () => {
     expect(container.querySelector('img')).not.toBeNull();
   });
 
-  it('keeps final failures but removes tool-only failure rows in Personal', () => {
+  it('keeps final failures and inspectable tool failures in Personal', () => {
     render([{ ...empty, outcome }, { role: 'assistant', content: [
       { type: 'tool_use', id: 'failed-tool', name: 'read', status: 'error', result: 'Tool failed' },
     ] }]);
-    expect(rows()).toHaveLength(1);
+    expect(rows()).toHaveLength(2);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Provider capacity exhausted');
   });
 

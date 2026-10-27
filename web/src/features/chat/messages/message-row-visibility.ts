@@ -2,9 +2,8 @@ import { assistantVisibleMessage } from './assistant-visible-message';
 import { buildAssistantTurnViewModel, type AssistantTurnViewModel } from './assistant-turn-view-model';
 import type { Message, ReasoningLevel } from './messages.types';
 
-export function shouldShowAssistantWorkLog(view: AssistantTurnViewModel, enabled: boolean, personal = false): boolean {
-  if (personal) return false;
-  // Outside Personal, failed tools remain inspectable when routine activity is hidden.
+export function shouldShowAssistantWorkLog(view: AssistantTurnViewModel, enabled: boolean): boolean {
+  // Failed tools remain inspectable when routine activity is hidden.
   return enabled || view.workLog.items.some(item => item.type === 'tool_use' && item.status === 'error');
 }
 
@@ -29,6 +28,6 @@ export function hasVisibleMessageRow(message: Message, options: {
       || view.outcome.evidence.length || view.outcome.deliverables.length))
     || message.taskResultDelivery
     || message.personalProvenance
-    || (shouldShowAssistantWorkLog(view, options.showAssistantWorkLog, options.personal) && view.workLog.items.length),
+    || (shouldShowAssistantWorkLog(view, options.showAssistantWorkLog) && view.workLog.items.length),
   );
 }

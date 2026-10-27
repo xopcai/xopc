@@ -8,7 +8,7 @@ export type TextContent = {
   text: string;
   /** One model message segment within an assistant turn. */
   segmentId?: string;
-  /** Pending text is intentionally rendered like narration until the segment ends. */
+  /** Pending text stays in the public answer area until the segment is classified. */
   presentation?: 'pending' | 'narration' | 'answer';
 };
 
@@ -165,6 +165,8 @@ export interface Message {
     cost?: number;
   };
   timestamp?: number;
+  /** Earliest assistant fragment timestamp after live/history aggregation. */
+  startedAt?: number;
   /** Client-observed end of a live assistant run, used to freeze elapsed activity time. */
   completedAt?: number;
 }

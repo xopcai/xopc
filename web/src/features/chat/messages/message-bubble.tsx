@@ -320,7 +320,7 @@ export const MessageBubble = memo(function MessageBubble({
   const showStreamingCursor = isAssistant
     ? Boolean(assistantTurnView?.answer.showStreamingCursor)
     : isStreaming;
-  const showPersonalThinkingBubble = personal && isAssistant && isStreaming
+  const showPersonalThinkingBubble = personal && !showAssistantWorkLog && isAssistant && isStreaming
     && !assistantTurnView?.answer.started && !attachmentsForBubble?.length;
 
   const showPendingThinking = isStreaming && !streamingThinking
@@ -331,12 +331,12 @@ export const MessageBubble = memo(function MessageBubble({
   const reserveAssistantActions = isAssistant && isStreaming && !readonly && !suppressAssistantActions
     && assistantAnswerStarted;
   const copyMarkdown = useMemo(
-    () => (assistantActionsVisible ? getAssistantCopyMarkdown(message.content ?? [], usesConversationText(message, personal)) : ''),
-    [assistantActionsVisible, message, personal],
+    () => (assistantActionsVisible ? getAssistantCopyMarkdown(message.content ?? []) : ''),
+    [assistantActionsVisible, message],
   );
   const copyPlainText = useMemo(
-    () => (assistantActionsVisible && copyMarkdown ? getAssistantCopyPlainText(message.content ?? [], usesConversationText(message, personal)) : ''),
-    [assistantActionsVisible, copyMarkdown, message, personal],
+    () => (assistantActionsVisible && copyMarkdown ? getAssistantCopyPlainText(message.content ?? []) : ''),
+    [assistantActionsVisible, copyMarkdown, message],
   );
   const speakableText = useMemo(
     () => (assistantActionsVisible && copyMarkdown ? buildSpeakableText(copyMarkdown) : ''),
@@ -556,7 +556,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [isUser, userCopyText]);
 
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
-  const assistantStepsBlock = assistantTurnView && shouldShowAssistantWorkLog(assistantTurnView, showAssistantWorkLog, personal)
+  const assistantStepsBlock = assistantTurnView && shouldShowAssistantWorkLog(assistantTurnView, showAssistantWorkLog)
     && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0)
     ? <AssistantStepsBlock
         workLog={assistantTurnView.workLog}

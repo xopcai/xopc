@@ -24,7 +24,8 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'stream',
     });
 
-    expect(view.answer.started).toBe(true);
+    expect(view.answer.started).toBe(false);
+    expect(view.workLog.items[0]).toMatchObject({ type: 'text', text: 'I will inspect the project.' });
     expect(view.answer.showStreamingCursor).toBe(false);
     expect(view.lifecycle.state).toBe('using_tool');
     expect(view.lifecycle.activeTool?.name).toBe('read_file');

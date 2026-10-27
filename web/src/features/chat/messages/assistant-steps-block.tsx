@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BookOpen, ChevronDown, Circle, FilePenLine, Globe, Search, Sparkles, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -50,6 +50,7 @@ import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
+import { groupAssistantActivity, summarizeToolActivity } from './assistant-activity-groups';
 import { CodemodeOutputLink } from './codemode-output-link';
 import { codemodeOutputPath } from './codemode-output-path';
 
@@ -160,7 +161,8 @@ export function AssistantStepsBlock({
   const stepCount = visibleItems.length;
   const anyActive = workLog.active;
   const stepsDrawerOpen = workLog.expandedByDefault && anyActive;
-  const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
+  const [expansion, setExpansion] = useState<{ active: boolean; value: boolean } | null>(null);
+  const userExpanded = expansion?.active === anyActive ? expansion.value : null;
   const autoExpanded = stepsDrawerOpen;
   const [showEarlier, setShowEarlier] = useState(false);
   const processRef = useRef<HTMLDivElement>(null);
@@ -193,8 +195,9 @@ export function AssistantStepsBlock({
   }, [expanded, hasOpened]);
   const stableItems = visibleItems.every(item => knownPartRenderKey(item)
     || item.type === 'tool_use' || (item.type === 'text' && item.segmentId));
-  const recentStart = stableItems && anyActive && !showEarlier && !showRawToolData ? Math.max(0, visibleItems.length - 3) : 0;
-  const timelineItems = visibleItems.slice(recentStart);
+  const groups = groupAssistantActivity(visibleItems);
+  const recentStart = stableItems && anyActive && !showEarlier && !showRawToolData ? Math.max(0, groups.length - 3) : 0;
+  const timelineItems = groups.slice(recentStart).flatMap(group => group.type === 'tools' ? group.tools : [group.item]);
   const effectiveStartedAt = workLog.startedAt ?? null;
   const completedDurationMs = workLog.durationMs ?? null;
   const friendlyTitleLabels = useMemo(() => ({
@@ -239,7 +242,7 @@ export function AssistantStepsBlock({
       ? 'thinking' : activityBlocks.length > 0 ? 'organizing' : 'working');
   const activeHeaderLabel = streamingHeaderText ?? pendingLabel ?? fallbackLabel;
 
-  if (stepCount === 0 && !anyActive) {
+  if (workLog.items.length === 0 && !anyActive) {
     return null;
   }
 
@@ -311,12 +314,14 @@ export function AssistantStepsBlock({
 
   return (
     <div
+      data-assistant-work-log
+      data-work-log-status={workLog.status}
       className={cn(
         'my-1 min-w-0',
         anyActive || expanded ? 'w-full' : 'w-fit max-w-full',
       )}
     >
-      {anyActive || showDisclosure ? <button
+      {anyActive || (!workLog.compact && workLog.items.length > 0) ? <button
         type="button"
         disabled={!showDisclosure}
         className={cn(
@@ -325,7 +330,7 @@ export function AssistantStepsBlock({
           anyActive ? 'w-full' : 'w-fit',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
-        onClick={showDisclosure ? () => setUserExpanded((current) => !(current ?? autoExpanded)) : undefined}
+        onClick={showDisclosure ? () => setExpansion({ active: anyActive, value: !expanded }) : undefined}
         aria-expanded={showDisclosure ? expanded : undefined}
       >
         <Sparkles className={cn('size-4 shrink-0', anyActive && 'assistant-activity-busy')} aria-hidden />
@@ -348,7 +353,7 @@ export function AssistantStepsBlock({
         <div className="assistant-activity-disclosure" data-open={expanded} aria-hidden={!expanded} inert={!expanded}>
           <div className="min-h-0 overflow-hidden">
             <div ref={processRef} className="assistant-activity-flow mt-1 max-h-[min(32rem,50dvh)] w-full min-w-0 overflow-x-hidden overflow-y-auto pb-1 pl-1 pr-2 [scrollbar-gutter:stable]" data-assistant-activity-flow
-              onFocusCapture={() => setUserExpanded(true)}>
+              onFocusCapture={() => setExpansion({ active: anyActive, value: true })}>
               {recentStart > 0 ? <button type="button" className="mb-3 text-xs text-fg-muted hover:text-fg"
                 onClick={() => setShowEarlier(true)}>{chatLabels.activityEarlier}</button> : null}
               <AssistantStepsTimeline
@@ -409,6 +414,11 @@ export function AssistantStepsTimeline({
   conversationId?: string | null;
 }) {
   const initialKeys = useRef(new Set(blocks.map(activityItemKey)));
+  const showRawToolData = useDevViewStore(state => state.showRawToolData);
+  const language = useLocaleStore(state => state.language);
+  const groups = showRawToolData
+    ? blocks.map(item => ({ type: 'item' as const, item }))
+    : groupAssistantActivity(blocks);
   const hasBlocks = blocks.length > 0;
 
   if (!hasBlocks) {
@@ -420,19 +430,58 @@ export function AssistantStepsTimeline({
       className={cn('min-w-0 overflow-x-hidden', className)}
     >
       <div className="min-w-0 space-y-2.5 pl-1">
-        {blocks.map((b, i) => (
-          <div key={activityItemKey(b, i)} className={cn(animateNew && !initialKeys.current.has(activityItemKey(b, i)) && b.type !== 'text' && 'assistant-activity-enter')}>
-            <StepRow
-              block={b}
-              toolLabels={toolLabels}
-              stepLabels={stepLabels}
-              cardLabels={cardLabels}
-              conversationId={conversationId}
-              runActive={runActive}
-            />
-          </div>
-        ))}
+        {groups.map((group, i) => {
+          const first = group.type === 'tools' ? group.tools[0] : group.item;
+          const key = activityItemKey(first, i);
+          const renderTool = (block: ToolUseContent) => (
+            <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={stepLabels}
+              cardLabels={cardLabels} conversationId={conversationId} runActive={runActive} />
+          );
+          return (
+            <div key={key} className={cn(animateNew && !initialKeys.current.has(key) && first.type !== 'text' && 'assistant-activity-enter')}>
+              {group.type === 'tools' ? (
+                <ToolActivityGroup tools={group.tools} runActive={runActive} labels={stepLabels}
+                  language={language} renderTool={renderTool} />
+              ) : (
+                <StepRow block={group.item} toolLabels={toolLabels} stepLabels={stepLabels}
+                  cardLabels={cardLabels} conversationId={conversationId} runActive={runActive} />
+              )}
+            </div>
+          );
+        })}
       </div>
+    </div>
+  );
+}
+
+function ToolActivityGroup({ tools, runActive, labels, language, renderTool }: {
+  tools: ToolUseContent[];
+  runActive?: boolean;
+  labels: Parameters<typeof AssistantStepsTimeline>[0]['stepLabels'];
+  language: StoredLanguage;
+  renderTool: (tool: ToolUseContent) => ReactNode;
+}) {
+  const running = runActive && tools.some(tool => tool.status === 'running' || tool.activity?.status === 'running');
+  const chat = messages(language).chat;
+  const summary = summarizeToolActivity(tools, tool => getPublicToolExecutionTitle(tool,
+    runActive && (tool.status === 'running' || tool.activity?.status === 'running') ? 'running' : 'completed',
+    labels.toolActivity, labels, labels.runningActions), {
+    repeated: chat.activityRepeated, more: chat.activityMore, failed: chat.activityFailed,
+    separator: language === 'zh' ? '、' : ', ',
+  });
+  const activeTool = running ? [...tools].reverse().find(tool => tool.status === 'running' || tool.activity?.status === 'running') : undefined;
+  if (tools.length === 1) return renderTool(tools[0]);
+  return (
+    <div data-activity-group className="min-w-0 space-y-1.5">
+      {activeTool ? renderTool(activeTool) : null}
+      <details className="min-w-0 text-[13px] text-fg-muted">
+        <summary className="cursor-pointer rounded-md py-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <span>{summary}</span>
+        </summary>
+        <div className="mt-2 min-w-0 space-y-2.5 border-l border-edge-subtle pl-3">
+          {tools.map(renderTool)}
+        </div>
+      </details>
     </div>
   );
 }

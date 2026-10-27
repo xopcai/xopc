@@ -2,6 +2,23 @@ import { resolveToolActivity, type AgentStreamToolExecutionMetadata, type ToolAc
 
 import type { Message, MessageContent, ReviewContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 import { inheritPartIdentity } from '@/features/chat/rendering/part-identity';
+import { assistantAnswerContent } from './assistant-turn-content';
+
+/** Recover classification when message-end was lost but an authoritative run terminal arrived. */
+export function finalizePendingText(content: MessageContent[], successful: boolean): void {
+  const answer = new Set(assistantAnswerContent(content, { includePending: true }));
+  for (const block of content) {
+    if (block.type !== 'text' || block.presentation !== 'pending') continue;
+    if (!answer.has(block)) block.presentation = 'narration';
+    else if (successful) block.presentation = 'answer';
+  }
+}
+
+function confirmPendingNarration(content: MessageContent[]): void {
+  for (const block of content) {
+    if (block.type === 'text' && block.presentation === 'pending') block.presentation = 'narration';
+  }
+}
 
 /** Pi / wire format may use `thinking` on blocks; UI streaming uses `text`. */
 function thinkingBlockVisibleText(b: MessageContent): string {
@@ -122,6 +139,7 @@ function closeStreamingThinkingIfAny(content: MessageContent[]): void {
 
 /** Start a new reasoning segment (e.g. run `thinking` with status `started`). */
 export function startThinkingSegment(content: MessageContent[]): void {
+  confirmPendingNarration(content);
   const last = content[content.length - 1];
   if (last?.type === 'thinking' && last.streaming) {
     return;
@@ -342,6 +360,7 @@ export function appendToolStart(
   activity?: ToolActivity,
   metadata?: AgentStreamToolExecutionMetadata,
 ): void {
+  confirmPendingNarration(content);
   closeStreamingThinkingIfAny(content);
 
   const block: ToolUseContent = {

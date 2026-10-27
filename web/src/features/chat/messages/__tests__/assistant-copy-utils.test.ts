@@ -18,9 +18,9 @@ describe('assistant copy presentation', () => {
     expect(getAssistantCopyMarkdown(content)).toBe('**最终结果**');
     expect(getAssistantCopyPlainText(content)).toBe('最终结果');
   });
-  it('copies visible Personal conversation text without thoughts or tool details', () => {
-    const visible = [...content, { type: 'thinking' as const, text: 'private thought' }];
-    expect(getAssistantCopyMarkdown(visible, true)).toBe(content.map(block => block.text).join('\n\n'));
-    expect(getAssistantCopyPlainText(visible, true)).not.toContain('private thought');
+  it('copies only the final result on Personal as well', () => {
+    const visible = [{ type: 'thinking' as const, text: 'private thought' }, ...content];
+    expect(getAssistantCopyMarkdown(visible)).toBe('**最终结果**');
+    expect(getAssistantCopyPlainText(visible)).not.toContain('private thought');
   });
 });

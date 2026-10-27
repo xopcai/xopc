@@ -128,7 +128,10 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       && !(m.startsNewBubble && previous.turnId !== m.turnId)) {
       const prev = { ...previous, content: mergeAssistantContentFragments(previous.content, m.content) };
       out[out.length - 1] = prev;
-      if (m.timestamp != null) prev.timestamp = m.timestamp;
+      if (m.timestamp != null) {
+        prev.startedAt = Math.min(previous.startedAt ?? previous.timestamp ?? m.timestamp, m.startedAt ?? m.timestamp);
+        prev.timestamp = m.timestamp;
+      }
       if (m.completedAt != null) prev.completedAt = m.completedAt;
       if (m.renderKey) prev.renderKey = m.renderKey;
       if (!prev.turnId && m.turnId) prev.turnId = m.turnId;
