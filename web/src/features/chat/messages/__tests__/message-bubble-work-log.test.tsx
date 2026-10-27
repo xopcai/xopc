@@ -161,6 +161,36 @@ describe('lightweight assistant activity', () => {
     expect(container.querySelector('[data-assistant-work-log] svg')).toBeNull();
   });
 
+  it('shows concrete phone operations even when the assistant has not sent narration', () => {
+    const show = (active: boolean) => act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', content: [
+      { ...tool, id: 'connect', name: 'phone_use', input: { op: 'open', deviceId: 'private-device' }, status: 'done' },
+      { ...tool, id: 'inspect', name: 'phone_use', input: { op: 'observe' }, status: 'done' },
+      { ...tool, id: 'operate', name: 'phone_use', input: { op: 'run', goal: 'private task with credentials' }, status: active ? 'running' : 'done' },
+      ...(!active ? [{ type: 'text' as const, text: '手机任务结果。', presentation: 'answer' as const }] : []),
+    ] }} isStreaming={active} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
+    show(true);
+    const flow = container.querySelector('[data-assistant-activity-flow]')!;
+    expect(flow.textContent).toContain('已检查手机连接');
+    expect(flow.textContent).toContain('已查看手机当前画面');
+    expect(flow.textContent).toContain('正在执行手机任务');
+    expect(container.textContent).not.toMatch(/private|phone_use|正在处理|其他操作/);
+    expect(flow.querySelector('svg')).toBeNull();
+    expect(container.querySelectorAll('[data-assistant-running]')).toHaveLength(1);
+    show(false);
+    expect(container.textContent).toContain('手机任务结果。');
+    expect(container.textContent).not.toContain('已查看手机当前画面');
+  });
+
+  it('deduplicates known parallel operations without hiding the actual activity', () => {
+    act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', content:
+      Array.from({ length: 4 }, (_, index) => ({ ...tool, id: `read-${index}`, name: 'read_file' })),
+    }} isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
+    const flow = container.querySelector('[data-assistant-activity-flow]')!;
+    expect(flow.textContent).toContain('正在读取文件');
+    expect(flow.querySelectorAll('.markdown-body')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-assistant-running]')).toHaveLength(1);
+  });
+
   it('shows all concrete narration in order and deduplicates replay without folding', () => {
     const progress = Array.from({ length: 7 }, (_, index) => ({ type: 'text' as const,
       text: `已核对资料 ${index + 1}`, presentation: 'narration' as const, segmentId: `stage-${index}` }));
