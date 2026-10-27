@@ -87,7 +87,7 @@ const currentHashes = candidate?.hashes ?? hostHashes;
 const diagnosticContracts = await import('../src/phone/contracts.js');
 const harnessSourceSha256 = Object.fromEntries(await Promise.all(['scripts/benchmark-phone-apps-live.mts', 'scripts/phone-apps-live/tasks.ts', 'scripts/phone-apps-live/support.ts', 'scripts/phone-apps-live/initial-state.ts', 'scripts/phone-apps-live/response-metadata.ts', 'scripts/phone-apps-live/response-reader.ts', 'scripts/phone-apps-live/protocol-envelope-diagnostics.ts', 'scripts/phone-apps-live/protocol-alternatives.ts'].map(async name => [name, createHash('sha256').update(await readFile(join(root, name))).digest('hex')])));
 const adb = currentDriver.resolveAdbPath(process.env.XOPC_PHONE_ADB_PATH);
-const setupDriver = new currentDriver.AdbPhoneDriver(adb);
+const setupDriver = new baseline.driver.AdbPhoneDriver(adb);
 const shell = async (args: string[], signal: AbortSignal = deadline) => currentDriver.runAdb(adb, ['-s', serial, 'shell', ...args], signal);
 const discovery = await setupDriver.discover(deadline);
 assert(discovery.some(device => device.serial === serial && device.emulator && device.state === 'device'), 'The selected emulator must be connected and authorized');
@@ -394,6 +394,10 @@ async function runTrial(task: Task, arm: ArmName, repeat: number) {
   const persistTrace = () => writeFile(tracePath, JSON.stringify({ task: task.id, arm, repeat, trace }, null, 2) + '\n');
   let observationCount = 0; let modelStep = 0; let scopeViolation = false;
   const definition = definitions[arm];
+  // Release only this suite's CLI instrumentation owner on the dedicated, asserted AVD.
+  // Production observer startup never kills another accessibility owner.
+  await setupDriver.releaseInput?.();
+  await shell(['am', 'force-stop', 'com.android.cli.interact.instrumentation']);
   const rawDriver = new definition.Driver(adb);
   const driver = new Proxy(rawDriver, { get(target, property) {
     if (property === 'observe') return async (targetSerial: string, signal: AbortSignal) => {
@@ -538,6 +542,7 @@ finally {
     try { await tasks.find(task => task.id === 'clock-stopwatch')!.prepare(setup); }
     catch (error) { console.error(JSON.stringify({ cleanupError: errorCode(error) })); }
   }
+  await setupDriver.releaseInput?.();
   if (checkpointInitial && checkpoint) {
     try { await snapshotCommand('delete', AbortSignal.timeout(60_000)); checkpointDeleted = true; }
     catch (error) { console.error(JSON.stringify({ checkpointCleanupError: errorCode(error) })); process.exitCode = 1; }

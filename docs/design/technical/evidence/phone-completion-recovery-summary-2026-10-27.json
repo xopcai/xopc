@@ -1,0 +1,282 @@
+{
+  "date": "2026-10-27",
+  "baseline": "Frozen phase-2 working tree",
+  "baselineDirectory": "/tmp/xopc-phone-finish-baseline-20261027",
+  "model": "autoglm-phone",
+  "device": "XOPC_Android_Test_API_35 (Android 15 emulator)",
+  "hashSets": {
+    "d05e026fd8e64f2b": {
+      "scripts/benchmark-phone-apps-live.mts": "94a2fa583b4592a79ed3b3fdb27cfa7da8460581c644b63718b3b1eccdb1150a",
+      "scripts/phone-apps-live/tasks.ts": "e7eb9ec479a28a90634ee7ab8205ef1b010126248b2b39436c514a716f5e0cc7",
+      "scripts/phone-apps-live/support.ts": "f79f9fa17e7a4a7223ef7d762da5b184bc590bebf158616b7e468b899548ba24",
+      "scripts/phone-apps-live/initial-state.ts": "42f69168743377ae03caa7125a49ea366ccaab037f54e91d5a7b5784ef48aa6d",
+      "scripts/phone-apps-live/response-metadata.ts": "f8fbbf68a1e88614ec9856148d1b8e5816cb428a71a6c1182a8f4c7af8b9c661",
+      "scripts/phone-apps-live/response-reader.ts": "e6e27af37526714e1ff1880d07ec2b01d05f9eeb794b7e924d30a30c11202815",
+      "scripts/phone-apps-live/protocol-envelope-diagnostics.ts": "7284c09eaf90faeafb65017c63d56d4379a712004dbbc2ae56292b1fe941ad34",
+      "scripts/phone-apps-live/protocol-alternatives.ts": "58e50a5714b9c607fd90a7e7718088dff6ea2db3650ded58720c7914353e7713"
+    },
+    "1910866a96452284": {
+      "runtime.ts": "26248b65ec6388eaed5d912ad573bf3466995b9bdc5d8377d6aa63ade9362edd",
+      "model-adapter.ts": "2ea1ef0150f3154809d9c8e90fc8b5daa23da09aafd087bfff9578bdeaafa780",
+      "adb-driver.ts": "10f38b215db183e4901722f7e41c68cb62abadecfe9947680a1d56d51854af86",
+      "contracts.ts": "382da1db570d559df4f6ee2c9fa6caf1ed38106c1fab96429880b3b23d279e0c",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1",
+      "execution-trace.ts": "64f36b371e202ac07aa2b4fdc7869f8871ebdb513aa85dd7289b695fb95e523c",
+      "model-response.ts": "197a3e4c8e384fb091a8ca4a75b40cc957af57536a01d92ac35dece603c564ab",
+      "autoglm-protocol.ts": "f9280634748a3d5e9968b9c2feea1f0788230f9be0ffb4f55d70dcd5f9dd2e37",
+      "autoglm-upstream-prompt.ts": "2e9a57b0cf486b58bc5db1a7220b547a130cd2824a06fb886bdc417ff23334d8",
+      "text-session.ts": "9df0daefe60259dca2e51036b2b4d816ffdb2c9307d98f9b485dc65a1ed87c0a",
+      "ui-session.ts": "5e5fb86ed4f15a8a259ecf5b4b9e4c869550b2493ede3f4b033fc06ced44f6bd",
+      "cloud-adb-connection.ts": "26712c5423e330ecd8dcc8d8a3211bd8835ee393ef93e24288814e29b93426e9",
+      "cloud-adb.ts": "b478fc17709312cc79e916e9cac7e3f5edf43ca8fa5cd3ba07337093e0a3a0c9",
+      "ui-dump-binary.ts": "e8651f93995ee085fdd593a1e80e2515db261fc79895db0b9cf037ca3e1e8edd"
+    },
+    "fa1f32ea35e3245e": {
+      "runtime.ts": "abd1c753037623cde515ce729f4097a2627c78b8e0343bcda8a1285cac3c9128",
+      "model-adapter.ts": "2ea1ef0150f3154809d9c8e90fc8b5daa23da09aafd087bfff9578bdeaafa780",
+      "adb-driver.ts": "10f38b215db183e4901722f7e41c68cb62abadecfe9947680a1d56d51854af86",
+      "contracts.ts": "382da1db570d559df4f6ee2c9fa6caf1ed38106c1fab96429880b3b23d279e0c",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "completion-recovery.ts": "67404efd5cf85f6c4ff164d4d656c9aa027ec801d76c897464dd6b9b998f9be4",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1",
+      "execution-trace.ts": "64f36b371e202ac07aa2b4fdc7869f8871ebdb513aa85dd7289b695fb95e523c",
+      "model-response.ts": "197a3e4c8e384fb091a8ca4a75b40cc957af57536a01d92ac35dece603c564ab",
+      "autoglm-protocol.ts": "f9280634748a3d5e9968b9c2feea1f0788230f9be0ffb4f55d70dcd5f9dd2e37",
+      "autoglm-upstream-prompt.ts": "2e9a57b0cf486b58bc5db1a7220b547a130cd2824a06fb886bdc417ff23334d8",
+      "text-session.ts": "9df0daefe60259dca2e51036b2b4d816ffdb2c9307d98f9b485dc65a1ed87c0a",
+      "ui-session.ts": "5e5fb86ed4f15a8a259ecf5b4b9e4c869550b2493ede3f4b033fc06ced44f6bd",
+      "cloud-adb-connection.ts": "26712c5423e330ecd8dcc8d8a3211bd8835ee393ef93e24288814e29b93426e9",
+      "cloud-adb.ts": "b478fc17709312cc79e916e9cac7e3f5edf43ca8fa5cd3ba07337093e0a3a0c9",
+      "ui-dump-binary.ts": "e8651f93995ee085fdd593a1e80e2515db261fc79895db0b9cf037ca3e1e8edd"
+    }
+  },
+  "panels": {
+    "main": {
+      "resultPath": "/tmp/xopc-phone-finish-main-20261027/result.json",
+      "resultSha256": "4434aae2ccf765efeb9e0d99b81276c9ebc02d1eb9b48a6658940ac40e20a464",
+      "actualModelRequests": 34,
+      "matchedPairEfficacy": [
+        {
+          "arm": "baseline",
+          "completed": 8,
+          "total": 8,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 1,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 0
+          },
+          "actualModelRequests": 17
+        },
+        {
+          "arm": "efficiency",
+          "completed": 8,
+          "total": 8,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 1
+          },
+          "actualModelRequests": 17
+        }
+      ],
+      "pairedInitialStates": [
+      {"task":"settings-display","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-display","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-search-display","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-search-display","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"contacts-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"contacts-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true}
+    ],
+      "animationSettingsRestored": true,
+      "budget": {
+        "repeats": 2,
+        "actionsPerTrial": 12,
+        "requestsPerTrial": 8,
+        "trialMs": 90000,
+        "requestCap": 128,
+        "suiteMs": 1800000
+      },
+      "harnessHashSet": "d05e026fd8e64f2b",
+      "sourcesByArm": {
+        "baseline": {
+          "implementation": "baseline-snapshot",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "sourceHashSet": "1910866a96452284"
+        },
+        "efficiency": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "sourceHashSet": "fa1f32ea35e3245e"
+        }
+      }
+    },
+    "files": {
+      "resultPath": "/tmp/xopc-phone-finish-files-20261027/result.json",
+      "resultSha256": "1af64b082a15a25e51fe9edec7febd5703d5fa202256c9520a5f57f634b4c7ee",
+      "actualModelRequests": 9,
+      "matchedPairEfficacy": [
+        {
+          "arm": "baseline",
+          "completed": 2,
+          "total": 2,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 0
+          },
+          "actualModelRequests": 4
+        },
+        {
+          "arm": "efficiency",
+          "completed": 2,
+          "total": 2,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 1
+          },
+          "actualModelRequests": 5
+        }
+      ],
+      "pairedInitialStates": [
+      {"task":"files-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true}
+    ],
+      "animationSettingsRestored": true,
+      "budget": {
+        "repeats": 2,
+        "actionsPerTrial": 12,
+        "requestsPerTrial": 8,
+        "trialMs": 90000,
+        "requestCap": 32,
+        "suiteMs": 600000
+      },
+      "harnessHashSet": "d05e026fd8e64f2b",
+      "sourcesByArm": {
+        "baseline": {
+          "implementation": "baseline-snapshot",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "sourceHashSet": "1910866a96452284"
+        },
+        "efficiency": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "sourceHashSet": "fa1f32ea35e3245e"
+        }
+      }
+    }
+  },
+  "rows": [
+      {"panel":"main","task":"settings-display","repeat":1,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":11440,"corrections":0},
+      {"panel":"main","task":"settings-display","repeat":1,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":9861,"corrections":0},
+      {"panel":"main","task":"settings-search-display","repeat":1,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":9815,"corrections":0},
+      {"panel":"main","task":"settings-search-display","repeat":1,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":10435,"corrections":0},
+      {"panel":"main","task":"files-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":10377,"corrections":0},
+      {"panel":"main","task":"files-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":3,"durationMs":17581,"corrections":1},
+      {"panel":"main","task":"contacts-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":9726,"corrections":0},
+      {"panel":"main","task":"contacts-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":3,"durationMs":11068,"corrections":0},
+      {"panel":"main","task":"settings-display","repeat":2,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":9844,"corrections":0},
+      {"panel":"main","task":"settings-display","repeat":2,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":10869,"corrections":0},
+      {"panel":"main","task":"settings-search-display","repeat":2,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":10714,"corrections":0},
+      {"panel":"main","task":"settings-search-display","repeat":2,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":9027,"corrections":0},
+      {"panel":"main","task":"files-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":10552,"corrections":0},
+      {"panel":"main","task":"files-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":10094,"corrections":0},
+      {"panel":"main","task":"contacts-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":8805,"corrections":0},
+      {"panel":"main","task":"contacts-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":8862,"corrections":0},
+      {"panel":"files","task":"files-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":12051,"corrections":0},
+      {"panel":"files","task":"files-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":3,"durationMs":21066,"corrections":1},
+      {"panel":"files","task":"files-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":9737,"corrections":0},
+      {"panel":"files","task":"files-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"status":"completed","stopReason":"condition_satisfied","requests":2,"durationMs":11058,"corrections":0}
+    ],
+  "recoveredCases": [
+      {"panel":"main","task":"files-search","repeat":1,"completed":true,"requests":3,"durationMs":17581,"corrections":1,"decisionSequence":["complete","tap","typeText"],"tracePath":"/tmp/xopc-phone-finish-main-20261027/files-search-1-efficiency.json","traceSha256":"f42b12307a4dae97d049f8151384574b412c6b24017f594848aff09c00667a6d"},
+      {"panel":"files","task":"files-search","repeat":1,"completed":true,"requests":3,"durationMs":21066,"corrections":1,"decisionSequence":["complete","tap","typeText"],"tracePath":"/tmp/xopc-phone-finish-files-20261027/files-search-1-efficiency.json","traceSha256":"573bb0e7897b63dc3fc4d7652abef64a669130f69534436b09a17e2767012e8b"}
+    ],
+  "limitations": [
+    "Ten matched pairs are not evidence of general success-rate superiority or statistical non-inferiority.",
+    "Both baseline and candidate completed all tasks in this run; baseline premature-finish failures were not reproduced.",
+    "Two candidate premature finishes recovered; their counterfactual behavior under baseline is not measured.",
+    "All completed trials including recovery costs are included; median alone does not describe total time or long tails.",
+    "System apps and test data on a dedicated emulator; no public-cloud latency or production account validation."
+  ],
+  "summary": {
+    "baseline": {
+      "completed": 10,
+      "trials": 10,
+      "requests": 21,
+      "medianEndToEndMs": 10791.5,
+      "totalEndToEndMs": 106911,
+      "normalPathMedianMs": 10791.5,
+      "normalPathTrials": 10,
+      "medianOfTrialMeanObservationMs": 264.76,
+      "medianOfTrialMeanFieldTransactionMs": 49.79,
+      "prematureFinishCorrections": 0
+    },
+    "efficiency": {
+      "completed": 10,
+      "trials": 10,
+      "requests": 22,
+      "medianEndToEndMs": 9829.5,
+      "totalEndToEndMs": 116071,
+      "normalPathMedianMs": 9776,
+      "normalPathTrials": 8,
+      "medianOfTrialMeanObservationMs": 274.27,
+      "medianOfTrialMeanFieldTransactionMs": 49.42,
+      "prematureFinishCorrections": 2
+    }
+  },
+  "actualModelRequests": 43,
+  "preservedPhoneModules": [
+    "adb-driver.ts",
+    "ui-session.ts",
+    "cloud-adb.ts",
+    "cloud-adb-connection.ts",
+    "ui-dump-binary.ts",
+    "model-adapter.ts"
+  ],
+  "changedPhoneModules": [
+    "runtime.ts",
+    "completion-recovery.ts"
+  ],
+  "validation": {
+    "phoneTestsPassed": 472,
+    "phoneTestsSkipped": 1,
+    "phoneTestFiles": 35,
+    "coreAndElectronTypecheck": true,
+    "benchmarkTypecheck": true,
+    "targetedEslint": true,
+    "nodeTypesWebBuild": true,
+    "electronGatewayBuild": true,
+    "docsCheck": true,
+    "noResidentObserverAfterBenchmarks": true
+  }
+}

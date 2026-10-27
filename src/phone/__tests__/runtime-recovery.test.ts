@@ -48,7 +48,7 @@ function fixture(predict: PhoneModelAdapter['predict'], options: { modelRequests
 
 describe('phone native recovery runtime', () => {
   it('replans entry Back without dispatching it, then completes an allowed forward route', async () => {
-    const predict = vi.fn<PhoneModelAdapter['predict']>(async input => input.recoveryHint
+    const predict = vi.fn<PhoneModelAdapter['predict']>(async input => input.recoveryHint?.includes('Back was not dispatched')
       ? { kind: 'action', action: { type: 'tap', point: [200, 300] } } : { kind: 'action', action: { type: 'back' } });
     const f = fixture(predict);
     vi.mocked(f.driver.execute).mockImplementation(async () => { f.set([element('Done')]); });
@@ -69,7 +69,7 @@ describe('phone native recovery runtime', () => {
   });
 
   it('keeps an incomplete destination open and permits scrolling to reveal its required evidence', async () => {
-    const predict = vi.fn<PhoneModelAdapter['predict']>(async input => input.recoveryHint
+    const predict = vi.fn<PhoneModelAdapter['predict']>(async input => input.recoveryHint?.includes('destination anchor')
       ? { kind: 'action', action: { type: 'swipe', start: [500, 800], end: [500, 300], durationMs: 500 } }
       : { kind: 'action', action: { type: 'back' } });
     const f = fixture(predict);

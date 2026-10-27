@@ -1,5 +1,6 @@
 /** Dedicated-AVD verification for cached UI helpers, Unicode channel reuse and batched readings. */
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
@@ -10,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import { AdbPhoneDriver, resolveAdbPath, runAdb } from '../src/phone/adb-driver.js';
 import { CloudAdbConnection } from '../src/phone/cloud-adb-connection.js';
+import { openLocalPhoneUi } from '../src/phone/ui-session.js';
 import { PHONE_UI_DEX } from '../src/phone/ui-dump-binary.js';
 import { readScrcpyServer, scrcpyServerPath } from '../src/phone/scrcpy-assets.js';
 import { PhoneExecutionTrace } from '../src/phone/execution-trace.js';
@@ -42,7 +44,7 @@ const legacy = await loadBaseline(root, baseline, modules);
 const results: Record<string, unknown> = {
   device: 'XOPC_Android_Test_API_35', testedAt: new Date().toISOString(),
   limitations: ['Cloud helper commands are bridged through local ADB; these are not cloud-network latency measurements.',
-    'Three samples per helper strategy and three Unicode replacements per implementation are mechanism checks, not production P95 estimates.'],
+    'Three samples per helper strategy and four Unicode/special-character replacements per implementation are mechanism checks, not production P95 estimates.'],
 };
 const binary = Buffer.from(PHONE_UI_DEX, 'base64');
 const cacheRemote = `/data/local/tmp/xopc-ui-${createHash('sha256').update(binary).digest('hex')}.dex`;
@@ -57,7 +59,18 @@ connection.command = async (_path, args, requestedSignal) => {
     throw error;
   }
 };
-connection.client = async () => ({ sync: async () => ({
+connection.client = async () => ({
+  createSocket: async (command: string) => {
+    assert(/^exec:env CLASSPATH=\/data\/local\/tmp\/xopc-ui-[0-9a-f]{64}\.dex app_process \/ ai\.xopc\.phone\.PhoneUiDump --resident$/.test(command));
+    const child = spawn(adb, ['-s', serial, 'shell', '-T', ...command.slice(5).split(' ')], { stdio: ['pipe', 'pipe', 'ignore'] });
+    child.on('error', () => {}); child.stdin.on('error', () => {});
+    return { readable: child.stdout, writable: new WritableStream<Uint8Array>({
+      write: data => new Promise<void>((resolve, reject) => child.stdin.write(data, error => error ? reject(error) : resolve())),
+    }), close: async () => {
+      child.stdin.destroy(); child.stdout.destroy();
+      if (child.exitCode === null && child.signalCode === null) await new Promise<void>(resolve => { child.once('close', resolve); child.kill(); });
+    } };
+  }, sync: async () => ({
   write: async ({ filename, permission, file }: any) => {
     const chunks = []; const reader = file.getReader();
     for (;;) { const next = await reader.read(); if (next.done) break; chunks.push(Buffer.from(next.value)); }
@@ -97,9 +110,28 @@ try {
     results.cloudDriverObservation = { nativeNodes: cloudScreen.elements.length, width: cloudScreen.width, height: cloudScreen.height,
       validPackageAssociation: true, performance: cloudTrace.snapshot() };
   } finally { cloudScreen.frame.fill(0); cloudTrace.finish(); }
+  const lifecycleObserver = await openLocalPhoneUi(adb, serial, signal);
+  try {
+    assert((await lifecycleObserver.snapshot(signal)).includes('</hierarchy>'));
+    const cancel = new AbortController();
+    const begin = performance.now();
+    const pending = lifecycleObserver.snapshot(cancel.signal);
+    setTimeout(() => cancel.abort(), 5);
+    await assert.rejects(pending, { code: 'PHONE_UI_UNAVAILABLE' });
+    await lifecycleObserver.close();
+    let exited = false;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const processes = await shell('ps', '-A', '-o', 'ARGS');
+      if (!processes.includes('ai.xopc.phone.PhoneUiDump')) { exited = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert(exited, 'The cancelled resident helper must exit and release accessibility ownership');
+    results.observerCancellation = { rejectedPendingRead: true, remoteProcessExited: true, durationMs: Math.round(performance.now() - begin) };
+  } finally { await lifecycleObserver.close(); }
   if (!process.argv.includes('--helpers-only')) {
   const unicode = []; results.unicode = unicode;
-  for (const arm of ['baseline', 'efficiency']) {
+  for (const arm of (process.argv.includes('--reverse-input-order') ? ['efficiency', 'baseline'] : ['baseline', 'efficiency'])) {
+    await shell('am', 'force-stop', 'com.android.cli.interact.instrumentation');
     const driver = arm === 'baseline' ? new legacy.driver.AdbPhoneDriver(adb) : new AdbPhoneDriver(adb);
     await shell('am', 'force-stop', 'com.google.android.settings.intelligence');
     await shell('am', 'force-stop', 'com.android.settings');
@@ -122,7 +154,7 @@ try {
     const samples = [];
     try {
       await trace.run(async () => {
-        for (const text of ['咖啡', '地图', '咖啡😀']) {
+        for (const text of ['咖啡', '地图', '咖啡😀', 'A&B <C> \"D\" &lt; 😀']) {
           observation = await driver.observe(serial, signal);
           try {
             const begin = performance.now();
@@ -138,6 +170,43 @@ try {
     unicode.push({ arm, durationMs: Math.round(performance.now() - started), samples, performance: trace.snapshot() });
   }
   results.unicode = unicode;
+  await shell('am', 'force-stop', 'com.android.cli.interact.instrumentation');
+  const resident = new AdbPhoneDriver('', connection.command.bind(connection), false, undefined, undefined, undefined, undefined,
+    requestedSignal => connection.observer(requestedSignal));
+  const residentTrace = new PhoneExecutionTrace();
+  try {
+    const timings = [];
+    await residentTrace.run(async () => {
+      for (let index = 0; index < 6; index++) {
+        const begin = performance.now(); const screen = await resident.observe(connection.endpoint, signal);
+        timings.push(Math.round(performance.now() - begin)); screen.frame.fill(0);
+      }
+      const screen = await resident.observe(connection.endpoint, signal);
+      try { await resident.execute(connection.endpoint, { type: 'typeText', mode: 'replace', text: '云端验证😀' }, screen, signal, { settleMs: 0 }); }
+      finally { screen.frame.fill(0); }
+      const verified = await resident.observe(connection.endpoint, signal);
+      try {
+        const editor = verified.elements.find(node => node.focused && node.editable && !node.password);
+        assert(editor); assert.equal(editor.text, '云端验证😀');
+        const stale = { ...verified, elements: [{ ...editor, text: 'incorrect old value' }] };
+        await assert.rejects(resident.execute(connection.endpoint, { type: 'typeText', mode: 'replace', text: 'must not appear' }, stale, signal, { settleMs: 0 }),
+          { code: 'PHONE_TEXT_INPUT_UNCONFIRMED' });
+      } finally { verified.frame.fill(0); }
+    });
+    await resident.releaseInput();
+    const unchanged = await resident.observe(connection.endpoint, signal);
+    try { assert(unchanged.elements.some(node => node.editable && node.text === '云端验证😀')); }
+    finally { unchanged.frame.fill(0); }
+    results.residentCloudBridge = { coldAndWarmObservationMs: timings, unicodeVerified: true, staleValueRefusedWithoutWrite: true,
+      performance: residentTrace.snapshot() };
+  } finally { await resident.releaseInput(); residentTrace.finish(); }
+  // Preserve the separate, optional batched-reading experiment's expected scratch query.
+  const restore = new AdbPhoneDriver(adb);
+  try {
+    const screen = await restore.observe(serial, signal);
+    try { await restore.execute(serial, { type: 'typeText', mode: 'replace', text: '咖啡😀' }, screen, signal, { settleMs: 0 }); }
+    finally { screen.frame.fill(0); }
+  } finally { await restore.releaseInput(); }
   }
   }
   if (process.env.XOPC_PHONE_REAL_MODEL === '1' && !process.argv.includes('--helpers-only')) {
@@ -167,16 +236,17 @@ try {
       };
     }
     const adapter = await createPhoneModel('phone-efficiency-check/autoglm-phone', ConfigSchema.parse({}), 'main');
-    const observation = await new AdbPhoneDriver(adb).observe(serial, signal);
+    const readingDriver = new AdbPhoneDriver(adb);
+    const observation = await readingDriver.observe(serial, signal);
     const trace = new PhoneExecutionTrace();
-    assert(observation.elements.some(node => node.editable && node.text === '咖啡😀'), 'Prepare the expected scratch query before reading fields');
     try {
+      assert(observation.elements.some(node => node.editable && node.text === '咖啡😀'), 'Prepare the expected scratch query before reading fields');
       const values = await trace.run(() => adapter.readFields!({ goal: 'Read the visible search query and page title', observation,
         allowedApps: ['com.google.android.settings.intelligence'], history: [] },
       [{ key: 'query', description: 'Exact current search query including any emoji' }, { key: 'title', description: 'Visible page title or null if absent' }], signal));
       assert.equal(values.query, '咖啡😀');
       results.fields = { verifiedByIndependentNativeQuery: true, values, source: 'screenshot', verification: 'unverified', performance: trace.snapshot() };
-    } finally { observation.frame.fill(0); trace.finish(); results.fieldTiming = trace.snapshot(); }
+    } finally { await readingDriver.releaseInput(); observation.frame.fill(0); trace.finish(); results.fieldTiming = trace.snapshot(); }
   }
 } catch (error) {
   results.error = { name: error instanceof Error ? error.name : 'Error', code: (error as { code?: string })?.code, message: error instanceof Error ? error.message : String(error) };

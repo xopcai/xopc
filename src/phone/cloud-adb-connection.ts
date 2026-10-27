@@ -13,6 +13,7 @@ import { readScrcpyServer } from './scrcpy-assets.js';
 import { PhoneError } from './contracts.js';
 import { protectPhoneCredential } from './cloud-key-permissions.js';
 import { measurePhonePhase } from './execution-trace.js';
+import { PhoneUiSession } from './ui-session.js';
 import { PHONE_UI_DEX } from './ui-dump-binary.js';
 
 /** Accept only an explicit TCP endpoint, never URLs, paths or ADB commands. */
@@ -137,7 +138,7 @@ export class CloudAdbConnection {
       clearTimeout(this.idle); this.idle = setTimeout(() => this.close(), 30_000); this.idle.unref();
     }
   }
-  async hierarchy(signal: AbortSignal): Promise<string> {
+  private async prepareUi(signal: AbortSignal): Promise<string> {
     const combined = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
     const abort = () => this.close(); combined.addEventListener('abort', abort, { once: true });
     const binary = Buffer.from(PHONE_UI_DEX, 'base64');
@@ -161,13 +162,34 @@ export class CloudAdbConnection {
           if (deployed !== hash) throw new PhoneError('PHONE_UI_UNAVAILABLE', 'Phone UI helper verification failed', 502);
         });
       }
-      const result = (await this.command('', ['-s', this.endpoint, 'shell', 'env', `CLASSPATH=${remote}`, 'app_process', '/', 'ai.xopc.phone.PhoneUiDump'], combined)).toString();
-      if (!result.includes('<hierarchy') || !result.includes('</hierarchy>')) throw new PhoneError('PHONE_UI_UNAVAILABLE', 'Unable to capture the active phone UI hierarchy', 502);
-      return result;
+      return remote;
     } finally {
       combined.removeEventListener('abort', abort);
       if (staging) await this.command('', ['-s', this.endpoint, 'shell', 'rm', '-f', staging], undefined, 3000).catch(() => {});
     }
+  }
+  async hierarchy(signal: AbortSignal): Promise<string> {
+    const remote = await this.prepareUi(signal);
+    const result = (await this.command('', ['-s', this.endpoint, 'shell', 'env', `CLASSPATH=${remote}`, 'app_process', '/', 'ai.xopc.phone.PhoneUiDump'], signal)).toString();
+    if (!result.includes('</hierarchy>')) throw new PhoneError('PHONE_UI_UNAVAILABLE', 'Incomplete phone hierarchy', 502);
+    return result;
+  }
+  async observer(signal: AbortSignal): Promise<PhoneUiSession> {
+    const combined = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
+    const abort = () => this.close(); combined.addEventListener('abort', abort, { once: true });
+    try {
+      const remote = await this.prepareUi(combined);
+      const adb = await this.client(); combined.throwIfAborted();
+      const channel = await adb.createSocket(`exec:env CLASSPATH=${remote} app_process / ai.xopc.phone.PhoneUiDump --resident`);
+      if (combined.aborted) { await channel.close(); combined.throwIfAborted(); }
+      clearTimeout(this.idle);
+      const writer = channel.writable.getWriter();
+      void writer.closed.catch(() => {});
+      return new PhoneUiSession({ readable: channel.readable,
+        write: data => writer.write(data),
+        close: async () => { await channel.close(); writer.releaseLock(); },
+      });
+    } finally { combined.removeEventListener('abort', abort); }
   }
   async applications(signal: AbortSignal) {
     const combined = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);

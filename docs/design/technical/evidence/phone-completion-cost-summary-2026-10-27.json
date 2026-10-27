@@ -1,0 +1,462 @@
+{
+  "date": "2026-10-27",
+  "baselineDirectory": "/tmp/xopc-phone-finish-cost-baseline-20261027",
+  "device": "XOPC_Android_Test_API_35 (Android 15 emulator)",
+  "model": "autoglm-phone",
+  "hashSets": {
+    "d05e026fd8e64f2b": {
+      "scripts/benchmark-phone-apps-live.mts": "94a2fa583b4592a79ed3b3fdb27cfa7da8460581c644b63718b3b1eccdb1150a",
+      "scripts/phone-apps-live/tasks.ts": "e7eb9ec479a28a90634ee7ab8205ef1b010126248b2b39436c514a716f5e0cc7",
+      "scripts/phone-apps-live/support.ts": "f79f9fa17e7a4a7223ef7d762da5b184bc590bebf158616b7e468b899548ba24",
+      "scripts/phone-apps-live/initial-state.ts": "42f69168743377ae03caa7125a49ea366ccaab037f54e91d5a7b5784ef48aa6d",
+      "scripts/phone-apps-live/response-metadata.ts": "f8fbbf68a1e88614ec9856148d1b8e5816cb428a71a6c1182a8f4c7af8b9c661",
+      "scripts/phone-apps-live/response-reader.ts": "e6e27af37526714e1ff1880d07ec2b01d05f9eeb794b7e924d30a30c11202815",
+      "scripts/phone-apps-live/protocol-envelope-diagnostics.ts": "7284c09eaf90faeafb65017c63d56d4379a712004dbbc2ae56292b1fe941ad34",
+      "scripts/phone-apps-live/protocol-alternatives.ts": "58e50a5714b9c607fd90a7e7718088dff6ea2db3650ded58720c7914353e7713"
+    },
+    "fa1f32ea35e3245e": {
+      "runtime.ts": "abd1c753037623cde515ce729f4097a2627c78b8e0343bcda8a1285cac3c9128",
+      "model-adapter.ts": "2ea1ef0150f3154809d9c8e90fc8b5daa23da09aafd087bfff9578bdeaafa780",
+      "adb-driver.ts": "10f38b215db183e4901722f7e41c68cb62abadecfe9947680a1d56d51854af86",
+      "contracts.ts": "382da1db570d559df4f6ee2c9fa6caf1ed38106c1fab96429880b3b23d279e0c",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "completion-recovery.ts": "67404efd5cf85f6c4ff164d4d656c9aa027ec801d76c897464dd6b9b998f9be4",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1",
+      "execution-trace.ts": "64f36b371e202ac07aa2b4fdc7869f8871ebdb513aa85dd7289b695fb95e523c",
+      "model-response.ts": "197a3e4c8e384fb091a8ca4a75b40cc957af57536a01d92ac35dece603c564ab",
+      "autoglm-protocol.ts": "f9280634748a3d5e9968b9c2feea1f0788230f9be0ffb4f55d70dcd5f9dd2e37",
+      "autoglm-upstream-prompt.ts": "2e9a57b0cf486b58bc5db1a7220b547a130cd2824a06fb886bdc417ff23334d8",
+      "text-session.ts": "9df0daefe60259dca2e51036b2b4d816ffdb2c9307d98f9b485dc65a1ed87c0a",
+      "ui-session.ts": "5e5fb86ed4f15a8a259ecf5b4b9e4c869550b2493ede3f4b033fc06ced44f6bd",
+      "cloud-adb-connection.ts": "26712c5423e330ecd8dcc8d8a3211bd8835ee393ef93e24288814e29b93426e9",
+      "cloud-adb.ts": "b478fc17709312cc79e916e9cac7e3f5edf43ca8fa5cd3ba07337093e0a3a0c9",
+      "ui-dump-binary.ts": "e8651f93995ee085fdd593a1e80e2515db261fc79895db0b9cf037ca3e1e8edd"
+    },
+    "ea0c9b0577ef4150": {
+      "runtime.ts": "faef00db9d674ddc1824bbda1abfbd55e9fe029e128c2bc9224d99126f45937c",
+      "model-adapter.ts": "2ea1ef0150f3154809d9c8e90fc8b5daa23da09aafd087bfff9578bdeaafa780",
+      "adb-driver.ts": "10f38b215db183e4901722f7e41c68cb62abadecfe9947680a1d56d51854af86",
+      "contracts.ts": "382da1db570d559df4f6ee2c9fa6caf1ed38106c1fab96429880b3b23d279e0c",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "completion-recovery.ts": "935453d4a1dadbcdf66801034c48c13497973aba418eb37bba10486f5f36931a",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1",
+      "execution-trace.ts": "64f36b371e202ac07aa2b4fdc7869f8871ebdb513aa85dd7289b695fb95e523c",
+      "model-response.ts": "197a3e4c8e384fb091a8ca4a75b40cc957af57536a01d92ac35dece603c564ab",
+      "autoglm-protocol.ts": "f9280634748a3d5e9968b9c2feea1f0788230f9be0ffb4f55d70dcd5f9dd2e37",
+      "autoglm-upstream-prompt.ts": "2e9a57b0cf486b58bc5db1a7220b547a130cd2824a06fb886bdc417ff23334d8",
+      "text-session.ts": "9df0daefe60259dca2e51036b2b4d816ffdb2c9307d98f9b485dc65a1ed87c0a",
+      "ui-session.ts": "5e5fb86ed4f15a8a259ecf5b4b9e4c869550b2493ede3f4b033fc06ced44f6bd",
+      "cloud-adb-connection.ts": "26712c5423e330ecd8dcc8d8a3211bd8835ee393ef93e24288814e29b93426e9",
+      "cloud-adb.ts": "b478fc17709312cc79e916e9cac7e3f5edf43ca8fa5cd3ba07337093e0a3a0c9",
+      "ui-dump-binary.ts": "e8651f93995ee085fdd593a1e80e2515db261fc79895db0b9cf037ca3e1e8edd"
+    },
+    "15fed772471274f5": {
+      "runtime.ts": "faef00db9d674ddc1824bbda1abfbd55e9fe029e128c2bc9224d99126f45937c",
+      "model-adapter.ts": "2ea1ef0150f3154809d9c8e90fc8b5daa23da09aafd087bfff9578bdeaafa780",
+      "adb-driver.ts": "10f38b215db183e4901722f7e41c68cb62abadecfe9947680a1d56d51854af86",
+      "contracts.ts": "382da1db570d559df4f6ee2c9fa6caf1ed38106c1fab96429880b3b23d279e0c",
+      "reliability.ts": "4a0a9696e3f29af9952960c7445131d4159cf6af4671ca1375557412e9ed8fa8",
+      "completion-recovery.ts": "955dd740927f16b7113bffe5399ae72d718ae79d2216abafcfd48e59c782d9d3",
+      "semantic-controls.ts": "0d0d7c6919d9adf38d2628aa04f516be0549d926591b1d2f8de2eb4b372a3b7c",
+      "planning.ts": "5bdd92cc6506e16b6a07dccd7a00dd0da1d8cc6a1d5a2333a4dd36b0b55cfddf",
+      "recovery.ts": "4aa05ab91011b5948bbdad55c2ffb7bac374d5a45655e4a3a703b341afd47d0e",
+      "numeric-entry.ts": "b09d7b9401b79bb9ad74853a1183d71a4a12796f515543efaebc8f650660f4b1",
+      "execution-trace.ts": "64f36b371e202ac07aa2b4fdc7869f8871ebdb513aa85dd7289b695fb95e523c",
+      "model-response.ts": "197a3e4c8e384fb091a8ca4a75b40cc957af57536a01d92ac35dece603c564ab",
+      "autoglm-protocol.ts": "f9280634748a3d5e9968b9c2feea1f0788230f9be0ffb4f55d70dcd5f9dd2e37",
+      "autoglm-upstream-prompt.ts": "2e9a57b0cf486b58bc5db1a7220b547a130cd2824a06fb886bdc417ff23334d8",
+      "text-session.ts": "9df0daefe60259dca2e51036b2b4d816ffdb2c9307d98f9b485dc65a1ed87c0a",
+      "ui-session.ts": "5e5fb86ed4f15a8a259ecf5b4b9e4c869550b2493ede3f4b033fc06ced44f6bd",
+      "cloud-adb-connection.ts": "26712c5423e330ecd8dcc8d8a3211bd8835ee393ef93e24288814e29b93426e9",
+      "cloud-adb.ts": "b478fc17709312cc79e916e9cac7e3f5edf43ca8fa5cd3ba07337093e0a3a0c9",
+      "ui-dump-binary.ts": "e8651f93995ee085fdd593a1e80e2515db261fc79895db0b9cf037ca3e1e8edd"
+    }
+  },
+  "panels": {
+    "explorationMain": {
+      "path": "/tmp/xopc-phone-finish-cost-main-20261027/result.json",
+      "sha256": "f500b7c8835c668d2679c71ae7950827214229bd2626eb5d6d135855cca76288",
+      "actualModelRequests": 35,
+      "matchedPairEfficacy": [
+        {
+          "arm": "baseline",
+          "completed": 8,
+          "total": 8,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 2
+          },
+          "actualModelRequests": 18
+        },
+        {
+          "arm": "efficiency",
+          "completed": 8,
+          "total": 8,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 1,
+            "unchangedActions": 0,
+            "completionCorrections": 0
+          },
+          "actualModelRequests": 17
+        }
+      ],
+      "pairedInitialStates": [
+      {"task":"settings-display","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-display","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-search-display","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-search-display","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"contacts-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"contacts-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true}
+    ],
+      "animationSettingsRestored": true,
+      "harnessHashSet": "d05e026fd8e64f2b",
+      "sourcesByArm": {
+        "baseline": {
+          "implementation": "baseline-snapshot",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "hashSet": "fa1f32ea35e3245e"
+        },
+        "efficiency": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "hashSet": "ea0c9b0577ef4150"
+        }
+      }
+    },
+    "explorationFiles": {
+      "path": "/tmp/xopc-phone-finish-cost-files-20261027/result.json",
+      "sha256": "a32caba2cb431b9f5f595038494e3e4fee94ee5eec530a27c0de38cd13ebea7e",
+      "actualModelRequests": 8,
+      "matchedPairEfficacy": [
+        {
+          "arm": "baseline",
+          "completed": 2,
+          "total": 2,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 0
+          },
+          "actualModelRequests": 4
+        },
+        {
+          "arm": "efficiency",
+          "completed": 2,
+          "total": 2,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 0
+          },
+          "actualModelRequests": 4
+        }
+      ],
+      "pairedInitialStates": [
+      {"task":"files-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true}
+    ],
+      "animationSettingsRestored": true,
+      "harnessHashSet": "d05e026fd8e64f2b",
+      "sourcesByArm": {
+        "baseline": {
+          "implementation": "baseline-snapshot",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "hashSet": "fa1f32ea35e3245e"
+        },
+        "efficiency": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "hashSet": "ea0c9b0577ef4150"
+        }
+      }
+    },
+    "finalMain": {
+      "path": "/tmp/xopc-phone-finish-cost-final-main-20261027/result.json",
+      "sha256": "0998baeec965bbdcea63371ea791aadeca9599f85ba63e2d440d9564437a09f8",
+      "actualModelRequests": 33,
+      "matchedPairEfficacy": [
+        {
+          "arm": "baseline",
+          "completed": 8,
+          "total": 8,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 1
+          },
+          "actualModelRequests": 17
+        },
+        {
+          "arm": "efficiency",
+          "completed": 8,
+          "total": 8,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 0
+          },
+          "actualModelRequests": 16
+        }
+      ],
+      "pairedInitialStates": [
+      {"task":"settings-display","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-display","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-search-display","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"settings-search-display","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"contacts-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"contacts-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true}
+    ],
+      "animationSettingsRestored": true,
+      "harnessHashSet": "d05e026fd8e64f2b",
+      "sourcesByArm": {
+        "baseline": {
+          "implementation": "baseline-snapshot",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "hashSet": "fa1f32ea35e3245e"
+        },
+        "efficiency": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "hashSet": "15fed772471274f5"
+        }
+      }
+    },
+    "finalFiles": {
+      "path": "/tmp/xopc-phone-finish-cost-final-files-20261027/result.json",
+      "sha256": "216e580c7144627a6edb74a7d323dcb12fc51f44b6e987edc4ba23053967008b",
+      "actualModelRequests": 8,
+      "matchedPairEfficacy": [
+        {
+          "arm": "baseline",
+          "completed": 2,
+          "total": 2,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 0
+          },
+          "actualModelRequests": 4
+        },
+        {
+          "arm": "efficiency",
+          "completed": 2,
+          "total": 2,
+          "falseVerified": 0,
+          "diagnosticTotals": {
+            "stalePredictions": 0,
+            "protocolRepairs": 0,
+            "unchangedActions": 0,
+            "completionCorrections": 0
+          },
+          "actualModelRequests": 4
+        }
+      ],
+      "pairedInitialStates": [
+      {"task":"files-search","repeat":1,"bothArmsRun":true,"identicalNativeUi":true},
+      {"task":"files-search","repeat":2,"bothArmsRun":true,"identicalNativeUi":true}
+    ],
+      "animationSettingsRestored": true,
+      "harnessHashSet": "d05e026fd8e64f2b",
+      "sourcesByArm": {
+        "baseline": {
+          "implementation": "baseline-snapshot",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "hashSet": "fa1f32ea35e3245e"
+        },
+        "efficiency": {
+          "implementation": "candidate",
+          "flags": {
+            "semanticControls": false,
+            "hierarchicalPlanning": false
+          },
+          "hashSet": "15fed772471274f5"
+        }
+      }
+    }
+  },
+  "rows": [
+      {"panel":"explorationMain","cohort":"exploration","task":"settings-display","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":11560,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationMain","cohort":"exploration","task":"settings-display","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":11763,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationMain","cohort":"exploration","task":"settings-search-display","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":10946,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationMain","cohort":"exploration","task":"settings-search-display","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":10275,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationMain","cohort":"exploration","task":"files-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":3,"durationMs":15113,"corrections":1,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationMain","cohort":"exploration","task":"files-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":10143,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationMain","cohort":"exploration","task":"contacts-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":10541,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationMain","cohort":"exploration","task":"contacts-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":8800,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationMain","cohort":"exploration","task":"settings-display","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":9804,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationMain","cohort":"exploration","task":"settings-display","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":10542,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationMain","cohort":"exploration","task":"settings-search-display","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":12093,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationMain","cohort":"exploration","task":"settings-search-display","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":3,"durationMs":16424,"corrections":0,"protocolRepairs":1,"stalePredictions":0,"proactiveGuidanceCalls":3},
+      {"panel":"explorationMain","cohort":"exploration","task":"files-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":12969,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationMain","cohort":"exploration","task":"files-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":3,"durationMs":19241,"corrections":1,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationMain","cohort":"exploration","task":"contacts-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":8585,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationMain","cohort":"exploration","task":"contacts-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":16438,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationFiles","cohort":"exploration","task":"files-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":10146,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"explorationFiles","cohort":"exploration","task":"files-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":10709,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationFiles","cohort":"exploration","task":"files-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":12906,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":2},
+      {"panel":"explorationFiles","cohort":"exploration","task":"files-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":13409,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"settings-display","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":12208,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"settings-display","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":8851,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"settings-search-display","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":9831,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"settings-search-display","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":9076,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"files-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":11333,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"files-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":12365,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":1},
+      {"panel":"finalMain","cohort":"final","task":"contacts-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":8824,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"contacts-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":8995,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"settings-display","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":9203,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"settings-display","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":11451,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"settings-search-display","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":8720,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"settings-search-display","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":10439,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"files-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":11459,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":1},
+      {"panel":"finalMain","cohort":"final","task":"files-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":3,"durationMs":17029,"corrections":1,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"contacts-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":9200,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalMain","cohort":"final","task":"contacts-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":8528,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalFiles","cohort":"final","task":"files-search","repeat":1,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":11489,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0},
+      {"panel":"finalFiles","cohort":"final","task":"files-search","repeat":1,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":11674,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":1},
+      {"panel":"finalFiles","cohort":"final","task":"files-search","repeat":2,"arm":"efficiency","completed":true,"verified":true,"requests":2,"durationMs":12824,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":1},
+      {"panel":"finalFiles","cohort":"final","task":"files-search","repeat":2,"arm":"baseline","completed":true,"verified":true,"requests":2,"durationMs":11488,"corrections":0,"protocolRepairs":0,"stalePredictions":0,"proactiveGuidanceCalls":0}
+    ],
+  "examples": [
+      {"panel":"explorationMain","task":"files-search","repeat":1,"arm":"baseline","decisionSequence":["complete","tap","typeText"],"guidanceCalls":0,"tracePath":"/tmp/xopc-phone-finish-cost-main-20261027/files-search-1-baseline.json","traceSha256":"c2820a15ff0090f7799935caee6bccf770d42c6e6d286180df98f21ec3b9fd7d"},
+      {"panel":"explorationMain","task":"settings-search-display","repeat":2,"arm":"efficiency","decisionSequence":["tap","typeText"],"guidanceCalls":3,"tracePath":"/tmp/xopc-phone-finish-cost-main-20261027/settings-search-display-2-efficiency.json","traceSha256":"8f45f4cb2d375f14f5c25083baec2d7867093781ee70192cc2d190f42241161c"},
+      {"panel":"explorationMain","task":"files-search","repeat":2,"arm":"baseline","decisionSequence":["complete","tap","typeText"],"guidanceCalls":0,"tracePath":"/tmp/xopc-phone-finish-cost-main-20261027/files-search-2-baseline.json","traceSha256":"6047fa92baf0c0302caa38aabcf1506118100eefa1429205bc093e1b4040ebe1"},
+      {"panel":"explorationMain","task":"contacts-search","repeat":2,"arm":"efficiency","decisionSequence":["tap","typeText"],"guidanceCalls":2,"tracePath":"/tmp/xopc-phone-finish-cost-main-20261027/contacts-search-2-efficiency.json","traceSha256":"15c60370f5d5b176bb1a04c2e3fb578bb05a1324f88ae00738d452d8f3eb1149"},
+      {"panel":"finalMain","task":"files-search","repeat":1,"arm":"efficiency","decisionSequence":["tap","typeText"],"guidanceCalls":1,"tracePath":"/tmp/xopc-phone-finish-cost-final-main-20261027/files-search-1-efficiency.json","traceSha256":"ec94a831fc66ba17191ee3801eadecdf6e4b2af4f6dc69402b39d141949bdc93"},
+      {"panel":"finalMain","task":"files-search","repeat":2,"arm":"efficiency","decisionSequence":["tap","typeText"],"guidanceCalls":1,"tracePath":"/tmp/xopc-phone-finish-cost-final-main-20261027/files-search-2-efficiency.json","traceSha256":"81bcefcb06d4391a585ea0d41b058c3fdeb0ba46132d660a094ed632c1a556b2"},
+      {"panel":"finalMain","task":"files-search","repeat":2,"arm":"baseline","decisionSequence":["complete","tap","typeText"],"guidanceCalls":0,"tracePath":"/tmp/xopc-phone-finish-cost-final-main-20261027/files-search-2-baseline.json","traceSha256":"6a6119377153b22fddd6db4a71e5e4b48ac8fbbf4e4b75ce5cbdb4785d1bf90b"},
+      {"panel":"finalFiles","task":"files-search","repeat":1,"arm":"efficiency","decisionSequence":["tap","typeText"],"guidanceCalls":1,"tracePath":"/tmp/xopc-phone-finish-cost-final-files-20261027/files-search-1-efficiency.json","traceSha256":"86df98cfc729e180392ecfdab85341e6617dc2e70fc30e8c7ebd30721511acf4"},
+      {"panel":"finalFiles","task":"files-search","repeat":2,"arm":"efficiency","decisionSequence":["tap","typeText"],"guidanceCalls":1,"tracePath":"/tmp/xopc-phone-finish-cost-final-files-20261027/files-search-2-efficiency.json","traceSha256":"b33dc2447b114204835e951c0cd8b979d38d95568be4c6414799411832624441"}
+    ],
+  "limitations": [
+    "Ten matched pairs per version cannot establish general non-inferiority or a production P95.",
+    "Exploration and final cohorts use different candidate hashes and are not pooled for efficacy.",
+    "Model paths and service latency vary; paired initial states do not fix random model outputs.",
+    "Some healthy file-search trials are slower; all trials and negative results are retained.",
+    "No production accounts or public-cloud latency were tested."
+  ],
+  "summary": {
+    "exploration": {
+      "baseline": {
+        "completed": 10,
+        "total": 10,
+        "requests": 22,
+        "corrections": 2,
+        "protocolRepairs": 0,
+        "proactiveGuidanceCalls": 0,
+        "medianMs": 11051,
+        "totalMs": 119764,
+        "maxMs": 19241,
+        "medianFieldTransactionMs": 43.41,
+        "promptTokens": 106550,
+        "completionTokens": 3720
+      },
+      "efficiency": {
+        "completed": 10,
+        "total": 10,
+        "requests": 21,
+        "corrections": 0,
+        "protocolRepairs": 1,
+        "proactiveGuidanceCalls": 21,
+        "medianMs": 11354.5,
+        "totalMs": 122643,
+        "maxMs": 16438,
+        "medianFieldTransactionMs": 51.07,
+        "promptTokens": 102382,
+        "completionTokens": 4749
+      }
+    },
+    "final": {
+      "baseline": {
+        "completed": 10,
+        "total": 10,
+        "requests": 21,
+        "corrections": 1,
+        "protocolRepairs": 0,
+        "proactiveGuidanceCalls": 0,
+        "medianMs": 11392,
+        "totalMs": 110989,
+        "maxMs": 17029,
+        "medianFieldTransactionMs": 46.98,
+        "promptTokens": 101446,
+        "completionTokens": 3193
+      },
+      "efficiency": {
+        "completed": 10,
+        "total": 10,
+        "requests": 20,
+        "corrections": 0,
+        "protocolRepairs": 0,
+        "proactiveGuidanceCalls": 4,
+        "medianMs": 10135,
+        "totalMs": 103998,
+        "maxMs": 12824,
+        "medianFieldTransactionMs": 51.24,
+        "promptTokens": 96649,
+        "completionTokens": 3384
+      }
+    }
+  },
+  "actualModelRequests": 84,
+  "changedPhoneModules": [
+    "runtime.ts",
+    "completion-recovery.ts"
+  ],
+  "validation": {
+    "phoneTestsPassed": 475,
+    "phoneTestsSkipped": 1,
+    "testFiles": 35,
+    "coreAndElectronTypecheck": true,
+    "benchmarkTypecheck": true,
+    "targetedEslint": true,
+    "nodeTypesWebBuild": true,
+    "electronGatewayBuild": true,
+    "docsCheck": true,
+    "noResidentObserverAfterBenchmarks": true
+  }
+}

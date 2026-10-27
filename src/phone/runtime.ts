@@ -20,6 +20,7 @@ import { WirelessPhones } from './wireless.js';
 import { AdbPhoneDriver, resolveAdbPath, type PhoneDriver } from './adb-driver.js';
 import { createPhoneModel, isAboutScreen, type PhoneModelAdapter, type PhoneModelDecision, type PhoneTrajectoryEntry } from './model-adapter.js';
 import { PhoneRepository } from './repository.js';
+import { PHONE_COMPLETION_CORRECTIONS, phoneCompletionGuidance, phoneCompletionRecoveryHint } from './completion-recovery.js';
 import { canDispatchPhoneAction, observationSignature, phoneCompletionSatisfied } from './reliability.js';
 import { groundPhoneCoordinateAction, resolvePhoneSemanticAction } from './semantic-controls.js';
 import { advancePhonePlan, buildPhonePlan, createPhonePlanState, type PhonePlanState } from './planning.js';
@@ -746,7 +747,8 @@ export class PhoneRuntime {
               history: session.report.steps.map(step => step.action), trajectory: session.trajectory,
               progressSummary: JSON.stringify({ dispatched: session.trajectoryCount,
                 earlier: [...session.trajectorySummary, ...session.trajectory.slice(0, -8).map(entry => JSON.stringify({ action: entry.action, effect: entry.effect, afterApp: entry.afterApp }).slice(0, 250))].slice(-12) }).slice(-1500),
-              recoveryHint, protocolFeedback, scenario: input.scenario, enhancements, planning }, AbortSignal.any([signal, session.prediction.signal]));
+              recoveryHint: recoveryHint ?? (completion ? phoneCompletionGuidance(completion, observation, changed) : undefined),
+              protocolFeedback, scenario: input.scenario, enhancements, planning }, AbortSignal.any([signal, session.prediction.signal]));
           } catch (error) {
             if (!signal.aborted && epoch !== session.report.controlEpoch) {
               await this.waitForAgent(session, signal); observation.frame.fill(0); observation = await this.observe(session, signal); continue;
@@ -771,11 +773,24 @@ export class PhoneRuntime {
           session.report.diagnostics!.completedSubgoals = planning.verifiedSteps;
         }
         if (decision.kind !== 'action') {
-          if (decision.kind === 'complete' && !session.report.mock && (input.completion || input.expectText)
-            && completionCorrections < 1 && session.report.modelRequests < this.modelRequestLimit(session, context)) {
-            completionCorrections++; session.report.diagnostics!.completionCorrections++;
-            recoveryHint = `Your completion claim is not verified. These required native UI conditions are not all satisfied: ${JSON.stringify({ expectText: input.expectText, ...input.completion })}. Recheck the fresh screen, preserve user constraints, and continue if a safe authorized action can satisfy the goal; otherwise report unfinished.`;
-            observation.frame.fill(0); observation = await this.observe(session, signal); continue;
+          if (decision.kind === 'complete' && !session.report.mock && completion) {
+            observation.frame.fill(0); observation = await this.observe(session, signal);
+            signal.throwIfAborted(); this.guard(session, context); this.allowedScreen(session, observation);
+            if (epoch !== session.report.controlEpoch || session.report.controlOwner !== 'agent') continue;
+            const currentChanged = changed || observationSignature(observation) !== previousSignature;
+            // Late UI updates return to the ordinary independent confirmation path without another prediction.
+            if (phoneCompletionSatisfied(completion, observation, currentChanged)) continue;
+            this.recordObservation(session, observation);
+            if (completionCorrections < PHONE_COMPLETION_CORRECTIONS && session.report.modelRequests < this.modelRequestLimit(session, context)) {
+              completionCorrections++; session.report.diagnostics!.completionCorrections++;
+              recoveryHint = phoneCompletionRecoveryHint(completion, observation, currentChanged, completionCorrections);
+              continue;
+            }
+            session.report.status = 'paused'; session.report.verified = false; session.report.verificationLevel = 'none';
+            session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+            session.report.stopReason = 'completion_unmet'; session.report.errorCode = 'PHONE_COMPLETION_UNMET';
+            session.report.message = 'The required native UI conditions are still unmet. Inspect the current screen before resuming; no action was generated from the completion conditions.';
+            session.budget?.pause(); await session.stream?.revoke(); return this.publish(session);
           }
           session.report.message = decision.kind === 'needsUser' ? decision.reason : decision.summary;
           if (decision.kind === 'complete') {
