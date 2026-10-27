@@ -1,6 +1,19 @@
 import type { AssistantWorkLogItem } from './assistant-turn-view-model';
 import type { ToolUseContent } from './messages.types';
 
+/** Only public narration belongs in the conversation; generic activity is conveyed by one indicator. */
+export function publicAssistantProgress(items: AssistantWorkLogItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (item.type !== 'text' || item.presentation !== 'narration') return false;
+    const text = item.text.replace(/\s+/g, ' ').trim();
+    if (!text || /^(?:正在处理|正在执行操作|其他操作|处理中|working|processing|other operations?|running)[.。…\s]*$/i.test(text)
+      || seen.has(text)) return false;
+    seen.add(text);
+    return true;
+  });
+}
+
 export type AssistantActivityGroup =
   | { type: 'item'; item: AssistantWorkLogItem }
   | { type: 'tools'; tools: ToolUseContent[] };
