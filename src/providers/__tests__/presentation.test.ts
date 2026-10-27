@@ -33,12 +33,16 @@ describe('provider presentation catalog', () => {
     expect(getAllProviders()).not.toContain('xopc-tunnel');
   });
 
-  it('only recommends models that exist in the provider catalog', () => {
+  it('only recommends models from the provider catalog or its onboarding preset', () => {
     for (const provider of getAllProviders()) {
-      const ids = new Set(getModelsByProvider(provider).map((model) => model.id));
+      const ids = new Set([
+        ...getModelsByProvider(provider).map((model) => model.id),
+        ...(getDomesticProviderPreset(provider)?.models.map((model) => model.id) ?? []),
+      ]);
       for (const model of getRecommendedModelsForProvider(provider, 20)) {
         expect(ids.has(model.id), `${provider}/${model.id}`).toBe(true);
       }
     }
+    expect(getRecommendedModelsForProvider('volcengine-ark').map(model => model.id)).not.toContain('ep-your-endpoint-id');
   });
 });

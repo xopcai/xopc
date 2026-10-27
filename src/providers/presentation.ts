@@ -126,7 +126,6 @@ const RECOMMENDED_MODEL_PATTERNS: Record<string, RegExp[]> = {
   dashscope: [/^qwen3\.7-plus$/i, /^qwen3\.7-max$/i, /^qwen3\.6-flash$/i],
   'dashscope-cn': [/^qwen3\.7-plus$/i, /^qwen3\.7-max$/i, /^qwen3\.6-flash$/i],
   'dashscope-intl': [/^qwen3\.7-plus$/i, /^qwen3\.7-max$/i, /^qwen3\.6-flash$/i],
-  'volcengine-ark': [/^ep-your-endpoint-id$/i],
   'volcengine-plan': [/^ark-code-latest$/i, /^doubao-seed-2\.0-code$/i, /^doubao-seed-2\.0-pro$/i],
   'byteplus-plan': [/^ark-code-latest$/i, /^doubao-seed-2\.0-code$/i, /^doubao-seed-2\.0-pro$/i],
   deepseek: [/^deepseek-v4-flash$/i, /^deepseek-v4-pro$/i],
