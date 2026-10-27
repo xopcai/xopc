@@ -235,6 +235,92 @@ describe('useChatScrollViewport', () => {
     vi.restoreAllMocks();
   });
 
+  it.each(['nested wheel', 'inverted downward wheel', 'disclosure', 'reading event'])(
+    'resumes following on send at the bottom after a %s pauses it', (trigger) => {
+      act(() => root.render(<Harness />));
+      const el = container.firstElementChild as HTMLDivElement;
+      const spacer = el.querySelector<HTMLDivElement>('[data-chat-reply-space]')!;
+      let height = 1000;
+      let top = 600;
+      Object.defineProperties(el, {
+        clientHeight: { value: 400 },
+        scrollHeight: { get: () => height + (parseFloat(spacer.style.height) || 0) },
+        scrollTop: { get: () => top, set: (value: number) => { top = Math.max(0, Math.min(value, el.scrollHeight - 400)); } },
+      });
+      act(() => viewport?.scrollToBottom(false));
+      if (trigger === 'disclosure') {
+        const button = document.createElement('button');
+        button.setAttribute('aria-expanded', 'false');
+        el.firstElementChild!.append(button);
+        act(() => button.click());
+      } else if (trigger === 'reading event') {
+        act(() => el.dispatchEvent(new Event('chat-scroll-reading')));
+      } else {
+        const wheel = new WheelEvent('wheel', {
+          deltaY: trigger === 'nested wheel' ? -100 : 100, bubbles: true,
+        });
+        if (trigger === 'inverted downward wheel') {
+          Object.defineProperty(wheel, 'webkitDirectionInvertedFromDevice', { value: true });
+        }
+        // The outer viewport does not move when the gesture is consumed or hits its boundary.
+        act(() => el.firstElementChild!.dispatchEvent(wheel));
+      }
+      expect(top).toBe(600);
+      expect(viewport?.atBottom).toBe(true);
+
+      act(() => viewport?.reserveReplySpace('next-send'));
+      height = 1300;
+      const sent: Message[] = [...chatMessages, {
+        role: 'user', renderKey: 'next-send', timestamp: 2, content: [],
+      }];
+      act(() => root.render(<Harness messages={sent} streaming />));
+      expect(parseFloat(spacer.style.height)).toBeGreaterThan(0);
+      expect(top).toBe(el.scrollHeight - el.clientHeight);
+
+      // Streamed text can grow without changing the message shell array.
+      height = 1500;
+      act(() => observers.get(el.firstElementChild!)?.());
+      expect(top).toBe(el.scrollHeight - el.clientHeight);
+      expect(viewport?.atBottom).toBe(true);
+
+      act(() => {
+        el.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
+        top = 200;
+        el.dispatchEvent(new Event('scroll'));
+      });
+      height = 1700;
+      act(() => observers.get(el.firstElementChild!)?.());
+      act(() => root.render(<Harness messages={sent} streaming={false} />));
+      expect(top).toBe(200);
+      expect(viewport?.atBottom).toBe(false);
+    },
+  );
+
+  it.each([true, false])('preserves history on send with a prior scroll event: %s', (notifyScroll) => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1000;
+    let top = 600;
+    Object.defineProperties(el, {
+      clientHeight: { value: 400 },
+      scrollHeight: { get: () => height },
+      scrollTop: { get: () => top, set: (value: number) => { top = Math.min(value, height - 400); } },
+    });
+    act(() => viewport?.scrollToBottom(false));
+    top = 200;
+    if (notifyScroll) act(() => el.dispatchEvent(new Event('scroll')));
+    act(() => viewport?.reserveReplySpace('history-send'));
+    height = 1300;
+    const sent: Message[] = [...chatMessages, { role: 'user', renderKey: 'history-send', content: [] }];
+    act(() => root.render(<Harness messages={sent} streaming />));
+    height = 1500;
+    act(() => observers.get(el.firstElementChild!)?.());
+    act(() => root.render(<Harness messages={sent} streaming={false} />));
+    expect(el.querySelector<HTMLDivElement>('[data-chat-reply-space]')?.style.height).toBe('0px');
+    expect(top).toBe(200);
+    expect(viewport?.atBottom).toBe(false);
+  });
+
   it('does not reserve space when a message is sent while reading history', () => {
     act(() => root.render(<Harness />));
     const el = container.firstElementChild as HTMLDivElement;
