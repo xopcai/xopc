@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import * as Popover from '@radix-ui/react-popover';
 import { CheckCircle2, ChevronRight, Clock3, Download, ExternalLink, Laptop, PanelRight, Smartphone, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +17,7 @@ import { useAsyncResource } from '@/lib/use-async-resource';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { DevicePairingTargetKind } from '@xopcai/gateway-contract';
 import { cn } from '@/lib/cn';
-import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_MODAL_POPOVER_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import {
   cancelDevicePairingSetup, createDevicePairingSetup, decideDevicePairing, downloadBrowserExtensionArchive,
   fetchDevicePairingReadiness, fetchDevicePairingSetup, type DevicePairingSetup,
@@ -126,7 +127,8 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
   const m = messages(language);
   const copy = m.endpointToolsSettings.deviceAccess;
   const f = copy.flow;
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(targetKind === 'mobile');
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const readiness = useSWR(started ? 'device-pairing-readiness' : null, fetchDevicePairingReadiness, { refreshInterval: 1500 });
   const [setup, setSetup] = useState<DevicePairingSetup>();
   const [error, setError] = useState<'create' | 'decision' | 'background' | 'download' | null>(null);
@@ -151,7 +153,7 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
     ? 'https://xopcai.github.io/xopc/zh/browser-extension'
     : 'https://xopcai.github.io/xopc/browser-extension';
   const appDownloadQr = useAsyncResource(() => encodeMobilePairQr(mobileDownloadUrl), [mobileDownloadUrl], {
-    enabled: !started && targetKind === 'mobile', initial: null as string | null, errorData: null,
+    enabled: downloadOpen && targetKind === 'mobile', initial: null as string | null, errorData: null,
   });
   useEffect(() => {
     mounted.current = true;
@@ -201,8 +203,8 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
     connect: copy.browserConnect, connectHint: copy.browserConnectHint, allowTitle: copy.browserAllowTitle,
     success: copy.browserSuccess, successHint: copy.browserSuccessHint,
   };
-  const preparationTitle = targetKind === 'mobile' ? copy.mobilePrepareTitle : copy.browserPrepareTitle;
-  const preparationHint = targetKind === 'mobile' ? copy.mobilePrepareHint : copy.browserPrepareHint;
+  const preparationTitle = copy.browserPrepareTitle;
+  const preparationHint = copy.browserPrepareHint;
   const title = !started ? preparationTitle : connected ? targetCopy.success : request?.status === 'pending' ? targetCopy.allowTitle : credentialsCommitted || request?.status === 'approved' ? f.waiting : setup ? targetCopy.connect : f.title;
   const errorMessage = error === 'create' ? f.createFailed
     : error === 'decision' ? f.decisionFailed
@@ -220,7 +222,28 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
     <Dialog.Content className={cn('xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(600px,calc(100dvh-48px))] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay', SETTINGS_SHELL_CONTENT_Z)}>
       <header className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-6 py-3">
         <span className="text-lg font-semibold tracking-tight text-fg">xopc</span>
-        <button type="button" className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={f.cancel} onClick={onClose}><X className="size-4" /></button>
+        <div className="flex items-center gap-2">
+          {targetKind === 'mobile' ? <Popover.Root open={downloadOpen} onOpenChange={setDownloadOpen}>
+            <Popover.Trigger asChild>
+              <Button variant="ghost" className="min-h-10">
+                <Download className="size-4" aria-hidden="true" />{copy.mobileDownloadAction}
+              </Button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content align="end" sideOffset={8} aria-label={copy.mobileDownloadAction} className={cn('w-[min(26rem,calc(100vw-2rem))] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto rounded-xl border border-edge bg-surface-overlay p-6 sm:p-7 shadow-elevated', SETTINGS_SHELL_MODAL_POPOVER_Z)}>
+                <p className="text-base font-semibold text-fg">{copy.mobileDownloadAction}</p>
+                <div className="my-6 flex justify-center">
+                  {appDownloadQr.data ? <img src={appDownloadQr.data} alt={copy.mobileDownloadQrAlt} width={216} height={216} className="size-[216px] max-w-full rounded-lg bg-white" /> : appDownloadQr.error ? <p role="status" className="text-sm text-warning">{f.qrFailed}</p> : <Skeleton className="size-[216px] max-w-full" />}
+                </div>
+                <p className="mt-3 text-sm leading-6 text-fg-muted">{copy.mobileDownloadHint}</p>
+                <Button variant="secondary" className="mt-5 w-full" onClick={() => void openExternalHttpLink(mobileDownloadUrl)}>
+                  <ExternalLink className="size-4" aria-hidden="true" />{copy.mobileDownload}
+                </Button>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root> : null}
+          <button type="button" className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={f.cancel} onClick={onClose}><X className="size-4" aria-hidden="true" /></button>
+        </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 py-7">
         {connected ? <CheckCircle2 className="mb-5 size-7 text-success" /> : null}
@@ -231,13 +254,7 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
         {errorMessage ? <p role="alert" className="mt-4 text-sm text-danger">{errorMessage}</p> : null}
         {started && readiness.error ? <p role="alert" className="mt-4 text-sm text-danger">{f.readinessFailed}</p> : null}
         {started && status.error ? <p role="status" className="mt-4 text-sm text-warning">{f.statusUnavailable}</p> : null}
-        {!started ? targetKind === 'mobile' ? <div className="mt-7 flex flex-col items-center">
-          {appDownloadQr.data ? <img src={appDownloadQr.data} alt={copy.mobileDownloadQrAlt} width={144} height={144} className="size-36 rounded-lg bg-white" /> : <Skeleton className="size-36" />}
-          <Button variant="secondary" className="mt-5 w-full" onClick={() => void openExternalHttpLink(mobileDownloadUrl)}>
-            <ExternalLink className="size-4" />{copy.mobileDownload}
-          </Button>
-          <p className="mt-3 text-center text-xs leading-5 text-fg-muted">{copy.mobileDownloadHint}</p>
-        </div> : <div className="mt-7">
+        {!started ? <div className="mt-7">
           <Button variant="secondary" className="w-full" disabled={busy} onClick={() => void downloadExtension()}>
             <Download className="size-4" />{copy.browserDownload}
           </Button>
@@ -306,7 +323,7 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
           </div>}
       </div>
       {!started || readiness.error || connected || request?.status === 'pending' || error === 'create' || error === 'decision' ? <footer className="shrink-0 px-8 pb-6">
-        {!started ? <Button className="w-full" variant="primary" onClick={() => { setError(null); setStarted(true); }}>{targetKind === 'mobile' ? copy.mobileReady : copy.browserReady}</Button> : connected ? <Button className="w-full" variant="primary" onClick={onClose}>{f.done}</Button> : request?.status === 'pending' ? <div className="flex flex-col gap-2">
+        {!started ? <Button className="w-full" variant="primary" onClick={() => { setError(null); setStarted(true); }}>{copy.browserReady}</Button> : connected ? <Button className="w-full" variant="primary" onClick={onClose}>{f.done}</Button> : request?.status === 'pending' ? <div className="flex flex-col gap-2">
           <Button className="w-full" variant="primary" disabled={busy} onClick={() => void decide('approve')}>{f.allow}</Button>
           <Button className="w-full" variant="ghost" disabled={busy} onClick={() => void decide('reject')}>{f.cancel}</Button>
         </div> : readiness.error ? <Button className="w-full" variant="primary" onClick={() => void readiness.mutate()}>{f.retry}</Button>
