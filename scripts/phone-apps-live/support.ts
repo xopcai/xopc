@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { PhoneAction, PhoneDecision, PhoneObservation } from '../../src/phone/contracts.js';
 
-export const SNAPSHOT_FILES = ['runtime.ts', 'model-adapter.ts', 'adb-driver.ts', 'contracts.ts', 'reliability.ts', 'semantic-controls.ts', 'planning.ts', 'recovery.ts', 'numeric-entry.ts', 'execution-trace.ts', 'model-response.ts', 'autoglm-protocol.ts', 'autoglm-upstream-prompt.ts', 'text-session.ts', 'cloud-adb-connection.ts', 'cloud-adb.ts', 'ui-dump-binary.ts'] as const;
+export const SNAPSHOT_FILES = ['runtime.ts', 'model-adapter.ts', 'adb-driver.ts', 'contracts.ts', 'reliability.ts', 'completion-recovery.ts', 'semantic-controls.ts', 'planning.ts', 'recovery.ts', 'numeric-entry.ts', 'execution-trace.ts', 'model-response.ts', 'autoglm-protocol.ts', 'autoglm-upstream-prompt.ts', 'text-session.ts', 'ui-session.ts', 'cloud-adb-connection.ts', 'cloud-adb.ts', 'ui-dump-binary.ts'] as const;
 export type ArmName = 'efficiency' | 'protocol' | 'prompt' | 'sampling' | 'upstream' | 'stream' | 'reference' | 'baseline' | 'semantic' | 'planning' | 'combined' | 'optimized' | 'before-planning' | 'after-planning' | 'before-combined' | 'after-combined';
 export type NativeFacts = ReturnType<typeof nativeFacts>;
 export type TrialTrace = Array<Record<string, unknown>>;

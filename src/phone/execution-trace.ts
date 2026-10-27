@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 
 export type PhonePhase = 'observation' | 'hierarchy' | 'capture' | 'foreground' | 'screenshot' | 'display'
-  | 'dispatch' | 'input' | 'input_confirmation' | 'settle' | 'model_request' | 'model_parse' | 'screen_reading' | 'dex_upload';
+  | 'field_transaction' | 'dispatch' | 'input' | 'input_confirmation' | 'settle' | 'model_request' | 'model_parse' | 'screen_reading' | 'dex_upload';
 export type PhonePhaseMetric = { count: number; errors: number; totalMs: number; maxMs: number };
 export type PhoneModelMetric = {
   durationMs?: number; preparationMs?: number; firstByteMs?: number; firstTokenMs?: number; httpStatus?: number;

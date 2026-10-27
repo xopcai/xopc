@@ -122,13 +122,13 @@ describe('phone runtime reliability integration', () => {
     expect(readScreen.mock.calls[0][0]).toMatchObject({ goal: 'Read Android version' });
   });
 
-  it('automatically reads screenshot-only values after model completion without satisfying native predicates', async () => {
+  it('does not spend a screenshot-reading request when explicit native predicates remain unmet', async () => {
     const readScreen = vi.fn<NonNullable<PhoneModelAdapter['readScreen']>>(async () => 'Android version: 15');
     const f = fixture(async () => ({ kind: 'complete', summary: 'About phone' }), { readScreen }); await f.open();
     const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read Android version', expectText: 'Android version' }, f.context) as PhoneReport;
-    expect(result).toMatchObject({ verified: false, verificationLevel: 'none', stopReason: 'model_finished_unverified', modelRequests: 3 });
-    expect(result.readings?.[1]).toMatchObject({ source: 'screenshot', verification: 'unverified', text: ['Android version: 15'] });
-    expect(readScreen).toHaveBeenCalledOnce(); expect(f.driver.execute).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: 'paused', verified: false, verificationLevel: 'none', stopReason: 'completion_unmet', modelRequests: 3 });
+    expect(result.readings?.some(reading => reading.source === 'screenshot')).toBe(false);
+    expect(readScreen).not.toHaveBeenCalled(); expect(f.driver.execute).not.toHaveBeenCalled();
   });
 
   it('reads screenshot-only values for goals without explicit completion predicates', async () => {
@@ -206,7 +206,7 @@ describe('phone runtime reliability integration', () => {
   });
 
   it('rejects an ambiguous semantic action without dispatch, then uses a new prediction', async () => {
-    const f = fixture(async input => input.protocolFeedback || input.recoveryHint
+    const f = fixture(async input => input.protocolFeedback || input.recoveryHint?.includes('semantic target was not dispatched')
       ? { kind: 'action', action: { type: 'tap', point: [200, 300] } }
       : { kind: 'action', action: { type: 'tapElement', frameId: input.observation.frameId, selector: { text: 'Initial' } } },
     { semanticControls: true });
@@ -349,7 +349,7 @@ describe('phone runtime reliability integration', () => {
       .toMatchObject({ verified: true, verificationLevel: 'ui' });
     expect(await f.runtime.execute('reliability', { op: 'run', goal: 'Make another change',
       completion: { textAll: ['Saved'], requireChange: true } }, f.context))
-      .toMatchObject({ verified: false, verificationLevel: 'none', stopReason: 'model_finished_unverified' });
+      .toMatchObject({ status: 'paused', verified: false, verificationLevel: 'none', stopReason: 'completion_unmet' });
   });
 
   it('does not verify an initially existing condition when a state change is required', async () => {
@@ -358,7 +358,7 @@ describe('phone runtime reliability integration', () => {
     f.set(observation([element('Saved')]));
     await f.open();
     const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Save a new item', completion: { textAll: ['Saved'], requireChange: true } }, f.context) as PhoneReport;
-    expect(result).toMatchObject({ verified: false, stopReason: 'model_finished_unverified', modelRequests: 2 });
+    expect(result).toMatchObject({ status: 'paused', verified: false, stopReason: 'completion_unmet', modelRequests: 3 });
   });
 
   it('checks completion against native nodes beyond the 60 display facts', async () => {
@@ -381,10 +381,10 @@ describe('phone runtime reliability integration', () => {
       .mockResolvedValue(observation([element('Still editing')]));
     await f.open();
     const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Save item', expectText: 'Saved' }, f.context) as PhoneReport;
-    expect(result).toMatchObject({ verified: false, facts: ['Still editing'], stopReason: 'model_finished_unverified' });
-    expect(f.driver.observe).toHaveBeenCalledTimes(3);
+    expect(result).toMatchObject({ status: 'paused', verified: false, facts: ['Still editing'], stopReason: 'completion_unmet' });
+    expect(f.driver.observe).toHaveBeenCalledTimes(5);
     expect(f.driver.execute).not.toHaveBeenCalled();
-    expect(predict).toHaveBeenCalledTimes(2);
+    expect(predict).toHaveBeenCalledTimes(3);
   });
 
   it('corrects one premature completion claim using fresh evidence and the unmet criteria', async () => {
@@ -407,26 +407,98 @@ describe('phone runtime reliability integration', () => {
     expect(f.driver.execute).toHaveBeenCalledOnce();
   });
 
-  it('does not repeatedly correct a model that keeps claiming unmet completion', async () => {
-    const predict = vi.fn<PhoneModelAdapter['predict']>(async () => ({ kind: 'complete', summary: 'Premature completion' }));
-    const f = fixture(predict);
-    await f.open();
-    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Reach Done', completion: { textAll: ['Done'] } }, f.context) as PhoneReport;
-    expect(result).toMatchObject({ verified: false, stopReason: 'model_finished_unverified', modelRequests: 2,
-      diagnostics: { completionCorrections: 1 } });
-    expect(predict).toHaveBeenCalledTimes(2);
+  it('prevents content-versus-field confusion without another request or generated input', async () => {
+    const inputs: PhonePrediction[] = [];
+    const f = fixture(async input => { inputs.push(input); return { kind: 'needsUser', reason: 'Inspect first' }; });
+    f.set(observation([element('target.txt')])); await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Search for target', completion: { field: { resourceId: 'query', value: 'target' } } }, f.context) as PhoneReport;
+    expect(inputs[0].recoveryHint).toContain('Native completion: NOT MET');
+    expect(result).toMatchObject({ status: 'needs_user', modelRequests: 1, diagnostics: { completionCorrections: 0 } });
     expect(f.driver.execute).not.toHaveBeenCalled();
   });
 
-  it('does not exceed the request budget to correct an unmet completion claim', async () => {
+  it('bounds repeated completion corrections and pauses without a read-only model call', async () => {
     const predict = vi.fn<PhoneModelAdapter['predict']>(async () => ({ kind: 'complete', summary: 'Premature completion' }));
+    const readScreen = vi.fn();
+    const f = fixture(predict, { readScreen });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Reach Done', completion: { textAll: ['Done'] } }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ status: 'paused', verified: false, stopReason: 'completion_unmet', errorCode: 'PHONE_COMPLETION_UNMET', modelRequests: 3,
+      controlOwner: 'none', diagnostics: { completionCorrections: 2 } });
+    expect(predict).toHaveBeenCalledTimes(3); expect(readScreen).not.toHaveBeenCalled();
+    expect(result.feedback).toMatchObject({ outcome: 'blocked', nextAction: 'inspect', verified: false });
+    expect(f.driver.execute).not.toHaveBeenCalled();
+  });
+
+  it('recovers after two premature finishes and dispatches only the model-requested action', async () => {
+    const inputs: PhonePrediction[] = [];
+    const predict = vi.fn<PhoneModelAdapter['predict']>(async input => {
+      inputs.push(input);
+      return inputs.length < 3 ? { kind: 'complete', summary: 'Done' }
+        : { kind: 'action', action: { type: 'tap', point: [200, 300] } };
+    });
+    const f = fixture(predict);
+    vi.mocked(f.driver.execute).mockImplementation(async () => { f.set(observation([element('Done')])); });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Reach Done', expectText: 'Done' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ verified: true, actions: 1, modelRequests: 3, diagnostics: { completionCorrections: 2 } });
+    expect(inputs[0].recoveryHint).toBeUndefined();
+    expect(inputs[2].recoveryHint).toContain('Completion rejected (2/2)');
+    expect(f.driver.execute).toHaveBeenCalledOnce();
+  });
+
+  it('confirms a delayed UI update after finish without another model call', async () => {
+    const predict = vi.fn<PhoneModelAdapter['predict']>(async () => {
+      f.set(observation([element('Done')])); return { kind: 'complete', summary: 'Done' };
+    });
     const f = fixture(predict, { modelRequests: 1 });
     await f.open();
     const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Reach Done', expectText: 'Done' }, f.context) as PhoneReport;
-    expect(result).toMatchObject({ verified: false, stopReason: 'model_finished_unverified', modelRequests: 1,
-      diagnostics: { completionCorrections: 0 } });
-    expect(predict).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ verified: true, modelRequests: 1, diagnostics: { completionCorrections: 0 } });
+    expect(f.driver.execute).not.toHaveBeenCalled(); expect(f.driver.observe).toHaveBeenCalledTimes(3);
+  });
+
+  it('honors takeover requests rather than correcting them into actions', async () => {
+    const readScreen = vi.fn();
+    const f = fixture(async () => ({ kind: 'needsUser', reason: 'Please sign in' }), { readScreen });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Reach Done', expectText: 'Done' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ status: 'needs_user', modelRequests: 1, diagnostics: { completionCorrections: 0 } });
+    expect(f.driver.execute).not.toHaveBeenCalled(); expect(readScreen).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 2])('does not exceed a %i-request budget to correct unmet completion', async modelRequests => {
+    const predict = vi.fn<PhoneModelAdapter['predict']>(async () => ({ kind: 'complete', summary: 'Premature completion' }));
+    const f = fixture(predict, { modelRequests });
+    await f.open();
+    const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Reach Done', expectText: 'Done' }, f.context) as PhoneReport;
+    expect(result).toMatchObject({ status: 'paused', verified: false, stopReason: 'completion_unmet', modelRequests,
+      diagnostics: { completionCorrections: modelRequests - 1 } });
+    expect(predict).toHaveBeenCalledTimes(modelRequests);
     expect(f.driver.execute).not.toHaveBeenCalled();
+  });
+
+  it('does not verify or correct after cancellation during the post-finish observation', async () => {
+    const predict = vi.fn<PhoneModelAdapter['predict']>(async () => ({ kind: 'complete', summary: 'Done' }));
+    const f = fixture(predict); let release!: (value: PhoneObservation) => void;
+    vi.mocked(f.driver.observe).mockResolvedValueOnce(observation([element('Initial')]))
+      .mockImplementationOnce(async () => new Promise(resolve => { release = resolve; }));
+    await f.open(); const controller = new AbortController();
+    const running = f.runtime.execute('reliability', { op: 'run', goal: 'Reach Done', expectText: 'Done' }, f.context, controller.signal);
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    const rejected = expect(running).rejects.toMatchObject({ code: 'PHONE_CANCELLED' });
+    controller.abort(); release(observation([element('Done')])); await rejected;
+    expect(predict).toHaveBeenCalledOnce(); expect(f.driver.execute).not.toHaveBeenCalled();
+    expect(f.runtime.status('reliability')?.verified).toBe(false);
+  });
+
+  it('rejects an out-of-scope app reached during completion reobservation', async () => {
+    const predict = vi.fn<PhoneModelAdapter['predict']>(async () => {
+      f.set(observation([element('Done')], 'com.forbidden.app')); return { kind: 'complete', summary: 'Done' };
+    });
+    const f = fixture(predict); await f.open();
+    await expect(f.runtime.execute('reliability', { op: 'run', goal: 'Reach Done', expectText: 'Done' }, f.context)).rejects.toMatchObject({ code: 'PHONE_APP_DENIED' });
+    expect(predict).toHaveBeenCalledOnce(); expect(f.driver.execute).not.toHaveBeenCalled();
   });
 
   it('does not verify after caller cancellation while confirmation is in flight', async () => {

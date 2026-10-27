@@ -11,6 +11,14 @@ export class CloudAdbConnection extends CloudAdbTransport {
     }, undefined, this.hierarchy.bind(this), async (_serial, failed) => {
       const { CloudScrcpyProvider } = await import('./cloud-scrcpy.js');
       return new CloudScrcpyProvider(this.endpoint, Buffer.from(this.key), failed, undefined, true);
+    }, async signal => {
+      const observation = new CloudAdbConnection(this.endpoint, Buffer.from(this.key));
+      try {
+        const session = await observation.observer(signal);
+        const close = session.close.bind(session);
+        session.close = async () => { try { await close(); } finally { observation.dispose(); } };
+        return session;
+      } catch (error) { observation.dispose(); throw error; }
     });
   }
 }

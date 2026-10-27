@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { DOMParser } from 'linkedom';
 import sharp from 'sharp';
 
+import { PhoneUiSession, openLocalPhoneUi } from './ui-session.js';
 import { measurePhonePhase } from './execution-trace.js';
 import { PhoneTextSession, type PhoneTextProvider } from './text-session.js';
 
@@ -43,12 +44,14 @@ export function parseAdbDevices(text: string): DiscoveredPhone[] {
 export function parsePhoneUi(xml: string): PhoneElement[] {
   const document = new DOMParser().parseFromString(xml.slice(xml.indexOf('<?xml') >= 0 ? xml.indexOf('<?xml') : xml.indexOf('<hierarchy')), 'text/xml');
   return Array.from(document.querySelectorAll('node')).slice(0, 500).flatMap(node => {
-    const bounds = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/.exec(node.getAttribute('bounds') ?? '');
-    if (!bounds || node.getAttribute('visible-to-user') === 'false') return [];
-    const password = node.getAttribute('password') === 'true';
-    return [{ text: password ? '' : (node.getAttribute('text') ?? '').slice(0, 500), description: password ? '' : (node.getAttribute('content-desc') ?? '').slice(0, 300),
-      resourceId: node.getAttribute('resource-id') ?? '', clickable: node.getAttribute('clickable') === 'true', focused: node.getAttribute('focused') === 'true', password,
-      editable: /(?:EditText|AutoCompleteTextView)$/.test(node.getAttribute('class') ?? ''),
+    // XML getAttribute re-escapes &, < and > in linkedom; Attr.value is decoded exactly once.
+    const attribute = (name: string) => node.getAttributeNode(name)?.value;
+    const bounds = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/.exec(attribute('bounds') ?? '');
+    if (!bounds || attribute('visible-to-user') === 'false') return [];
+    const password = attribute('password') === 'true';
+    return [{ text: password ? '' : (attribute('text') ?? '').slice(0, 500), description: password ? '' : (attribute('content-desc') ?? '').slice(0, 300),
+      resourceId: attribute('resource-id') ?? '', clickable: attribute('clickable') === 'true', focused: attribute('focused') === 'true', password,
+      editable: /(?:EditText|AutoCompleteTextView)$/.test(attribute('class') ?? ''),
       bounds: bounds.slice(1).map(Number) as [number, number, number, number] }];
   });
 }
@@ -115,8 +118,28 @@ function sameTextEditor(target: PhoneElement, node: PhoneElement): boolean {
 }
 
 export class AdbPhoneDriver implements PhoneDriver {
+  private observers = new Map<string, PhoneUiSession>();
+  private openingObservers = new Map<string, Promise<PhoneUiSession>>();
+  private observerEpoch = 0;
+  private async observer(serial: string, signal: AbortSignal): Promise<PhoneUiSession | undefined> {
+    if (!this.createObserver && (this.command !== runAdb || !this.useAndroidCli || this.readHierarchy)) return undefined;
+    if (this.observers.has(serial)) return this.observers.get(serial);
+    let pending = this.openingObservers.get(serial);
+    if (!pending) {
+      const epoch = this.observerEpoch;
+      pending = (this.createObserver ? this.createObserver(signal) : openLocalPhoneUi(this.adbPath, serial, signal)).then(async session => {
+        if (epoch !== this.observerEpoch || signal.aborted) { await session.close(); throw new PhoneError('PHONE_CANCELLED', 'Phone observer stopped'); }
+        this.observers.set(serial, session); return session;
+      });
+      this.openingObservers.set(serial, pending);
+    }
+    try { return await pending; } finally { if (this.openingObservers.get(serial) === pending) this.openingObservers.delete(serial); }
+  }
   private textSessions = new Map<string, PhoneTextSession>();
   async releaseInput(): Promise<void> {
+    this.observerEpoch++;
+    const observers = [...this.observers.values()]; this.observers.clear();
+    await Promise.allSettled([...observers.map(observer => observer.close()), ...this.openingObservers.values()].map(async value => { const session = await value; if (session instanceof PhoneUiSession) await session.close(); }));
     const sessions = [...this.textSessions.values()]; this.textSessions.clear();
     await Promise.all(sessions.map(session => session.close()));
   }
@@ -136,7 +159,8 @@ export class AdbPhoneDriver implements PhoneDriver {
     private readonly readApplications?: (signal: AbortSignal) => Promise<PhoneApplication[]>,
     private readonly pasteText?: (text: string, signal: AbortSignal) => Promise<void>,
     private readonly readHierarchy?: (signal: AbortSignal) => Promise<string>,
-    private readonly createTextProvider?: (serial: string, failed: () => void) => Promise<PhoneTextProvider>) {}
+    private readonly createTextProvider?: (serial: string, failed: () => void) => Promise<PhoneTextProvider>,
+    private readonly createObserver?: (signal: AbortSignal) => Promise<PhoneUiSession>) {}
   async textInputStatus(serial: string, signal: AbortSignal): Promise<PhoneTextInputStatus> {
     const androidSdk = Number((await this.shell(serial, ['getprop', 'ro.build.version.sdk'], signal)).trim()) || 0;
     let ready = false;
@@ -170,8 +194,9 @@ export class AdbPhoneDriver implements PhoneDriver {
     return { ...observation, elements: native.elements };
   }
   private async hierarchy(serial: string, signal: AbortSignal): Promise<{ elements: PhoneElement[]; app?: string }> {
-    if (this.readHierarchy) {
-      const xml = await this.readHierarchy(signal);
+    const observer = await this.observer(serial, signal);
+    if (observer || this.readHierarchy) {
+      const xml = observer ? await observer.snapshot(signal) : await this.readHierarchy!(signal);
       const app = new DOMParser().parseFromString(xml, 'text/xml').querySelector('node')?.getAttribute('package');
       if (!app) throw new PhoneError('PHONE_FRAME_CHANGED', 'Unable to identify the UI hierarchy application');
       return { app, elements: parsePhoneUi(xml) };
@@ -290,6 +315,14 @@ export class AdbPhoneDriver implements PhoneDriver {
       case 'typeText': {
         const editors = observation.elements.filter(node => node.focused && node.editable && !node.password);
         if (editors.length !== 1) throw new PhoneError('PHONE_INPUT_NOT_FOCUSED', 'Focus one non-password editable field before typing');
+        const observer = action.mode === 'replace' ? await this.observer(serial, signal) : undefined;
+        if (observer) {
+          const target = editors[0];
+          if (!target.resourceId || target.resourceId === 'android:active-editor' || target.text.length >= 500)
+            throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'Replacing text requires an identifiable field with a complete current value', 409);
+          await observer.replace(observation.package, target, action.text, signal);
+          break;
+        }
         const ascii = /^[a-zA-Z0-9 .,_@+-]+$/.test(action.text) && !action.text.includes('%');
         if (!ascii) {
           const capability = await this.textInputStatus(serial, signal);
