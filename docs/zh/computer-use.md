@@ -1,10 +1,20 @@
 # 电脑控制预览
 
-通过 macOS 或 Windows x64 桌面应用，让 xopc 读取或操作一个应用窗口。预览功能需要兼容的 GUI 模型与本机应用授权，建议从小范围、有人看护的任务开始。
+通过 macOS 或 Windows x64 桌面应用，让 xopc 读取或操作一个应用窗口。预览功能需要本机应用授权，以及兼容的 GUI 模型或支持图像的主模型，建议从小范围、有人看护的任务开始。
 
 [Windows 稳定性矩阵](https://github.com/xopcai/xopc/blob/main/docs/design/technical/windows-computer-reliability.md) 补充验证了回包丢失、私有驱动崩溃、隐藏控制界面和 Gateway 硬退出，并记录跨应用分阶段耗时。WinForms/WPF 样例与 Calculator 正向通过；Notepad 后台保存组合键仍受限，拒绝后停止，不改用全局输入绕过。CI 构建发布要求保持不变。
 
 Windows 的 [安装后完整验证](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-windows-installed-validation.md) 覆盖正式 NSIS 安装、正常应用与包内 Gateway、认证会话 API、签名桌面 WebSocket、截图上传、真实聊天/GUI 模型、重启和卸载。在没有安装或运行 xopc 的交互账户构建安装包后，可运行 `node --import tsx scripts/run-computer-windows-installed-validation.mts` 复现；Authenticode 签名分发另行验收。
+
+## 主模型可编程 UI 预览
+
+Agent 可以通过 `computer_use` 的 `open` 选择 `planner: "agent"`，再用 `op: "exec"` 执行 UI 专用 JavaScript。此模式使用当前支持图像的主模型，无需另配 GUI 模型。默认 GUI 模式继续使用 `step/run`。每个包含输入的 exec 必须先观察，并在同一次 exec 内使用该快照；不可跨模型调用复制快照 ID。
+
+程序复用现有 broker 和驱动，支持观察控件、精确定位、受保护输入、条件等待与结果验证。同一窗口串行操作；跨调用 JSON 状态只保存在内存，关闭后清理。截图仅注入当前模型请求，不写入会话数据库和诊断日志。无障碍文本和程序源码仍可能出现在普通会话历史中。
+
+首轮 macOS 验证用固定脚本完成了两个真实测试窗口输入；这不代表真实模型任务性能或 Windows 新模式认证。详见[实施与基线记录](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-programmable-ui-validation-2026-10-27.md)。
+
+原生输入诊断新增身份检查、动作校验、SDK 调用、返回校验及渲染等待的分段耗时。SDK 时间包含 RPC 和 OS 工作，不等于纯 OS 输入时间。可显式运行 `pnpm exec tsx scripts/benchmark-computer-input-live.mts 30`，或用 `1 program` 验证可编程链路。macOS 真实模型与网络成对实测使用 `pnpm exec tsx scripts/benchmark-computer-paired-live.mts 3`，需要 `DASHSCOPE_API_KEY`，只发送其临时测试窗口，并产生真实推理用量。详见[验证报告](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-network-paired-validation-2026-10-27.md)。
 
 ## Windows x64 预览
 

@@ -1,6 +1,16 @@
 # Computer Use preview
 
-Use the macOS or Windows x64 desktop app to ask xopc to read or operate one application window. This preview requires a compatible GUI model and local application access. Start with a small, supervised task.
+Use the macOS or Windows x64 desktop app to ask xopc to read or operate one application window. This preview requires local application access and either a compatible GUI model or a visual main model for programmable UI. Start with a small, supervised task.
+
+## Programmable UI preview
+
+The Agent can open `computer_use` with `planner: "agent"` and execute UI-only JavaScript through `op: "exec"`. This uses the current visual main model without a separate GUI model binding. The default GUI planner keeps `step` and `run`. Every exec that acts must first observe and use that snapshot within the same exec; snapshot IDs cannot be copied between model calls.
+
+Programs reuse the existing broker and driver to observe controls, resolve exact labels, perform guarded inputs, wait for conditions and verify results. Operations remain sequential. JSON state survives calls in memory until close. Requested screenshots enter only the current model request; stored transcripts and diagnostic logs exclude pixels. Accessibility text and program source may appear in conversation history.
+
+Initial macOS validation completed two real fixture inputs using a fixed script. It does not establish real-model task performance or certify the new mode on Windows. See the [validation record](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-programmable-ui-validation-2026-10-27.md).
+
+Native input diagnostics separate identity checks, action validation, SDK calls, response validation and render grace. SDK time includes RPC and OS work. Run opt-in fixture tests with `pnpm exec tsx scripts/benchmark-computer-input-live.mts 30`, or use `1 program` for the programmable path. The macOS live model/network comparison is `pnpm exec tsx scripts/benchmark-computer-paired-live.mts 3` (requires `DASHSCOPE_API_KEY`, sends only its disposable fixture window, and incurs real inference usage). See the [validation report](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-network-paired-validation-2026-10-27.md).
 
 ## Windows x64 preview
 

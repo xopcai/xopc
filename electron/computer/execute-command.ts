@@ -19,10 +19,15 @@ export async function executeComputerCommand(
   const abort = () => { void cancel(); };
   context.signal.throwIfAborted();
   context.signal.addEventListener('abort', abort, { once: true });
+  const startedAt = performance.now();
   try {
+    const brokerStarted = performance.now();
     const { frame, ...metadata } = await broker.command(command);
-    const content: EndpointToolContent[] = [{ type: 'json', value: metadata }];
+    const transport = { brokerWallMs: performance.now() - brokerStarted, frameUploadMs: null as number | null, commandWallMs: 0 };
+    const payload = { ...metadata, transportTiming: transport };
+    const content: EndpointToolContent[] = [{ type: 'json', value: payload }];
     if (frame) {
+      const uploadStarted = performance.now();
       try {
         context.signal.throwIfAborted();
         content.push(await context.uploadFile({ name: frame.mimeType === 'image/jpeg' ? 'observation.jpg' : 'observation.png',
@@ -32,9 +37,14 @@ export async function executeComputerCommand(
         const diagnostic = computerDiagnostic(error);
         if (!metadata.receipt || !diagnostic) throw error;
         // Preserve an already-delivered input even when its verification frame cannot be uploaded.
-        return { content: [{ type: 'json', value: { ...metadata, status: 'stopped', errorCode: diagnostic.errorCode, diagnostic } }] };
-      } finally { frame.bytes.fill(0); }
+        return { content: [{ type: 'json', value: { ...payload, status: 'stopped', errorCode: diagnostic.errorCode, diagnostic } }] };
+      } finally {
+        transport.frameUploadMs = performance.now() - uploadStarted;
+        transport.commandWallMs = performance.now() - startedAt;
+        frame.bytes.fill(0);
+      }
     }
+    transport.commandWallMs = performance.now() - startedAt;
     return { content };
   } finally { context.signal.removeEventListener('abort', abort); }
 }

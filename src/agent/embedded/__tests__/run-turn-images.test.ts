@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { bindComputerAgentTurn, computerAgentTurn, retainComputerFrame, computerImagesForRequest } from '../../../computer/agent-context.js';
 
 const mocks = vi.hoisted(() => ({
   phoneSuspended: vi.fn(),
@@ -119,6 +120,36 @@ import { runXopcEmbeddedTurn } from '../run-turn.js';
 import { EmbeddedRunConflictError } from '../runs.js';
 
 describe('runXopcEmbeddedTurn image input', () => {
+  it('projects computer pixels only into the provider request, leaving transcript and debug payload text-only', async () => {
+    const owner = '259a62b5-df35-4b40-88ae-275ddf5f1ba0';
+    const model = { id: 'visual-main', provider: 'test', api: 'openai-completions',
+      baseUrl: 'https://model.test/v1', input: ['text', 'image'], contextWindow: 128_000 } as any;
+    const messages: any[] = [
+      { role: 'user', content: 'Inspect the test window', timestamp: 1 },
+      { role: 'assistant', content: [{ type: 'toolCall', id: 'call_screen-1', name: 'computer_use', arguments: { op: 'exec', code: 'await ui.observe({visual:true})' } }],
+        model: model.id, provider: model.provider, api: model.api, timestamp: 2 },
+      { role: 'toolResult', toolCallId: 'call_screen-1', toolName: 'computer_use', content: [{ type: 'text', text: 'Ephemeral screenshot ready' }], timestamp: 3 },
+    ];
+    const before = JSON.stringify(messages);
+    process.env.XOPC_LOG_LLM_PAYLOAD = 'true';
+    mocks.prompt.mockImplementationOnce(async () => {
+      bindComputerAgentTurn(owner, 'run-computer-image', model);
+      retainComputerFrame(owner, 'call_screen-1', new Uint8Array([1, 2, 3]), 'image/png');
+      const stream = mocks.session.agent.streamFunction(model, { systemPrompt: 'system', messages,
+        tools: [{ name: 'computer_use', description: 'UI', parameters: { type: 'object' } }] }, {});
+      await stream.result();
+    });
+    const result = await runXopcEmbeddedTurn({ conversationId: owner, runId: 'run-computer-image',
+      userMessage: { role: 'user', content: 'Inspect the test window', timestamp: 1 }, model, modelRef: 'test/visual-main',
+      tools: [], systemPrompt: 'system', workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000 });
+    expect(result.ok).toBe(true);
+    const outgoing = mocks.baseStreamFn.mock.calls[0]?.[1].messages.find((m: any) => m.role === 'toolResult');
+    expect(outgoing.toolCallId).not.toBe('call_screen-1');
+    expect(outgoing.content).toContainEqual({ type: 'image', mimeType: 'image/png', data: 'AQID' });
+    expect(JSON.stringify(messages)).toBe(before);
+    expect(JSON.stringify(mocks.debug.mock.calls)).not.toContain('AQID');
+    expect(computerImagesForRequest(owner, 'run-computer-image', 'call_screen-1')).toEqual([]);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.phoneSuspended.mockReturnValue(false);
@@ -296,6 +327,26 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(mocks.session.agent.beforeToolCall).toBeUndefined();
     expect(mocks.session.agent.afterToolCall).toBeUndefined();
     expect(finishDecisions).toEqual([{ action: 'end' }, { action: 'end' }]);
+  });
+  it('rechecks each UI host call with distinct matched before/after policy identities', async () => {
+    const owner = '259a62b5-df35-4b40-88ae-275ddf5f1ba0';
+    const model = { id: 'visual-main', provider: 'test', input: ['image'], baseUrl: 'https://model.test/v1' } as any;
+    const turnPolicy = { reset: vi.fn(), beforeToolCall: vi.fn(), afterToolCall: vi.fn(), shouldStopAfterTurn: vi.fn() };
+    mocks.prompt.mockImplementationOnce(async () => {
+      bindComputerAgentTurn(owner, 'ui-policy', model);
+      await mocks.session.agent.beforeToolCall({ toolCall: { id: 'program', name: 'computer_use' }, args: { op: 'exec', code: '' } });
+      const turn = computerAgentTurn(owner);
+      for (let i = 0; i < 2; i++) {
+        await turn.authorize!('observe', {});
+        expect(await turn.complete!('observe', { snapshotId: String(i) })).toEqual({ snapshotId: String(i) });
+      }
+    });
+    const result = await runXopcEmbeddedTurn({ conversationId: owner, runId: 'ui-policy',
+      userMessage: { role: 'user', content: 'Inspect the fixture', timestamp: 1 }, model, modelRef: 'test/visual-main',
+      tools: [], systemPrompt: 'system', workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000, turnPolicy });
+    expect(result.ok).toBe(true);
+    expect(turnPolicy.beforeToolCall.mock.calls.map(([context]) => context.toolCall.id)).toEqual(['program', 'program/ui/1', 'program/ui/2']);
+    expect(turnPolicy.afterToolCall.mock.calls.map(([context]) => context.toolCall.id)).toEqual(['program/ui/1', 'program/ui/2']);
   });
 
   it('reports external cancellation as a failed run outcome', async () => {

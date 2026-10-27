@@ -32,6 +32,10 @@ export class ComputerTargetError extends Error {
 
 /** Recovery instructions are deterministic; never replay an input with unknown delivery. */
 export function computerRecovery(code: string): string {
+  if (code === 'COMPUTER_AGENT_MODEL_REQUIRED') return 'Direct UI programs require an active visual main-model turn. Select a visual model and open with planner:agent; do not change models inside an active desktop session.';
+  if (code === 'COMPUTER_AGENT_MODEL_CHANGED' || code === 'COMPUTER_PLANNER_MISMATCH') return 'The requested UI planner does not match the active session. Close and confirm release before opening the requested mode with the current main model.';
+  if (code === 'COMPUTER_PROGRAM_UNAWAITED_CALL') return 'The program ended with an unawaited UI call. Earlier inputs may already have completed. Control was released. Reopen and observe current state before performing only the remaining authorized actions; never replay the script. Await every ui.* call, including emitScreenshot. observe({visual:true}) already attaches the screenshot.';
+  if (code.startsWith('COMPUTER_PROGRAM_')) return 'The UI program stopped. Inspect completed receipts and the report before continuing with a new program for only the remaining work. Never replay the entire script or bypass a policy refusal.';
   if (code === 'COMPUTER_RECEIPT_MISMATCH') return 'The receipt could not be matched to the dispatched action, so its outcome is uncertain. Inspect the application locally; never automatically retry or replay the input. Wait for confirmed release before switching tools.';
   if (code === 'COMPUTER_FLOW_NOT_FOUND' || code === 'COMPUTER_FLOW_TARGET_MISMATCH') return 'The saved flow is unavailable or belongs to another application/device. Do not replay it or switch targets automatically. List flows and inspect the authorized target before planning again.';
   if (code === 'COMPUTER_FLOW_NOT_VERIFIED' || code === 'COMPUTER_FLOW_SAVE_FAILED') return 'Control was released. No reusable flow was confirmed saved. Saving requires verified native navigation, non-sensitive labels and working local storage; never repeat desktop input merely to save a flow.';
@@ -39,6 +43,7 @@ export function computerRecovery(code: string): string {
     return 'Screenshot upload to the Gateway failed. No automatic retry. Report the diagnosticId and HTTP status; do not change model providers or bypass desktop controls.';
   }
   switch (code) {
+
     case 'COMPUTER_WINDOWS_TEXT_INPUT_UNVERIFIED': case 'COMPUTER_WINDOWS_KEY_INPUT_UNVERIFIED':
       return 'This Windows control cannot be certified for safe input. Ask the user to enter text manually. Do not substitute key presses, paste, shell commands, coordinates or another tool to bypass this refusal.';
     case 'COMPUTER_WINDOWS_KEY_TARGET_REQUIRED':

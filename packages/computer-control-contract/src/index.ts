@@ -3,6 +3,23 @@ import { z } from 'zod';
 export const COMPUTER_CONTROL_TOOL = 'desktop.computer.control';
 export const COMPUTER_FRAME_MAX_BYTES = 5 * 1024 * 1024;
 export const COMPUTER_FRAME_MAX_PIXELS = 16_000_000;
+const Duration = z.number().finite().nonnegative();
+export const ComputerInputTimingSchema = z.object({
+  wallMs: Duration,
+  identityCheckMs: Duration,
+  actionValidationMs: Duration,
+  windowsInputGuardMs: Duration.nullable(),
+  sdkCallMs: Duration,
+  resultValidationMs: Duration,
+  renderGraceMs: Duration,
+  unattributedMs: Duration,
+  sdkCalls: z.number().int().nonnegative(),
+  completed: z.boolean(),
+}).strict();
+export type ComputerInputTiming = z.infer<typeof ComputerInputTimingSchema>;
+export const ComputerTransportTimingSchema = z.object({
+  brokerWallMs: Duration, frameUploadMs: Duration.nullable(), commandWallMs: Duration,
+}).strict();
 export const ComputerProfileSchema = z.enum([
   'gui-plus-2026-02-26',
   'structured-tools-v1',
@@ -37,11 +54,16 @@ export const ComputerObservationSchema = z.object({
   stateDigest: Id,
 }).strict();
 export type ComputerObservation = z.infer<typeof ComputerObservationSchema>;
-export const ComputerModelBindingSchema = z.object({
+const GuiModelBindingSchema = z.object({
   modelRef: Id, profile: ComputerProfileSchema, origin: z.string().url(),
   runtimeLocation: z.enum(['local', 'remote', 'unknown']),
   upstreamOrigin: z.string().url().optional(),
 }).strict();
+export const ComputerModelBindingSchema = z.union([GuiModelBindingSchema, z.object({
+  planner: z.literal('agent'), modelRef: Id, origin: z.string().url(),
+  runtimeLocation: z.enum(['local', 'remote', 'unknown']), runId: Id,
+  recipientHash: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict()]);
 export type ComputerModelBinding = z.infer<typeof ComputerModelBindingSchema>;
 export const ActionEnvelopeSchema = z.object({
   actionId: Id, sessionId: Id, observationId: Id, brokerEpoch: Id,

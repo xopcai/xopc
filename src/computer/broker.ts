@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   ActionEnvelopeSchema, ComputerCommandSchema, COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS,
   type ComputerAction, type ComputerCommand, type ComputerModelBinding,
-  type ComputerObservation, type ComputerReceipt, type ComputerTarget, type ComputerApp, type ComputerWindow,
+  type ComputerObservation, type ComputerReceipt, type ComputerTarget, type ComputerApp, type ComputerWindow, type ComputerInputTiming,
 } from '@xopcai/computer-control-contract';
 import { ComputerConfigSchema, type ComputerConfig } from './config.js';
 import type { ComputerNativeTiming } from './diagnostics.js';
@@ -27,6 +28,7 @@ export interface ComputerDriver {
   resolveTarget(appId: string, signal: AbortSignal, options: { prepare: boolean; windowRef?: string }): Promise<ComputerTarget>;
   observe(target: ComputerTarget, signal: AbortSignal): Promise<DriverObservation>;
   perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void>;
+  getLastInputTiming?(): ComputerInputTiming | undefined;
   /** Must finish only after no further input can be dispatched. */
   stop(): Promise<void>;
 }
@@ -75,7 +77,7 @@ export class ComputerBroker {
   private readonly apps = new Map<string, { owner: string; appId: string; name: string; expires: number }>();
   private readonly config: ComputerConfig;
   private readonly timer: ReturnType<typeof setInterval>;
-  constructor(private readonly driver: ComputerDriver, private readonly host: ComputerBrokerHost, config: Partial<ComputerConfig> = {}, private readonly now = Date.now) {
+  constructor(private readonly driver: ComputerDriver, private readonly host: ComputerBrokerHost, config: Partial<ComputerConfig> = {}, private readonly now = Date.now, private readonly durationNow = now === Date.now ? () => performance.now() : now) {
     this.config = ComputerConfigSchema.parse(config);
     this.timer = setInterval(() => {
       const s = this.session;
@@ -258,13 +260,16 @@ export class ComputerBroker {
       if (s.pending.approved === undefined) return this.result(s);
       if (!s.pending.approved) { await this.stop(); return this.result(s); }
     }
-    const precheckStarted = this.now();
+    const precheckStarted = this.durationNow();
     let matched = false;
+    let precheckSamples = 0;
     // A blinking insertion caret can change pixels while the application is
     // otherwise unchanged. Resample before any dispatch, without masking pixels
     // or weakening the original full target/digest comparison. A persistent
     // change still refuses the envelope and uses the existing bounded rescue.
     for (let sample = 0; sample < 4; sample++) {
+      precheckSamples++;
+      if (sample) await delay(100, undefined, { signal: s.controller.signal });
       let current: DriverObservation;
       try { current = await this.driver.observe(s.target!, s.controller.signal); }
       catch (error) { await this.stop().catch(() => {}); throw error; }
@@ -282,19 +287,23 @@ export class ComputerBroker {
       s.pending = undefined; s.observation = undefined; s.status = 'ready';
       return { ...this.result(s), errorCode: 'COMPUTER_OBSERVATION_CHANGED' };
     }
-    const nativeMs: ComputerNativeTiming = { precheckMs: Math.max(0, this.now() - precheckStarted), inputMs: 0, postObserveMs: 0 };
+    const nativeMs: ComputerNativeTiming = { precheckMs: Math.max(0, Math.round(this.durationNow() - precheckStarted)), inputMs: 0, postObserveMs: 0, precheckSamples };
     const receipt: ComputerReceipt = { actionId: e.actionId, dispatch: 'started', outcome: 'unknown', verification: 'none' };
     s.receipts.set(e.actionId, { digest, receipt }); s.actions++; s.pending = undefined; s.status = 'running';
     try {
-      const inputStarted = this.now();
-      await this.driver.perform(s.target!, e.action, s.controller.signal);
-      nativeMs.inputMs = Math.max(0, this.now() - inputStarted);
+      const inputStarted = this.durationNow();
+      try { await this.driver.perform(s.target!, e.action, s.controller.signal); }
+      finally {
+        nativeMs.inputMs = Math.max(0, Math.round(this.durationNow() - inputStarted));
+        nativeMs.inputDetail = this.driver.getLastInputTiming?.();
+      }
       this.active(s);
       receipt.dispatch = 'completed';
       s.status = 'ready';
-      const observationStarted = this.now();
-      const after = await this.observe(s);
-      nativeMs.postObserveMs = Math.max(0, this.now() - observationStarted);
+      const observationStarted = this.durationNow();
+      let after: BrokerResult;
+      try { after = await this.observe(s); }
+      finally { nativeMs.postObserveMs = Math.max(0, Math.round(this.durationNow() - observationStarted)); }
       // A changed screenshot is observation evidence, not proof of business success.
       receipt.verification = after.observation ? 'visual' : 'none';
       return { ...after, receipt, nativeMs };
@@ -306,7 +315,7 @@ export class ComputerBroker {
       await this.stop().catch(() => {
         log.warn({ sessionId: s.id, actionId: e.actionId, phase: 'cleanup' }, 'Computer driver cleanup failed after session revocation');
       });
-      return { ...this.result(s), receipt };
+      return { ...this.result(s), receipt, nativeMs };
     }
   }
   stop(): Promise<void> {

@@ -258,7 +258,8 @@ describe('private native driver admission', () => {
   it('re-captures a transient invalid frame from the same exact window without input', async () => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
-    const invalid = { pid: 42, windowId: 9n, screenshotFrameValid: false, images: [{ dataBase64: 'private-invalid-frame' }] };
+    vi.spyOn(driver as any, 'listWindows').mockResolvedValue([{pid:42,windowId:9n,isOnScreen:true,bounds:{x:0,y:0,width:800,height:600}}]);
+    const invalid = { pid: 42, windowId: 9n, windowBounds:{x:0,y:0,width:800,height:600}, screenshotFrameValid: false, images: [{ dataBase64: 'private-invalid-frame' }] };
     const capture = vi.spyOn(driver as any, 'getWindowState').mockResolvedValueOnce(invalid).mockResolvedValue({
       pid: 42, windowId: 9n, screenshotFrameValid: true, windowBounds: { x: 0, y: 0, width: 800, height: 600 },
       screenshotWidth: 800, screenshotHeight: 600, elements: [], images: [{ mimeType: 'image/png', dataBase64: 'AQID' }],
@@ -269,14 +270,33 @@ describe('private native driver admission', () => {
     expect(capture.mock.calls.every(([pid, window]) => pid === 42 && window === 9n)).toBe(true);
     expect(invalid.images).toEqual([]);
     expect(Array.from(frame.image)).toEqual([1, 2, 3]);
+    expect(driver.getCaptureStats()).toEqual({ attempts: 2, invalidFrames: 1, recovered: 1, exhausted: 0 });
+  });
+  it('recovers a native invalid frame with no optional AX bounds', async () => {
+    const f = semanticNative();
+    vi.spyOn(f.driver as any, 'listWindows').mockResolvedValue([{pid:42,windowId:9n,isOnScreen:true,bounds:f.state.windowBounds}]);
+    f.capture.mockResolvedValueOnce({ ...f.state, windowBounds: undefined, images: [], screenshotFrameValid: false })
+      .mockResolvedValueOnce(f.state);
+    await expect(f.driver.observe(f.target, f.signal)).resolves.toHaveProperty('image');
+    expect(f.driver.getCaptureStats()).toEqual({ attempts: 2, invalidFrames: 1, recovered: 1, exhausted: 0 });
+    expect(f.client.click).not.toHaveBeenCalled();
+  });
+  it('refuses geometry changes during invalid-frame recovery without accepting pixels', async () => {
+    const f = semanticNative();
+    vi.spyOn(f.driver as any, 'listWindows').mockResolvedValue([{pid:42,windowId:9n,isOnScreen:true,bounds:f.state.windowBounds}]);
+    f.capture.mockResolvedValueOnce({ ...f.state, images: [], screenshotFrameValid: false })
+      .mockResolvedValueOnce({ ...f.state, windowBounds: { ...f.state.windowBounds, x: 101 }, screenshotFrameValid: true });
+    await expect(f.driver.observe(f.target, f.signal)).rejects.toThrow('COMPUTER_WINDOW_CHANGED');
+    expect(f.client.click).not.toHaveBeenCalled();
   });
   it.each([
-    [{ pid: 42, windowId: 9n, screenshotFrameValid: false, images: [] }, 3],
+    [{ pid: 42, windowId: 9n, windowBounds:{x:0,y:0,width:800,height:600}, screenshotFrameValid: false, images: [] }, 4],
     [{ pid: 43, windowId: 9n, screenshotFrameValid: false, images: [] }, 1],
     [{ pid: 42, windowId: 10n, screenshotFrameValid: false, images: [] }, 1],
   ])('bounds invalid-frame capture and never follows changed window identity', async (state, count) => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
+    vi.spyOn(driver as any, 'listWindows').mockResolvedValue([{pid:42,windowId:9n,isOnScreen:true,bounds:{x:0,y:0,width:800,height:600}}]);
     const capture = vi.spyOn(driver as any, 'getWindowState').mockResolvedValue(state);
     await expect(driver.observe({ appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9',
       width: 800, height: 600, geometryRevision: '1' }, new AbortController().signal)).rejects.toThrow('CAPTURE_TARGET_MISMATCH');

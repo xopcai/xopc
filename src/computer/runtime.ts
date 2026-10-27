@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import {
-  COMPUTER_CONTROL_TOOL, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
+  COMPUTER_CONTROL_TOOL, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
   type ActionEnvelope, type ComputerCommand, type ComputerModelBinding,
 } from '@xopcai/computer-control-contract';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
@@ -16,6 +16,8 @@ import { computerModelProfile, ComputerServiceLimitsSchema, type ComputerService
 import { groundComputerAction } from './semantic-actions.js';
 import { ComputerFlowCapture, ComputerFlowStore, computerFlowMetadata, computerFlowHint, type ComputerFlowRepository } from './flows.js';
 import { ComputerSessionDiagnostics, ComputerNativeTimingSchema, type ComputerNativeTiming, type ComputerSessionReport } from './diagnostics.js';
+import { computerAgentTurn, clearComputerFrames, retainComputerFrame } from './agent-context.js';
+import { executeComputerProgram } from './program-runtime.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
 import { createLogger } from '../utils/logger.js';
 import { ComputerExpectationSchema, ComputerTaskState, verifyComputerExpectation,
@@ -28,6 +30,7 @@ const Reply = z.object({
   sessionId: z.string(), brokerEpoch: z.string(), generation: z.number().int().nonnegative(),
   grantId: z.string().optional(), observation: ComputerObservationSchema.optional(),
   nativeMs: ComputerNativeTimingSchema.optional(),
+  transportTiming: ComputerTransportTimingSchema.optional(),
   errorCode: z.string().optional(),
   diagnostic: ComputerDiagnosticSchema.optional(),
   apps: z.array(ComputerAppSchema).max(100).optional(), windows: z.array(ComputerWindowSchema).max(100).optional(),
@@ -37,7 +40,7 @@ type ObservationReply = { value: z.infer<typeof Reply>; frame?: Uint8Array; mime
 type GoalContext = { observation?: ObservationReply; observationsReused: number; stabilityObservations: number; actionsRemaining: number; nativeMs: ComputerNativeTiming };
 type Session = {
   id: string; owner: string; endpointId: string; appRef: string; mode: 'observe' | 'control'; prepare: boolean; windowRef?: string; binding: ComputerModelBinding;
-  adapter: ComputerStepAdapter; createdAt: number; modelRequests: number; actions: number;
+  adapter?: ComputerStepAdapter; programStore?: Record<string, unknown>; createdAt: number; modelRequests: number; actions: number;
   rescues: number; rescueLimit: number;
   pending?: ActionEnvelope; controller: AbortController;
   task: ComputerTaskState;
@@ -49,9 +52,11 @@ type Session = {
 export const ComputerUseInputSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('discover'), query: z.string().max(200) }).strict(),
   z.object({ op: z.literal('open'), appRef: z.string().min(1).max(200), windowRef: z.string().min(1).max(200).optional(),
-    mode: z.enum(['observe', 'control']), prepare: z.boolean() }).strict(),
+    mode: z.enum(['observe', 'control']), prepare: z.boolean(), planner: z.enum(['gui', 'agent']).optional() }).strict(),
   z.object({ op: z.literal('observe'), question: z.string().min(1).max(4000).optional(), expect: ComputerExpectationSchema.optional() }).strict(),
   z.object({ op: z.literal('step'), goal: z.string().min(1).max(4000), expect: ComputerExpectationSchema.optional(), flowId: z.uuid().optional() }).strict(),
+  z.object({ op: z.literal('exec'), code: z.string().max(65536), maxActions: z.number().int().min(1).max(12).optional(),
+    timeoutMs: z.number().int().min(100).max(120000).optional() }).strict(),
   z.object({ op: z.literal('run'), goal: z.string().min(1).max(4000), expect: ComputerExpectationSchema,
     maxActions: z.number().int().min(1).max(12).optional() }).strict(),
   z.object({ op: z.literal('close'), saveFlowAs: z.string().trim().min(1).max(160).optional() }).strict(),
@@ -61,7 +66,7 @@ export const ComputerUseInputSchema = z.discriminatedUnion('op', [
 ]);
 export type ComputerUseInput = z.infer<typeof ComputerUseInputSchema>;
 export interface ComputerPublicResult {
-  status: string; sessionId: string; pending?: boolean; summary?: string;
+  status: string; sessionId: string; output?: string; scriptError?: string; scriptErrorMessage?: string; imageRef?: string; pending?: boolean; summary?: string;
   receipt?: z.infer<typeof Reply>['receipt']; claimedSuccess?: boolean; verified?: boolean;
   verification?: ComputerVerification;
   budget?: { actionsRemaining: number; modelRequestsRemaining: number; rescuesRemaining: number; expiresAt: number; serviceLimits?: ComputerServiceLimits };
@@ -89,7 +94,7 @@ export class ComputerRuntime {
     private readonly getTurnEndpoint?: (owner: string) => string | undefined,
     private readonly flowStore: ComputerFlowRepository = new ComputerFlowStore()) {}
 
-  async execute(owner: string, input: ComputerUseInput, signal?: AbortSignal): Promise<ComputerPublicResult> {
+  async execute(owner: string, input: ComputerUseInput, signal?: AbortSignal, execution?: { toolCallId: string }): Promise<ComputerPublicResult> {
     input = ComputerUseInputSchema.parse(input);
     if (!owner) throw new Error('COMPUTER_CONVERSATION_REQUIRED');
     if (input.op === 'flows' || input.op === 'forget_flow') {
@@ -135,7 +140,8 @@ export class ComputerRuntime {
     if (diagnostics) this.openingReports.set(owner, diagnostics);
     try {
       const operationSignal = signal ? AbortSignal.any([signal, operation.signal]) : operation.signal;
-      const result = input.op === 'run' ? await this.executeGoal(owner, input, operationSignal, diagnostics)
+      const result = input.op === 'exec' ? await this.executeProgram(owner, input, operationSignal, execution)
+        : input.op === 'run' ? await this.executeGoal(owner, input, operationSignal, diagnostics)
         : await this.executeInput(owner, input, operationSignal, diagnostics);
       if (result.errorCode) diagnostics?.fail(new Error(result.errorCode), diagnostics.phase, result.receipt?.dispatch ?? 'notStarted');
       if (diagnostics && !this.sessions.has(owner)) this.retainReport(owner, diagnostics);
@@ -158,6 +164,113 @@ export class ComputerRuntime {
   private flowScope(owner: string): string {
     const effective = resolveEffectiveAgentConfigForSession(owner).config;
     return JSON.stringify([effective.id, effective.workspace]);
+  }
+  private async executeProgram(owner: string, input: Extract<ComputerUseInput, { op: 'exec' }>, signal: AbortSignal,
+    execution?: { toolCallId: string }): Promise<ComputerPublicResult> {
+    const s = this.sessions.get(owner);
+    if (!s) throw new Error('COMPUTER_OPEN_REQUIRED');
+    if (!('planner' in s.binding) || s.binding.planner !== 'agent' || !execution) throw new Error('COMPUTER_PLANNER_MISMATCH');
+    const turn = computerAgentTurn(owner);
+    if (JSON.stringify(turn.binding) !== JSON.stringify(s.binding)) { await this.close(owner); throw new Error('COMPUTER_AGENT_MODEL_CHANGED'); }
+    const combined = AbortSignal.any([signal, s.controller.signal]);
+    let current: ObservationReply | undefined;
+    let actions = 0;
+    let imageRef: string | undefined;
+    const observe = async (observationSignal = combined) => {
+      current?.frame?.fill(0);
+      current = await this.send(s, { op: 'observe', sessionId: s.id, owner }, observationSignal);
+      if (current.value.status !== 'ready' || current.value.errorCode || !current.value.observation) {
+        throw new Error(current.value.errorCode ?? 'COMPUTER_NOT_READY');
+      }
+      const observation = current.value.observation;
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(observation.summary); }
+      catch { data = { text: observation.summary, elements: [], truncated: true }; }
+      return { snapshotId: observation.id, ...data };
+    };
+    const snapshot = (id: string) => {
+      const observation = current?.value.observation;
+      if (!observation || observation.id !== id || Date.now() - observation.capturedAt > 5000) throw new Error('COMPUTER_STALE_OBSERVATION');
+      return observation;
+    };
+    try {
+      const result = await executeComputerProgram(input.code, async (method, args, callSignal) => {
+        callSignal.throwIfAborted();
+        if (!this.getConfig().computer.enabled || Date.now() - s.createdAt >= this.getConfig().computer.maxSessionDurationMs) throw new Error('COMPUTER_SESSION_BUDGET');
+        if (JSON.stringify(computerAgentTurn(owner).binding) !== JSON.stringify(s.binding)) throw new Error('COMPUTER_AGENT_MODEL_CHANGED');
+        await turn.authorize?.(method, args);
+        const hostResult = await (async () => {
+        if (method === 'observe') {
+          const options = z.object({ visual: z.boolean().optional() }).strict().parse(args ?? {});
+          const state = await observe(callSignal);
+          if (options.visual && current?.frame && current.mimeType) imageRef = retainComputerFrame(owner, execution.toolCallId, current.frame, current.mimeType);
+          return state;
+        }
+        if (method === 'emitScreenshot') {
+          const value = z.object({ snapshotId: z.string() }).strict().parse(args);
+          snapshot(value.snapshotId);
+          if (!current?.frame || !current.mimeType) throw new Error('COMPUTER_FRAME_REQUIRED');
+          imageRef = retainComputerFrame(owner, execution.toolCallId, current.frame, current.mimeType);
+          return { imageRef };
+        }
+        if (method === 'resolve') {
+          const value = z.object({ snapshotId: z.string(), role: z.string().max(100), label: z.string().max(300) }).strict().parse(args);
+          const data = JSON.parse(snapshot(value.snapshotId).summary);
+          if (data.truncated || !Array.isArray(data.elements)) throw new Error('COMPUTER_ELEMENT_REF_REQUIRED');
+          const candidates = data.elements.filter((e: Record<string, unknown>) => e.role === value.role && e.label === value.label && e.in_web_content !== true);
+          if (candidates.length !== 1 || typeof candidates[0].ref !== 'string') throw new Error('COMPUTER_ELEMENT_REF_REQUIRED');
+          return candidates[0];
+        }
+        if (method === 'verify' || method === 'waitFor') {
+          const value = z.object({ expect: ComputerExpectationSchema, timeoutMs: z.number().int().min(0).max(5000).optional() }).strict().parse(args);
+          const deadline = Date.now() + (method === 'waitFor' ? value.timeoutMs ?? 2000 : 0);
+          for (let sample = 0; sample < 20; sample++) {
+            const state = await observe(callSignal);
+            const verification = verifyComputerExpectation(value.expect, current!.value.observation);
+            s.diagnostics.verify(verification);
+            if (verification?.status === 'satisfied' || Date.now() >= deadline || sample === 19) return { ...state, verification };
+            await delay(100, undefined, { signal: callSignal });
+          }
+        }
+        if (method === 'act') {
+          if (s.mode === 'observe') throw new Error('COMPUTER_READ_ONLY');
+          const value = z.object({ snapshotId: z.string(), action: ComputerActionSchema, expect: ComputerExpectationSchema.optional() }).strict().parse(args);
+          const before = snapshot(value.snapshotId);
+          if (++actions > (input.maxActions ?? 6)) throw new Error('COMPUTER_ACTION_BUDGET');
+          const action = groundComputerAction(value.action, before);
+          s.task.assertProgress(action, before);
+          s.pendingContext = { goal: 'Authorized main-agent UI program', before, expectation: value.expect };
+          const envelope: ActionEnvelope = { actionId: randomUUID(), sessionId: s.id, observationId: before.id,
+            brokerEpoch: before.brokerEpoch, generation: before.generation, grantId: current!.value.grantId!,
+            deadlineAt: Date.now() + 120_000, action };
+          const context: GoalContext = { observationsReused: 0, stabilityObservations: 0, actionsRemaining: 1,
+            nativeMs: { precheckMs: 0, inputMs: 0, postObserveMs: 0 } };
+          clearComputerFrames(owner); imageRef = undefined;
+          current?.frame?.fill(0); current = undefined;
+          const authorizationDeadline = Date.now() + 60_000;
+          let reply = await this.dispatchAction(s, envelope, callSignal, context);
+          while (reply.status === 'pending_action') {
+            if (Date.now() >= authorizationDeadline) throw new Error('COMPUTER_AUTHORIZATION_TIMEOUT');
+            await delay(250, undefined, { signal: callSignal });
+            reply = await this.dispatchAction(s, envelope, callSignal, context);
+          }
+          current = context.observation;
+          if (reply.errorCode || reply.receipt?.dispatch !== 'completed') throw new Error(reply.errorCode ?? 'COMPUTER_NATIVE_ACTION_FAILED');
+          let state: Record<string, unknown> = {};
+          try { state = JSON.parse(current?.value.observation?.summary ?? '{}'); } catch { state = { truncated: true }; }
+          return { ...state, receipt: reply.receipt, verification: reply.verification, snapshotId: current?.value.observation?.id };
+        }
+        throw new Error('COMPUTER_INVALID_INPUT');
+        })();
+        const checked = await turn.complete?.(method, hostResult);
+        return checked ?? hostResult;
+      }, s.programStore ??= Object.create(null), combined, input.timeoutMs);
+      if (result.status === 'program_error') { await this.close(owner); return { ...result, sessionId: s.id }; }
+      return { ...result, sessionId: s.id, ...(imageRef ? { imageRef } : {}), budget: this.budget(s) };
+    } catch (error) {
+      await this.close(owner);
+      throw error;
+    } finally { current?.frame?.fill(0); }
   }
   private async executeGoal(owner: string, input: Extract<ComputerUseInput, { op: 'run' }>, signal: AbortSignal,
     diagnostics?: ComputerSessionDiagnostics): Promise<ComputerPublicResult> {
@@ -199,16 +312,16 @@ export class ComputerRuntime {
       // Pixels live only inside this call, never in session history or across Agent turns.
       context.observation?.frame?.fill(0);
       context.observation = undefined;
-      this.sessions.get(owner)?.adapter.reset?.();
+      this.sessions.get(owner)?.adapter?.reset?.();
     }
   }
-  private async executeInput(owner: string, input: Exclude<ComputerUseInput, { op: 'close' | 'report' | 'flows' | 'forget_flow' | 'run' }>, signal: AbortSignal,
+  private async executeInput(owner: string, input: Exclude<ComputerUseInput, { op: 'close' | 'report' | 'flows' | 'forget_flow' | 'run' | 'exec' }>, signal: AbortSignal,
     diagnostics?: ComputerSessionDiagnostics, goalContext?: GoalContext): Promise<ComputerPublicResult> {
     signal.throwIfAborted();
     const config = this.getConfig();
     if (!config.computer.enabled) { await this.close(owner); throw new Error('COMPUTER_DISABLED'); }
     let s = this.sessions.get(owner);
-    if (s?.binding.modelRef.startsWith('xopc-cloud/')) rejectUnbudgetedCloudTransport('computer use');
+    if (s && !('planner' in s.binding) && s.binding.modelRef.startsWith('xopc-cloud/')) rejectUnbudgetedCloudTransport('computer use');
     if (input.op === 'discover') {
       const endpoint = this.resolveEndpoint(owner);
       const id = randomUUID();
@@ -219,6 +332,14 @@ export class ComputerRuntime {
     if (input.op === 'open' && !s) {
       const endpoint = this.resolveEndpoint(owner);
       const effective = resolveEffectiveAgentConfigForSession(owner).config;
+      let adapter: ComputerStepAdapter | undefined;
+      let binding: ComputerModelBinding;
+      let serviceLimits: ComputerServiceLimits | undefined;
+      if (input.planner === 'agent') {
+        const turn = computerAgentTurn(owner);
+        binding = turn.binding;
+        turn.cleanup = async () => { await this.close(owner); };
+      } else {
       const ref = effective.models.computerUse?.primary;
       if (!ref) throw new Error('COMPUTER_MODEL_REQUIRED');
       const model = resolveModel(ref);
@@ -227,7 +348,6 @@ export class ComputerRuntime {
       const apiKey = await getApiKey(model.provider, { agentId: effective.id, appConfig: config });
       if (!apiKey) throw new Error('COMPUTER_MODEL_KEY_MISSING');
       let deployment: { revision: string; origin?: string } | undefined;
-      let serviceLimits: ComputerServiceLimits | undefined;
       if (model.provider === 'xopc-cloud') {
         rejectUnbudgetedCloudTransport('computer use');
         const response = await fetch(`${model.baseUrl.replace(/\/$/, '')}/models`, { headers: { Authorization: `Bearer ${apiKey}` },
@@ -240,12 +360,14 @@ export class ComputerRuntime {
         if (!parsedDeployment.success || !parsedLimits.success) throw new Error('COMPUTER_DEPLOYMENT_UNAVAILABLE');
         deployment = parsedDeployment.data; serviceLimits = parsedLimits.data;
       }
-      const adapter = createComputerModelAdapter({ modelId: model.id, baseUrl: model.baseUrl, api: model.api, apiKey, profile, headers: model.headers, deploymentRevision: deployment?.revision,
+      adapter = createComputerModelAdapter({ modelId: model.id, baseUrl: model.baseUrl, api: model.api, apiKey, profile, headers: model.headers, deploymentRevision: deployment?.revision,
         maxOutputTokens: Math.min(2048, model.maxTokens ?? 2048, serviceLimits?.maxOutputTokens ?? 2048) });
+      binding = { modelRef: ref, profile, origin: new URL(model.baseUrl).origin, runtimeLocation: 'unknown',
+        ...(deployment?.origin ? { upstreamOrigin: deployment.origin } : {}) };
+      }
       signal.throwIfAborted();
       s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, adapter,
-        binding: { modelRef: ref, profile, origin: new URL(model.baseUrl).origin, runtimeLocation: 'unknown',
-          ...(deployment?.origin ? { upstreamOrigin: deployment.origin } : {}) },
+        binding,
         createdAt: Date.now(), actions: 0, modelRequests: 0, rescues: 0, rescueLimit: config.computer.maxRescuesPerSession,
         controller: new AbortController(), task: new ComputerTaskState(),
         flowCapture: new ComputerFlowCapture(), flowPrincipalId: endpoint.principalId, flowScope: JSON.stringify([effective.id, effective.workspace]),
@@ -264,7 +386,7 @@ export class ComputerRuntime {
     s.diagnostics.phase = 'observe';
     try {
       if (input.op === 'open') {
-        if (input.appRef !== s.appRef || input.windowRef !== s.windowRef || input.mode !== s.mode || input.prepare !== s.prepare) throw new Error('COMPUTER_CLOSE_BEFORE_TARGET_CHANGE');
+        if ((input.planner === 'agent') !== ('planner' in s.binding) || input.appRef !== s.appRef || input.windowRef !== s.windowRef || input.mode !== s.mode || input.prepare !== s.prepare) throw new Error('COMPUTER_CLOSE_BEFORE_TARGET_CHANGE');
         const reply = await this.send(s, { op: 'open', sessionId: s.id, owner, appRef: s.appRef, mode: s.mode, prepare: s.prepare,
           ...(s.windowRef ? { windowRef: s.windowRef } : {}), model: s.binding }, signal);
         if (reply.value.errorCode) s.diagnostics.fail(new Error(reply.value.errorCode), 'open', 'notStarted');
@@ -289,7 +411,7 @@ export class ComputerRuntime {
       } else if (status.value.status !== 'ready') return this.present(status.value);
       // Explicit reuse starts a fresh model decision, never a queued action from a previous call.
       if (input.op === 'step') {
-        if (input.flowId || s.lastFlowId) s.adapter.reset?.();
+        if (input.flowId || s.lastFlowId) s.adapter?.reset?.();
         s.lastFlowId = input.flowId;
       }
       while (true) {
@@ -316,7 +438,7 @@ export class ComputerRuntime {
           }
           if (input.op === 'step' && input.expect?.kind !== 'text' && verification?.status === 'satisfied') {
             s.diagnostics.verify(verification);
-            s.adapter.reset?.();
+            s.adapter?.reset?.();
             return { status: 'condition_satisfied', sessionId: s.id, verification, verified: true, budget: this.budget(s),
               nextAction: 'Only the supplied condition was verified. No input was dispatched. Check remaining task requirements before reporting completion.' };
           }
@@ -333,7 +455,8 @@ export class ComputerRuntime {
           }
           phase = 'model';
           const predictionInput = input;
-          const proposal = await s.diagnostics.measure('model', () => predictComputerStep(s.adapter, { goal: predictionInput.op === 'observe' ? predictionInput.question! : predictionInput.goal, readOnly: predictionInput.op === 'observe', image: observed.frame, mimeType: observed.mimeType,
+          if (!s.adapter) throw new Error('COMPUTER_PLANNER_MISMATCH');
+          const proposal = await s.diagnostics.measure('model', () => predictComputerStep(s.adapter!, { goal: predictionInput.op === 'observe' ? predictionInput.question! : predictionInput.goal, readOnly: predictionInput.op === 'observe', image: observed.frame, mimeType: observed.mimeType,
             width: o.imageWidth, height: o.imageHeight, summary: o.summary, stateDigest: o.stateDigest,
             maxPlanActions: goalContext?.actionsRemaining, history: s.task.history, expectation: predictionInput.expect, flowHint, onModelRequest: () => {
               if (++s!.modelRequests > config.computer.maxModelRequests) throw new Error('COMPUTER_MODEL_BUDGET');
@@ -381,7 +504,7 @@ export class ComputerRuntime {
     s.rescues++;
     s.diagnostics.count('rescueAttempts');
     // Drop queued native batches and continuation state before using a fresh screenshot.
-    s.adapter.reset?.();
+    s.adapter?.reset?.();
   }
   private async dispatchAction(s: Session, envelope: ActionEnvelope, signal?: AbortSignal, goalContext?: GoalContext): Promise<ComputerPublicResult> {
     if (!s.pending) {
@@ -396,7 +519,7 @@ export class ComputerRuntime {
       reply.frame?.fill(0);
       throw new Error('COMPUTER_RECEIPT_MISMATCH');
     }
-    if (goalContext && s.adapter.hasPendingPlan && reply.value.status === 'ready' && !reply.value.errorCode
+    if (goalContext && s.adapter?.hasPendingPlan && reply.value.status === 'ready' && !reply.value.errorCode
       && reply.value.receipt?.dispatch === 'completed' && reply.value.observation) {
       // Fast local continuations lack the incidental settling time of a model
       // round trip. Require two equal native snapshots before recording the
@@ -421,7 +544,7 @@ export class ComputerRuntime {
           if (stable || next.value.status !== 'ready' || next.value.errorCode) break;
         }
         if (!stable && !reply.value.errorCode) reply.value.errorCode = 'COMPUTER_UI_UNSTABLE';
-      } catch (error) {
+      } catch {
         // The input is known completed even if subsequent observation fails.
         // Keep its receipt; never turn a failed capture into a replay request.
         reply.frame?.fill(0);
@@ -492,7 +615,9 @@ export class ComputerRuntime {
       toolName: COMPUTER_CONTROL_TOOL, arguments: command, descriptorRevision: tool.revision, signal });
     const phase = command.op === 'open' ? 'open' : command.op === 'act' ? 'dispatch' : command.op === 'observe' ? 'observe' : command.op === 'release' ? 'release' : undefined;
     if (command.op === 'observe') s.diagnostics?.count('observations');
+    const startedAt = performance.now();
     const reply = s.diagnostics && phase ? await s.diagnostics.measure(phase, invoke) : await invoke();
+    const endpointRoundTripMs = performance.now() - startedAt;
     const file = reply.content.find((item) => item.type === 'file');
     let frame: Uint8Array | undefined;
     if (file?.type === 'file' && reply.invocationId) frame = this.endpoints.uploads.takeComputerFrame(file.fileId, reply.invocationId);
@@ -501,6 +626,10 @@ export class ComputerRuntime {
       const json = reply.content.find((item) => item.type === 'json');
       const value = Reply.parse(json?.type === 'json' ? json.value : undefined);
       if (value.sessionId !== s.id) throw new Error('COMPUTER_SESSION_MISMATCH');
+      if (command.op === 'act' && value.receipt?.actionId === command.envelope.actionId && (value.nativeMs || value.transportTiming)) {
+        s.diagnostics?.timing({ actionId: value.receipt.actionId, kind: command.envelope.action.kind, nativeMs: value.nativeMs,
+          transport: value.transportTiming, endpointRoundTripMs });
+      }
       if ((file && !frame) || (value.observation && !frame && !value.errorCode)) throw new Error('COMPUTER_FRAME_HANDOFF_FAILED');
       if (frame && (!value.observation || !['observe', 'act'].includes(command.op))) throw new Error('COMPUTER_UNEXPECTED_FRAME');
       return { value, frame, mimeType: file?.type === 'file' ? file.mimeType as 'image/png' | 'image/jpeg' : undefined };
@@ -510,11 +639,14 @@ export class ComputerRuntime {
     if (this.sessions.get(s.owner) !== s) return;
     this.sessions.delete(s.owner); leaveComputerControl(s.owner);
     s.diagnostics.finish(true); this.retainReport(s.owner, s.diagnostics);
+    clearComputerFrames(s.owner); s.programStore = undefined;
     s.task.clear(); s.pendingContext = undefined; s.controller.abort();
   }
   async close(owner: string): Promise<boolean> {
     this.operations.get(owner)?.abort();
+    clearComputerFrames(owner);
     const s = this.sessions.get(owner); if (!s) return true;
+    s.programStore = undefined;
     s.task.clear(); s.pendingContext = undefined;
     s.controller.abort();
     try {
