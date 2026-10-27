@@ -10,6 +10,27 @@ import {
 } from '@/features/settings/models/models-settings-lib';
 
 describe('models settings provider presets', () => {
+  it('adds the Beijing GUI-Plus phone preset without declaring computer control', () => {
+    const entry = buildProviderConfigFromPresetProviderId('dashscope-phone', 'user-key');
+    expect(entry?.config).toMatchObject({ apiKey: 'user-key', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' });
+    expect(entry?.config.models).toEqual([expect.objectContaining({ id: 'gui-plus-2026-02-26', phoneUse: { profile: 'gui-owl-phone-v1' } })]);
+    expect(entry?.config.models?.[0]).not.toHaveProperty('computerUse');
+  });
+  it.each([
+    ['volcengine-ark', 'doubao-seed-phone-v1', 'https://ark.cn-beijing.volces.com/api/v3'],
+  ])('keeps BYOK phone metadata when adding %s', (provider, profile, baseUrl) => {
+    const entry = buildProviderConfigFromPresetProviderId(provider, 'user-key');
+    expect(entry?.config).toMatchObject({ apiKey: 'user-key', api: 'openai-completions', baseUrl });
+    expect(entry?.config.models).toHaveLength(1);
+    for (const model of entry!.config.models!) expect(model).toMatchObject({ input: ['text', 'image'], phoneUse: { profile } });
+  });
+  it('keeps ModelScope credentials usable for general inference without phone presets', () => {
+    const entry = buildProviderConfigFromPresetProviderId('modelscope', 'user-token');
+    expect(entry?.config.apiKey).toBe('user-token');
+    expect(entry?.config.models).toHaveLength(1);
+    expect(entry?.config.models?.[0]).toMatchObject({ id: 'Qwen/Qwen3.5-35B-A3B' });
+    expect(entry?.config.models?.[0]).not.toHaveProperty('phoneUse');
+  });
   it('exposes domestic provider presets for the add-provider dialog', () => {
     expect(PROVIDER_PRESET_OPTIONS.map((option) => option.providerId)).toEqual(
       expect.arrayContaining([

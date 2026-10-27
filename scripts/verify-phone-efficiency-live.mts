@@ -64,7 +64,8 @@ connection.client = async () => ({
     assert(/^exec:env CLASSPATH=\/data\/local\/tmp\/xopc-ui-[0-9a-f]{64}\.dex app_process \/ ai\.xopc\.phone\.PhoneUiDump --resident$/.test(command));
     const child = spawn(adb, ['-s', serial, 'shell', '-T', ...command.slice(5).split(' ')], { stdio: ['pipe', 'pipe', 'ignore'] });
     child.on('error', () => {}); child.stdin.on('error', () => {});
-    return { readable: child.stdout, writable: new WritableStream<Uint8Array>({
+    const closed = new Promise<void>(resolve => { child.once('close', resolve); });
+    return { readable: child.stdout, closed, writable: new WritableStream<Uint8Array>({
       write: data => new Promise<void>((resolve, reject) => child.stdin.write(data, error => error ? reject(error) : resolve())),
     }), close: async () => {
       child.stdin.destroy(); child.stdout.destroy();

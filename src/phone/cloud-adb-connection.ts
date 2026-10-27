@@ -13,7 +13,7 @@ import { readScrcpyServer } from './scrcpy-assets.js';
 import { PhoneError } from './contracts.js';
 import { protectPhoneCredential } from './cloud-key-permissions.js';
 import { measurePhonePhase } from './execution-trace.js';
-import { PhoneUiSession } from './ui-session.js';
+import { closePhoneUiProcess, PhoneUiSession } from './ui-session.js';
 import { PHONE_UI_DEX } from './ui-dump-binary.js';
 
 /** Accept only an explicit TCP endpoint, never URLs, paths or ADB commands. */
@@ -187,7 +187,9 @@ export class CloudAdbConnection {
       void writer.closed.catch(() => {});
       return new PhoneUiSession({ readable: channel.readable,
         write: data => writer.write(data),
-        close: async () => { await channel.close(); writer.releaseLock(); },
+        close: () => closePhoneUiProcess(data => writer.write(data), channel.closed, async () => {
+          try { await channel.close(); } finally { writer.releaseLock(); }
+        }),
       });
     } finally { combined.removeEventListener('abort', abort); }
   }

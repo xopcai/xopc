@@ -92,15 +92,43 @@ export const PROVIDER_PRESETS: Record<string, ProviderPresetOption> = {
       ],
     },
   },
+  dashscopePhone: {
+    label: 'Alibaba Bailian · Phone Use',
+    providerId: 'dashscope-phone',
+    description: 'Beijing GUI-Plus API, the official GUI-Owl hosted entry; requires a Beijing Bailian key',
+    config: {
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      api: 'openai-completions',
+      apiKey: 'DASHSCOPE_API_KEY',
+      models: [
+        { id: 'gui-plus-2026-02-26', name: 'Bailian GUI-Plus · Phone', input: ['text', 'image'], contextWindow: 262144, maxTokens: 4096, phoneUse: { profile: 'gui-owl-phone-v1' } },
+      ],
+    },
+  },
+  modelscope: {
+    label: 'ModelScope',
+    providerId: 'modelscope',
+    description: 'General inference; select a model currently offered by ModelScope',
+    config: {
+      baseUrl: 'https://api-inference.modelscope.cn/v1',
+      api: 'openai-completions',
+      apiKey: 'MODELSCOPE_TOKEN',
+      models: [
+        { id: 'Qwen/Qwen3.5-35B-A3B', name: 'Qwen3.5 35B A3B', input: ['text'], maxTokens: 4096 },
+      ],
+    },
+  },
   volcengineArk: {
     label: 'Volcengine Ark',
     providerId: 'volcengine-ark',
-    description: 'Use your Ark endpoint id as the model id',
+    description: 'Doubao Seed GUI; use the activated model ID or your Ark endpoint ID',
     config: {
       baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
       api: 'openai-completions',
       apiKey: 'ARK_API_KEY',
-      models: [{ id: 'ep-your-endpoint-id', name: 'Ark endpoint ID', contextWindow: 128000, input: ['text'] }],
+      models: [
+        { id: 'doubao-seed-2-1-pro-260915', name: 'Doubao Seed 2.1 Pro', contextWindow: 1024000, maxTokens: 4096, input: ['text', 'image'], phoneUse: { profile: 'doubao-seed-phone-v1' } },
+      ],
     },
   },
   volcenginePlan: {
@@ -372,6 +400,8 @@ export function providerPresetKeyForProviderId(providerId: string): string | und
 }
 
 const MODELS_JSON_PROVIDER_PRESET_IDS = new Set([
+  'modelscope',
+  'dashscope-phone',
   'dashscope-cn',
   'dashscope-intl',
   'volcengine-ark',

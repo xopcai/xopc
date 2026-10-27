@@ -166,6 +166,9 @@ export function getAllProviders(): string[] {
 	for (const m of registry.getAll()) {
 		if (!isRetiredModelProvider(m.provider)) providers.add(m.provider);
 	}
+	for (const m of getSupplementalModels()) {
+		if (!isRetiredModelProvider(m.provider)) providers.add(m.provider);
+	}
 
 	for (const plugin of getProviderRegistry().listAll()) {
 		providers.add(plugin.id);
@@ -393,6 +396,8 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   'dashscope': { name: 'DashScope (Alibaba)', category: 'domestic', supportsApiKey: true },
   'dashscope-cn': { name: 'Alibaba Bailian / DashScope China', category: 'domestic', supportsApiKey: true },
   'dashscope-intl': { name: 'Alibaba Bailian / DashScope International', category: 'domestic', supportsApiKey: true },
+  modelscope: { name: 'ModelScope', category: 'domestic', supportsApiKey: true },
+  'dashscope-phone': { name: 'Bailian Phone Use', category: 'domestic', supportsApiKey: true },
   'volcengine-ark': { name: 'Volcengine Ark', category: 'domestic', supportsApiKey: true },
   'volcengine-plan': { name: 'Volcengine Doubao Coding Plan', category: 'domestic', supportsApiKey: true },
   'byteplus-plan': { name: 'BytePlus Doubao Coding Plan', category: 'domestic', supportsApiKey: true },

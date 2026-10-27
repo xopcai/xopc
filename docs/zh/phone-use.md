@@ -44,7 +44,24 @@ ADB 与 mDNS 均运行在 Gateway 电脑。发现失败时检查 Platform Tools�
 
 选择 AutoGLM 并保存后，「测试模型连接」只发送内置合成图片，不读取手机截图。测试分别检查动作协议与按钮定位，会产生真实模型调用，费用以平台账户为准。
 
-自定义模型需配置图片输入、OpenAI Chat Completions API 和受支持的手机协议：`autoglm-phone-v1` 或 `structured-phone-v1`。Agent 的模型设置可覆盖全局手机模型，聊天模型保持独立；当前不自动切换备用手机模型。
+自定义模型需配置图片输入、OpenAI Chat Completions API 和受支持的手机协议：`autoglm-phone-v1`、`structured-phone-v1`、`doubao-seed-phone-v1` 或 `gui-owl-phone-v1`。Agent 的模型设置可覆盖全局手机模型，聊天模型保持独立；当前不自动切换备用手机模型。
+
+### 使用自己的云端模型 Key（BYOK）
+
+在「智能 → 模型」添加 **Volcengine Ark** 或 **Alibaba Bailian · Phone Use**，填写自己的 Key 并保存，再到手机操作设置中选择模型。预设会自动带上图片输入和对应手机协议；已有服务商可手动新增模型。已有手机模型选择不会被替换。
+
+| 服务商 | Base URL | 预设模型 ID | 手机协议 |
+|---|---|---|---|
+| 火山方舟 | `https://ark.cn-beijing.volces.com/api/v3` | `doubao-seed-2-1-pro-260915` | `doubao-seed-phone-v1` |
+| 百炼 Phone Use | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `gui-plus-2026-02-26` | `gui-owl-phone-v1` |
+
+**申请豆包 Key：**登录[火山方舟控制台](https://console.volcengine.com/ark/)，选择项目，在「API Key 管理」创建 Key，在「开通管理」开通对应 Seed 模型。步骤见[官方快速入门](https://docs.volcengine.com/docs/ark/quick-start?lang=en)。模型 ID 以账户实际可用项为准；如使用 `ep-...` 推理接入点，可替换模型 ID，保留手机协议。使用标准模型服务地址，不要混用 Coding Plan 地址和凭据。也可以在 Gateway 环境中配置 `ARK_API_KEY` 或 `VOLCENGINE_API_KEY`。
+
+2026-10-27 已移除不可用的魔搭 GUI-Owl 预设与未做真机验证的 Seed Lite 预设。魔搭凭据保留供普通模型使用；手机列表仅保留已验证的豆包 Pro 和百炼 GUI-Plus 入口。
+
+[GUI-Owl 官方项目](https://github.com/X-PLUG/MobileAgent/blob/main/README_zh.md)将百炼托管 API 指向 `gui-plus-2026-02-26`。这是厂商的 GUI-Plus 服务名，不表示某个开源 8B 权重的别名。其原生手机动作提示已通过 xopc 的截图定位与 Android 导航验证。本地 BYOK 选择 `dashscope-phone/gui-plus-2026-02-26`，托管服务选择 `xopc-cloud/phone-gui-plus`。根据[官方 GUI-Plus 文档](https://help.aliyun.com/zh/model-studio/gui-automation)，须使用**北京地域百炼 API Key**，可按[获取 API Key](https://help.aliyun.com/zh/model-studio/get-api-key)申请。手机服务与现有电脑操作服务使用独立入口，按所选能力限制控制协议。
+
+BYOK 复用现有 Gateway 服务商凭据管理，直接请求配置的服务商，不要求连接 XOPC Cloud。保存模型不切换正在执行的会话。先使用「测试模型连接」：只发送合成图片，不操作手机。两种原生协议均只接受单个动作，拒绝批量、畸形和截断输出，继续由宿主执行应用限制和完成验证。目录中的费用占位值不代表免费；账户权限、实际费用、延迟和真实 App 成功率需用自己的 Key 验证。
 
 原生 UI 无可读文字时，`observe` 会自动调用已配置的手机模型，只读识别当前截图。节点只包含部分文字时，可在 `observe` 提供 `goal` 指定读取目标；`run` / `step` 以模型结束、但未通过原生 UI 验证时，也会自动按原目标尝试一次截图读取。模型读取计入现有请求数和活跃时间预算，不执行点击或输入。
 
@@ -219,4 +236,4 @@ AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重�
 
 `modelResponseMode: "stream"` 请求 SSE 并测量首 token；未完整结束的流不会派发动作。开启 `modelRepetitionGuard` 可在流读取期间中止大段精确重复。流式和重复检测保持默认关闭，需对照真实完成率、错误率、费用和总耗时后决定是否采用。
 
-云端 UI helper 按内容哈希校验复用；Unicode 输入在一次操作内复用专用通道，在结束、接管或取消时释放。实验项 `batchReadings` 可将多个视觉输出合并为一次只读请求，默认关闭；缺失字段保持 unavailable，截图读数保持 unverified。
+云端 UI helper 按内容哈希校验复用；操作结束、接管、取消或临时预览完成后，发送显式退出指令并等待进程退出，再交接 UI 自动化连接，避免只关闭 ADB 通道后仍有观察器占用。Unicode 输入在一次操作内复用专用通道，在结束、接管或取消时释放。实验项 `batchReadings` 可将多个视觉输出合并为一次只读请求，默认关闭；缺失字段保持 unavailable，截图读数保持 unverified。

@@ -258,6 +258,8 @@ function ModelEditForm({
             <SelectOption value="">{zh ? '未声明' : 'Not declared'}</SelectOption>
             <SelectOption value="autoglm-phone-v1">AutoGLM Phone</SelectOption>
             <SelectOption value="structured-phone-v1">Structured Phone</SelectOption>
+            <SelectOption value="doubao-seed-phone-v1">Doubao Seed GUI</SelectOption>
+            <SelectOption value="gui-owl-phone-v1">GUI-Owl 1.5</SelectOption>
           </Select>
           <p className="text-xs text-fg-muted">{zh ? '需要图片输入与 OpenAI Chat Completions API；配置后在手机控制中选择。' : 'Requires image input and an OpenAI Chat Completions API. Select the model in Phone Use settings.'}</p>
         </div>

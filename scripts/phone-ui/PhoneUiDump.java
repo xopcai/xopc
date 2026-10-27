@@ -157,6 +157,7 @@ public final class PhoneUiDump {
                 while ((line = input.readLine()) != null) {
                     if (line.length() > 65536) break;
                     JSONObject request = new JSONObject(line);
+                    if (request.getString("op").equals("close")) break;
                     JSONObject response = new JSONObject().put("id", request.getInt("id"));
                     try {
                         if (request.getString("op").equals("snapshot")) response.put("xml", stableSnapshot(automation));

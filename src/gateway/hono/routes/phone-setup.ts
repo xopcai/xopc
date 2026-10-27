@@ -11,13 +11,16 @@ import { phoneAllowsApp } from '../../../phone/app-access.js';
 import { phoneModelProfile } from '../../../phone/model-adapter.js';
 import { getPhoneRuntime } from '../../../phone/runtime.js';
 import { PhoneSetupService } from '../../../phone/setup/service.js';
-import { getModelRegistry } from '../../../providers/model-registry.js';
-import { isProviderConfiguredSync } from '../../../providers/index.js';
+import { getAllModels, resolveModel, isProviderConfiguredSync } from '../../../providers/index.js';
 import { PhoneDependencyManager, probePhoneAdb } from '../../../runtime-tools/phone-dependencies.js';
 import { managedPhoneAdbPath } from '../../../runtime-tools/phone-dependency-catalog.js';
 import { getSessionMetadata } from '../../../storage/sqlite/session-read-repository.js';
 import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+function resolvePhoneSetupModel(ref: string) {
+  try { return resolveModel(ref); } catch { return undefined; }
+}
 
 export function createPhoneSetupService(service: GatewayService): PhoneSetupService {
   const runtime = getPhoneRuntime();
@@ -26,10 +29,10 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
     if (runtime.reports().some(report => !['closed', 'cancelled', 'failed', 'outcome_unknown'].includes(report.status))) throw new Error('PHONE_SETUP_BUSY: Close active phone sessions before changing shared configuration.');
   };
   return new PhoneSetupService({ runtime,
-    models: () => getModelRegistry().getAll().filter(model => phoneModelProfile(model)).map(model => ({ ref: `${model.provider}/${model.id}`, name: model.name, configured: isProviderConfiguredSync(model.provider) })),
+    models: () => getAllModels().filter(model => phoneModelProfile(model)).map(model => ({ ref: `${model.provider}/${model.id}`, name: model.name, configured: isProviderConfiguredSync(model.provider) })),
     setModel: async (agentId, ref) => {
       requireIdle();
-      const model = getModelRegistry().resolve(ref);
+      const model = resolvePhoneSetupModel(ref);
       if (!model || !phoneModelProfile(model) || !isProviderConfiguredSync(model.provider)) throw new Error('PHONE_SETUP_MODEL_REQUIRED: Choose a compatible model with configured credentials.');
       const repository = new AgentCatalogRepository(); const agent = repository.get(agentId);
       if (!agent) throw new Error('Phone setup Agent not found');
@@ -58,7 +61,7 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
     revision: (context, deviceId) => {
       const agent = resolveEffectiveAgentConfigForAgent(context.agentId).config;
       const device = runtime.repository.list().find(device => device.id === deviceId);
-      const model = agent.models.phoneUse?.primary ? getModelRegistry().resolve(agent.models.phoneUse.primary) : undefined;
+      const model = agent.models.phoneUse?.primary ? resolvePhoneSetupModel(agent.models.phoneUse.primary) : undefined;
       return createHash('sha256').update(JSON.stringify([service.currentConfig.phone, agent.models.phoneUse, agent.tools.phone_use, agent.toolAllowlist, device, model && [model.api, model.baseUrl, model.input, phoneModelProfile(model)]])).digest('hex');
     },
     leaseActive: deviceId => { const device = runtime.repository.list().find(device => device.id === deviceId); return device ? runtime.repository.leaseActive(device.serial) : false; },
@@ -71,7 +74,7 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
       const resolved = resolveEffectiveAgentConfigForAgent(context.agentId);
       const agent = resolved.config;
       const ref = agent.models.phoneUse?.primary;
-      const model = ref ? getModelRegistry().resolve(ref) : undefined;
+      const model = ref ? resolvePhoneSetupModel(ref) : undefined;
       const dependencies = await new PhoneDependencyManager({ stateDir: resolveStateDir(), config: config.runtimeTools, adbPath: config.phone.adbPath }).status();
       let localDiscovery: Array<{ serial?: string; name: string; state: string; emulator: boolean }> = []; let diagnostic: string | undefined;
       if (source === 'local' && dependencies.some(item => item.kind === 'adb' && item.state === 'ready')) {

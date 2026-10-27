@@ -12,8 +12,7 @@ import { authorizePhoneAccess, phoneAdministrator } from '../../security/phone-a
 import { normalizePhoneAppAccess, phoneAppAccess } from '../../../phone/app-access.js';
 
 import { getDefaultAgentId } from '../../../routing/resolve-route.js';
-import { getModelRegistry } from '../../../providers/model-registry.js';
-import { isProviderConfiguredSync } from '../../../providers/index.js';
+import { getAllModels, isProviderConfiguredSync } from '../../../providers/index.js';
 import { type PhoneReport, MOCK_PHONE_MODEL, PhoneExecutionModeSchema, PhoneActionSchema, PhoneConfigSchema, PhoneDeviceSchema, PhoneError, PhoneInputSchema } from '../../../phone/contracts.js';
 import { createPhoneModel, phoneModelProfile } from '../../../phone/model-adapter.js';
 import { getPhoneRuntime, phoneExecutionContext, type PhoneRuntime } from '../../../phone/runtime.js';
@@ -220,7 +219,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   });
 
   app.get('/api/phone/models', c => c.json({ ok: true, payload: { models: [
-    ...getModelRegistry().getAll().flatMap(model => {
+    ...getAllModels().flatMap(model => {
       const profile = phoneModelProfile(model);
       return profile ? [{ id: `${model.provider}/${model.id}`, name: model.name, profile, mock: false, configured: isProviderConfiguredSync(model.provider) }] : [];
     }),

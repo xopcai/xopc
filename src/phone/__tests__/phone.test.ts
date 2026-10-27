@@ -37,6 +37,27 @@ function fixture(adapter: PhoneModelAdapter = new MockPhoneModel()) {
 }
 
 describe('persistent device connections', () => {
+  it('releases a temporary preview observer before handing the device lease to control', async () => {
+    const f = fixture();
+    let finish!: () => void;
+    f.driver.releaseInput = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    const preview = f.runtime.preview(f.device.id, f.context.config, new AbortController().signal);
+    await vi.waitFor(() => expect(f.driver.releaseInput).toHaveBeenCalledOnce());
+    expect(() => f.repository.acquire(f.device.serial)).toThrow();
+    finish(); const image = await preview; image.frame.fill(0);
+    const lease = f.repository.acquire(f.device.serial); f.repository.release(f.device.serial, lease);
+    await f.runtime.shutdown();
+  });
+  it.each(['observation', 'denied-app', 'cleanup'])('cleans up a temporary preview after %s failure', async failure => {
+    const f = fixture(); f.driver.releaseInput = vi.fn(async () => {});
+    if (failure === 'observation') vi.mocked(f.driver.observe).mockRejectedValue(new Error('lost observer'));
+    if (failure === 'denied-app') vi.mocked(f.driver.observe).mockResolvedValue({ ...screen(), package: 'com.denied.app' });
+    if (failure === 'cleanup') vi.mocked(f.driver.releaseInput).mockRejectedValue(new Error('cleanup failed'));
+    await expect(f.runtime.preview(f.device.id, f.context.config, new AbortController().signal)).rejects.toThrow();
+    expect(f.driver.releaseInput).toHaveBeenCalledOnce();
+    const lease = f.repository.acquire(f.device.serial); f.repository.release(f.device.serial, lease);
+    await f.runtime.shutdown();
+  });
   it('blocks Agent actions on expired location but keeps explicit inspection and cancellation available', async () => {
     const f = fixture();
     try {

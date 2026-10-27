@@ -167,11 +167,17 @@ export class PhoneRuntime {
       catch (error) { observation.frame.fill(0); throw error; }
     }
     const lease = this.repository.acquire(device.serial);
+    let driver: PhoneDriver | undefined;
     try {
-      const observation = await (await this.driverFor(device, config)).observe(device.serial, signal);
+      driver = await this.driverFor(device, config);
+      const observation = await driver.observe(device.serial, signal);
       if (!phoneAllowsApp(device, observation.package)) { observation.frame.fill(0); throw new PhoneError('PHONE_APP_DENIED', 'Open an allowed app before previewing the screen'); }
       return observation;
-    } finally { this.repository.release(device.serial, lease); }
+    } finally {
+      // Temporary previews must relinquish accessibility ownership before the lease.
+      try { await driver?.releaseInput?.(); }
+      finally { this.repository.release(device.serial, lease); }
+    }
   }
   async previewSession(owner: string, context: ExecutionContext, signal: AbortSignal): Promise<PhoneObservation> {
     const session = this.sessions.get(owner);

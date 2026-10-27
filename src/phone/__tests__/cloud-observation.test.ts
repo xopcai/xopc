@@ -62,13 +62,16 @@ describe('cloud non-idle hierarchy capture', () => {
 it('multiplexes resident snapshot requests over one verified cloud exec socket', async () => {
   const { PassThrough } = await import('node:stream');
   const f = fixture(); const stream = new PassThrough();
+  let exited!: () => void;
+  const closed = new Promise<undefined>(resolve => { exited = () => resolve(undefined); });
   const write = vi.fn(async (bytes: Uint8Array) => {
     const request = JSON.parse(Buffer.from(bytes).toString());
+    if (request.op === 'close') { stream.end(); exited(); return; }
     stream.write(JSON.stringify({ id: request.id, ok: true, xml: '<hierarchy></hierarchy>' }) + '\n');
   });
   const close = vi.fn(async () => { stream.destroy(); });
   const releaseLock = vi.fn();
-  const createSocket = vi.fn(async () => ({ readable: stream, writable: { getWriter: () => ({ write, closed: new Promise(() => {}), releaseLock }) }, close }));
+  const createSocket = vi.fn(async () => ({ readable: stream, closed, writable: { getWriter: () => ({ write, closed: new Promise(() => {}), releaseLock }) }, close }));
   vi.mocked(f.connection.client).mockResolvedValue({ sync: async () => f.sync, createSocket } as never);
   try {
     const session = await f.connection.observer(f.signal);
@@ -76,5 +79,6 @@ it('multiplexes resident snapshot requests over one verified cloud exec socket',
     expect(createSocket).toHaveBeenCalledOnce(); expect(createSocket).toHaveBeenCalledWith(expect.stringContaining('PhoneUiDump --resident'));
     expect(write).toHaveBeenCalledTimes(2); expect(f.sync.write).toHaveBeenCalledOnce();
     await session.close(); expect(close).toHaveBeenCalledOnce(); expect(releaseLock).toHaveBeenCalledOnce();
+    expect(JSON.parse(Buffer.from(write.mock.calls[2][0]).toString())).toEqual({ op: 'close' });
   } finally { f.connection.dispose(); }
 });
