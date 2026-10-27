@@ -50,7 +50,7 @@ import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
-import { groupAssistantActivity, summarizeToolActivity } from './assistant-activity-groups';
+import { groupAssistantActivity, publicAssistantProgress, summarizeToolActivity } from './assistant-activity-groups';
 import { CodemodeOutputLink } from './codemode-output-link';
 import { codemodeOutputPath } from './codemode-output-path';
 
@@ -103,7 +103,11 @@ export function AssistantStepsBlock({
   clusterLabels,
   cardLabels,
   conversationId,
+  simplified = true,
+  answerStarted = false,
 }: {
+  simplified?: boolean;
+  answerStarted?: boolean;
   workLog: AssistantTurnWorkLogPresentation;
   pendingStatus?: 'sending' | 'waiting';
   toolLabels: { input: string; output: string; noOutput: string };
@@ -311,6 +315,35 @@ export function AssistantStepsBlock({
   ) : null;
 
   const showDisclosure = !workLog.compact && stepCount > 0;
+
+  if (simplified && !showRawToolData) {
+    const failedWithoutAnswer = !anyActive && !answerStarted && workLog.items.some(item => item.type === 'tool_use'
+      && (item.status === 'error' || item.activity?.status === 'failed'));
+    const needsAttention = workLog.status === 'failed' || workLog.status === 'partial' || failedWithoutAnswer;
+    const progress = (anyActive && !answerStarted) || needsAttention
+      ? publicAssistantProgress(workLog.items) : [];
+    return (
+      <div data-assistant-work-log data-work-log-status={workLog.status} className="my-1 min-w-0 w-full text-left">
+        {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
+          <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
+            cardLabels={cardLabels} conversationId={conversationId} surfaceOnly runActive={anyActive} />
+        ))}
+        {progress.length > 0 ? <div data-assistant-activity-flow className="space-y-2.5 text-sm leading-relaxed text-fg-muted">
+          {progress.map((block, index) => (
+            <StepRow key={activityItemKey(block, index)} block={block} toolLabels={toolLabels}
+              stepLabels={timelineLabels} cardLabels={cardLabels} conversationId={conversationId} runActive={anyActive} />
+          ))}
+        </div> : null}
+        {anyActive ? <div className="mt-2 flex h-11 w-[72px] items-center justify-center rounded-full bg-surface-hover"
+          data-assistant-running role="status" aria-label={pendingLabel ?? fallbackLabel}
+          data-status-phase={statusPhase}>
+          <span className="xopc-personal-thinking-dots [&>i]:size-[7px]" aria-hidden="true"><i /><i /><i /></span>
+        </div> : needsAttention ? <p className="text-sm text-fg-muted">
+          {failedWithoutAnswer || workLog.status === 'failed' ? stepLabels.workLogFailed : stepLabels.workLogPartial}
+        </p> : null}
+      </div>
+    );
+  }
 
   return (
     <div

@@ -44,10 +44,11 @@ describe('MessageBubble assistant work log', () => {
     expect(container.textContent).not.toContain('personal task');
   });
 
-  it('continues to show the work log in regular chats', () => {
+  it('keeps only the final result after a regular chat completes', () => {
     act(() => root.render(<MemoryRouter><MessageBubble message={message} isStreaming={false} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
 
-    expect(container.textContent).toContain('执行过程');
+    expect(container.textContent).not.toContain('执行过程');
+    expect(container.textContent).toContain('已经安排好了。');
   });
 
   it.each([true, false].flatMap(personal => (['off', 'on', 'stream'] as ReasoningLevel[])
@@ -113,78 +114,62 @@ describe('lightweight assistant activity', () => {
         ...(answer ? [{ type: 'text' as const, text: answer, presentation: 'answer' as const, segmentId: 'answer' }] : [])] }}
       isStreaming={active} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
   }
-  const disclosure = () => container.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
-
-  it('opens concise progress by default, hides technical payloads, and collapses when the final result completes', () => {
+  it('shows concrete public progress without tool rows, icons or generic status text', () => {
     render(true);
-    expect(disclosure().getAttribute('aria-expanded')).toBe('true');
-    expect(container.querySelector('[data-assistant-activity-flow]')).not.toBeNull();
-    expect(container.textContent).not.toMatch(/customer.export|private\/secret|cat /);
-    expect(container.querySelector('[data-activity-status="running"]')).not.toBeNull();
+    expect(container.textContent).toContain('正在核对相关资料。');
+    expect(container.textContent).not.toMatch(/customer.export|private\/secret|其他操作|正在处理|cat /);
+    expect(container.querySelector('[data-assistant-work-log] svg')).toBeNull();
+    expect(container.querySelector('button[aria-expanded]')).toBeNull();
+    expect(container.querySelectorAll('[data-assistant-work-log] [role="status"]')).toHaveLength(1);
+    const flow = container.querySelector('[data-assistant-activity-flow]')!;
+    const status = container.querySelector('[data-assistant-work-log] [role="status"]')!;
+    expect(flow.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     render(false, '最终结果保持完整。');
-    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
-    expect(container.querySelector('.assistant-activity-disclosure')?.getAttribute('inert')).not.toBeNull();
+    expect(container.textContent).not.toContain('正在核对相关资料。');
     expect(container.textContent).toContain('最终结果保持完整。');
-    expect(container.querySelector('.assistant-activity-busy')).toBeNull();
+    expect(container.querySelector('[data-assistant-work-log] [role="status"]')).toBeNull();
   });
 
-  it('collapses automatically when answer text starts without treating the run as complete', () => {
-    render(true);
-    render(true, '正在输出答案。');
-    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
-    expect(container.textContent).not.toContain('已完成 ·');
-    expect(container.textContent).toContain('正在输出答案。');
-  });
-
-  it('collapses a manually opened live process on completion and preserves the answer DOM', () => {
+  it('keeps one bottom indicator while the final answer streams and preserves the answer DOM', () => {
     render(true, '保留这段答案。');
-    act(() => disclosure().click());
-    expect(disclosure().getAttribute('aria-expanded')).toBe('true');
-    const answer = [...container.querySelectorAll('.markdown-body')].find(node => node.textContent?.includes('保留这段答案'));
+    expect(container.textContent).not.toContain('正在核对相关资料。');
+    const answer = container.querySelector('[data-chat-find-text]')!;
+    const status = container.querySelector('[data-assistant-work-log] [role="status"]')!;
+    expect(answer.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     render(false, '保留这段答案。');
-    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
-    act(() => disclosure().click());
-    expect(disclosure().getAttribute('aria-expanded')).toBe('true');
-    expect([...container.querySelectorAll('.markdown-body')].find(node => node.textContent?.includes('保留这段答案'))).toBe(answer);
+    expect(container.querySelector('[data-chat-find-text]')).toBe(answer);
+    expect(container.querySelector('[data-assistant-work-log] [role="status"]')).toBeNull();
   });
 
-  it('keeps failures human-readable and stops loading without calling the turn completed', () => {
+  it('keeps failures human-readable and stops loading without exposing technical errors', () => {
     render(true);
     render(false, '这部分暂时无法获取。', true);
     expect(container.textContent).toContain('暂时没能完成');
     expect(container.textContent).not.toMatch(/INTERNAL_ERROR|private\/secret|已完成 ·/);
-    expect(container.querySelector('.assistant-activity-busy')).toBeNull();
+    expect(container.querySelector('[data-assistant-work-log] [role="status"]')).toBeNull();
   });
 
-  it('defers completion collapse while the user is selecting progress text', () => {
-    render(true);
+  it('uses only one indicator for unknown parallel tools and generic narration', () => {
+    act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', content: [
+      { type: 'thinking', text: 'Private reasoning', streaming: true },
+      { type: 'text', text: '正在处理...', presentation: 'narration' },
+      ...Array.from({ length: 6 }, (_, index) => ({ ...tool, id: `tool-${index}` })),
+    ] }} isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
+    expect(container.textContent).not.toMatch(/正在处理|其他操作|Private reasoning|customer.export/);
+    expect(container.querySelectorAll('[data-assistant-work-log] [role="status"]')).toHaveLength(1);
+    expect(container.querySelector('[data-activity-group]')).toBeNull();
+    expect(container.querySelector('[data-assistant-work-log] svg')).toBeNull();
+  });
+
+  it('shows all concrete narration in order and deduplicates replay without folding', () => {
+    const progress = Array.from({ length: 7 }, (_, index) => ({ type: 'text' as const,
+      text: `已核对资料 ${index + 1}`, presentation: 'narration' as const, segmentId: `stage-${index}` }));
+    act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', content: [
+      ...progress, { ...progress[0], segmentId: 'replay' },
+    ] }} isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
     const flow = container.querySelector('[data-assistant-activity-flow]')!;
-    const selection = window.getSelection()!;
-    act(() => {
-      selection.selectAllChildren(flow);
-      document.dispatchEvent(new Event('selectionchange'));
-    });
-    render(false, '最终结果。');
-    expect(disclosure().getAttribute('aria-expanded')).toBe('true');
-    act(() => {
-      selection.removeAllRanges();
-      document.dispatchEvent(new Event('selectionchange'));
-    });
-    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('bounds parallel activity, exposes earlier steps on demand, and respects manual collapse', () => {
-    const show = (count: number) => act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant',
-      content: Array.from({ length: count }, (_, index) => ({ ...tool, id: `tool-${index}` })) }}
-      isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
-    show(5);
-    expect(container.textContent).toContain('正在处理 5 项工作');
-    expect(container.querySelectorAll('[data-activity-group]').length).toBe(1);
-    expect(container.querySelector('[data-activity-group] details')?.hasAttribute('open')).toBe(false);
-    expect(container.querySelector('[data-activity-group] summary')?.textContent).toContain('5 次');
-    act(() => disclosure().click());
-    show(6);
-    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
-    expect(container.textContent).toContain('正在处理 6 项工作');
+    expect(flow.textContent).toBe(progress.map(item => item.text).join(''));
+    expect(flow.querySelectorAll('.markdown-body')).toHaveLength(7);
+    expect(container.querySelector('button[aria-expanded]')).toBeNull();
   });
 });

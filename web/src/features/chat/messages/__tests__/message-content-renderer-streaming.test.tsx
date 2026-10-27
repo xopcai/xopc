@@ -164,14 +164,10 @@ describe('streaming assistant Markdown rendering', () => {
     };
 
     render([], true, false, waiting, undefined, 'waiting');
-    const buttonBefore = container.querySelector<HTMLButtonElement>('button');
+    expect(container.querySelector('button')).toBeNull();
     const statusBefore = container.querySelector<HTMLElement>('[data-status-phase="waiting"]');
-    expect(buttonBefore?.classList.contains('w-full')).toBe(true);
-    expect(buttonBefore?.classList.contains('h-11')).toBe(true);
-    expect(buttonBefore?.classList.contains('min-h-11')).toBe(false);
     expect(statusBefore).not.toBeNull();
-    expect(statusBefore?.classList.contains('truncate')).toBe(true);
-    expect(statusBefore?.classList.contains('whitespace-nowrap')).toBe(true);
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
 
     render([], true, false, {
       ...waiting,
@@ -179,16 +175,16 @@ describe('streaming assistant Markdown rendering', () => {
       expandedByDefault: true,
     });
 
-    expect(container.querySelector('button')).toBe(buttonBefore);
+    expect(container.querySelector('button')).toBeNull();
     expect(container.querySelector('[data-status-phase="thinking"]')).toBe(statusBefore);
-    expect(container.querySelector('[data-status-phase="thinking"]')?.classList.contains('truncate')).toBe(true);
+    expect(container.textContent).not.toContain('Considering');
   });
 
   it('hides ordinary compact activity after completion and never offers a drawer', () => {
     const tool = { type: 'tool_use', id: 'r', name: 'read_file', status: 'done', input: { path: 'secret.txt' } } as const;
     const workLog = { items: [tool], active: true, status: 'running', expandedByDefault: false, compact: true } as const;
     render([], true, false, { ...workLog, items: [tool] });
-    expect(container.textContent).toContain('mixed');
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
     expect(container.textContent).not.toContain('secret.txt');
     expect(container.querySelector('button[aria-expanded]')).toBeNull();
     render([], false, false, { ...workLog, items: [tool], active: false, status: 'completed' });
@@ -208,6 +204,7 @@ describe('streaming assistant Markdown rendering', () => {
   });
 
   it.each([false, true])('resets live expansion on completion: %s', (manual) => {
+    useDevViewStore.setState({ showRawToolData: true });
     const workLog: AssistantTurnWorkLogPresentation = {
       items: [{ type: 'tool_use', id: 'r', name: 'read_file', status: 'running' }],
       active: true, status: 'running', expandedByDefault: true, compact: false,
@@ -256,6 +253,7 @@ describe('streaming assistant Markdown rendering', () => {
   });
 
   it('keeps tool errors inside the normal work-log disclosure', () => {
+    useDevViewStore.setState({ showRawToolData: true });
     render([], false, false, {
       items: [{ type: 'tool_use', id: 'r', name: 'read_file', status: 'error', result: 'Permission denied' }],
       active: false, status: 'failed', expandedByDefault: false, compact: false,
@@ -268,6 +266,7 @@ describe('streaming assistant Markdown rendering', () => {
   });
 
   it('keeps completed file paths hidden until the work log is explicitly expanded', () => {
+    useDevViewStore.setState({ showRawToolData: true });
     const tool = {
       type: 'tool_use', id: 'w', name: 'write_file', status: 'done',
       input: { path: '/Users/example/.xopc/workspace/main/proposal.md', content: 'Proposal' },
@@ -534,6 +533,7 @@ describe('streaming assistant Markdown rendering', () => {
   });
 
   it('renders tool groups at their original positions between narration updates', () => {
+    useDevViewStore.setState({ showRawToolData: true });
     const firstTool = { type: 'tool_use', id: 'read-1', name: 'read_file', status: 'done' } as const;
     const secondTool = { type: 'tool_use', id: 'command-1', name: 'run_command', status: 'done' } as const;
     const content: MessageContent[] = [
@@ -583,10 +583,12 @@ describe('streaming assistant Markdown rendering', () => {
     });
 
     expect(container.querySelector('.animate-spin')).toBeNull();
-    expect(container.textContent).toContain('30');
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(container.textContent).not.toContain('30');
   });
 
   it('keeps technical failure data in on-demand details', () => {
+    useDevViewStore.setState({ showRawToolData: true });
     const failedTool = {
       type: 'tool_use',
       id: 'command-1',
@@ -615,6 +617,7 @@ describe('streaming assistant Markdown rendering', () => {
   });
 
   it('uses input-aware wording for xopc_use inside the expanded work log', () => {
+    useDevViewStore.setState({ showRawToolData: true });
     const xopcTool = {
       type: 'tool_use',
       id: 'xopc-1',
@@ -671,6 +674,7 @@ describe('streaming assistant Markdown rendering', () => {
     { innerTop: 20, deltaY: -60, expectedInner: 0, expectedOuter: 160 },
     { innerTop: 0, deltaY: -40, expectedInner: 0, expectedOuter: 160 },
   ])('hands remaining wheel distance to chat at process boundaries: %j', ({ innerTop, deltaY, expectedInner, expectedOuter }) => {
+    useDevViewStore.setState({ showRawToolData: true });
     container.classList.add('chat-messages');
     Object.defineProperties(container, {
       clientHeight: { configurable: true, value: 500 },

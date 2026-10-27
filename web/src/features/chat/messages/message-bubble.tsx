@@ -566,6 +566,8 @@ export const MessageBubble = memo(function MessageBubble({
         clusterLabels={clusterLabels}
         cardLabels={cardLabels}
         conversationId={conversationId}
+        simplified={!personal}
+        answerStarted={assistantTurnView.answer.started}
       />
     : null;
 
@@ -636,7 +638,6 @@ export const MessageBubble = memo(function MessageBubble({
                 <span className="xopc-personal-thinking-dots" aria-hidden="true"><i /><i /><i /></span>
               </div>
             ) : null}
-            {!followUpTrigger ? assistantStepsBlock : null}
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 <div
@@ -689,7 +690,7 @@ export const MessageBubble = memo(function MessageBubble({
               </>
             ) : null}
 
-            {followUpTrigger ? assistantStepsBlock : null}
+            {assistantStepsBlock}
 
             {!personal && !isUser && message.taskResultDelivery && conversationId ? (
               <div className="flex flex-wrap items-center gap-2" data-result-follow-up>

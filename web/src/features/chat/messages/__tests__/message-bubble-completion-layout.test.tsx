@@ -37,7 +37,8 @@ describe('assistant reply completion layout', () => {
   it('removes the waiting label when answer text starts and reserves the completed action row', () => {
     const waiting: Message = { role: 'assistant', content: [], pendingResponseStatus: 'waiting' };
     render(waiting, true);
-    expect(container.textContent).toContain('waiting for a response');
+    expect(container.querySelector('[data-status-phase="waiting"]')?.getAttribute('aria-label')).toContain('waiting for a response');
+    expect(container.textContent).not.toContain('waiting for a response');
 
     const answer: Message = { role: 'assistant', content: [{ type: 'text', text: 'The answer.' }] };
     render(answer, true);

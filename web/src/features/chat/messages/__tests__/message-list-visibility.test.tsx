@@ -93,12 +93,14 @@ describe('MessageList visible rows', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Provider capacity exhausted');
   });
 
-  it('preserves failed tool details outside Personal even with work logs hidden', () => {
+  it('keeps a readable failure outside Personal without exposing tool details', () => {
     render([{ role: 'assistant', content: [
       { type: 'tool_use', id: 'failed-tool', name: 'read', status: 'error', result: 'Tool failed' },
     ] }], { personal: false });
     expect(rows()).toHaveLength(1);
-    expect(container.querySelector('button[aria-expanded]')).not.toBeNull();
+    expect(container.querySelector('button[aria-expanded]')).toBeNull();
+    expect(container.querySelector('[data-assistant-work-log]')?.textContent).toBeTruthy();
+    expect(container.textContent).not.toContain('Tool failed');
   });
 
   it('keeps task result follow-ups without answer text and drops empty successful outcomes', () => {
