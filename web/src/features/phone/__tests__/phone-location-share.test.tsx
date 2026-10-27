@@ -72,3 +72,13 @@ it('revokes an active share when the browser reports system permission withdrawa
   expect(mocks.api.mock.calls.some(([, init]) => init.method === 'DELETE')).toBe(true);
   Object.defineProperty(navigator, 'permissions', { configurable: true, value: undefined });
 });
+
+it('places the location modal and backdrop above the floating phone workspace', async () => {
+  await act(async () => root.render(<PhoneLocationShare phoneId={phoneId} conversationId={conversationId} />));
+  await act(async () => button('共享当前位置').click());
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(container.contains(dialog)).toBe(false);
+  expect(dialog.classList.contains('xopc-dialog-content')).toBe(true);
+  expect(dialog.classList.contains('z-[91]')).toBe(true);
+  expect(document.querySelector('.xopc-dialog-overlay')?.classList.contains('z-[90]')).toBe(true);
+});
