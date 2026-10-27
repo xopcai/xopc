@@ -284,7 +284,7 @@ private extension MessageBubble {
                                         source: uri,
                                         configuration: configuration,
                                         conversationID: conversationID,
-                                        compact: true,
+                                        compact: message.role == "user" || images.count > 1,
                                         gallery: images
                                     )
                                 } else {

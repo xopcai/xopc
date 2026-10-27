@@ -25,6 +25,10 @@
       "undo": "Unable to undo strategy"
     },
     "productDelivery": {
+    "relatedTaskCount": "Related tasks · {{count}}",
+    "viewAllTasks": "View all {{count}} tasks",
+    "closeTaskList": "Close task list",
+    "relatedTasksDescription": "Tasks associated with this message. Select a task to open its details.",
     "heading": "Turn outputs",
     "partialResults": "Showing partial results",
     "diffPreview": "Edit preview",

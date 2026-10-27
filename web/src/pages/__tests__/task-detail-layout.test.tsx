@@ -6,11 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskDetailPage } from '../task-detail-page';
 import { commandTask, type TaskDetail } from '@/features/tasks/home-api';
+import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { taskCopy } from '@/features/tasks/task-copy';
 
-const state = vi.hoisted(() => ({ detail: {} as TaskDetail, mutate: vi.fn() }));
+const state = vi.hoisted(() => ({ detail: {} as TaskDetail, mutate: vi.fn(), automations: [] as Automation[], schedulesLoading: false }));
 vi.mock('@/features/tasks/use-task-detail', () => ({ useTaskDetail: () => ({ data: state.detail, mutate: state.mutate }) }));
-vi.mock('swr', () => ({ default: () => ({ data: { automations: [] } }) }));
+vi.mock('swr', async () => {
+  const { useState } = await import('react');
+  return { default: function useMockAutomationList() {
+    const [automations, setAutomations] = useState(state.automations);
+    return { data: state.schedulesLoading ? undefined : { automations }, mutate: (update: (current: { automations: Automation[] }) => { automations: Automation[] }) => {
+      if (typeof update === 'function') setAutomations((current) => update({ automations: current }).automations);
+    } };
+  } };
+});
+vi.mock('@/features/automations/automation-api', () => ({ automationApi: { create: vi.fn(), update: vi.fn() } }));
 vi.mock('@/features/chat/chat-page', () => ({ ChatPage: () => <div>Execution chat</div> }));
 vi.mock('@/features/tasks/task-collaboration-panel', () => ({ TaskCollaborationPanel: () => <textarea aria-label="任务留言" /> }));
 vi.mock('@/features/chat/context/page-context-capture-button', () => ({ PageContextCaptureButton: () => <button>Capture context</button> }));
@@ -40,6 +50,8 @@ describe('task detail action-first layout', () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.clearAllMocks();
     state.detail = detail();
+    state.automations = [];
+    state.schedulesLoading = false;
     vi.mocked(commandTask).mockResolvedValue(state.detail);
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   });
@@ -143,6 +155,66 @@ describe('task detail action-first layout', () => {
     await render();
     await act(async () => button(copy.runTask).click());
     expect(container.querySelector('[aria-label="任务操作"] [role="alert"]')?.textContent).toBe(copy.actionFailed);
+  });
+
+  it('opens scheduling in the task page instead of linking to the automation page', async () => {
+    await render();
+    const schedule = button('设置执行时间');
+    expect(schedule.tagName).toBe('BUTTON');
+    act(() => schedule.click());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('input[type="datetime-local"]')).not.toBeNull();
+    expect(container.textContent).toContain('Prepare report');
+  });
+
+  function savedSchedule(): Automation {
+    return {
+      id: 'existing-schedule', name: 'Report schedule', enabled: true, updatedAtMs: 42,
+      trigger: { kind: 'schedule', schedule: { kind: 'once', at: '2099-10-28T06:30:00.000Z' } },
+      action: { kind: 'task_command', taskId: 'task-1', command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } } },
+      state: { nextRunAtMs: Date.parse('2099-10-28T06:30:00.000Z') }, delivery: { notificationPolicy: 'attention', destinations: [] }, conversationMode: 'new_session', createdAtMs: 1,
+    };
+  }
+
+  it('reopens a newly created schedule for editing instead of creating another automation', async () => {
+    const saved = savedSchedule();
+    vi.mocked(automationApi.create).mockResolvedValue({ automation: saved });
+    vi.mocked(automationApi.update).mockResolvedValue({ automation: saved });
+    await render(); act(() => button('设置执行时间').click());
+    const time = document.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(time, '2099-10-28T14:30');
+      time.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    const done = [...document.querySelectorAll('button')].find((item) => item.textContent === '完成')!;
+    act(() => done.click());
+    expect(container.querySelector('[aria-label="执行时间"]')?.textContent).toContain('下次执行：2099');
+    expect(button('设置执行时间')).toBeUndefined();
+    act(() => button('管理执行时间').click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('修改执行时间');
+    await act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    expect(automationApi.create).toHaveBeenCalledOnce();
+    expect(automationApi.update).toHaveBeenCalledWith(saved.id, expect.objectContaining({ expectedRevision: 42 }));
+  });
+
+  it('loads saved schedules on revisit and cancellation updates the card without navigation', async () => {
+    const saved = savedSchedule(); state.automations = [saved];
+    vi.mocked(automationApi.update).mockResolvedValue({ automation: { ...saved, enabled: false } });
+    await render();
+    expect(button('设置执行时间')).toBeUndefined();
+    expect(button('管理执行时间')).toBeDefined();
+    await act(async () => button('取消定时执行').click());
+    expect(container.textContent).toContain('已取消，不再自动执行');
+    expect(button('设置执行时间')).toBeUndefined();
+    expect(automationApi.create).not.toHaveBeenCalled();
+  });
+
+  it('blocks creation before existing schedules have loaded', async () => {
+    state.schedulesLoading = true; await render();
+    expect(button('设置执行时间').disabled).toBe(true);
+    act(() => button('设置执行时间').click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
 });
