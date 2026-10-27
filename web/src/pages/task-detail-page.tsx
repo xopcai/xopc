@@ -1,7 +1,7 @@
 import { TaskResultStatus } from '@/features/tasks/task-result-status';
 import { taskDescriptionForDisplay, preserveTaskExecutionInstructions } from '@xopcai/gateway-contract';
 import { TaskPhaseHistory } from '@/features/tasks/task-phase-history';
-import { TaskInputCard } from '@/features/tasks/task-input-card';
+import { TaskCurrentAction } from '@/features/tasks/task-current-action';
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -246,6 +246,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [chatPanelPercent, setChatPanelPercent] = useState(readTaskChatPanelPercent);
   const [resizingPanels, setResizingPanels] = useState(false);
+  const acceptanceRef = useRef<HTMLDetailsElement>(null);
+  const resultsRef = useRef<HTMLElement>(null);
   const splitPaneRef = useRef<HTMLDivElement>(null);
   const skipTitleSaveRef = useRef(false);
   const skipDescriptionSaveRef = useRef(false);
@@ -617,8 +619,6 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     conversationConversationId
     && workspacePanes[conversationConversationId]?.open,
   );
-  const needsUserAttention = detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
-  const verifiedCriteriaCount = criterionSummaries.filter((criterion) => criterion.status === 'passed').length;
   const deliverables = detail.context.filter((item) => item.role === 'deliverable');
   const currentRunIds = new Set(detail.runs.filter((run) => run.contractVersion === detail.task.latestContractVersion).map((run) => run.id));
   const artifactEvidence = [...new Map(detail.receipts.filter((receipt) => currentRunIds.has(receipt.runId))
@@ -642,21 +642,32 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const activeRun = detail.runs.find((run) => !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
   const deleteBlocked = activeRun !== undefined;
   const automationHref = `/automations?action=create&taskId=${encodeURIComponent(detail.task.id)}${detail.task.projectId ? `&projectId=${encodeURIComponent(detail.task.projectId)}` : ''}`;
+  const openAcceptance = () => {
+    const panel = acceptanceRef.current;
+    if (!panel) return;
+    panel.open = true;
+    panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    panel.focus({ preventScroll: true });
+  };
   const taskActions = (
     <div className="flex flex-wrap items-center gap-2">
-      {canSchedule ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
+      {canSchedule && !canStart && !activeWait && detail.task.phase !== 'review' ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
       {pausedWait && detail.allowedCommands.includes('resolve_wait') ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
-      {!activeWait && canStart && conversationAgentId ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
+      {!activeWait && canStart && detail.task.phase !== 'review' && conversationAgentId ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
       {canApprove ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
-      {canReopen ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
+      {canReopen ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="ghost" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
       {!pausedWait && canPause ? <Button variant="ghost" className="min-h-9 px-3 py-1.5 text-xs" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
-      {detail.task.phase !== 'closed' ? <Button asChild variant="ghost" className="min-h-9 px-3 py-1.5 text-xs"><Link to={automationHref}><CalendarClock className="size-4" />{copy.scheduleRecurringTask}</Link></Button> : null}
+      {detail.task.phase === 'closed' ? <Button variant="primary" className="min-h-9 px-3 py-1.5 text-xs" onClick={() => { resultsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); resultsRef.current?.focus({ preventScroll: true }); }}>{language === 'zh' ? '查看结果' : 'View results'}</Button> : null}
+      {!activeWait && !activeRun && detail.task.phase !== 'closed' ? <Button asChild variant="ghost" className="min-h-9 px-3 py-1.5 text-xs"><Link to={automationHref}><CalendarClock className="size-4" />{language === 'zh' ? '设置执行时间' : 'Set execution time'}</Link></Button> : null}
+      {detail.task.phase === 'review' && !canApprove && !activeWait ? <Button variant="primary" className="min-h-9 px-3 py-1.5 text-xs" onClick={openAcceptance}>{language === 'zh' ? '去验收' : 'Review results'}</Button> : null}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button type="button" variant="ghost" className="size-9 p-0" disabled={commandPending || deletePending} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-44 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
+            {detail.task.phase === 'review' && !activeWait && canStart && conversationAgentId ? <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none focus:bg-surface-hover" onSelect={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}>{copy.runTask}</DropdownMenu.Item> : null}
+            {canSchedule && (canStart || activeWait || detail.task.phase === 'review') ? <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none focus:bg-surface-hover" onSelect={() => void execute({ type: 'mark_ready' })}>{copy.scheduleTask}</DropdownMenu.Item> : null}
             {activeRun ? (
               <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => {
                 setOperationPending('command', true);
@@ -753,7 +764,6 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           </div>
           <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-medium', detailStatusTone(statusKey))}>{statusLabel}</span>
         </div>
-        <TaskResultStatus detail={detail} language={language} />
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
           <span className="inline-flex min-w-0 items-center gap-2">
             {conversationAgentId ? <AgentAvatarDisplay agentId={conversationAgentId} avatar={conversationAgent?.avatar} size={20} className="shrink-0" /> : null}
@@ -761,22 +771,33 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           </span>
           <span className="text-fg-subtle">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</span>
         </div>
-        <div className="mt-4 border-t border-edge-subtle pt-3">{taskActions}</div>
-        {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
+
       </header>
+      <div className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-edge-subtle bg-surface-panel px-4 py-2 sm:px-5" aria-label={language === 'zh' ? '任务操作' : 'Task actions'}>
+        <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{detail.task.title} · {statusLabel}</span>
+        {taskActions}
+        {error ? <p role="alert" className="basis-full text-sm text-danger">{error}</p> : null}
+      </div>
 
-      <section className="min-w-0 p-5 sm:p-6">
+      <section className="min-w-0 space-y-4 p-4 sm:p-5">
+        <TaskCurrentAction detail={detail} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} />
 
-      <section className="mb-4 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel shadow-surface">
-        <div className="border-b border-edge-subtle p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '目标与验收' : 'Goal and acceptance'}</h2>
-            {criterionSummaries.length > 0 ? <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.criteriaProgress.replace('{{verified}}', String(verifiedCriteriaCount)).replace('{{total}}', String(criterionSummaries.length))}</span> : null}
-          </div>
-          <TaskExpandableContent content={detail.task.contract?.objective || detail.task.title} contentKey={`${taskId}:goal`} language={language} markdown={false} previewHeight={72} className="mt-3 text-sm leading-6 text-fg" />
-        </div>
-        <div className="p-5">
-          <h3 className="text-xs font-medium text-fg-muted">{copy.successDefinition}</h3>
+        <section ref={resultsRef} tabIndex={-1} aria-labelledby="task-results-heading" className="scroll-mt-24">
+          <h2 id="task-results-heading" className="mb-3 text-sm font-semibold text-fg">{language === 'zh' ? '结果与交付' : 'Results and deliverables'}</h2>
+      {(deliverables.length > 0 || artifactEvidence.length > 0) ? <section className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">
+        <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '交付物' : 'Deliverables'}</h2>
+        {(deliverables.length > 0 || artifactEvidence.length > 0) ? <ul className="mt-3 space-y-2">{deliverables.map((item) => <li key={item.id} className="rounded-lg bg-surface-hover p-3 text-sm">
+          <span className="block text-xs text-fg-muted">{copy.contextKindLabels[item.targetKind]}</span>
+          {item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <TaskExpandableContent content={item.title ?? item.targetId} contentKey={`${taskId}:deliverable:${item.id}`} language={language} previewHeight={60} className="mt-1"><a className="block break-all text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a></TaskExpandableContent> : <TaskExpandableContent content={item.title ?? item.targetId} contentKey={`${taskId}:deliverable:${item.id}`} language={language} markdown={false} previewHeight={60} className="mt-1 text-fg" />}
+        </li>)}{artifactEvidence.map((item) => <li key={item.uri ?? item.title} className="rounded-lg bg-surface-hover p-3 text-sm"><span className="block text-xs text-fg-muted">{language === 'zh' ? '执行产物（待检查）' : 'Run artifact (review needed)'}</span>{item.uri && /^https?:\/\//.test(item.uri) ? <TaskExpandableContent content={item.title} contentKey={`${taskId}:artifact:${item.uri ?? item.title}`} language={language} previewHeight={60} className="mt-1"><a className="block break-all text-accent hover:underline" href={item.uri} target="_blank" rel="noreferrer">{item.title}</a></TaskExpandableContent> : <TaskExpandableContent content={item.title} contentKey={`${taskId}:artifact:${item.uri ?? item.title}`} language={language} markdown={false} previewHeight={60} className="mt-1 text-fg" />}</li>)}</ul> : <p className="mt-2 text-sm text-fg-muted">{language === 'zh' ? '尚未关联交付物' : 'No deliverables linked yet'}</p>}
+
+      </section> : null}
+
+          {latestReceipt ? <section className={cn('mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-fg">{copy.latestResult}</h2><p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? (latestReceipt.completionVerdict === 'achieved' ? '本次执行报告目标已达成，请结合下方验证依据验收。' : '这是阶段性结果，尚不能代表任务全部完成。') : (latestReceipt.completionVerdict === 'achieved' ? 'The run reports the goal achieved. Review the evidence below.' : 'This is a partial result; the task is not yet fully complete.')}</p></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div><TaskExpandableContent content={latestReceipt.summary} contentKey={`${taskId}:result:${latestReceipt.runId}`} language={language} className="mt-3" />{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList contentKey={`${taskId}:remaining:${latestReceipt.runId}`} items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><TaskExpandableContent content={latestReceipt.nextAction} contentKey={`${taskId}:next:${latestReceipt.runId}`} language={language} markdown={false} previewHeight={72} className="mt-1 text-sm text-fg" /></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button></div>{latestReceipt.evidence.length > 0 ? <details className="mt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted">{language === 'zh' ? '验证依据与执行产物' : 'Evidence and run artifacts'}</summary><TaskResultEvidence evidence={latestReceipt.evidence} projectId={detail.task.projectId} conversationId={conversationConversationId ?? undefined} language={language} /></details> : null}{detail.receipts.length > 1 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-hover p-3"><div className="flex items-start justify-between gap-3"><TaskExpandableContent content={receipt.summary} contentKey={`${taskId}:result:${receipt.runId}`} language={language} className="min-w-0 flex-1" /><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
+
+      <details open={detail.task.phase === 'review' || Boolean(latestReceipt)} ref={acceptanceRef} tabIndex={-1} aria-label={copy.successDefinition} className="scroll-mt-24 mb-4 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel shadow-surface">
+        <summary className="cursor-pointer p-4 text-sm font-medium text-fg">{copy.successDefinition} · {criterionSummaries.filter((criterion) => criterion.status === 'passed').length}/{criterionSummaries.length}</summary>
+        <div className="px-5 pb-5">
           {criterionSummaries.length > 0 ? <ul className="mt-3 space-y-3">{criterionSummaries.map((criterion, index) => {
             const Icon = criterion.status === 'passed' ? CircleCheck : criterion.status === 'failed' ? CircleX : Circle;
             const tone = criterion.status === 'passed' ? 'text-success' : criterion.status === 'failed' ? 'text-danger' : 'text-fg-subtle';
@@ -801,38 +822,21 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             </li>;
           })}</ul> : <p className="mt-3 text-sm text-fg-muted">{copy.noDefinition}</p>}
         </div>
-      </section>
+      </details>
 
-      {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`} className="flex flex-wrap items-start justify-between gap-2"><TaskExpandableContent content={item.summary} contentKey={`${taskId}:attention:${item.kind}:${index}`} language={language} markdown={false} previewHeight={72} className="min-w-0 flex-1" />{item.kind === 'input_required' || item.kind === 'approval_required' ? <Link className="inline-flex min-h-11 items-center rounded-lg bg-surface-panel px-3 text-sm font-medium text-accent" to={taskChatHref(taskId)}>{language === 'zh' ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}</li>)}</ul></section> : null}
+          {!latestReceipt && deliverables.length === 0 && artifactEvidence.length === 0 ? <p className="mb-3 text-sm text-fg-muted">{language === 'zh' ? '尚无执行结果' : 'No execution results yet'}</p> : null}
+          <details className="rounded-xl border border-edge-subtle bg-surface-panel p-4"><summary className="cursor-pointer text-sm text-fg-muted">{language === 'zh' ? '执行与交付概览' : 'Execution and delivery overview'}</summary><TaskResultStatus detail={detail} language={language} /></details>
+        </section>
 
-      {detail.allowedCommands.includes('resolve_wait') && !pausedWait && detail.waits.filter(wait => (wait.kind === 'user_input' || (wait.kind === 'approval' && typeof wait.condition.capability === 'string')) && wait.condition.type !== 'connection').map(wait => <TaskInputCard key={wait.id} wait={wait} detail={detail} zh={language === 'zh'} onUpdated={updated => { void mutateDetail(updated, { revalidate: false }); }} />)}
-
-      <div className="mb-4"><TaskPhaseHistory changes={detail.phaseChanges} language={language} /></div>
-      <div className="mb-4"><TaskCollaborationPanel key={taskId} taskId={taskId} /></div>
-
-      {(deliverables.length > 0 || artifactEvidence.length > 0 || expectedOutputs.length > 0) ? <section className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">
-        <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '交付物' : 'Deliverables'}</h2>
-        {(deliverables.length > 0 || artifactEvidence.length > 0) ? <ul className="mt-3 space-y-2">{deliverables.map((item) => <li key={item.id} className="rounded-lg bg-surface-hover p-3 text-sm">
-          <span className="block text-xs text-fg-muted">{copy.contextKindLabels[item.targetKind]}</span>
-          {item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <TaskExpandableContent content={item.title ?? item.targetId} contentKey={`${taskId}:deliverable:${item.id}`} language={language} previewHeight={60} className="mt-1"><a className="block break-all text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a></TaskExpandableContent> : <TaskExpandableContent content={item.title ?? item.targetId} contentKey={`${taskId}:deliverable:${item.id}`} language={language} markdown={false} previewHeight={60} className="mt-1 text-fg" />}
-        </li>)}{artifactEvidence.map((item) => <li key={item.uri ?? item.title} className="rounded-lg bg-surface-hover p-3 text-sm"><span className="block text-xs text-fg-muted">{language === 'zh' ? '执行产物（待检查）' : 'Run artifact (review needed)'}</span>{item.uri && /^https?:\/\//.test(item.uri) ? <TaskExpandableContent content={item.title} contentKey={`${taskId}:artifact:${item.uri ?? item.title}`} language={language} previewHeight={60} className="mt-1"><a className="block break-all text-accent hover:underline" href={item.uri} target="_blank" rel="noreferrer">{item.title}</a></TaskExpandableContent> : <TaskExpandableContent content={item.title} contentKey={`${taskId}:artifact:${item.uri ?? item.title}`} language={language} markdown={false} previewHeight={60} className="mt-1 text-fg" />}</li>)}</ul> : <p className="mt-2 text-sm text-fg-muted">{language === 'zh' ? '尚未关联交付物' : 'No deliverables linked yet'}</p>}
-        {expectedOutputs.length > 0 ? <div className="mt-4 border-t border-edge-subtle pt-3"><h3 className="text-xs font-medium text-fg-muted">{copy.expectedOutputs}</h3><div className="mt-2"><TextList contentKey={`${taskId}:expectedOutputs`} items={expectedOutputs} empty={copy.noDefinition} /></div></div> : null}
-      </section> : null}
-
-      <section className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">
-        <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '关联内容' : 'Related work'}</h2>
-        {(linkedSessions.length > 0 || detail.runs.length > 0 || linkedAutomations.length > 0 || detail.dependencies.length > 0 || detail.dependents.length > 0) ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {linkedSessions.length > 0 ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{language === 'zh' ? `对话 · ${linkedSessions.length}` : `Conversations · ${linkedSessions.length}`}</h3><TaskExpandableList contentKey={`${taskId}:sessions`} language={language} className="mt-2">{linkedSessions.map((session) => <li key={session.id}><Link className="block break-words [overflow-wrap:anywhere] text-sm text-accent hover:underline" to={session.conversationId === conversationConversationId ? taskChatHref(taskId) : `/chat/${encodeURIComponent(session.conversationId)}`}>{session.conversationId === conversationConversationId ? (language === 'zh' ? '当前执行对话' : 'Current execution chat') : session.role === 'discussion' ? (language === 'zh' ? '关联讨论' : 'Linked discussion') : (language === 'zh' ? '历史执行对话' : 'Earlier execution chat')}</Link></li>)}</TaskExpandableList></div> : null}
-          {linkedAutomations.length > 0 ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{language === 'zh' ? `自动化 · ${linkedAutomations.length}` : `Automations · ${linkedAutomations.length}`}</h3><TaskExpandableList contentKey={`${taskId}:automations`} language={language} className="mt-2">{linkedAutomations.map((automation) => <li key={automation.id}><Link className="block break-words [overflow-wrap:anywhere] text-sm text-accent hover:underline" to={`/automations?automation=${encodeURIComponent(automation.id)}`}>{automation.name}</Link></li>)}</TaskExpandableList></div> : null}
-          {(detail.dependencies.length > 0 || detail.dependents.length > 0) ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{copy.taskRelations}</h3><p className="mt-2 text-sm text-fg">{language === 'zh' ? `${detail.dependencies.length} 个前置任务 · ${detail.dependents.length} 个后续任务` : `${detail.dependencies.length} prerequisites · ${detail.dependents.length} dependents`}</p></div> : null}
-        </div> : <p className="mt-2 text-sm text-fg-muted">{language === 'zh' ? '还没有关联内容' : 'No related work yet'}</p>}
-        <div className="mt-4 border-t border-edge-subtle pt-3"><PageContextCaptureButton resource={{ kind: 'task', id: detail.task.id, revision: String(detail.task.version) }} disabled={editingTitle || editingDescription || pendingOperations.size > 0} /></div>
-      </section>
-
-      <div className="flex flex-col gap-4">
-        <main className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
-          <section className={cn('p-5', recentlyChanged('body') && 'task-detail-live-update')}>
-            <h2 className="text-sm font-semibold text-fg">{copy.taskDescription}</h2>
+        <section className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel divide-y divide-edge-subtle">
+        <div className="border-b border-edge-subtle p-5">
+<h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '任务目标' : 'Task goal'}</h2>
+          <TaskExpandableContent content={detail.task.contract?.objective || detail.task.title} contentKey={`${taskId}:goal`} language={language} markdown={false} previewHeight={72} className="mt-3 text-sm leading-6 text-fg" />
+          <Button variant="ghost" className="mt-2 min-h-9 px-2 text-xs" onClick={openAcceptance}>{copy.successDefinition} · {criterionSummaries.length}</Button>
+        </div>
+        {expectedOutputs.length > 0 ? <div className="p-5"><h3 className="text-xs font-medium text-fg-muted">{copy.expectedOutputs}</h3><div className="mt-2"><TextList contentKey={`${taskId}:expectedOutputs`} items={expectedOutputs} empty={copy.noDefinition} /></div></div> : null}
+          <details className={cn('p-5', recentlyChanged('body') && 'task-detail-live-update')}>
+            <summary className="cursor-pointer text-sm font-semibold text-fg">{copy.taskDescription}</summary>
             {editingDescription ? (
               <textarea
                 autoFocus
@@ -868,7 +872,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
                 <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" onClick={() => void savePatch({ body: preserveTaskExecutionInstructions(detail.task.body ?? '', descriptionDraft.trim()) || null }).then((saved) => { if (saved) { setEditConflict(null); setEditingDescription(false); } })}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
               </div>
             ) : null}
-          </section>
+          </details>
 
           {hasSupportingContext ? <section className={cn('p-5', recentlyChanged('contract') && 'task-detail-live-update')}>
             <h2 className="text-sm font-semibold text-fg">{copy.taskDefinition}</h2>
@@ -879,11 +883,10 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             {risks.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.contextRisks}</summary><div className="mt-3"><TextList contentKey={`${taskId}:risks`} items={risks} empty={copy.noDefinition} /></div></details> : null}
           </section> : null}
 
-          {latestReceipt ? <section className={cn('p-5', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-fg">{copy.latestResult}</h2><p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? (latestReceipt.completionVerdict === 'achieved' ? '本次执行报告目标已达成，请结合下方验证依据验收。' : '这是阶段性结果，尚不能代表任务全部完成。') : (latestReceipt.completionVerdict === 'achieved' ? 'The run reports the goal achieved. Review the evidence below.' : 'This is a partial result; the task is not yet fully complete.')}</p></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div><TaskExpandableContent content={latestReceipt.summary} contentKey={`${taskId}:result:${latestReceipt.runId}`} language={language} className="mt-3" />{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList contentKey={`${taskId}:remaining:${latestReceipt.runId}`} items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><TaskExpandableContent content={latestReceipt.nextAction} contentKey={`${taskId}:next:${latestReceipt.runId}`} language={language} markdown={false} previewHeight={72} className="mt-1 text-sm text-fg" /></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button></div><TaskResultEvidence evidence={latestReceipt.evidence} projectId={detail.task.projectId} conversationId={conversationConversationId ?? undefined} language={language} />{detail.receipts.length > 1 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-hover p-3"><div className="flex items-start justify-between gap-3"><TaskExpandableContent content={receipt.summary} contentKey={`${taskId}:result:${receipt.runId}`} language={language} className="min-w-0 flex-1" /><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
+        </section>
 
-          {referenceContext.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{referenceContext.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
-        </main>
-
+        <section aria-labelledby="task-management-heading">
+          <h2 id="task-management-heading" className="mb-3 text-sm font-semibold text-fg">{language === 'zh' ? '任务管理' : 'Task management'}</h2>
         <aside className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
           <section className={cn('p-5', recentlyChanged('phase', 'resolution', 'priority', 'dueAt', 'delegateAgentId') && 'task-detail-live-update')}>
             <h2 className="text-sm font-semibold text-fg">{copy.taskProperties}</h2>
@@ -895,8 +898,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             </div>
           </section>
 
-          <section className={cn('p-5', recentlyChanged('dependencies') && 'task-detail-live-update')}>
-            <h2 className="text-sm font-semibold text-fg">{copy.taskRelations}</h2>
+          <details className={cn('p-5', recentlyChanged('dependencies') && 'task-detail-live-update')}>
+            <summary className="cursor-pointer text-sm font-semibold text-fg">{copy.taskRelations} · {detail.dependencies.length} / {detail.dependents.length}</summary>
             <div className="mt-4 space-y-4">
               <div>
                 <p className="mb-2 text-xs text-fg-muted">{copy.dependencies}</p>
@@ -904,9 +907,25 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
               </div>
               <div><p className="mb-2 text-xs text-fg-muted">{copy.dependents}</p>{detail.dependents.length > 0 ? <div className="space-y-1.5">{detail.dependents.map((task) => <TaskExpandableContent key={task.id} content={task.title} contentKey={`${taskId}:dependent:${task.id}`} language={language} previewHeight={72} className="rounded-lg bg-surface-hover p-2.5"><Link to={taskHref(task.id)} className="block break-words [overflow-wrap:anywhere] text-sm text-fg-muted transition-colors hover:text-fg">{task.title}</Link></TaskExpandableContent>)}</div> : <p className="text-sm text-fg-subtle">{copy.noDependents}</p>}</div>
             </div>
-          </section>
+          </details>
         </aside>
-      </div>
+          {detail.task.phase !== 'closed' ? <Button asChild variant="ghost" className="my-3"><Link to={automationHref}><CalendarClock className="size-4" />{copy.scheduleRecurringTask}</Link></Button> : null}
+      <details className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">
+        <summary className="cursor-pointer text-sm font-semibold text-fg">{language === 'zh' ? '关联内容' : 'Related work'}</summary>
+        {(linkedSessions.length > 0 || detail.runs.length > 0 || linkedAutomations.length > 0 || detail.dependencies.length > 0 || detail.dependents.length > 0) ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {linkedSessions.length > 0 ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{language === 'zh' ? `对话 · ${linkedSessions.length}` : `Conversations · ${linkedSessions.length}`}</h3><TaskExpandableList contentKey={`${taskId}:sessions`} language={language} className="mt-2">{linkedSessions.map((session) => <li key={session.id}><Link className="block break-words [overflow-wrap:anywhere] text-sm text-accent hover:underline" to={session.conversationId === conversationConversationId ? taskChatHref(taskId) : `/chat/${encodeURIComponent(session.conversationId)}`}>{session.conversationId === conversationConversationId ? (language === 'zh' ? '当前执行对话' : 'Current execution chat') : session.role === 'discussion' ? (language === 'zh' ? '关联讨论' : 'Linked discussion') : (language === 'zh' ? '历史执行对话' : 'Earlier execution chat')}</Link></li>)}</TaskExpandableList></div> : null}
+          {linkedAutomations.length > 0 ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{language === 'zh' ? `自动化 · ${linkedAutomations.length}` : `Automations · ${linkedAutomations.length}`}</h3><TaskExpandableList contentKey={`${taskId}:automations`} language={language} className="mt-2">{linkedAutomations.map((automation) => <li key={automation.id}><Link className="block break-words [overflow-wrap:anywhere] text-sm text-accent hover:underline" to={`/automations?automation=${encodeURIComponent(automation.id)}`}>{automation.name}</Link></li>)}</TaskExpandableList></div> : null}
+          {(detail.dependencies.length > 0 || detail.dependents.length > 0) ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{copy.taskRelations}</h3><p className="mt-2 text-sm text-fg">{language === 'zh' ? `${detail.dependencies.length} 个前置任务 · ${detail.dependents.length} 个后续任务` : `${detail.dependencies.length} prerequisites · ${detail.dependents.length} dependents`}</p></div> : null}
+        </div> : <p className="mt-2 text-sm text-fg-muted">{language === 'zh' ? '还没有关联内容' : 'No related work yet'}</p>}
+        <div className="mt-4 border-t border-edge-subtle pt-3"><PageContextCaptureButton resource={{ kind: 'task', id: detail.task.id, revision: String(detail.task.version) }} disabled={editingTitle || editingDescription || pendingOperations.size > 0} /></div>
+      </details>
+          {referenceContext.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{referenceContext.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
+        </section>
+
+        <details className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-fg">{language === 'zh' ? '活动记录与留言' : 'Activity and updates'}</summary>
+          <div className="mt-3 space-y-4"><TaskCollaborationPanel key={taskId} taskId={taskId} /><TaskPhaseHistory changes={detail.phaseChanges} language={language} /></div>
+        </details>
       </section>
       </div>
 
