@@ -110,9 +110,16 @@ export function useChatScrollViewport({
   }, []);
 
   const reserveReplySpace = useCallback((messageRenderKey: string) => {
-    if (!followingRef.current) return;
-    pendingReplyAnchorRef.current = messageRenderKey;
-  }, []);
+    const el = scrollRef.current;
+    if (!el) return;
+    // Dispatch runs before the optimistic row mounts. Reconcile paused input
+    // intent with the actual position, including scroll events still in flight.
+    const near = isNearChatBottom(el);
+    setFollowing(near);
+    setAtBottom(near);
+    pendingReplyAnchorRef.current = near ? messageRenderKey : null;
+    if (!near) readingAnchorRef.current = readChatScrollAnchor(el);
+  }, [setFollowing]);
 
   const updateReplySpace = useCallback(() => {
     const el = scrollRef.current;
