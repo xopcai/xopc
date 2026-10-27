@@ -19,6 +19,12 @@ struct ChatImageGalleryView: View {
     @State private var image: UIImage?
     @State private var error: String?
     @State private var zoom: CGFloat = 1
+    @State private var imageOffset: CGSize = .zero
+    @State private var viewportSize: CGSize = .zero
+    @State private var pinchStartZoom: CGFloat?
+    @State private var pinchStartOffset: CGSize = .zero
+    @State private var dragStartOffset: CGSize?
+    @GestureState private var isPinching = false
 
     init(items: [ChatImageGalleryItem], initialSource: String, configuration: GatewayConfiguration, conversationID: String?) {
         self.items = items
@@ -37,13 +43,53 @@ struct ChatImageGalleryView: View {
                             .scaledToFit()
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .scaleEffect(zoom)
-                            .gesture(MagnifyGesture().onChanged { value in
-                                zoom = min(3, max(1, value.magnification))
-                            })
-                            .simultaneousGesture(DragGesture(minimumDistance: 60).onEnded { value in
-                                guard zoom == 1, abs(value.translation.width) > abs(value.translation.height) else { return }
+                            .offset(imageOffset)
+                            .contentShape(Rectangle())
+                            .gesture(MagnifyGesture()
+                                .updating($isPinching) { _, active, _ in active = true }
+                                .onChanged { value in
+                                    if pinchStartZoom == nil {
+                                        pinchStartZoom = zoom
+                                        pinchStartOffset = imageOffset
+                                    }
+                                    let start = pinchStartZoom ?? zoom
+                                    let next = min(3, max(1, start * value.magnification))
+                                    let ratio = next / start
+                                    let focal = CGSize(
+                                        width: (value.startAnchor.x - 0.5) * geometry.size.width,
+                                        height: (value.startAnchor.y - 0.5) * geometry.size.height)
+                                    zoom = next
+                                    imageOffset = bounded(CGSize(
+                                        width: focal.width - (focal.width - pinchStartOffset.width) * ratio,
+                                        height: focal.height - (focal.height - pinchStartOffset.height) * ratio),
+                                        image: image, viewport: geometry.size)
+                                }
+                                .onEnded { _ in pinchStartZoom = nil })
+                            .simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { value in
+                                guard !isPinching, zoom > 1 else { return }
+                                if dragStartOffset == nil { dragStartOffset = imageOffset }
+                                let start = dragStartOffset ?? .zero
+                                imageOffset = bounded(CGSize(width: start.width + value.translation.width,
+                                                             height: start.height + value.translation.height),
+                                                      image: image, viewport: geometry.size)
+                            }.onEnded { value in
+                                defer { dragStartOffset = nil }
+                                guard !isPinching, zoom == 1, abs(value.translation.width) > 60,
+                                      abs(value.translation.width) > abs(value.translation.height) else { return }
                                 move(value.translation.width < 0 ? 1 : -1)
                             })
+                            .onTapGesture(count: 2) { location in
+                                if zoom > 1 { zoom = 1; imageOffset = .zero }
+                                else {
+                                    zoom = 2
+                                    imageOffset = bounded(CGSize(width: geometry.size.width / 2 - location.x,
+                                                                 height: geometry.size.height / 2 - location.y),
+                                                          image: image, viewport: geometry.size)
+                                }
+                            }
+                            .onChange(of: isPinching) { _, active in
+                                if !active { pinchStartZoom = nil; dragStartOffset = nil }
+                            }
                             .accessibilityLabel(items[index].title)
                     } else if let error {
                         ContentUnavailableView("图片无法显示", systemImage: "photo.badge.exclamationmark", description: Text(error))
@@ -53,8 +99,13 @@ struct ChatImageGalleryView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .onAppear { viewportSize = geometry.size }
+                .onChange(of: geometry.size) { _, newSize in
+                    viewportSize = newSize
+                    if let image { imageOffset = bounded(imageOffset, image: image, viewport: newSize) }
+                }
             }
-            .navigationTitle(items.indices.contains(index) ? items[index].title : "图片")
+            .navigationTitle("图片")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -70,9 +121,9 @@ struct ChatImageGalleryView: View {
                             .disabled(index == items.count - 1)
                     }
                     Spacer()
-                    Button("缩小", systemImage: "minus.magnifyingglass") { zoom = max(1, zoom - 0.5) }
+                    Button("缩小", systemImage: "minus.magnifyingglass") { changeZoom(max(1, zoom - 0.5)) }
                         .disabled(zoom <= 1)
-                    Button("放大", systemImage: "plus.magnifyingglass") { zoom = min(3, zoom + 0.5) }
+                    Button("放大", systemImage: "plus.magnifyingglass") { changeZoom(min(3, zoom + 0.5)) }
                         .disabled(zoom >= 3)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -83,10 +134,29 @@ struct ChatImageGalleryView: View {
         }
     }
 
+    private func changeZoom(_ next: CGFloat) {
+        let ratio = next / zoom
+        imageOffset = CGSize(width: imageOffset.width * ratio, height: imageOffset.height * ratio)
+        zoom = next
+        if let image { imageOffset = bounded(imageOffset, image: image, viewport: viewportSize) }
+        if next == 1 { imageOffset = .zero }
+    }
+
+    private func bounded(_ proposed: CGSize, image: UIImage, viewport: CGSize) -> CGSize {
+        let fit = min(viewport.width / image.size.width, viewport.height / image.size.height)
+        let limitX = max(0, (image.size.width * fit * zoom - viewport.width) / 2)
+        let limitY = max(0, (image.size.height * fit * zoom - viewport.height) / 2)
+        return CGSize(width: min(limitX, max(-limitX, proposed.width)),
+                      height: min(limitY, max(-limitY, proposed.height)))
+    }
+
     private func move(_ offset: Int) {
         let next = index + offset
         guard items.indices.contains(next) else { return }
         zoom = 1
+        imageOffset = .zero
+        pinchStartZoom = nil
+        dragStartOffset = nil
         index = next
     }
 
@@ -95,6 +165,9 @@ struct ChatImageGalleryView: View {
         image = nil
         error = nil
         zoom = 1
+        imageOffset = .zero
+        pinchStartZoom = nil
+        dragStartOffset = nil
         guard let source = ChatImageSource.resolve(items[index].source, conversationID: conversationID) else {
             error = AppLocalization.resolve("图片地址无效")
             return

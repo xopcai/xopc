@@ -60,7 +60,7 @@ struct MarkdownImageView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: requestIdentity) { await load() }
-        .sheet(isPresented: $showsPreview) {
+        .fullScreenCover(isPresented: $showsPreview) {
             ChatImageGalleryView(
                 items: gallery.isEmpty
                     ? [ChatImageGalleryItem(title: alt, source: source)]

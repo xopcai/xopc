@@ -1,6 +1,8 @@
 import { TaskResultStatus } from '@/features/tasks/task-result-status';
 import { taskDescriptionForDisplay, preserveTaskExecutionInstructions } from '@xopcai/gateway-contract';
 import { TaskPhaseHistory } from '@/features/tasks/task-phase-history';
+import { TaskSchedulePanel } from '@/features/tasks/task-schedule-panel';
+import { TaskScheduleDialog } from '@/features/tasks/task-schedule-dialog';
 import { TaskCurrentAction } from '@/features/tasks/task-current-action';
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -12,7 +14,7 @@ import useSWR from 'swr';
 
 import { TaskExpandableContent } from '@/features/tasks/task-expandable-content';
 import { TaskExpandableList } from '@/features/tasks/task-expandable-list';
-import { automationApi } from '@/features/automations/automation-api';
+import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -234,7 +236,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     conversationLoading,
     conversationError,
   } = useTaskDetail(taskId);
-  const { data: automationList } = useSWR(taskId ? 'task-detail-automations' : null, () => automationApi.list());
+  const { data: automationList, error: automationListError, mutate: mutateAutomations } = useSWR(taskId ? ['task-detail-automations', token] : null, () => automationApi.list(), { refreshInterval: 30_000 });
   const [error, setError] = useState<string | null>(null);
   const [pendingOperations, setPendingOperations] = useState<ReadonlySet<TaskPendingOperation>>(() => new Set());
   const [dependencyCandidates, setDependencyCandidates] = useState<DependencyCandidate[]>([]);
@@ -259,6 +261,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const [editConflict, setEditConflict] = useState<TaskEditConflict>(null);
   const [recentChange, setRecentChange] = useState<TaskChangedEvent | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<Automation | null>(null);
+  const schedulePanelRef = useRef<HTMLDivElement>(null);
   const dependencyPickerLabels = useMemo(() => ({
     link: copy.linkDependencies,
     linked: copy.linkedDependencies,
@@ -297,6 +302,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     setEditingDescription(false);
     setRecentChange(null);
     setDeleteDialogOpen(false);
+    setScheduleDialogOpen(false);
+    setEditingSchedule(null);
   }, [taskId]);
 
   useEffect(() => {
@@ -626,6 +633,25 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     .map((item) => [item.uri ?? item.title, item])).values()];
   const referenceContext = detail.context.filter((item) => item.role !== 'deliverable');
   const linkedAutomations = automationList?.automations.filter((automation) => automation.action.kind === 'task_command' && automation.action.taskId === taskId) ?? [];
+  const taskSchedules = linkedAutomations.filter((automation) => automation.trigger.kind === 'schedule' && automation.action.kind === 'task_command' && automation.action.command.type === 'start');
+  const saveScheduledAutomation = (automation: Automation) => {
+    void mutateAutomations((current) => ({ automations: [automation, ...(current?.automations ?? []).filter((item) => item.id !== automation.id)] }), { revalidate: false });
+  };
+  const editSchedule = (automation: Automation) => {
+    setEditingSchedule(automation);
+    setScheduleDialogOpen(true);
+  };
+  const openSchedule = () => {
+    if (!automationList) return;
+    if (taskSchedules.length === 1) editSchedule(taskSchedules[0]);
+    else if (taskSchedules.length > 1) {
+      schedulePanelRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      schedulePanelRef.current?.focus({ preventScroll: true });
+    } else {
+      setEditingSchedule(null);
+      setScheduleDialogOpen(true);
+    }
+  };
   const linkedSessions = detail.sessions.filter((session, index, sessions) => sessions.findIndex((entry) => entry.conversationId === session.conversationId) === index);
   const expectedOutputs = detail.task.contract?.expectedOutputs ?? [];
   const constraints = detail.task.contract?.constraints ?? [];
@@ -641,7 +667,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const deletePending = pendingOperations.has('delete');
   const activeRun = detail.runs.find((run) => !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
   const deleteBlocked = activeRun !== undefined;
-  const automationHref = `/automations?action=create&taskId=${encodeURIComponent(detail.task.id)}${detail.task.projectId ? `&projectId=${encodeURIComponent(detail.task.projectId)}` : ''}`;
+
   const openAcceptance = () => {
     const panel = acceptanceRef.current;
     if (!panel) return;
@@ -658,7 +684,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
       {canReopen ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="ghost" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
       {!pausedWait && canPause ? <Button variant="ghost" className="min-h-9 px-3 py-1.5 text-xs" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
       {detail.task.phase === 'closed' ? <Button variant="primary" className="min-h-9 px-3 py-1.5 text-xs" onClick={() => { resultsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); resultsRef.current?.focus({ preventScroll: true }); }}>{language === 'zh' ? '查看结果' : 'View results'}</Button> : null}
-      {!activeWait && !activeRun && detail.task.phase !== 'closed' ? <Button asChild variant="ghost" className="min-h-9 px-3 py-1.5 text-xs"><Link to={automationHref}><CalendarClock className="size-4" />{language === 'zh' ? '设置执行时间' : 'Set execution time'}</Link></Button> : null}
+      {!activeWait && !activeRun && detail.task.phase !== 'closed' ? <Button variant="ghost" className="min-h-9 px-3 py-1.5 text-xs" disabled={!automationList} onClick={openSchedule}><CalendarClock className="size-4" />{taskSchedules.length > 0 ? (language === 'zh' ? '管理执行时间' : 'Manage schedule') : (language === 'zh' ? '设置执行时间' : 'Set execution time')}</Button> : null}
       {detail.task.phase === 'review' && !canApprove && !activeWait ? <Button variant="primary" className="min-h-9 px-3 py-1.5 text-xs" onClick={openAcceptance}>{language === 'zh' ? '去验收' : 'Review results'}</Button> : null}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
@@ -781,6 +807,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
 
       <section className="min-w-0 space-y-4 p-4 sm:p-5">
         <TaskCurrentAction detail={detail} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} />
+        {!automationList && !automationListError ? <Skeleton className="h-24 rounded-xl" /> : null}
+        {automationListError ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger"><span>{language === 'zh' ? '无法读取执行计划，请重试后再设置时间。' : 'Could not load schedules. Retry before setting a time.'}</span><Button variant="ghost" onClick={() => void mutateAutomations()}>{language === 'zh' ? '重试' : 'Retry'}</Button></div> : null}
+        {taskSchedules.length > 0 ? <div ref={schedulePanelRef} tabIndex={-1} className="scroll-mt-24"><TaskSchedulePanel schedules={taskSchedules} language={language} onEdit={editSchedule} onUpdated={saveScheduledAutomation} /></div> : null}
 
         <section ref={resultsRef} tabIndex={-1} aria-labelledby="task-results-heading" className="scroll-mt-24">
           <h2 id="task-results-heading" className="mb-3 text-sm font-semibold text-fg">{language === 'zh' ? '结果与交付' : 'Results and deliverables'}</h2>
@@ -909,7 +938,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             </div>
           </details>
         </aside>
-          {detail.task.phase !== 'closed' ? <Button asChild variant="ghost" className="my-3"><Link to={automationHref}><CalendarClock className="size-4" />{copy.scheduleRecurringTask}</Link></Button> : null}
+          {detail.task.phase !== 'closed' ? <Button variant="ghost" className="my-3" disabled={!automationList} onClick={openSchedule}><CalendarClock className="size-4" />{taskSchedules.length > 0 ? (language === 'zh' ? '管理执行时间' : 'Manage schedule') : copy.scheduleRecurringTask}</Button> : null}
       <details className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">
         <summary className="cursor-pointer text-sm font-semibold text-fg">{language === 'zh' ? '关联内容' : 'Related work'}</summary>
         {(linkedSessions.length > 0 || detail.runs.length > 0 || linkedAutomations.length > 0 || detail.dependencies.length > 0 || detail.dependents.length > 0) ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -978,6 +1007,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         )}
       </aside>
       </div>
+      {scheduleDialogOpen ? <TaskScheduleDialog key={`${taskId}:${editingSchedule?.id ?? 'new'}`} automation={editingSchedule ?? undefined} taskId={taskId} taskTitle={detail.task.title} projectId={detail.task.projectId} executorAgentId={conversationAgentId} language={language} onClose={() => setScheduleDialogOpen(false)} onCreated={saveScheduledAutomation} /> : null}
       <ConfirmDialog
         open={deleteDialogOpen}
         title={copy.deleteTaskTitle}

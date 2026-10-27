@@ -1,3 +1,4 @@
+import { imageZoomOffset, boundedImageOffset } from '../common/chatImageViewport';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { image } from '@kit.ImageKit';
@@ -54,7 +55,27 @@ export struct XopcChatMediaView {
   @Local audioPlayer: XopcChatMediaPlayback = new XopcChatMediaPlayback();
   @Local zoom: number = 1;
   @Local galleryFile?: XopcHistoryMedia;
+  @Local imageOffsetX: number = 0;
+  @Local imageOffsetY: number = 0;
+  @Local viewportWidth: number = 1;
+  @Local viewportHeight: number = 1;
   private pinchZoom: number = 1;
+  private startOffsetX: number = 0;
+  private startOffsetY: number = 0;
+  private pinchX: number = 0;
+  private pinchY: number = 0;
+  private resetImageTransform(): void { this.zoom = 1; this.imageOffsetX = 0; this.imageOffsetY = 0; }
+  private clampImageOffset(): void {
+    const fittedWidth = Math.min(this.viewportWidth, this.viewportHeight * this.pictureRatio);
+    const fittedHeight = fittedWidth / this.pictureRatio;
+    this.imageOffsetX = boundedImageOffset(this.imageOffsetX, fittedWidth, this.viewportWidth, this.zoom);
+    this.imageOffsetY = boundedImageOffset(this.imageOffsetY, fittedHeight, this.viewportHeight, this.zoom);
+  }
+  private changeZoom(next: number): void {
+    const ratio = next / this.zoom;
+    this.imageOffsetX *= ratio; this.imageOffsetY *= ratio; this.zoom = next;
+    this.clampImageOffset();
+  }
   private controller: VideoController = new VideoController();
   private webController: webview.WebviewController = new webview.WebviewController();
   private allowInitialHtmlNavigation: boolean = false;
@@ -107,7 +128,7 @@ export struct XopcChatMediaView {
     this.picture?.release(); this.picture = undefined;
     this.previewPicture?.release(); this.previewPicture = undefined;
     await this.clearPlayback();
-    this.previewText = ''; this.attempted = false; this.error = ''; this.zoom = 1; this.pinchZoom = 1;
+    this.previewText = ''; this.attempted = false; this.error = ''; this.resetImageTransform(); this.pinchZoom = 1;
     this.galleryFile = this.imageGallery[next];
     this.sourceIdentity = this.sourceKey();
     await this.openPreview();
@@ -115,7 +136,7 @@ export struct XopcChatMediaView {
   private reset(): void {
     this.document.reset();
     this.generation++; this.picture?.release(); this.picture = undefined; this.busy = false;
-    this.previewText = ''; this.expanded = false; this.attempted = false; this.zoom = 1; this.pinchZoom = 1; this.error = '';
+    this.previewText = ''; this.expanded = false; this.attempted = false; this.resetImageTransform(); this.pinchZoom = 1; this.error = '';
     this.htmlLoading = false; this.htmlError = false;
     this.allowInitialHtmlNavigation = false;
     this.htmlDataLoaded = false;
@@ -135,7 +156,7 @@ export struct XopcChatMediaView {
     this.picture?.release(); this.picture = undefined;
     this.previewPicture?.release(); this.previewPicture = undefined;
     this.galleryFile = undefined;
-    this.previewText = ''; this.error = ''; this.attempted = false; this.zoom = 1; this.pinchZoom = 1;
+    this.previewText = ''; this.error = ''; this.attempted = false; this.resetImageTransform(); this.pinchZoom = 1;
     this.sourceIdentity = this.sourceKey();
     if (!this.compact || (this.compactThumbnail && this.previewKind() === 'image')) this.load();
   }
@@ -157,7 +178,7 @@ export struct XopcChatMediaView {
     if (kind === 'image' && !this.picture) await this.load();
     if (sourceIdentity !== this.sourceKey()) return;
     if (this.picture) {
-      this.zoom = 1; this.pinchZoom = 1; this.expanded = true;
+      this.resetImageTransform(); this.pinchZoom = 1; this.expanded = true;
       const generation = this.generation;
       try {
         const bytes = await readChatMedia(this.activeFile(), this.conversationId, context);
@@ -557,15 +578,43 @@ export struct XopcChatMediaView {
       } else if (this.busy && this.previewKind() !== 'html' && !this.picture) {
         Column() {}.width('100%').layoutWeight(1).borderRadius(12).backgroundColor(this.colors.grouped)
       } else if (this.picture) {
-        Scroll() { Image(this.previewPicture || this.picture).width((this.zoom * 100) + '%').aspectRatio(this.pictureRatio).objectFit(ImageFit.Contain)
-          .gesture(PinchGesture({ fingers: 2 }).onActionStart((_event: GestureEvent): void => { this.pinchZoom = this.zoom; })
-            .onActionUpdate((event: GestureEvent): void => { this.zoom = Math.max(1, Math.min(3, this.pinchZoom * event.scale)); })) }
-          .width('100%').layoutWeight(1).scrollable(ScrollDirection.FREE)
-          .parallelGesture(PanGesture({ fingers: 1, direction: PanDirection.Horizontal, distance: 30 })
-            .onActionEnd((event: GestureEvent): void => {
-              if (this.zoom > 1.05 || Math.abs(event.offsetX) < 60) return;
-              this.navigateGallery(event.offsetX > 0 ? -1 : 1);
-            }))
+        Stack({ alignContent: Alignment.Center }) {
+          Image(this.previewPicture || this.picture).width('100%').height('100%').objectFit(ImageFit.Contain)
+            .scale({ x: this.zoom, y: this.zoom, centerX: '50%', centerY: '50%' })
+            .translate({ x: this.imageOffsetX, y: this.imageOffsetY })
+        }.width('100%').layoutWeight(1).clip(true)
+          .onAreaChange((_old: Area, area: Area): void => {
+            this.viewportWidth = Number(area.width); this.viewportHeight = Number(area.height); this.clampImageOffset();
+          })
+          .gesture(GestureGroup(GestureMode.Exclusive,
+            PinchGesture({ fingers: 2 }).onActionStart((event: GestureEvent): void => {
+              this.pinchZoom = this.zoom; this.startOffsetX = this.imageOffsetX; this.startOffsetY = this.imageOffsetY;
+              this.pinchX = event.pinchCenterX - this.viewportWidth / 2;
+              this.pinchY = event.pinchCenterY - this.viewportHeight / 2;
+            }).onActionUpdate((event: GestureEvent): void => {
+              this.zoom = Math.max(1, Math.min(3, this.pinchZoom * event.scale));
+              this.imageOffsetX = imageZoomOffset(this.pinchX, this.startOffsetX, this.pinchZoom, this.zoom) + event.pinchCenterX - this.viewportWidth / 2 - this.pinchX;
+              this.imageOffsetY = imageZoomOffset(this.pinchY, this.startOffsetY, this.pinchZoom, this.zoom) + event.pinchCenterY - this.viewportHeight / 2 - this.pinchY;
+              this.clampImageOffset();
+            }),
+            PanGesture({ fingers: 1, direction: PanDirection.All, distance: 10 })
+              .onActionStart((): void => { this.startOffsetX = this.imageOffsetX; this.startOffsetY = this.imageOffsetY; })
+              .onActionUpdate((event: GestureEvent): void => {
+                if (this.zoom <= 1.05) return;
+                this.imageOffsetX = this.startOffsetX + event.offsetX; this.imageOffsetY = this.startOffsetY + event.offsetY;
+                this.clampImageOffset();
+              }).onActionEnd((event: GestureEvent): void => {
+                if (this.zoom > 1.05 || Math.abs(event.offsetX) < 60 || Math.abs(event.offsetX) <= Math.abs(event.offsetY)) return;
+                this.navigateGallery(event.offsetX > 0 ? -1 : 1);
+              }),
+            TapGesture({ count: 2 }).onAction((event: GestureEvent): void => {
+              if (this.zoom > 1) { this.resetImageTransform(); return; }
+              const finger = event.fingerList[0];
+              this.zoom = 2;
+              if (finger) { this.imageOffsetX = this.viewportWidth / 2 - finger.localX;
+                this.imageOffsetY = this.viewportHeight / 2 - finger.localY; }
+              this.clampImageOffset();
+            })))
         Row({ space: 8 }) {
           if (this.canNavigateGallery()) {
             Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(20).fontColor([this.colors.secondary]) }
@@ -579,8 +628,8 @@ export struct XopcChatMediaView {
               .enabled(this.galleryIndex() >= 0 && this.galleryIndex() < this.imageGallery.length - 1 && !this.busy)
               .accessibilityText($r('app.string.chat_next_image')).onClick((): void => { this.navigateGallery(1); })
           }
-          Button('−').width(44).height(44).backgroundColor(this.colors.grouped).fontColor(this.colors.secondary).onClick((): void => { this.zoom = Math.max(1, this.zoom - 0.5); })
-          Button('+').width(44).height(44).backgroundColor(this.colors.grouped).fontColor(this.colors.secondary).onClick((): void => { this.zoom = Math.min(3, this.zoom + 0.5); })
+          Button('−').width(44).height(44).backgroundColor(this.colors.grouped).fontColor(this.colors.secondary).onClick((): void => { this.changeZoom(Math.max(1, this.zoom - 0.5)); })
+          Button('+').width(44).height(44).backgroundColor(this.colors.grouped).fontColor(this.colors.secondary).onClick((): void => { this.changeZoom(Math.min(3, this.zoom + 0.5)); })
         }
       } else if (this.playbackPath && this.previewKind() === 'audio') {
         Row({ space: 12 }) {

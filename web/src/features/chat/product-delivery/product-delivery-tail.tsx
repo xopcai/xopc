@@ -38,6 +38,7 @@ import {
   workspacePathFromFileResourceId,
   type ProductDeliveryEntry,
 } from './product-delivery-model';
+import { TaskDeliveryGroup } from './task-delivery-group';
 
 const KIND_ICON = {
   task: Target,
@@ -116,12 +117,16 @@ function DeliveryRow({
   language,
   conversationId,
   projectId,
+  fullTitle = false,
+  compactTask = false,
 }: {
   delivery: ProductDeliveryEnvelope;
   reference: ProductReference;
   language: 'en' | 'zh';
   conversationId?: string | null;
   projectId?: string | null;
+  fullTitle?: boolean;
+  compactTask?: boolean;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -190,7 +195,8 @@ function DeliveryRow({
         onClick={canOpen ? open : undefined}
         disabled={!canOpen}
         className={cn(
-          'flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left',
+          'flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left',
+          compactTask ? 'min-h-11' : 'min-h-14',
           canOpen && 'cursor-pointer hover:bg-surface-hover/65 active:bg-surface-active/70',
           interaction.transition,
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
@@ -199,19 +205,20 @@ function DeliveryRow({
       >
         <span
           className={cn(
-            'flex size-8 shrink-0 items-center justify-center rounded-lg',
+            'flex shrink-0 items-center justify-center rounded-lg',
+            compactTask ? 'size-5' : 'size-8',
             isFailure
               ? 'bg-danger-soft text-danger'
-              : 'bg-accent-soft/70 text-accent-fg',
+              : compactTask ? 'text-fg-muted' : 'bg-accent-soft/70 text-accent-fg',
           )}
           aria-hidden
         >
           <Icon className="size-4" strokeWidth={1.75} />
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-fg" title={reference.title}>{reference.title}</span>
+        <span className={cn('min-w-0 flex-1', compactTask && 'flex flex-wrap items-center gap-x-3 gap-y-0.5 sm:flex-nowrap')}>
+          <span className={cn('block text-sm font-medium text-fg', fullTitle ? 'break-words' : compactTask ? 'line-clamp-2 sm:truncate' : 'truncate', compactTask && 'min-w-0 flex-1')} title={reference.title}>{reference.title}</span>
           <span
-            className="mt-0.5 block truncate text-xs leading-5 text-fg-muted"
+            className={cn('block text-xs leading-5 text-fg-muted', compactTask ? 'shrink-0' : 'mt-0.5 truncate')}
             title={description}
           >
             {description}
@@ -310,12 +317,22 @@ export function ProductDeliveryRows({
   const references = productDeliveryReferences(deliveries, excludedReferenceKeys);
   const fileReferences = references.filter(({ reference }) => reference.kind === 'file');
   const firstFileIndex = references.findIndex(({ reference }) => reference.kind === 'file');
+  const taskReferences = references.filter(({ reference }) => reference.kind === 'task');
+  const firstTaskIndex = references.findIndex(({ reference }) => reference.kind === 'task');
 
   if (references.length === 0) return null;
 
   return (
     <>
       {references.map(({ key, delivery, reference }, index) => {
+        if (reference.kind === 'task' && taskReferences.length > 3) {
+          return index === firstTaskIndex ? (
+            <TaskDeliveryGroup key="task-delivery-group" entries={taskReferences} language={language}
+              renderEntry={(entry, fullTitle) => <DeliveryRow key={entry.key} delivery={entry.delivery}
+                reference={entry.reference} language={language} conversationId={conversationId}
+                projectId={projectId} fullTitle={fullTitle} compactTask />} />
+          ) : null;
+        }
         if (reference.kind !== 'file' || fileReferences.length === 1) {
           return (
             <DeliveryRow
@@ -325,6 +342,7 @@ export function ProductDeliveryRows({
               language={language}
               conversationId={conversationId}
               projectId={projectId}
+              compactTask={reference.kind === 'task' && taskReferences.length > 1}
             />
           );
         }

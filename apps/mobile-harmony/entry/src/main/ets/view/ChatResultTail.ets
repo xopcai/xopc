@@ -1,6 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { common } from '@kit.AbilityKit';
-import { XopcArtifact, XopcChatRow, XopcProductDelivery, XopcProductReference } from '../model/chat';
+import { XopcArtifact, XopcHistoryMedia, XopcChatRow, XopcProductDelivery, XopcProductReference } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { artifactMedia, chatDeliveries, chatProductCapability } from '../common/chatRichContent';
 import { markdownLink } from '../common/markdown';
@@ -13,14 +13,22 @@ export struct XopcChatResultTail {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Param conversationId: string = '';
+  @Param messageImageGallery: XopcHistoryMedia[] = [];
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onFillDraft: (text: string) => void = (_text: string): void => {};
   @Computed get deliveries(): XopcProductDelivery[] { return chatDeliveries(this.row); }
   @Computed get artifacts(): XopcArtifact[] { return this.row.outcome?.deliverables || []; }
   @Local expanded: boolean = false;
-  @Computed get visibleArtifacts(): XopcArtifact[] { return previewArtifacts(this.artifacts, this.expanded); }
-  @Computed get visibleDeliveries(): XopcProductDelivery[] { return previewDeliveries(this.artifacts, this.deliveries, this.expanded); }
-  @Computed get hiddenCount(): number { return hiddenResultCount(this.artifacts, this.deliveries); }
+  @Computed get visibleArtifacts(): XopcArtifact[] { return previewArtifacts(this.nonImageArtifacts, this.expanded); }
+  @Computed get visibleDeliveries(): XopcProductDelivery[] { return previewDeliveries(this.nonImageArtifacts, this.deliveries, this.expanded); }
+  @Computed get hiddenCount(): number { return hiddenResultCount(this.nonImageArtifacts, this.deliveries); }
+  private isImage(artifact: XopcArtifact): boolean {
+    return artifact.availability === 'available' && !!(artifact.uri || artifact.workspaceRelativePath)
+      && (artifact.kind === 'image' || artifact.mimeType?.startsWith('image/') === true);
+  }
+  @Computed get imageArtifacts(): XopcArtifact[] { return this.artifacts.filter((item: XopcArtifact): boolean => this.isImage(item)); }
+  @Computed get nonImageArtifacts(): XopcArtifact[] { return this.artifacts.filter((item: XopcArtifact): boolean => !this.isImage(item)); }
+  @Computed get imageGallery(): XopcHistoryMedia[] { return this.messageImageGallery.length ? this.messageImageGallery : this.imageArtifacts.map((item: XopcArtifact): XopcHistoryMedia => artifactMedia(item)); }
   private status(artifact: XopcArtifact): Resource {
     if (artifact.availability === 'materializing') return $r('app.string.chat_artifact_materializing');
     if (artifact.availability === 'expired') return $r('app.string.chat_artifact_expired');
@@ -84,11 +92,25 @@ export struct XopcChatResultTail {
   build() {
     if (!this.row.live && (this.artifacts.length || this.deliveries.length)) {
       Column({ space: 4 }) {
+          if (this.imageArtifacts.length) {
+            Scroll() {
+              Row({ space: 8 }) {
+                Repeat<XopcArtifact>(this.imageArtifacts).each((item: RepeatItem<XopcArtifact>) => {
+                  Column() {
+                    XopcChatMediaView({ file: artifactMedia(item.item), conversationId: this.conversationId,
+                      compact: true, embedded: true, compactThumbnail: true, compactMetadata: false,
+                      compactDisclosure: false, compactThumbnailWidth: this.imageArtifacts.length === 1 ? 240 : 144,
+                      compactThumbnailHeight: this.imageArtifacts.length === 1 ? 240 : 144,
+                      imageGallery: this.imageGallery })
+                  }.width(this.imageArtifacts.length === 1 ? 240 : 144).borderRadius(12).clip(true)
+                }).key((artifact: XopcArtifact): string => artifact.artifactId)
+              }
+            }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+          }
           Repeat<XopcArtifact>(this.visibleArtifacts).each((item: RepeatItem<XopcArtifact>) => {
             if (item.item.availability === 'available' && (item.item.uri || item.item.workspaceRelativePath)) {
               XopcChatMediaView({ file: artifactMedia(item.item), conversationId: this.conversationId, compact: true,
-                embedded: true, compactThumbnail: item.item.kind === 'image' || item.item.mimeType?.startsWith('image/') === true,
-                compactAvailable: true })
+                embedded: true, compactAvailable: true })
             } else if (item.item.availability === 'available' && markdownLink(item.item.shareUrl || '')) {
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 10 }) {

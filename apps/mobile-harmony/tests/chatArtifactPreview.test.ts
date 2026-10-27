@@ -6,9 +6,10 @@ const resultTail = readFileSync(new URL('../entry/src/main/ets/view/ChatResultTa
 const zh = readFileSync(new URL('../entry/src/main/resources/zh_CN/element/string.json', import.meta.url), 'utf8');
 
 describe('chat artifact image preview', () => {
-  it('requests compact thumbnails only for image deliverables', () => {
-    expect(resultTail).toContain("compactThumbnail: item.item.kind === 'image' || item.item.mimeType?.startsWith('image/') === true");
-    expect(resultTail).toContain('compactAvailable: true');
+  it('renders image deliverables without file metadata and shares their gallery', () => {
+    expect(resultTail).toContain('compactThumbnail: true, compactMetadata: false');
+    expect(resultTail).toContain('imageGallery: this.imageGallery');
+    expect(resultTail).toContain('this.nonImageArtifacts');
   });
 
   it('loads and opens compact image thumbnails with configurable sizing and fit', () => {
@@ -58,7 +59,7 @@ describe('chat image gallery preview', () => {
   it('passes same-message images into each attachment preview', () => {
     const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
     expect(content).toContain("filePreviewKind(file.name, file.mimeType) === 'image'");
-    expect(content).toContain('imageGallery: this.imageMedia');
+    expect(content).toContain('imageGallery: this.galleryMedia');
   });
 
   it('navigates within bounds and keeps actions attached to the active image', () => {
@@ -66,7 +67,7 @@ describe('chat image gallery preview', () => {
     expect(media).toContain('next < 0 || next >= this.imageGallery.length');
     expect(media).toContain(".id('chat-media-previous-image')");
     expect(media).toContain(".id('chat-media-next-image')");
-    expect(media).toContain('PanGesture({ fingers: 1, direction: PanDirection.Horizontal, distance: 30 })');
+    expect(media).toContain('PanGesture({ fingers: 1, direction: PanDirection.All, distance: 10 })');
     expect(media).toContain('this.zoom > 1.05 || Math.abs(event.offsetX) < 60');
     expect(media).toContain('saveChatMedia(context, this.activeFile(), this.conversationId)');
     expect(media).toContain('createChatMediaShare(this.activeFile(), this.conversationId)');
