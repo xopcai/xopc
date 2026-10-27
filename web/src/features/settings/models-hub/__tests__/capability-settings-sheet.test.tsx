@@ -9,7 +9,11 @@ import { CapabilitySettingsSheet } from '../capability-settings-sheet';
 import { openCapabilitySettings } from '../open-capability-settings';
 let container: HTMLDivElement; let root: ReturnType<typeof createRoot>;
 beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+afterEach(async () => {
+  await act(async () => root.unmount());
+  await new Promise(resolve => setTimeout(resolve, 0));
+  container.remove();
+});
 it('keeps the invoking screen mounted and prevents closing or switching during a save', async () => {
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   await act(async () => root.render(<MemoryRouter><textarea defaultValue="unsent draft" /><CapabilitySettingsSheet /></MemoryRouter>));
