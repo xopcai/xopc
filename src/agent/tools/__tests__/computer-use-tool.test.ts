@@ -16,6 +16,17 @@ describe('computer tool error signaling', () => {
     const error = await f.tool.execute('call', { op: 'discover', query: 'Example' }, undefined, undefined).catch(error => error);
     expect(JSON.parse(error.message)).toMatchObject({ errorCode: 'COMPUTER_WINDOW_AMBIGUOUS', windows: [{ title: 'Project' }] });
   });
+  it('preserves completed-input evidence and gives non-replay recovery for an unfinished UI program', async () => {
+    const f = setup();
+    const report = { recentActions: [{ kind: 'activate', dispatch: 'completed' }] };
+    f.execute.mockResolvedValue({ status: 'program_error', errorCode: 'COMPUTER_PROGRAM_UNAWAITED_CALL', report });
+    const error = await f.tool.execute('call', { op: 'exec', code: 'ui.emitScreenshot({})' }, undefined, undefined).catch(error => error);
+    const result = JSON.parse(error.message);
+    expect(result.report).toEqual(report);
+    expect(result.nextAction).toContain('Earlier inputs may already have completed');
+    expect(result.nextAction).toContain('never replay');
+    expect(result.nextAction).toContain('Await every ui.* call');
+  });
   it('resumes a held action without a chat continuation prompt', async () => {
     const f = setup();
     f.execute.mockResolvedValueOnce({ status: 'pending_action', pending: true, sessionId: 's' })

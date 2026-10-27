@@ -4,6 +4,8 @@ import { ProviderUsageScopeError } from '../../providers/model-usage.js';
 import { traceRun, traceTools, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
 import { isComputerControlActive, isComputerLeaseTool, stopComputerControl } from '../../computer/control-guard.js';
+import { bindComputerAgentTurn, computerImagesForRequest, computerRequestFrameCleanup,
+  endComputerAgentTurn, setComputerProgramAuthorization } from '../../computer/agent-context.js';
 import {
   getClarificationResumeInput,
   getClarification,
@@ -553,6 +555,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (session.agent.transformContext === transformWorkEvidence) session.agent.transformContext = baseTransformContext;
     };
     const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
+      bindComputerAgentTurn(conversationId, runId, streamModel);
+      const releaseComputerFrames = computerRequestFrameCleanup(conversationId, runId);
       instructions.acknowledge();
       const memoryMetadata = isXopcDatabaseOpen() ? getSessionMetadata(conversationId) : undefined;
       const historyContext = {
@@ -566,7 +570,13 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           ...(message.sections ? { sections: Object.fromEntries(Object.entries(message.sections).map(([key, value]) =>
             [key, projectSuppressedMemoryBlocks(value, historyContext)])) } : {}),
         });
-      const hygienicMessages = tryApplySessionTranscriptHygiene(sourceMessages, streamModel) as typeof sourceMessages;
+      // Project using host tool-call ids before provider hygiene rewrites them.
+      const computerMessages = sourceMessages.map(message => {
+        if (message.role !== 'toolResult' || message.toolName !== 'computer_use') return message;
+        const images = computerImagesForRequest(conversationId, runId, message.toolCallId);
+        return images.length ? { ...message, content: [...message.content, ...images] } : message;
+      });
+      const hygienicMessages = tryApplySessionTranscriptHygiene(computerMessages, streamModel) as typeof sourceMessages;
       const recentToolCalls = extractRecentToolCalls(session.agent.state.messages);
       const loopGuard = detectToolLoops(recentToolCalls);
 
@@ -647,6 +657,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       });
       const promptCacheChanges = observePromptCacheSnapshot(conversationId, promptCacheSnapshot);
 
+      const recordedContext = { ...effectiveContext, messages: effectiveContext.messages.map(message =>
+        message.role === 'toolResult' && message.toolName === 'computer_use'
+          ? { ...message, content: message.content.filter(block => block.type !== 'image') } : message) };
       log.debug(
         {
           conversationId,
@@ -670,7 +683,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             ? {
                 effectiveContext: {
                   systemPrompt: effectiveSystemPrompt,
-                  messages: effectiveContext.messages.filter(message => message.role !== 'system'),
+                  messages: recordedContext.messages.filter(message => message.role !== 'system'),
                   tools: effectiveTools,
                 },
               }
@@ -690,12 +703,14 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           toolCount: effectiveTools.length, toolSchemaChars: JSON.stringify(effectiveTools).length,
           estimatedContextTokens: assessed.evaluation.estimatedTokens }, 'Embedded first model request ready');
       }
-      return trackAiUsageStream(streamModel, {
+      const stream = trackAiUsageStream(streamModel, {
         operation: continuesAfterTool(effectiveContext.messages) ? 'agent.continue_after_tool' : 'agent.answer',
         conversationId,
         runId,
         traceId: runId,
-      }, () => streamFnWithXopcExtensions(streamModel, effectiveContext, { ...options }), { context: effectiveContext, reasoning: options?.reasoning });
+      }, () => streamFnWithXopcExtensions(streamModel, effectiveContext, { ...options }), { context: recordedContext, reasoning: options?.reasoning });
+      void Promise.resolve(stream).then(value => value.result()).finally(releaseComputerFrames).catch(() => {});
+      return stream;
     };
     session.agent.streamFunction = loggingStreamFn;
     const verification = await RunVerification.open(workspaceDir, { required: params.verifyChanges === true, toolNames: tools.map(tool => tool.name) });
@@ -722,6 +737,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     params.turnPolicy?.reset();
     const nativeBeforeTool = session.agent.beforeToolCall;
     const nativeAfterTool = session.agent.afterToolCall;
+    const computerProgramOperation = Symbol('computerProgramOperation');
     const hostBeforeTool: NonNullable<typeof nativeBeforeTool> = async (context, signal) => {
       if (!allowsExecutionTool(executionToolPolicy, context.toolCall.name)) {
         return { block: true, reason: 'Tool is outside this execution scope.' };
@@ -768,6 +784,30 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         if (scoped) return { block: true, reason: `${scoped}\n\nApply these instructions, then retry the operation.` };
       }
       await verification.beforeTool(context.toolCall.id, context.toolCall.name);
+      if (context.toolCall.name === 'computer_use' && !(context as unknown as Record<symbol, unknown>)[computerProgramOperation]) {
+        let operationNumber = 0;
+        const nestedContext = (operation: string, args: unknown) => ({ ...context,
+          [computerProgramOperation]: true,
+          toolCall: { ...context.toolCall, id: `${context.toolCall.id}/ui/${++operationNumber}` },
+          args: { op: 'exec', operation, input: args },
+        });
+        let activeOperation: ReturnType<typeof nestedContext> | undefined;
+        setComputerProgramAuthorization(conversationId, async (operation, args) => {
+          activeOperation = nestedContext(operation, args);
+          const result = await hostBeforeTool(activeOperation, signal);
+          if (result?.block) throw new Error('COMPUTER_PROGRAM_POLICY_REFUSED');
+        }, async (_operation, result) => {
+          if (!activeOperation) throw new Error('COMPUTER_PROGRAM_POLICY_REFUSED');
+          const operation = activeOperation;
+          activeOperation = undefined;
+          const checked = await hostAfterTool({ ...operation, result: {
+            content: [{ type: 'text', text: JSON.stringify(result) }], details: {},
+          }, isError: false }, signal);
+          if (checked?.isError) throw new Error('COMPUTER_PROGRAM_POLICY_REFUSED');
+          const content = checked?.content.filter(block => block.type === 'text').map(block => block.text).join('\n');
+          return content ? JSON.parse(content) : result;
+        });
+      }
       return decision;
     };
     const hostAfterTool: NonNullable<typeof nativeAfterTool> = async (context) => {
@@ -1031,6 +1071,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     return { ok: false, terminationReason: isAgentTurnTimeoutError(err) ? 'deadline_exceeded'
       : params.abortSignal?.aborted ? resolveAgentAbortReason(params.abortSignal.reason) : 'runtime_error', errorMessage: em };
   } finally {
+    await endComputerAgentTurn(conversationId, runId);
     restorePrepareNextTurn?.();
     restorePrepareRequest?.();
     restoreTransformContext?.();

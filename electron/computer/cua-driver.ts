@@ -12,8 +12,9 @@ import type {
   WindowStateOutput,
 } from '@trycua/cua-driver';
 import { z } from 'zod';
-import type { ComputerAction, ComputerTarget } from '@xopcai/computer-control-contract';
+import type { ComputerAction, ComputerTarget, ComputerInputTiming } from '@xopcai/computer-control-contract';
 import type { ComputerDriver, DriverObservation } from '../../src/computer/broker.js';
+import { ComputerInputTimer } from '../../src/computer/native-timing.js';
 import { ComputerTargetError } from '../../src/computer/errors.js';
 import { normalizeComputerKeys as nativeKeys } from '../../src/computer/keyboard.js';
 import { createLogger } from '../../src/utils/logger.js';
@@ -115,6 +116,8 @@ export class CuaComputerDriver implements ComputerDriver {
   private readonly referenceSalt = randomUUID();
   private readonly windowsApps = new Map<string, AppInfo>();
   private windowsInput?: WindowsInputState;
+  private captureStats = { attempts: 0, invalidFrames: 0, recovered: 0, exhausted: 0 };
+  getCaptureStats() { return { ...this.captureStats }; }
   constructor(
     private readonly binary: string,
     private readonly bundleId: string,
@@ -172,14 +175,16 @@ export class CuaComputerDriver implements ComputerDriver {
   private async callUntyped(name: string, args: Record<string, unknown>, signal?: AbortSignal) {
     signal?.throwIfAborted();
     if (!this.client) throw new Error('COMPUTER_DRIVER_OFFLINE');
-    const result: ToolResult = await this.client.callTool(name, JSON.stringify(args), signal ? { signal } : undefined);
-    signal?.throwIfAborted();
-    if (result.isError) throw new Error(`COMPUTER_DRIVER_${name.toUpperCase()}_REFUSED`);
-    let data: Record<string, unknown>;
-    try { data = JSON.parse(result.structuredJson ?? result.rawJson ?? '{}') as Record<string, unknown>; }
-    catch { throw new Error('COMPUTER_DRIVER_INVALID_RESULT'); }
-    const content = result.images.map(image => ({ type: 'image', data: image.dataBase64, mimeType: image.mimeType }));
-    return { data, content };
+    const result: ToolResult = await this.timedSdk(() => this.client!.callTool(name, JSON.stringify(args), signal ? { signal } : undefined));
+    return this.validateInputResult(() => {
+      signal?.throwIfAborted();
+      if (result.isError) throw new Error(`COMPUTER_DRIVER_${name.toUpperCase()}_REFUSED`);
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(result.structuredJson ?? result.rawJson ?? '{}') as Record<string, unknown>; }
+      catch { throw new Error('COMPUTER_DRIVER_INVALID_RESULT'); }
+      const content = result.images.map(image => ({ type: 'image', data: image.dataBase64, mimeType: image.mimeType }));
+      return { data, content };
+    });
   }
   private async listApps(signal?: AbortSignal, query?: string): Promise<AppInfo[]> {
     signal?.throwIfAborted();
@@ -376,18 +381,39 @@ export class CuaComputerDriver implements ComputerDriver {
     else if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     const windowId = BigInt(target.windowId);
     let state: WindowStateOutput;
+    const recoveryDelays = [100, 300, 900];
+    let recoveryBounds: string | undefined;
     for (let attempt = 0; ; attempt++) {
       signal.throwIfAborted();
       if (this.platform === 'win32') {
         if (attempt > 0) await this.assertWindowApp(target, signal);
       } else if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+      this.captureStats.attempts++;
       state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+      signal.throwIfAborted();
       // A resize/render transition can invalidate the optional pixel frame while
       // retaining the exact AX window. Re-capture only that window; never accept
       // invalid pixels, follow another window or replay the preceding input.
-      if (state.pid !== target.pid || state.windowId !== windowId || state.screenshotFrameValid !== false || attempt >= 2) break;
+      if (state.pid !== target.pid || state.windowId !== windowId) break;
+      const captureBounds = state.windowBounds == null ? undefined : Bounds.parse(state.windowBounds);
+      if (recoveryBounds && captureBounds && JSON.stringify(captureBounds) !== recoveryBounds) throw new Error('COMPUTER_WINDOW_CHANGED');
+      if (state.screenshotFrameValid !== false) {
+        if (attempt) this.captureStats.recovered++;
+        break;
+      }
+      this.captureStats.invalidFrames++;
+      if (attempt >= recoveryDelays.length) { this.captureStats.exhausted++; break; }
       state.images.length = 0;
-      await delay(100, undefined, { signal });
+      // Only retry capture while the exact native window still exists and has
+      // stable native geometry, matching AX bounds when available. Never recover a process/window/geometry change.
+      const windows = await this.listWindows(target.pid, signal);
+      const current = windows.find(window => window.windowId === windowId);
+      if (!current || !current.isOnScreen || current.onCurrentSpace === false) throw new Error('COMPUTER_WINDOW_CHANGED');
+      const nativeBounds = JSON.stringify(Bounds.parse(current.bounds));
+      if ((captureBounds && nativeBounds !== JSON.stringify(captureBounds))
+        || (recoveryBounds && nativeBounds !== recoveryBounds)) throw new Error('COMPUTER_WINDOW_CHANGED');
+      recoveryBounds = nativeBounds;
+      await delay(recoveryDelays[attempt], undefined, { signal });
     }
     if (state.elements?.some(element => element.role === 'AXButton' && element.label === 'WindowSharingSessionButton')) throw new Error('COMPUTER_WINDOW_CHANGED');
     // Some platforms cannot produce an affirmative frame-validity bit. An explicit
@@ -515,22 +541,39 @@ export class CuaComputerDriver implements ComputerDriver {
       if (found?.length !== 1 || !windowsInputAllowed(found[0])) throw new Error('COMPUTER_WINDOWS_EDIT_TARGET_CHANGED');
     }
   }
+  private inputTimer?: ComputerInputTimer;
+  private lastInputTiming?: ComputerInputTiming;
+  getLastInputTiming(): ComputerInputTiming | undefined { return this.lastInputTiming; }
+  private validateInputResult<T>(operation: () => T): T {
+    return this.inputTimer ? this.inputTimer.measureSync('resultValidationMs', operation) : operation();
+  }
+  private async timedSdk<T>(operation: () => Promise<T>): Promise<T> {
+    return this.inputTimer ? this.inputTimer.measure('sdkCallMs', operation) : operation();
+  }
   async perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void> {
-    await this.performInput(target, action, signal);
-    // AX/input acknowledgement can precede the window's render commit. Let
-    // short button/display animations settle before the broker captures the
-    // post-action frame that the next decision may reuse. This is not proof
-    // of stability: the fresh pre-dispatch target/state check remains mandatory.
-    if (action.kind !== 'wait') await delay(200, undefined, { signal });
+    const timer = new ComputerInputTimer(this.platform === 'win32');
+    this.lastInputTiming = undefined;
+    this.inputTimer = timer;
+    let completed = false;
+    try {
+      await this.performInput(target, action, signal);
+      if (action.kind !== 'wait') await timer.measure('renderGraceMs', () => delay(200, undefined, { signal }));
+      completed = true;
+    } finally {
+      this.lastInputTiming = timer.finish(completed);
+      this.inputTimer = undefined;
+    }
   }
   private async performInput(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
-    if (this.platform === 'win32') {
-      if (!['typeText', 'setValue', 'pressKeys'].includes(action.kind)) await this.assertWindowApp(target, signal);
-    } else if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+    await this.inputTimer!.measure('identityCheckMs', async () => {
+      if (this.platform === 'win32') {
+        if (!['typeText', 'setValue', 'pressKeys'].includes(action.kind)) await this.assertWindowApp(target, signal);
+      } else if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+    });
     signal.throwIfAborted();
-    this.validateAction(action);
-    await this.checkWindowsInput(target, action, signal);
+    await this.inputTimer!.measure('actionValidationMs', () => this.validateAction(action));
+    if (this.platform === 'win32') await this.inputTimer!.measure('windowsInputGuardMs', () => this.checkWindowsInput(target, action, signal));
     signal.throwIfAborted();
     if ('ref' in action && (!this.observedTarget || this.observedTarget.appId !== target.appId
       || this.observedTarget.pid !== target.pid || this.observedTarget.processIdentity !== target.processIdentity
@@ -540,21 +583,23 @@ export class CuaComputerDriver implements ComputerDriver {
     const actionTarget = new this.sdk.ActionTarget.Window({ pid: target.pid, windowId });
     switch (action.kind) {
       case 'activate': case 'showMenu': {
-        const result = await this.client.click({ target: actionTarget,
-          position: new this.sdk.ClickPosition.Element({ elementToken: this.semanticElement(action).element_token as string }),
-          deliveryMode: this.sdk.InputDeliveryMode.Background, count: 1,
-          button: action.kind === 'activate' ? this.sdk.ClickButton.Left : this.sdk.ClickButton.Right }, { signal });
-        if (result.route !== this.sdk.ActionRoute.Accessibility || ![
-          this.sdk.ActionEffect.Confirmed, this.sdk.ActionEffect.Unverifiable,
-        ].includes(result.effect)) throw new Error('COMPUTER_SEMANTIC_ACTION_UNCONFIRMED');
+        const result = await this.timedSdk(() => this.client!.click({ target: actionTarget,
+          position: new this.sdk!.ClickPosition.Element({ elementToken: this.semanticElement(action).element_token as string }),
+          deliveryMode: this.sdk!.InputDeliveryMode.Background, count: 1,
+          button: action.kind === 'activate' ? this.sdk!.ClickButton.Left : this.sdk!.ClickButton.Right }, { signal }));
+        this.validateInputResult(() => {
+          if (result.route !== this.sdk!.ActionRoute.Accessibility || ![
+            this.sdk!.ActionEffect.Confirmed, this.sdk!.ActionEffect.Unverifiable,
+          ].includes(result.effect)) throw new Error('COMPUTER_SEMANTIC_ACTION_UNCONFIRMED');
+        });
         return;
       }
       case 'wait': await delay(action.durationMs, undefined, { signal }); return;
       case 'click': {
         const button = action.button === 'right' ? this.sdk.ClickButton.Right : this.sdk.ClickButton.Left;
-        const result = await this.client.click({ target: actionTarget, position: new this.sdk.ClickPosition.Coordinates(action.point),
-          deliveryMode: this.sdk.InputDeliveryMode.Background, count: action.count, button }, { signal });
-        if (result.effect === this.sdk.ActionEffect.Refused) throw new Error('COMPUTER_DRIVER_CLICK_REFUSED');
+        const result = await this.timedSdk(() => this.client!.click({ target: actionTarget, position: new this.sdk!.ClickPosition.Coordinates(action.point),
+          deliveryMode: this.sdk!.InputDeliveryMode.Background, count: action.count, button }, { signal }));
+        this.validateInputResult(() => { if (result.effect === this.sdk!.ActionEffect.Refused) throw new Error('COMPUTER_DRIVER_CLICK_REFUSED'); });
         return;
       }
       case 'drag':
@@ -579,12 +624,14 @@ export class CuaComputerDriver implements ComputerDriver {
             delivery_mode: 'background', ...(keys.length === 1 ? { key: keys[0] } : { keys }) }, signal);
           return;
         }
-        const result = keys.length === 1 ? await this.client.pressKey({ key: keys[0], target: actionTarget }, { signal })
-          : await this.client.hotkey({ keys, target: actionTarget }, { signal });
-        if (result.isError) {
-          log.warn({ phase: 'key', nativeErrorCode: /^[a-z_0-9]{1,80}$/i.test(result.errorCode ?? '') ? result.errorCode : undefined }, 'Native window key refused');
-          throw new Error('COMPUTER_DRIVER_KEY_REFUSED');
-        }
+        const result = await this.timedSdk(() => keys.length === 1 ? this.client!.pressKey({ key: keys[0], target: actionTarget }, { signal })
+          : this.client!.hotkey({ keys, target: actionTarget }, { signal }));
+        this.validateInputResult(() => {
+          if (result.isError) {
+            log.warn({ phase: 'key', nativeErrorCode: /^[a-z_0-9]{1,80}$/i.test(result.errorCode ?? '') ? result.errorCode : undefined }, 'Native window key refused');
+            throw new Error('COMPUTER_DRIVER_KEY_REFUSED');
+          }
+        });
         return;
       }
       case 'scroll': {
@@ -593,9 +640,9 @@ export class CuaComputerDriver implements ComputerDriver {
         const direction = action.deltaY
           ? (delta > 0 ? this.sdk.ScrollDirection.Down : this.sdk.ScrollDirection.Up)
           : (delta > 0 ? this.sdk.ScrollDirection.Right : this.sdk.ScrollDirection.Left);
-        const result = await this.client.scroll({ target: actionTarget, ...action.point, by: this.sdk.ScrollBy.Line,
-          amount: BigInt(Math.min(5, Math.max(1, Math.ceil(Math.abs(delta) / 100)))), direction }, { signal });
-        if (result.isError) throw new Error('COMPUTER_DRIVER_SCROLL_REFUSED');
+        const result = await this.timedSdk(() => this.client!.scroll({ target: actionTarget, ...action.point, by: this.sdk!.ScrollBy.Line,
+          amount: BigInt(Math.min(5, Math.max(1, Math.ceil(Math.abs(delta) / 100)))), direction }, { signal }));
+        this.validateInputResult(() => { if (result.isError) throw new Error('COMPUTER_DRIVER_SCROLL_REFUSED'); });
         return;
       }
     }

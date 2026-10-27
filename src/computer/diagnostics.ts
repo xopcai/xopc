@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { ComputerAction, ComputerObservation, ComputerReceipt } from '@xopcai/computer-control-contract';
+import { ComputerInputTimingSchema, ComputerTransportTimingSchema, type ComputerAction, type ComputerObservation, type ComputerReceipt } from '@xopcai/computer-control-contract';
 import { ComputerDiagnosticSchema, computerDiagnostic } from './errors.js';
 import type { ComputerVerification } from './task-state.js';
 
@@ -19,6 +19,11 @@ export const ComputerFailureSchema = z.object({
 export type ComputerFailure = z.infer<typeof ComputerFailureSchema>;
 
 const categories: Record<string, ComputerFailure['category']> = Object.create(null);
+for (const code of ['AGENT_MODEL_REQUIRED', 'AGENT_MODEL_CHANGED', 'PLANNER_MISMATCH']) categories[`COMPUTER_${code}`] = 'model';
+for (const code of ['PROGRAM_BUDGET', 'PROGRAM_STORE_LIMIT']) categories[`COMPUTER_${code}`] = 'budget';
+categories.COMPUTER_PROGRAM_POLICY_REFUSED = 'permission';
+categories.COMPUTER_PROGRAM_FAILED = 'harness';
+categories.COMPUTER_PROGRAM_UNAWAITED_CALL = 'harness';
 for (const [category, codes] of Object.entries({
   permission: ['DISABLED', 'READ_ONLY', 'LOCAL_UI_REQUIRED', 'CONTROL_PAUSED', 'APP_NOT_AUTHORIZED', 'OS_PERMISSION_REQUIRED', 'SELF_CONTROL_DENIED', 'SENSITIVE_APP_MANUAL_ONLY', 'REVOKED', 'GRANT_REVOKED', 'KEY_SCOPE_UNSAFE', 'WINDOWS_TEXT_INPUT_UNVERIFIED', 'WINDOWS_KEY_INPUT_UNVERIFIED', 'WINDOWS_KEY_TARGET_REQUIRED', 'PLATFORM_UNSUPPORTED'],
   target: ['APP_NOT_FOUND', 'APP_NOT_RUNNING', 'APP_REF_EXPIRED', 'APP_INSTANCE_AMBIGUOUS', 'WINDOW_REQUIRED', 'WINDOW_OTHER_SPACE', 'WINDOW_AMBIGUOUS', 'WINDOW_CHANGED', 'WINDOW_APP_CHANGED', 'NATIVE_IDENTITY_UNAVAILABLE', 'WINDOW_ID_UNSUPPORTED', 'PROCESS_CHANGED', 'PROCESS_EXITED', 'ELEMENT_REF_REQUIRED', 'ELEMENT_TARGET_CHANGED', 'TARGET_CHANGED', 'TARGET_MISMATCH', 'CLOSE_BEFORE_TARGET_CHANGE', 'FLOW_TARGET_MISMATCH', 'FLOW_NOT_FOUND', 'DESKTOP_BINDING_REQUIRED', 'DESKTOP_UPGRADE_REQUIRED'],
@@ -52,7 +57,9 @@ export function classifyComputerFailure(error: unknown, phase: ComputerFailurePh
 }
 
 const Count = z.number().int().nonnegative();
-export const ComputerNativeTimingSchema = z.object({ precheckMs: Count, inputMs: Count, postObserveMs: Count }).strict();
+export const ComputerNativeTimingSchema = z.object({ precheckMs: Count, inputMs: Count, postObserveMs: Count,
+  inputDetail: ComputerInputTimingSchema.optional(), precheckSamples: Count.optional(),
+}).strict();
 export type ComputerNativeTiming = z.infer<typeof ComputerNativeTimingSchema>;
 
 const CountersSchema = z.object({
@@ -68,6 +75,11 @@ export const ComputerSessionReportSchema = z.object({
   counters: CountersSchema,
   phaseMs: z.object({ open: Count, observe: Count, model: Count, dispatch: Count, release: Count }).strict(),
   failure: ComputerFailureSchema.optional(),
+  timings: z.array(z.object({ actionId: z.string().max(200), nativeMs: ComputerNativeTimingSchema.optional(),
+    kind: z.enum(['activate', 'showMenu', 'click', 'drag', 'setValue', 'typeText', 'pressKeys', 'scroll', 'wait']).optional(),
+    transport: ComputerTransportTimingSchema.optional(), endpointRoundTripMs: z.number().finite().nonnegative(),
+  }).strict()).max(256).optional(),
+  timingsTruncated: z.boolean().optional(),
   recentActions: z.array(z.object({
     kind: z.enum(['activate', 'showMenu', 'click', 'drag', 'setValue', 'typeText', 'pressKeys', 'scroll', 'wait']),
     dispatch: z.enum(['notStarted', 'started', 'completed', 'unknown']),
@@ -84,7 +96,8 @@ export class ComputerSessionDiagnostics {
   private pending?: { id: string; kind: ComputerAction['kind'] };
   private endedAt?: number;
   phase: ComputerFailurePhase = 'open';
-  constructor(private readonly now: () => number = Date.now) {
+  constructor(private readonly now: () => number = Date.now,
+    private readonly durationNow = now === Date.now ? () => performance.now() : now) {
     this.data = { version: 1, reportId: randomUUID(), status: 'active', startedAt: now(), durationMs: 0,
       counters: { observations: 0, predictionAttempts: 0, modelRequests: 0, proposedInputs: 0, completedInputs: 0, unknownDispatches: 0,
         unchangedInputs: 0, observationChanges: 0, rescueAttempts: 0, rescueExhaustions: 0,
@@ -93,11 +106,17 @@ export class ComputerSessionDiagnostics {
   }
   bind(sessionId: string): void { this.data.sessionId = sessionId; }
   count(key: keyof ComputerSessionReport['counters']): void { this.data.counters[key]++; }
+  timing(value: NonNullable<ComputerSessionReport['timings']>[number]): void {
+    const timings = this.data.timings ??= [];
+    if (timings.some(item => item.actionId === value.actionId)) return;
+    if (timings.length === 256) { this.data.timingsTruncated = true; return; }
+    timings.push(value);
+  }
   async measure<T>(phase: keyof ComputerSessionReport['phaseMs'], fn: () => Promise<T>): Promise<T> {
     this.phase = phase;
-    const start = this.now();
+    const start = this.durationNow();
     try { return await fn(); }
-    finally { this.data.phaseMs[phase] += Math.max(0, Math.round(this.now() - start)); }
+    finally { this.data.phaseMs[phase] += Math.max(0, Math.round(this.durationNow() - start)); }
   }
   propose(id: string, kind: ComputerAction['kind']): void {
     this.pending = { id, kind };

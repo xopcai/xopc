@@ -8,6 +8,7 @@ import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profil
 import { computerDiagnostic } from '../errors.js';
 import { resolveModel } from '../../providers/index.js';
 import { ComputerFlowSchema, type ComputerFlowRepository } from '../flows.js';
+import { bindComputerAgentTurn, endComputerAgentTurn, computerImagesForRequest, setComputerProgramAuthorization } from '../agent-context.js';
 
 vi.mock('../../config/agent-profile.js', () => ({ resolveEffectiveAgentConfigForSession: vi.fn(() => ({ config: { id: 'main', models: { computerUse: { primary: 'ali/gui' } } } })) }));
 vi.mock('../../providers/index.js', () => ({
@@ -19,7 +20,7 @@ vi.mock('../../providers/index.js', () => ({
 }));
 
 const cleanups: Array<() => Promise<void>> = [];
-afterEach(async () => { await Promise.all(cleanups.splice(0).map(fn => fn())); vi.unstubAllGlobals(); });
+afterEach(async () => { await endComputerAgentTurn('owner', 'agent-run'); await Promise.all(cleanups.splice(0).map(fn => fn())); vi.unstubAllGlobals(); });
 function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
   const target = { appId: 'fixture', pid: 1, processIdentity: 'fixture:1', windowId: '1', width: 800, height: 600, geometryRevision: '1' };
   const images: Uint8Array[] = [];
@@ -62,6 +63,76 @@ function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
 describe('agent to broker desktop lifecycle', () => {
+  it('uses real QuickJS with the existing guarded dispatch and no GUI model request', async () => {
+    const f = fixture();
+    bindComputerAgentTurn('owner', 'agent-run', { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['text', 'image'] } as any);
+    const authorize = vi.fn(async () => {}), complete = vi.fn(async () => {});
+    setComputerProgramAuthorization('owner', authorize, complete);
+    await f.runtime.execute('owner', { op: 'open', appRef: await f.discover(), mode: 'control', prepare: false, planner: 'agent' });
+    const result = await f.runtime.execute('owner', { op: 'exec', code: `
+      const state = await ui.observe({visual: true});
+      text(await ui.act({snapshotId: state.snapshotId, action: {kind:'click',point:{x:10,y:10},button:'left',count:1}}));
+      await ui.observe({visual:true});
+    ` }, undefined, { toolCallId: 'program-1' });
+    expect(result.status).toBe('program_completed');
+    expect(f.driver.perform).toHaveBeenCalledTimes(1);
+    expect(f.fetch).not.toHaveBeenCalled();
+    expect(authorize.mock.calls).toHaveLength(3);
+    expect(complete.mock.calls).toHaveLength(3);
+    expect(computerImagesForRequest('owner', 'agent-run', 'program-1')).toHaveLength(1);
+    expect(computerImagesForRequest('other', 'agent-run', 'program-1')).toHaveLength(0);
+    const closed = await f.runtime.execute('owner', { op: 'close' });
+    expect(closed.report?.counters.modelRequests).toBe(0);
+    expect(computerImagesForRequest('owner', 'agent-run', 'program-1')).toHaveLength(0);
+  });
+  it('closes a direct session after a script failure without replaying completed input', async () => {
+    const f = fixture();
+    bindComputerAgentTurn('owner', 'agent-run', { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['image'] } as any);
+    await f.runtime.execute('owner', { op: 'open', appRef: await f.discover(), mode: 'control', prepare: false, planner: 'agent' });
+    const result = await f.runtime.execute('owner', { op: 'exec', code: `
+      const s = await ui.observe({});
+      await ui.act({snapshotId:s.snapshotId,action:{kind:'click',point:{x:10,y:10},button:'left',count:1}});
+      throw new Error('stop');
+    ` }, undefined, { toolCallId: 'program-2' });
+    expect(result.status).toBe('program_error');
+    expect(f.driver.perform).toHaveBeenCalledTimes(1);
+    expect(isComputerControlActive('owner')).toBe(false);
+    expect(f.runtime.getReport('owner')?.counters.completedInputs).toBe(1);
+  });
+  it('refuses stale program snapshots after a completed input', async () => {
+    const f = fixture();
+    bindComputerAgentTurn('owner', 'agent-run', { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['image'] } as any);
+    await f.runtime.execute('owner', { op: 'open', appRef: await f.discover(), mode: 'control', prepare: false, planner: 'agent' });
+    const result = await f.runtime.execute('owner', { op: 'exec', code: `
+      const s = await ui.observe({});
+      const input = {snapshotId:s.snapshotId,action:{kind:'click',point:{x:10,y:10},button:'left',count:1}};
+      await ui.act(input); await ui.act(input);
+    ` }, undefined, { toolCallId: 'stale-program' });
+    expect(result).toMatchObject({ status: 'program_error', errorCode: 'COMPUTER_STALE_OBSERVATION' });
+    expect(f.driver.perform).toHaveBeenCalledTimes(1);
+  });
+  it('retains read-only authority for program sessions', async () => {
+    const f = fixture();
+    bindComputerAgentTurn('owner', 'agent-run', { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['image'] } as any);
+    await f.runtime.execute('owner', { op: 'open', appRef: await f.discover(), mode: 'observe', prepare: false, planner: 'agent' });
+    const result = await f.runtime.execute('owner', { op: 'exec', code: `
+      const s = await ui.observe({});
+      await ui.act({snapshotId:s.snapshotId,action:{kind:'click',point:{x:10,y:10},button:'left',count:1}});
+    ` }, undefined, { toolCallId: 'readonly-program' });
+    expect(result).toMatchObject({ status: 'program_error', errorCode: 'COMPUTER_READ_ONLY' });
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('refuses a main-model endpoint change even within the same origin', async () => {
+    const f = fixture();
+    const model = { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['image'] } as any;
+    bindComputerAgentTurn('owner', 'agent-run', model);
+    await f.runtime.execute('owner', { op: 'open', appRef: await f.discover(), mode: 'control', prepare: false, planner: 'agent' });
+    bindComputerAgentTurn('owner', 'agent-run', { ...model, baseUrl: 'https://main.test/other' });
+    await expect(f.runtime.execute('owner', { op: 'exec', code: 'text(1)' }, undefined, { toolCallId: 'changed-model' }))
+      .rejects.toThrow('COMPUTER_AGENT_MODEL_CHANGED');
+    expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(isComputerControlActive('owner')).toBe(false);
+  });
   it.each(['openai-completions', 'openai-responses'])('runs a custom visual model with inferred function tools on %s', async api => {
     const f = fixture();
     vi.mocked(resolveModel).mockReturnValueOnce({ id: 'arbitrary-vision', provider: 'custom', api,
