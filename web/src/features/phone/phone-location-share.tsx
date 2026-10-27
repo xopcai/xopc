@@ -139,8 +139,8 @@ export function PhoneLocationShare({ phoneId, conversationId }: { phoneId: strin
       {share?.sync === 'applied' && <span role="status" className="text-xs text-fg-muted">{zh ? '位置已同步' : 'Location synced'}</span>}
       {error && <span role="alert" className="max-w-40 truncate text-xs text-fg-muted" title={error}>{error}</span>}
     </div>
-    <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-      <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(430px,90dvh)] w-[min(440px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel p-5">
+    <Dialog.Portal><Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[90] bg-scrim" />
+      <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[91] flex h-[min(430px,90dvh)] w-[min(440px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel p-5">
         <header className="flex shrink-0 items-center justify-between"><Dialog.Title className="font-semibold text-fg">{zh ? '共享当前位置到云手机' : 'Share current location with cloud phone'}</Dialog.Title><Dialog.Close aria-label={zh ? '关闭' : 'Close'}><X className="size-4" /></Dialog.Close></header>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-5 text-sm text-fg-muted">
           <Dialog.Description>{zh ? '从你正在使用的设备获取位置，经 Gateway 同步到这台云手机。有定位权限的应用均可能读取，任务模型也可能从画面看到位置信息。原始采样坐标不写入聊天或长期记忆。' : 'Share this device’s location via Gateway. Apps with location permission and task models viewing the phone may see location information. Raw samples stay out of chat and long-term memory.'}</Dialog.Description>

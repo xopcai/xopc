@@ -43,7 +43,7 @@ async function mountPanel(state: PhoneLiveState) {
   await act(async () => root!.render(<PhoneLivePanel conversationId="conversation" state={state} onChange={vi.fn()} />));
 }
 function button(label: string) {
-  const match = [...container!.querySelectorAll('button')].find(b => b.textContent === label || b.getAttribute('aria-label') === label);
+  const match = [...document.querySelectorAll('button')].find(b => b.textContent === label || b.getAttribute('aria-label') === label);
   expect(match, `Button ${label}`).toBeDefined();
   return match!;
 }
@@ -88,9 +88,9 @@ it('keeps releasing control and handing back to the Agent as separate actions', 
   vi.mocked(controlPhone).mockResolvedValue(state);
   await mountPanel(state);
   await act(async () => button('手机输入').click());
-  expect(container!.querySelector('[aria-label="发送到手机的文本"]')).not.toBeNull();
+  expect(document.querySelector('[aria-label="发送到手机的文本"]')).not.toBeNull();
   await menuItem('结束控制，保持暂停');
-  expect(container!.querySelector('[aria-label="发送到手机的文本"]')).toBeNull();
+  expect(document.querySelector('[aria-label="发送到手机的文本"]')).toBeNull();
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'release', expect.any(Object));
   await act(async () => button('完成，继续任务').click());
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', state, 'handback', expect.any(Object));
@@ -210,4 +210,17 @@ it('releases a late takeover after its panel unmounts', async () => {
   const acquired = { ...state, ownControl: true, report: { ...state.report, controlOwner: 'human' as const, controlEpoch: 3 } };
   await act(async () => finish(acquired));
   expect(controlPhone).toHaveBeenLastCalledWith('conversation', acquired, 'release');
+});
+
+it('portals the phone keyboard above the floating workspace with a blocking backdrop', async () => {
+  await mountPanel(session({ controlOwner: 'human' }, true));
+  await act(async () => button('手机输入').click());
+  const input = document.querySelector('[aria-label="发送到手机的文本"]')!;
+  const dialog = input.closest('[role="dialog"]')!;
+  expect(container!.contains(dialog)).toBe(false);
+  expect(dialog.classList.contains('xopc-dialog-content')).toBe(true);
+  expect(dialog.classList.contains('z-[91]')).toBe(true);
+  expect(document.querySelector('.xopc-dialog-overlay')?.classList.contains('z-[90]')).toBe(true);
+  await act(async () => button('关闭文字输入').click());
+  expect(document.querySelector('.xopc-dialog-overlay')).toBeNull();
 });

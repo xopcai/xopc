@@ -41,6 +41,7 @@
 }
 
 .phone-control-shade {
+  background-color: var(--color-surface-overlay);
   border-top-left-radius: var(--phone-screen-radius);
   border-top-right-radius: var(--phone-screen-radius);
 }
