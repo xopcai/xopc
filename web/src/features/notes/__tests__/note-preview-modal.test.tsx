@@ -14,7 +14,12 @@ vi.mock('../note-markdown-view', () => ({ NoteMarkdownView: ({ content }: { cont
 
 let root: ReturnType<typeof createRoot>;
 let container: HTMLDivElement;
-afterEach(() => { act(() => root.unmount()); container.remove(); vi.clearAllMocks(); });
+afterEach(async () => {
+  await act(async () => root.unmount());
+  await new Promise(resolve => setTimeout(resolve, 0));
+  container.remove();
+  vi.clearAllMocks();
+});
 
 async function render() {
   container = document.createElement('div');
