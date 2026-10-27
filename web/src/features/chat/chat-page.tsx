@@ -1176,7 +1176,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     sending={stream.sending}
                     progress={stream.progress}
                     reasoningLevel={session.reasoningLevel}
-                    showAssistantWorkLog={!personal}
+                    showAssistantWorkLog
                     registerListContentRef={registerListContentRef}
                     replySpaceRef={replySpaceRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}

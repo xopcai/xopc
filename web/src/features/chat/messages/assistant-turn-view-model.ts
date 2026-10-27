@@ -15,7 +15,6 @@ import type {
 } from '@/features/chat/messages/messages.types';
 import {
   collectTurnActivityBlocks,
-  hasAssistantAnswerText,
 } from '@/features/chat/messages/turn-activity';
 import {
   extractSearchSources,
@@ -24,7 +23,7 @@ import {
 import { extractProductDelivery } from '@/features/chat/product-delivery/product-delivery';
 import { isProductDeliveryVisibleResult } from '@/features/chat/product-delivery/product-delivery-model';
 import type { ProductDeliveryEnvelope } from '@xopcai/gateway-contract';
-import { usesConversationText } from './personal-text-surface';
+import { assistantAnswerContent } from './assistant-turn-content';
 
 export type AssistantTurnLifecycleState =
   | 'starting'
@@ -77,39 +76,30 @@ export function buildAssistantTurnViewModel({
   message,
   isStreaming,
   reasoningLevel,
-  personal = false,
 }: {
   message: Message;
   isStreaming: boolean;
   reasoningLevel: ReasoningLevel;
   personal?: boolean;
 }): AssistantTurnViewModel {
-  // The Personal page also supplies this mode for historical messages.
-  const conversationalText = usesConversationText(message, personal);
-  const isLiveText = (block: MessageContent) =>
-    isStreaming && block.type === 'text' && block.presentation === 'pending';
-  const answerContent = (message.content ?? []).filter((block) => (
-    block.type === 'review'
-    || (block.type === 'text'
-      && (conversationalText || isLiveText(block) || (block.presentation !== 'pending'
-        && block.presentation !== 'narration')))
-  ));
+  const answerContent = assistantAnswerContent(message.content ?? [], {
+    // Pending text is an answer candidate, never private reasoning or tool output.
+    includePending: true,
+  });
+  const answerBlocks = new Set(answerContent);
   const allActivityBlocks = filterVisibleSteps(collectTurnActivityBlocks(message.content ?? []));
   const workLogItems = (message.content ?? []).filter(
     (block): block is AssistantWorkLogItem => {
       if (block.type === 'tool_use') return true;
-      if (reasoningLevel === 'off') return false;
-      if (block.type === 'thinking') return Boolean(block.text?.trim()) || Boolean(block.streaming);
+      if (block.type === 'thinking') return reasoningLevel !== 'off'
+        && (Boolean(block.text?.trim()) || Boolean(block.streaming));
       return block.type === 'text'
-        && !conversationalText
-        && !isLiveText(block)
-        && (block.presentation === 'pending' || block.presentation === 'narration')
+        && !answerBlocks.has(block)
         && Boolean(block.text?.trim());
     },
   );
-  const answerStarted = conversationalText || answerContent.some(isLiveText)
-    ? answerContent.some((block) => block.type === 'text' && Boolean(block.text?.trim()))
-    : hasAssistantAnswerText(answerContent);
+  const answerStarted = answerContent.some((block) => block.type === 'review'
+    || (block.type === 'text' && Boolean(block.text?.trim())));
   const toolBlocks = allActivityBlocks.filter(
     (block): block is ToolUseContent => block.type === 'tool_use',
   );
@@ -128,7 +118,7 @@ export function buildAssistantTurnViewModel({
     ? message.completedAt ?? message.timestamp
     : undefined;
   const timing = getActivityTiming(allActivityBlocks, activityEndedAt);
-  const startedAtCandidates = [message.timestamp, timing.startedAt]
+  const startedAtCandidates = [message.startedAt ?? message.timestamp, timing.startedAt]
     .filter((value): value is number => Number.isFinite(value));
   const workLogStartedAt = startedAtCandidates.length > 0
     ? Math.min(...startedAtCandidates)

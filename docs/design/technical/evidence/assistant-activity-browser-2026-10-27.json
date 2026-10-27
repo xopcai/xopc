@@ -1,0 +1,94 @@
+{
+  "ok": true,
+  "checks": [
+    "production WebUI and authenticated Gateway",
+    "actual Agent file tools",
+    "live unclassified text outside process",
+    "streaming final Markdown table outside process",
+    "pure text streaming table without activity container",
+    "private thinking hidden",
+    "consecutive tool aggregation",
+    "completion auto-collapse",
+    "final result isolated",
+    "completed process can reopen",
+    "SQLite history reload",
+    "narrow viewport",
+    "existing off/on/stream settings via UI",
+    "developer details toggle",
+    "simple/advanced settings preserved",
+    "clipboard contains only final result"
+  ],
+  "observed": {
+    "requests": 7,
+    "turns": 3,
+    "pureReplies": 1,
+    "tools": [
+      "apply_patch",
+      "exec_command",
+      "find",
+      "grep",
+      "list_dir",
+      "publish_artifacts",
+      "read_file",
+      "review_workspace",
+      "skill_view",
+      "skills_list",
+      "tool_manual",
+      "write_file",
+      "xopc_require_connection",
+      "xopc_update_connection_objective",
+      "tool_search"
+    ],
+    "errors": []
+  },
+  "dropEnd": "none",
+  "dropped": {
+    "message": 0,
+    "run": 0,
+    "sessions": 0
+  },
+  "date": "2026-10-27",
+  "regression": {
+    "filesPassed": 187,
+    "testsPassed": 1187
+  },
+  "build": {
+    "web": "passed (includes TypeScript)",
+    "changedSourceLint": "passed"
+  },
+  "terminalEventFaultInjection": [
+    {
+      "mode": "none",
+      "ok": true,
+      "dropped": {
+        "message": 0,
+        "run": 0,
+        "sessions": 0
+      },
+      "pureTextStreamingReply": true,
+      "evidence": "/tmp/xopc-assistant-activity-browser"
+    },
+    {
+      "mode": "message",
+      "ok": true,
+      "dropped": {
+        "message": 4,
+        "run": 0,
+        "sessions": 0
+      },
+      "pureTextStreamingReply": true,
+      "evidence": "/tmp/xopc-assistant-activity-browser-message"
+    },
+    {
+      "mode": "all",
+      "ok": true,
+      "dropped": {
+        "message": 4,
+        "run": 2,
+        "sessions": 2
+      },
+      "pureTextStreamingReply": true,
+      "evidence": "/tmp/xopc-assistant-activity-browser-all"
+    }
+  ]
+}

@@ -7,6 +7,8 @@ import {
   type FriendlyToolTitleLabels,
 } from '@/features/chat/messages/tool-friendly-title';
 import { messages } from '@/i18n/messages';
+import { summarizeToolActivity } from '@/features/chat/messages/assistant-activity-groups';
+import type { ToolUseContent } from '@/features/chat/messages/messages.types';
 
 function friendly(language: 'en' | 'zh'): FriendlyToolTitleLabels {
   const chat = messages(language).chat;
@@ -67,14 +69,14 @@ describe('getToolExecutionTitle', () => {
   it('uses dedicated wording for built-in tools', () => {
     expect(title('en', 'image_generate', {}, 'running')).toBe('Generating image…');
     expect(title('zh', 'delegate_task', {}, 'completed')).toBe('已安排相关工作');
-    expect(title('en', 'mcp__server__inspect', {}, 'completed')).toBe('Processed related information');
+    expect(title('en', 'mcp__server__inspect', {}, 'completed')).toBe('Other actions');
     expect(hasSpecificToolExecutionTitle('xopc_use')).toBe(true);
   });
 
   it('infers an action from namespaced external tool names and safely humanizes unknown tools', () => {
     expect(title('en', 'github__create_issue', {}, 'completed')).toBe('Created issue');
     expect(title('zh', 'github__create_issue', {}, 'running')).toBe('正在创建issue…');
-    expect(title('en', 'vendor__customer_export', {}, 'completed')).toBe('Processed related information');
+    expect(title('en', 'vendor__customer_export', {}, 'completed')).toBe('Other actions');
   });
 
   it.each(['en', 'zh'] as const)('keeps arbitrary names, paths and skill identifiers out of public %s titles', language => {
@@ -87,5 +89,42 @@ describe('getToolExecutionTitle', () => {
         expect(text.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('names code execution and tool discovery explicitly', () => {
+    expect(title('zh', 'codemode', {}, 'running')).toBe('正在运行代码…');
+    expect(title('zh', 'tool_search', {}, 'completed')).toBe('查找可用工具');
+  });
+});
+
+describe('readable activity summaries', () => {
+  const tool = (name: string, input?: unknown): ToolUseContent => ({
+    type: 'tool_use', id: name, name, input, status: 'done',
+  });
+  function summary(tools: ToolUseContent[], language: 'en' | 'zh' = 'zh') {
+    const chat = messages(language).chat;
+    return summarizeToolActivity(tools, block => getPublicToolExecutionTitle(block, 'completed',
+      chat.toolActivity, friendly(language), chat.stepsClusterIng), {
+      repeated: chat.activityRepeated, more: chat.activityMore, failed: chat.activityFailed,
+      separator: language === 'zh' ? '、' : ', ',
+    });
+  }
+
+  it('distinguishes different actions that share the other display category', () => {
+    expect(summary([tool('xopc_use', { mode: 'note', command: 'update' }), tool('browser_use')]))
+      .toBe('更新了笔记、操作了浏览器');
+  });
+
+  it('counts repeated actions and bounds long summaries without exposing raw parameters', () => {
+    expect(summary([tool('read_file'), tool('read_file'), tool('read_file'),
+      tool('xopc_use', { mode: 'note', command: 'update', title: '/private/secret' }),
+      tool('browser_use'), tool('codemode'), tool('tool_search')]))
+      .toBe('读取文件（3 次）、更新了笔记、另 3 项操作');
+  });
+
+  it('reserves the fallback for unknown actions and keeps failures out of successful counts', () => {
+    expect(summary([tool('vendor__unknown'), { ...tool('read_file'), status: 'error' }]))
+      .toBe('其他操作、1 项操作未完成');
+    expect(summary([tool('read_file'), tool('read_file')], 'en')).toBe('Read files (2 times)');
   });
 });

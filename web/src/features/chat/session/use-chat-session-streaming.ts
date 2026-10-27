@@ -48,6 +48,7 @@ import {
   finalizeRunningReviews,
   finalizeRunningTools,
   finalizeStreamingThinking,
+  finalizePendingText,
   hasRenderableAssistantContent,
 } from '@/features/chat/messages/streaming';
 import type { ChatFollowUpClarifyApi } from '@/features/chat/session/use-chat-follow-up-clarify';
@@ -124,6 +125,7 @@ export function useChatSessionStreaming(deps: {
       let finalMsg: Message | null = null;
       if (cachedBubble) {
         const msg = ensureAssistantMessage(cachedBubble, Date.now());
+        finalizePendingText(msg.content, terminalStatus === 'success');
         finalizeStreamingThinking(msg.content);
         finalizeRunningTools(msg.content);
         finalizeRunningReviews(msg.content);

@@ -35,7 +35,7 @@ describe('Personal response realtime replay', () => {
     expect(markers[0]).toMatchObject({ taskTrigger: trigger, turnId: 'retry-19' });
   });
 
-  it('recovers immediate conversation text from a delta even when start events were missed', async () => {
+  it('recovers live progress from missed starts and keeps replay idempotent', async () => {
     const conversationId = 'personal-stream-test';
     const runId = 'personal-run-test';
     useChatSessionStore.getState().seedSessionIfEmpty(conversationId, [], false, true);
@@ -59,15 +59,16 @@ describe('Personal response realtime replay', () => {
     });
     emit('assistant_delta', { messageId: 'm1', offset: 0, delta: '我先核对数值。', textSurface: 'conversation' });
     const readView = () => buildAssistantTurnViewModel({
-      message: getChatSessionSnapshot(conversationId)!.streamingMsg!, isStreaming: true, reasoningLevel: 'off',
+      message: getChatSessionSnapshot(conversationId)!.streamingMsg!, isStreaming: true, reasoningLevel: 'on',
     });
     expect(readView().answer.started).toBe(true);
     expect(readView().answerContent).toMatchObject([{ text: '我先核对数值。', presentation: 'pending' }]);
+    expect(readView().workLog.items).toEqual([]);
     // Replayed offsets must not duplicate an already visible sentence.
     emit('assistant_delta', { messageId: 'm1', offset: 0, delta: '我先核对数值。', textSurface: 'conversation' });
     expect(readView().answerContent).toMatchObject([{ text: '我先核对数值。' }]);
     emit('assistant_message_end', { messageId: 'm1', presentation: 'narration' });
-    expect(readView().answerContent).toMatchObject([{ text: '我先核对数值。', presentation: 'narration' }]);
+    expect(readView().workLog.items).toMatchObject([{ text: '我先核对数值。', presentation: 'narration' }]);
     emit('run_end', { status: 'success' });
     expect(await resumed).toBe(true);
     expect(finalize).toHaveBeenCalledOnce();

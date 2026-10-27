@@ -10,21 +10,21 @@ describe('buildAssistantTurnViewModel', () => {
     const view = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [{ type: 'tool_use', id: 'run', name: 'xopc_use', status: 'done', result }] }, isStreaming: false, reasoningLevel: 'off' });
     expect(view.deliveries[0]?.delivery.primary?.runId).toBe('original-run');
   });
-  it.each(['off', 'on', 'stream'] as const)('shows public Personal text immediately with %s reasoning detail', (reasoningLevel) => {
+  it.each(['off', 'on', 'stream'] as const)('groups Personal progress with tools with %s reasoning detail', (reasoningLevel) => {
     const message: Message = { role: 'assistant', textSurface: 'conversation', content: [
       { type: 'thinking', text: 'private thought', streaming: true },
       { type: 'text', text: '我先核对数值。', presentation: 'pending' },
       { type: 'tool_use', id: 'check', name: 'personal_task', status: 'running' },
     ] };
     const live = buildAssistantTurnViewModel({ message, isStreaming: true, reasoningLevel });
-    expect(live.answerContent).toEqual([message.content[1]]);
-    expect(live.answer.started).toBe(true);
+    expect(live.answerContent).toEqual([]);
+    expect(live.answer.started).toBe(false);
     expect(live.lifecycle.state).toBe('using_tool');
-    expect(live.workLog.items.some((block) => block.type === 'text')).toBe(false);
+    expect(live.workLog.items).toContain(message.content[1]);
     const history = { ...message, textSurface: undefined, content: message.content.map((block) =>
       block.type === 'text' ? { ...block, presentation: 'narration' as const } : block) };
     expect(buildAssistantTurnViewModel({ message: history, personal: true, isStreaming: false, reasoningLevel }).answerContent)
-      .toEqual([history.content[1]]);
+      .toEqual([]);
   });
 
   it('holds a status row before the first event and yields its place to an immediate answer', () => {
@@ -68,7 +68,17 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.lifecycle.state).toBe('using_tool');
   });
 
-  it('shows pending text in the answer surface while streaming', () => {
+  it('preserves immediate text streaming in concise mode without opening a process drawer', () => {
+    const view = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [
+      { type: 'text', text: 'A direct reply', segmentId: 'reply', presentation: 'pending' },
+    ] }, isStreaming: true, reasoningLevel: 'off' });
+    expect(view.answerContent).toHaveLength(1);
+    expect(view.answer.showStreamingCursor).toBe(true);
+    expect(view.workLog.compact).toBe(true);
+    expect(view.workLog.expandedByDefault).toBe(false);
+  });
+
+  it('streams unclassified text in an independent answer region', () => {
     const message: Message = {
       role: 'assistant',
       content: [
@@ -84,7 +94,7 @@ describe('buildAssistantTurnViewModel', () => {
 
     expect(view.answerContent).toEqual(message.content);
     expect(view.answer.started).toBe(true);
-    expect(view.lifecycle.state).toBe('answering');
+    expect(view.workLog.expandedByDefault).toBe(false);
     expect(view.workLog.items).toEqual([]);
   });
 
@@ -92,7 +102,7 @@ describe('buildAssistantTurnViewModel', () => {
     level: ReasoningLevel;
     expectedWorkLog: string[];
   }>([
-    { level: 'off', expectedWorkLog: ['tool:read-1'] },
+    { level: 'off', expectedWorkLog: ['text:正在分析。', 'text:我先检查项目。', 'tool:read-1'] },
     {
       level: 'on',
       expectedWorkLog: [

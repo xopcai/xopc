@@ -207,7 +207,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.querySelector('details')?.textContent).toContain('Private reasoning');
   });
 
-  it.each([false, true])('respects explicit expansion on completion: %s', (manual) => {
+  it.each([false, true])('resets live expansion on completion: %s', (manual) => {
     const workLog: AssistantTurnWorkLogPresentation = {
       items: [{ type: 'tool_use', id: 'r', name: 'read_file', status: 'running' }],
       active: true, status: 'running', expandedByDefault: true, compact: false,
@@ -221,7 +221,7 @@ describe('streaming assistant Markdown rendering', () => {
       act(() => container.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click());
     }
     render([], false, false, { ...workLog, active: false, status: 'completed', expandedByDefault: false });
-    expect(container.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded')).toBe(String(manual));
+    expect(container.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
   });
 
   it.each(['off', 'on', 'stream'] as const)('does not render obsolete browser approval controls in %s mode', (mode) => {
@@ -367,32 +367,25 @@ describe('streaming assistant Markdown rendering', () => {
     expect(completedBlock).toBe(previousTail);
   });
 
-  it('renders ordinary pending answers progressively and preserves their tree through final classification', () => {
-    vi.useFakeTimers();
+  it('keeps streamed final text outside the work log and preserves its DOM at confirmation', () => {
     const answer = (text: string, presentation: 'pending' | 'answer', streaming: boolean) => {
       const view = buildAssistantTurnViewModel({
         message: { role: 'assistant', content: [{ type: 'text', text, segmentId: 'reply', presentation }] },
         isStreaming: streaming,
-        reasoningLevel: 'off',
+        reasoningLevel: 'on',
       });
-      render(view.answerContent, streaming);
+      render(view.answerContent, streaming, false, view.workLog);
     };
     answer('先看结论。', 'pending', true);
-    const tree = container.querySelector('.xopc-chat-markdown');
-    expect(tree?.textContent).toBe('先看结论。');
-    const content = '先看结论。' + '这部分正文应该逐渐显示。'.repeat(40);
-    answer(content, 'pending', true);
-    act(() => vi.advanceTimersByTime(128));
-    const partial = tree?.textContent ?? '';
-    expect(partial.length).toBeGreaterThan(5);
-    expect(partial.length).toBeLessThan(content.length);
-    expect(content.startsWith(partial)).toBe(true);
-
-    answer(content, 'answer', false);
-    expect(container.querySelector('.xopc-chat-markdown')).toBe(tree);
-    expect(tree?.textContent).toBe(content);
-    act(() => vi.advanceTimersByTime(320));
-    expect(tree?.textContent).toBe(content);
+    const answerTree = container.querySelector('.xopc-chat-markdown');
+    expect(answerTree?.textContent).toBe('先看结论。');
+    expect(container.querySelector('[data-assistant-activity-flow]')).toBeNull();
+    answer('先看结论。这部分正文应该逐渐显示。', 'pending', true);
+    expect(container.querySelector('.xopc-chat-markdown')).toBe(answerTree);
+    expect(container.querySelector('[data-assistant-activity-flow]')).toBeNull();
+    answer('先看结论。这部分正文应该逐渐显示。', 'answer', false);
+    expect(container.querySelector('.assistant-markdown-content')?.textContent).toBe('先看结论。这部分正文应该逐渐显示。');
+    expect(container.querySelector('.xopc-chat-markdown')).toBe(answerTree);
   });
 
   it('keeps the streaming block tree mounted when the response completes', () => {

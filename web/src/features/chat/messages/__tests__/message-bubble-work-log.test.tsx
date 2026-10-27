@@ -9,6 +9,7 @@ vi.mock('@/features/extensions/extension-provider', () => ({ useUiExtensions: ()
 
 import { MessageBubble } from '@/features/chat/messages/message-bubble';
 import { useLocaleStore } from '@/stores/locale-store';
+import type { Message, ReasoningLevel } from '../messages.types';
 
 describe('MessageBubble assistant work log', () => {
   let container: HTMLDivElement;
@@ -47,6 +48,28 @@ describe('MessageBubble assistant work log', () => {
     act(() => root.render(<MemoryRouter><MessageBubble message={message} isStreaming={false} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
 
     expect(container.textContent).toContain('执行过程');
+  });
+
+  it.each([true, false].flatMap(personal => (['off', 'on', 'stream'] as ReasoningLevel[])
+    .map(level => ({ personal, level }))))('keeps a streaming final table separate: %j', ({ personal, level }) => {
+    const content: Message['content'] = [
+      { type: 'thinking', text: 'Private reasoning', streaming: false },
+      { type: 'text', text: 'Checking the files.', presentation: 'narration' },
+      { type: 'tool_use', id: 'read', name: 'read_file', status: 'done' },
+      { type: 'text', text: '| Final file | Result |\n| --- | --- |\n| report.md | Verified |', segmentId: 'final', presentation: 'pending' },
+    ];
+    const show = (streaming: boolean) => act(() => root.render(<MemoryRouter><MessageBubble
+      personal={personal} message={{ role: 'assistant', content }} isStreaming={streaming}
+      reasoningLevel={level} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
+    show(true);
+    const table = container.querySelector('[data-chat-find-text] table');
+    expect(table).not.toBeNull();
+    expect(table?.closest('[data-assistant-work-log]')).toBeNull();
+    expect(container.querySelector('[data-assistant-work-log]')?.textContent).not.toContain('Final file');
+    expect(container.textContent).not.toContain('Private reasoning');
+    content[3] = { ...content[3], presentation: 'answer' } as Message['content'][number];
+    show(false);
+    expect(container.querySelector('[data-chat-find-text] table')).toBe(table);
   });
 
   it.each([true, false])('hides mixed tool activity in Personal throughout streaming=%s', (isStreaming) => {
@@ -113,12 +136,14 @@ describe('lightweight assistant activity', () => {
     expect(container.textContent).toContain('正在输出答案。');
   });
 
-  it('respects an explicit disclosure choice across completion and preserves the answer DOM', () => {
+  it('collapses a manually opened live process on completion and preserves the answer DOM', () => {
     render(true, '保留这段答案。');
     act(() => disclosure().click());
     expect(disclosure().getAttribute('aria-expanded')).toBe('true');
     const answer = [...container.querySelectorAll('.markdown-body')].find(node => node.textContent?.includes('保留这段答案'));
     render(false, '保留这段答案。');
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
+    act(() => disclosure().click());
     expect(disclosure().getAttribute('aria-expanded')).toBe('true');
     expect([...container.querySelectorAll('.markdown-body')].find(node => node.textContent?.includes('保留这段答案'))).toBe(answer);
   });
@@ -131,16 +156,32 @@ describe('lightweight assistant activity', () => {
     expect(container.querySelector('.assistant-activity-busy')).toBeNull();
   });
 
+  it('defers completion collapse while the user is selecting progress text', () => {
+    render(true);
+    const flow = container.querySelector('[data-assistant-activity-flow]')!;
+    const selection = window.getSelection()!;
+    act(() => {
+      selection.selectAllChildren(flow);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    render(false, '最终结果。');
+    expect(disclosure().getAttribute('aria-expanded')).toBe('true');
+    act(() => {
+      selection.removeAllRanges();
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('bounds parallel activity, exposes earlier steps on demand, and respects manual collapse', () => {
     const show = (count: number) => act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant',
       content: Array.from({ length: count }, (_, index) => ({ ...tool, id: `tool-${index}` })) }}
       isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
     show(5);
     expect(container.textContent).toContain('正在处理 5 项工作');
-    expect(container.querySelectorAll('[data-activity-status="running"]').length).toBe(3);
-    const earlier = [...container.querySelectorAll('button')].find(button => button.textContent === '查看之前的过程');
-    act(() => earlier?.click());
-    expect(container.querySelectorAll('[data-activity-status="running"]').length).toBe(5);
+    expect(container.querySelectorAll('[data-activity-group]').length).toBe(1);
+    expect(container.querySelector('[data-activity-group] details')?.hasAttribute('open')).toBe(false);
+    expect(container.querySelector('[data-activity-group] summary')?.textContent).toContain('5 次');
     act(() => disclosure().click());
     show(6);
     expect(disclosure().getAttribute('aria-expanded')).toBe('false');

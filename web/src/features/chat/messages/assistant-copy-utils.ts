@@ -8,12 +8,15 @@ import { marked } from 'marked';
 
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 
+import { assistantAnswerContent } from './assistant-turn-content';
+
 /** Markdown source for clipboard: final answer text plus image placeholders. */
-export function getAssistantCopyMarkdown(content: MessageContent[], conversationalText = false): string {
+export function getAssistantCopyMarkdown(content: MessageContent[]): string {
   const parts: string[] = [];
+  const answer = new Set(assistantAnswerContent(content, { includePending: true }));
   for (const b of content) {
     if (b.type === 'text') {
-      if (!conversationalText && (b.presentation === 'pending' || b.presentation === 'narration')) continue;
+      if (!answer.has(b)) continue;
       parts.push(b.text);
     } else if (b.type === 'image') {
       parts.push('[image]');
@@ -30,11 +33,12 @@ function markdownToPlainText(md: string): string {
 }
 
 /** Plain text for clipboard: rendered final answer text plus image placeholders. */
-export function getAssistantCopyPlainText(content: MessageContent[], conversationalText = false): string {
+export function getAssistantCopyPlainText(content: MessageContent[]): string {
   const parts: string[] = [];
+  const answer = new Set(assistantAnswerContent(content, { includePending: true }));
   for (const b of content) {
     if (b.type === 'text') {
-      if (!conversationalText && (b.presentation === 'pending' || b.presentation === 'narration')) continue;
+      if (!answer.has(b)) continue;
       parts.push(markdownToPlainText(b.text));
     } else if (b.type === 'image') {
       parts.push('[image]');

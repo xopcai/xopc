@@ -59,6 +59,28 @@ describe('useChatSessionStreaming run lookup', () => {
     vi.resetAllMocks();
   });
 
+  it.each(['success', 'cancelled', 'error'] as const)('settles pending text after a missing message-end on %s', status => {
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...defaultSessionMeta(), historyStatus: 'ready', hasMore: false, messages: [],
+      streamingMsg: { role: 'assistant', content: [
+        { type: 'text', text: 'Checking files', segmentId: 'progress', presentation: 'pending' },
+        { type: 'tool_use', id: 'read', name: 'read_file', status: 'done' },
+        { type: 'text', text: '| File | Result |\n| --- | --- |\n| one | ok |', segmentId: 'final', presentation: 'pending' },
+      ] },
+      progress: null, taskPlan: null, sending: false, streaming: true,
+    });
+    act(() => streaming.finalizeMessage(conversationId, status));
+    const slice = getChatSessionSnapshot(conversationId)!;
+    expect(slice.streaming).toBe(false);
+    expect(slice.streamingMsg).toBeNull();
+    expect(slice.messages.at(-1)?.content).toMatchObject([
+      { presentation: 'narration' }, { type: 'tool_use' },
+      { segmentId: 'final', presentation: status === 'success' ? 'answer' : 'pending' },
+    ]);
+    act(() => streaming.finalizeMessage(conversationId, status));
+    expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(1);
+  });
+
   it('shows a rejected thinking configuration instead of a generic network error', async () => {
     useChatSessionStore.getState().initSessionSnapshot(conversationId, {
       ...defaultSessionMeta(), historyStatus: 'ready', hasMore: false,

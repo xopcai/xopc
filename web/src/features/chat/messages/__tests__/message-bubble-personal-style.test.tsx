@@ -114,7 +114,8 @@ describe('Personal AI message styling', () => {
 
   it('shows the waiting bubble until an assistant answer starts', () => {
     render({ role: 'assistant', content: [], pendingResponseStatus: 'waiting' }, true, true);
-    expect(container.querySelector('[role="status"].xopc-personal-thinking')).not.toBeNull();
+    expect(container.querySelector('[data-status-phase="waiting"]')).not.toBeNull();
+    expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
 
     render({ role: 'assistant', content: [{ type: 'text', text: 'Hello back' }] }, true, true);
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
@@ -126,17 +127,19 @@ describe('Personal AI message styling', () => {
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
   });
 
-  it('shows a live first sentence and retains it after tool-call classification and history reload', () => {
+  it('groups live Personal narration and keeps it inspectable after completion', () => {
     const opening: Message = { role: 'assistant', content: [{ type: 'text', text: '我先核对论文里的数值。', segmentId: 'first', presentation: 'pending' }] };
     render(opening, true, true);
     expect(container.querySelector('.assistant-markdown-content')?.textContent).toContain('我先核对论文里的数值。');
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
     render({ ...opening, content: [{ type: 'text', text: '我先核对论文里的数值。', segmentId: 'first', presentation: 'narration' },
       { type: 'text', text: '这项结果检验的是轨道衰减。', presentation: 'answer' }] }, true, false);
-    expect(container.textContent).toContain('我先核对论文里的数值。');
+    expect(container.querySelector('.assistant-markdown-content')?.textContent).not.toContain('我先核对论文里的数值。');
     expect(container.textContent).toContain('这项结果检验的是轨道衰减。');
-    render(opening, false, true);
-    expect(container.querySelector('.assistant-markdown-content')?.textContent).toContain('我先核对论文里的数值。');
+    render({ ...opening, content: [{ type: 'text', text: '我先核对论文里的数值。', presentation: 'narration' }] }, true, false);
+    expect(container.querySelector('[data-assistant-work-log] button[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
+    act(() => container.querySelector<HTMLButtonElement>('[data-assistant-work-log] button[aria-expanded]')?.click());
+    expect(container.querySelector('[data-assistant-activity-flow]')?.textContent).toContain('我先核对论文里的数值。');
   });
 
   it('does not reveal a fragmented silent-reply marker in the Personal conversation', () => {
