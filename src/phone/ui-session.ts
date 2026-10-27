@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { spawnPhoneInteractiveCommand } from '../process/phone-process.js';
 import { runAdb } from './adb-command.js';
 import { PhoneError, type PhoneElement } from './contracts.js';
 import { measurePhonePhase } from './execution-trace.js';
@@ -98,7 +98,7 @@ export async function openLocalPhoneUi(adbPath: string, serial: string, signal: 
     } finally { await rm(work, { recursive: true, force: true }); await runAdb(adbPath, [...args, 'shell', 'rm', '-f', staging], undefined, 3000).catch(() => {}); }
   }
   signal.throwIfAborted();
-  const child = spawn(adbPath, [...args, 'shell', '-T', 'env', `CLASSPATH=${remote}`, 'app_process', '/', 'ai.xopc.phone.PhoneUiDump', '--resident'], { stdio: ['pipe', 'pipe', 'ignore'] });
+  const child = spawnPhoneInteractiveCommand(adbPath, [...args, 'shell', '-T', 'env', `CLASSPATH=${remote}`, 'app_process', '/', 'ai.xopc.phone.PhoneUiDump', '--resident']);
   child.on('error', () => {});
   child.stdin.on('error', () => {});
   return new PhoneUiSession({ readable: child.stdout,
