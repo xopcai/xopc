@@ -19,3 +19,7 @@ export function runPhoneCommandText(program: string, args: string[], signal: Abo
 export function spawnPhoneCommand(program: string, args: string[]): ChildProcess {
   return spawn(program, args, { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
 }
+
+export function spawnPhoneInteractiveCommand(program: string, args: string[]) {
+  return spawn(program, args, { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+}
