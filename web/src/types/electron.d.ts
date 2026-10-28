@@ -598,6 +598,14 @@ export interface ElectronUnderstandingSourcesAPI {
 }
 
 export interface ElectronAPI {
+  intake?: {
+    list(): Promise<import('../../../electron/external-intake').ExternalIntakeBatch[]>;
+    read(id: string, itemId: string): Promise<string>;
+    target(id: string, scope: string, conversationId: string): Promise<void>;
+    remove(id: string): Promise<void>;
+    release(id: string, scope: string): Promise<void>;
+    onChanged(callback: () => void): () => void;
+  };
   browser?: import('../../../electron/browser/types').EmbeddedBrowserAPI;
   computer?: {
     status(): Promise<{ connected: boolean; controlPaused: boolean; platform?: string; capabilities?: { supported: boolean; delivery: string; textInput: boolean }; claim?: { type: 'endpoint'; endpointId: string; token: string }; error?: string; reenrollmentRequired?: boolean; session?: { status: string; errorCode?: string; appId?: string }; permissions: { accessibility: boolean; screenRecording: string } }>;

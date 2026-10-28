@@ -149,7 +149,8 @@ final class GatewayConfigurationStore {
         let profileToken = loadToken(account: profileTokenAccount(profile.id))
         return GatewayConfiguration(
             baseURL: profile.baseURL,
-            token: profileToken ?? ""
+            token: profileToken ?? "",
+            localIdentity: profile.id
         )
     }
 

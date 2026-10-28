@@ -64,6 +64,7 @@ export default defineConfig({
             'electron/__tests__/windows-signature-process.test.ts',
             'electron/__tests__/system-settings-behavior.test.ts',
             'electron/__tests__/temporary-preview-file.test.ts',
+            'electron/__tests__/external-intake.test.ts',
             'electron/__tests__/file-resource-path.test.ts',
             'electron/__tests__/uninstall-paths.test.ts',
           ],

@@ -16,7 +16,10 @@ targets:
   XopcMobile:
     type: application
     platform: iOS
+    dependencies:
+      - target: XopcShareExtension
     sources:
+      - path: Shared
       - path: XopcMobile
         excludes: [Resources/Math, Resources/Charts]
       - path: XopcMobile/Resources/Math
@@ -32,6 +35,7 @@ targets:
         MARKETING_VERSION: 0.0.111
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_FILE: XopcMobile/Resources/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: xopc
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: false
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
@@ -46,6 +50,22 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  XopcShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.xopc.xopc.share
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: true
+        SKIP_INSTALL: true
+        MARKETING_VERSION: 0.0.111
+        CURRENT_PROJECT_VERSION: 1
   XopcMobileTests:
     type: bundle.unit-test
     platform: iOS

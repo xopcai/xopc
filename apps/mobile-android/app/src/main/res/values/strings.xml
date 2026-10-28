@@ -859,4 +859,15 @@
     <string name="clarify_next">Next</string>
     <string name="clarify_retry">Retry submission</string>
     <string name="clarify_too_long">Answers are too long. Shorten them before submitting.</string>
+    <string name="intake_title">Add to conversation</string>
+    <string name="intake_new">New conversation (recommended)</string>
+    <string name="intake_current">Current conversation</string>
+    <string name="intake_search">Search conversations</string>
+    <string name="intake_selected">Continue to selected conversation</string>
+    <string name="intake_hint">Keeps your draft. AI starts only when you send.</string>
+    <string name="intake_cancel">Cancel</string>
+    <string name="intake_add">Add to input</string>
+    <string name="intake_adding">Adding…</string>
+    <string name="intake_wrong_connection">Switch to the original Gateway and account to continue.</string>
+    <string name="intake_capture_failed">Unable to receive files. Please share again.</string>
 </resources>

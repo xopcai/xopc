@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { registerExternalIntakeReceiver } from './external-intake-receiver';
+import { MAX_CHAT_ATTACHMENTS } from '../constants';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { composerDraftStorage } from '../session/local-session-drafts';
 import type { Attachment } from '../attachments/attachment-utils';
@@ -6,9 +8,9 @@ import type { ComposerContextRef } from './composer.types';
 import type { UseComposerEditorReturn } from './use-composer-editor';
 import type { UseComposerAttachmentsReturn } from './use-composer-attachments';
 
-type SavedComposer = { text: string; attachments: Attachment[]; refs: ComposerContextRef[] };
+type SavedComposer = { text: string; attachments: Attachment[]; refs: ComposerContextRef[]; intakeReceipts?: string[] };
 type ActiveDraft = {
-  scope: string; ready: boolean; dirty: boolean; observe: boolean; snapshot: SavedComposer;
+  receipts: string[]; scope: string; ready: boolean; dirty: boolean; observe: boolean; snapshot: SavedComposer;
   storage: ReturnType<typeof composerDraftStorage<SavedComposer>>;
 };
 const sameItems = <T,>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
@@ -26,7 +28,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
 
   useLayoutEffect(() => {
     if (!scope || !id) { active.current = undefined; return; }
-    const entry: ActiveDraft = { scope, ready: false, dirty: false, observe: false,
+    const entry: ActiveDraft = { receipts: [], scope, ready: false, dirty: false, observe: false,
       snapshot: { text: current.current.editor.valueRef.current, attachments: current.current.attachments.attachmentsRef.current, refs: current.current.refs },
       storage: composerDraftStorage<SavedComposer>(id) };
     active.current = entry;
@@ -41,6 +43,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
     void entry.storage.read().then(saved => {
       loaded = true;
       if (active.current !== entry) return;
+      entry.receipts = saved?.intakeReceipts ?? [];
       const live = current.current;
       // Never replace text or attachments entered while IndexedDB was opening.
       if (saved && !entry.dirty && !live.editor.valueRef.current && !live.attachments.attachmentsRef.current.length && !live.refs.length) {
@@ -72,7 +75,33 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
     if (!entry || entry.scope !== scope || (!entry.ready && !entry.dirty)) return;
     const snapshot: SavedComposer = { text: editor.value, attachments: attachments.attachments, refs };
     const payload = snapshot.text || snapshot.attachments.length || refs.length ? snapshot : undefined;
-    writes.current = writes.current.catch(() => {}).then(() => entry.storage.write(payload))
+    writes.current = writes.current.catch(() => {}).then(() => entry.storage.write(payload ? { ...payload, intakeReceipts: entry.receipts } : entry.receipts.length ? { text: '', attachments: [], refs: [], intakeReceipts: entry.receipts } : undefined))
       .catch(error => { console.warn('Composer draft persistence failed', error); });
   }, [scope, hydration, editor.value, attachments.attachments, refs]);
+
+  useEffect(() => {
+    const entry = active.current;
+    if (!entry?.ready || !scope) return;
+    return registerExternalIntakeReceiver(scope, async (intakeId, incoming) => {
+      await writes.current;
+      if (active.current !== entry) throw new Error('Conversation changed. Please retry.');
+      if (entry.receipts.includes(intakeId)) return;
+      const live = current.current;
+      const existing = live.attachments.attachmentsRef.current;
+      const additions = incoming.filter(item => !existing.some(saved => saved.id === item.id));
+      if (existing.length + additions.length > MAX_CHAT_ATTACHMENTS) throw new Error('A message supports at most 10 attachments. Remove attachments or choose another conversation.');
+      live.attachments.setAttachments([...existing, ...additions]);
+      entry.receipts.push(intakeId);
+      try {
+        const snapshot: SavedComposer = { text: live.editor.valueRef.current, attachments: live.attachments.attachmentsRef.current, refs: live.refs, intakeReceipts: entry.receipts.slice() };
+        const pending = writes.current.catch(() => {}).then(() => entry.storage.write(snapshot));
+        writes.current = pending;
+        await pending;
+      } catch (error) {
+        entry.receipts = entry.receipts.filter(id => id !== intakeId);
+        throw error;
+      }
+    });
+  }, [scope, hydration]);
+
 }

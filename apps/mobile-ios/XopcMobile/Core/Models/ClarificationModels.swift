@@ -200,7 +200,7 @@ struct QueuedContextReference: Decodable, Equatable, Sendable {
     let title: String?
 }
 
-struct MessageAttachment: Equatable, Identifiable, Sendable {
+struct MessageAttachment: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let type: String
     let name: String
@@ -225,7 +225,7 @@ struct MessageAttachment: Equatable, Identifiable, Sendable {
     }
 }
 
-enum ContextReferenceKind: String, CaseIterable, Sendable {
+enum ContextReferenceKind: String, Codable, CaseIterable, Sendable {
     case note
     case task
     case file
@@ -247,7 +247,7 @@ enum ContextReferenceKind: String, CaseIterable, Sendable {
     }
 }
 
-struct ContextReference: Equatable, Identifiable, Sendable {
+struct ContextReference: Codable, Equatable, Identifiable, Sendable {
     let kind: ContextReferenceKind
     let sourceId: String
     let expectedVersion: String

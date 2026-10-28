@@ -3,6 +3,7 @@ import { act, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { deliverExternalIntake } from '../external-intake-receiver';
 import { usePersistedComposer } from '../use-persisted-composer';
 import type { UseComposerEditorReturn } from '../use-composer-editor';
 import type { UseComposerAttachmentsReturn } from '../use-composer-attachments';
@@ -27,7 +28,7 @@ function Harness({ id }: { id: string }) {
   edit = setValue; text = value;
   usePersistedComposer(id, { value, valueRef, resetEditor: options => {
     valueRef.current = options?.nextText ?? ''; setValue(valueRef.current);
-  } } as UseComposerEditorReturn, { attachments, attachmentsRef, setAttachments,
+  } } as UseComposerEditorReturn, { attachments, attachmentsRef, setAttachments: (next: Attachment[]) => { attachmentsRef.current = next; setAttachments(next); },
     clearAttachments: () => setAttachments([]) } as unknown as UseComposerAttachmentsReturn, refs, setRefs);
   return null;
 }
@@ -73,4 +74,28 @@ it('persists edits before navigation even if the initial read is pending', async
   expect(storage.write).toHaveBeenCalledWith('one', expect.objectContaining({ text: 'keep me' }));
   await restore('one', 'outdated'); await restore('two', 'second');
   expect(text).toBe('second');
+});
+
+it('appends external attachments after hydration, preserves text and records delivery before acknowledgement', async () => {
+  await render('one');
+  const file: Attachment = { id: 'intake:file', type: 'image', name: 'photo.png', mimeType: 'image/png', size: 3, content: 'AAH/' };
+  const delivery = deliverExternalIntake(JSON.stringify(['gateway:principal', 'one']), 'batch-1', [file]);
+  await restore('one', 'keep this question');
+  await act(async () => { await delivery; });
+  expect(text).toBe('keep this question');
+  expect(storage.write).toHaveBeenLastCalledWith('one', expect.objectContaining({
+    text: 'keep this question', attachments: [file], intakeReceipts: ['batch-1'],
+  }));
+  await act(async () => { await deliverExternalIntake(JSON.stringify(['gateway:principal', 'one']), 'batch-1', [file]); });
+  expect(storage.write.mock.calls.at(-1)?.[1].attachments).toEqual([file]);
+});
+it('does not acknowledge an import when draft persistence fails and permits a safe retry', async () => {
+  await render('one'); await restore('one', 'question');
+  const file: Attachment = { id: 'intake:file', type: 'document', name: 'a.txt', mimeType: 'text/plain', size: 1, content: 'YQ==' };
+  storage.write.mockRejectedValueOnce(new Error('disk full'));
+  await act(async () => {
+    await expect(deliverExternalIntake(JSON.stringify(['gateway:principal', 'one']), 'batch-1', [file])).rejects.toThrow('disk full');
+  });
+  await act(async () => { await deliverExternalIntake(JSON.stringify(['gateway:principal', 'one']), 'batch-1', [file]); });
+  expect(storage.write).toHaveBeenLastCalledWith('one', expect.objectContaining({ attachments: [file], intakeReceipts: ['batch-1'] }));
 });

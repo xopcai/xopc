@@ -3,6 +3,7 @@ import Foundation
 struct GatewayConfiguration: Hashable, Sendable {
     var baseURL: URL
     var token: String
+    var localIdentity: String? = nil
 
     static let local = GatewayConfiguration(
         baseURL: URL(string: "http://127.0.0.1:18790")!,
@@ -114,7 +115,7 @@ struct ConversationSummary: Decodable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct ConversationSelection: Equatable, Identifiable, Sendable {
+struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
     let id: String
     let title: String
     let agentId: String
@@ -159,9 +160,9 @@ struct ConversationSelection: Equatable, Identifiable, Sendable {
         executionMode = nil
     }
 
-    static func draft(agentId: String) -> ConversationSelection {
+    static func draft(agentId: String, id: String = UUID().uuidString.lowercased()) -> ConversationSelection {
         ConversationSelection(
-            id: UUID().uuidString.lowercased(),
+            id: id,
             title: "新对话",
             agentId: agentId,
             transcriptId: nil,
@@ -171,6 +172,12 @@ struct ConversationSelection: Equatable, Identifiable, Sendable {
             projectId: nil,
             executionMode: nil
         )
+    }
+
+    static func intakeDraft(_ target: ExternalIntakeTarget) -> ConversationSelection {
+        ConversationSelection(id: target.conversationID, title: target.title, agentId: target.agentID,
+            transcriptId: nil, isDraft: true, model: target.model, thinkingLevel: target.thinkingLevel,
+            projectId: target.projectID, executionMode: target.executionMode)
     }
 
     static func projectDraft(

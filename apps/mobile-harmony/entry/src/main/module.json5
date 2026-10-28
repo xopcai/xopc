@@ -22,7 +22,16 @@
       "skills": [
         { "entities": ["entity.system.home"], "actions": ["ohos.want.action.home"] },
         { "entities": ["entity.system.browsable"], "actions": ["ohos.want.action.viewData"],
-          "uris": [{ "scheme": "xopc", "host": "notification" }] }
+          "uris": [{ "scheme": "xopc", "host": "notification" }] },
+        { "actions": ["ohos.want.action.viewData"], "uris": [
+          { "scheme": "file", "type": "image/*" },
+          { "scheme": "file", "type": "application/pdf" },
+          { "scheme": "file", "type": "text/*" },
+          { "scheme": "file", "type": "application/json" },
+          { "scheme": "file", "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+          { "scheme": "file", "type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+          { "scheme": "file", "type": "application/vnd.openxmlformats-officedocument.presentationml.presentation" }
+        ] }
       ]
     }, {
       "name": "PushMessageAbility",
@@ -44,9 +53,14 @@
       "skills": [{
         "actions": ["ohos.want.action.sendData"],
         "uris": [
-          { "scheme": "file", "utd": "general.text", "maxFileSupported": 1 },
-          { "scheme": "file", "utd": "general.plain-text", "maxFileSupported": 1 },
-          { "scheme": "file", "utd": "general.hyperlink", "maxFileSupported": 1 }
+          { "scheme": "file", "utd": "general.text", "maxFileSupported": 10 },
+          { "scheme": "file", "utd": "general.plain-text", "maxFileSupported": 10 },
+          { "scheme": "file", "utd": "general.hyperlink", "maxFileSupported": 1 },
+          { "scheme": "file", "utd": "general.image", "maxFileSupported": 10 },
+          { "scheme": "file", "utd": "com.adobe.pdf", "maxFileSupported": 10 },
+          { "scheme": "file", "utd": "org.openxmlformats.wordprocessingml.document", "maxFileSupported": 10 },
+          { "scheme": "file", "utd": "org.openxmlformats.spreadsheetml.sheet", "maxFileSupported": 10 },
+          { "scheme": "file", "utd": "org.openxmlformats.presentationml.presentation", "maxFileSupported": 10 }
         ]
       }]
     }],

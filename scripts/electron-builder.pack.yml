@@ -106,6 +106,72 @@ electronLanguages:
   - zh-TW
 
 mac:
+  fileAssociations: &chatFileAssociations
+    - ext: [png]
+      name: Chat attachment
+      mimeType: image/png
+      role: Viewer
+      rank: Alternate
+    - ext: [jpg, jpeg]
+      name: Chat attachment
+      mimeType: image/jpeg
+      role: Viewer
+      rank: Alternate
+    - ext: [webp]
+      name: Chat attachment
+      mimeType: image/webp
+      role: Viewer
+      rank: Alternate
+    - ext: [gif]
+      name: Chat attachment
+      mimeType: image/gif
+      role: Viewer
+      rank: Alternate
+    - ext: [pdf]
+      name: Chat attachment
+      mimeType: application/pdf
+      role: Viewer
+      rank: Alternate
+    - ext: [txt]
+      name: Chat attachment
+      mimeType: text/plain
+      role: Viewer
+      rank: Alternate
+    - ext: [md]
+      name: Chat attachment
+      mimeType: text/markdown
+      role: Viewer
+      rank: Alternate
+    - ext: [csv]
+      name: Chat attachment
+      mimeType: text/csv
+      role: Viewer
+      rank: Alternate
+    - ext: [tsv]
+      name: Chat attachment
+      mimeType: text/tab-separated-values
+      role: Viewer
+      rank: Alternate
+    - ext: [json]
+      name: Chat attachment
+      mimeType: application/json
+      role: Viewer
+      rank: Alternate
+    - ext: [docx]
+      name: Chat attachment
+      mimeType: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      role: Viewer
+      rank: Alternate
+    - ext: [xlsx]
+      name: Chat attachment
+      mimeType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      role: Viewer
+      rank: Alternate
+    - ext: [pptx]
+      name: Chat attachment
+      mimeType: application/vnd.openxmlformats-officedocument.presentationml.presentation
+      role: Viewer
+      rank: Alternate
   icon: icon.icns
   category: public.app-category.productivity
   hardenedRuntime: true
@@ -133,13 +199,17 @@ dmg:
 
 win:
   icon: icon.ico
+  # The default NSIS association macro changes extension defaults; use our Open With registration.
+  fileAssociations: []
   target:
     - nsis
 
 nsis:
   buildUniversalInstaller: false
+  include: _pack-resources/build-resources/external-intake.nsh
 
 linux:
+  fileAssociations: *chatFileAssociations
   icon: icons
   category: Utility
   target:

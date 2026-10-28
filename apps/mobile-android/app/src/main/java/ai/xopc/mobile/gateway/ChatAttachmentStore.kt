@@ -245,6 +245,50 @@ class ChatAttachmentStore(context: Context) {
     return list(gatewayId, toConversationId)
   }
 
+  /** Commit external snapshots and their receipt together, preserving an existing composer. */
+  @Synchronized
+  fun appendIntake(batchId: String, gatewayId: String, conversationId: String): List<ChatAttachment> {
+    checkScope(gatewayId, conversationId); checkId(batchId)
+    val db = database.writableDatabase
+    db.execSQL("CREATE TABLE IF NOT EXISTS intake_receipts (batch_id TEXT PRIMARY KEY, gateway_id TEXT NOT NULL, conversation_id TEXT NOT NULL)")
+    db.beginTransactionNonExclusive()
+    try {
+      val accepted = db.query("intake_receipts", arrayOf("gateway_id", "conversation_id"),
+        "batch_id=?", arrayOf(batchId), null, null, null).use { rows ->
+        if (!rows.moveToFirst()) false else {
+          require(rows.getString(0) == gatewayId && rows.getString(1) == conversationId) { "INTAKE_TARGET_CHANGED" }
+          true
+        }
+      }
+      if (!accepted) {
+        val source = list(ExternalFileIntake.STAGING_GATEWAY, batchId)
+        val current = list(gatewayId, conversationId)
+        require(current.size + source.size <= MAX_ATTACHMENTS) { "ATTACHMENT_LIMIT_10" }
+        require(current.sumOf { it.size } + source.sumOf { it.size } <= MAX_TOTAL_BYTES) { "ATTACHMENT_TOTAL_LIMIT_20_MB" }
+        db.query(TABLE, arrayOf("attachment_id", "metadata", "payload", "created_at"),
+          "gateway_id=? AND conversation_id=?", arrayOf(ExternalFileIntake.STAGING_GATEWAY, batchId), null, null, null).use { rows ->
+          while (rows.moveToNext()) {
+            val id = rows.getString(0)
+            val values = ContentValues().apply {
+              put("gateway_id", gatewayId); put("conversation_id", conversationId); put("attachment_id", id)
+              put("metadata", encrypt(gatewayId, conversationId, id, "metadata",
+                decrypt(ExternalFileIntake.STAGING_GATEWAY, batchId, id, "metadata", rows.getBlob(1))))
+              put("payload", encrypt(gatewayId, conversationId, id, "payload",
+                decrypt(ExternalFileIntake.STAGING_GATEWAY, batchId, id, "payload", rows.getBlob(2))))
+              put("created_at", rows.getLong(3))
+            }
+            db.insertOrThrow(TABLE, null, values)
+          }
+        }
+        db.insertOrThrow("intake_receipts", null, ContentValues().apply {
+          put("batch_id", batchId); put("gateway_id", gatewayId); put("conversation_id", conversationId)
+        })
+      }
+      db.setTransactionSuccessful()
+    } finally { db.endTransaction() }
+    return list(gatewayId, conversationId)
+  }
+
   @Synchronized
   fun remove(gatewayId: String, conversationId: String, id: String) {
     checkScope(gatewayId, conversationId); checkId(id)

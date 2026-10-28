@@ -17,6 +17,8 @@ struct AssistantView<Dock: View>: View {
     let onPersonalAgentUpdated: (PersonalAgentRecord) -> Void
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
+    var externalIntake: ExternalIntakeBatch? = nil
+    var onExternalIntakeFinished: (UUID, String?) -> Void = { _, _ in }
     let bottomDock: (AssistantComposer, Bool) -> Dock
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -25,6 +27,9 @@ struct AssistantView<Dock: View>: View {
 
     @State var state = AssistantState()
     @State var draft = ""
+    @State var composerDraftScope: String?
+    @State var intakeReceipts: [UUID] = []
+    @State var composerSaveTask: Task<Void, Never>?
     @State var attachments: [MessageAttachment] = []
     @State var references: [ContextReference] = []
     @State var attachmentError: String?
@@ -75,7 +80,7 @@ struct AssistantView<Dock: View>: View {
             .onDisappear { phone.leave() }
     }
 
-    private var chatBody: some View {
+    private var chatLayout: some View {
         VStack(spacing: 0) {
             content
                 .accessibilityHidden(!isActive)
@@ -112,6 +117,10 @@ struct AssistantView<Dock: View>: View {
         .overlay(alignment: .top) {
             floatingHeader.padding(.horizontal, 20).padding(.top, 8)
         }
+    }
+
+    private var chatLifecycle: some View {
+        chatLayout
         .fullScreenCover(isPresented: $showingMessageSearch) {
             ChatMessageSearchView(messages: state.messages, configuration: configuration,
                                   conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
@@ -156,7 +165,7 @@ struct AssistantView<Dock: View>: View {
                 state.pauseConversation()
             }
         }
-        .onChange(of: conversation?.id) {
+        .onChange(of: conversation?.id, initial: true) {
             readAloud.stop()
             assistantAudio.stop()
             executionPresentation = nil
@@ -169,22 +178,29 @@ struct AssistantView<Dock: View>: View {
             if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
                 state.select(agent)
             }
-            draft = ""
-            attachments = []
-            references = []
-            attachmentError = nil
+            restoreComposerDraft()
             isActionPanelExpanded = false
         }
+        .onChange(of: configuration) { restoreComposerDraft() }
+        .onChange(of: draft) { scheduleComposerSave() }
+        .onChange(of: attachments) { scheduleComposerSave() }
+        .onChange(of: references) { scheduleComposerSave() }
+        .onChange(of: externalIntake?.id) { handleExternalIntake() }
         .onChange(of: quickChatHandoff?.id) {
             handleQuickChatHandoff()
         }
         .onAppear(perform: handleQuickChatHandoff)
         .onDisappear {
+            saveComposerDraft()
             state.pauseConversation()
             readAloud.stop()
             assistantAudio.stop()
             onInputFocusChanged(false)
         }
+    }
+
+    private var chatBody: some View {
+        chatLifecycle
         .onChange(of: assistantAudioObservation, initial: true) { _, observation in
             assistantAudio.observe(observation, configuration: configuration)
         }

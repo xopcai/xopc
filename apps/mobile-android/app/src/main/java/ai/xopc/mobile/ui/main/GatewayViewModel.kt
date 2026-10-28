@@ -1,5 +1,7 @@
 package ai.xopc.mobile.ui.main
 
+import org.json.JSONObject
+
 import ai.xopc.mobile.gateway.ProgressTaskEdit
 
 import ai.xopc.mobile.theme.LanguagePreference
@@ -4048,6 +4050,36 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
             personal = it.personal.copy(understandingChatError = true))
         }
       }
+    }
+  }
+
+  suspend fun searchExternalConversations(query: String): List<ConversationSummary> =
+    runInterruptible(Dispatchers.IO) { conversations.list(query, limit = 30).items.filter { it.status != "archived" } }
+
+  suspend fun appendExternalFiles(batch: ai.xopc.mobile.gateway.ExternalFileBatch, target: String?) {
+    val profile = mutableState.value.profile ?: error("NOT_PAIRED")
+    val intake = ai.xopc.mobile.gateway.ExternalFileIntake.get(getApplication())
+    draftWriteJob?.join()
+    val id = runInterruptible(Dispatchers.IO) {
+      check(session.currentProfile()?.gatewayId == profile.gatewayId && session.currentProfile()?.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+      val targetId = batch.targetConversation ?: target ?: conversations.createDraft(mutableState.value.defaultAgentId.ifBlank { "main" }).conversationId
+      if (conversations.draft(targetId) == null) {
+        val metadata = JSONObject(session.request("/api/sessions/$targetId")).optJSONObject("session")
+        require(metadata != null && metadata.optString("status") != "archived") { "INTAKE_TARGET_UNAVAILABLE" }
+      }
+      intake.bind(batch, profile.gatewayId, profile.deviceId, targetId)
+      check(session.currentProfile()?.gatewayId == profile.gatewayId && session.currentProfile()?.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+      intake.commit(batch, profile.gatewayId, targetId)
+      intake.dismiss(batch.id)
+      targetId
+    }
+    if (mutableState.value.profile?.gatewayId != profile.gatewayId || mutableState.value.profile?.deviceId != profile.deviceId) return
+    if (mutableState.value.selectedConversationId == id) {
+      val files = runInterruptible(Dispatchers.IO) { conversations.composerAttachments(id) }
+      mutableState.update { it.copy(draftAttachments = files, quickOpenedConversationId = id) }
+    } else {
+      selectConversation(id)
+      mutableState.update { it.copy(quickOpenedConversationId = id) }
     }
   }
 
