@@ -19,7 +19,7 @@ export function getNativePiAgentDir(): string {
   return directory;
 }
 
-export type NativeMcpConfig = LoadedMcpConfig & { credentials?: NativeMcpCredentials; credentialAliases?: Record<string, string> };
+export type NativeMcpConfig = LoadedMcpConfig & { credentials?: NativeMcpCredentials; credentialAliases?: Record<string, string>; automationSourceRunId?: string };
 
 /** Only projects host configuration and secret references; all MCP execution belongs to pi. */
 export async function prepareNativeMcpConfig(config: Config, workspaceDir: string, agentId?: string): Promise<NativeMcpConfig> {

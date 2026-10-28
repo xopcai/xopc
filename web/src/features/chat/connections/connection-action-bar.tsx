@@ -10,6 +10,7 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useConnectionWait } from './use-connection-wait';
 import { ConnectionAccountPrompt } from './connection-account-prompt';
+import { McpSetupActionBar } from './mcp-setup-action-bar';
 
 const copy = {
   zh: { waiting: '等待连接', install: '安装', installing: '正在准备安装', connect: '连接', reconnect: '重新连接', details: '查看详情', skip: '跳过连接', cancel: '取消这个目标',
@@ -48,14 +49,14 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
   if (!wait) return cancellationError ? <div role="alert" className="mb-2 flex items-center gap-2 rounded-xl border border-edge bg-surface-panel px-3 py-2 text-sm text-fg">
     <p className="min-w-0 flex-1">{cancellationError}</p>
     <button type="button" onClick={dismissError} className={secondary}>{t.close}</button>
-  </div> : null;
+  </div> : <McpSetupActionBar conversationId={conversationId} />;
   const first = wait.needs[0];
   const single = wait.needs.length === 1;
   const queued = wait.phase === 'queued';
   const checking = wait.recoveryStage === 'checking_connection' || wait.recoveryStage === 'checking_tools';
   const accountNeed = wait.needs.find(need => need.phase === 'choose_account');
   const capabilityFailed = wait.needs.some(need => need.capabilityError);
-  if (wait.phase === 'ready' && !checking && !wait.recoveryError) return null;
+  if (wait.phase === 'ready' && !checking && !wait.recoveryError) return <McpSetupActionBar conversationId={conversationId} />;
   const stateLabel = wait.recoveryStage === 'checking_connection' ? t.checkingConnection
     : wait.recoveryStage === 'checking_tools' ? t.checkingTools : queued ? wait.resolution === 'skipped' ? t.queuedSkipped : t.queued
       : wait.recoveryError === 'check_failed' ? t.checkFailed : wait.recoveryError ? t.interrupted

@@ -38,6 +38,18 @@ it('does not start OAuth discovery when a configured bearer credential is reject
   expect(fetcher).not.toHaveBeenCalled();
 });
 
+it('verifies an opaque native failure against the configured static header without returning it', async () => {
+  native.discover.mockRejectedValueOnce(new Error('Native MCP connection needs attention'));
+  const secured = structuredClone(config); secured.mcp!.servers!.docs.headers = { Authorization: 'Bearer private-test-value' };
+  native.prepare.mockResolvedValueOnce({ servers: [{ name: 'docs', config: { url: 'https://fixture.example/', headers: { Authorization: 'Bearer private-test-value' } } }] });
+  fetcher.mockResolvedValueOnce(new Response('', { status: 401 }));
+  const result = await probeMcpConnection(secured, '/fixture', 'docs');
+  expect(result).toEqual({ state: 'token_required' });
+  expect(JSON.stringify(result)).not.toContain('private-test-value');
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0][1].headers.Authorization).toBe('Bearer private-test-value');
+});
+
 it('preserves a safe cause category when the native connection only reports fetch failed', async () => {
   native.discover.mockRejectedValueOnce(new TypeError('fetch failed', { cause: Object.assign(new Error('certificate issue'), { code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' }) }));
   expect(await probeMcpConnection(config, '/fixture', 'docs')).toMatchObject({ state: 'error', errorCode: 'tls' });

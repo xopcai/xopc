@@ -25,6 +25,7 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     kind: z.literal('agent'),
     agentId: z.string().optional(),
     instruction: z.string(),
+    mcpSourceId: z.string().max(200).optional(),
     workingDirectory: z.string().optional(),
     model: z.string().optional(),
     timeoutSeconds: z.number().positive().optional(),
@@ -60,6 +61,7 @@ export const AutomationRunStatusSchema = z.enum([
 
 export const AutomationDeliveryDestinationSchema = z.discriminatedUnion('kind', [
   z.object({ key: z.string(), kind: z.literal('gateway_event') }),
+  z.object({ key: z.string(), kind: z.literal('weixin'), conversationId: z.string().uuid(), principalId: z.string().min(1) }),
   z.object({ key: z.string(), kind: z.literal('webhook'), endpoint: z.string().url().startsWith('https://'), secretId: z.string() }),
   z.object({ key: z.string(), kind: z.literal('file'), targetId: z.string(), pathTemplate: z.string() }),
   z.object({ key: z.string(), kind: z.literal('card'), channelId: z.string(), templateId: z.string() }),

@@ -35,3 +35,11 @@ xopc channels pairing approve weixin <code> --account default
 - 回复失败：先验证本地聊天，再查看微信通道日志。
 
 不要把已保存登录文件复制到不受信任的电脑。凭据撤销或迁移到新 Gateway 主机后，请重新登录。
+
+## 通过对话配置能力
+
+已配对或明确批准的独立私聊可以请求安装和使用 Skill，也可以说“连接这个资料服务并读取资料”。MCP 连接会提供安全页面：网关 owner 登录后核准具体服务与微信私聊，再输入密钥或完成 OAuth；密钥和回调地址不要发在微信中。完成后会在原私聊自动继续处理，发送失败时可在安全页只重发已有结果。
+
+MCP 安全回流需要可从手机访问的 HTTPS `gateway.publicUrl`，以及 `session.dmScope=per-account-channel-peer` 的独立路由；不支持共享会话、身份合并或群聊配置。安全入口不能替换／删除其他服务，也不授予微信用户通用管理权限。连接保存为网关共享能力，沿用助手工具权限。
+
+普通提醒可要求“60秒后只在当前微信提醒我一次，不要现在试运行”。结果通过绑定原账号和私聊的持久 outbox 投递。支持范围与真实客户端验收状态见[实施记录](../../design/technical/weixin-conversation-configuration-2026-10-28.md)。

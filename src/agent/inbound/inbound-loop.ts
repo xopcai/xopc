@@ -193,6 +193,7 @@ export class InboundLoop {
         isGroup: context.isGroup || false,
         origin: { type: 'channel', channel: context.channel },
         metadata: {
+          accountId: msg.metadata?.accountId,
           transcribedVoice: msg.metadata?.transcribedVoice === true,
         },
       };

@@ -70,6 +70,7 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     kind: z.literal('agent'),
     agentId: optionalTrimmedString(64),
     instruction: nonEmptyString.max(50000),
+    mcpSourceId: nonEmptyString.max(200).optional(),
     workingDirectory: optionalTrimmedString(4096),
     model: optionalTrimmedString(100),
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
@@ -121,6 +122,7 @@ export const AutomationDeliveryPolicySchema = z.object({
   notificationPolicy: z.enum(['attention', 'all', 'none']).default('attention'),
   destinations: z.array(z.discriminatedUnion('kind', [
     z.object({ key: nonEmptyString.max(100), kind: z.literal('gateway_event') }).strict(),
+    z.object({ key: nonEmptyString.max(100), kind: z.literal('weixin'), conversationId: z.string().uuid(), principalId: nonEmptyString.max(500) }).strict(),
     z.object({
       key: nonEmptyString.max(100), kind: z.literal('webhook'), endpoint: httpsUrl,
       secretId: nonEmptyString.max(200),

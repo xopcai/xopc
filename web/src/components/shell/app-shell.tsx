@@ -214,7 +214,7 @@ function AppShellContent() {
       <GlobalVoiceInputShortcutHost />
       <SideChatSelectionLauncher conversationId={parentConversationId} />
       <TokenDialog />
-      <OnboardingDialog />
+      {!pathname.startsWith('/mcp-setup/') ? <OnboardingDialog /> : null}
       {productPreviewTarget ? (
         <ProductPreviewModal target={productPreviewTarget} backgroundPath={productPreviewBackgroundPath} onClose={() => navigate(productPreviewBackgroundPath, { replace: true })} />
       ) : null}

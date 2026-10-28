@@ -155,6 +155,7 @@ export class AutomationDeliveryRouter {
   private readonly abortController = new AbortController();
 
   constructor(private readonly options: {
+    deliverWeixin?: (conversationId: string, principalId: string, run: AutomationRun) => Promise<void>;
     deliverGatewayEvent?: (run: AutomationRun, context: AutomationRunDeliveryContext) => void | Promise<void>;
     onDeadLetter?: (input: { phase: 'result_delivery'; runId: string; destinationKey: string; error: string }) => void;
     fetch?: typeof fetch;
@@ -166,6 +167,11 @@ export class AutomationDeliveryRouter {
       requiresAttention: config.requiresAttention === true,
       ...(typeof config.projectId === 'string' ? { projectId: config.projectId } : {}),
       });
+    });
+    this.register('weixin', ({ run, config }) => {
+      if (config.notificationPolicy === 'none' || config.notificationPolicy === 'attention' && !config.requiresAttention) return;
+      if (!this.options.deliverWeixin) throw new Error('Weixin delivery is unavailable. Delivery will retry.');
+      return this.options.deliverWeixin(String(config.conversationId), String(config.principalId), run);
     });
     this.register('webhook', input => this.postWebhook(input));
   }
@@ -201,7 +207,9 @@ export class AutomationDeliveryRouter {
         next_attempt_at_ms, created_at_ms, updated_at_ms
       ) VALUES (?, ?, ?, ?, 'pending', ?, 0, ?, ?, ?)`);
       for (const destination of destinations) {
-        const config = destination.kind === 'gateway_event'
+        if (destination.kind === 'weixin' && (automation.delivery.notificationPolicy === 'none'
+          || automation.delivery.notificationPolicy === 'attention' && run.status === 'succeeded' && (automation.safety?.mode ?? 'auto_apply') === 'auto_apply')) continue;
+        const config = destination.kind === 'gateway_event' || destination.kind === 'weixin'
           ? {
               ...destination,
               notificationPolicy: automation.delivery.notificationPolicy,

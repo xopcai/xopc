@@ -14,6 +14,8 @@ See [Documentation information architecture](./documentation-information-archite
 
 Active proposed designs:
 
+- [对话优先配置：Skill、MCP 与定时任务](./conversation-first-configuration-product-plan-2026-10-28.md)：当前实现与缺口、原 Chat 配置闭环、安全输入，以及第一阶段任务和验收标准。
+- [微信对话配置：安全输入、OAuth 回流与原私聊续跑](technical/weixin-conversation-configuration-2026-10-28.md)
 - [Benchmark 驱动 Harness 持续自我迭代](./benchmark-driven-harness-evolution-plan.md)：统一评测证据、并发快速验证、开发者 Dashboard 与执行收敛/可靠交付试点的分阶段建设计划。
 - [Personal AI work continuity](./personal-ai-work-continuity-plan.md): result reading, durable handoffs, follow-up revisions, and foreground latency targets.
 - [Personal result reading, stage A](./technical/personal-result-reading-stage-a-2026-10-15.md): implementation, access boundaries, cold-read continuation, and verification evidence.

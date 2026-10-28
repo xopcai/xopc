@@ -20,8 +20,12 @@ or topic:"settings", "automation", "connections" as relevant; no need to load a 
 /** Tool registration already reflects the host's allowlist and deny policy. */
 export function getConversationalConfigurationGuide(toolNames: readonly string[]): string {
   if (!toolNames.includes('xopc_use')) return '';
-  return toolNames.includes('tool_manual')
+  const manualGuide = toolNames.includes('tool_manual')
     ? conversationalConfigurationGuide
     : conversationalConfigurationGuide.replace(manualRouting,
       'No tool_manual is registered. Use documented registered parameters; report a blocker if required details are unavailable.\n');
+  const guide = `${manualGuide}\nxopc_use is registered and may be deferred. If its schema is absent and tool_search is available, discover the exact name before reporting it missing. Never bypass policy.\n${toolNames.includes('mcp_setup') ? 'HTTP MCP: mcp_setup is directly available. Its probes execute on the Gateway host; user-provided loopback addresses are supported. Check with this tool before claiming a missing capability or unreachable address. Use inspect/start/advance; secrets use interactionPath.\n' : ''}`;
+  return toolNames.includes('skill_manage')
+    ? `${guide}\nFor Skill configuration use skill_manage status/enable/disable/delete and skill_install; never edit product storage through shell/file tools. A clear request to install a specified source already authorizes that installation: do not ask for the same confirmation again. Search or a pasted URL alone does not authorize installation; overwrites or additional permissions require their own authorization. Load the skills manual topic when needed. Installation is not a verified first use. For an explicit HTTP MCP service address, use xopc_use mode mcp_setup and manual topic mcp; credentials use its trusted interaction page.\n`
+    : guide;
 }

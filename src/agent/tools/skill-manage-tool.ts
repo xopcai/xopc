@@ -5,7 +5,10 @@ import { join } from 'path';
 import { readFile, rm } from 'fs/promises';
 
 import { resolveStateDir } from '../../config/paths.js';
-import { createSkillConfigManager } from '../skills/config.js';
+import { createSkillConfigManager, getSkillEnvironment, isSkillEnabled, resolveSkillConfig } from '../skills/config.js';
+import { hasBinary } from '../skills/installer.js';
+import { removeSkillsLockEntry } from '../skills/hub-lock.js';
+import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from '../skills/workspace-skills-dir.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import {
   applyPatchToContent,
@@ -25,6 +28,9 @@ import {
 
 const SkillManageSchema = Type.Object({
   action: Type.Union([
+    Type.Literal('status'),
+    Type.Literal('enable'),
+    Type.Literal('disable'),
     Type.Literal('create'),
     Type.Literal('edit'),
     Type.Literal('patch'),
@@ -56,6 +62,7 @@ export interface SkillManageToolDeps {
   getSkillManager: () => SkillManager | undefined;
   getWorkspace: () => string;
   onSkillsFilesystemMutate?: () => void;
+  getSkillIndexingContext?: () => { registeredToolNames: string[]; skillAllowlist?: string[] } | undefined;
 }
 
 function jsonResult(obj: Record<string, unknown>): AgentToolResult<{}> {
@@ -67,7 +74,8 @@ export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool {
     name: 'skill_manage',
     label: '🛠️ Skill',
     description:
-      'Create, edit, patch, or delete user skills under ~/.xopc/skills and/or workspace .xopc/skills/ (see skills.agentWritePolicy). ' +
+      'Inspect installed skills with status (including disabled skills and current Agent availability); enable or disable by name. ' +
+      'Create, edit, patch, or delete/uninstall user skills under ~/.xopc/skills and/or workspace .xopc/skills/ (see skills.agentWritePolicy). ' +
       'Also write_file / remove_file under references/, templates/, scripts/, assets/. ' +
       'Bundled and extra-dir skills cannot be modified. Runs a security scan after writes.',
     parameters: SkillManageSchema,
@@ -90,6 +98,42 @@ export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool {
 
       try {
         switch (params.action) {
+          case 'status':
+          case 'enable':
+          case 'disable': {
+            const requested = params.name?.trim();
+            if (params.action !== 'status' && !requested) return jsonResult({ success: false, error: 'name is required.' });
+            const skill = requested ? mgr.findSkill(requested) : undefined;
+            if (requested && !skill) return jsonResult({ success: false, error: 'Skill is not installed.', errorCode: 'skill_not_found' });
+            if (params.action !== 'status') {
+              const enabled = params.action === 'enable';
+              const manager = createSkillConfigManager(resolveStateDir());
+              manager.setSkillEnabled(requested!, enabled);
+              if (manager.load().entries?.[requested!]?.enabled !== enabled) {
+                return jsonResult({ success: false, error: 'Skill enabled state could not be saved.' });
+              }
+              mgr.refreshPromptFromConfig();
+              notify();
+            }
+            const config = createSkillConfigManager(resolveStateDir()).load();
+            const indexing = deps.getSkillIndexingContext?.();
+            const canLoad = !indexing || indexing.registeredToolNames.includes('skill_view');
+            const visible = new Set(canLoad ? mgr.getEnabledSkillsForAgentSession(indexing).map(item => item.name) : []);
+            return jsonResult({ success: true, skills: (skill ? [skill] : mgr.getSkills()).map(item => {
+              const enabled = resolveSkillConfig(item, config).enabled !== false;
+              const requires = item.metadata.xopc?.requires ?? item.metadata.requires;
+              const environment = getSkillEnvironment(item, config);
+              const missingEnv = requires?.env?.filter(name => !environment[name]) ?? [];
+              const anyBinsMissing = Boolean(requires?.anyBins?.length && !requires.anyBins.some(hasBinary));
+              const requirementsMet = !missingEnv.length && !anyBinsMissing && isSkillEnabled(item, { ...config, entries: { ...config.entries, [item.name]: { ...config.entries?.[item.name], enabled: true } } });
+              return { name: item.name, description: item.description, source: item.source,
+                managed: item.origin?.managed === true, writable: Boolean(mutatableSkillOrNull(item, workspace, policy)),
+                enabled, requirementsMet, missingEnv, availableToCurrentAgent: requirementsMet && visible.has(item.name),
+                state: !enabled ? 'disabled' : !requirementsMet ? 'requirements_unmet' : !visible.has(item.name) ? 'agent_unavailable' : 'ready',
+                verified: false };
+            }), managementPath: '/capabilities/skills?tab=installed',
+            guidance: 'Ready means the current Agent can load the skill, not that a task has been tested. After installation, load skill_view and complete the requested task; explain relevant examples and any remaining requirements. Enabling is shared by skill name.' });
+          }
           case 'create': {
             const nameErr = validateSkillNameSegment(params.name ?? '', 'name');
             if (nameErr) return jsonResult({ success: false, error: nameErr });
@@ -251,6 +295,8 @@ export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool {
             }
 
             rmSync(sk.baseDir, { recursive: true, force: true });
+            removeSkillsLockEntry(name, isPathInsideDir(resolveWorkspaceSkillsDir(workspace), sk.baseDir)
+              ? resolveWorkspaceSkillsLockPath(workspace) : undefined);
             notify();
             return jsonResult({ success: true, message: `Skill "${name}" removed.`, path: sk.baseDir });
           }

@@ -17,6 +17,7 @@ export type McpCatalogTool = {
   description: string;
   inputSchema: unknown;
   exposure?: string;
+  annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
 };
 
 export class McpAuthenticationRequiredError extends Error {}
@@ -27,7 +28,7 @@ export type McpLoginInteraction = {
   requestRedirectUrl: (signal?: AbortSignal) => Promise<string | undefined>;
 };
 
-export type McpSessionOptions = { credentials?: NativeMcpCredentials; signal?: AbortSignal };
+export type McpSessionOptions = { credentials?: NativeMcpCredentials; signal?: AbortSignal; callbackRelayUrl?: string };
 
 /** A short-lived native session discovers tools without making a model request. */
 export async function discoverMcpTools(config: Config, workspaceDir: string, serverId: string, options?: McpSessionOptions): Promise<McpCatalogTool[]> {
@@ -49,6 +50,12 @@ async function runNativeMcpSession(config: Config, workspaceDir: string, serverI
   const entry = loaded.servers.find(server => server.name === serverId);
   if (!entry) throw new Error(`MCP server "${serverId}" is not configured or has invalid configuration.`);
   if (entry.config.enabled === false) throw new Error(`MCP server "${serverId}" is disabled.`);
+  if (interaction && options?.callbackRelayUrl && 'url' in entry.config) {
+    const relay = new URL(options.callbackRelayUrl);
+    if (relay.protocol !== 'https:' && !(relay.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(relay.hostname))) throw new Error('A secure callback relay is required.');
+    if (relay.username || relay.password || relay.search || relay.hash) throw new Error('Invalid callback relay.');
+    entry.config = { ...entry.config, oauth: { ...entry.config.oauth, callbackRelayUrl: relay.href } };
+  }
   const agentDir = getNativePiAgentDir();
   const settingsManager = SettingsManager.inMemory({ retry: { enabled: false }, compaction: { enabled: false } });
   const loader = new DefaultResourceLoader({ cwd: workspaceDir, agentDir, settingsManager,
@@ -110,7 +117,7 @@ async function runNativeMcpSession(config: Config, workspaceDir: string, serverI
     if (signal?.aborted) throw new Error('MCP connection check cancelled.');
     const namespace = `mcp__${serverId.replace(/-/g, '_')}`;
     return session.getAllTools().filter(tool => tool.namespace?.name === namespace).map(tool => ({
-      name: tool.name, description: tool.description, inputSchema: tool.parameters, exposure: tool.exposure,
+      name: tool.name, description: tool.description, inputSchema: tool.parameters, exposure: tool.exposure, annotations: tool.annotations,
     })).sort((a, b) => a.name.localeCompare(b.name));
   } finally {
     try {

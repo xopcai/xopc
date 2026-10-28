@@ -2,6 +2,14 @@
 
 xopc 使用 pi 1.1.0 的公开 `createMcpExtension` 连接出站 MCP 服务。pi 负责连接、协议调用、工具注册、取消、重连、目录更新、资源读取和 OAuth；xopc 仅投影配置及已有的密钥引用，并管理 AgentSession 的生命周期。
 
+## 在对话中连接
+
+本地 owner Web Chat 可直接说：“连接这个 HTTP MCP 服务，查一下我的资料”，或“只连接，先不要读取数据”。系统检查服务后，按需提供安全 Token 输入页或原生 OAuth 授权入口。密钥只填在安全页面，不发送到聊天；授权完成后返回原会话继续原请求。
+
+也可以要求查看、停用、重新启用或移除自定义连接。移除本地配置不等于撤销远端授权。明确的配置请求无需再次确认；保存、待重启生效和实际读取成功分别报告。服务地址中的 `localhost` 指 Gateway 所在主机。
+
+当前对话入口支持 HTTP MCP；任意 stdio 包安装、原生移动端和其他渠道授权回流需要各自实现。验收范围及本地 OAuth 测试服务见[实施记录](../design/technical/conversation-configuration-implementation-2026-10-28.md)。
+
 ## 配置
 
 在 `xopc.json` 的 `mcp.servers` 中配置服务，也可以在能力中心编辑自定义 MCP。启用的 Agent Plugin MCP 服务会自动加入，服务 ID 在插件详情中显示。
@@ -86,7 +94,7 @@ CLI 会在该目录写入权限为 0600 的 `mcp.json` 配置投影；它可能�
 
 Web 自定义连接采用「输入地址 → 检查 → 按需授权 → 验证工具」流程，自动生成服务器名称。检查到 OAuth 元数据后可点击「登录并连接」，授权成功会自动验证工具；只有返回 401 而未提供 OAuth 元数据的服务会提示填写 Token。Client ID、Headers、超时和工具使用方式收在高级设置，也支持粘贴单个服务器配置或 `mcpServers` JSON（多个服务可选择其中一个）。本地命令支持带引号的参数或 JSON 参数数组。
 
-Web 授权通过原生 pi MCP 扩展完成，凭据与 CLI 共用。浏览器和 Gateway 不在同一机器时，可以在「已授权，但连接仍在等待？」中粘贴完整回调地址；原生 pi 校验 state、交换令牌并保存凭据。关闭连接窗口会取消等待中的授权。插件卸载不会自动清除 pi 凭据；需要时先执行 `xopc mcp logout <插件服务ID>`。此配置流程不会自动恢复先前的聊天任务。
+Web 授权通过原生 pi MCP 扩展完成，凭据与 CLI 共用。浏览器和 Gateway 不在同一机器时，可以在「已授权，但连接仍在等待？」中粘贴完整回调地址；原生 pi 校验 state、交换令牌并保存凭据。关闭连接窗口会取消等待中的授权。插件卸载不会自动清除 pi 凭据；需要时先执行 `xopc mcp logout <插件服务ID>`。从管理页单独发起的配置不会自动恢复先前的聊天任务；从对话发起的受支持流程会绑定并恢复原目标。
 
 ## 不兼容变更
 
@@ -105,3 +113,5 @@ Web 授权通过原生 pi MCP 扩展完成，凭据与 CLI 共用。浏览器和
 `xopc mcp capabilities --allow-capability <精确ID...>` 仍使用官方 MCP SDK 将明确允许的 Gateway 能力暴露给外部客户端。出站 pi 客户端的替换不影响这个入站服务。
 
 参考：[pi 原生 MCP 文档](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/mcp.md)。
+
+微信私聊可发起绑定原目标的安全配置请求。需要独立账号私聊路由、明确批准的发送者，以及手机可访问的 HTTPS Gateway 地址。owner 在安全页核准具体服务与私聊身份后，再填写 Token 或授权；结果自动发回原微信会话。此入口不授予通用管理权限，范围与验收状态见[微信对话配置记录](../design/technical/weixin-conversation-configuration-2026-10-28.md)。

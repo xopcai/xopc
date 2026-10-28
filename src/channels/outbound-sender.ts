@@ -85,7 +85,7 @@ export class ChannelOutboundSender {
     }
   }
 
-  async send(msg: OutboundMessage, options?: { skipPersist?: boolean }): Promise<void> {
+  async send(msg: OutboundMessage, options?: { skipPersist?: boolean; requireDelivery?: boolean }): Promise<void> {
     log.debug({ type: msg.type, channel: msg.channel, chatId: msg.chat_id }, 'Received outbound message');
 
     let processedMsg = await this.applyTtsIfNeeded(msg);
@@ -102,6 +102,7 @@ export class ChannelOutboundSender {
           processedMsg.channel,
         );
         if (!hookResult.send) {
+          if (options?.requireDelivery) throw new Error('Channel delivery was blocked by policy.');
           if (queueId) this.persistStore!.ack(queueId);
           return;
         }
@@ -119,6 +120,7 @@ export class ChannelOutboundSender {
 
       const plugin = this.opts.registry.get(processedMsg.channel);
       if (!plugin?.outbound) {
+        if (options?.requireDelivery) throw new Error('The requested channel is unavailable.');
         log.error({ channel: processedMsg.channel }, 'Unknown channel or no outbound adapter');
         if (queueId) this.persistStore!.ack(queueId);
         return;
@@ -141,6 +143,7 @@ export class ChannelOutboundSender {
         );
       }
 
+      if (options?.requireDelivery && !result?.success) throw new Error('Channel delivery did not succeed.');
       if (!result) {
         if (queueId) this.persistStore!.ack(queueId);
         return;

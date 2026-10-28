@@ -31,6 +31,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   closeXopcDatabase();
   resetXopcDatabaseSingletonForTest();
   rmSync(directory, { recursive: true, force: true });
@@ -49,6 +50,54 @@ async function fixture() {
 }
 
 describe('automation state capability', () => {
+  it('anchors a relative one-time intent once across stable create and update retries', async () => {
+    const service = new AutomationService();
+    const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service });
+    const input = { name: 'Once only', enabled: false, trigger: { kind: 'schedule', schedule: { kind: 'once', afterMs: 90000 } }, action: { kind: 'agent', instruction: 'Remind once' } };
+    const operation = 'xopc.automations.create';
+    const acceptedAt = Date.now();
+    const expected = { ...dispatcher.describe(operation, caller), idempotencyKey: 'relative-once' };
+    const created = AutomationMutationOutputSchema.parse(await dispatcher.call(operation, input, caller, expected)).automation;
+    expect(created.trigger.kind === 'schedule' && created.trigger.schedule.kind).toBe('once');
+    const at = created.trigger.kind === 'schedule' && created.trigger.schedule.kind === 'once' ? Date.parse(created.trigger.schedule.at) : 0;
+    expect(at).toBeGreaterThanOrEqual(acceptedAt + 90000);
+    expect(at).toBeLessThan(acceptedAt + 91000);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    expect(await dispatcher.call(operation, input, caller, expected)).toMatchObject({ automation: { id: created.id, trigger: created.trigger } });
+    const update = 'xopc.automations.update';
+    const patch = { id: created.id, expectedRevision: created.updatedAtMs, patch: { trigger: { kind: 'schedule', schedule: { kind: 'once', afterMs: 120000 } } } };
+    const retry = { ...dispatcher.describe(update, caller), idempotencyKey: 'reschedule-once' };
+    const changed = await dispatcher.call(update, patch, caller, retry);
+    expect(await dispatcher.call(update, patch, caller, retry)).toEqual(changed);
+    expect(await service.list()).toHaveLength(1);
+  });
+  it('replays a retried Agent tool call across both adapters without creating a duplicate', async () => {
+    const service = new AutomationService();
+    const input = { name: 'Retry-safe draft', enabled: false, trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Summarize later' } };
+    const deps = { getAutomationService: () => service, getCurrentAgentId: () => 'main', getCurrentConversationId: () => undefined };
+    const first = await createAutomationTool(deps).execute('stable-tool-call', { action: 'create', automation: input });
+    const second = await createXopcUseTool(deps).execute('stable-tool-call', { mode: 'automation', command: 'create', args: { automation: input } });
+    expect((first.details as any).automation.id).toBe((second.details as any).result.automation.id);
+    expect(await service.list()).toHaveLength(1);
+  });
+
+  it('waits for an actual terminal run and respects cancellation without reporting completion early', async () => {
+    const service = new AutomationService();
+    const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service });
+    const readCaller = { ...caller, scopes: ['automations.read'] };
+    const running = { id: 'wait-run', automationId: 'a', automationName: 'Wait fixture', status: 'running', manual: true,
+      triggerSnapshot: { kind: 'manual' }, actionSnapshot: { kind: 'agent', instruction: 'Wait' }, createdAtMs: Date.now() } as const;
+    saveAutomationRun(running);
+    const pending = dispatcher.call('xopc.automations.get_run', { id: running.id, waitMs: 1000 }, readCaller);
+    setTimeout(() => saveAutomationRun({ ...running, status: 'succeeded', summary: 'Actual completed result' }), 30);
+    expect(await pending).toMatchObject({ run: { status: 'succeeded', summary: 'Actual completed result' } });
+    saveAutomationRun(running);
+    expect(await dispatcher.call('xopc.automations.get_run', { id: running.id, waitMs: 0 }, readCaller)).toMatchObject({ run: { status: 'running' } });
+    const controller = new AbortController();
+    const stopped = dispatcher.call('xopc.automations.get_run', { id: running.id, waitMs: 1000 }, { ...readCaller, signal: controller.signal });
+    controller.abort();
+    await expect(stopped).rejects.toThrow();
+  });
   it('protects managed automations while allowing declared user controls', async () => {
     const service = new AutomationService();
     const automation = await service.create({
@@ -394,4 +443,32 @@ describe('automation state capability', () => {
     expect(paused?.updatedAtMs).toBe(automation.updatedAtMs + 1);
     expect(resumed?.updatedAtMs).toBe(automation.updatedAtMs + 2);
   });
+});
+
+it('pins Weixin reminder delivery to the trusted conversation and rejects a different recipient', async () => {
+  const { ConfigSchema } = await import('../../config/schema.js');
+  const { createConversation } = await import('../../storage/sqlite/conversation-repository.js');
+  const { saveWeixinAccount } = await import('../../../extensions/weixin/src/auth/accounts.js');
+  const { weixinAccountIdentityRevision } = await import('../../channels/weixin/account-identity.js');
+  vi.stubEnv('XOPC_STATE_DIR', directory);
+  saveWeixinAccount('bot-a', { token: 'fixture-weixin-login', userId: 'fixture-bot' });
+  const config = ConfigSchema.parse({ gateway: { publicUrl: 'https://gateway.example.com' }, session: { dmScope: 'per-account-channel-peer' },
+    channels: { weixin: { enabled: true, dmPolicy: 'pairing', allowFrom: ['alice@im.wechat'] } } });
+  const conversation = createConversation({ agentId: 'main', sourceChannel: 'weixin', sourceChatId: 'alice@im.wechat',
+    routing: { agentId: 'main', source: 'weixin', accountId: 'bot-a', peerKind: 'direct', peerId: 'alice@im.wechat' } });
+  config.gateway.publicUrl = undefined;
+  const service = new AutomationService(); service.setDeps({ getConfig: () => config });
+  const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service });
+  const context = { ...caller, conversationId: conversation.key };
+  const operation = 'xopc.automations.create';
+  const input = { name: 'Weixin reminder', enabled: false, trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Remind once' },
+    delivery: { notificationPolicy: 'all', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] } };
+  const created = await dispatcher.call(operation, input, context, { ...dispatcher.describe(operation, context), idempotencyKey: 'weixin-reminder' });
+  expect(created).toMatchObject({ automation: { delivery: { destinations: expect.arrayContaining([
+    { key: 'weixin', kind: 'weixin', conversationId: conversation.key, principalId: `channel:weixin:bot-a:direct:alice@im.wechat:login:${weixinAccountIdentityRevision('bot-a')}` },
+  ]) } } });
+  await expect(dispatcher.call(operation, { ...input, delivery: { notificationPolicy: 'all', destinations: [{ key: 'evil', kind: 'weixin',
+    conversationId: conversation.key, principalId: 'channel:weixin:bot-b:direct:bob@im.wechat' }] } }, context,
+  { ...dispatcher.describe(operation, context), idempotencyKey: 'wrong-weixin-recipient' })).rejects.toThrow('another Weixin');
+  await service.stop();
 });

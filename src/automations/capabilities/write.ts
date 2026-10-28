@@ -4,16 +4,30 @@ import { z } from 'zod';
 import { assertAutomationSetupTarget, bindAutomationSetup } from '../configuration-conversation.js';
 import { CapabilityError, defineAtomicCapability, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import { getAutomation, getAutomationRun, markAutomationRunRead, markAllAutomationRunsRead } from '../storage/index.js';
-import { AutomationInvalidAgentError, AutomationInvalidScheduleError, AutomationAlreadyExistsError, AutomationAlreadyRunningError, type AutomationService } from '../service/automation-service.js';
-import { CreateAutomationSchema, UpdateAutomationSchema } from '../domain/validation.js';
+import { AutomationInvalidSourceError, AutomationInvalidAgentError, AutomationInvalidScheduleError, AutomationAlreadyExistsError, AutomationAlreadyRunningError, type AutomationService } from '../service/automation-service.js';
+import { AutomationTriggerSchema, CreateAutomationSchema, UpdateAutomationSchema } from '../domain/validation.js';
+import type { AutomationTrigger } from '../domain/types.js';
 import type { ProjectService } from '../../projects/project-service.js';
 import { getAutomationEventForRun } from '../events/index.js';
 
+const triggerRequest = z.union([AutomationTriggerSchema, z.object({ kind: z.literal('schedule'),
+  schedule: z.object({ kind: z.literal('once'), afterMs: z.number().int().min(1).max(366 * 86400000) }).strict() }).strict()]);
+
+/** Anchor a relative one-time intent inside the receipt's single atomic execution. */
+export function materializeAutomationTrigger(trigger: z.infer<typeof triggerRequest>): AutomationTrigger {
+  if (trigger.kind !== 'schedule') return trigger;
+  const schedule = trigger.schedule!;
+  return 'afterMs' in schedule
+    ? { kind: 'schedule', schedule: { kind: 'once', at: new Date(Date.now() + schedule.afterMs).toISOString() } }
+    : { kind: 'schedule', schedule };
+}
+
 export const AutomationCreateCapabilityInputSchema = CreateAutomationSchema
-  .omit({ state: true, management: true })
+  .omit({ state: true, management: true, trigger: true }).extend({ trigger: triggerRequest })
   .refine(input => input.action.kind !== 'system', { message: 'System actions can only be created by the runtime' });
-export const AutomationUpdatePatchSchema = UpdateAutomationSchema
-  .safeExtend({ state: z.never().optional(), management: z.never().optional() });
+export const AutomationUpdatePatchSchema = z.object({ ...UpdateAutomationSchema.shape,
+  trigger: triggerRequest.optional(), state: z.never().optional(), management: z.never().optional() })
+  .strict().refine(data => Object.keys(data).length > 0, { message: 'At least one field must be provided' });
 
 function assertManagedOperation(
   automation: NonNullable<ReturnType<typeof getAutomation>>,
@@ -42,7 +56,7 @@ function assertManagedOperation(
 function validateSchedule<T>(operation: () => T): T {
   try { return operation(); }
   catch (error) {
-    if (error instanceof AutomationInvalidScheduleError || error instanceof AutomationInvalidAgentError) throw new CapabilityError('INVALID_INPUT', error.message);
+    if (error instanceof AutomationInvalidScheduleError || error instanceof AutomationInvalidAgentError || error instanceof AutomationInvalidSourceError) throw new CapabilityError('INVALID_INPUT', error.message);
     throw error;
   }
 }
@@ -157,7 +171,7 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
       requireProject(input.projectId);
       assertAutomationSetupTarget(context.conversationId);
       try {
-        const automation = validateSchedule(() => service.createAtomically(input));
+        const automation = validateSchedule(() => service.createAtomically({ ...input, delivery: service.bindConversationDelivery(context.conversationId, input.delivery), trigger: materializeAutomationTrigger(input.trigger) }));
         bindAutomationSetup(context.conversationId, automation.id);
         return { ok: true as const, automation: { ...automation } };
       }
@@ -178,7 +192,9 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
       if (current.updatedAtMs !== expectedRevision) throw new CapabilityError('REVISION_CONFLICT', 'Automation changed');
       assertManagedOperation(current, 'update', patch);
       requireProject(patch.projectId);
-      return { ok: true as const, automation: { ...validateSchedule(() => service.updateAtomically(id, patch))! } };
+      const { trigger, ...fields } = patch;
+      return { ok: true as const, automation: { ...validateSchedule(() => service.updateAtomically(id,
+        { ...fields, ...(fields.delivery ? { delivery: service.bindConversationDelivery(context.conversationId, fields.delivery) } : {}), ...(trigger ? { trigger: materializeAutomationTrigger(trigger) } : {}) }))! } };
     },
   }));
   dispatcher.register(defineAtomicCapability({

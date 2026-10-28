@@ -215,4 +215,27 @@ describe('automation result delivery router', () => {
     expect(listAutomationResultDeliveries({ runId: queued.id })).toEqual([expect.objectContaining({ status: 'retrying' })]);
   });
 
+  it.each(['all', 'attention', 'none'] as const)('does not claim a silent Weixin notification was delivered (%s)', async notificationPolicy => {
+    const automation = await service.create({ name: 'Private reminder', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'done' },
+      delivery: { notificationPolicy, destinations: [{ key: 'wechat', kind: 'weixin', conversationId: crypto.randomUUID(), principalId: 'original-private-identity' }] } });
+    const run = { ...service.queueRunAtomically(automation.id), status: 'succeeded' as const, endedAtMs: Date.now(), summary: 'Actual result' };
+    saveAutomationRun(run);
+    const deliverWeixin = vi.fn(async () => undefined);
+    const router = new AutomationDeliveryRouter({ deliverWeixin, deliverGatewayEvent: async () => undefined });
+    router.enqueue(run, automation); await router.dispatch();
+    expect(deliverWeixin).toHaveBeenCalledTimes(notificationPolicy === 'all' ? 1 : 0);
+    expect(listAutomationResultDeliveries({ runId: run.id }).filter(item => item.kind === 'weixin')).toHaveLength(notificationPolicy === 'all' ? 1 : 0);
+  });
+
+  it('keeps failed Weixin result delivery retryable without changing the successful run', async () => {
+    const automation = await service.create({ name: 'Offline Weixin', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'done' },
+      delivery: { notificationPolicy: 'all', destinations: [{ key: 'wechat', kind: 'weixin', conversationId: crypto.randomUUID(), principalId: 'original-private-identity' }] } });
+    const run = { ...service.queueRunAtomically(automation.id), status: 'succeeded' as const, endedAtMs: Date.now(), summary: 'Actual result' };
+    saveAutomationRun(run);
+    const router = new AutomationDeliveryRouter({ deliverWeixin: async () => { throw new Error('offline'); }, deliverGatewayEvent: async () => undefined });
+    router.enqueue(run, automation); await router.dispatch();
+    expect(listAutomationResultDeliveries({ runId: run.id }).find(item => item.kind === 'weixin')).toMatchObject({ status: 'retrying', attempts: 1 });
+    expect(await service.getRun(run.id)).toMatchObject({ status: 'succeeded', summary: 'Actual result' });
+  });
+
 });

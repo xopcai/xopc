@@ -28,6 +28,7 @@ export type SecretInputProps = {
   labels: SecretInputLabels;
   reveal?: () => Promise<string | null>;
   allowUnrevealedCopy?: boolean;
+  hideCopy?: boolean;
   loadFailedLabel?: string;
   maskedHelp?: string;
   notInConfigFile?: string;
@@ -60,6 +61,7 @@ export function SecretInput({
   labels,
   reveal,
   allowUnrevealedCopy,
+  hideCopy = false,
   loadFailedLabel,
   maskedHelp,
   notInConfigFile,
@@ -109,7 +111,7 @@ export function SecretInput({
           className={cn(defaultInputClass, inputClassName)}
         />
         <div className="absolute right-1 top-1/2 flex -translate-y-1/2 gap-0.5">
-          {copyEnabled ? (
+          {copyEnabled && !hideCopy ? (
             <button
               type="button"
               className={cn(

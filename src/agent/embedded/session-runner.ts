@@ -29,6 +29,7 @@ import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-sear
 import { type NativeMcpConfig, getNativePiAgentDir } from '../mcp/native-mcp.js';
 import { abortEmbeddedRun } from './runs.js';
 import { filterExecutionTools, resolveExecutionToolPolicy, type ExecutionToolPolicy } from './execution-tool-policy.js';
+import { createAutomationMcpSourceGuard } from '../../automations/mcp-source.js';
 import { AGENT_PROFILE_CONTEXT_STATE, createAgentProfileContextExtension } from './agent-profile-context.js';
 
 const toolContract = (tool: AgentTool) => JSON.stringify([tool.name, tool.parameters, tool.description,
@@ -69,7 +70,8 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
     input.thinkingLevel,
     input.credentialRevision,
     JSON.stringify(input.codemode ?? null),
-    JSON.stringify(input.mcp ? { servers: input.mcp.servers, errors: input.mcp.errors, credentialAliases: input.mcp.credentialAliases } : null),
+    JSON.stringify(input.mcp ? { servers: input.mcp.servers, errors: input.mcp.errors, credentialAliases: input.mcp.credentialAliases,
+      automationSourceRunId: input.mcp.automationSourceRunId } : null),
     JSON.stringify(input.executionToolPolicy ?? null),
   ].join('\0')).digest('base64url');
 }
@@ -356,6 +358,7 @@ export class EmbeddedSessionRunnerPool {
       noContextFiles: true,
       noExtensions: true,
       extensionFactories: [
+        ...(mcp?.automationSourceRunId ? [createAutomationMcpSourceGuard(mcp.automationSourceRunId)] : []),
         ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
         ...(discovery ? [createXopcToolSearchExtension(tools)] : []),
         ...(mcp ? [createMcpExtension({ loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),

@@ -42,6 +42,22 @@ function secretsEqual(actual: string, expected: string): boolean {
 }
 
 export function registerPublicGatewayRoutes(app: Hono, service: GatewayService): void {
+  app.get('/mcp-setup/callback/:id', c => {
+    c.header('Cache-Control', 'no-store'); c.header('Referrer-Policy', 'no-referrer');
+    try {
+      const incoming = new URL(c.req.url);
+      if (incoming.search.length > 8192 || [...incoming.searchParams.keys()].some(key => !['code', 'state', 'iss', 'error', 'error_description'].includes(key)
+        || incoming.searchParams.getAll(key).length !== 1)) return c.text('Invalid authorization response.', 400);
+      // Build origin from deployment configuration, never Host or forwarded headers.
+      const origin = service.currentConfig.gateway.publicUrl;
+      if (!origin) return c.text('Secure callback is unavailable.', 400);
+      const target = new URL(`/mcp-setup/callback/${encodeURIComponent(c.req.param('id'))}`, origin);
+      target.search = incoming.search;
+      const path = service.mcpSetup.relayCallback(c.req.param('id'), target.href);
+      return c.redirect(path, 303);
+    } catch { return c.text('Authorization response was rejected. Return to the secure connection page and check its status.', 400); }
+  });
+
   app.get('/health', (c) => {
     const health = service.getHealth();
     return c.json({ status: health.ready ? 'ok' : 'starting', ready: health.ready });

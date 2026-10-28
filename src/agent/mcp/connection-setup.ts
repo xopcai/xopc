@@ -97,6 +97,23 @@ export async function probeMcpConnection(config: Config, workspace: string, serv
       } catch (cause) { return failed(cause); }
     }
     if (server?.url && hasCredentials && /\b(?:401|403)\b|unauthorized|forbidden/i.test(String(error))) return { state: 'token_required' };
+    // Native transport summaries can omit the HTTP status. Verify static-header rejection
+    // without interpreting an opaque failure as OAuth or exposing the credential.
+    if (server?.url && !server.auth && classifyMcpConnectionError(error) === 'unknown'
+      && Object.keys(server.headers ?? {}).some(name => name.toLowerCase() === 'authorization')) {
+      try {
+        const loaded = await prepareNativeMcpConfig(config, workspace);
+        const entry = loaded.servers.find(candidate => candidate.name === serverId);
+        if (entry && 'url' in entry.config) {
+          const response = await fetch(httpUrl(entry.config.url), { method: 'POST', redirect: 'error',
+            signal: options?.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
+            headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', ...(entry.config.headers as Record<string, string> | undefined) },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'xopc', version: '1' } } }) });
+          await response.body?.cancel();
+          if (response.status === 401 || response.status === 403) return { state: 'token_required' };
+        }
+      } catch { options?.signal?.throwIfAborted(); }
+    }
     return failed(error);
   }
 }
