@@ -67,7 +67,7 @@ describe('chat message layout parity', () => {
     const userStart = content.indexOf("} else if (this.row.role === 'user') {");
     const userEnd = content.indexOf('} else {', userStart);
     const userContent = content.slice(userStart, userEnd);
-    const imageStart = content.indexOf("if (this.row.role === 'user' && this.imageMedia.length)");
+    const imageStart = content.indexOf('if (this.imageMedia.length)');
     const imageEnd = content.indexOf('if (this.attachmentMedia.length)', imageStart);
     const imageStrip = content.slice(imageStart, imageEnd);
 
@@ -81,13 +81,12 @@ describe('chat message layout parity', () => {
     expect(imageStrip).toContain('embedded: true, compactThumbnail: true, compactThumbnailWidth: this.userImageThumbnailSize');
     expect(imageStrip).toContain('compactThumbnailHeight: this.userImageThumbnailSize');
     expect(imageStrip).toContain('compactThumbnailContain: false, compactMetadata: false, compactDisclosure: false');
-    expect(imageStrip).toContain('imageGallery: this.imageMedia');
+    expect(imageStrip).toContain('imageGallery: this.galleryMedia');
     expect(imageStrip).toContain('.width(this.userImageThumbnailSize).height(this.userImageThumbnailSize)');
     expect(imageStrip).toContain('.height(this.userImageThumbnailSize)');
-    expect(imageStrip).toContain(".justifyContent(this.imageMedia.length === 1 ? FlexAlign.End : FlexAlign.Start)");
+    expect(imageStrip).toContain(".justifyContent(this.row.role === 'user' && this.imageMedia.length === 1 ? FlexAlign.End : FlexAlign.Start)");
     expect(content).toContain(".alignItems(this.row.role === 'user' ? HorizontalAlign.End : HorizontalAlign.Start)");
     expect(content).toContain("if (this.row.role !== 'user')");
-    expect(content).toContain("return this.row.role === 'user'");
     expect(content).toContain("filePreviewKind(file.name, file.mimeType) !== 'image'");
   });
 
