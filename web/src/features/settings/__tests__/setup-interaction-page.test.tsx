@@ -34,7 +34,7 @@ it('saves only the current setup model, rechecks scope and returns to the origin
   const [url, input] = mock.fetch.mock.calls[0];
   expect(url).toBe('/api/phone/setup');
   expect(JSON.parse(input.body)).toMatchObject({ action: 'set_model', setupId: 'goal', expectedRevision: 3, modelRef: 'test/phone' });
-  const destination = container.querySelector('output')!.textContent!;
+  const destination = container.querySelector('output')!.textContent;
   expect(destination.startsWith(`/chat/${conversationId}?`)).toBe(true);
   const query = new URL(destination, 'https://xopc.test').searchParams;
   expect(query.get('autoSend')).toBe('1'); expect(query.get('draft')).toContain('重新检查');
