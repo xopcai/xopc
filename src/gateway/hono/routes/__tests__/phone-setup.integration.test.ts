@@ -23,7 +23,9 @@ it('serves Phone setup via real authenticated lazy routes without exposing uploa
   const conversation = createConversation({ agentId: 'main' }, root); buckets.resetAllForTests();
   const auth = { mode: 'token' as const, token: 'phone-setup-test-token' };
   const config = ConfigSchema.parse({ gateway: { bind: 'loopback', auth } });
-  const setup = new PhoneSetupService({ runtime: { status: () => undefined } as unknown as PhoneRuntime,
+  const originalConfig = structuredClone(config);
+  const setModel = vi.fn(async () => {});
+  const setup = new PhoneSetupService({ runtime: { status: () => undefined } as unknown as PhoneRuntime, setModel,
     inspect: async () => ({ enabled: false, toolAllowed: true, model: { supported: false, configured: false }, dependencies: [], devices: [], localDiscovery: [] }),
     revision: () => 'one', connected: async () => false, leaseActive: () => false });
   const service = { currentConfig: config, getResolvedAuth: () => auth, getEffectiveListenPort: () => 18790,
@@ -42,6 +44,16 @@ it('serves Phone setup via real authenticated lazy routes without exposing uploa
     expect((await request({ action: 'install', conversationId: conversation.key, setupId: payload.id })).status).toBe(400);
     const result = await (await request({ action: 'get', conversationId: conversation.key, setupId: payload.id })).json();
     expect(result).toMatchObject({ payload: { source: 'aliyun', state: 'configuring', readiness: { enabled: false }, checks: { verified: false, released: false } } });
+    const modelRequest = { action: 'set_model', conversationId: conversation.key, setupId: payload.id, expectedRevision: result.payload.revision, modelRef: 'test/phone' };
+    expect((await request(modelRequest, false)).status).toBe(401);
+    const other = createConversation({ agentId: 'main' }, root);
+    expect((await request({ ...modelRequest, conversationId: other.key })).status).toBe(409);
+    expect(setModel).not.toHaveBeenCalled();
+    expect((await request(modelRequest)).status).toBe(200);
+    expect(setModel).toHaveBeenCalledWith('main', 'test/phone', expect.any(Object));
+    expect(config).toEqual(originalConfig);
+    expect((await request(modelRequest)).status).toBe(409);
+    expect(setModel).toHaveBeenCalledTimes(1);
   } finally {
     gateway.closeAllConnections(); await new Promise<void>(resolve => gateway.close(() => resolve()));
     closeXopcDatabase(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });

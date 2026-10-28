@@ -61,3 +61,10 @@ it('retains the committed snapshot on reload errors so a later save cannot resto
   await coordinator.updateConfig({ gateway: { ...current.gateway, port: 19999 } });
   expect(disk.mcp!.servers!.docs.command).toBe('committed');
 });
+
+it('rechecks a pending configuration grant at the serialized commit boundary', async () => {
+  const next = structuredClone(current); next.phone.enabled = true;
+  const beforeCommit = vi.fn(() => { throw new Error('setup cancelled'); });
+  await expect(coordinator.saveConfig(next, current, beforeCommit)).rejects.toThrow('cancelled');
+  expect(io.save).not.toHaveBeenCalled(); expect(current.phone.enabled).toBe(false);
+});

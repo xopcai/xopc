@@ -30,31 +30,36 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
   };
   return new PhoneSetupService({ runtime,
     models: () => getAllModels().filter(model => phoneModelProfile(model)).map(model => ({ ref: `${model.provider}/${model.id}`, name: model.name, configured: isProviderConfiguredSync(model.provider) })),
-    setModel: async (agentId, ref) => {
+    setModel: async (agentId, ref, mutation) => {
+      mutation?.check();
       requireIdle();
       const model = resolvePhoneSetupModel(ref);
       if (!model || !phoneModelProfile(model) || !isProviderConfiguredSync(model.provider)) throw new Error('PHONE_SETUP_MODEL_REQUIRED: Choose a compatible model with configured credentials.');
       const repository = new AgentCatalogRepository(); const agent = repository.get(agentId);
       if (!agent) throw new Error('Phone setup Agent not found');
-      await new AgentCatalogService(repository).update(agentId, { models: { ...agent.models, phoneUse: { primary: ref, fallbacks: [] } } }, agent.revision);
+      await new AgentCatalogService(repository).update(agentId, { models: { ...agent.models, phoneUse: { primary: ref, fallbacks: [] } } }, agent.revision, mutation?.check);
       service.refreshAgentCatalog();
     },
-    configure: async enabled => {
+    configure: async (enabled, mutation) => {
+      mutation?.check();
       requireIdle(); const config = service.currentConfig; const next = structuredClone(config); next.phone.enabled = enabled;
-      const result = await service.saveConfig(next, config); if (!result.saved) throw new Error('PHONE_SETUP_CONFIG_CONFLICT');
+      const result = await service.saveConfig(next, config, mutation?.check); if (!result.saved) throw new Error('PHONE_SETUP_CONFIG_CONFLICT');
     },
-    install: async (kind, repair) => {
+    install: async (kind, repair, mutation) => {
+      mutation?.check();
       if (kind === 'adb') requireIdle();
       const config = service.currentConfig;
-      await manager().install(kind, { repair });
+      await manager().install(kind, { repair, signal: mutation?.signal, beforeCommit: mutation?.check });
+      mutation?.check();
       if (kind === 'adb' && config.phone.adbPath) {
-        const path = managedPhoneAdbPath(resolveStateDir()); await probePhoneAdb(path);
+        const path = managedPhoneAdbPath(resolveStateDir()); await probePhoneAdb(path); mutation?.check();
         const next = structuredClone(config); next.phone.adbPath = path;
-        if (!(await service.saveConfig(next, config)).saved) throw new Error('PHONE_SETUP_CONFIG_CONFLICT');
+        if (!(await service.saveConfig(next, config, mutation?.check)).saved) throw new Error('PHONE_SETUP_CONFIG_CONFLICT');
       }
     },
-    registerLocal: async (serial, name) => {
+    registerLocal: async (serial, name, mutation) => {
       const discovered = (await runtime.discover(service.currentConfig)).find(phone => phone.serial === serial && phone.state === 'device');
+      mutation?.check();
       if (!discovered) throw new Error('PHONE_SETUP_DEVICE_OFFLINE: Select an online discovered local phone.');
       if (!runtime.repository.list().some(phone => phone.serial === serial)) runtime.repository.save({ serial, name: name?.trim() || discovered.name, enabled: true, appAccess: 'selected', allowedApps: ['com.android.settings'] });
     },
@@ -94,7 +99,8 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
 /** Registered inside the existing Phone admin route group. */
 export function registerPhoneSetupRoutes(app: Hono, deps: AuthenticatedRouteDeps) {
   const schema = z.strictObject({ conversationId: z.string().uuid(), setupId: z.string().uuid().optional(),
-    action: z.enum(['inspect', 'start', 'get', 'recheck', 'source', 'begin_verification', 'release', 'cancel']),
+    action: z.enum(['inspect', 'start', 'get', 'recheck', 'source', 'set_model', 'begin_verification', 'release', 'cancel']),
+    modelRef: z.string().min(1).max(500).optional(), replaceExisting: z.boolean().optional(),
     source: z.enum(['local', 'aliyun']).optional(), deviceId: z.string().uuid().optional(), expectedRevision: z.number().int().positive().optional() });
   app.post('/api/phone/setup', deps.strictRateLimitMiddleware, async c => {
     const parsed = schema.safeParse(await c.req.json().catch(() => null));
@@ -104,7 +110,10 @@ export function registerPhoneSetupRoutes(app: Hono, deps: AuthenticatedRouteDeps
     const context = { conversationId: body.conversationId, agentId: metadata.agentId }; const setup = deps.service.phoneSetup;
     try {
       let payload: unknown;
-      if (body.action === 'source') {
+      if (body.action === 'set_model') {
+        if (!body.setupId || !body.modelRef || !body.expectedRevision) throw new Error('Choose a compatible model and refresh current progress');
+        payload = await setup.command('set_model', { setupId: body.setupId, modelRef: body.modelRef, expectedRevision: body.expectedRevision, replaceExisting: body.replaceExisting }, { ...context, canConfigure: true });
+      } else if (body.action === 'source') {
         if (!body.setupId || !body.source || !body.expectedRevision) throw new Error('Choose a source and refresh current progress');
         payload = await setup.source(context, body.setupId, body.source, body.expectedRevision);
       } else if (body.action === 'begin_verification') {

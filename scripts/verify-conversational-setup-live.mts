@@ -15,18 +15,28 @@ const originalEnv = { ...process.env };
 const originalState = resolve(process.env.XOPC_STATE_DIR ?? join(process.env.HOME!, '.xopc'));
 const credentials = resolve(process.env.XOPC_CREDENTIALS_DIR ?? join(originalState, 'credentials'));
 const credentialPath = join(credentials, 'oauth/xopc-cloud.json');
+const evidence = resolve(process.env.XOPC_PHONE_SETUP_EVIDENCE ?? '/tmp/xopc-conversational-setup-live');
+await mkdir(evidence, { recursive: true });
+async function blocked(reason: string, details: Record<string, unknown> = {}): Promise<never> {
+  await writeFile(join(evidence, 'result.json'), JSON.stringify({ ok: false, status: 'blocked', reason, ...details }, null, 2));
+  console.log(JSON.stringify({ status: 'blocked', reason, evidence })); process.exit(2);
+}
 const adb = process.env.XOPC_PHONE_ADB_PATH ?? join(process.env.HOME!, 'Library/Android/sdk/platform-tools/adb');
 const devices = JSON.parse(execFileSync('sqlite3', ['-readonly', '-json', join(originalState, 'xopc.db'), "SELECT payload FROM durable_state WHERE namespace='phone.devices'"], { encoding: 'utf8' }) || '[]').map((row: any) => JSON.parse(row.payload));
 const selectedCloud = devices.find((d: any) => d.name === (process.env.XOPC_PHONE_DEVICE_NAME ?? '阿里云测试手机') && d.enabled && d.connection?.kind === 'aliyun-adb');
-assert(selectedCloud, 'Configured Aliyun test phone not found');
+if (!selectedCloud) await blocked('configured_test_phone_not_found');
 const leases = JSON.parse(execFileSync('sqlite3', ['-readonly', '-json', join(originalState, 'xopc.db'), "SELECT key,payload FROM durable_state WHERE namespace='phone.leases'"], { encoding: 'utf8' }) || '[]');
-assert(!leases.some((row: any) => row.key === selectedCloud.serial && JSON.parse(row.payload).expiresAt > Date.now()), 'Cloud test phone is busy');
+if (leases.some((row: any) => row.key === selectedCloud.serial && JSON.parse(row.payload).expiresAt > Date.now())) await blocked('test_phone_busy');
 const { XopcCloudModelSource } = await import('../src/providers/xopc-cloud-model-source.js');
 const catalog = await new XopcCloudModelSource().fetch();
-assert(catalog.status === 'fetched' && catalog.models.some(m => m.id === 'phone' && m.phoneUse), 'Cloud Phone model unavailable');
+if (catalog.status !== 'fetched') await blocked('phone_catalog_unavailable');
+assert(catalog.status === 'fetched');
+const phoneModels = catalog.models.filter(model => model.phoneUse);
+const requestedModel = process.env.XOPC_PHONE_SETUP_MODEL?.replace(/^xopc-cloud\//, '');
+const phoneModel = requestedModel ? phoneModels.find(model => model.id === requestedModel) : phoneModels.find(model => model.id === 'phone') ?? (phoneModels.length === 1 ? phoneModels[0] : undefined);
+if (!phoneModel) await blocked('select_available_phone_model', { compatibleModelIds: phoneModels.map(model => model.id) });
+const phoneModelRef = `xopc-cloud/${phoneModel.id}`;
 const root = await mkdtemp(join(tmpdir(), 'xopc-phone-setup-live-'));
-const evidence = resolve(process.env.XOPC_PHONE_SETUP_EVIDENCE ?? '/tmp/xopc-conversational-setup-live');
-await mkdir(evidence, { recursive: true });
 await mkdir(join(root, 'home'));
 const modelRequests: Array<{ id: number; status?: number; elapsedMs?: number; configureSkill: boolean }> = [];
 const proxy = createServer(async (req, res) => {
@@ -56,7 +66,7 @@ await new Promise<void>(done => probe.close(() => done()));
 const base = `http://127.0.0.1:${port}`; const token = randomUUID(); const configPath = join(root, 'xopc.json');
 Object.assign(process.env, { XOPC_STATE_DIR: root, XOPC_CONFIG: configPath, XOPC_CONFIG_PATH: configPath, XOPC_CREDENTIALS_DIR: credentials,
   XOPC_WORKSPACE: root, XOPC_MODELS_JSON: join(root, 'models.json'), PI_CODING_AGENT_DIR: join(root, 'pi'), XOPC_BUNDLED_SKILLS_ROOT: join(root, 'skills'),
-  XOPC_BROWSER_EXT_BUNDLED_ROOT: join(root, 'browser-extension'), XOPC_UI_STATIC_ROOT: process.env.XOPC_PHONE_SETUP_UI_ROOT ?? '/tmp/xopc-dialog-setup-ui', XOPC_LOG_CONSOLE: 'false', XOPC_LOG_FILE: 'false', XOPC_SKIP_CHANNELS: '1', XOPC_NO_RESPAWN: '1' });
+  XOPC_BROWSER_EXT_BUNDLED_ROOT: join(root, 'browser-extension'), XOPC_UI_STATIC_ROOT: process.env.XOPC_PHONE_SETUP_UI_ROOT ?? resolve('dist/gateway/static/root'), XOPC_LOG_CONSOLE: 'false', XOPC_LOG_FILE: 'false', XOPC_SKIP_CHANNELS: '1', XOPC_NO_RESPAWN: '1' });
 await writeFile(configPath, JSON.stringify({ gateway: { bind: 'loopback', port, auth: { mode: 'token', token } }, phone: { enabled: false, adbPath: adb }, browser: { enabled: false } }), { mode: 0o600 });
 const modelRef = 'phone-setup-live/gpt-5.6-sol';
 await writeFile(join(root, 'models.json'), JSON.stringify({ providers: { 'phone-setup-live': { baseUrl: `http://127.0.0.1:${modelAddress.port}/v1`, api: 'openai-completions', apiKey: 'isolated-relay', models: [{ id: 'gpt-5.6-sol', name: 'XOPC Cloud GPT-5.6 Sol', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096 }] } } }), { mode: 0o600 });
@@ -135,7 +145,7 @@ try {
   let rows: any[];
   if (process.env.XOPC_SETUP_LIVE_SCENE !== 'browser') {
   await send('帮我配置 Phone Use', true);
-  rows = await send('使用已经配置的阿里云测试手机；使用已登录的 XOPC Cloud 手机操作模型。请自动完成能处理的配置和系统设置基础验收，允许发送这台测试手机的设置页截图并产生正常模型调用费用，不更改其他设置。');
+  rows = await send(`使用已经配置的阿里云测试手机；使用已登录的手机操作模型 ${phoneModelRef}。请自动完成能处理的配置和系统设置基础验收，允许发送这台测试手机的设置页截图并产生正常模型调用费用，不更改其他设置。`);
   const inspected = await request('/api/phone/setup', { conversationId, action: 'inspect' });
   assert(inspected.setup, 'No Phone setup was created');
   const phoneCalls = calls(rows).filter(c => c.name === 'xopc_use' && c.args.mode === 'phone_setup');
@@ -160,8 +170,12 @@ try {
   }
   const guidanceRequests = modelRequests.filter(r => r.configureSkill);
   assert(guidanceRequests.length > 0 && guidanceRequests.every(r => r.status === 200), 'Conversation guidance API failure');
-  await writeFile(join(evidence, 'result.json'), JSON.stringify({ ok: true, chatModel: 'xopc-cloud/openai-codex/gpt-5.6-sol', results, modelRequests }, null, 2));
-  console.log(JSON.stringify({ stage: 'completed', evidence, results }));
+  const fullPhonePass = results.filter(result => result.scenario === 'phone').every(result => result.state === 'completed' && Object.values(result.checks).every(Boolean));
+  const browserNeedsManual = results.some(result => result.scenario === 'browser' && result.state !== 'completed');
+  const status = !fullPhonePass ? 'blocked' : browserNeedsManual ? 'requires_manual_step' : 'passed';
+  if (status !== 'passed') process.exitCode = 2;
+  await writeFile(join(evidence, 'result.json'), JSON.stringify({ ok: status === 'passed', status, chatModel: 'xopc-cloud/openai-codex/gpt-5.6-sol', phoneModelRef, results, modelRequests }, null, 2));
+  console.log(JSON.stringify({ stage: status, evidence, results }));
 } catch (error) {
   process.exitCode = 1; console.error(error instanceof Error ? error.message : 'Live verification failed');
   await page?.screenshot({ path: join(evidence, 'failure.png'), fullPage: true }).catch(() => {});

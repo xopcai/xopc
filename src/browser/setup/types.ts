@@ -4,6 +4,7 @@ export type SetupState = 'plan_ready' | 'preparing' | 'waiting_extension' | 'rea
 export interface BrowserSetup {
   id: string;
   conversationId: string;
+  transcriptId?: string;
   agentId: string;
   revision: number;
   state: SetupState;

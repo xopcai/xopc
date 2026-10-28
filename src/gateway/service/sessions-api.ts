@@ -305,6 +305,7 @@ export class GatewaySessionsApi {
     return performSessionReset(key, {
       sessionIndex: this.opts.sessionIndex,
       getAgentService: this.opts.getAgentService,
+      cancelConfigurationSetups: conversationId => this.opts.getAgentService().cancelConfigurationSetups(conversationId),
     });
   }
 

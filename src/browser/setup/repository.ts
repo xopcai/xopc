@@ -1,11 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-read-repository.js';
 import type { BrowserSetup } from './types.js';
 
 export function readBrowserSetup(id: string): BrowserSetup | undefined {
   const row = getSqliteDatabase().prepare('SELECT payload_json FROM browser_setup_runs WHERE id = ?').get(id) as { payload_json: string } | undefined;
   return row ? JSON.parse(row.payload_json) as BrowserSetup : undefined;
+}
+
+export function listConversationBrowserSetups(conversationId: string): BrowserSetup[] {
+  return (getSqliteDatabase().prepare('SELECT payload_json FROM browser_setup_runs WHERE conversation_id = ?').all(conversationId) as Array<{ payload_json: string }>)
+    .map(row => JSON.parse(row.payload_json) as BrowserSetup);
 }
 
 export function findBrowserSetup(conversationId: string, agentId: string): BrowserSetup | undefined {
@@ -19,7 +25,7 @@ export function createBrowserSetup(conversationId: string, agentId: string, conf
     const existing = findBrowserSetup(conversationId, agentId);
     if (existing && existing.state !== 'cancelled' && existing.state !== 'completed') return existing;
     const now = Date.now();
-    const setup: BrowserSetup = { id: randomUUID(), conversationId, agentId, configRevision, state: 'plan_ready', revision: 1, createdAt: now, updatedAt: now };
+    const setup: BrowserSetup = { id: randomUUID(), conversationId, agentId, transcriptId: getSessionMetadata(conversationId)?.transcriptId, configRevision, state: 'plan_ready', revision: 1, createdAt: now, updatedAt: now };
     db.prepare('INSERT INTO browser_setup_runs (id, conversation_id, agent_id, revision, updated_at, payload_json) VALUES (?, ?, ?, ?, ?, ?)')
       .run(setup.id, conversationId, agentId, setup.revision, now, JSON.stringify(setup));
     return setup;

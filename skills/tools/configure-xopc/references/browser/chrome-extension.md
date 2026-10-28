@@ -13,7 +13,10 @@ prepared folder. Only these manual browser steps belong to the user:
    extensionDir. Give that directory as plain text; do not invent a folder-opening button in settings.
 2. Open the xopc extension side panel and accept any native/browser permission they want.
 
-Recheck after the user returns. If already installed and connected, skip manual installation.
+Give the exact host-returned interactionPath for the manual step. Link its unchanged relative
+path as the Markdown destination; never add localhost or an origin. The authenticated modal
+selects the intended Chrome and rechecks before returning to the original conversation.
+Do not ask for an additional done or continue message. Skip installation when already connected.
 Describe available Chrome names and ask only when the intended endpoint is ambiguous. Explain
 the independent read/click/fill demo, then begin_verification with the chosen endpointId and
 current expectedRevision. Read acceptance.md and perform the test yourself using browser_use.

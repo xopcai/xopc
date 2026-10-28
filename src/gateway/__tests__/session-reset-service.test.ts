@@ -22,7 +22,7 @@ describe('performSessionReset', () => {
     const sessionIndex = { resetSession } as unknown as SessionIndex;
     const getAgentService = () => ({ evictSessionAgent }) as unknown as AgentService;
 
-    const result = await performSessionReset(conversationId, { sessionIndex, getAgentService });
+    const result = await performSessionReset(conversationId, { sessionIndex, getAgentService, cancelConfigurationSetups: async () => {} });
 
     expect(result).toEqual({
       ok: true,
@@ -42,6 +42,7 @@ describe('performSessionReset', () => {
     const result = await performSessionReset("76f7326a-cdd0-41c3-8250-3baf9107be28", {
       sessionIndex,
       getAgentService,
+      cancelConfigurationSetups: async () => {},
     });
 
     expect(result).toEqual({ ok: false, error: 'Session not found' });
@@ -49,6 +50,7 @@ describe('performSessionReset', () => {
 
   it('rejects empty session key', async () => {
     const result = await performSessionReset('  ', {
+      cancelConfigurationSetups: async () => {},
       sessionIndex: { resetSession: vi.fn() } as unknown as SessionIndex,
       getAgentService: () => ({ evictSessionAgent: vi.fn() }) as unknown as AgentService,
     });
@@ -94,4 +96,24 @@ describe('POST /api/sessions/:key/reset', () => {
     expect(body.session.key).toBe(conversationId);
     expect(reset).toHaveBeenCalledWith(conversationId);
   });
+});
+
+it('releases configuration test owners before archiving the old transcript', async () => {
+  const events: string[] = [];
+  const result = await performSessionReset('0ae51c38-22a0-4fcf-818c-9611ec591e34', {
+    sessionIndex: { resetSession: async () => { events.push('reset'); return { transcriptId: 'new' }; } } as unknown as SessionIndex,
+    getAgentService: () => ({ evictSessionAgent: () => {} }) as unknown as AgentService,
+    cancelConfigurationSetups: async () => { events.push('release'); },
+  });
+  expect(result.ok).toBe(true); expect(events).toEqual(['release', 'reset']);
+});
+
+it('does not declare reset complete while configuration control release is unconfirmed', async () => {
+  const resetSession = vi.fn();
+  const result = await performSessionReset('0ae51c38-22a0-4fcf-818c-9611ec591e34', {
+    sessionIndex: { resetSession } as unknown as SessionIndex,
+    getAgentService: () => ({ evictSessionAgent: () => {} }) as unknown as AgentService,
+    cancelConfigurationSetups: async () => { throw new Error('device offline'); },
+  });
+  expect(result).toMatchObject({ ok: false }); expect(resetSession).not.toHaveBeenCalled();
 });

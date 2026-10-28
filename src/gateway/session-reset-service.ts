@@ -11,6 +11,7 @@ const log = createLogger('SessionReset');
 export type SessionResetDeps = {
   sessionIndex: SessionIndex;
   getAgentService: () => AgentService;
+  cancelConfigurationSetups: (conversationId: string) => Promise<void>;
 };
 
 export type SessionResetResult =
@@ -36,12 +37,19 @@ export async function performSessionReset(
 
   await abortEmbeddedRun(key);
 
+  try {
+    await deps.cancelConfigurationSetups(key);
+    cancelPhoneAssistance(key);
+    await getPhoneRuntime().stop(key, 'close');
+  }
+  catch (err) {
+    log.warn({ err, conversationId: key, phase: 'setup_release' }, 'Configuration test release is unconfirmed');
+    return { ok: false, error: 'Configuration test control could not be released. Recheck the device and retry reset.' };
+  }
   const task = await deps.sessionIndex.resetSession(key);
   if (!task) {
     return { ok: false, error: 'Session not found' };
   }
-  cancelPhoneAssistance(key);
-  await getPhoneRuntime().stop(key, 'cancel');
 
   try {
     const agent = deps.getAgentService();

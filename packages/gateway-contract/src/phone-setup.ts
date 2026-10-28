@@ -1,7 +1,7 @@
 export interface PhoneSetupView {
   id: string; conversationId: string; agentId: string; revision: number;
   state: 'configuring' | 'verifying' | 'completed' | 'needs_attention' | 'cancelled';
-  source?: 'local' | 'aliyun'; error?: string; stale: boolean; settingsPath: string;
+  source?: 'local' | 'aliyun'; error?: string; stale: boolean; settingsPath: string; interactionPath?: string;
   readiness: {
     enabled: boolean; toolAllowed: boolean;
     model: { ref?: string; chatRef?: string; source?: 'system' | 'global' | 'agent'; supported: boolean; configured: boolean };

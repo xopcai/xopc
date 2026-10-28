@@ -44,10 +44,30 @@ it('registers only discovered online local devices and does not widen an existin
   let setup = await service.command('start', {}, context) as PhoneSetupView;
   setup = await service.command('source', { setupId: setup.id, expectedRevision: setup.revision, source: 'local' }, context) as PhoneSetupView;
   await expect(service.command('register_local', { setupId: setup.id, expectedRevision: setup.revision, serial: 'unseen-phone' }, context)).rejects.toThrow('DEVICE_OFFLINE');
-  await service.command('register_local', { setupId: setup.id, expectedRevision: setup.revision, serial: 'test-emulator' }, context);
+  setup = await service.command('get', { setupId: setup.id }, context) as PhoneSetupView;
+  setup = await service.command('register_local', { setupId: setup.id, expectedRevision: setup.revision, serial: 'test-emulator' }, context) as PhoneSetupView;
   const device = runtime.repository.list()[0];
   expect(device).toMatchObject({ serial: 'test-emulator', appAccess: 'selected', allowedApps: ['com.android.settings'] });
   runtime.repository.save({ ...device, enabled: false }, device.id);
-  await service.command('register_local', { setupId: setup.id, expectedRevision: setup.revision, serial: 'test-emulator' }, context);
+  setup = await service.command('get', { setupId: setup.id }, context) as PhoneSetupView;
+  setup = await service.command('register_local', { setupId: setup.id, expectedRevision: setup.revision, serial: 'test-emulator' }, context) as PhoneSetupView;
   expect(runtime.repository.get(device.id).enabled).toBe(false);
+});
+
+it('does not register a discovered phone after the original setup was cancelled', async () => {
+  const runtime = getPhoneRuntime(); let entered!: () => void, resolve!: (devices: any[]) => void;
+  const started = new Promise<void>(done => { entered = done; });
+  const discovery = vi.spyOn(runtime, 'discover').mockResolvedValue([]);
+  const service = createPhoneSetupService({ currentConfig: ConfigSchema.parse({}) } as unknown as GatewayService);
+  const context = { conversationId: 'local-cancelled', agentId: 'main', canConfigure: true };
+  let setup = await service.command('start', {}, context) as PhoneSetupView;
+  // Selecting the source is a separate versioned product operation.
+  setup = await service.command('source', { setupId: setup.id, source: 'local', expectedRevision: setup.revision }, context) as PhoneSetupView;
+  discovery.mockImplementationOnce(async () => { entered(); return new Promise<any[]>(done => { resolve = done; }); });
+  const pending = service.command('register_local', { setupId: setup.id, serial: 'late-phone', expectedRevision: setup.revision }, context);
+  const rejected = expect(pending).rejects.toThrow(); await started;
+  const cancelled = service.command('cancel', { setupId: setup.id }, context);
+  resolve([{ serial: 'late-phone', name: 'Late phone', state: 'device', emulator: true }]);
+  await rejected; await cancelled;
+  expect(runtime.repository.list()).toHaveLength(0);
 });

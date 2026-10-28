@@ -49,6 +49,7 @@ const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.Ses
 const TracingSettingsPage = lazy(() => import('@/features/tracing/tracing-settings-page').then(m => ({ default: m.TracingSettingsPage })));
 const UsageSettingsPage = lazy(() => loadUsagePage().then((m) => ({ default: m.UsageSettingsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
+const SetupInteractionPage = lazy(() => import('@/features/settings/setup-interaction-page').then(m => ({ default: m.SetupInteractionPage })));
 const McpConversationSetupPage = lazy(() => import('@/features/connectors/mcp/mcp-conversation-setup-page').then(m => ({ default: m.McpConversationSetupPage })));
 const BrowserAutomationsPage = lazy(() => loadBrowserAutomationsPage().then((m) => ({ default: m.BrowserAutomationsPage })));
 const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })));
@@ -165,6 +166,7 @@ const router = createHashRouter([
     element: <AppShell />,
     errorElement: <RouteErrorFallback />,
     children: [
+      { path: 'configuration/:scene/:setupId', element: <Suspense fallback={<SecondaryRouteFallback />}><SetupInteractionPage /></Suspense> },
       { path: 'mcp-setup/:setupId', element: <Suspense fallback={<SecondaryRouteFallback />}><McpConversationSetupPage /></Suspense> },
       {
         path: 'personal',

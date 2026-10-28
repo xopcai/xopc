@@ -299,3 +299,25 @@ it('requires host interactive authority and current revisions without allowing t
   await expect(f.service.command('prepare', { setupId: start.id, expectedRevision: start.revision }, { ...f.context, canConfigure: true })).rejects.toThrow('AGENT_BROWSER_DENIED');
   expect(f.deps.prepare).not.toHaveBeenCalled();
 });
+
+it('revokes independent Browser test grants and releases control before a conversation reset', async () => {
+  const f = fixture(); let setup = await f.ready();
+  setup = f.service.begin(setup, f.endpoint.endpointId, 'http://127.0.0.1', setup.revision);
+  await f.service.cancelConversation(f.context.conversationId);
+  const current = readBrowserSetup(setup.id)!;
+  expect(current.state).toBe('cancelled'); expect(current.approvedBy).toBeUndefined();
+  expect(current.attempt?.released).toBe(true);
+  expect(f.deps.release).toHaveBeenCalledWith(f.endpoint.endpointId, setup.attempt!.sessionId);
+});
+
+it('does not reuse Browser verification evidence after the transcript is replaced', async () => {
+  const { randomUUID } = await import('node:crypto');
+  const { createConversation } = await import('../../../storage/sqlite/conversation-repository.js');
+  const { resetSessionRecord } = await import('../../../storage/sqlite/session-repository.js');
+  const f = fixture(); f.context.conversationId = randomUUID();
+  createConversation({ agentId: 'main' }, dir, f.context.conversationId);
+  let setup = await f.ready(); setup = f.service.begin(setup, f.endpoint.endpointId, 'http://127.0.0.1', setup.revision);
+  resetSessionRecord(f.context.conversationId, dir);
+  expect(f.service.view(setup).stale).toBe(true);
+  expect(() => f.service.beforeAction(f.context.conversationId, 'main', { action: 'navigate', url: setup.attempt!.fixtureUrl })).toThrow('STOPPED');
+});

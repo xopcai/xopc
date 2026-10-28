@@ -1,5 +1,7 @@
 # Phone Use 在线配置验收
 
+> 2026-10-28：已使用当前兼容模型 `xopc-cloud/phone-doubao` 完成真实云手机五项验收，见[审查修复报告](browser-phone-setup-review-fixes-2026-10-28.md)。下文保留当日额度阻塞记录。
+
 日期：2026-10-24。最终状态：**外部手机模型额度阻塞，完整操作验收未通过**。
 
 对话引导全部使用 XOPC Cloud GPT-5.6 Sol，实际请求模型为 `openai-codex/gpt-5.6-sol`。手机动作模型独立使用 `xopc-cloud/phone`。最终两组证据共 83 次对话模型请求全部 HTTP 200；手机动作模型返回 HTTP 429、`free_quota_exhausted`，不是 GPT-5.6 Sol 对话失败。Cloud 当前仅公开一个支持 Phone 动作协议的模型，未自动切换供应商或开启计费。
