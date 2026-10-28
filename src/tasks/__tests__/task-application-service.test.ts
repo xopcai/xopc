@@ -315,11 +315,11 @@ describe('TaskApplicationService', () => {
     expect(new TaskCollaborationRepository().recent(run.taskId)[0].body.length).toBeLessThanOrEqual(8000);
   });
 
-  it('requires current criterion reviews before an agent completes a task', () => {
+  it.each(['manual', 'verified_then_review', 'verified_auto'] as const)('honors current human criterion reviews under %s before completing a task', (acceptancePolicy) => {
     const service = new TaskApplicationService();
     const created = service.create({
       idempotencyKey: 'manual-acceptance', title: 'Review work', priority: 'normal',
-      contract: { ...contract, acceptancePolicy: 'manual' },
+      contract: { ...contract, acceptancePolicy },
       dependencies: [], context: [], authorityGrants: [],
       activation: { mode: 'capture', phase: 'ready' },
     });

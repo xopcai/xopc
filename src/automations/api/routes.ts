@@ -55,9 +55,9 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
 
   authenticated.get('/api/automations', async (c) => {
     try {
-      const { items } = ProductReadContracts['xopc.automations.list'].output.parse(await capabilities.call('xopc.automations.list',
+      const { items, executionSummaries } = ProductReadContracts['xopc.automations.list'].output.parse(await capabilities.call('xopc.automations.list',
         { projectId: parseProjectId(c.req.query('projectId')) }, capabilityHttpContext(c)));
-      return c.json({ automations: items });
+      return c.json({ automations: items, executionSummaries });
     } catch (error) { return capabilityHttpError(c, error); }
   });
 
@@ -101,11 +101,11 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
     const automationId = c.req.query('automationId')?.trim();
     const projectId = parseProjectId(c.req.query('projectId'));
     try {
-      const { items } = ProductReadContracts['xopc.automations.history'].output.parse(await capabilities.call('xopc.automations.history', {
-        automationId: automationId || undefined, projectId: automationId ? undefined : projectId,
+      const { items, nextCursor, hasMore } = ProductReadContracts['xopc.automations.history'].output.parse(await capabilities.call('xopc.automations.history', {
+        automationId: automationId || undefined, projectId, cursor: c.req.query('cursor'),
         limit: c.req.query('limit') === undefined ? undefined : Number(c.req.query('limit')),
       }, capabilityHttpContext(c)));
-      return c.json({ runs: items });
+      return c.json({ runs: items, nextCursor, hasMore });
     } catch (error) { return capabilityHttpError(c, error); }
   });
 

@@ -10,6 +10,24 @@ vi.mock('@/features/chat/chat-page', () => ({ ChatPage: ({ conversationId, autom
 import { automationApi } from '../automation-api';
 import { AutomationConversation } from '../automation-conversation';
 
+it('keeps an explicitly opened repair conversation without reopening it and clearing its focused run', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  const automation = { id: 'task', name: 'Report', enabled: true,
+    trigger: { kind: 'manual' as const }, action: { kind: 'agent' as const, instruction: 'Report' }, conversationMode: 'new_session' as const,
+    delivery: { notificationPolicy: 'none' as const, destinations: [] }, state: {}, createdAtMs: 1, updatedAtMs: 1 };
+  vi.spyOn(automationApi, 'configuration').mockResolvedValue({ deleted: false, automation });
+  const open = vi.spyOn(automationApi, 'openConfiguration');
+  const container = document.createElement('div'); document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => { root.render(<SWRConfig value={{ provider: () => new Map() }}>
+      <AutomationConversation automation={automation} conversationId="repair-chat" runs={[]} language="en" onSelectRun={vi.fn()} />
+    </SWRConfig>); });
+    expect(open).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-conversation="repair-chat"]')).not.toBeNull();
+  } finally { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); }
+});
+
 it('opens an unbound setup conversation and reports its created task', async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   const configured = vi.fn();

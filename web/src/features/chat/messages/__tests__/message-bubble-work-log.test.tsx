@@ -114,11 +114,14 @@ describe('lightweight assistant activity', () => {
         ...(answer ? [{ type: 'text' as const, text: answer, presentation: 'answer' as const, segmentId: 'answer' }] : [])] }}
       isStreaming={active} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
   }
-  it('shows concrete public progress without tool rows, icons or generic status text', () => {
+  it('shows concrete progress with a text status and no three-dot bubble', () => {
     render(true);
     expect(container.textContent).toContain('正在核对相关资料。');
-    expect(container.textContent).not.toMatch(/customer.export|private\/secret|其他操作|正在处理|cat /);
-    expect(container.querySelector('[data-assistant-work-log] svg')).toBeNull();
+    expect(container.textContent).not.toMatch(/customer.export|private\/secret|其他操作|cat /);
+    expect(container.querySelector('[data-assistant-running] svg')).not.toBeNull();
+    expect(container.querySelector('.xopc-personal-thinking-dots')).toBeNull();
+    expect(container.querySelector('[data-assistant-running] [role="status"]')?.textContent).toBeTruthy();
+    expect(container.querySelector('[data-assistant-running] .tabular-nums')).not.toBeNull();
     expect(container.querySelector('button[aria-expanded]')).toBeNull();
     expect(container.querySelectorAll('[data-assistant-work-log] [role="status"]')).toHaveLength(1);
     const flow = container.querySelector('[data-assistant-activity-flow]')!;
@@ -155,10 +158,12 @@ describe('lightweight assistant activity', () => {
       { type: 'text', text: '正在处理...', presentation: 'narration' },
       ...Array.from({ length: 6 }, (_, index) => ({ ...tool, id: `tool-${index}` })),
     ] }} isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
-    expect(container.textContent).not.toMatch(/正在处理|其他操作|Private reasoning|customer.export/);
+    expect(container.textContent).not.toMatch(/其他操作|Private reasoning|customer.export/);
+    expect(container.querySelector('[data-assistant-running]')?.textContent).toContain('6');
     expect(container.querySelectorAll('[data-assistant-work-log] [role="status"]')).toHaveLength(1);
     expect(container.querySelector('[data-activity-group]')).toBeNull();
-    expect(container.querySelector('[data-assistant-work-log] svg')).toBeNull();
+    expect(container.querySelector('[data-assistant-running] [role="status"]')?.textContent).toBeTruthy();
+    expect(container.querySelector('.xopc-personal-thinking-dots')).toBeNull();
   });
 
   it('shows concrete phone operations even when the assistant has not sent narration', () => {

@@ -101,6 +101,20 @@ describe('execution context', () => {
     expect(renderExecutionContext(context)).toContain('Confirmed user context');
   });
 
+  it('retains ongoing response preferences under a limited context budget and applies corrections immediately', () => {
+    const preference = reconcileAssertion(assertion({ applicability: { operation: 'response' }, consequence: 'medium',
+      declaredImportance: undefined, inferredImportance: 0.7 }), 200);
+    if (preference.action === 'suppressed') throw new Error('Unexpected suppression');
+    reconcileAssertion(assertion({ predicate: 'identity.release', kind: 'identity', value: 'release', normalizedValue: 'release',
+      statement: 'Prepare the release response.', consequence: 'medium', declaredImportance: undefined, inferredImportance: 0.7 }), 200);
+    expect(buildExecutionContext({ ...request, maxAssertions: 1 }).assertions[0]?.assertion.id).toBe(preference.assertion.id);
+    reconcileAssertion(assertion({ applicability: { operation: 'response' }, value: 'detailed', normalizedValue: 'detailed',
+      statement: 'Explain the reasoning in detail.', observedAt: 300, correctionOfAssertionId: preference.assertion.id }), 400);
+    const next = buildExecutionContext({ ...request, maxAssertions: 1 });
+    expect(next.assertions[0]?.assertion.statement).toBe('Explain the reasoning in detail.');
+    expect(renderExecutionContext(next)).not.toContain('Use concise responses.');
+  });
+
   it('uses strong observed and inferred candidates as labeled working assumptions', () => {
     reconcileAssertion(assertion({
       authority: 'system_inferred',

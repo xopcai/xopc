@@ -7,6 +7,7 @@ import type { HomeCapabilityRequirement, HomeCapabilityResolution } from './capa
 import type { HomeGeneratedResult } from './types.js';
 import type { HomeContextSnapshot } from './snapshot.js';
 import { homePatternKey, type HomeAdvicePersonalization } from './strategy.js';
+import { buildEvidencePresentation } from './evidence-presentation.js';
 
 const CONFIDENCE_SCORE = { high: 30, medium: 20, low: 0 } as const;
 const URGENCY_SCORE = { now: 12, today: 8, this_week: 4 } as const;
@@ -82,6 +83,9 @@ export class HomeAdvicePolicy {
       const degradedStartAvailable = missingRequired
         && Boolean(candidate.degradedActionPrompt)
         && candidate.risk !== 'external_write';
+      const evidencePresentation = buildEvidencePresentation(
+        candidate.evidenceGroups, candidate.evidenceIds, evidence, snapshot.locale,
+      );
       const opportunity: HomeOpportunity = {
         id: randomUUID(),
         revision: 1,
@@ -91,6 +95,7 @@ export class HomeAdvicePolicy {
         outcome: candidate.outcome,
         rationale: candidate.rationale,
         evidence,
+        ...(evidencePresentation ? { evidencePresentation } : {}),
         confidence: candidate.confidence,
         urgency: candidate.urgency,
         estimatedMinutes: candidate.estimatedMinutes,

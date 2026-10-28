@@ -17,6 +17,7 @@ import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AutomationsWorkspace } from '@/features/automations/automations-workspace';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
+import { NewChatLink } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { commandTask, createTask, ensureTaskConversation, fetchTask, updateTaskBoardPosition, updateTaskDependencies } from '@/features/tasks/home-api';
@@ -1177,10 +1178,10 @@ export function ProjectDetailPage() {
           {pm.board.create}
         </Button>
         <Button asChild variant="primary" className="h-9 rounded-lg">
-          <Link to={newChatHrefForProject(project.id)} state={{ forceNewChat: true, agentId: project.defaultAgentId }} onClick={onProjectTabLinkClick('sessions')}>
+          <NewChatLink to={newChatHrefForProject(project.id)} state={{ forceNewChat: true, agentId: project.defaultAgentId }} onClick={onProjectTabLinkClick('sessions')}>
             <MessageSquarePlus className="size-4" aria-hidden />
             {pm.common.newChat}
-          </Link>
+          </NewChatLink>
         </Button>
       </>
     ) : null,

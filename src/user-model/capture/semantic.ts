@@ -20,6 +20,7 @@ export interface CaptureEvidence {
 export type AssertionMaintenanceAction = 'create' | 'merge' | 'replace';
 
 export interface ParsedAssertionOperation extends AssertionCandidate {
+  intent?: UserModelCaptureIntent;
   action: AssertionMaintenanceAction;
   targetAssertionId?: string;
   evidenceRefs: string[];
@@ -28,6 +29,7 @@ export interface ParsedAssertionOperation extends AssertionCandidate {
 }
 
 export interface ParsedGoalCandidate {
+  intent?: UserModelCaptureIntent;
   title: string;
   desiredOutcome: string;
   scope: AssertionCandidate['scope'];
@@ -37,6 +39,7 @@ export interface ParsedGoalCandidate {
 }
 
 export interface ParsedCollaborationRuleCandidate {
+  intent?: UserModelCaptureIntent;
   category: 'communication' | 'execution' | 'boundary' | 'routine' | 'initiative';
   priority: number;
   scope: AssertionCandidate['scope'];
@@ -160,6 +163,11 @@ function comparable(value: string): string {
   return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+function operationIntent(intent: UserModelCaptureIntent | undefined, turnIntent: UserModelCaptureIntent): UserModelCaptureIntent {
+  // Candidate arrays describe durable claims independently of the surrounding task.
+  return intent ?? (turnIntent === 'task' || turnIntent === 'none' ? 'user_assertion' : turnIntent);
+}
+
 function effectiveAuthority(intent: UserModelCaptureIntent, authority: AssertionAuthority): AssertionAuthority {
   if (intent === 'remember' || intent === 'correct' || intent === 'confirm' || intent === 'user_assertion') return authority;
   return authority === 'user_explicit' ? 'user_observed' : authority;
@@ -219,12 +227,16 @@ export function parseUserModelInterpretation(
   const assertions: ParsedAssertionOperation[] = [];
   {
     for (const item of parsed.assertions) {
-      if (!assertionIntents.has(item.intent ?? parsed.intent)) continue;
+      const intent = operationIntent(item.intent, parsed.intent);
+      if (!assertionIntents.has(intent)) continue;
       const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
       if (!evidenceRefs) continue;
+      if (item.action === 'create' && (item.authority === 'user_observed' || item.authority === 'system_inferred')
+        && new Set(evidenceRefs.map(ref => comparable(evidenceByRef.get(ref)!.text))).size < 2) continue;
       if (item.action !== 'create' && (!item.targetAssertionId || !allowed.has(item.targetAssertionId))) continue;
       const observedAt = Math.max(...item.evidence.map((claim) => evidenceByRef.get(claim.ref)!.createdAt));
       assertions.push({
+        intent,
         action: item.action,
         ...(item.targetAssertionId ? { targetAssertionId: item.targetAssertionId } : {}),
         subject: item.subject,
@@ -235,7 +247,7 @@ export function parseUserModelInterpretation(
         value: item.value,
         normalizedValue: item.normalizedValue,
         statement: item.statement,
-        authority: effectiveAuthority(item.intent ?? parsed.intent, item.authority),
+        authority: effectiveAuthority(intent, item.authority),
         confidence: item.confidence,
         ...(item.declaredImportance === undefined ? {} : { declaredImportance: item.declaredImportance }),
         inferredImportance: item.inferredImportance,
@@ -260,10 +272,12 @@ export function parseUserModelInterpretation(
   }
   const structuredIntents = new Set<UserModelCaptureIntent>(['remember', 'confirm', 'correct', 'user_assertion']);
   const goals = parsed.goals.flatMap((item) => {
-    if (!structuredIntents.has(item.intent ?? parsed.intent)) return [];
+    const intent = operationIntent(item.intent, parsed.intent);
+    if (!structuredIntents.has(intent)) return [];
     const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
     if (!evidenceRefs) return [];
     return [{
+      intent,
       title: item.title,
       desiredOutcome: item.desiredOutcome,
       scope: item.scope,
@@ -273,18 +287,20 @@ export function parseUserModelInterpretation(
     }];
   });
   const collaborationRules = parsed.collaborationRules.flatMap((item) => {
-        if (!structuredIntents.has(item.intent ?? parsed.intent)) return [];
-        const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
-        if (!evidenceRefs || item.scope.type === 'agent') return [];
-        return [{
-          category: item.category,
-          priority: item.priority,
-          scope: item.scope,
-          conditions: item.conditions,
-          statement: item.statement,
-          evidenceRefs,
-        }];
-      });
+    const intent = operationIntent(item.intent, parsed.intent);
+    if (!structuredIntents.has(intent)) return [];
+    const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
+    if (!evidenceRefs || item.scope.type === 'agent') return [];
+    return [{
+      intent,
+      category: item.category,
+      priority: item.priority,
+      scope: item.scope,
+      conditions: item.conditions,
+      statement: item.statement,
+      evidenceRefs,
+    }];
+  });
   return {
     knowledge: parsed.knowledge,
     knowledgeDeletions: parsed.knowledgeDeletions.flatMap(item => {

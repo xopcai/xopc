@@ -67,6 +67,25 @@
       "advisorStatusModelUnavailable": "Setup needed",
       "advisorWhy": "Why now",
       "advisorEvidence": "View evidence",
+      "advisorEvidenceCopy": {
+        "aiNote": "AI summary; original records are available for verification.",
+        "unavailable": "No English summary is available for this record. View the original records.",
+        "originals": "View original records",
+        "sourceCount": "{{count}} records",
+        "openSource": "Open source",
+        "noSource": "No source link available",
+        "more": "Show {{count}} more groups",
+        "sources": {
+          "project": "Project",
+          "task": "Task",
+          "conversation": "Conversation",
+          "calendar": "Calendar record",
+          "mail": "Mail record",
+          "communication": "Communication record",
+          "file": "File",
+          "user_model": "Knowledge record"
+        }
+      },
       "advisorNeedsSetup": "Setup needed",
       "advisorStart": "Start with xopc",
       "advisorDiscuss": "Discuss first",
@@ -118,7 +137,7 @@
       "advisorHistoryStatusSourceIncorrect": "Source reported incorrect",
       "advisorHistoryStatusLessLikeThis": "Preference updated",
       "advisorHistoryReturnsAt": "Returns",
-      "advisorHistoryEvidence": "View original evidence",
+      "advisorHistoryEvidence": "View evidence",
       "advisorHistoryContinueDiscussion": "Continue discussion",
       "advisorHistoryViewProgress": "View progress",
       "advisorHistoryReevaluate": "Re-evaluate"

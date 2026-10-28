@@ -120,6 +120,7 @@ export const AutomationRunSchema = z.object({
   summary: z.string().optional(),
   error: z.string().optional(),
   conversationId: z.string().optional(),
+  conversationShared: z.boolean().optional(),
   model: z.string().optional(),
   deadlineAtMs: z.number().optional(),
   currentPhase: z.enum(['queued', 'action', 'cancelling', 'completed']).optional(),

@@ -86,6 +86,22 @@ function resolveCapabilities(
 describe('HomeAdvicePolicy', () => {
   const policy = new HomeAdvicePolicy(resolveCapabilities);
 
+  it('adds localized evidence presentation without changing execution context or ranking', () => {
+    const input = candidate({ evidenceGroups: [{ summary: 'Atlas 本周需要发布。', evidenceIds: [evidence.id] }] });
+    const result = policy.apply(snapshot, { state: 'ready', candidates: [input] }, now);
+    const baseline = policy.apply(snapshot, { state: 'ready', candidates: [candidate()] }, now);
+    expect(result).toMatchObject({ state: 'ready', placement: 'primary', opportunities: [{
+      evidence: [evidence], actionPrompt: input.actionPrompt,
+      evidencePresentation: { version: 1, locale: 'zh', groups: input.evidenceGroups },
+    }] });
+    expect(result.state === 'ready' && result.placement).toBe(baseline.state === 'ready' && baseline.placement);
+    const invalid = policy.apply(snapshot, { state: 'ready', candidates: [candidate({
+      evidenceGroups: [{ summary: 'Sources conflict on publishing intent 拾光.', evidenceIds: [evidence.id] }],
+    })] }, now);
+    expect(invalid.state).toBe('ready');
+    if (invalid.state === 'ready') expect(invalid.opportunities[0].evidencePresentation).toBeUndefined();
+  });
+
   it('ranks grounded, executable outcomes ahead of risky suggestions', () => {
     const result = policy.apply(snapshot, {
       state: 'ready',

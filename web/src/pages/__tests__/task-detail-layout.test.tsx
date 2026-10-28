@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskDetailPage } from '../task-detail-page';
-import { commandTask, type TaskDetail } from '@/features/tasks/home-api';
+import { commandTask, reviewTaskCriterion, type TaskDetail } from '@/features/tasks/home-api';
 import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { taskCopy } from '@/features/tasks/task-copy';
 
@@ -49,6 +49,8 @@ describe('task detail action-first layout', () => {
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.clearAllMocks();
+    state.mutate.mockResolvedValue(undefined);
+    vi.mocked(reviewTaskCriterion).mockReset();
     state.detail = detail();
     state.automations = [];
     state.schedulesLoading = false;
@@ -60,8 +62,8 @@ describe('task detail action-first layout', () => {
   it('puts current action before results, goal and management and keeps start actionable', async () => {
     await render();
     const text = container.textContent;
-    expect(text.indexOf('当前进展')).toBeLessThan(text.indexOf('结果与交付'));
-    expect(text.indexOf('结果与交付')).toBeLessThan(text.indexOf('任务目标'));
+    expect(text.indexOf('当前进展')).toBeLessThan(text.indexOf('交付结果'));
+    expect(text.indexOf('交付结果')).toBeLessThan(text.indexOf('任务目标'));
     expect(text.indexOf('任务目标')).toBeLessThan(text.indexOf('任务管理'));
     await act(async () => button(copy.runTask).click());
     expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'start', executor: { kind: 'agent', agentId: 'main' } }, 3);
@@ -99,7 +101,7 @@ describe('task detail action-first layout', () => {
     state.detail.task.phase = 'review'; state.detail.allowedCommands = ['start', 'close'];
     await render();
     expect(button(copy.runTask)).toBeUndefined();
-    expect(button(copy.approveTask)).toBeUndefined();
+    expect(button('验收通过，完成任务').disabled).toBe(true);
     const acceptance = container.querySelector<HTMLElement>(`[aria-label="${copy.successDefinition}"]`)!;
     acceptance.scrollIntoView = vi.fn();
     act(() => button('去验收').click());
@@ -112,13 +114,94 @@ describe('task detail action-first layout', () => {
     expect(document.body.textContent).toContain(copy.deleteTask);
   });
 
+  it('lets a user accept an unverified automatic criterion and then complete the task', async () => {
+    state.detail.task.phase = 'review';
+    state.detail.task.contract!.acceptancePolicy = 'verified_auto';
+    state.detail.allowedCommands = ['close'];
+    vi.mocked(reviewTaskCriterion).mockImplementation(async () => {
+      state.detail = { ...state.detail, task: { ...state.detail.task, version: 4 },
+        criterionReviews: [{ criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1,
+          status: 'passed', reviewedBy: { kind: 'user', id: 'owner' }, reviewedAt: 1 }] };
+      return state.detail;
+    });
+    await render();
+    expect(button('验收通过，完成任务').disabled).toBe(true);
+    expect(button('标记未通过')).toBeDefined();
+    await act(async () => button('确认通过').click());
+    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'passed', 3, 1);
+    await render();
+    expect(container.textContent).toContain('人工判定');
+    expect(button('更改判定')).toBeDefined();
+    expect(button('确认通过')).toBeUndefined();
+    await act(async () => button('验收通过，完成任务').click());
+    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'close', resolution: 'done' }, 4);
+  });
+
+  it('hides criterion review controls for closed tasks', async () => {
+    state.detail.task.phase = 'closed';
+    await render();
+    expect(button('确认通过')).toBeUndefined();
+    expect(button('标记未通过')).toBeUndefined();
+  });
+
   it('allows completion only after all criteria passed', async () => {
     state.detail.task.phase = 'review'; state.detail.allowedCommands = ['close'];
     state.detail.criterionReviews = [{ criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1, status: 'passed', reviewedAt: 1 }] as TaskDetail['criterionReviews'];
     await render();
-    expect(button('去验收')).toBeUndefined();
-    await act(async () => button(copy.approveTask).click());
+    expect(button('去验收')).toBeDefined();
+    await act(async () => button('验收通过，完成任务').click());
     expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'close', resolution: 'done' }, 3);
+  });
+
+  it('keeps delivery and unresolved decisions visible while collapsing reports and evidence', async () => {
+    state.detail.task.phase = 'review';
+    state.detail.allowedCommands = ['close', 'add_wait', 'start'];
+    state.detail.task.contract!.acceptanceCriteria = ['Report saved', 'Evidence checked'];
+    state.detail.runs = [{ id: 'run-1', contractVersion: 1, status: 'succeeded' }] as TaskDetail['runs'];
+    const note = 'Default criteria were not expanded into concrete acceptance items; broad completion cannot certify item coverage.';
+    state.detail.receipts = [{ runId: 'run-1', status: 'succeeded', summary: 'Claim c-ac0-scope: Full report with detailed reasoning',
+      finalizedAt: 1, completionVerdict: 'partial', needsUser: true, remainingWork: ['Confirm the public release scope'], nextAction: 'Choose internal or public release',
+      evidence: [{ kind: 'source', title: 'Research claim: c-file', summary: 'Source details', provenance: 'judge', strength: 'observed' }],
+      verification: { status: 'unverified', checks: state.detail.task.contract!.acceptanceCriteria.map((criterion) => ({ criterion,
+        status: 'unverified', evidenceTitles: ['Research claim: c-file'], method: 'model_reviewed', note })) } }] as TaskDetail['receipts'];
+    await render();
+    const report = [...container.querySelectorAll('summary')].find((item) => item.textContent === '完整执行报告')!.parentElement as HTMLDetailsElement;
+    expect(report.open).toBe(false);
+    expect(report.textContent).toContain('Full report with detailed reasoning');
+    expect(report.textContent).toContain(copy.doneWell);
+    const management = container.querySelector<HTMLDetailsElement>('[aria-label="任务管理"]')!;
+    expect(management.open).toBe(false);
+    const followUp = container.querySelector('[aria-label="执行待办"]')!;
+    expect(followUp.textContent).toContain('Confirm the public release scope');
+    expect(followUp.textContent).toContain('Choose internal or public release');
+    expect(followUp.querySelector('a')?.getAttribute('href')).toBe('/chat/task/task-1');
+    const acceptance = container.querySelector(`[aria-label="${copy.successDefinition}"]`)!;
+    expect(acceptance.querySelectorAll('summary')[0].textContent).toBe('验收 · 0/2');
+    expect(acceptance.textContent!.split(note)).toHaveLength(2);
+    const evidencePanels = [...acceptance.querySelectorAll('summary')].filter((item) => item.textContent!.startsWith('查看依据'));
+    expect(evidencePanels).toHaveLength(2);
+    for (const summary of evidencePanels) expect((summary.parentElement as HTMLDetailsElement).open).toBe(false);
+    const toolbar = container.querySelector('[aria-label="任务操作"]')!;
+    expect(toolbar.textContent).not.toContain(copy.pauseTask);
+    expect(toolbar.textContent).not.toContain('设置执行时间');
+    await act(async () => evidencePanels[0].click());
+    expect((evidencePanels[0].parentElement as HTMLDetailsElement).open).toBe(true);
+    expect((evidencePanels[1].parentElement as HTMLDetailsElement).open).toBe(false);
+  });
+
+  it('allows changing a human decision and keeps save failures beside acceptance', async () => {
+    state.detail.task.phase = 'review';
+    state.detail.allowedCommands = ['close'];
+    state.detail.criterionReviews = [{ criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1,
+      status: 'passed', reviewedAt: 1 }] as TaskDetail['criterionReviews'];
+    vi.mocked(reviewTaskCriterion).mockRejectedValueOnce(new Error('Conflict'));
+    await render();
+    act(() => button('更改判定').click());
+    await act(async () => button('标记未通过').click());
+    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'failed', 3, 1);
+    expect(container.querySelector(`[aria-label="${copy.successDefinition}"] [role="alert"]`)?.textContent).toBe(copy.actionFailed);
+    expect(button('确认通过')).toBeDefined();
+    expect(commandTask).not.toHaveBeenCalled();
   });
 
   it('shows a closed summary and view-results action while retaining reopen', async () => {

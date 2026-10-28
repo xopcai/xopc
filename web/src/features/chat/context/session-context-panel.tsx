@@ -5,6 +5,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ComposerAttachmentSummary, ComposerContextRef } from '@/features/chat/composer/composer.types';
+import { NewChatLink } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -82,6 +83,9 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="end" sideOffset={8} collisionPadding={12} aria-label={copy.title}
+          onCloseAutoFocus={event => {
+            if (document.activeElement?.closest('[data-primary-chat-composer]')) event.preventDefault();
+          }}
           className="xopc-session-context-popover z-50 max-h-[min(30rem,var(--radix-popover-content-available-height))] w-[min(23rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-edge bg-surface-overlay p-3 shadow-popover">
           <h2 className="mb-2 px-2 text-sm font-medium text-fg">{copy.title}</h2>
           {isLoading ? <div className="space-y-2 px-2" aria-busy="true">{[0, 1, 2].map((n) => <Skeleton key={n} className="h-8 w-full" />)}</div> : error ? (
@@ -160,7 +164,7 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
                 </div>
                 {props.environmentAction}
                 {!environment.available ? <p className="px-2 py-1 text-xs text-fg-muted">{copy.unavailableEnvironment}</p> : null}
-                {currentProject && project?.workspaceRoot ? <Link className={actionClass} to={newChatHrefForProject(currentProject.id)} state={{ forceNewChat: true, agentId: props.agentId, temporary: props.temporary }} onClick={close}>{copy.newEnvironment}</Link> : null}
+                {currentProject && project?.workspaceRoot ? <NewChatLink className={actionClass} to={newChatHrefForProject(currentProject.id)} state={{ forceNewChat: true, agentId: props.agentId, temporary: props.temporary }} onClick={close}>{copy.newEnvironment}</NewChatLink> : null}
               </> : <p className="px-2 py-2 text-xs text-fg-muted">{copy.unavailable}</p>}
             </section> : null}
           </div>}

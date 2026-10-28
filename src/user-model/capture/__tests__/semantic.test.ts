@@ -60,6 +60,28 @@ describe('user model semantic capture', () => {
     expect(parseUserModelInterpretation(JSON.stringify(input), evidence)?.assertions).toHaveLength(1);
     expect(parseUserModelInterpretation(JSON.stringify(input), [{ ...evidence[0]!, role: 'toolResult' }])?.assertions).toHaveLength(0);
   });
+  it('retains a durable preference in a task without inheriting the task intent', () => {
+    const input = JSON.parse(response());
+    input.intent = 'task';
+    const parsed = parseUserModelInterpretation(JSON.stringify(input), evidence);
+    expect(parsed?.assertions[0]).toMatchObject({ intent: 'user_assertion', authority: 'user_explicit' });
+    input.assertions[0].intent = 'task';
+    expect(parseUserModelInterpretation(JSON.stringify(input), evidence)?.assertions).toEqual([]);
+    delete input.assertions[0].intent;
+    input.intent = 'query';
+    expect(parseUserModelInterpretation(JSON.stringify(input), evidence)?.assertions).toEqual([]);
+  });
+
+  it('requires independent user expressions for behavioral inference', () => {
+    const input = JSON.parse(response({ authority: 'user_observed' }));
+    expect(parseUserModelInterpretation(JSON.stringify(input), evidence)?.assertions).toEqual([]);
+    input.assertions[0].evidence.push({ ref: 'entry-2', quote: 'Short explanations work better for me.' });
+    const repeated = [...evidence, { ...evidence[0]!, ref: 'entry-2', text: 'Short explanations work better for me.' }];
+    expect(parseUserModelInterpretation(JSON.stringify(input), repeated)?.assertions).toHaveLength(1);
+    input.assertions[0].evidence[1].quote = 'Keep answers concise.';
+    expect(parseUserModelInterpretation(JSON.stringify(input), [...evidence, { ...evidence[0]!, ref: 'entry-2' }])?.assertions).toEqual([]);
+  });
+
   it('grounds evidence and keeps importance separate from confidence', () => {
     const parsed = parseUserModelInterpretation(response(), evidence);
     expect(parsed?.assertions[0]).toMatchObject({

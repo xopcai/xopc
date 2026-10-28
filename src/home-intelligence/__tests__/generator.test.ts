@@ -78,6 +78,34 @@ describe('HomeAdviceGenerator', () => {
     vi.clearAllMocks();
   });
 
+  it.each([undefined, 'invalid', [{ summary: '', evidenceIds: [] }]])('keeps usable advice without retrying malformed display groups: %j', async (evidenceGroups) => {
+    const result = readyResult();
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(modelResponse({
+      ...result, candidates: result.candidates.map((item) => ({ ...item, evidenceGroups })),
+    }));
+    const generated = await new HomeAdviceGenerator(() => config).generate(snapshot, {
+      agentId: 'main', connectors: new Set(), skills: new Set(),
+    });
+    expect(generated.result.state).toBe('ready');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
+    if (generated.result.state === 'ready') expect(generated.result.candidates[0].evidenceGroups).toBeUndefined();
+  });
+
+  it('requests and parses localized evidence groups in the same generation call', async () => {
+    const result = readyResult();
+    const evidenceGroups = [{ summary: '发布口径尚未确认。', evidenceIds: ['project:atlas:v1'] }];
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(modelResponse({
+      ...result, candidates: result.candidates.map((item) => ({ ...item, evidenceGroups })),
+    }));
+    const generated = await new HomeAdviceGenerator(() => config).generate(snapshot, {
+      agentId: 'main', connectors: new Set(), skills: new Set(),
+    });
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0][1].systemPrompt).toContain('permission limits');
+    if (generated.result.state !== 'ready') throw new Error('Expected ready');
+    expect(generated.result.candidates[0].evidenceGroups).toEqual(evidenceGroups);
+  });
+
   it('keeps machine fields in English while localizing only user-visible prose', async () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValue(modelResponse({
       state: 'quiet', reason: 'no_change',

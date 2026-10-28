@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ConfigSchema } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
-import { ensureSessionRecord } from '../../storage/sqlite/session-repository.js';
+import { ensureSessionRecord, resetSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { setSessionConfig } from '../../storage/sqlite/config-repository.js';
@@ -10,7 +10,7 @@ import { listKnowledgeItems, deleteKnowledgeItem, canUseKnowledge } from '../../
 import { MemoryLearningService } from '../service.js';
 import { bindOwnerIdentity } from '../../user-context/identity-bindings.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
-import { claimLearningJob, enqueueConversationLearning, failLearningJob, finishLearningJob } from '../repository.js';
+import { claimLearningJob, enqueueConversationLearning, failLearningJob, finishLearningJob, PERSONAL_UNDERSTANDING_VERSION } from '../repository.js';
 import { applyWorkCandidates, type WorkCandidate } from '../work-capture.js';
 
 const id = '4dffa204-0300-4d2d-89ce-55305490c550';
@@ -57,6 +57,59 @@ describe('persistent memory learning', () => {
     const job = claimLearningJob()!;
     finishLearningJob(job, () => {}, job.through_seq - 1);
     expect(claimLearningJob()).toMatchObject({ start_seq: job.through_seq - 1, through_seq: job.through_seq });
+  });
+
+  it('rebuilds previously processed personal understanding once and preserves bounded continuation', () => {
+    seed();
+    enqueueConversationLearning(config, id, '/workspace', true);
+    finishLearningJob(claimLearningJob()!, () => {});
+    expect(enqueueConversationLearning(config, id, '/workspace', true, Date.now(), { version: PERSONAL_UNDERSTANDING_VERSION })).toBeTypeOf('string');
+    const job = claimLearningJob()!;
+    expect(job).toMatchObject({ start_seq: 0, extractor_version: PERSONAL_UNDERSTANDING_VERSION });
+    finishLearningJob(job, () => {}, job.through_seq - 1);
+    expect(claimLearningJob()).toMatchObject({ start_seq: job.through_seq - 1, extractor_version: `${PERSONAL_UNDERSTANDING_VERSION}:${job.through_seq - 1}` });
+    expect(enqueueConversationLearning(config, id, '/workspace', true, Date.now(), { version: PERSONAL_UNDERSTANDING_VERSION })).toBeUndefined();
+  });
+
+  it('recovers older processed conversations for personal understanding without an interactive turn', async () => {
+    seed();
+    enqueueConversationLearning(config, id, '/workspace', true);
+    finishLearningJob(claimLearningJob()!, () => {});
+    getSqliteDatabase().prepare("UPDATE memory_learning_jobs SET extractor_version = '2:0'").run();
+    getSqliteDatabase().prepare('UPDATE sessions SET updated_at = ?').run(Date.now() - 60 * 86_400_000);
+    const versions: Array<string | undefined> = [];
+    const service = new MemoryLearningService({ getConfig: () => config, workspaceForSession: () => '/workspace',
+      execute: async job => { versions.push(job.extractor_version); finishLearningJob(job, () => {}); } });
+    await service.runNow();
+    await service.runNow();
+    service.stop();
+    expect(versions).toEqual([PERSONAL_UNDERSTANDING_VERSION]);
+  });
+
+  it('rebuilds retained archived transcripts after reset without reading another conversation', async () => {
+    seed();
+    enqueueConversationLearning(config, id, '/workspace', true);
+    const oldJob = claimLearningJob()!;
+    finishLearningJob(oldJob, () => {});
+    getSqliteDatabase().prepare("UPDATE memory_learning_jobs SET extractor_version = '2:0'").run();
+    resetSessionRecord(id, '/workspace');
+    const transcripts: string[] = [];
+    const service = new MemoryLearningService({ getConfig: () => config, workspaceForSession: () => '/workspace',
+      execute: async job => { transcripts.push(job.transcript_id); finishLearningJob(job, () => {}); } });
+    await service.runNow();
+    service.stop();
+    expect(transcripts).toEqual([oldJob.transcript_id]);
+    expect(enqueueConversationLearning(config, id, '/workspace', true, Date.now(), {
+      version: 'test', transcriptId: 'missing-transcript',
+    })).toBeUndefined();
+  });
+
+  it('does not schedule personal rebuilds when personal writes are denied or the conversation is temporary', () => {
+    seed();
+    const denied = ConfigSchema.parse({ userContext: { userModel: { writePolicy: 'deny' } } });
+    expect(enqueueConversationLearning(denied, id, '/workspace', true, Date.now(), { version: PERSONAL_UNDERSTANDING_VERSION })).toBeUndefined();
+    setSessionConfig(id, { userContextMode: 'temporary' }, '/tmp');
+    expect(enqueueConversationLearning(config, id, '/workspace', true, Date.now(), { version: PERSONAL_UNDERSTANDING_VERSION })).toBeUndefined();
   });
 
   it('rejects a stale worker after another worker recovers its lease', () => {

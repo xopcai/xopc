@@ -118,6 +118,7 @@ export interface AutomationRun {
   summary?: string;
   error?: string;
   conversationId?: string;
+  conversationShared?: boolean;
   model?: string;
   deadlineAtMs?: number;
   currentPhase?: 'queued' | 'action' | 'cancelling' | 'completed';
@@ -267,7 +268,7 @@ export const automationApi = {
     const params = new URLSearchParams();
     if (input?.projectId) params.set('projectId', input.projectId);
     const suffix = params.toString();
-    return fetchJson<{ automations: Automation[] }>(apiUrl(`/api/automations${suffix ? `?${suffix}` : ''}`));
+    return fetchJson<{ automations: Automation[]; executionSummaries?: Record<string, { unreadCount: number }> }>(apiUrl(`/api/automations${suffix ? `?${suffix}` : ''}`));
   },
   metrics: () => fetchJson<AutomationMetrics>(apiUrl('/api/automations/metrics')),
   draft: (input: { prompt: string; agentId?: string; language?: 'en' | 'zh' }, idempotencyKey = crypto.randomUUID()) =>
@@ -307,11 +308,12 @@ export const automationApi = {
     fetchJson<{ automation: Automation }>(apiUrl(`/api/automations/${encodeURIComponent(id)}/resume`), {
       method: 'POST',
     }),
-  runs: (limit = 50, automationId?: string, options?: { projectId?: string }) => {
+  runs: (limit = 50, automationId?: string, options?: { projectId?: string; cursor?: string }) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (automationId) params.set('automationId', automationId);
-    if (!automationId && options?.projectId) params.set('projectId', options.projectId);
-    return fetchJson<{ runs: AutomationRun[] }>(apiUrl(`/api/automation-runs?${params.toString()}`));
+    if (options?.projectId) params.set('projectId', options.projectId);
+    if (options?.cursor) params.set('cursor', options.cursor);
+    return fetchJson<{ runs: AutomationRun[]; hasMore?: boolean; nextCursor?: string }>(apiUrl(`/api/automation-runs?${params.toString()}`));
   },
   productEventRuns: (input: {
     eventType: string;

@@ -82,6 +82,9 @@ function rankAssertion(
   feedbackScore: number,
 ): RankedExecutionAssertion {
   const taskRelevance = retrievalLexicalSimilarity(query, `${assertion.statement} ${assertion.normalizedValue}`);
+  const ongoingCollaboration = assertion.authority === 'user_explicit' && assertion.kind === 'preference'
+    && (assertion.applicability.operation === 'response'
+      || (Array.isArray(assertion.applicability.operation) && assertion.applicability.operation.includes('response')));
   const score = calculateExecutionValue({
     declaredImportance: assertion.declaredImportance,
     inferredImportance: assertion.inferredImportance,
@@ -90,7 +93,7 @@ function rankAssertion(
     taskRelevance,
     urgency: urgency(assertion, asOf),
   }) + feedbackScore;
-  const reasons = [taskRelevance >= 0.35 ? 'task_relevant' : '',
+  const reasons = [ongoingCollaboration ? 'ongoing_collaboration' : '', taskRelevance >= 0.35 ? 'task_relevant' : '',
     assertion.declaredImportance !== undefined ? 'user_declared_importance' : '',
     assertion.consequence === 'critical' || assertion.consequence === 'high' ? 'high_consequence' : '',
     assertion.kind === 'identity' || assertion.kind === 'preference' ? 'stable_personalization' : '',
@@ -189,8 +192,12 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
     ))
     .filter((item) => item.score >= 0.12 || item.reasons.includes('high_consequence'))
     .sort((left, right) => right.score - left.score) : [];
+  const confirmed = rankedAssertions.filter((item) => item.usage === 'confirmed').sort((left, right) =>
+    Number(right.reasons.includes('high_consequence')) - Number(left.reasons.includes('high_consequence'))
+    || Number(right.reasons.includes('ongoing_collaboration')) - Number(left.reasons.includes('ongoing_collaboration'))
+    || right.score - left.score);
   const assertions = [
-    ...rankedAssertions.filter((item) => item.usage === 'confirmed'),
+    ...confirmed,
     ...rankedAssertions.filter((item) => item.usage === 'working_assumption'),
   ].slice(0, assertionLimit);
   const maxKnowledge = Math.max(0, Math.min(100, request.maxKnowledge ?? 12));

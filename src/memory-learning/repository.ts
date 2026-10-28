@@ -8,7 +8,10 @@ export interface LearningJob {
   job_id: string; conversation_id: string; transcript_id: string; through_seq: number;
   policy_hash: string; workspace_id: string; lease_token: string; attempts: number;
   start_seq?: number | null;
+  extractor_version?: string;
 }
+
+export const PERSONAL_UNDERSTANDING_VERSION = 'understanding-v3';
 
 export function learningPolicyHash(config: Config): string {
   const catalog = getSqliteDatabase().prepare('SELECT revision FROM agent_catalog_settings WHERE singleton_id = 1').get();
@@ -17,7 +20,7 @@ export function learningPolicyHash(config: Config): string {
 
 /** Recover learning intent from authoritative rows, including notifications lost in a crash. */
 export function enqueueConversationLearning(config: Config, conversationId: string, workspaceId: string,
-  force = false, now = Date.now()): string | undefined {
+  force = false, now = Date.now(), rebuild?: { version: string; transcriptId?: string }): string | undefined {
   const access = resolveUserContextSessionAccess(config, conversationId);
   if ((!access.userModel || config.userContext.userModel.writePolicy === 'deny')
     && (!access.knowledge || config.userContext.knowledgeMemory.writePolicy === 'deny')) return;
@@ -25,7 +28,13 @@ export function enqueueConversationLearning(config: Config, conversationId: stri
   return runSqliteWriteTransaction(db => {
     const transcript = db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id = ?').get(conversationId) as { active_transcript_id: string } | undefined;
     if (!transcript?.active_transcript_id) return;
-    const id = transcript.active_transcript_id;
+    const id = rebuild?.transcriptId ?? transcript.active_transcript_id;
+    if (!db.prepare('SELECT 1 FROM transcripts WHERE transcript_id = ? AND conversation_id = ?')
+      .get(id, conversationId)) return;
+    if (rebuild && (!access.userModel || config.userContext.userModel.writePolicy !== 'allow')) return;
+    if (rebuild && db.prepare(`SELECT 1 FROM memory_learning_jobs
+      WHERE conversation_id = ? AND transcript_id = ? AND extractor_version = ? AND policy_hash = ?`)
+      .get(conversationId, id, rebuild.version, learningPolicyHash(config))) return;
     const last = db.prepare(`SELECT MAX(seq) AS seq, MAX(created_at) AS last_at FROM transcript_entries
       WHERE transcript_id = ? AND role = 'assistant'`).get(id) as { seq: number | null; last_at: number | null };
     if (!last.seq) return;
@@ -42,7 +51,7 @@ export function enqueueConversationLearning(config: Config, conversationId: stri
     const inserted = db.prepare(`INSERT OR IGNORE INTO memory_learning_jobs(job_id, conversation_id, transcript_id,
       through_seq, start_seq, extractor_version, policy_hash, workspace_id, state, next_attempt_at, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`).run(jobId, conversationId, id, last.seq,
-        force ? 0 : null, force ? `rebuild:${jobId}` : `2:${cursor.processed_seq}`,
+        force ? 0 : null, rebuild?.version ?? (force ? `3:rebuild:${jobId}` : `3:${cursor.processed_seq}`),
         learningPolicyHash(config), workspaceId, due ? now : (last.last_at ?? now) + idleMs, now, now);
     db.prepare(`UPDATE memory_learning_cursors SET observed_seq = MAX(observed_seq, ?), updated_at = ?
       WHERE conversation_id = ? AND transcript_id = ?`).run(last.seq, now, conversationId, id);
@@ -91,7 +100,8 @@ export function finishLearningJob(job: LearningJob, apply: () => void, processed
         start_seq, extractor_version, policy_hash, workspace_id, state, next_attempt_at, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`).run(nextId, job.conversation_id,
           job.transcript_id, job.through_seq, job.start_seq == null ? null : processedThrough,
-          job.start_seq == null ? `2:${processedThrough}` : `rebuild:${nextId}`, job.policy_hash,
+          job.extractor_version?.startsWith('understanding-') ? `${job.extractor_version.split(':')[0]}:${processedThrough}`
+            : job.start_seq == null ? `3:${processedThrough}` : `3:rebuild:${nextId}`, job.policy_hash,
           job.workspace_id, Date.now(), Date.now(), Date.now());
     }
     return true;

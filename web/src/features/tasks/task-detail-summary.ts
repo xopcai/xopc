@@ -34,7 +34,7 @@ export function summarizeTaskCriteria(detail: TaskDetail): CriterionSummary[] {
       automatic = { text, status, evidence, runId: receipt.runId, verificationStatus: status, method: check.method, note: check.note };
       break;
     }
-    if (review && detail.task.contract?.acceptancePolicy !== 'verified_auto') {
+    if (review) {
       return { ...automatic, status: review.status, review };
     }
     return detail.task.contract?.acceptancePolicy === 'manual'

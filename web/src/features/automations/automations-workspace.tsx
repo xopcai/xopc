@@ -1,5 +1,7 @@
+import { AutomationExecutionPanel } from './automation-execution-panel';
+import { AutomationNavigation } from './automation-navigation';
+import { AutomationSplitLayout } from './automation-split-layout';
 import { AutomationConversation } from './automation-conversation';
-import { AutomationItemMenu } from './automation-item-menu';
 import { isCompletedOneTimeTask } from './automation-display';
 import { AutomationDeliveryStatus } from './automation-delivery-status';
 import { AutomationListToolbar } from './automation-list-toolbar';
@@ -33,7 +35,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { mutate as revalidate } from 'swr';
 
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
@@ -102,7 +104,6 @@ import {
   automationExecutionIssueMarker,
   automationHasExecutionIssue,
   automationRunFailureSummary,
-  latestAutomationRun,
 } from './automation-result-state';
 
 type CreateMode = 'blank' | 'draft' | 'quick';
@@ -285,6 +286,7 @@ export function AutomationsWorkspace({
   const [searchParams, setSearchParams] = useSearchParams();
   const activityView = !embedded && searchParams.get('view') === 'activity';
   const runParam = searchParams.get('run')?.trim() ?? '';
+  const executionView = searchParams.get('view') === 'execution' && Boolean(runParam);
   const automationParam = searchParams.get('automation')?.trim() ?? '';
   const newTaskView = searchParams.get('new') === '1';
   const setupChat = searchParams.get('setupChat') ?? undefined;
@@ -556,12 +558,9 @@ export function AutomationsWorkspace({
   useEffect(() => {
     if (scopeLoading) return;
     if (newTaskView) { setSelectedAutomationId(null); return; }
+    if (automationParam) { setSelectedAutomationId(automationParam); return; }
     if (filteredAutomations.length === 0) {
       setSelectedAutomationId(null);
-      return;
-    }
-    if (automationParam && filteredAutomations.some((automation) => automation.id === automationParam)) {
-      setSelectedAutomationId(automationParam);
       return;
     }
     if (selectedAutomationId && filteredAutomations.some((automation) => automation.id === selectedAutomationId)) return;
@@ -576,6 +575,7 @@ export function AutomationsWorkspace({
       globalRunsSwr.mutate(),
       selectedRunsSwr.mutate(),
       runEventsSwr.mutate(),
+      revalidate(key => Array.isArray(key) && key[0] === 'automation-navigation-runs'),
     ]);
   }, [automationsSwr.mutate, globalAutomationsSwr.mutate, globalRunsSwr.mutate, runEventsSwr.mutate, runsSwr.mutate, selectedRunsSwr.mutate]);
 
@@ -757,17 +757,34 @@ export function AutomationsWorkspace({
 
   const openAutomationDetails = useCallback((automationId: string) => {
     setSelectedAutomationId(automationId);
-    const latestRun = latestAutomationRun(automationId, availableRuns);
-    setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('automation', automationId); next.delete('new'); next.delete('setupChat'); next.delete('chatDraft'); return next; }, { replace: true });
-    if (latestRun && latestRun.readAtMs == null && !isActiveRun(latestRun)) markRunRead(latestRun.id);
-  }, [availableRuns, markRunRead, setSearchParams]);
+    setSelectedRunId(null);
+    setRunDetailOpen(false);
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      next.set('automation', automationId);
+      for (const key of ['new', 'setupChat', 'chatDraft', 'run', 'view']) next.delete(key);
+      return next;
+    });
+  }, [setSearchParams]);
+
+  const openExecution = useCallback((run: AutomationRun) => {
+    setRunDetailOpen(false);
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      next.set('automation', run.automationId); next.set('run', run.id); next.set('view', 'execution');
+      for (const key of ['new', 'setupChat', 'chatDraft']) next.delete(key);
+      return next;
+    });
+  }, [setSearchParams]);
 
   useEffect(() => {
-    if (!runParam) return;
-    markRunRead(runParam);
-    setSelectedRunId(runParam);
-    setRunDetailOpen(true);
-  }, [markRunRead, runParam]);
+    setSelectedRunId(runParam || null);
+    setRunDetailOpen(Boolean(runParam) && !executionView);
+  }, [executionView, runParam]);
+
+  useEffect(() => {
+    if (runParam && !executionView) markRunRead(runParam);
+  }, [executionView, runParam, markRunRead]);
 
   useEffect(() => {
     setRepairDraft(null);
@@ -1030,11 +1047,8 @@ export function AutomationsWorkspace({
         {initialLoading ? (
           <AutomationsPageSkeleton />
         ) : (
-          <section
-            className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1 lg:grid-cols-[17rem_minmax(0,1fr)]"
-            aria-busy={scopeLoading}
-          >
-            <aside className="flex max-h-[28vh] min-h-0 flex-col overflow-hidden rounded-xl bg-surface-base md:h-full md:max-h-none">
+          <AutomationSplitLayout language={language} busy={scopeLoading}>
+            <aside className={cn('max-h-[28vh] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-surface-base md:flex md:h-full md:max-h-none', executionView ? 'hidden' : 'flex')}>
               <div className="shrink-0 p-3">
                 <AutomationListToolbar language={language} labels={labels} filter={filter} ownership={ownership} source={sourceFilter}
                   projectId={projectIdParam} projects={projects} projectLocked={projectLocked} query={searchQuery}
@@ -1043,19 +1057,32 @@ export function AutomationsWorkspace({
                   onClear={() => { clearListFilters(); setOwnership('user'); if (!projectLocked) selectProject(''); }} onMarkAllRead={() => void markAllRead()} />
                 <button type="button" onClick={() => setSimpleCreateOpen(true)} className="mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><Plus className="size-4" aria-hidden />{language === 'zh' ? '新建任务' : 'New task'}</button>
               </div>
-              <AutomationList
+              {automationParam && !filteredAutomations.some(item => item.id === automationParam) ? <p role="status" className="px-3 pb-2 text-xs text-fg-muted">{language === 'zh' ? '当前自动化不在筛选结果中。' : 'The selected automation is outside these filters.'}<button type="button" className="ml-1 text-accent-fg underline" onClick={clearListFilters}>{language === 'zh' ? '清除筛选' : 'Clear filters'}</button></p> : null}
+              <AutomationNavigation
                 automations={filteredAutomations}
                 runs={ownershipRuns}
                 labels={labels}
                 cronLabels={cronLabels}
                 language={language}
                 selectedAutomationId={newTaskView ? null : selectedAutomationId}
+                selectedRunId={executionView ? runParam : undefined}
+                selectedRun={executionView ? selectedRun : null}
+                projectId={projectIdParam || undefined}
+                executionSummaries={(ownership === 'system' && projectIdParam ? globalAutomationsSwr.data : automationsSwr.data)?.executionSummaries}
+                onSelectRun={openExecution}
                 onOpenDetails={openAutomationDetails}
                 busy={busyAction !== null} onEdit={openAutomationEditor} onAction={mutateAutomation}
               />
             </aside>
-            {!newTaskView && selectedAutomation && !selectedAutomation.management && selectedAutomation.action.kind !== 'system' ? (
-              <AutomationConversation key={selectedAutomation.id} automation={selectedAutomation} runs={selectedAutomationRuns} language={language} onSelectRun={selectRun} />
+            {executionView && automationParam ? (
+              <AutomationExecutionPanel key={`${automationParam}:${runParam}`} automationId={automationParam} runId={runParam} projectId={projectIdParam || undefined} language={language}
+                onBack={() => openAutomationDetails(automationParam)} onDetails={() => setRunDetailOpen(true)}
+                onConfigure={run => { void automationApi.openConfiguration({ automationId: run.automationId, runId: run.id }).then(({ conversationId }) => {
+                  setRunDetailOpen(false);
+                  setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('automation', run.automationId); next.set('setupChat', conversationId); next.delete('run'); next.delete('view'); return next; });
+                }).catch(err => setError(err instanceof Error ? err.message : String(err))); }} />
+            ) : !newTaskView && selectedAutomation && !selectedAutomation.management && selectedAutomation.action.kind !== 'system' ? (
+              <AutomationConversation key={selectedAutomation.id} automation={selectedAutomation} conversationId={setupChat} runs={selectedAutomationRuns} language={language} onSelectRun={selectRun} />
             ) : setupChat ? (
               <AutomationConversation key={setupChat} conversationId={setupChat} runs={[]} language={language} onSelectRun={selectRun} onConfigured={openAutomationDetails} />
             ) : !newTaskView && selectedAutomation ? (
@@ -1081,7 +1108,7 @@ export function AutomationsWorkspace({
                 setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('new', '1'); next.delete('automation'); next.set('setupChat', id); const prompt = target.searchParams.get('chatDraft'); if (prompt) next.set('chatDraft', prompt); else next.delete('chatDraft'); return next; });
               }} /></div>
             )}
-          </section>
+          </AutomationSplitLayout>
         )}
         </>}
       </div>
@@ -1224,7 +1251,7 @@ export function AutomationsWorkspace({
         open={runDetailOpen && Boolean(selectedRun)}
         onOpenChange={(open) => {
           setRunDetailOpen(open);
-          if (open) return;
+          if (open || executionView) return;
           setSearchParams((previous) => {
             const next = new URLSearchParams(previous);
             next.delete('run');
@@ -1641,88 +1668,6 @@ function AutomationActivityView({
         </div>
       )}
     </section>
-  );
-}
-
-function AutomationList({
-  automations,
-  runs,
-  labels,
-  cronLabels,
-  language,
-  selectedAutomationId,
-  onOpenDetails,
-  busy, onEdit, onAction,
-}: {
-  automations: Automation[];
-  runs: AutomationRun[];
-  labels: AutomationsMessages;
-  cronLabels: CronMessages;
-  language: StoredLanguage;
-  selectedAutomationId: string | null;
-  onOpenDetails: (automationId: string) => void;
-  busy: boolean; onEdit: (automation: Automation) => void;
-  onAction: (key: string, action: () => Promise<unknown>, title?: string) => Promise<boolean>;
-}) {
-  if (automations.length === 0) {
-    return (
-      <EmptyState
-        className="rounded-none border-0 shadow-none"
-        icon={<Zap className="size-5" />}
-        title={labels.empty.filtered}
-      />
-    );
-  }
-  return (
-    <div className="min-h-0 overflow-y-auto divide-y divide-edge-subtle">
-      {automations.map((automation) => {
-        const recentRuns = runs
-          .filter((run) => run.automationId === automation.id)
-          .sort((a, b) => b.createdAtMs - a.createdAtMs);
-        const activeRun = recentRuns.find(isActiveRun);
-        const latestRunForAutomation = recentRuns[0];
-        return (
-          <div key={automation.id} className="group relative">
-          <button
-            type="button"
-            className={cn(
-              'block w-full p-3 pr-10 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-              selectedAutomationId === automation.id && 'bg-surface-hover',
-            )}
-            style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 76px' }}
-            aria-current={selectedAutomationId === automation.id ? 'true' : undefined}
-            onClick={() => onOpenDetails(automation.id)}
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className={cn(
-                'size-2 shrink-0 rounded-full',
-                activeRun
-                  ? 'bg-blue-500'
-                  : automationHasExecutionIssue(automation, recentRuns)
-                    ? 'bg-red-500'
-                    : automation.enabled
-                      ? 'bg-emerald-500'
-                      : 'bg-fg-subtle',
-              )} />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{automation.name}</span>
-              <span className="shrink-0 text-xs text-fg-muted">{isCompletedOneTimeTask(automation) ? (language === 'zh' ? '已完成' : 'Completed') : automation.enabled ? labels.enabled : labels.paused}</span>
-              {latestRunForAutomation && latestRunForAutomation.readAtMs == null && !isActiveRun(latestRunForAutomation) ? (
-                <span className="ml-auto size-2 shrink-0 rounded-full bg-blue-500">
-                  <span className="sr-only">{labels.filters.unread}</span>
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-1 truncate pl-4 text-xs leading-5 text-fg-muted">
-              {automation.enabled ? <>{automationNextRunLabel(automation, labels, language)}<span className="mx-1.5">·</span></> : null}
-              {automationTriggerLabel(automation.trigger, labels, cronLabels, language)}
-            </p>
-            {automationHasExecutionIssue(automation, recentRuns) ? <p className="mt-1 pl-4 text-xs text-red-700 dark:text-red-300">{labels.dashboard.needsAttention}</p> : null}
-          </button>
-          <div className="absolute right-1 top-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"><AutomationItemMenu automation={automation} language={language} busy={busy} onEdit={onEdit} onAction={onAction} /></div>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 

@@ -151,6 +151,8 @@ export interface AutomationRun {
   summary?: string;
   error?: string;
   conversationId?: string;
+  /** Read projection; multiple stored runs reference the same conversation. */
+  conversationShared?: boolean;
   model?: string;
   deadlineAtMs?: number;
   currentPhase?: AutomationRunPhase;

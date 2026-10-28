@@ -18,7 +18,7 @@ export function AutomationConversation({ automation, conversationId, runs, langu
   onSelectRun: (id: string) => void; onConfigured?: (id: string) => void;
 }) {
   const automationId = automation?.id;
-  const { data, error, mutate } = useSWR(automationId ? ['automation-workspace-chat', automationId] : null,
+  const { data, error, mutate } = useSWR(automationId && !conversationId ? ['automation-workspace-chat', automationId] : null,
     () => automationApi.openConfiguration({ automationId }),
     { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false });
   const { data: setup } = useSWR(conversationId ? ['automation-configuration', conversationId] : null,

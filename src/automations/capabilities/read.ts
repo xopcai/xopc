@@ -60,7 +60,7 @@ export function registerAutomationReadCapabilities(dispatcher: CapabilityDispatc
     ...ProductReadContracts['xopc.automations.list'],
     async execute(input) {
       requireProject(input.projectId);
-      return { ok: true as const, items: (await service.list(input)).map(item => ({ ...item })), projectId: input.projectId };
+      return { ok: true as const, items: (await service.list(input)).map(item => ({ ...item })), projectId: input.projectId, executionSummaries: service.executionSummaries(input.projectId) };
     },
   }));
   dispatcher.register(defineReadCapability({
@@ -77,7 +77,22 @@ export function registerAutomationReadCapabilities(dispatcher: CapabilityDispatc
     ...ProductReadContracts['xopc.automations.history'],
     async execute(input) {
       requireProject(input.projectId);
-      return { ok: true as const, items: (await service.listRuns(input)).map(item => ({ ...item })), projectId: input.projectId };
+      let before: { createdAtMs: number; id: string } | undefined;
+      if (input.cursor) {
+        try {
+          const parsed = JSON.parse(Buffer.from(input.cursor, 'base64url').toString('utf8'));
+          if (!Number.isSafeInteger(parsed.createdAtMs) || parsed.createdAtMs < 0 || typeof parsed.id !== 'string' || !parsed.id
+            || parsed.automationId !== input.automationId || parsed.projectId !== input.projectId) throw new Error('Invalid cursor');
+          before = { createdAtMs: parsed.createdAtMs, id: parsed.id };
+        } catch { throw new CapabilityError('INVALID_INPUT', 'Invalid history cursor for this scope'); }
+      }
+      const rows = await service.listRuns({ ...input, before, limit: input.limit + 1 });
+      const hasMore = rows.length > input.limit;
+      const items = rows.slice(0, input.limit).map(item => ({ ...item }));
+      const last = items.at(-1);
+      const nextCursor = hasMore && last ? Buffer.from(JSON.stringify({ createdAtMs: last.createdAtMs, id: last.id,
+        automationId: input.automationId, projectId: input.projectId })).toString('base64url') : undefined;
+      return { ok: true as const, items, projectId: input.projectId, hasMore, nextCursor };
     },
   }));
 }

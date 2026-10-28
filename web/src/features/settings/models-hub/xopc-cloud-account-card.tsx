@@ -1,5 +1,6 @@
 import { cloudAccountSummarySchema, creditDecimal, type CloudAccountSummary } from '@xopcai/gateway-contract';
 import { AlertTriangle, Cloud, ExternalLink, RefreshCw } from 'lucide-react';
+import type { ReactNode } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -39,7 +40,7 @@ async function fetchAccountSummary(): Promise<CloudAccountSummary> {
   return cloudAccountSummarySchema.parse(response.payload);
 }
 
-export function XopcCloudAccountCard({ labels }: { labels: XopcCloudAccountMessages }) {
+export function XopcCloudAccountCard({ labels, children }: { labels: XopcCloudAccountMessages; children?: ReactNode }) {
   const language = useLocaleStore((state) => state.language);
   const locale = language === 'zh' ? 'zh-CN' : 'en-US';
   const { data, error, isLoading, isValidating, mutate } = useSWR(
@@ -68,6 +69,7 @@ export function XopcCloudAccountCard({ labels }: { labels: XopcCloudAccountMessa
             {labels.retry}
           </Button>
         </div>
+        {children}
       </section>
     );
   }
@@ -135,6 +137,7 @@ export function XopcCloudAccountCard({ labels }: { labels: XopcCloudAccountMessa
           </p>
         </div>
       </div>
+      {children}
     </section>
   );
 }

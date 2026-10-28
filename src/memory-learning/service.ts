@@ -2,7 +2,7 @@ import type { Config } from '../config/schema.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
-import { claimLearningJob, enqueueConversationLearning, failLearningJob, renewLearningLease, type LearningJob } from './repository.js';
+import { claimLearningJob, enqueueConversationLearning, failLearningJob, renewLearningLease, learningPolicyHash, PERSONAL_UNDERSTANDING_VERSION, type LearningJob } from './repository.js';
 import { learnTaskReceipts } from './task-receipts.js';
 import { pruneSourceRetention, recoverKnowledgeIndexes, recoverSourceLearning, runSourceLearning } from './source-learning.js';
 
@@ -55,6 +55,28 @@ export class MemoryLearningService {
         .all(Date.now() - 30 * 86_400_000) as Array<{ conversation_id: string }>;
       for (const session of sessions) enqueueConversationLearning(config, session.conversation_id,
         this.options.workspaceForSession(session.conversation_id));
+      if (config.userContext.enabled && config.userContext.userModel.enabled
+        && config.userContext.userModel.writePolicy === 'allow') {
+        const historical = getSqliteDatabase().prepare(`SELECT s.conversation_id, c.transcript_id FROM sessions s
+          JOIN memory_learning_cursors c ON c.conversation_id = s.conversation_id
+          LEFT JOIN session_config cfg ON cfg.conversation_id = s.conversation_id
+          WHERE c.processed_seq > 0 AND COALESCE(cfg.user_context_mode, 'enabled') = 'enabled'
+          AND json_extract(s.routing_json, '$.peerKind') = 'direct'
+          AND (json_extract(s.routing_json, '$.source') IN ('webchat','cli','tui') OR EXISTS (
+            SELECT 1 FROM owner_identity_bindings b WHERE b.revoked_at IS NULL
+            AND b.channel = json_extract(s.routing_json, '$.source')
+            AND b.account_id = json_extract(s.routing_json, '$.accountId')
+            AND b.peer_id = json_extract(s.routing_json, '$.peerId')))
+          AND EXISTS (SELECT 1 FROM memory_learning_jobs old WHERE old.conversation_id = s.conversation_id
+            AND old.transcript_id = c.transcript_id AND old.state = 'succeeded'
+            AND (old.extractor_version LIKE '2:%' OR old.extractor_version LIKE 'rebuild:%'))
+          AND NOT EXISTS (SELECT 1 FROM memory_learning_jobs j WHERE j.conversation_id = s.conversation_id
+            AND j.transcript_id = c.transcript_id AND j.extractor_version = ? AND (j.state = 'succeeded' OR j.policy_hash = ?))
+          ORDER BY s.updated_at DESC LIMIT 3`).all(PERSONAL_UNDERSTANDING_VERSION, learningPolicyHash(config)) as
+          Array<{ conversation_id: string; transcript_id: string }>;
+        for (const session of historical) enqueueConversationLearning(config, session.conversation_id,
+          this.options.workspaceForSession(session.conversation_id), true, Date.now(), { version: PERSONAL_UNDERSTANDING_VERSION, transcriptId: session.transcript_id });
+      }
       const dayStart = Date.now() - (Date.now() % 86_400_000);
       const batches = getSqliteDatabase().prepare(`SELECT COUNT(*) AS n FROM context_extraction_runs
         WHERE extractor_id IN ('transcript-synthesis', 'source-work-synthesis') AND started_at >= ?`).get(dayStart) as { n: number };

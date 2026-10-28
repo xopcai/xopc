@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   HomeAdvisorSchema,
+  HomeEvidencePresentationSchema,
   HomeOpportunityHistoryResponseSchema,
   HomeOpportunitySchema,
   HomeOpportunityActionResponseSchema,
@@ -9,6 +10,16 @@ import {
 } from './home.js';
 
 describe('home contract', () => {
+  it('bounds localized evidence presentation and versions the display format', () => {
+    const group = { summary: '发布口径尚待确认。', evidenceIds: ['project:atlas:1'] };
+    const presentation = { version: 1, locale: 'zh', groups: [group] };
+    expect(HomeEvidencePresentationSchema.parse(presentation)).toEqual(presentation);
+    for (const invalid of [
+      { ...presentation, version: 2 }, { ...presentation, locale: 'fr' },
+      { ...presentation, groups: [] }, { ...presentation, groups: Array(9).fill(group) },
+      { ...presentation, groups: [{ ...group, summary: 'x'.repeat(301) }] },
+    ]) expect(HomeEvidencePresentationSchema.safeParse(invalid).success).toBe(false);
+  });
   it('requires the server to return an explicit advisor state', () => {
     expect(() => HomeResponseSchema.parse({
       needsUser: [], background: [], backgroundCount: 0, decisions: [],

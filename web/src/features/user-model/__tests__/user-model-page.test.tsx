@@ -139,6 +139,23 @@ describe('UserModelPage summary navigation', () => {
     expect(container.textContent).not.toContain('Workspace uses pnpm.');
   });
 
+
+  it('keeps personal understanding and work memory in independent primary views with browser history', async () => {
+    const personal = container.querySelector<HTMLButtonElement>('#understanding-tab-understanding');
+    const work = container.querySelector<HTMLButtonElement>('#understanding-tab-work');
+    expect(personal?.textContent).toContain('1');
+    expect(work?.textContent).toContain('Work memory');
+    await act(async () => personal?.click());
+    expect(container.textContent).toContain('Prefers visual summaries.');
+    expect(container.textContent).not.toContain('Project uses React.');
+    await act(async () => work?.click());
+    expect(container.querySelector('[data-testid="router-location"]')?.textContent).toBe('/user-model?tab=work');
+    expect(container.textContent).toContain('Project uses React.');
+    expect(container.textContent).not.toContain('Prefers visual summaries.');
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="router-back"]')?.click());
+    expect(container.querySelector('#understanding-tab-understanding')?.getAttribute('aria-selected')).toBe('true');
+  });
+
   it('uses all available width when only two memory categories have content', () => {
     const grid = container.querySelector('[data-testid="memory-summary-grid"]');
     expect(grid?.className).toContain('sm:grid-cols-2');
@@ -173,7 +190,7 @@ describe('UserModelPage summary navigation', () => {
 
   it('renders the primary tabs as a capsule control', () => {
     const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(4);
     expect(tabs.every((tab) => tab.className.includes('rounded-full'))).toBe(true);
     expect(tabs.find((tab) => tab.getAttribute('aria-selected') === 'true')?.className)
       .toContain('bg-surface-active');
@@ -256,7 +273,7 @@ describe('UserModelPage summary navigation', () => {
     expect(overviewTab?.getAttribute('aria-selected')).toBe('true');
   });
 
-  it('shows data and privacy as the third primary view', async () => {
+  it('shows data and privacy as an independent primary view', async () => {
     const privacyTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
       .find((button) => button.textContent?.includes('Data & privacy'));
 

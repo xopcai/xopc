@@ -140,6 +140,17 @@ export const HomeCapabilityPreflightSchema = z.discriminatedUnion('state', [
   }),
 ]);
 
+export const HomeEvidenceGroupSchema = z.strictObject({
+  summary: z.string().trim().min(1).max(300),
+  evidenceIds: z.array(z.string().trim().min(1).max(300)).min(1).max(8),
+});
+
+export const HomeEvidencePresentationSchema = z.strictObject({
+  version: z.literal(1),
+  locale: z.enum(['zh', 'en']),
+  groups: z.array(HomeEvidenceGroupSchema).min(1).max(8),
+});
+
 export const HomeOpportunitySchema = z.strictObject({
   id: z.string().trim().min(1).max(200),
   revision: z.number().int().positive(),
@@ -149,6 +160,7 @@ export const HomeOpportunitySchema = z.strictObject({
   outcome: z.string().trim().min(1).max(1_000),
   rationale: z.string().trim().min(1).max(1_500),
   evidence: z.array(HomeEvidenceSchema).min(1).max(8),
+  evidencePresentation: HomeEvidencePresentationSchema.optional(),
   confidence: z.enum(['high', 'medium', 'low']),
   urgency: z.enum(['now', 'today', 'this_week']),
   estimatedMinutes: z.number().int().min(1).max(480).optional(),
@@ -365,6 +377,7 @@ export type HomeAction = z.infer<typeof HomeActionSchema>;
 export type HomeWorkbenchItem = z.infer<typeof HomeWorkbenchItemSchema>;
 export type HomeRunningConversation = z.infer<typeof HomeRunningConversationSchema>;
 export type HomeEvidence = z.infer<typeof HomeEvidenceSchema>;
+export type HomeEvidencePresentation = z.infer<typeof HomeEvidencePresentationSchema>;
 export type HomeCapabilityReadiness = z.infer<typeof HomeCapabilityReadinessSchema>;
 export type HomeCapabilityBlocker = z.infer<typeof HomeCapabilityBlockerSchema>;
 export type HomeCapabilityPreflight = z.infer<typeof HomeCapabilityPreflightSchema>;
