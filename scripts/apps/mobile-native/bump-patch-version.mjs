@@ -28,14 +28,13 @@ const androidCodeMatch = matchOne(
   /^\s*versionCode\s*=\s*(\d+)\s*$/gm,
   'Android versionCode',
 );
-const iosVersionMatch = matchOne(
-  iosProject,
-  /^\s*MARKETING_VERSION:\s*(\d+\.\d+\.\d+)\s*$/gm,
-  'iOS MARKETING_VERSION',
-);
+const iosVersionMatches = [...iosProject.matchAll(/^\s*MARKETING_VERSION:\s*(\d+\.\d+\.\d+)\s*$/gm)];
+if (iosVersionMatches.length !== 2 || iosVersionMatches[0][1] !== iosVersionMatches[1][1]) {
+  throw new Error('Expected matching iOS MARKETING_VERSION values for the app and share extension.');
+}
 
 const androidVersion = androidVersionMatch[1];
-const iosVersion = iosVersionMatch[1];
+const iosVersion = iosVersionMatches[0][1];
 if (androidVersion !== iosVersion) {
   throw new Error(`Native mobile versions differ: Android=${androidVersion}, iOS=${iosVersion}`);
 }
@@ -61,8 +60,8 @@ const nextAndroidGradle = androidGradle
   .replace(androidVersionMatch[0], androidVersionMatch[0].replace(androidVersion, nextVersion))
   .replace(androidCodeMatch[0], androidCodeMatch[0].replace(androidCodeMatch[1], String(androidVersionCode + 1)));
 const nextIosProject = iosProject.replace(
-  iosVersionMatch[0],
-  iosVersionMatch[0].replace(iosVersion, nextVersion),
+  /^(\s*MARKETING_VERSION:\s*)\d+\.\d+\.\d+(\s*)$/gm,
+  (_match, prefix, suffix) => `${prefix}${nextVersion}${suffix}`,
 );
 
 writeFileSync(androidGradlePath, nextAndroidGradle);
