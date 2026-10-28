@@ -6,7 +6,7 @@ import { getToolManual, listToolManuals } from '../tool-manuals/index.js';
 
 const ToolManualSchema = Type.Object({
   tool: Type.String({ description: 'Built-in tool name, e.g. browser_use' }),
-  topic: Type.Optional(Type.Union([Type.Literal('agent'), Type.Literal('settings'), Type.Literal('automation'), Type.Literal('connections'), Type.Literal('browser_setup'), Type.Literal('phone_setup')], { description: 'Focused xopc_use workflow; omit for the full parameter manual.' })),
+  topic: Type.Optional(Type.Union([Type.Literal('mcp'), Type.Literal('skills'), Type.Literal('agent'), Type.Literal('settings'), Type.Literal('automation'), Type.Literal('connections'), Type.Literal('browser_setup'), Type.Literal('phone_setup')], { description: 'Focused product workflow; omit for the full parameter manual.' })),
 });
 
 export function createToolManualTool(): AgentTool<typeof ToolManualSchema, {}> {

@@ -34,6 +34,7 @@ export interface AgentServiceConfig {
   canConfigureEndpoint?: (endpointId: string) => boolean;
   getPhoneSetupService?: () => import('../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../browser/setup/service.js').BrowserSetupService | undefined;
+  getMcpSetupService?: () => import('./mcp/conversation-setup.js').McpConversationSetup | undefined;
   getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */

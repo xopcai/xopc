@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getAutomationSetup } from '../../automations/configuration-conversation.js';
+import { AutomationMcpSourceInput, prepareAutomationMcpSource } from '../../automations/mcp-source.js';
 import { getEmbeddedExecutionRunId } from '../embedded/execution-context.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import { localAppCapabilities } from '../../local-apps/capabilities/runtime.js';
@@ -84,9 +85,11 @@ const XopcUseToolSchema = Type.Object({
     Type.Literal('settings'),
     Type.Literal('browser_setup'),
     Type.Literal('phone_setup'),
+    Type.Literal('mcp_setup'),
   ]),
   command: Type.String({
     description:
+      'HTTP MCP configuration: mode mcp_setup inspect/start/get/advance/cancel/set_enabled/remove; load tool_manual topic mcp. Never pass credentials or OAuth callbacks as tool arguments. ' +
       'Context resolve takes an explicit AppContextEnvelope; never guess a current page. Automation draft/repair_draft accept prompt/id, agentId?, language?, idempotencyKey?; simulate explains an automation without running it. Local_app record_acceptance records supplied checks and sourceHash, not proof that checks were executed. ' +
       'Agent profile-only changes: patch_profile {id, expectedRevision, patch:{name?,description?,style?,language?,...}, idempotencyKey?} preserves omitted fields. Agent commands: list, get {id}, create {id, profile, workspace?, models?, skills?, tools?, runtime?, idempotencyKey?}, update {id, expectedRevision, patch, idempotencyKey?}, set_default {id, expectedRevision, idempotencyKey?}, disable/delete/purge {id, expectedRevision, idempotencyKey?}. Purge also removes on-disk data. ' +
       'Project create accepts idempotencyKey; update/pin/unpin/delete accepts {projectId, expectedVersion?, idempotencyKey?}; stable retries require the original expectedVersion. Delete preserves workspace files and does not confirm external execution stopped. ' +
@@ -101,7 +104,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings' | 'browser_setup' | 'phone_setup';
+export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings' | 'browser_setup' | 'phone_setup' | 'mcp_setup';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -112,8 +115,10 @@ export interface XopcUseToolInput {
 
 export interface XopcUseToolDeps {
   canConfigureFromConversation?: () => boolean;
+  canRequestWeixinMcpSetup?: () => boolean;
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
+  getMcpSetupService?: () => import('../mcp/conversation-setup.js').McpConversationSetup | undefined;
   authorizeCapability?: CapabilityContext['authorize'];
   getWorkspace?: () => string;
   getConfig?: () => Config | undefined;
@@ -622,6 +627,7 @@ async function handleAutomation(
   deps: XopcUseToolDeps,
   dryRun: boolean,
   capabilities: CapabilityDispatcher,
+  toolCallId: string,
 ): Promise<unknown> {
   const automations = deps.getAutomationService?.();
   if (!automations) return { ok: false, error: 'Automation service is unavailable' };
@@ -635,7 +641,7 @@ async function handleAutomation(
         : operation === 'xopc.automations.read_all' ? AutomationReadAllOutputSchema
         : operation === 'xopc.automations.replay_event' || operation === 'xopc.automations.retry_delivery' ? AutomationRecoveryOutputSchema
         : operation === 'xopc.automations.run' || operation === 'xopc.automations.rerun' ? AutomationRunMutationOutputSchema : AutomationMutationOutputSchema).parse(await capabilities.call(operation, input, caller,
-        { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
+        { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? toolCallId }));
     } catch (error) {
       if (error instanceof CapabilityError) return { ok: false as const, error: error.message, code: error.code };
       throw error;
@@ -1300,6 +1306,25 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       const args = ensureArgs(input);
       const details: XopcUseDetails = { mode, command, dryRun };
       if (!command) return errorText('command is required', details);
+      if (mode === 'mcp_setup') {
+        const service = deps.getMcpSetupService?.();
+        const conversationId = deps.getCurrentConversationId?.();
+        const agentId = deps.getCurrentAgentId?.();
+        if (!service || !conversationId || !agentId) return errorText('MCP setup requires a Gateway conversation.', details);
+        if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.mcp_setup.${command}`, args)) return errorText('MCP setup access denied', details);
+        try { return okText({ ...details, result: await service.command(command, args, { conversationId, agentId, canConfigure: deps.canConfigureFromConversation?.() === true, canRequestWeixinSetup: deps.canRequestWeixinMcpSetup?.() === true }, dryRun) }); }
+        catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
+      }
+      if (mode === 'automation' && command === 'prepare_source') {
+        const config = deps.getConfig?.();
+        if (!config || !deps.getWorkspace) return errorText('MCP source preparation is unavailable in this runtime.', details);
+        if (deps.authorizeCapability && !await deps.authorizeCapability('xopc.automations.prepare_source', args)) return errorText('Source preparation denied', details);
+        const input = AutomationMcpSourceInput.parse(args);
+        if (dryRun) return okText({ ...details, result: { dryRun: true, ...input } });
+        return okText({ ...details, result: await prepareAutomationMcpSource(input, { conversationId: deps.getCurrentConversationId?.(),
+          agentId: deps.getCurrentAgentId?.(), canConfigure: deps.canConfigureFromConversation?.() === true,
+          workspaceDir: deps.getWorkspace(), readConfig: () => deps.getConfig?.() ?? config, signal }) });
+      }
       if (mode === 'phone_setup') {
         const service = deps.getPhoneSetupService?.();
         const conversationId = deps.getCurrentConversationId?.();
@@ -1400,7 +1425,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
           ? { runId: args.runId, limit: args.limit }
           : command === 'product_events'
           ? { eventType: args.eventType, source: args.source, payloadKey: args.payloadKey, payloadValue: args.payloadValue, limit: args.limit }
-          : { id: args.runId ?? args.id };
+          : { id: args.runId ?? args.id, ...(command === 'get_run' && args.waitMs !== undefined ? { waitMs: args.waitMs } : {}) };
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
           surface: 'agent', scopes: ['automations.read'], authorize: deps.authorizeCapability ?? (() => true), signal };
         const result = await capabilities.call(`xopc.automations.${command}`, projectedInput, caller);
@@ -1481,7 +1506,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
               : mode === 'project'
             ? await handleProject(command, args, deps, dryRun, capabilities)
               : mode === 'automation'
-                ? await handleAutomation(command, args, deps, dryRun, capabilities)
+                ? await handleAutomation(command, args, deps, dryRun, capabilities, toolCallId)
                 : mode === 'note'
                   ? await handleNote(command, args, deps, dryRun, capabilities)
                 : mode === 'task'

@@ -80,3 +80,12 @@ describe('ChannelManager module', () => {
     expect(stopCalls).toBe(1);
   });
 });
+
+it('requires an actual channel acknowledgement when result delivery requests a receipt', async () => {
+  const manager = new ChannelManager({ channels: {} } as any, {} as any);
+  const outbound = { sendText: async () => ({ success: false, error: 'offline', messageId: '', chatId: 'peer' }) };
+  manager.registerPlugin({ id: 'weixin', meta: { label: 'Weixin' }, outbound } as unknown as ChannelPlugin);
+  const message = { channel: 'weixin', chat_id: 'peer', content: 'An already completed result' };
+  await expect(manager.send(message, { skipPersist: true, requireDelivery: true })).rejects.toThrow('did not succeed');
+  await expect(manager.send(message, { skipPersist: true })).resolves.toBeUndefined();
+});

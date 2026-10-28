@@ -8,6 +8,16 @@ Existing configurations are preserved. Selecting **Use every enabled skill** opt
 
 ## Find and enable a Skill
 
+You can manage Skills in a conversation when the current Agent has the Skill tools:
+
+- “Find a Skill for weekly reports. Recommend options without installing anything.”
+- “Install this Skill globally, then summarize these sales rows.”
+- “Check whether the weekly-report Skill is installed, disabled, or unavailable to this Agent.”
+- “Disable weekly-report but keep its files.” / “Enable it again.”
+- “Uninstall the weekly-report Skill I installed.”
+
+An explicit installation request authorizes that installation. Searching or sharing a link alone does not. Installs default to the shared global directory; ask for workspace scope when appropriate. Enabling a Skill changes its shared flag, while Agent selection and tool permissions remain separate. The Agent reports unmet requirements instead of bypassing them. Bundled, plugin-owned, and extra-directory Skills retain their owner's management rules. A successful install does not prove a task has run: ask for a small first use and check the result.
+
 In the Gateway console, open **Skills**, review the description and requirements, then install or enable it for the intended Agent.
 
 In a terminal:

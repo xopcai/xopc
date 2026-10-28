@@ -11,6 +11,23 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
 export function registerMcpRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
+  const secureSetup = (handler: (c: Context) => Promise<unknown>) => async (c: Context) => {
+    const principal = getGatewayPrincipal(c);
+    if (principal.kind !== 'owner' || !principal.scopes.includes('gateway.admin')) return c.json({ ok: false, error: 'Owner administration is required.' }, 403);
+    c.header('Cache-Control', 'no-store');
+    try { return c.json({ ok: true, payload: await handler(c) }); }
+    catch (error) { return c.json({ ok: false, error: error instanceof McpDraftError ? error.message : 'MCP setup could not be completed.' }, error instanceof McpDraftError ? error.status : 500); }
+  };
+  app.get('/api/mcp/setup/conversations/:id', secureSetup(async c => deps.service.mcpSetup.currentForConversation(c.req.param('id'))));
+  app.get('/api/mcp/setup/:id', secureSetup(c => deps.service.mcpSetup.interact(c.req.param('id'), 'get')));
+  app.post('/api/mcp/setup/:id', deps.strictRateLimitMiddleware, secureSetup(async c => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || !['advance', 'authorize', 'token', 'cancel', 'approve', 'retry_delivery'].includes(body.action)
+      || !Number.isSafeInteger(body.expectedVersion)
+      || Object.keys(body).some(key => !['action', 'value', 'expectedVersion'].includes(key))
+      || body.value !== undefined && (typeof body.value !== 'string' || body.action !== 'token')) throw new McpDraftError(400, 'Invalid MCP setup action.');
+    return deps.service.mcpSetup.interact(c.req.param('id'), body.action, body.value, body.expectedVersion, getGatewayPrincipal(c).principalId);
+  }));
   const drafts = new McpConnectionDrafts({ readConfig: () => deps.service.currentConfig, saveConfig: (config, expected) => deps.service.saveConfig(config, expected) });
   const owner = (c: Context) => getGatewayPrincipal(c).principalId;
   const draftRoute = (handler: (c: Context) => Promise<unknown> | unknown) => async (c: Context) => {

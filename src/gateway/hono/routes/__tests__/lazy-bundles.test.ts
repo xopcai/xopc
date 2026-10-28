@@ -6,6 +6,14 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('routes secure conversational MCP setup without capturing nearby paths', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/setup/goal-id')?.id).toBe('mcp');
+    expect(findAuthenticatedLazyRouteBundle('/mcp-setup/callback/goal-id')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/setup/conversations/session-id')?.id).toBe('mcp');
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/setup/conversations/session-id/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/setup-other/goal-id')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/setup/goal-id/extra')).toBeUndefined();
+  });
   it('maps authorized location sharing separately from basic reports and phone cleanup', () => {
     for (const path of ['/api/user-context/environment/location-shares', '/api/user-context/environment/location-shares/id', '/api/user-context/environment/location-shares/id/samples'])
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('location-sharing');

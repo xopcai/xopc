@@ -1,6 +1,9 @@
 import { Type } from '@sinclair/typebox';
+import { createHash } from 'node:crypto';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { isSkillInstallTarget, type SkillInstallTarget } from '../skills/install-target.js';
+import { DurableState } from '../../storage/sqlite/durable-state.js';
+import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
 
 export interface SkillInstallToolOptions {
   source: string;
@@ -52,6 +55,8 @@ export interface SkillInstallToolDeps {
 }
 
 const SkillInstallSchema = Type.Object({
+  idempotencyKey: Type.Optional(Type.String({ minLength: 1, maxLength: 200,
+    description: 'Stable installation intent key. Keep the same key after a timeout; use a new key for a new install/update request.' })),
   source: Type.Optional(Type.String({
     description:
       'Explicit source install: Git URL, GitHub repository URL, https .zip/.tar.gz URL, file:// URL, or local archive/path.',
@@ -95,7 +100,7 @@ function clean(value: unknown): string | undefined {
 }
 
 export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
-  return {
+  const tool: AgentTool = {
     name: 'skill_install',
     label: 'Install skill',
     description:
@@ -211,4 +216,24 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
     idempotent: false,
     finalGuardRelevant: true,
   } as any;
+  const execute = tool.execute.bind(tool);
+  tool.execute = async (callId, params: any, signal, update) => {
+    if (!isXopcDatabaseOpen() || !deps.getConversationId?.()) return execute(callId, params, signal, update);
+    const key = clean(params.idempotencyKey) ?? callId;
+    const input = { source: clean(params.source), provider: clean(params.provider), name: clean(params.name),
+      version: clean(params.version), ref: clean(params.ref), path: clean(params.path), skillId: clean(params.skillId),
+      target: isSkillInstallTarget(params.target) ? params.target : 'global', force: params.force === true, strictScan: params.strictScan === true };
+    const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+    const receipts = new DurableState<{ fingerprint: string; result?: AgentToolResult<any> }>('skills.install', deps.getConversationId!()!);
+    const previous = receipts.update(key, value => ({ value: value ?? { fingerprint }, result: value }));
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) return { content: [{ type: 'text', text: 'Installation intent key was already used with different parameters.' }], details: { errorCode: 'intent_conflict' } };
+      return previous.result ?? { content: [{ type: 'text', text: 'Installation result is not yet known. Inspect skill_manage status before taking further action; do not blindly reinstall or overwrite.' }], details: { errorCode: 'install_unknown' } };
+    }
+    // A thrown operation may have written files. Retain its intent for inspection.
+    const result = await execute(callId, params, signal, update);
+    receipts.set(key, { fingerprint, result });
+    return result;
+  };
+  return tool;
 }

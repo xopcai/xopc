@@ -1,6 +1,13 @@
+import { weixinPrivateIdentity } from '../../agent/mcp/weixin-setup-scope.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import type { AutomationDeliveryPolicy } from '../domain/types.js';
 import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '../../utils/logger.js';
+import { DEFAULT_AGENT_ID, normalizeAgentId } from '../../agent/agent-scope.js';
+import { getAutomationMcpSource, assertAutomationMcpSource } from '../mcp-source.js';
+import { mcpConfigRevision } from '../../agent/mcp/connection-drafts.js';
+import type { Config } from '../../config/schema.js';
 import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import {
   computeNextAutomationRunAtMs,
@@ -19,6 +26,7 @@ import type {
   AutomationRunStatus,
 } from '../domain/types.js';
 import {
+  AutomationDeliveryPolicySchema,
   CreateAutomationSchema,
   UpdateAutomationSchema,
   type CreateAutomationInput,
@@ -75,6 +83,7 @@ const RETRY_BASE_DELAY_MS = 1_000;
 
 export class AutomationInvalidScheduleError extends Error {}
 export class AutomationInvalidAgentError extends Error {}
+export class AutomationInvalidSourceError extends Error {}
 
 export class AutomationAlreadyRunningError extends Error {
   constructor(readonly automationId: string, readonly runningRunId?: string) {
@@ -97,6 +106,10 @@ export class AutomationService {
     onDeadLetter: input => this.deps.onReliabilityAttention?.(input),
   });
   private readonly deliveryRouter = new AutomationDeliveryRouter({
+    deliverWeixin: (conversationId, principalId, run) => {
+      if (!this.deps.onWeixinRunCompleted) throw new Error('Weixin delivery is unavailable.');
+      return this.deps.onWeixinRunCompleted(conversationId, principalId, run);
+    },
     deliverGatewayEvent: (run, context) => {
       if (!this.deps.onRunCompleted) throw new Error('Notification service is unavailable. Delivery will retry.');
       return this.deps.onRunCompleted(run, context);
@@ -146,6 +159,19 @@ export class AutomationService {
     log.info('Automation service stopped');
   }
 
+  bindConversationDelivery(conversationId: string | undefined, input: unknown): AutomationDeliveryPolicy {
+    const delivery = AutomationDeliveryPolicySchema.parse(input) as AutomationDeliveryPolicy;
+    if (!conversationId || getSessionMetadata(conversationId)?.sourceChannel !== 'weixin') return delivery;
+    const scope = this.deps.getConfig && weixinPrivateIdentity(conversationId, this.deps.getConfig() as Config);
+    if (!scope) throw new AutomationInvalidSourceError('A paired Weixin conversation is required for this notification.');
+    const destinations = delivery.destinations.filter(item => item.kind !== 'weixin');
+    if (delivery.destinations.some(item => item.kind === 'weixin' && (item.conversationId !== conversationId || item.principalId !== scope.principalId))) {
+      throw new AutomationInvalidSourceError('Notifications cannot be redirected to another Weixin identity.');
+    }
+    let key = 'weixin'; while (destinations.some(item => item.key === key)) key = `_${key}`;
+    return { ...delivery, destinations: [...destinations, { key, kind: 'weixin', conversationId, principalId: scope.principalId }] };
+  }
+
   async create(input: CreateAutomationInput): Promise<Automation> {
     const automation = this.createAtomically(input);
     this.refreshSchedule();
@@ -177,6 +203,7 @@ export class AutomationService {
     this.assertExecutionAgent(automation);
     this.prepareSchedule(automation, now);
     this.pinBrowserVersion(automation);
+    this.assertMcpSource(automation);
     if (getAutomation(automation.id)) throw new AutomationAlreadyExistsError(automation.id);
     automation.updatedAtMs = Math.max(automation.updatedAtMs, (getDeletedAutomationRevision(automation.id) ?? -1) + 1);
     automation.state.nextRunAtMs = computeNextAutomationRunAtMs(automation, now);
@@ -187,6 +214,19 @@ export class AutomationService {
   private assertExecutionAgent(automation: Automation): void {
     if (automation.action.kind !== 'agent' || !automation.action.agentId || !this.deps.isAgentAvailable) return;
     if (!this.deps.isAgentAvailable(automation.action.agentId)) throw new AutomationInvalidAgentError('Execution assistant is unavailable. Choose an available assistant or use the default.');
+  }
+
+  private assertMcpSource(automation: Automation): void {
+    if (automation.action.kind !== 'agent' || !automation.action.mcpSourceId || !automation.enabled) return;
+    try {
+      const source = getAutomationMcpSource(automation.action.mcpSourceId,
+        normalizeAgentId(automation.action.agentId || this.deps.getDefaultAgentId?.() || DEFAULT_AGENT_ID));
+      if (!this.deps.getConfig) throw new Error('The selected MCP source cannot be checked in this runtime.');
+      assertAutomationMcpSource(source, this.deps.getConfig() as Config);
+      const tested = listAutomationRuns({ automationId: automation.id, limit: 500 }).some(run => run.status === 'succeeded'
+        && mcpConfigRevision(run.actionSnapshot) === mcpConfigRevision(automation.action));
+      if (!tested) throw new Error('Run and verify this exact source-bound action before enabling its schedule. Save a disabled draft first.');
+    } catch (error) { throw new AutomationInvalidSourceError(error instanceof Error ? error.message : 'The MCP source is unavailable.'); }
   }
 
   private prepareSchedule(automation: Automation, now: number): void {
@@ -253,9 +293,13 @@ export class AutomationService {
         ...(parsed.state ?? {}),
       },
     }) as Automation;
+    if (current.action.kind === 'agent' && current.action.mcpSourceId && next.action.kind === 'agent' && !next.action.mcpSourceId) {
+      next.action.mcpSourceId = current.action.mcpSourceId;
+    }
     if (parsed.action) this.assertExecutionAgent(next);
     if (parsed.trigger || (parsed.enabled === true && next.trigger.kind === 'schedule' && next.trigger.schedule.kind === 'once')) this.prepareSchedule(next, now);
     this.pinBrowserVersion(next);
+    this.assertMcpSource(next);
     if ('enabled' in parsed || 'trigger' in parsed) {
       next.state.nextRunAtMs = computeNextAutomationRunAtMs(next, now);
     }

@@ -35,3 +35,11 @@ Add account-specific settings only when you need separate Weixin identities or r
 - Reply fails: verify local Chat and inspect the Weixin channel logs.
 
 Do not copy the stored login files to an untrusted machine. Re-login if credentials are revoked or moved to a new Gateway host.
+
+## Configure capabilities in conversation
+
+A paired, explicitly approved private chat can request Skill installation and use. HTTP MCP requests return a secure page where the Gateway owner signs in, checks the exact service and Weixin identity, and approves the connection before Token entry or OAuth. The original Weixin chat continues automatically; failed result delivery can resend the saved result without repeating the read.
+
+Secure MCP return requires a phone-accessible HTTPS `gateway.publicUrl`, `session.dmScope=per-account-channel-peer`, and no identity merging. Shared chats and group configuration are outside this scope. Connections join shared Gateway capabilities under the assistant's tool policies; pairing does not grant general administration rights.
+
+Self-contained reminders use the original account and peer through the durable automation delivery outbox. See the [implementation and acceptance record](../design/technical/weixin-conversation-configuration-2026-10-28.md) for exact scope; local protocol acceptance does not imply official WeChat or physical-phone acceptance.

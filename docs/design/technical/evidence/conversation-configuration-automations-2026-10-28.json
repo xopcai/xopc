@@ -1,0 +1,627 @@
+{
+  "date": "2026-10-28",
+  "stage": "automations-core",
+  "baseCommit": "561ffc9032e262ef640c5e2a498303a305be96d3",
+  "workingTree": true,
+  "sourceHashes": {
+    "packages/gateway-contract/src/automations.ts": "8c54afac1540e87ba8d26020aff5ad629dd4d511f7c2f1d17d0be5e4cec2d05d",
+    "packages/gateway-contract/src/capabilities.ts": "522b9a0da1fdf74e73460b84a572ca7bab300d4b6ca4c417a27b7174123fefc1",
+    "scripts/conversation-configuration-test-server.mts": "2234a2a6b2502efbe6acb60c53c684afa5d2e10fcbd07b2b423b01718490aa73",
+    "scripts/verify-conversation-configuration-e2e.mts": "4f16e10f05e1eb664ca09b3b4d57c9fcb801b76747c97a691a721916b7520037",
+    "src/agent/agent-manager.ts": "cea68aabb05bb46675a0a5d24de38a157174489a5bc97ce1baf3f0f88df434db",
+    "src/agent/embedded/__tests__/codemode.integration.test.ts": "e17a65d03cd369f3bcb47599ba4f773e52a8846139755f28b5467e7183659620",
+    "src/agent/embedded/__tests__/configuration-capability-correction.test.ts": "e1794119fdc9abbf01d721a4d1e9b548d66ffa226af7624245a668746ad0f0b9",
+    "src/agent/embedded/__tests__/run-turn-images.test.ts": "bebc0db173e5c36acd1587bd0ece479a44794d97969ad00a0cdd35fc0135df83",
+    "src/agent/embedded/__tests__/session-runner.test.ts": "a71d7445adf626534952203d17336385085567f3b5749d365ed77148c5a01a4f",
+    "src/agent/embedded/configuration-capability-correction.ts": "9c7432af1cd509af1c0a5f29c4dfc58db2e0cad4be46f5bfbfa0bdc1eaf30778",
+    "src/agent/embedded/run-for-session.ts": "b4b3f621eaf066651d1d851dfe8f8572324d75e05ae8e7c132335baa4dd9702c",
+    "src/agent/embedded/run-turn.ts": "06fb97b275036a94df5a2500e31b441decd285e33ece594dc3714ad575570d5a",
+    "src/agent/embedded/session-runner.ts": "0f8b1e5eadedeba264a1719dce1582e6c5b5102bb3b42093d209c21ed054dba0",
+    "src/agent/mcp/__tests__/connection-setup.test.ts": "5572a130078862157135f06ed44e932f53e33000982ad68abe8763dc6965d824",
+    "src/agent/mcp/__tests__/conversation-setup.test.ts": "ada68161a2f45910c826dc5c17550c4995b5b58a4c14aa1fd9c93f51d435153d",
+    "src/agent/mcp/connection-setup.ts": "04ee5996417e032cd23cd796cb69c3ba9caa447f6de09897b3d77f1341f19cf6",
+    "src/agent/mcp/conversation-setup.ts": "4d05791551580b9b7841cf4572f084ddff2570fe56218c263c1efbed9b76cd04",
+    "src/agent/mcp/native-mcp.ts": "fac2ee15d461b292d64bcceaf55fad0a34eb2a573b64aba9b6899220da8bf082",
+    "src/agent/mcp/tool-catalog.ts": "fc0599b57fe3fa4f145744324846c4a768b9c99abb2df42bfde6be58080e92e7",
+    "src/agent/prompt/conversational-configuration-guide.ts": "2af309bb9eed1d859713dbc38edd6d33a4705bd55fb3011f877597142eecd167",
+    "src/agent/prompt/sections/tooling.ts": "d6004b3316b6415707fda87e1d39b58d3fd09b1d93b020c37e83084838113c26",
+    "src/agent/service.ts": "230c877ed4874a0e832eaceb54ea0517084e20e26537cba6b87ea817e4aea7a2",
+    "src/agent/service.types.ts": "82c946a5d81e79f5ae987ce31110881774bb191daa9f56a7a1cc375f6feb83ca",
+    "src/agent/tool-manuals/xopc-configuration.ts": "6bb2b6b26406e9d6263ab34c42d1c5d6d9bbc290fdff1c0f83efd39f147ddd69",
+    "src/agent/tools/__tests__/skill-configuration.test.ts": "c4a05053a9f6aa66dce509ed0401befc3bbf1e2f53a409bdc8b57a51ce17a6e6",
+    "src/agent/tools/automation-tool.ts": "b52fec9a3df4aafa42f8cc65298bc53d58fdb3cbecf62723bf3fc1c6bda6e175",
+    "src/agent/tools/factory.ts": "9cfbe33d347d2b6937930c5c704076bb33da9688f62c3cffc777355a73304105",
+    "src/agent/tools/index.ts": "f62210b3ec3b67e5d53a51725952ac0b3a12abc96b9cb087a0af350806fa7c19",
+    "src/agent/tools/mcp-setup-tool.ts": "3eaf1da1259b4e81287c6519661bb18dd4e300232517cea8c3005dca5680d313",
+    "src/agent/tools/skill-install-tool.ts": "187985b108355ecb71fe5e384ce5fbe322e3cc2d62cae62d3d82abef2b4715ca",
+    "src/agent/tools/skill-manage-tool.ts": "b0fab045b1a2ed39acb6a4f83e518609d94a64967e497a3f5c5413828d0d0da8",
+    "src/agent/tools/tool-manual-tool.ts": "8785ab05c0a6db964bafabbdabcd74b6430333f0269a8a6ba6deeb315de06457",
+    "src/agent/tools/toolExposure.ts": "859ffdeb8b58b6707bd1a963b5d76231be2cab3230d10feca92fa1afc162bafb",
+    "src/agent/tools/xopc-use-tool.ts": "a5ff6664df476248a498b16bdb7e86396361f39e4c0f3c000b2a2e0f390bd59d",
+    "src/automations/__tests__/capabilities.test.ts": "0a04d94785939c0a911023e04db71267988c63ea15e8264393f2947d9acb1ca3",
+    "src/automations/__tests__/mcp-source.test.ts": "db6925fb741c6034b04e11939c7a8468ca69fed045f70b6f4d304800696e4a41",
+    "src/automations/capabilities/drafts.ts": "e724adb1ec44f39c10ad66322985af7dc654bb9a063cc896b2ab96a0d6613781",
+    "src/automations/capabilities/read.ts": "60483ff7734e0d9e293cf05cf4a9e690e90ebbad8b8d90122782d378694ca6db",
+    "src/automations/capabilities/write.ts": "35e7af956acb95d364547f83e7b95876376fbfe3765a4073c29bd5fe31a56806",
+    "src/automations/domain/types.ts": "2777a93ccfd759091ea251e04c8792939c50e4bad9d4c962c9a5136f66e4caee",
+    "src/automations/domain/validation.ts": "d1aa76a6e4aac4fb7f6b955bf0c230c44221ba61564b85601d46c0e01528f400",
+    "src/automations/mcp-source.ts": "ab5c86cd984fa579591291801f5708592d18dd74389fe415b3ab93aac16884e9",
+    "src/automations/service/action-executor.ts": "47d7857195df6f74d5169c41e4a380578827221f8fcf5e6fd778037648a11f97",
+    "src/automations/service/automation-service.ts": "ccc155cfb971cb8fec38dfe78d95e61e4f5f1f664aed8b77846b83c3b98862bf",
+    "src/gateway/hono/routes/__tests__/lazy-bundles.test.ts": "ccc38b86b019082ab4d5938763a3428f6c01c5f9b73a92e896111d123750d85d",
+    "src/gateway/hono/routes/lazy-bundles.ts": "472d895a1e88920fd8f8c0fabcd9b7dfe2b9f98fbc7092810625921d14a4b7fb",
+    "src/gateway/hono/routes/mcp.ts": "f484e68fdb89a4ccb1eea9df23f0ed222536d503dd62dee1736944a6b990ea60",
+    "src/gateway/service.ts": "fdd95f4da79e1f6497cc3ca84864960f6ebbadb6cbfabe9acc41b88e51ef65ba",
+    "web/src/app.tsx": "3fc50b862a1834e84ead0a85afacdfd5501b65f8ca670c09e4276f43ea7eefdf",
+    "web/src/features/automations/__tests__/automations-page.test.ts": "84e2c17d573fbb60283bc040e58b4b8cf2b0e42ee827d686c215291da31c0858",
+    "web/src/features/automations/automation-api.ts": "cd3706251a88877560715ba59d16c03833ca2b0968d8b168d020e4d866690e8e",
+    "web/src/features/chat/connections/connection-action-bar.tsx": "4b4c59e3cbf7d28e6761b83b87fde0fb390e9d8bb4b2121db333a8abb652f6fa",
+    "web/src/features/chat/connections/mcp-setup-action-bar.tsx": "593158d46adcf3bac852ad437960e12449ea0a6eef4dc2bb911d81350dc517d3",
+    "web/src/features/connectors/mcp/mcp-conversation-setup-page.tsx": "c98310eaca406a0b66c3bcc798bfca63ce7a43dcc469da5371995023185e92c0",
+    "web/src/lib/__tests__/app-link.test.ts": "79b61b177e76315a0d4773c0c0681fb5cb5ee9de328ae1b0251e413269c27820",
+    "web/src/lib/app-link.ts": "3a6b078448918b2d57c7adde84a622df5b6d07a20ea0b067c8881428e5a5ab9a"
+  },
+  "hashesRecordedAfterRun": true,
+  "hashMeaning": "Post-run working-tree fingerprints, not proof of the exact launch tree. Raw development runs are retained separately.",
+  "inference": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "entry": "production Web Chat, 390px plus desktop layout",
+  "fixture": "Real isolated scheduler, model and production Web Chat. Two pre-existing assistants; no management API writes by the test.",
+  "passed": true,
+  "caseCount": 46,
+  "cases": [
+    {
+      "id": "automation-draft",
+      "checks": {
+        "oneDraft": true,
+        "disabled": true,
+        "cron": true,
+        "timezone": true,
+        "currentAgent": true,
+        "notRun": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-management-link",
+      "checks": {
+        "actualManagementDialog": true,
+        "selectedObject": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-update-time",
+      "checks": {
+        "sameObject": true,
+        "cron": true,
+        "timezone": true,
+        "preservedAction": true,
+        "disabled": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-change-assistant",
+      "checks": {
+        "selectedAgent": true,
+        "sameObject": true,
+        "noDuplicate": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-restore-assistant",
+      "checks": {
+        "selectedAgent": true,
+        "sameObject": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-restart-draft",
+      "checks": {
+        "persistent": true,
+        "stillDisabled": true,
+        "noRun": true,
+        "accurate": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-trial",
+      "checks": {
+        "oneActualRun": true,
+        "completed": true,
+        "actualResult": true,
+        "stillDisabled": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-enable",
+      "checks": {
+        "sameObject": true,
+        "enabled": true,
+        "futureRun": true,
+        "correctTime": true,
+        "timezoneFeedback": true,
+        "noExtraTrial": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-pause",
+      "checks": {
+        "paused": true,
+        "historyPreserved": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-resume",
+      "checks": {
+        "resumed": true,
+        "sameObject": true,
+        "noDuplicate": true,
+        "noExtraTrial": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-delete",
+      "checks": {
+        "deleted": true,
+        "othersPreserved": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-one-off-answer",
+      "checks": {
+        "result": true,
+        "noSchedule": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-once",
+      "checks": {
+        "once": true,
+        "enabled": true,
+        "notifiesOnSuccess": true,
+        "actualFuture": true,
+        "noManualRun": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-actual-scheduled-run",
+      "checks": {
+        "oneScheduledExecution": true,
+        "actualResult": true,
+        "noReplacement": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-reminder-delivery",
+      "checks": {
+        "notificationPersisted": true,
+        "gatewayDeliveryCompleted": true,
+        "actualUserInbox": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-read-result",
+      "checks": {
+        "actualResult": true,
+        "noExtraRun": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-delete-english",
+      "checks": {
+        "removed": true,
+        "noneRemain": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-missing-source",
+      "checks": {
+        "noUnverifiedSchedule": true,
+        "honestBlocker": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-connect-source",
+      "checks": {
+        "connected": true,
+        "actualRead": true,
+        "actualResult": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-source-trial-before-enable",
+      "checks": {
+        "oneObject": true,
+        "sourcePinned": true,
+        "continuousContext": true,
+        "enabledAfterTrial": true,
+        "oneTrial": true,
+        "realSourceResult": true,
+        "reportsActualResult": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-source-disabled-failure",
+      "checks": {
+        "sourceDisabled": true,
+        "sameBinding": true,
+        "actualFailedRun": true,
+        "noFallbackRead": true,
+        "honestFailure": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-source-recovery",
+      "checks": {
+        "sameObject": true,
+        "sameBinding": true,
+        "oneNewTrial": true,
+        "actualFreshRead": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-source-schedule-once",
+      "checks": {
+        "sameObject": true,
+        "sameBinding": true,
+        "enabled": true,
+        "once": true,
+        "noExtraTrial": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-source-actual-scheduled-run",
+      "checks": {
+        "oneScheduledRun": true,
+        "freshBoundResult": true,
+        "sameBinding": true
+      },
+      "passed": true
+    },
+    {
+      "id": "automation-source-cleanup",
+      "checks": {
+        "removed": true,
+        "connectionPreserved": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-01",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-02",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-03",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-04",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-05",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-06",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-07",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-08",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-09",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-10",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-11",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-12",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-13",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-14",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-15",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-16",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-17",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-18",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-19",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "negative-20",
+      "checks": {
+        "noConfigurationMutation": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "desktop-chat-layout",
+      "checks": {
+        "desktopEditorVisible": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    }
+  ],
+  "rawEvidence": ".xopc-evals/conversation-configuration/automations-final3",
+  "timing": {
+    "definition": "Gateway input accepted until that input turn completed; excludes client rendering and separate authorization/resume inputs. Not total configuration completion latency.",
+    "userInputTurn": {
+      "samples": 41,
+      "minMs": 1656,
+      "p50Ms": 7824,
+      "p95Ms": 22485,
+      "maxMs": 31865
+    },
+    "actualScheduledRuns": [
+      {
+        "status": "succeeded",
+        "durationMs": 4657,
+        "scheduledStartDelayMs": 6
+      },
+      {
+        "status": "succeeded",
+        "durationMs": 6972,
+        "scheduledStartDelayMs": 6
+      }
+    ]
+  },
+  "completedInferenceRequests": 197,
+  "regression": {
+    "files": 51,
+    "tests": 431,
+    "passed": true,
+    "additionalTargetedChecks": "Source/native SDK: 16 passed; source and runner isolation: 9 passed; after tool-summary consent repair: capabilities and runner 29 passed, prompt suite 95 passed. These overlap the broad suite."
+  },
+  "scope": "Local owner production Web Chat; source-bound custom read-only HTTP MCP workflows. Not independently verified remote account identity, native mobile or arbitrary third-party compatibility.",
+  "failuresRetained": [
+    "run2: once-only reminder incorrectly represented as annual cron; added stable relative once input",
+    "run4: inbox left mobile drawer open; repaired real UI close interactions",
+    "run5: invalid oracle assumed displayName equals internal server ID; now checks neutral visible label plus exact endpoint",
+    "final2: redundant confirmation for explicit local deletion; added consent rule to eager tool description and summary",
+    "run6: continuous session reused previous run MCP guard; included execution ID in runner fingerprint and reran complete matrix"
+  ],
+  "independentOracles": [
+    "Real scheduler persisted terminal state and actual clock-triggered execution",
+    "Actual mobile notification inbox, persisted notification and delivery outbox",
+    "Server rotates marker on each business read; verify current-run timestamp window, stored transcript and result",
+    "Disabled source produces failed run without fallback or historical success",
+    "No shell/file configuration bypass and 20 Chinese/English no-change prompts"
+  ]
+}

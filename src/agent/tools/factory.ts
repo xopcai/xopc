@@ -69,6 +69,7 @@ import {
   createAutomationTool,
   createBrowserAutomationTool,
   createXopcUseTool,
+  createMcpSetupTool,
   createDesktopPetTool,
   createSkillInstallTool,
   createSkillsMarketplaceSearchTool,
@@ -114,6 +115,7 @@ import type { ProjectService } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { skillEnvironmentId } from '../skills/installer.js';
+import { getConversationRouting } from '../../routing/session-key.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
 import { createSkillsListTool, createSkillViewTool } from './skills-tools.js';
@@ -141,7 +143,7 @@ export interface ToolFactoryDeps {
   isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
   workspace: string;
   extensionRegistry?: ExtensionRegistry;
-  getCurrentContext: () => { channel: string; chatId: string; conversationId: string; origin: TurnOrigin } | null;
+  getCurrentContext: () => { channel: string; chatId: string; conversationId: string; origin: TurnOrigin; isGroup?: boolean; metadata?: Record<string, unknown> } | null;
   endpointTools?: EndpointToolRuntime;
   hookRunner?: import('../../extensions/index.js').ExtensionHookRunner;
   bus: MessageBus;
@@ -165,6 +167,7 @@ export interface ToolFactoryDeps {
   canConfigureEndpoint?: (endpointId: string) => boolean;
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
+  getMcpSetupService?: () => import('../mcp/conversation-setup.js').McpConversationSetup | undefined;
   getBrowserAutomationService?: () => BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: enables the `xopc_use` product-object tool. */
@@ -460,6 +463,12 @@ export class AgentToolsFactory {
     const find = createFindTool(workspace);
 
     const productToolDeps = {
+      canRequestWeixinMcpSetup: () => {
+        const context = this.deps.getCurrentContext();
+        if (!context || context.origin.type !== 'channel' || context.origin.channel !== 'weixin' || context.isGroup) return false;
+        const route = getConversationRouting(context.conversationId);
+        return route?.accountId === context.metadata?.accountId && route.peerId.toLowerCase() === context.chatId.toLowerCase();
+      },
       canConfigureFromConversation: () => {
         const origin = this.deps.getCurrentContext()?.origin;
         return origin?.type === 'system' && origin.source === 'cli'
@@ -478,6 +487,7 @@ export class AgentToolsFactory {
       getLocalAppService: this.deps.getLocalAppService,
       getChatPreviewService: this.deps.getChatPreviewService,
       getBrowserSetupService: this.deps.getBrowserSetupService,
+      getMcpSetupService: this.deps.getMcpSetupService,
       getPhoneSetupService: this.deps.getPhoneSetupService,
       dispatchTaskEvents: this.deps.dispatchTaskEvents,
       dispatchTaskRuns: this.deps.dispatchTaskRuns,
@@ -532,6 +542,7 @@ export class AgentToolsFactory {
               getSkillManager: getSkillMgr,
               getWorkspace: () => workspace,
               onSkillsFilesystemMutate: this.deps.onSkillsFilesystemMutate,
+              getSkillIndexingContext: this.deps.getSkillIndexingContext,
             }),
           ]
         : []),
@@ -702,12 +713,7 @@ export class AgentToolsFactory {
         : []),
       ...(this.deps.getAutomationService
         ? [
-            createAutomationTool({
-              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
-              getAutomationService: this.deps.getAutomationService,
-              getCurrentAgentId: () => options.agentId,
-              getProjectService: this.deps.getProjectService,
-            }),
+            createAutomationTool(productToolDeps),
           ]
         : []),
       ...(browserEnabled && this.deps.getBrowserAutomationService
@@ -724,6 +730,7 @@ export class AgentToolsFactory {
         || this.deps.dispatchTaskRuns
         ? [
             createXopcUseTool(productToolDeps),
+            ...(this.deps.getMcpSetupService ? [createMcpSetupTool(productToolDeps)] : []),
             ...(personalToolsConfigured ? [
               createPersonalTaskTool(productToolDeps),
               createPersonalReadTool({ ...productToolDeps, getCurrentConversationId: currentConversationId }),

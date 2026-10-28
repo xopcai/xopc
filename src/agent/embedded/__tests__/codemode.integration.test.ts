@@ -98,6 +98,31 @@ async function runScript(params: RunXopcEmbeddedTurnParams, code: string, name =
   return { result: result as unknown as Record<string, unknown>, events, calls };
 }
 
+it.each([true, false])('bounds automatic correction of an unverified MCP capability denial (recovers=%s)', async recovers => {
+  const { params } = await fixture();
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'Current connection status' }], details: {} }));
+  params.tools = [{ name: 'mcp_setup', label: 'MCP', description: 'Inspect connections', parameters: Type.Object({ command: Type.String() }), execute }];
+  params.codemode = undefined;
+  params.userMessage = { role: 'user', content: 'Connect http://127.0.0.1/mcp', timestamp: Date.now() };
+  let round = 0;
+  scripted.stream.mockImplementation(() => {
+    const index = round++;
+    const calling = recovers && index === 1;
+    const message = { role: 'assistant', api: model.api, provider: model.provider, model: model.id,
+      content: calling ? [{ type: 'toolCall', id: 'inspect', name: 'mcp_setup', arguments: { command: 'inspect' } }]
+        : [{ type: 'text', text: recovers && index > 1 ? 'The actual tool is available.' : 'The MCP setup tool is not available.' }],
+      stopReason: calling ? 'toolUse' : 'stop', timestamp: Date.now(),
+      usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { ...model.cost, total: 0 } },
+    } as AssistantMessage;
+    const stream = createAssistantMessageEventStream();
+    stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+    return stream;
+  });
+  expect(await runXopcEmbeddedTurn(params)).toMatchObject({ ok: true });
+  expect(round).toBe(recovers ? 3 : 2);
+  expect(execute).toHaveBeenCalledTimes(recovers ? 1 : 0);
+});
+
 it.each(['connection', 'authorization', 'connection_then_authorization'] as const)('handles %s invalidation during an assistant response', async reason => {
   const { params } = await fixture();
   let invalidate!: (reason?: 'connection' | 'authorization') => void;
@@ -529,3 +554,27 @@ it('distinguishes an already loaded tool from an unavailable tool on repeated di
   expect(JSON.stringify(used.result)).toContain('browser available');
   expect(execute).toHaveBeenCalledOnce();
 }, 15000);
+
+it.each([true, false])('bounds a promise-only Skill installation continuation (recovers=%s)', async recovers => {
+  const { params } = await fixture();
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'Installed the requested fixture' }], details: {} }));
+  params.tools = [{ name: 'skill_install', label: 'Install Skill', description: 'Install an authorized Skill', parameters: Type.Object({ source: Type.String() }), execute }];
+  params.codemode = undefined;
+  params.userMessage = { role: 'user', content: '安装这个周报能力 https://example.com/report.zip，装好后整理数据。', timestamp: Date.now() };
+  let round = 0;
+  scripted.stream.mockImplementation(() => {
+    const index = round++, calling = recovers && index === 1;
+    const message = { role: 'assistant', api: model.api, provider: model.provider, model: model.id,
+      content: calling ? [{ type: 'toolCall', id: 'install-once', name: 'skill_install', arguments: { source: 'https://example.com/report.zip' } }]
+        : [{ type: 'text', text: recovers && index > 1 ? 'The actual installation completed.' : '我会安装这个周报能力，然后整理数据。' }],
+      stopReason: calling ? 'toolUse' : 'stop', timestamp: Date.now(),
+      usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { ...model.cost, total: 0 } },
+    } as AssistantMessage;
+    const stream = createAssistantMessageEventStream();
+    stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+    return stream;
+  });
+  expect(await runXopcEmbeddedTurn(params)).toMatchObject({ ok: true });
+  expect(round).toBe(recovers ? 3 : 2);
+  expect(execute).toHaveBeenCalledTimes(recovers ? 1 : 0);
+});

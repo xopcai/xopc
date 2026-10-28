@@ -23,6 +23,7 @@ export type AutomationAction =
       kind: 'agent';
       agentId?: string;
       instruction: string;
+      mcpSourceId?: string;
       workingDirectory?: string;
       model?: string;
       timeoutSeconds?: number;
@@ -51,6 +52,7 @@ export type AutomationConversationMode = 'new_session' | 'continuous';
 export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
 export type AutomationDeliveryDestination =
   | { key: string; kind: 'gateway_event' }
+  | { key: string; kind: 'weixin'; conversationId: string; principalId: string }
   | { key: string; kind: 'webhook'; endpoint: string; secretId: string }
   | { key: string; kind: 'file'; targetId: string; pathTemplate: string }
   | { key: string; kind: 'card'; channelId: string; templateId: string };

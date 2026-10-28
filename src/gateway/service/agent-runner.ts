@@ -53,6 +53,7 @@ import {
 const log = createLogger('Gateway:AgentRunner');
 
 export interface GatewayAgentRunnerOptions {
+  afterConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput, status: string) => Promise<void>;
   validateConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput) => Promise<boolean>;
   continueConnection?: (wait: import('@xopcai/gateway-contract').ConnectionWait, idempotencyKey: string) => Promise<void>;
   cancelConnection?: (wait: import('@xopcai/gateway-contract').ConnectionWait) => void;
@@ -133,6 +134,8 @@ export class GatewayAgentRunner {
             break;
           }
         }
+        const persisted = findSessionInputByRunId(input.conversationId, input.runId);
+        if (persisted?.clientMessageId.startsWith('mcp-setup:')) await opts.afterConnectionResume?.(persisted, result?.status ?? 'error');
         return result;
       },
       onInputReceived: conversationId => {

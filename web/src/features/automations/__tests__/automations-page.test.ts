@@ -160,7 +160,7 @@ describe('automation buildInput', () => {
       name: 'Daily report',
       enabled: true,
       trigger: { kind: 'manual' },
-      action: { kind: 'agent', instruction: 'Prepare a report.', model: 'openai/gpt-5' },
+      action: { kind: 'agent', instruction: 'Prepare a report.', model: 'openai/gpt-5', mcpSourceId: 'pinned-source' },
       conversationMode: 'new_session',
       delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
       state: {},
@@ -174,6 +174,7 @@ describe('automation buildInput', () => {
     });
 
     expect(edited.action.kind === 'agent' ? edited.action.model : 'not-agent').toBeUndefined();
+    expect(edited.action.kind === 'agent' ? edited.action.mcpSourceId : undefined).toBe('pinned-source');
   });
 
   it('includes the selected project and delivery preferences', () => {

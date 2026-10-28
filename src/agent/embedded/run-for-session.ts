@@ -32,6 +32,7 @@ import { prepareNativeMcpConfig } from '../mcp/native-mcp.js';
 import { materializeNativeExternalTools } from './external-tool-discovery.js';
 import { filterExecutionTools, resolveExecutionToolPolicy } from './execution-tool-policy.js';
 import { getTaskContinuation, getTaskExecutionDeadline } from '../../tasks/task-continuation.js';
+import { boundAutomationMcpSource, restrictAutomationMcpConfig } from '../../automations/mcp-source.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -195,13 +196,18 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       await mm.applyModelForSession(agent, conversationId);
     }
     agentManager.setModelForSession(conversationId, modelRef);
-    const executionToolPolicy = resolveExecutionToolPolicy(conversationId);
-    const tools = filterExecutionTools(executionToolPolicy, agent.state.tools);
+    const source = boundAutomationMcpSource(runId, conversationId);
+    const baseToolPolicy = resolveExecutionToolPolicy(conversationId);
+    if (source && !baseToolPolicy.nativeMcp) throw new Error('This execution surface does not permit native MCP tools.');
+    const executionToolPolicy = source ? { ...baseToolPolicy, codemode: false, externalMaterialization: false,
+      revision: `${baseToolPolicy.revision}:${source.id}` } : baseToolPolicy;
+    const tools = source ? [] : filterExecutionTools(executionToolPolicy, agent.state.tools);
     const turnPolicy = agentManager.createAgentTurnPolicy(conversationId);
     const baseSystemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
       .filter(Boolean).join('\n\n');
     const systemPrompt = appendDynamicPromptSection(baseSystemPrompt,
-      [params.dynamicSystemContext, connectionObjectiveContext(conversationId)].filter(Boolean).join('\n\n'));
+      [params.dynamicSystemContext, connectionObjectiveContext(conversationId), source
+        ? `The host pinned this automation to MCP server ${source.serverId} and tools ${JSON.stringify(source.tools.map(tool => tool.name))}. Use these exact tools for the requested read. No other external source, configuration change or local file/shell fallback is permitted. An answer without a successful pinned tool call will fail verification.` : ''].filter(Boolean).join('\n\n'));
     const idlePolicy = resolveCompactionPolicy(config);
     if (personal && idlePolicy.enabled && idlePolicy.personalIdle.enabled) {
       idleJob = async (signal, isCurrent) => {
@@ -232,7 +238,9 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     if (executionToolPolicy.externalMaterialization) {
       tools.push(...await materializeNativeExternalTools({ conversationId, tools }));
     }
-    const mcp = config && executionToolPolicy.nativeMcp ? await prepareNativeMcpConfig(config, workspaceDir, resolveEffectiveAgentProfileForSession(conversationId).agentId) : undefined;
+    const preparedMcp = config && executionToolPolicy.nativeMcp ? await prepareNativeMcpConfig(config, workspaceDir, resolveEffectiveAgentProfileForSession(conversationId).agentId) : undefined;
+    if (source && !preparedMcp) throw new Error('The bound MCP source cannot be loaded.');
+    const mcp = preparedMcp ? restrictAutomationMcpConfig(runId, conversationId, preparedMcp) : undefined;
     const promptCachePolicy = resolvePromptCachePolicy(
       config
         ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.promptCache

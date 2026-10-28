@@ -102,6 +102,7 @@ async function resolveWeixinSendContext(
 
   let account = prep.account;
   let ctxTok = prep.ctxTok?.trim() || undefined;
+  if (!ctxTok && ctx.accountId?.trim()) return { ok: false, error: MISSING_WEIXIN_CONTEXT_TOKEN };
 
   if (!ctxTok) {
     for (const aid of listWeixinAccountIds(ctx.cfg)) {
@@ -175,6 +176,10 @@ async function resolveWeixinSendContext(
     return { ok: false, error: MISSING_WEIXIN_CONTEXT_TOKEN };
   }
 
+  const originalPeer = getWeixinOutboundSendUserId(account.accountId, ctx.to)?.trim();
+  if (ctx.outboundMetadata?.strictWeixinIdentity === true && (!originalPeer || originalPeer.toLowerCase() !== ctx.to.trim().toLowerCase())) {
+    return { ok: false, error: 'weixin: the original private-message identity is unavailable; no alternative recipient is allowed.' };
+  }
   const ilinkToUserId =
     getWeixinOutboundSendUserId(account.accountId, ctx.to)?.trim() ||
     toRawIlinkUserIdForApi(ctx.to);

@@ -77,11 +77,11 @@ export class McpConnectionDrafts {
       draft.probe = result; if (result.state === 'connected') draft.checkedAt = new Date().toISOString(); return result;
     } finally { draft.running = false; }
   }
-  authorize(owner: string, id: string) {
+  authorize(owner: string, id: string, options?: { callbackRelayUrl?: string }) {
     const draft = this.get(owner, id); this.assertIdle(draft);
     if (draft.authorizationId) cancelMcpAuthorization(draft.authorizationId, owner);
     draft.probe = undefined;
-    const attempt = startMcpAuthorization(draft.config, draft.workspace, draft.serverId, owner, { credentials: draft.credentials, authorizationScope: draft.id });
+    const attempt = startMcpAuthorization(draft.config, draft.workspace, draft.serverId, owner, { credentials: draft.credentials, authorizationScope: draft.id, ...options });
     draft.authorizationId = attempt.id;
     return attempt;
   }

@@ -34,8 +34,14 @@ Keep the first run manual. Enable an unattended schedule only after the result a
 
 Sending, deleting, purchasing, publishing, or changing an external system should retain the applicable confirmation or explicit policy. A schedule does not expand an Agent's authority.
 
-## Monitor runs
+## Configure in chat
 
+You can also configure schedules in the owner Web Chat. For example: “Save a daily 9:00 Beijing-time report as a draft; don’t run it yet,” “Try it once, show the actual result, then enable the same task,” or “Remind me once in 90 seconds.” A one-time reminder uses a saved `once` schedule. The API also accepts `schedule: { kind: "once", afterMs: 90000 }`; the server anchors it once within the operation receipt, so retrying does not move the reminder.
+
+Explicit local create, edit, pause, resume, and delete requests need no duplicate confirmation. Requested reminders and reports should use `notificationPolicy: "all"` to notify on success; `attention` is for exceptional updates. A queued run is not a completed result. Inspect the terminal run and its result delivery separately.
+
+For a selected custom HTTP MCP read, conversational setup can prepare a source reference and save it as the Agent action’s `mcpSourceId`. The runtime pins the service, tool contracts, and fixed argument hashes, requires an actual successful read in every run, and refuses changed sources or alternative tools. Enable only after a successful trial of the same action. This reference does not independently verify remote account identity; account-specific workflows require their identity adapter. Existing general Agent automations keep their previous behavior.
+## Monitor runs
 
 The runtime uses one durable pipeline for every entry point:
 
@@ -77,3 +83,5 @@ Result webhook destinations use the same secret registry and must use HTTPS. Del
 
 - summarize open Tasks every weekday morning;
 - check a saved browser task and report changes;
+
+For supported, paired Weixin private conversations, the host binds reminder delivery to the original conversation and principal. Requested reminders use `notificationPolicy: "all"`; the durable result outbox retries failed message delivery without rerunning the task. Identity and pairing are checked again before sending. See [Weixin conversational configuration](design/technical/weixin-conversation-configuration-2026-10-28.md) for routing requirements and acceptance scope.

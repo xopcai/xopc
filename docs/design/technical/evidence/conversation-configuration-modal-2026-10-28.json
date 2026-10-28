@@ -1,0 +1,875 @@
+{
+  "date": "2026-10-28",
+  "change": "Simplified conversational MCP setup modal and mobile sheet",
+  "baseCommit": "561ffc9032e262ef640c5e2a498303a305be96d3",
+  "workingTree": true,
+  "hashesRecordedAfterRun": true,
+  "sourceHashes": {
+    "web/src/features/connectors/mcp/mcp-conversation-setup-page.tsx": "a2055fad010eae852f1e799a556641f27c60d3677b819e3b3627d44d301fd755",
+    "web/src/features/chat/connections/mcp-setup-action-bar.tsx": "95d4259a7f26d5e36f0dfe4827ee98e1771ab6f3ac7f505d3e6556f8324c9cb5",
+    "web/src/components/ui/secret-input.tsx": "1205e2adf5439eef611dc0349cfeea7aa6ca640ba3161e95615f720c60c0c932",
+    "web/src/features/connectors/mcp/__tests__/mcp-conversation-setup-dialog.test.tsx": "ab5230fbb5a04b273062bf9de4017be8cdbd9ad73b29abd3bf945bc1f79367c1",
+    "web/src/features/connectors/mcp/__tests__/mcp-setup-action-bar.test.tsx": "9cad2e7bd0d0164119940244695f86399df020dba83d81547dab3c2807bd1a31",
+    "scripts/verify-conversation-configuration-e2e.mts": "6d3ad64f5f2f66f219b3810a58bb65dbb43be939bc3839818261bf703f5e3058"
+  },
+  "passed": true,
+  "suites": [
+    {
+      "stage": "weixin",
+      "passed": true,
+      "caseCount": 41,
+      "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+      "inference": "real",
+      "requestCount": 63,
+      "cases": [
+        {
+          "id": "weixin-ordinary",
+          "checks": {
+            "replyDelivered": true,
+            "noInstall": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-skill",
+          "checks": {
+            "installed": true,
+            "total": true,
+            "realSummary": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-token-request",
+          "checks": {
+            "originalIdentity": true,
+            "approvalRequired": true,
+            "trustedLink": true,
+            "noProbeBeforeApproval": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-owner-approval-view",
+          "checks": {
+            "ownerRequired": true,
+            "noCredentialsBeforeApproval": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-wrong-token",
+          "checks": {
+            "inputCleared": true,
+            "noRead": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-token-automatic-resume",
+          "checks": {
+            "realSourceRead": true,
+            "resultInOriginalTranscript": true,
+            "onlyOriginalConversation": true,
+            "onlyOriginalPeer": true,
+            "oneAutomaticReply": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-oauth-request",
+          "checks": {
+            "originalIdentity": true,
+            "approvalRequired": true,
+            "trustedLink": true,
+            "noProbeBeforeApproval": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-oauth-mobile-redirect",
+          "checks": {
+            "gatewayCallback": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-oauth-host-completion",
+          "checks": {
+            "realReadWithoutBrowserAdvance": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-result-delivery-failure",
+          "checks": {
+            "realReadCompleted": true,
+            "failedSendRecorded": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-oauth-automatic-resume",
+          "checks": {
+            "realSourceRead": true,
+            "resultInOriginalTranscript": true,
+            "onlyOriginalConversation": true,
+            "onlyOriginalPeer": true,
+            "oneAutomaticReply": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-result-delivery-retry",
+          "checks": {
+            "noNewSourceRead": true,
+            "noExtraUserContinue": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-oauth-denied-request",
+          "checks": {
+            "originalIdentity": true,
+            "approvalRequired": true,
+            "trustedLink": true,
+            "noProbeBeforeApproval": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-oauth-denied",
+          "checks": {
+            "noRemoteGrant": true,
+            "noRead": true,
+            "noConfig": true,
+            "noResume": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-cancel-no-revival",
+          "checks": {
+            "originalConversation": true,
+            "noConfig": true,
+            "noRead": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-skill-disable",
+          "checks": {
+            "disabled": true,
+            "keptFiles": true,
+            "replyDelivered": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-skill-enable",
+          "checks": {
+            "enabled": true,
+            "actualResult": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-reminder-create",
+          "checks": {
+            "once": true,
+            "enabled": true,
+            "originalIdentity": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-reminder-actual-delivery",
+          "checks": {
+            "scheduledOnce": true,
+            "deliveryAcknowledged": true,
+            "originalPeer": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-reminder-delete",
+          "checks": {
+            "removed": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-1",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-2",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-3",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-4",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-5",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-6",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-7",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-8",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-9",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-10",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-11",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-12",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-13",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-14",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-15",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-16",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-17",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-18",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-19",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-negative-20",
+          "checks": {
+            "noConfigurationMutation": true
+          },
+          "passed": true
+        },
+        {
+          "id": "weixin-secret-isolation",
+          "checks": {
+            "noSecretsInTranscript": true,
+            "noSecretsInOutbound": true,
+            "noPlaintextConfig": true,
+            "noSecretsInLogs": true
+          },
+          "passed": true
+        }
+      ],
+      "rawEvidenceDirectory": ".xopc-evals/conversation-configuration/weixin-modal"
+    },
+    {
+      "stage": "mcp",
+      "passed": true,
+      "caseCount": 40,
+      "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+      "inference": "real",
+      "requestCount": 153,
+      "cases": [
+        {
+          "id": "mcp-public",
+          "checks": {
+            "configured": true,
+            "actualRead": true,
+            "uniqueResult": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-token-start",
+          "checks": {
+            "notPublishedBeforeCredential": true,
+            "noReadWithoutCredential": true,
+            "noContinuePrompt": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-wrong-token",
+          "checks": {
+            "notPublished": true,
+            "noRead": true,
+            "clearedInput": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-token-resume-after-restart",
+          "checks": {
+            "actualRead": true,
+            "uniqueResult": true,
+            "noSecretsInTranscript": true,
+            "noSecretsInConfig": true,
+            "returnedToOriginalChat": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-oauth-start",
+          "checks": {
+            "notPublishedBeforeAuthorization": true,
+            "noContinuePrompt": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-oauth-resume",
+          "checks": {
+            "actualRead": true,
+            "uniqueResult": true,
+            "noSecretsInTranscript": true,
+            "noSecretsInConfig": true,
+            "returnedToOriginalChat": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-disable",
+          "checks": {
+            "disabled": true,
+            "otherConnectionsPreserved": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-enable",
+          "checks": {
+            "enabled": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-remove",
+          "checks": {
+            "removed": true,
+            "otherConnectionPreserved": true,
+            "distinguishesRemoteAuthorization": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-denied-start",
+          "checks": {
+            "notPublished": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-oauth-denied",
+          "checks": {
+            "noConfiguration": true,
+            "oneGrantedAuthorization": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-connect-only",
+          "checks": {
+            "configured": true,
+            "noUnrequestedRead": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-inspect-only",
+          "checks": {
+            "unchanged": true,
+            "names": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-unavailable",
+          "checks": {
+            "notPublished": true,
+            "honestFailure": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-cancel-start",
+          "checks": {
+            "noConfiguration": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-cancel-status",
+          "checks": {
+            "noConfiguration": true,
+            "cancelled": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-remove-english",
+          "checks": {
+            "removed": true,
+            "othersPreserved": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-ordinary-unnamed-service",
+          "checks": {
+            "configured": true,
+            "correctSource": true,
+            "actualResult": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-01",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-02",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-03",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-04",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-05",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-06",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-07",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-08",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-09",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-10",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-11",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-12",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-13",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-14",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-15",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-16",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-17",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-18",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-19",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "negative-20",
+          "checks": {
+            "noConfigurationMutation": true,
+            "noStorageBypass": true,
+            "visibleReply": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "desktop-chat-layout",
+          "checks": {
+            "desktopEditorVisible": true,
+            "noHorizontalOverflow": true
+          },
+          "passed": true
+        },
+        {
+          "id": "mcp-management-link",
+          "checks": {
+            "actualConnectedServiceVisible": true,
+            "refreshWorks": true
+          },
+          "passed": true
+        }
+      ],
+      "rawEvidenceDirectory": ".xopc-evals/conversation-configuration/mcp-modal-final"
+    }
+  ],
+  "regression": {
+    "files": 9,
+    "tests": 100,
+    "passed": true,
+    "scope": "MCP Web directory, onboarding dialog, durable conversation setup domain; includes 9 new modal and route-state cases"
+  },
+  "checks": {
+    "webTypecheck": true,
+    "webProductionBuild": true,
+    "e2eScriptTypecheck": true,
+    "affectedUiEslint": true,
+    "diffCheck": true
+  },
+  "visual": {
+    "scope": "Production UI with synthetic display fixtures; not authorization or model E2E evidence",
+    "layout": [
+      {
+        "name": "desktop-token",
+        "metrics": {
+          "left": 416,
+          "top": 162,
+          "right": 864,
+          "bottom": 738,
+          "width": 448,
+          "height": 576,
+          "viewportWidth": 1280,
+          "viewportHeight": 900,
+          "overflow": false
+        }
+      },
+      {
+        "name": "mobile-token",
+        "metrics": {
+          "left": 0,
+          "top": 268,
+          "right": 390,
+          "bottom": 844,
+          "width": 390,
+          "height": 576,
+          "viewportWidth": 390,
+          "viewportHeight": 844,
+          "overflow": false
+        }
+      },
+      {
+        "name": "mobile-compact",
+        "metrics": {
+          "left": 0,
+          "top": 16,
+          "right": 320,
+          "bottom": 568,
+          "width": 320,
+          "height": 552,
+          "viewportWidth": 320,
+          "viewportHeight": 568,
+          "overflow": false
+        }
+      },
+      {
+        "name": "desktop-approval",
+        "metrics": {
+          "left": 416,
+          "top": 162,
+          "right": 864,
+          "bottom": 738,
+          "width": 448,
+          "height": 576,
+          "viewportWidth": 1280,
+          "viewportHeight": 900,
+          "overflow": false
+        }
+      },
+      {
+        "name": "desktop-dark",
+        "metrics": {
+          "left": 416,
+          "top": 162,
+          "right": 864,
+          "bottom": 738,
+          "width": 448,
+          "height": 576,
+          "viewportWidth": 1280,
+          "viewportHeight": 900,
+          "overflow": false
+        }
+      }
+    ]
+  },
+  "developmentFailures": [
+    {
+      "run": "mcp-modal",
+      "reason": "Existing recording/E2E expected an always-visible Cancel connection button. Updated the user journey to expand Connection details before cancelling. Full matrix then passed."
+    }
+  ],
+  "limits": [
+    "Synthetic display fixtures are visual-layout evidence only; authorization and real-model evidence comes from the separate E2E suites",
+    "Local ilink and OAuth/MCP services, not official WeChat or physical phone acceptance",
+    "Historical video displays the previous page style; new modal screenshots show this change"
+  ]
+}

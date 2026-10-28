@@ -292,6 +292,7 @@ export class AgentService {
       getAutomationService: config.getAutomationService,
       getBrowserAutomationService: config.getBrowserAutomationService,
       getBrowserSetupService: config.getBrowserSetupService,
+      getMcpSetupService: config.getMcpSetupService,
       getPhoneSetupService: config.getPhoneSetupService,
       canConfigureEndpoint: config.canConfigureEndpoint,
       emitBrowserEvent: config.emitBrowserEvent,

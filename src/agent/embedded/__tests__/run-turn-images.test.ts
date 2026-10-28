@@ -48,6 +48,7 @@ vi.mock('../session-runner.js', () => ({
   evictEmbeddedSessionRunner: vi.fn(),
   acquireEmbeddedSessionRunner: vi.fn().mockImplementation(async () => {
     const session = {
+      getAllTools: () => [],
       prompt: mocks.prompt,
       sendCustomMessage: mocks.customMessage,
       agent: {

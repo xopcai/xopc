@@ -27,8 +27,16 @@ export function markdownToPlainText(text: string): string {
   result = result.replace(/```[^\n]*\n?([\s\S]*?)```/g, (_, code: string) => code.trim());
   // Images: remove entirely
   result = result.replace(/!\[[^\]]*\]\([^)]*\)/g, "");
-  // Links: keep display text only
-  result = result.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  // Weixin has no Markdown anchors: retain safe destinations as visible, tappable URLs.
+  const links: string[] = [];
+  result = result.replace(/\[([^\]]+)\]\(([^)]*)\)/g, (_match, label: string, href: string) => {
+    try {
+      const url = new URL(href);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return label;
+      const index = links.push(label === href ? href : `${label}\n${href}`) - 1;
+      return `\u0000WX_LINK_${index}\u0000`;
+    } catch { return label; }
+  });
   // Tables: remove separator rows, then strip leading/trailing pipes and convert inner pipes to spaces
   result = result.replace(/^\|[\s:|-]+\|$/gm, "");
   result = result.replace(/^\|(.+)\|$/gm, (_, inner: string) =>
@@ -38,7 +46,7 @@ export function markdownToPlainText(text: string): string {
   result = result.replace(/\*([^*]+)\*/g, "$1");
   result = result.replace(/__([^_]+)__/g, "$1");
   result = result.replace(/`([^`]+)`/g, "$1");
-  return result.trim();
+  return result.replace(/\u0000WX_LINK_(\d+)\u0000/g, (_, index: string) => links[Number(index)] ?? '').trim();
 }
 
 

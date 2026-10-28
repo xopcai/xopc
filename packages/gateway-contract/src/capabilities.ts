@@ -271,7 +271,7 @@ export const ProductReadContracts = {
       operations: z.array(z.object({ type: z.literal('replaceRange'), from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), markdown: z.string() })),
     }) }),
   },
-  'xopc.automations.get_run': { input: CapabilityResourceInputSchema,
+  'xopc.automations.get_run': { input: CapabilityResourceInputSchema.extend({ waitMs: z.number().int().min(0).max(30000).optional() }),
     output: z.object({ ok: z.literal(true), run: AutomationRunSchema.loose() }) },
   'xopc.automations.run_events': { input: CapabilityResourceInputSchema,
     output: z.object({ ok: z.literal(true), events: z.array(AutomationRunEventSchema.loose()) }) },

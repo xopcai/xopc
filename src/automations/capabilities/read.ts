@@ -1,4 +1,5 @@
 import { ProductReadContracts } from '@xopcai/gateway-contract';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { CapabilityError, defineReadCapability, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import type { ProjectService } from '../../projects/project-service.js';
@@ -12,10 +13,16 @@ export function registerAutomationReadCapabilities(dispatcher: CapabilityDispatc
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.automations.get_run', description: 'Read current run state rather than the historical submission receipt.',
     ...ProductReadContracts['xopc.automations.get_run'],
-    async execute({ id }) {
-      const run = await service.getRun(id);
-      if (!run) throw new CapabilityError('NOT_FOUND', 'Run not found');
-      return { ok: true as const, run: { ...run } };
+    async execute({ id, waitMs }, context) {
+      const deadline = Date.now() + (waitMs ?? 0);
+      for (;;) {
+        context.signal?.throwIfAborted();
+        const run = await service.getRun(id);
+        if (!run) throw new CapabilityError('NOT_FOUND', 'Run not found');
+        const remaining = deadline - Date.now();
+        if (!['queued', 'running', 'cancelling'].includes(run.status) || remaining <= 0) return { ok: true as const, run: { ...run } };
+        await delay(Math.min(250, remaining), undefined, { signal: context.signal });
+      }
     },
   }));
   dispatcher.register(defineReadCapability({

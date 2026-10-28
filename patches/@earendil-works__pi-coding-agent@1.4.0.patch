@@ -1,0 +1,51 @@
+diff --git a/dist/core/mcp-servers.d.ts b/dist/core/mcp-servers.d.ts
+index d17cfa892a19b1a1497fdbc4a27764f76a6ce925..c2458d9972240f347fb26767bfe527098fbadc45 100644
+--- a/dist/core/mcp-servers.d.ts
++++ b/dist/core/mcp-servers.d.ts
+@@ -68,6 +68,8 @@ export interface McpOAuthConfig {
+      * listens on `callbackPort` or a free port, which is added to the URI (RFC 8252).
+      */
+     callbackUrl?: string;
++    /** Trusted host relay URI; the native listener remains loopback. */
++    callbackRelayUrl?: string;
+     /** Scopes to request, separated by spaces. Default: the scopes the server advertises. */
+     scope?: string;
+     /**
+diff --git a/dist/extensions/mcp/oauth.d.ts b/dist/extensions/mcp/oauth.d.ts
+index 6e9ee3ef8d4c1c7df168ee1e2c2ca475c2cebe58..5ecd2ae51c153ad879013aff9cdfc94d27e33708 100644
+--- a/dist/extensions/mcp/oauth.d.ts
++++ b/dist/extensions/mcp/oauth.d.ts
+@@ -19,6 +19,8 @@ export interface McpOAuthSettings {
+     callbackPort?: number;
+     /** Loopback redirect URI; see `McpOAuthConfig.callbackUrl`. */
+     callbackUrl?: string;
++    /** Trusted host relay URI; the native listener remains loopback. */
++    callbackRelayUrl?: string;
+     /** Scopes to request, separated by spaces. */
+     scope?: string;
+     /** `client_name` for dynamic client registration. Default: `APP_NAME`. */
+diff --git a/dist/extensions/mcp/oauth.js b/dist/extensions/mcp/oauth.js
+index 24852eb70f68f14757a32520ffbce3ff91163e60..341b428255ed6d2d31586bac89d36852e0b46a53 100644
+--- a/dist/extensions/mcp/oauth.js
++++ b/dist/extensions/mcp/oauth.js
+@@ -54,7 +54,7 @@ function callbackSettings(settings) {
+         redirectHost: address,
+         port,
+         path: url.pathname,
+-        fixedRedirectUrl,
++        fixedRedirectUrl: settings.callbackRelayUrl ?? fixedRedirectUrl,
+     };
+ }
+ /** Scopes of both lists, each once. */
+diff --git a/dist/extensions/mcp/runtime.js b/dist/extensions/mcp/runtime.js
+index 833ea47b21071c2abcda79b70549f58a62affa39..f12ac97fca5dc63cacfde32cf1e853c85da73742 100644
+--- a/dist/extensions/mcp/runtime.js
++++ b/dist/extensions/mcp/runtime.js
+@@ -157,6 +157,7 @@ export class McpServerConnection {
+                 : resolveConfigValueOrThrow(oauth.clientSecret, `MCP server "${this.entry.name}" oauth.clientSecret`),
+             callbackPort: oauth.callbackPort,
+             callbackUrl: oauth.callbackUrl,
++            callbackRelayUrl: oauth.callbackRelayUrl,
+             scope: oauth.scope,
+             clientName: oauth.clientName,
+             clientRegistration: oauth.clientRegistration,

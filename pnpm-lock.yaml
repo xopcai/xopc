@@ -39,6 +39,7 @@ overrides:
   vite@>=8.0.0 <8.1.6: 8.1.6
 
 patchedDependencies:
+  '@earendil-works/pi-coding-agent@1.4.0': 190054bd3b41ad83d3636e3841c734f381f7a6f53efa10b758d766be7f4a1fa2
   app-builder-lib@26.15.3: 33904f2cda5efc2f029b7b8245df2812306f0bf85e54071e3655e0dbed78dfeb
   beautiful-mermaid@1.1.3: bb616de6afec3faef68501736d4d68b09def7bc5b5ed97d57139c46ac8cf68f8
 
@@ -69,7 +70,7 @@ importers:
         version: 1.4.0
       '@earendil-works/pi-coding-agent':
         specifier: 1.4.0
-        version: 1.4.0(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.6.6)
+        version: 1.4.0(patch_hash=190054bd3b41ad83d3636e3841c734f381f7a6f53efa10b758d766be7f4a1fa2)(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.6.6)
       '@earendil-works/pi-mcp':
         specifier: 1.4.0
         version: 1.4.0
@@ -9677,7 +9678,7 @@ snapshots:
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-coding-agent@1.4.0(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.6.6)':
+  '@earendil-works/pi-coding-agent@1.4.0(patch_hash=190054bd3b41ad83d3636e3841c734f381f7a6f53efa10b758d766be7f4a1fa2)(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.6.6)':
     dependencies:
       '@earendil-works/pi-agent-core': 1.4.0(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(undici@8.12.2)(ws@8.21.0)(zod@4.6.6)
       '@earendil-works/pi-ai': 1.4.0(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(undici@8.12.2)(ws@8.21.0)(zod@4.6.6)

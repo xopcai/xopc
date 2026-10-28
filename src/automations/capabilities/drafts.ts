@@ -10,7 +10,7 @@ import { getUserTrustPolicy } from '../../storage/sqlite/index.js';
 import { resolveAutomationSafetyForTrust } from '../../user-context/trust-policy.js';
 import { AutomationDraftService, simulateAutomation } from '../draft/index.js';
 import type { AutomationService } from '../service/automation-service.js';
-import { AutomationCreateCapabilityInputSchema } from './write.js';
+import { AutomationCreateCapabilityInputSchema, materializeAutomationTrigger } from './write.js';
 
 export function registerAutomationDraftCapabilities(dispatcher: CapabilityDispatcher, service: AutomationService, getConfig?: () => Config | undefined): void {
   const policy = { majorVersion: 1, effect: 'external-write' as const, recovery: 'manual' as const,
@@ -25,7 +25,7 @@ export function registerAutomationDraftCapabilities(dispatcher: CapabilityDispat
     description: 'Validate and explain an automation without running it or calling a model.',
     input: AutomationCreateCapabilityInputSchema, output: z.object({ simulation: simulationSchema }),
     execute(input) {
-      try { return { simulation: simulateAutomation(input) }; }
+      try { return { simulation: simulateAutomation({ ...input, trigger: materializeAutomationTrigger(input.trigger) }) }; }
       catch (error) { throw new CapabilityError('INVALID_INPUT', error instanceof Error ? error.message : 'Invalid automation'); }
     },
   }));

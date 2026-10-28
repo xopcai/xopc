@@ -13,6 +13,7 @@ const INTERNAL_ROUTE_ROOTS = new Set([
   'channels',
   'chat',
   'connectors',
+  'mcp-setup',
   'extensions',
   'local-apps',
   'notes',
@@ -39,7 +40,9 @@ function normalizeInternalRoute(raw: string): string | null {
 function xopcSettingsRoute(raw: string): string | null {
   try {
     const url = new URL(raw);
-    if (url.protocol !== 'xopc:' || url.hostname !== 'settings') return null;
+    if (url.protocol !== 'xopc:' || url.username || url.password) return null;
+    if (url.hostname === 'app') return normalizeInternalRoute(`${url.pathname}${url.search}${url.hash}`);
+    if (url.hostname !== 'settings') return null;
     const path = url.pathname === '/' ? '' : url.pathname;
     return normalizeInternalRoute(`/settings${path}${url.search}${url.hash}`);
   } catch {

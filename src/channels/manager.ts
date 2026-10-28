@@ -143,7 +143,7 @@ export class ChannelManager {
 
   // ── Outbound pass-throughs ─────────────────────────────────────────────
 
-  send(msg: OutboundMessage, options?: { skipPersist?: boolean }): Promise<void> {
+  send(msg: OutboundMessage, options?: { skipPersist?: boolean; requireDelivery?: boolean }): Promise<void> {
     return this.outbound.send(msg, options);
   }
 

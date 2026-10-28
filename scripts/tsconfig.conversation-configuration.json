@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "allowImportingTsExtensions": true, "lib": ["ES2023", "DOM"] },
+  "include": ["./verify-conversation-configuration-e2e.mts"],
+  "exclude": ["../node_modules", "../dist"]
+}

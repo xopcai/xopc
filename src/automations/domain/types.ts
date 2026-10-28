@@ -23,6 +23,7 @@ export type AutomationAction =
       kind: 'agent';
       agentId?: string;
       instruction: string;
+      mcpSourceId?: string;
       workingDirectory?: string;
       model?: string;
       timeoutSeconds?: number;
@@ -61,6 +62,7 @@ export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
 
 export type AutomationDeliveryDestination =
   | { key: string; kind: 'gateway_event' }
+  | { key: string; kind: 'weixin'; conversationId: string; principalId: string }
   | { key: string; kind: 'webhook'; endpoint: string; secretId: string }
   | { key: string; kind: 'file'; targetId: string; pathTemplate: string }
   | { key: string; kind: 'card'; channelId: string; templateId: string };
@@ -323,6 +325,7 @@ export interface PrepareAutomationAgentSessionInput {
 }
 
 export interface AutomationDeps {
+  getConfig?: () => unknown;
   agentService?: {
     sessionConfig?: {
       applyAutomationWorkingDirectory?: (conversationId: string, workingDirectory: string | undefined) => Promise<void>;
@@ -358,6 +361,7 @@ export interface AutomationDeps {
       error?: string;
     }>;
   };
+  onWeixinRunCompleted?: (conversationId: string, principalId: string, run: AutomationRun) => Promise<void>;
   onRunCompleted?: (run: AutomationRun, context: AutomationRunDeliveryContext) => void | Promise<void>;
   onEvent?: (event: AutomationEventEnvelope, signal?: AbortSignal) => void | Promise<void>;
   onReliabilityAttention?: (input: {

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import {
@@ -21,10 +20,13 @@ import type { Automation, AutomationService } from '../../automations/index.js';
 import type { ProjectService } from '../../projects/project-service.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
+import { prepareAutomationMcpSource } from '../../automations/mcp-source.js';
+import type { Config } from '../../config/schema.js';
 
 const AutomationToolSchema = Type.Object({
   action: Type.Union([
     Type.Literal('list'),
+    Type.Literal('prepare_source'),
     Type.Literal('get'),
     Type.Literal('create'),
     Type.Literal('update'),
@@ -47,11 +49,15 @@ const AutomationToolSchema = Type.Object({
     Type.Literal('retry_delivery'),
   ]),
   automationId: Type.Optional(Type.String({ description: 'Automation id for update/delete/run/pause/resume/history' })),
+  serverId: Type.Optional(Type.String({ description: 'prepare_source: the selected configured custom HTTP MCP server' })),
+  toolNames: Type.Optional(Type.Array(Type.String(), { description: 'prepare_source: exact discovered MCP tool names annotated read-only' })),
+  toolInputs: Type.Optional(Type.Record(Type.String(), Type.Any(), { description: 'prepare_source: fixed argument objects keyed by the exact tool name; defaults to {}. Future calls cannot change them.' })),
   runId: Type.Optional(Type.String({ description: 'Run id for rerun/cancel/read' })),
   projectId: Type.Optional(Type.String({ description: 'Optional project filter for read_all; omitted means all projects' })),
   automation: Type.Optional(Type.Any({ description: 'Automation create payload' })),
   patch: Type.Optional(Type.Any({ description: 'Automation update patch' })),
   limit: Type.Optional(Type.Number({ description: 'History limit, default 5' })),
+  waitMs: Type.Optional(Type.Integer({ minimum: 0, maximum: 30000, description: 'get_run: bounded wait for an actual terminal state; queued/running is not completion' })),
   eventType: Type.Optional(Type.String()),
   eventId: Type.Optional(Type.String({ description: 'Dead-letter event id for replay_event' })),
   destinationKey: Type.Optional(Type.String({ description: 'Dead-letter result destination key for retry_delivery' })),
@@ -64,7 +70,10 @@ const AutomationToolSchema = Type.Object({
 });
 
 type AutomationToolInput = {
-  action: 'get' | 'list' | 'create' | 'update' | 'delete' | 'run' | 'rerun' | 'cancel' | 'read' | 'read_all' | 'pause' | 'resume' | 'history' | 'get_run' | 'run_events' | 'metrics' | 'events' | 'deliveries' | 'product_events' | 'replay_event' | 'retry_delivery';
+  action: 'prepare_source' | 'get' | 'list' | 'create' | 'update' | 'delete' | 'run' | 'rerun' | 'cancel' | 'read' | 'read_all' | 'pause' | 'resume' | 'history' | 'get_run' | 'run_events' | 'metrics' | 'events' | 'deliveries' | 'product_events' | 'replay_event' | 'retry_delivery';
+  serverId?: string;
+  toolNames?: string[];
+  toolInputs?: Record<string, Record<string, unknown>>;
   eventType?: string;
   eventId?: string;
   destinationKey?: string;
@@ -78,11 +87,15 @@ type AutomationToolInput = {
   automation?: unknown;
   patch?: unknown;
   limit?: number;
+  waitMs?: number;
   expectedRevision?: number | null;
   idempotencyKey?: string;
 };
 
 export interface AutomationToolDeps {
+  getConfig?: () => Config | undefined;
+  getWorkspace?: () => string;
+  canConfigureFromConversation?: () => boolean;
   getAutomationService: () => AutomationService | undefined;
   getCurrentConversationId?: () => string | undefined;
   getCurrentAgentId?: () => string | undefined;
@@ -145,9 +158,9 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
     name: 'automation',
     label: 'Automation',
     description:
-      'Manage product automations. Automations can be manual, scheduled, webhook-triggered, or product-event-triggered and can run an agent instruction.',
+      'Manage product automations. A clear request to create, edit, pause, resume or delete a local automation already authorizes that operation: read the target and act without duplicate confirmation. This does not grant permission for external effects. One-time reminders use trigger:{kind:"schedule",schedule:{kind:"once",afterMs:90000}} for 90 seconds from acceptance, or once with an ISO at timestamp. A cron rule repeats; it is never a one-time reminder. For reminders/reports expected by the user, delivery.notificationPolicy:all notifies on success; attention is for exceptional updates. get_run with waitMs up to 30000 waits for an actual result. Use prepare_source for a selected custom HTTP MCP read before creating an action with mcpSourceId. Load tool_manual xopc_use topic automation for workflows.',
     parameters: AutomationToolSchema,
-    async execute(_toolCallId, params: AutomationToolInput, signal) {
+    async execute(toolCallId, params: AutomationToolInput, signal) {
       const service = deps.getAutomationService();
       if (!service) {
         return textResult('Automation service is not available.', { ok: false });
@@ -157,11 +170,19 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
           surface: 'agent', conversationId: deps.getCurrentConversationId?.(), scopes: [scope], authorize: () => true, signal };
         return capabilities.call(operation, input, caller,
-          { ...capabilities.describe(operation, caller), idempotencyKey: params.idempotencyKey ?? randomUUID() });
+          { ...capabilities.describe(operation, caller), idempotencyKey: params.idempotencyKey ?? toolCallId });
       };
       const invoke = async (operation: string, input: unknown) => AutomationMutationOutputSchema.parse(await call(operation, input));
 
       switch (params.action) {
+        case 'prepare_source': {
+          const config = deps.getConfig?.();
+          if (!config || !deps.getWorkspace) return textResult('MCP source preparation is unavailable in this runtime.', { ok: false });
+          const source = await prepareAutomationMcpSource({ serverId: params.serverId, toolNames: params.toolNames, toolInputs: params.toolInputs }, {
+            conversationId: deps.getCurrentConversationId?.(), agentId: deps.getCurrentAgentId?.(), canConfigure: deps.canConfigureFromConversation?.() === true,
+            workspaceDir: deps.getWorkspace(), readConfig: () => deps.getConfig?.() ?? config, signal });
+          return textResult(JSON.stringify(source), { source });
+        }
         case 'get': {
           const result = ProductReadContracts['xopc.automations.get'].output.parse(await call('xopc.automations.get', { id: params.automationId }, 'automations.read'));
           return textResult(JSON.stringify(result.automation), result);
@@ -291,7 +312,7 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
             ? { runId: params.runId, limit: params.limit }
             : params.action === 'product_events'
             ? { eventType: params.eventType, source: params.source, payloadKey: params.payloadKey, payloadValue: params.payloadValue, limit: params.limit }
-            : { id: params.runId };
+            : { id: params.runId, ...(params.action === 'get_run' && params.waitMs !== undefined ? { waitMs: params.waitMs } : {}) };
           const result = ProductReadContracts[operation].output.parse(await call(operation, input, 'automations.read'));
           return textResult(JSON.stringify(result), result);
         }

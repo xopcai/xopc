@@ -1,4 +1,5 @@
 // Export all agent tools
+export { createMcpSetupTool } from './mcp-setup-tool.js';
 export {
   getToolMetadata,
   DEFAULT_TOOL_METADATA,

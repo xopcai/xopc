@@ -51,6 +51,7 @@ import { restoreCurrentTurnImages } from './current-turn-images.js';
 import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './session-runner.js';
 import { externalPolicyContext, getXopcToolMetadata } from './tool-metadata.js';
 import { allowsExecutionTool, filterExecutionTools, resolveExecutionToolPolicy } from './execution-tool-policy.js';
+import { configurationCapabilityCorrection } from './configuration-capability-correction.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
@@ -447,6 +448,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     });
 
     const { session, reused } = runner;
+    const configurationTurnStart = session.agent.state.messages.length;
     await runLease.attach(session, async () => session.abort());
     const runAbortSignal = params.abortSignal
       ? AbortSignal.any([runLease.signal, params.abortSignal])
@@ -961,6 +963,16 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             });
           };
           await recoverSettledTurn();
+          const capabilityCorrection = configurationCapabilityCorrection(
+            session.getAllTools().filter(tool => tool.exposure !== 'hidden').map(tool => tool.name),
+            userMessageToPromptText(userMessage), lastAssistantPlainText(session),
+            session.agent.state.messages.slice(configurationTurnStart));
+          if (capabilityCorrection && !policyStopped && !connectionStopped && !clarificationStopped && !phoneStopped
+            && !runAbortSignal.aborted && !isAssistantTurnFailed(session.agent) && !isAssistantTurnAborted(session.agent)) {
+            await session.sendCustomMessage({ customType: 'configuration_capability_current', content: capabilityCorrection, display: false }, { triggerTurn: true });
+            await session.agent.waitForIdle();
+            await recoverSettledTurn();
+          }
           if (params.requireVisibleReply && !sentVisibleMessage && !policyStopped
             && !runAbortSignal.aborted && !isAssistantTurnFailed(session.agent)
             && !isAssistantTurnAborted(session.agent)

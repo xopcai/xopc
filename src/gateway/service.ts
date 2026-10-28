@@ -1,6 +1,9 @@
 import { deliverAutomationCompletion } from './automation-completion-delivery.js';
 import { createPhoneSetupService } from './hono/routes/phone-setup.js';
 import { BrowserSetupService } from '../browser/setup/service.js';
+import { weixinPrivateIdentity } from '../agent/mcp/weixin-setup-scope.js';
+import { McpConversationSetup } from '../agent/mcp/conversation-setup.js';
+import { withGatewayConfigWriteLock } from './hono/lib/config-write-lock.js';
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { PhoneStreamGateway } from '../phone/stream-gateway.js';
 import { configureGatewayHttpProxy } from '../infra/http-proxy-env.js';
@@ -298,6 +301,23 @@ export class GatewayService {
     return this.config;
   }
 
+  private _mcpSetup?: McpConversationSetup;
+  get mcpSetup(): McpConversationSetup {
+    return this._mcpSetup ??= new McpConversationSetup({
+      readConfig: () => this.currentConfig,
+      changed: conversationId => this.emit('session.mcp-setup.changed', { conversationId }),
+      deliver: (destination, text, setupId) => this.channelManager.send({ channel: 'weixin', chat_id: destination.peerId,
+        content: text, type: 'message', metadata: { accountId: destination.accountId, mcpSetupId: setupId, strictWeixinIdentity: true } }, { skipPersist: true, requireDelivery: true }),
+      saveConfig: (next, expected) => this.saveConfig(next, expected),
+      withConfigLock: operation => withGatewayConfigWriteLock(this, operation),
+      resume: async goal => (await this.agentRunner.submitSessionInput({
+        conversationId: goal.conversationId, expectedTranscriptId: goal.transcriptId,
+        clientMessageId: `mcp-setup:${goal.id}`, delivery: 'next', origin: { type: 'system', source: 'internal' },
+        content: `MCP configuration is saved. Discover the newly available native MCP tools and complete the original user objective. If the user only requested a connection, explain available uses without reading account data. After the actual result or accurate blocker, give one or two relevant example requests grounded in the discovered tools, and link the trusted management route ${goal.channel ? `${goal.channel.origin}/#/capabilities/connectors?tab=connected` : '/capabilities/connectors?tab=connected'}. Do not repeat configuration, request secrets, or treat this status as extra write permission. Setup data: ${JSON.stringify({ serverId: goal.serverId, originalObjective: goal.purpose })}`,
+      })).ok,
+    });
+  }
+
   getModelCatalogSync(): ModelCatalogSyncService {
     return this.modelCatalogSync;
   }
@@ -589,9 +609,13 @@ export class GatewayService {
     this.chatPreviews = new ChatPreviewService({ localApps: this.localApps });
 
     this.agentRunner = new GatewayAgentRunner({
+      afterConnectionResume: (input, status) => this.mcpSetup.completeContinuation(input, status === 'ok'
+        ? this.agentService.getLastAssistantPlainText(input.conversationId)
+        : '连接已保存，但后续读取未完成。请在原微信私聊查看状态或重试；尚未验证业务结果。'),
       continueConnection: (wait, idempotencyKey) => this.connectionRecovery.continueObjective(wait, idempotencyKey),
       cancelConnection: wait => this.connectionRecovery.cancelObjective(wait),
       validateConnectionResume: async input => {
+        if (!this.mcpSetup.permitsContinuation(input)) return false;
         for (const source of input.contextSnapshots ?? []) {
           if (source.kind === 'app_context') {
             await checkAppContextAccess(source, this.appContextDispatcher(), this.auth);
@@ -716,7 +740,7 @@ export class GatewayService {
       bus: this.bus,
       enableHotReload: this.serviceConfig.enableHotReload !== false,
       getConfig: () => this.config,
-      setConfig: (next) => { this.config = next; },
+      setConfig: (next) => { this.config = next; this._mcpSetup?.reconcileWeixinScopes(); },
       getAgentService: () => this.ensureAgentService(),
       getChannelManager: () => this.channelManager,
       getExtensionLoader: () => this.extensionLoader,
@@ -777,6 +801,7 @@ export class GatewayService {
       getAutomationService: () => this.automationService,
       getBrowserAutomationService: () => this.browserAutomations,
       getBrowserSetupService: () => this.browserSetup,
+      getMcpSetupService: () => this.mcpSetup,
       getPhoneSetupService: () => this.phoneSetup,
       canConfigureEndpoint: endpointId => this.realtime.canConfigureEndpoint(endpointId),
       emitBrowserEvent: (type, payload) => this.emit(type, payload),
@@ -823,6 +848,7 @@ export class GatewayService {
     });
 
     this.automationService.setDeps({
+      getConfig: () => this.config,
       agentService: this._agentService,
       getDefaultAgentId: () => getDefaultAgentId(),
       isAgentAvailable: id => listAgentEntries().some(agent => agent.id === id && agent.enabled !== false),
@@ -845,6 +871,7 @@ export class GatewayService {
         return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
       },
       executeSystemAction: (input) => this.executeSystemAutomationAction(input),
+      onWeixinRunCompleted: (conversationId, principalId, run) => this.deliverWeixinAutomation(conversationId, principalId, run),
       onRunCompleted: (run, context) => this.handleAutomationRunCompleted(run, context),
     });
 
@@ -899,6 +926,7 @@ export class GatewayService {
   }
 
   private readonly taskRunDispatch = createBackgroundTask(async () => {
+    await this._mcpSetup?.resumePending();
     new TaskSignalService().tick();
     this.notesService.flushCommittedEffects();
     this.projects.flushCommittedEffects();
@@ -1355,6 +1383,7 @@ export class GatewayService {
     });
 
     setPairingBroadcastSink((type, payload) => {
+      if (type === 'channels.pairing.revoked' && payload.channel === 'weixin') this.mcpSetup.revokeWeixinRequests(payload.accountId, payload.senderId);
       this.emit(type, payload);
     });
 
@@ -1545,6 +1574,7 @@ export class GatewayService {
     log.debug('Session manager initialized');
 
     this.automationService.setDeps({
+      getConfig: () => this.config,
       agentService: this.agentService,
       getDefaultAgentId: () => getDefaultAgentId(),
       isAgentAvailable: id => listAgentEntries().some(agent => agent.id === id && agent.enabled !== false),
@@ -1567,6 +1597,7 @@ export class GatewayService {
         return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
       },
       executeSystemAction: (input) => this.executeSystemAutomationAction(input),
+      onWeixinRunCompleted: (conversationId, principalId, run) => this.deliverWeixinAutomation(conversationId, principalId, run),
       onRunCompleted: (run, context) => this.handleAutomationRunCompleted(run, context),
       onEvent: (event) => this.projectAutomationEvent(event),
       onReliabilityAttention: (input) => this.emit('automation.attention.required', input),
@@ -1696,6 +1727,7 @@ export class GatewayService {
       return;
     }
     this.readiness.markReady();
+    void this.mcpSetup.resumePending(true).catch(err => log.warn({ err, phase: 'mcp_setup_resume' }, 'MCP setup continuation could not be queued'));
     this.startupTrace?.mark('ready');
     this.schedulePostReadySidecars();
   }
@@ -1780,6 +1812,7 @@ export class GatewayService {
     await flushTracing();
     if (!this.running) return;
     this.stopping = true;
+    this._mcpSetup?.dispose();
     const { getPhoneRuntime } = await import('../phone/runtime.js');
     await getPhoneRuntime().shutdown();
     this.phoneStreams.close();
@@ -2270,6 +2303,15 @@ export class GatewayService {
       }
     }
     this.createNotificationService().handleGatewayEvent(type, notificationPayload);
+  }
+
+  private async deliverWeixinAutomation(conversationId: string, principalId: string, run: import('../automations/index.js').AutomationRun) {
+    const destination = weixinPrivateIdentity(conversationId, this.currentConfig);
+    if (!destination || destination.principalId !== principalId) throw new Error('The original Weixin notification identity is unavailable or revoked.');
+    await this.channelManager.send({ channel: 'weixin', chat_id: destination.peerId,
+      content: `${run.automationName} · ${run.status}\n${run.summary ?? run.error ?? '运行结束，无可用结果。'}`,
+      type: 'message', metadata: { accountId: destination.accountId, conversationId, automationRunId: run.id, strictWeixinIdentity: true } },
+    { skipPersist: true, requireDelivery: true });
   }
 
   private async handleAutomationRunCompleted(
