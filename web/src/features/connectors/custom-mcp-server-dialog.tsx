@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import type { ConnectorsSettingsMessages, McpSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { useLocaleStore } from '@/stores/locale-store';
 
 import { applyMcpAuthDraft, createMcpAuthDraft, invalidMcpHeaderIndex, type McpAuthDraft } from './mcp/mcp-auth-draft';
 import { McpAuthFields, McpHeaderFields, mcpInputClass } from './mcp/mcp-auth-fields';
@@ -54,6 +55,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
   existingCustomServers: McpServerRow[]; config: unknown; managedServerIds: ReadonlySet<string>; lastCheck?: McpLastCheck;
   t: McpSettingsMessages; cs: ConnectorsSettingsMessages; onClose: () => void; onSaved: () => Promise<void> }) {
   const { t, cs } = props;
+  const language = useLocaleStore(state => state.language);
   const validationId = useId();
   const [row, setRow] = useState(props.initialRow);
   const [auth, setAuth] = useState(() => createMcpAuthDraft(props.initialRow));
@@ -190,7 +192,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
   }
   function validate(next: McpServerRow): boolean {
     function invalid(field: string, message: string) { setValidation({ field, message }); return false; }
-    if (next.transport === 'streamable-http') {
+    if (next.transport !== 'stdio') {
       try { next.url = normalizeMcpAddress(next.url); } catch { return invalid('url', t.setupAddressInvalid); }
       if ((auth.mode === 'bearer' && !auth.token.trim().replace(/^Bearer\s*/i, '')) || (auth.mode === 'apiKey' && (!auth.apiKey.trim() || !auth.headerName.trim()))) return invalid('auth', t.setupCredentialRequired);
       if (invalidMcpHeaderIndex(next.headers) >= 0) return invalid('auth', t.setupHeaderInvalid);
@@ -310,18 +312,18 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
           <fieldset disabled={busy || reloadRequired} className="min-w-0 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <SlidingTabList className="flex gap-1" role="group" aria-label={t.transportLabel}>
-                {(['streamable-http', 'stdio'] as const).map(transport => <Button key={transport} type="button" variant={row.transport === transport ? 'secondary' : 'ghost'} aria-pressed={row.transport === transport}
-                  onClick={() => update({ transport })}>{transport === 'stdio' ? t.setupUseCommand : t.setupUseUrl}</Button>)}
+                {(['streamable-http', 'sse', 'stdio'] as const).map(transport => <Button key={transport} type="button" variant={row.transport === transport ? 'secondary' : 'ghost'} aria-pressed={row.transport === transport}
+                  onClick={() => update({ transport })}>{transport === 'stdio' ? t.setupUseCommand : transport === 'sse' ? (language === 'zh' ? '旧版 SSE' : 'Legacy SSE') : t.setupUseUrl}</Button>)}
               </SlidingTabList>
               <Button type="button" variant="ghost" onClick={() => setImporting(true)}>{t.setupImport}</Button>
             </div>
             <div><McpServerFormFields key={`${row.transport}-${formRevision}`} row={row} t={t} variant="basic" onUpdate={update} /></div>
-            {row.transport === 'streamable-http' ? <div data-field="auth"><McpAuthFields allowExisting={Boolean(row.extra.auth) || row.headers.some(header => Boolean(header.reference))} draft={auth} onChange={updateAuth} t={t} /></div> : null}
+            {row.transport !== 'stdio' ? <div data-field="auth"><McpAuthFields allowExisting={Boolean(row.extra.auth) || row.headers.some(header => Boolean(header.reference))} draft={auth} onChange={updateAuth} t={t} /></div> : null}
             {validation ? <p id={validationId} ref={alert} tabIndex={-1} role="alert" className="text-sm text-danger">{validation.message}</p> : null}
             <details data-field="advanced" className="rounded-lg border border-edge p-3" open={advanced} onToggle={event => setAdvanced(event.currentTarget.open)}>
               <summary className="cursor-pointer text-sm font-medium text-fg-muted">{t.setupAdvanced}</summary>
               <div className="mt-4 space-y-4"><McpServerFormFields row={row} t={t} variant="advanced" idReadOnly={saved} showOAuth={auth.mode === 'oauth'} onUpdate={update} />
-                {row.transport === 'streamable-http' && auth.mode !== 'headers' && auth.mode !== 'existing' ? <McpHeaderFields additional headers={auth.additionalHeaders} onChange={additionalHeaders => updateAuth({ additionalHeaders })} t={t} /> : null}
+                {row.transport !== 'stdio' && auth.mode !== 'headers' && auth.mode !== 'existing' ? <McpHeaderFields additional headers={auth.additionalHeaders} onChange={additionalHeaders => updateAuth({ additionalHeaders })} t={t} /> : null}
               </div>
             </details>
             <p className="text-xs leading-relaxed text-fg-muted">{row.transport === 'stdio' ? t.setupCommandHostHint : localAddress ? t.setupLocalhostHint : t.setupGatewayHint}</p>
@@ -336,6 +338,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
           {probe?.state === 'connected' ? <div className="space-y-2"><p role="status" className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4 shrink-0" aria-hidden />{probe.toolCount ? t.setupConnected.replace('{{count}}', String(probe.toolCount)) : t.setupZeroTools}</p>
             <Button ref={toolsTrigger} variant="secondary" onClick={() => setShowTools(true)}>{t.viewTools}</Button></div> : null}
           {probe?.state === 'token_required' ? <p role="status" className="text-sm text-fg-muted">{t.setupNeedsAuth}</p> : null}
+          {probe?.state === 'auth_unknown' ? <p role="status" className="text-sm text-fg-muted">{language === 'zh' ? '认证方式尚未确定。请核实服务接入说明，选择 Token 或已确认支持的 OAuth。' : 'Authentication is undetermined. Check the integration guide and select a Token or verified OAuth method.'}</p> : null}
           {probe?.state === 'oauth_required' && !authorizing ? <p className="text-sm text-fg-muted">{t.setupOAuthRequired}</p> : null}
           {authorizing ? <div className="space-y-3 rounded-lg border border-edge p-4">
             <p role="status" className="flex items-center gap-2 text-sm text-fg-muted"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />{t.setupAuthorizing}</p>

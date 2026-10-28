@@ -36,13 +36,14 @@ it('projects native configuration and host secrets without leaking host markers'
   } }]);
 });
 
-it('rejects removed SSE and native name collisions before loading connections', async () => {
+it('projects legacy SSE for the native transport factory and rejects native name collisions', async () => {
   const prepared = await prepareNativeMcpConfig({ mcp: { servers: {
     events: { type: 'sse', url: 'https://example.com' },
     'a-b': { command: 'node' }, a_b: { command: 'node' },
   } } } as unknown as Config, state);
-  expect(prepared.servers.map(server => server.name)).toEqual(['a-b']);
-  expect(prepared.errors).toHaveLength(2);
+  expect(prepared.servers.map(server => server.name)).toEqual(['events', 'a-b']);
+  expect(prepared.servers[0].config).toMatchObject({ type: 'http', xopcLegacySse: true });
+  expect(prepared.errors).toHaveLength(1);
 });
 
 it('keeps one process-wide native state directory across workspace turns', async () => {

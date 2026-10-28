@@ -1,3 +1,4 @@
+import { getMcpSetupResumeInput } from '../mcp/continuation-input.js';
 import { isPhoneAssistanceSuspended, phoneAssistance, phoneResumeForRun } from '../../phone/assistance.js';
 import { isNestedCodemodePolicy } from './codemode-extension.js';
 import { ProviderUsageScopeError } from '../../providers/model-usage.js';
@@ -904,12 +905,16 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       await runAgentTurnWithTimeout(
         session.agent,
         () => withDelegationScope({ tools,
+          getToolContext: () => {
+            const message = session.agent.state.messages.findLast(item => item.role === 'assistant');
+            return message?.role === 'assistant' ? { assistantMessage: message, context: { messages: session.agent.state.messages, tools: session.agent.state.tools } } : undefined;
+          },
           authorizeToolCall: params.turnPolicy ? (context, signal) => runWithEmbeddedExecutionSession(conversationId,
             () => params.turnPolicy!.beforeToolCall(context, signal), runId) : undefined,
         }, async () => {
           // The timeout wrapper defers this callback to a microtask.
           if (runAbortSignal.aborted) return;
-          const connectionResume = getConnectionResumeInput(conversationId, runId);
+          const connectionResume = getConnectionResumeInput(conversationId, runId) ?? getMcpSetupResumeInput(conversationId, runId);
           const clarificationResume = getClarificationResumeInput(conversationId, runId);
           const phoneResume = phoneResumeForRun(conversationId, runId);
           if (phoneResume) {

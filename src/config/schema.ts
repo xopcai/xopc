@@ -1075,7 +1075,7 @@ export const McpOAuthConfigSchema = z.object({
 export const McpServerSchema = z.object({
   displayName: z.string().optional(),
   xopcOAuthCredentialId: z.string().regex(/^mcp_draft_[a-f0-9]{32}$/).optional(),
-  type: z.enum(['stdio', 'http', 'streamable-http']).optional(),
+  type: z.enum(['stdio', 'http', 'streamable-http', 'sse']).optional(),
   command: z.string().min(1).optional(), args: z.array(z.string()).optional(),
   env: z.record(z.string(), McpConfigScalarSchema).optional(), cwd: z.string().optional(),
   url: z.union([McpHttpUrlSchema, ConnectorSecretReferenceSchema]).optional(), headers: z.record(z.string(), McpConfigScalarSchema).optional(),
@@ -1088,7 +1088,7 @@ export const McpServerSchema = z.object({
 }).catchall(z.unknown()).superRefine((value, ctx) => {
   if (Boolean(value.command) === Boolean(value.url)) ctx.addIssue({ code: 'custom', message: 'MCP server requires exactly one command or url' });
   if (value.type === 'stdio' && !value.command) ctx.addIssue({ code: 'custom', message: 'stdio requires command' });
-  if ((value.type === 'http' || value.type === 'streamable-http') && !value.url) ctx.addIssue({ code: 'custom', message: 'HTTP requires url' });
+  if ((value.type === 'http' || value.type === 'streamable-http' || value.type === 'sse') && !value.url) ctx.addIssue({ code: 'custom', message: 'HTTP requires url' });
   if ((value.oauth || value.auth) && !value.url) ctx.addIssue({ code: 'custom', message: 'MCP authentication requires HTTP' });
 });
 export const McpConfigSchema = z.object({

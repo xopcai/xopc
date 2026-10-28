@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   appendMessage: vi.fn(),
   connectionSuspended: vi.fn(),
   connectionResume: vi.fn(),
+  mcpResume: vi.fn(),
   customMessage: vi.fn(),
   prompt: vi.fn(),
   waitForIdle: vi.fn(),
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   leaseController: undefined as AbortController | undefined,
 }));
 
+vi.mock('../../mcp/continuation-input.js', () => ({ getMcpSetupResumeInput: mocks.mcpResume }));
 vi.mock('../../../phone/assistance.js', () => ({ isPhoneAssistanceSuspended: (...args: unknown[]) => mocks.phoneSuspended(...args), phoneAssistance: () => ({ id: 'phone-wait' }), phoneResumeForRun: () => undefined }));
 
 vi.mock('../../../storage/sqlite/connection-wait-repository.js', () => ({
@@ -156,6 +158,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     mocks.phoneSuspended.mockReturnValue(false);
     mocks.connectionSuspended.mockReturnValue(false);
     mocks.connectionResume.mockReturnValue(undefined);
+    mocks.mcpResume.mockReturnValue(undefined);
     mocks.leaseController = new AbortController();
     mocks.acquireRunLease.mockReturnValue({
       signal: mocks.leaseController.signal,
@@ -195,6 +198,22 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(mocks.prompt).not.toHaveBeenCalled();
     expect(mocks.customMessage).toHaveBeenCalledWith({
       customType: 'connection_resume', content: 'Resume the original Gmail request.', display: false,
+    }, { triggerTurn: true });
+  });
+
+  it('passes MCP setup continuation instructions to the model as hidden context', async () => {
+    mocks.mcpResume.mockReturnValue({ content: 'MCP configuration is saved. Continue the original task.' });
+    const result = await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'run-mcp-resume',
+      userMessage: { role: 'user', content: 'MCP configuration is saved. Continue the original task.', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any,
+      modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    expect(result.ok).toBe(true);
+    expect(mocks.prompt).not.toHaveBeenCalled();
+    expect(mocks.customMessage).toHaveBeenCalledWith({
+      customType: 'connection_resume', content: 'MCP configuration is saved. Continue the original task.', display: false,
     }, { triggerTurn: true });
   });
 

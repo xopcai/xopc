@@ -64,3 +64,10 @@ it('stores display names separately from stable IDs and rejects invalid import c
   expect(row.id).toBe('stable_id'); expect(buildMcpServerConfigFromRow(row).displayName).toBe('团队知识库');
   expect(() => parseMcpConfigImport('{"mcpServers":[]}')).toThrow('object');
 });
+
+it('preserves legacy SSE and secret references through a management edit', () => {
+  const server = { type: 'sse', url: 'https://legacy.example/sse', headers: { 'X-API-Key': { xopcSecretRef: { provider: 'fixture', fieldKey: 'key', prefix: '' } } }, exposure: 'codemode' };
+  const row = normalizeMcpSettingsFromConfig({ mcp: { servers: { legacy: server } } }).servers[0];
+  expect(row.transport).toBe('sse');
+  expect(buildMcpServerConfigFromRow(row)).toEqual(server);
+});

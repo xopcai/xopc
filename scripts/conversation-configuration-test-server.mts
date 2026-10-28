@@ -8,13 +8,21 @@ const opaque = () => randomBytes(24).toString('base64url');
 async function body(request: IncomingMessage) { let value = ''; for await (const chunk of request) value += chunk; return value; }
 function json(response: ServerResponse, value: unknown, status = 200) { response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(value)); }
 
-export async function createConfigurationTestServers(options: { rotateCodes?: boolean } = {}) {
+export async function createConfigurationTestServers(options: { rotateCodes?: boolean; tokenRefusalStatus?: 401 | 403; publicOrigin?: string; oauthOrigin?: string } = {}) {
   const token = opaque(), sensitive = new Set([token]);
   const calls: Array<{ service: string; account: string; tool: string; code: string; atMs: number }> = [];
-  const codes = { public: `PUBLIC-${opaque().slice(0, 8)}`, plain: `PLAIN-${opaque().slice(0, 8)}`, token: `TOKEN-${opaque().slice(0, 8)}`, oauth: `OAUTH-${opaque().slice(0, 8)}` };
+  const codes = { public: `PUBLIC-${opaque().slice(0, 8)}`, publicOnly: `ONLY-${opaque().slice(0, 8)}`, plain: `PLAIN-${opaque().slice(0, 8)}`, token: `TOKEN-${opaque().slice(0, 8)}`, oauth: `OAUTH-${opaque().slice(0, 8)}`, header: `HEADER-${opaque().slice(0, 8)}`, legacy: `SSE-${opaque().slice(0, 8)}` };
+  const tenantToken = opaque(); sensitive.add(tenantToken);
   let grants = 0;
+  const refusals: Array<{ service: string; status: number; hadCredential: boolean }> = [];
   async function mcp(request: IncomingMessage, response: ServerResponse, service: keyof typeof codes, authenticated: boolean, challenge?: string) {
-    if (!authenticated) { response.writeHead(401, { 'WWW-Authenticate': challenge ?? 'Bearer' }).end(); return; }
+    if (!authenticated) {
+      const status = service === 'token' ? options.tokenRefusalStatus ?? 401 : 401;
+      refusals.push({ service, status, hadCredential: Boolean(request.headers.authorization) });
+      if (status === 403) json(response, { code: '0001', msg: 'Service refused access', data: null }, 403);
+      else response.writeHead(401, { 'WWW-Authenticate': challenge ?? 'Bearer' }).end();
+      return;
+    }
     if (request.method !== 'POST') { response.writeHead(405).end(); return; }
     const message = JSON.parse(await body(request));
     if (message.id === undefined) { response.writeHead(202).end(); return; }
@@ -29,13 +37,29 @@ export async function createConfigurationTestServers(options: { rotateCodes?: bo
     else { json(response, { jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Unknown method' } }); return; }
     json(response, { jsonrpc: '2.0', id: message.id, result });
   }
+  let legacyStream: ServerResponse | undefined;
   const publicServer = createServer((request, response) => {
     const path = new URL(request.url!, 'http://localhost').pathname;
-    if (path === '/public' || path === '/plain' || path === '/token') void mcp(request, response, path === '/public' ? 'public' : path === '/plain' ? 'plain' : 'token', path !== '/token' || request.headers.authorization === `Bearer ${token}`).catch(() => response.writeHead(500).end());
+    if (path === '/header') { void mcp(request, response, 'header', request.headers['x-api-key'] === token && request.headers['x-tenant-token'] === tenantToken).catch(() => response.writeHead(500).end()); return; }
+    if (path === '/legacy' && request.method === 'GET') {
+      if (request.headers['x-api-key'] !== token) { response.writeHead(401).end(); return; }
+      legacyStream = response; response.writeHead(200, { 'Content-Type': 'text/event-stream' }); response.write('event: endpoint\ndata: /legacy-message\n\n'); return;
+    }
+    if (path === '/legacy-message') { void (async () => {
+      if (request.headers['x-api-key'] !== token) { response.writeHead(401).end(); return; }
+      const message = JSON.parse(await body(request)); response.writeHead(202).end(); if (message.id === undefined) return;
+      const result = message.method === 'initialize' ? { protocolVersion: message.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'legacy', version: '1' } }
+        : message.method === 'tools/list' ? { tools: [{ name: 'read_profile', description: 'Read the account verification code', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } }] }
+        : { content: [{ type: 'text', text: JSON.stringify({ account: 'fixture-reader', verificationCode: codes.legacy }) }] };
+      if (message.method === 'tools/call') calls.push({ service: 'legacy', account: 'fixture-reader', tool: 'read_profile', code: codes.legacy, atMs: Date.now() });
+      legacyStream?.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: message.id, result })}\n\n`);
+    })().catch(() => response.end()); return; }
+    if (path === '/public' || path === '/public-only' || path === '/plain' || path === '/token' || path === '/token-explicit') void mcp(request, response, path === '/public' ? 'public' : path === '/public-only' ? 'publicOnly' : path === '/plain' ? 'plain' : 'token', !path.startsWith('/token') || request.headers.authorization === `Bearer ${token}`).catch(() => response.writeHead(500).end());
     else response.writeHead(404).end();
   }).listen(0, '127.0.0.1');
   await once(publicServer, 'listening');
-  const publicBase = `http://127.0.0.1:${(publicServer.address() as { port: number }).port}`;
+  const localPublicBase = `http://127.0.0.1:${(publicServer.address() as { port: number }).port}`;
+  const publicBase = options.publicOrigin ?? localPublicBase;
   const clients = new Map<string, string[]>();
   const authorizations = new Map<string, { clientId: string; redirect: string; state: string; challenge: string }>();
   const authorizationCodes = new Map<string, { clientId: string; redirect: string; challenge: string }>();
@@ -89,10 +113,13 @@ export async function createConfigurationTestServers(options: { rotateCodes?: bo
     response.writeHead(404).end();
   })().catch(() => json(response, { error: 'invalid_request' }, 400)); });
   oauthServer.listen(0, '127.0.0.1'); await once(oauthServer, 'listening');
-  oauthBase = `http://127.0.0.1:${(oauthServer.address() as { port: number }).port}`;
-  return { publicUrl: `${publicBase}/public`, plainUrl: `${publicBase}/plain`, tokenUrl: `${publicBase}/token`, oauthUrl: `${oauthBase}/mcp`, token, sensitive, calls, codes,
+  const localOauthBase = `http://127.0.0.1:${(oauthServer.address() as { port: number }).port}`;
+  oauthBase = options.oauthOrigin ?? localOauthBase;
+  return { publicUrl: `${publicBase}/public`, publicOnlyUrl: `${publicBase}/public-only`, plainUrl: `${publicBase}/plain`, tokenUrl: `${publicBase}/token`, tokenExplicitUrl: `${publicBase}/token-explicit`, oauthUrl: `${oauthBase}/mcp`, headerUrl: `${publicBase}/header`, legacyUrl: `${publicBase}/legacy`, token, tenantToken, sensitive, calls, codes, refusals,
+    networkRoutes: { [publicBase]: localPublicBase, [oauthBase]: localOauthBase },
     get grants() { return grants; },
     async close() {
+      legacyStream?.end();
       publicServer.closeAllConnections(); oauthServer.closeAllConnections();
       await Promise.all([new Promise<void>(done => publicServer.close(() => done())), new Promise<void>(done => oauthServer.close(() => done()))]);
     } };

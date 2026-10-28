@@ -8,11 +8,12 @@ import { localAppCapabilities } from '../../local-apps/capabilities/runtime.js';
 import { CapabilityCallSchema } from '@xopcai/gateway-contract';
 import { CapabilityError, type CapabilityContext, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import { normalizeSpecialistRequirements } from '../../agent-matching/schema.js';
+import { getDelegationScope } from '../orchestration/delegation-scope.js';
 import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
 import { TaskMutationOutputSchema } from '../../tasks/capabilities/write.js';
 import { TaskDeleteOutputSchema } from '../../tasks/capabilities/management.js';
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import type { AgentTool, AgentToolResult, BeforeToolCallContext } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
   ChatPreviewCreateInputSchema,
@@ -114,6 +115,7 @@ export interface XopcUseToolInput {
 }
 
 export interface XopcUseToolDeps {
+  getAgentToolAvailability?: (agentId: string, tool: string) => import('../../agent-matching/service.js').AvailabilityCheck;
   canConfigureFromConversation?: () => boolean;
   canRequestWeixinMcpSetup?: () => boolean;
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
@@ -1312,7 +1314,19 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
         const agentId = deps.getCurrentAgentId?.();
         if (!service || !conversationId || !agentId) return errorText('MCP setup requires a Gateway conversation.', details);
         if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.mcp_setup.${command}`, args)) return errorText('MCP setup access denied', details);
-        try { return okText({ ...details, result: await service.command(command, args, { conversationId, agentId, canConfigure: deps.canConfigureFromConversation?.() === true, canRequestWeixinSetup: deps.canRequestWeixinMcpSetup?.() === true }, dryRun) }); }
+        try { return okText({ ...details, result: await service.command(command, args, { conversationId, agentId, signal,
+          authorizeResearch: async (tool, params) => {
+            if (deps.getAgentToolAvailability?.(agentId, tool).state !== 'verified') return false;
+            const scope = getDelegationScope(), current = scope?.getToolContext?.();
+            if (scope && !scope.tools.some(item => item.name === tool)) return false;
+            if (scope?.authorizeToolCall) {
+              if (!current) return false;
+              const decision = await scope.authorizeToolCall({ ...current, toolCall: { type: 'toolCall', id: `${toolCallId}/research/${crypto.randomUUID()}`, name: tool, arguments: params as BeforeToolCallContext['toolCall']['arguments'] }, args: params }, signal);
+              if (decision?.block) return false;
+            }
+            return !deps.authorizeCapability || await deps.authorizeCapability(tool, params);
+          },
+          canConfigure: deps.canConfigureFromConversation?.() === true, canRequestWeixinSetup: deps.canRequestWeixinMcpSetup?.() === true }, dryRun) }); }
         catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
       }
       if (mode === 'automation' && command === 'prepare_source') {

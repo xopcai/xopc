@@ -42,9 +42,11 @@ export async function prepareNativeMcpConfig(config: Config, workspaceDir: strin
     if (!parsed.success) { result.errors.push(`Invalid MCP server ${name}: ${parsed.error.message}`); continue; }
     const value = await resolveConnectorSecretReferences(parsed.data) as Record<string, unknown>;
     const fields = ['type', 'command', 'args', 'env', 'cwd', 'url', 'headers', 'oauth', 'auth',
-      'timeout', 'enabled', 'exposure', 'toolExposure', 'description'];
+      'timeout', 'enabled', 'exposure', 'toolExposure', 'description', 'xopcPublicOnly', 'xopcManagedStdio'];
     const projected = Object.fromEntries(fields.filter(key => value[key] !== undefined).map(key => [key, value[key]]));
+    if (typeof value.displayName === 'string' && value.displayName.trim()) projected.description = `Service: ${value.displayName.trim()}. ${typeof value.description === 'string' ? value.description : ''}`.trim();
     if (projected.type === 'streamable-http') projected.type = 'http';
+    if (projected.type === 'sse') { projected.type = 'http'; projected.xopcLegacySse = true; }
     const plugin = raw.xopcPlugin as { id: string; revision: string } | undefined;
     result.servers.push({ name, config: projected as unknown as McpServerConfig, source: plugin?.revision ? `plugin:${plugin.id}@${plugin.revision}` : 'xopc.json', scope: 'extension' });
   }

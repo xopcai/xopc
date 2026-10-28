@@ -153,9 +153,9 @@ it('detects authentication and completes native OAuth through authenticated Gate
     expect((await fetch(`${base}/servers/docs/probe`, { method: 'POST' })).status).toBe(401);
     expect((await fetch(`${base}/servers/docs/auth`, { method: 'POST' })).status).toBe(401);
     expect((await request('/servers/public/probe', 'POST')).data.payload).toEqual({ state: 'connected', toolCount: 1 });
-    expect((await request('/servers/docs/probe', 'POST')).data.payload).toEqual({ state: 'oauth_required' });
+    expect((await request('/servers/docs/probe', 'POST')).data.payload).toMatchObject({ state: 'oauth_required', auth: { method: 'oauth', metadata: 'valid' } });
     // A generic 401 must not be classified as OAuth merely because the origin has metadata.
-    expect((await request('/servers/token/probe', 'POST')).data.payload).toEqual({ state: 'token_required' });
+    expect((await request('/servers/token/probe', 'POST')).data.payload).toMatchObject({ state: 'auth_unknown', auth: { method: 'unknown' } });
     const started = await request('/servers/docs/auth', 'POST');
     expect(started.response.status).toBe(200);
     const id = started.data.payload.id; pending.push(id);

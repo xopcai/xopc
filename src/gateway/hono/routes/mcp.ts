@@ -25,7 +25,7 @@ export function registerMcpRoutes(app: Hono, deps: AuthenticatedRouteDeps): void
     if (!body || !['advance', 'authorize', 'token', 'cancel', 'approve', 'retry_delivery'].includes(body.action)
       || !Number.isSafeInteger(body.expectedVersion)
       || Object.keys(body).some(key => !['action', 'value', 'expectedVersion'].includes(key))
-      || body.value !== undefined && (typeof body.value !== 'string' || body.action !== 'token')) throw new McpDraftError(400, 'Invalid MCP setup action.');
+      || body.value !== undefined && (body.action !== 'token' || typeof body.value !== 'string' && (!body.value || typeof body.value !== 'object' || Array.isArray(body.value) || Object.values(body.value).some(value => typeof value !== 'string')))) throw new McpDraftError(400, 'Invalid MCP setup action.');
     return deps.service.mcpSetup.interact(c.req.param('id'), body.action, body.value, body.expectedVersion, getGatewayPrincipal(c).principalId);
   }));
   const drafts = new McpConnectionDrafts({ readConfig: () => deps.service.currentConfig, saveConfig: (config, expected) => deps.service.saveConfig(config, expected) });

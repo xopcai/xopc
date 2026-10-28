@@ -16,19 +16,25 @@ import type { Browser, BrowserContext, Page, Video } from 'playwright-core';
 import { createWeixinConfigurationTestServer } from './weixin-configuration-test-server.mts';
 import { DatabaseSync } from 'node:sqlite';
 import { createConfigurationTestServers } from './conversation-configuration-test-server.mts';
+import { createDiscoveryFixtures } from './mcp-discovery-fixtures.mts';
 
 const { chromium } = createRequire(import.meta.url)('playwright-core') as typeof import('playwright-core');
 const inheritedEnv = { ...process.env };
 
 assert.equal(process.env.XOPC_CONFIGURATION_E2E_LIVE, '1', 'Set XOPC_CONFIGURATION_E2E_LIVE=1 for real model inference');
 const stage = process.env.XOPC_CONFIGURATION_E2E_STAGE ?? 'skills';
+const token403Only = stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_TOKEN_403_ONLY === '1';
+const onlineFlow = stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_ONLINE === '1';
+const nameFlow = stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_NAME_FLOW === '1';
 const recordDemo = process.env.XOPC_CONFIGURATION_E2E_RECORD_DEMO === '1';
 assert(!recordDemo || ['automations', 'weixin'].includes(stage), 'Recording demo uses the automations or Weixin environment');
 assert(['skills', 'mcp', 'automations', 'weixin'].includes(stage), 'Choose skills, mcp or automations');
 const weixin = stage === 'weixin' ? await createWeixinConfigurationTestServer() : undefined;
-const testServers = stage !== 'skills' ? await createConfigurationTestServers({ rotateCodes: stage === 'automations' }) : undefined;
+const testServers = stage !== 'skills' ? await createConfigurationTestServers({ rotateCodes: stage === 'automations', ...(token403Only || nameFlow ? { tokenRefusalStatus: 403 } : {}), ...(nameFlow ? { publicOrigin: 'https://mcp-fixture.example', oauthOrigin: 'https://auth-fixture.example' } : {}) }) : undefined;
 const deniedServers = weixin ? await createConfigurationTestServers() : undefined;
 const root = await mkdtemp(join(tmpdir(), 'xopc-conversation-config-'));
+const discoveryFixtures = nameFlow ? await createDiscoveryFixtures(root, testServers!) : undefined;
+if (discoveryFixtures) await writeFile(join(root, 'network-routes.json'), JSON.stringify(discoveryFixtures.routes));
 const evidence = resolve(process.env.XOPC_CONFIGURATION_E2E_OUT ?? `.xopc-evals/conversation-configuration/${stage}`);
 await mkdir(evidence, { recursive: true });
 const credentials = process.env.XOPC_CREDENTIALS_DIR ?? join(homedir(), '.xopc/credentials');
@@ -51,7 +57,7 @@ const proxy = createServer(async (request, response) => {
     assert(![...(testServers?.sensitive ?? [])].some(secret => raw.includes(secret)), 'A credential leaked into a model request');
     const body = JSON.parse(raw); body.model = 'openai-codex/gpt-5.6-sol';
     if (stage === 'mcp') await writeFile(join(evidence, `request-${randomUUID()}.private.json`), JSON.stringify(body), { mode: 0o600 });
-    assert(modelRequests.length < (stage === 'skills' ? 160 : 260), 'Inference budget exceeded');
+    assert(modelRequests.length < (nameFlow ? 450 : stage === 'skills' ? 160 : 260), 'Inference budget exceeded');
     let credential = JSON.parse(await readFile(credentialFile, 'utf8'));
     if (credential.expiresAt <= Date.now() + 60000) { await refreshCloudLogin(); credential = JSON.parse(await readFile(credentialFile, 'utf8')); }
     assert(credential.expiresAt > Date.now(), 'Cloud login expired; reconnect before running acceptance');
@@ -88,6 +94,7 @@ Object.assign(process.env, { XOPC_STATE_DIR: root, XOPC_CONFIG_PATH: join(root, 
 await mkdir(join(root, 'home'));
 await cp(resolve('skills'), join(root, 'bundled-skills'), { recursive: true });
 await writeFile(join(root, 'xopc.json'), JSON.stringify({ gateway: { bind: 'loopback', port, auth: { mode: 'token', token }, ...(weixin ? { publicUrl: base } : {}) },
+  ...(discoveryFixtures ? { tools: { web: { search: { providers: [{ type: 'searxng', url: discoveryFixtures.local }] } } } } : {}),
   ...(weixin ? { session: { dmScope: 'per-account-channel-peer' }, channels: { weixin: { enabled: true, dmPolicy: 'pairing', allowFrom: ['alice@im.wechat', 'bob@im.wechat'], streamMode: 'off' } } } : {}), userContext: { enabled: false } }), { mode: 0o600 });
 await writeFile(join(root, 'models.json'), JSON.stringify({ providers: { 'configuration-live': { baseUrl: `http://127.0.0.1:${proxyPort}/v1`, api: 'openai-completions', apiKey: 'local-relay',
   models: [{ id: 'sol', name: 'Real XOPC Cloud GPT-5.6 Sol', input: ['text'], reasoning: false, contextWindow: 128000, maxTokens: 4096 }] } } }));
@@ -107,8 +114,8 @@ db.closeXopcDatabase();
 let child: ReturnType<typeof spawn>;
 let logs = '';
 function launch() {
-  child = spawn(process.execPath, ['--import', 'tsx', 'src/cli/bin.ts', 'gateway', '--port', String(port), '--no-hot-reload'], { cwd: resolve('.'),
-    env: { ...process.env, HOME: join(root, 'home') }, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawn(process.execPath, [...(nameFlow ? ['--experimental-test-module-mocks', '--import', resolve('scripts/fixtures/mcp-discovery-network.mjs')] : []), '--import', 'tsx', 'src/cli/bin.ts', 'gateway', '--port', String(port), '--no-hot-reload'], { cwd: resolve('.'),
+    env: { ...process.env, HOME: join(root, 'home'), ...(nameFlow ? { XOPC_E2E_NETWORK_ROUTES: join(root, 'network-routes.json') } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout!.on('data', chunk => { logs = (logs + chunk).slice(-200000); });
   child.stderr!.on('data', chunk => { logs = (logs + chunk).slice(-200000); });
 }
@@ -502,6 +509,83 @@ async function verifyWeixin() {
   } finally { observer.close(); }
 }
 
+async function verifyOnlineDiscovery() {
+  report.scope = 'Live internet discovery from a service name, real model and production secure form. No service Token is supplied; official authenticated connection is outside this check.';
+  await send('online-mcd-name', '帮我连接中国麦当劳的官方服务，只连接，不查询账号资料。', async (_answer) => ({ visibleReply: true }), true);
+  const observer = new DatabaseSync(join(root, 'xopc.db'), { readOnly: true });
+  try {
+    const row = observer.prepare("SELECT payload FROM durable_state WHERE namespace='mcp.conversation-setup' AND json_extract(payload,'$.conversationId')=? ORDER BY rowid DESC LIMIT 1").get(conversationId!) as { payload: string } | undefined;
+    assert(row, 'Live search did not produce a setup plan'); const goal = JSON.parse(row.payload);
+    assert.equal(goal.url.replace(/\/$/, ''), 'https://mcp.mcd.cn'); assert.equal(goal.authentication, 'bearer');
+    assert.equal(goal.objective, 'connect_only'); assert(goal.sources?.some((source: any) => /^https:\/\/(open\.mcd\.cn|github\.com\/M-China\/mcd-mcp-server|raw\.githubusercontent\.com\/M-China\/mcd-mcp-server\/main\/README\.md)(?:\/|$)/.test(source.url)));
+    await page.locator(`a[data-xopc-link-kind="internal-route"][href="#/mcp-setup/${goal.id}"]`).click();
+    const approval = page.getByRole('button', { name: /^(允许这次连接|Approve this connection)$/ });
+    if (await approval.isVisible()) await approval.click();
+    await page.locator('input[type="password"]').first().waitFor();
+    await page.screenshot({ path: join(evidence, 'online-mcd-secure-input.png'), fullPage: true });
+    report.cases.push({ id: 'online-mcd-secure-input', passed: true, checks: { officialSource: true, documentedEndpoint: true, bearerForm: true, noCredentialSupplied: true }, sources: goal.sources.map((source: any) => source.url) });
+  } finally { observer.close(); }
+}
+
+async function verifyNameDiscovery() {
+  report.scope = 'Name-only discovery through the production search provider, actual reference reads, real model, secure UI and native MCP. Virtual public .example origins route to independent real localhost servers through an explicit test-only Node dispatcher; production SSRF/DNS guards are tested separately. Not official external service authorization.';
+  const fixtures = discoveryFixtures!, servers = testServers!;
+  const observer = new DatabaseSync(join(root, 'xopc.db'), { readOnly: true });
+  const goal = () => JSON.parse((observer.prepare("SELECT payload FROM durable_state WHERE namespace='mcp.conversation-setup' AND json_extract(payload,'$.conversationId')=? ORDER BY rowid DESC LIMIT 1").get(conversationId!) as { payload: string }).payload);
+  const check = async (id: string, checks: Record<string, boolean>) => { report.cases.push({ id, checks, passed: Object.values(checks).every(Boolean) }); console.log(JSON.stringify({ id, checks })); assert(Object.values(checks).every(Boolean), id); };
+  await page.context().route('https://auth-fixture.example/**', async route => {
+    const request = route.request(), incoming = new URL(request.url());
+    const response = await fetch(`${servers.networkRoutes['https://auth-fixture.example']}${incoming.pathname}${incoming.search}`, { method: request.method(), headers: request.headers(), body: request.postData() ?? undefined, redirect: 'manual' });
+    await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
+  });
+  try {
+    const rounds = Number(process.env.XOPC_CONFIGURATION_E2E_NAME_ROUNDS ?? '1'); assert.equal(rounds, 1, 'Repeat this command in separate processes for independent acceptance rounds');
+    const allKinds = ['public-only', 'public', 'token', 'unknown', 'header', 'legacy', 'stdio', 'oauth', 'package'];
+    const kinds = process.env.XOPC_CONFIGURATION_E2E_NAME_KINDS?.split(',') ?? allKinds;
+    assert(kinds.length && kinds.every(kind => allKinds.includes(kind)));
+    report.acceptanceSubset = kinds.length === allKinds.length ? 'full name-flow matrix' : `diagnostic subset: ${kinds.join(',')}`;
+    for (let round = 1; round <= rounds; round++) {
+      for (const kind of kinds) {
+        const key = kind;
+        const beforeCalls = servers.calls.length, beforeStdio = await fixtures.stdioReads(), beforePackage = await fixtures.packageReads(), beforeSearch = fixtures.searchLog.length;
+        await send(`name-${round}-${kind}`, kind === 'public-only' ? `帮我连接${fixtures.names[key]}，只连接，不读取我的资料。` : `帮我连接${fixtures.names[key]}并查询我资料中的标记码。`, async () => ({ searchedFromName: fixtures.searchLog.length > beforeSearch, noReadBeforeApproval: servers.calls.length === beforeCalls && await fixtures.stdioReads() === beforeStdio && await fixtures.packageReads() === beforePackage }), true);
+        const current = goal();
+        const local = kind === 'stdio' || kind === 'package';
+        assert.equal(current.phase, 'approval_required'); assert(current.sources?.length && current.publicOnly !== false || local);
+        assert.equal(current.transport ?? 'streamable-http', local ? 'stdio' : kind === 'legacy' ? 'sse' : 'streamable-http');
+        if (!local) assert.equal(current.url, kind === 'public-only' ? servers.publicOnlyUrl : kind === 'public' ? servers.publicUrl : kind === 'token' ? servers.tokenExplicitUrl : kind === 'unknown' ? servers.tokenUrl : kind === 'header' ? servers.headerUrl : kind === 'legacy' ? servers.legacyUrl : servers.oauthUrl);
+        else assert(current.execution?.command && current.secretFields?.some((f: any) => f.name === 'FIXTURE_ACCESS_KEY'));
+        assert.equal(current.objective, kind === 'public-only' ? 'connect_only' : 'complete_task');
+        await page.locator(`a[data-xopc-link-kind="internal-route"][href="#/mcp-setup/${current.id}"]`).click();
+        await page.getByRole('button', { name: /^(允许这次连接|Approve this connection)$/ }).click();
+        if (['token', 'unknown', 'header', 'legacy', 'stdio', 'package'].includes(kind)) {
+          await page.locator('input[type="password"]').first().waitFor();
+          if (round === 1 && kind === 'unknown') { await stopGateway(); launch(); await ready(); await page.reload(); await page.locator('input[type="password"]').first().waitFor(); }
+          const snapshot = await api(`/api/mcp/setup/${current.id}`);
+          if (kind === 'unknown') assert.equal(snapshot.phase, 'auth_unknown');
+          for (const field of snapshot.secretFields?.length ? snapshot.secretFields : [{ id: 'token', name: 'Authorization' }]) await page.locator(`#mcp-setup-${field.id}`).fill(field.name === 'X-Tenant-Token' ? servers.tenantToken : servers.token);
+          await page.getByRole('button', { name: /^(保存并连接|Save and connect)$/ }).click();
+        } else if (kind === 'oauth') {
+          const popupPromise = page.context().waitForEvent('page'); await page.getByRole('link', { name: /^(继续登录|Continue sign-in)$/ }).click();
+          const popup = await popupPromise; await popup.getByRole('button', { name: 'Allow connection', exact: true }).click();
+        }
+        await page.waitForURL(new RegExp(`#/chat/${conversationId}`), { timeout: 120000 });
+        const expectedCode = kind === 'stdio' ? fixtures.stdioCode : kind === 'package' ? fixtures.packageCode : servers.codes[(kind === 'unknown' ? 'token' : key) as keyof typeof servers.codes];
+        await until(async () => {
+          const state = await api(`/api/sessions/${conversationId}/input-state`); const h = await api(`/api/sessions/${conversationId}?include=transcriptRows`);
+          return !state.activeRunId && !state.inputs?.some((i: any) => ['queued', 'running'].includes(i.status)) && goal().resumed && (kind === 'public-only' || JSON.stringify(h.messages).includes(expectedCode));
+        }, `name ${kind} original objective`);
+        const history = JSON.stringify(await api(`/api/sessions/${conversationId}?include=transcriptRows`)), stored = JSON.stringify(await configuredServers());
+        await check(`name-${round}-${kind}-verified`, { sameConversation: page.url().includes(conversationId!), ready: goal().phase === 'ready', actualExpectedRead: kind === 'public-only' ? servers.calls.length === beforeCalls : kind === 'package' ? await fixtures.packageReads() > beforePackage && fixtures.packageDownloads > 0 : kind === 'stdio' ? await fixtures.stdioReads() > beforeStdio : servers.calls.slice(beforeCalls).some(call => call.code === expectedCode), noSecretInTranscript: ![...servers.sensitive].some(secret => history.includes(secret)), noSecretInConfig: ![...servers.sensitive].some(secret => stored.includes(secret)) });
+        await page.screenshot({ path: join(evidence, `name-${round}-${kind}-verified.png`), fullPage: true });
+      }
+    }
+    const diagnostic = logs + await readFile(join(root, 'pi/mcp.log'), 'utf8').catch(() => '');
+    report.inferenceFailures = modelRequests.filter(request => request.status !== 200).map(request => ({ status: request.status, elapsedMs: request.elapsedMs }));
+    await check('name-flow-secret-isolation', { noSecretInLogs: ![...servers.sensitive].some(secret => diagnostic.includes(secret)), realModel: modelRequests.filter(r => r.status === 200).length >= kinds.length });
+  } finally { observer.close(); }
+}
+
 launch();
 try {
   await ready();
@@ -514,7 +598,11 @@ try {
   for (const name of ['Maybe later, keep using my current model', 'Skip for now', '以后再说，继续使用当前模型', '暂时跳过']) {
     try { await page.getByRole('button', { name, exact: true }).click({ timeout: 1000 }); } catch { /* Optional onboarding. */ }
   }
-  if (stage === 'weixin') {
+  if (onlineFlow) {
+    await verifyOnlineDiscovery();
+  } else if (nameFlow) {
+    await verifyNameDiscovery();
+  } else if (stage === 'weixin') {
     if (recordDemo) {
       recordingContext = await browser.newContext({ storageState: await page.context().storageState(),
         viewport: { width: 1280, height: 900 }, recordVideo: { dir: join(evidence, 'recording'), size: { width: 1280, height: 900 } } });
@@ -666,6 +754,46 @@ try {
     assert(Object.values(pinnedScheduleChecks).every(Boolean), 'Scheduled execution must use the pinned source');
     await send('automation-source-cleanup', '请删除资料日报这个定时任务，保留资料服务连接。', async () => ({ removed: !(await named('资料日报')), connectionPreserved: Boolean(await configuredNamedServer('test_schedule')) }));
     await negativeChecks();
+  } else if (token403Only) {
+    report.scope = 'First-time Token HTTP 403 recovery and explicit Bearer setup, real model and production Web Chat; not the complete MCP acceptance matrix or official McDonald service.';
+    report.fixture = 'Independent real HTTP MCP server: HTTP 403 JSON without WWW-Authenticate until the correct Bearer Token is supplied.';
+    const verify = async (id: string, checks: Record<string, boolean>) => {
+      report.cases.push({ id, checks, passed: Object.values(checks).every(Boolean) });
+      console.log(JSON.stringify({ id, checks })); assert(Object.values(checks).every(Boolean), id);
+    };
+    await send('mcp-403-auto-start', `连接资料服务 ${testServers!.tokenUrl}，命名 test_403，读取资料中的标记码。目前不知道认证方式，请先自动探测；如果服务拒绝访问，请给我产品里的配置入口。`, async () => ({ notPublished: !(await configuredServers()).test_403, noRead: testServers!.calls.length === 0 }), true);
+    const observer = new DatabaseSync(join(root, 'xopc.db'), { readOnly: true });
+    try {
+      const goal = () => JSON.parse((observer.prepare("SELECT payload FROM durable_state WHERE namespace='mcp.conversation-setup' AND json_extract(payload,'$.conversationId')=? ORDER BY rowid DESC LIMIT 1").get(conversationId!) as { payload: string }).payload);
+      assert.equal(goal().phase, 'blocked'); assert.equal(goal().errorCode, 'access_denied'); assert(!goal().tokenProvider);
+      const setupId = goal().id;
+      // Click the actual assistant link, not a generated test URL or action-bar fallback.
+      await page.locator(`a[data-xopc-link-kind="internal-route"][href="#/mcp-setup/${setupId}"]`).click();
+      await page.locator('#mcp-setup-token').waitFor();
+      await verify('mcp-403-first-token-form', { actualChatLink: true, passwordInput: await page.locator('#mcp-setup-token').getAttribute('type') === 'password', noFalseRejectedToken: !(await page.getByText(/密钥未被接受|This key was rejected/).count()), refusedWithoutCredential: testServers!.refusals.some(r => r.status === 403 && !r.hadCredential) });
+      await stopGateway(); launch(); await ready(); await page.reload();
+      await page.locator('#mcp-setup-token').waitFor();
+      await page.locator('#mcp-setup-token').fill(`wrong-${testServers!.token}`);
+      await page.getByRole('button', { name: /^(保存并连接|Save and connect)$/ }).click();
+      await page.getByRole('alert').filter({ hasText: /未接受|未被接受|rejected/ }).waitFor();
+      await verify('mcp-403-wrong-token-after-restart', { sameSetup: goal().id === setupId, notPublished: !(await configuredServers()).test_403, noRead: testServers!.calls.length === 0, inputCleared: await page.locator('#mcp-setup-token').inputValue() === '', credentialRejected: goal().errorCode === 'credential_rejected' });
+      await page.locator('#mcp-setup-token').fill(testServers!.token);
+      await page.getByRole('button', { name: /^(保存并连接|Save and connect)$/ }).click();
+      await continuation('mcp-403-original-chat-resume', 'token');
+      await verify('mcp-403-resumed-once', { sameSetup: goal().id === setupId, queuedOnce: Number((observer.prepare('SELECT COUNT(*) AS total FROM session_inputs WHERE client_message_id=?').get(`mcp-setup:${setupId}`) as { total: number }).total) === 1 });
+      const refusalsBeforeExplicit = testServers!.refusals.length, readsBeforeExplicit = testServers!.calls.length;
+      await send('mcp-bearer-explicit-start', `连接资料服务 ${testServers!.tokenExplicitUrl}，命名 test_bearer，读取标记码。接入说明明确要求 Authorization: Bearer MCP Token，请直接引导安全配置 Token，不要先尝试无凭据连接。`, async () => ({ notPublished: !(await configuredServers()).test_bearer }), true);
+      assert.equal(goal().authentication, 'bearer'); assert.equal(goal().phase, 'token_required');
+      const explicitId = goal().id;
+      await page.locator(`a[data-xopc-link-kind="internal-route"][href="#/mcp-setup/${explicitId}"]`).click();
+      await page.locator('#mcp-setup-token').waitFor();
+      await page.locator('#mcp-setup-token').fill(testServers!.token);
+      await page.getByRole('button', { name: /^(保存并连接|Save and connect)$/ }).click();
+      await continuation('mcp-bearer-original-chat-resume', 'token');
+      await verify('mcp-bearer-no-unauthenticated-probe', { noNewRefusal: testServers!.refusals.length === refusalsBeforeExplicit, freshRealRead: testServers!.calls.length > readsBeforeExplicit });
+      const diagnostic = logs + await readFile(join(root, 'pi/mcp.log'), 'utf8').catch(() => '');
+      await verify('mcp-403-secret-isolation', { noSecretsInLogs: ![...testServers!.sensitive].some(secret => diagnostic.includes(secret)), noSecretsInUrls: ![...testServers!.sensitive].some(secret => page.url().includes(secret)), realModel: modelRequests.filter(r => r.status === 200).length >= kinds.length });
+    } finally { observer.close(); }
   } else if (stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_MCP_SMOKE === '1') {
     report.scope = 'Diagnostic smoke only; not a complete phase acceptance';
     if (process.env.XOPC_CONFIGURATION_E2E_MCP_RELOAD === '1') {
@@ -785,7 +913,7 @@ try {
   await send('marketplace-search', '帮我在技能市场找适合整理 PDF 的能力，推荐两个，说明来源。只推荐，不要安装。', async answer => ({ noInstall: !installed(), provenance: /ClawHub|SkillHub|Store|来源|市场/i.test(answer) }), true);
   await negativeChecks();
   }
-  if (stage !== 'weixin' && !recordDemo && process.env.XOPC_CONFIGURATION_E2E_MCP_SMOKE !== '1') {
+  if (stage !== 'weixin' && !recordDemo && !token403Only && !nameFlow && !onlineFlow && process.env.XOPC_CONFIGURATION_E2E_MCP_SMOKE !== '1') {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.reload();
     await page.locator('[role="textbox"][contenteditable="true"]').first().waitFor();
@@ -827,6 +955,7 @@ try {
   proxy.closeAllConnections(); fixture.closeAllConnections();
   await Promise.all([new Promise<void>(done => proxy.close(() => done())), new Promise<void>(done => fixture.close(() => done()))]);
   await testServers?.close();
+  await discoveryFixtures?.close();
   await deniedServers?.close();
   await weixin?.close();
   console.log(JSON.stringify({ passed: report.passed, evidence, error: report.error }));

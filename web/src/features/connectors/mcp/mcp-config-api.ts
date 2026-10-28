@@ -7,7 +7,7 @@ import {
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type McpTransportKind = 'stdio' | 'streamable-http';
+export type McpTransportKind = 'stdio' | 'streamable-http' | 'sse';
 export type McpServerRow = {
   clientKey: string; id: string; displayName?: string; transport: McpTransportKind;
   command: string; argsText: string; envJson: string; cwd: string; url: string;
@@ -101,7 +101,7 @@ function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
     } else if (row.envJson.trim()) config.env = parseJsonObject(row.envJson);
     delete config.oauth; delete config.auth;
   } else {
-    config.type = 'http'; config.url = row.url.trim();
+    config.type = row.transport === 'sse' ? 'sse' : 'http'; config.url = row.url.trim();
     const headers = headersToRecord(row.headers); if (headers) config.headers = headers;
     const oauth = { ...(config.oauth as Record<string, unknown> ?? {}) };
     if (row.oauthClientId.trim()) oauth.clientId = row.oauthClientId.trim(); else delete oauth.clientId;
@@ -112,7 +112,7 @@ function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
 }
 function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerRow {
   const oauth = raw.oauth as Record<string, unknown> | undefined;
-  return { clientKey: id, id, displayName: typeof raw.displayName === 'string' ? raw.displayName : '', transport: typeof raw.url === 'string' ? 'streamable-http' : 'stdio',
+  return { clientKey: id, id, displayName: typeof raw.displayName === 'string' ? raw.displayName : '', transport: typeof raw.url === 'string' ? raw.type === 'sse' ? 'sse' : 'streamable-http' : 'stdio',
     command: typeof raw.command === 'string' ? raw.command : '', argsText: Array.isArray(raw.args) ? JSON.stringify(raw.args) : '',
     envJson: raw.env ? JSON.stringify(raw.env, null, 2) : '', cwd: typeof raw.cwd === 'string' ? raw.cwd : '',
     url: typeof raw.url === 'string' ? raw.url : '', headers: recordToHeaders(raw.headers as Record<string, unknown> | undefined),
@@ -124,7 +124,7 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
 
 export function suggestMcpServerId(row: McpServerRow, occupied: ReadonlySet<string>): string {
   let name = 'mcp';
-  try { name = row.transport === 'streamable-http' ? new URL(row.url).hostname : row.command.split(/[\\/]/).pop() || name; } catch { /* The URL is validated when connecting. */ }
+  try { name = row.transport !== 'stdio' ? new URL(row.url).hostname : row.command.split(/[\\/]/).pop() || name; } catch { /* The URL is validated when connecting. */ }
   const base = name.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'mcp';
   const used = new Set([...occupied].map(id => id.replace(/-/g, '_')));
   let id = base;
@@ -193,7 +193,7 @@ export async function fetchMcpTools(serverId: string, signal: AbortSignal): Prom
   return result.payload.tools;
 }
 
-export type McpConnectionProbe = { state: 'connected' | 'oauth_required' | 'token_required' | 'error'; toolCount?: number; error?: string; errorCode?: string };
+export type McpConnectionProbe = { state: 'connected' | 'oauth_required' | 'token_required' | 'auth_unknown' | 'error'; toolCount?: number; error?: string; errorCode?: string };
 export type McpAuthorization = { id: string; serverId: string; state: 'starting' | 'authorizing' | 'connected' | 'error' | 'cancelled';
   authorizationUrl?: string; acceptsRedirect?: boolean; toolCount?: number; error?: string };
 export async function probeMcpServer(serverId: string, signal: AbortSignal): Promise<McpConnectionProbe> {
