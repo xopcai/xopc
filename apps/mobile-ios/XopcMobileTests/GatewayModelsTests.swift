@@ -5,6 +5,19 @@ import Testing
 
 // swiftlint:disable:next type_body_length
 struct GatewayModelsTests {
+    @Test @MainActor func hidesInternalContinuationContextWithoutFilteringUserAuthoredText() throws {
+        let messages = try JSONDecoder().decode([WireMessage].self, from: Data(#"""
+        [
+          {"id":"hidden","role":"user","display":false,"content":"Internal continuation instructions"},
+          {"id":"private","role":"user","metadata":{"hiddenFromClient":true},"content":"Internal setup data"},
+          {"id":"context","role":"custom","display":false,"content":"Internal tools instructions"},
+          {"id":"user","role":"user","content":"MCP configuration is saved. What does this mean?"},
+          {"id":"answer","role":"assistant","content":"已连接，可以继续使用。"}
+        ]
+        """#.utf8))
+        #expect(AssistantState.timeline(from: messages).map(\.id) == ["user", "answer"])
+    }
+
     @Test func voiceAttachmentAcceptsGatewayDurationSeconds() throws {
         let attachment = try JSONDecoder().decode(HistoryAttachment.self,
                                                   from: Data(#"{"id":"voice","type":"audio","durationSeconds":3.5}"#.utf8))

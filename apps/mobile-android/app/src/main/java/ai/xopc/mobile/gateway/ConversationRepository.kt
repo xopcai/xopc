@@ -1182,6 +1182,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     private fun parseMessages(messages: JSONArray): List<ConversationMessage> {
       val parsed = (0 until messages.length()).mapNotNull { index ->
         val item = messages.getJSONObject(index)
+        if (item.optBoolean("display", true) == false || item.optJSONObject("metadata")?.optBoolean("hiddenFromClient") == true) return@mapNotNull null
         val role = item.optString("role")
         if (role !in setOf("user", "assistant")) return@mapNotNull null
         val content = item.opt("content")

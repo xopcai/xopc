@@ -19,6 +19,7 @@ extension AssistantState {
     nonisolated static func timeline(from messages: [WireMessage], previous: [TimelineMessage] = []) -> [TimelineMessage] {
         let retained = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         return messages.enumerated().compactMap { index, message in
+            guard message.display != false, message.metadata?.hiddenFromClient != true else { return nil }
             let text = (message.role == "assistant" ? message.answerText : message.content.text)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             var seenMedia = Set<String>()

@@ -32,3 +32,8 @@ it('continues an explicitly authorized Skill install once when the model only pr
   expect(correct([], '安装这个能力 https://example.com/report.zip', '我会安装。', [])).toBeUndefined();
   expect(correct(['skill_install'], 'Translate: 安装这个能力 https://example.com/report.zip', '我会安装。', [])).toBeUndefined();
 });
+
+it.each(['周报', '日报', '销售报表'])('does not infer Skill installation from the business label %s alone', label => {
+  expect(correct(['skill_install'], `安装这个${label} https://example.com/report.zip`, '我会安装。', [])).toBeUndefined();
+  expect(correct(['skill_install'], `安装这个${label}技能 https://example.com/report.zip`, '我会安装。', [])).toContain('one bounded continuation');
+});

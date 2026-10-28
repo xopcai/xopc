@@ -4,7 +4,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 export function configurationCapabilityCorrection(toolNames: readonly string[], userText: string,
   answer: string, messages: readonly AgentMessage[]): string | undefined {
   const explicitSkillInstall = /^(?:请|帮我)?安装(?:这个|此)|^(?:please\s+)?install\s+(?:this|the)\b/i.test(userText.trim())
-    && /skill|技能|能力|周报/i.test(userText) && /https?:\/\//i.test(userText) && !/mcp/i.test(userText)
+    && /skill|技能|能力/i.test(userText) && /https?:\/\//i.test(userText) && !/mcp/i.test(userText)
     && !/不要|别|暂不|先不|只推荐|仅查看|do not|don't|not now|only recommend|review only/i.test(userText);
   const skillAttempted = messages.some(message => message.role === 'assistant' && Array.isArray(message.content)
     && message.content.some(block => block.type === 'toolCall' && ['skill_install', 'skill_manage'].includes(block.name)));

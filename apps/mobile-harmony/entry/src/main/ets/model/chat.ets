@@ -41,11 +41,11 @@ export interface XopcProductPresentation { kind: string; items?: XopcProductRefe
 export interface XopcProductDelivery { version: number; operation: string; primary?: XopcProductReference; related?: XopcProductReference[]; presentation?: XopcProductPresentation; }
 export interface XopcHistoryMedia { id: string; name: string; type: string; mimeType: string; size: number; uri: string; fileId?: string; workspaceRelativePath?: string; data?: string; extractedText?: string; duration?: number; }
 export interface XopcHistorySource { kind: string; sourceId: string; version: string; title?: string; }
-export interface XopcMessageMetadata { clientMessageId?: string; sourceContexts?: XopcHistorySource[]; turnOutcome?: XopcTurnOutcome; review?: XopcContentBlock; }
+export interface XopcMessageMetadata { hiddenFromClient?: boolean; clientMessageId?: string; sourceContexts?: XopcHistorySource[]; turnOutcome?: XopcTurnOutcome; review?: XopcContentBlock; }
 export interface XopcHistoryToolCall { id?: string; name?: string; args?: Object; result?: Object; isError?: boolean; details?: Object; }
 export interface XopcOpenAiToolCall { id: string; function: XopcToolFunction; }
 export interface XopcToolFunction { name: string; arguments?: string; }
-export interface XopcMessage { id?: string; messageId?: string; role: string; content: string | XopcContentBlock[];
+export interface XopcMessage { display?: boolean; id?: string; messageId?: string; role: string; content: string | XopcContentBlock[];
   deliveries?: XopcProductDelivery[];
   rawContent?: XopcContentBlock[]; media?: XopcHistoryMedia[]; attachments?: XopcHistoryMedia[]; metadata?: XopcMessageMetadata;
   toolCalls?: XopcHistoryToolCall[]; tool_calls?: XopcOpenAiToolCall[];
