@@ -31,6 +31,7 @@ import { shouldRefreshSidebarForTranscriptUpdate } from '@/components/shell/side
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { navigateToNewChat } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
 import { taskDetailHref } from '@/features/tasks/task-detail-route';
@@ -1506,10 +1507,9 @@ function SidebarTaskListContent({
   }, [activeConversationId, data, firstInbox?.items, inboxHasMore, loadingInboxMore, pendingOrders.inbox, sidebarUpdatedAfter]);
 
   const createProjectChat = useCallback((project: Project) => {
-    navigate(newChatHrefForProject(project.id), {
+    navigateToNewChat(navigate, newChatHrefForProject(project.id), {
       state: { forceNewChat: true, agentId: project.defaultAgentId ?? defaultAgentId },
-    });
-    onNavigate?.();
+    }, onNavigate);
   }, [defaultAgentId, navigate, onNavigate]);
 
   const submitCreateProject = useCallback(async (event: FormEvent<HTMLFormElement>) => {
@@ -1704,8 +1704,7 @@ function SidebarTaskListContent({
                 isCollapsed={inboxCollapsed}
                 onToggleCollapsed={() => setInboxCollapsed((value) => !value)}
                 onCreateChat={() => {
-                  navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
-                  onNavigate?.();
+                  navigateToNewChat(navigate, '/chat/new?projectScope=none', { state: { forceNewChat: true } }, onNavigate);
                 }}
                 onLoadMore={loadMoreInbox}
                 activeConversationId={activeConversationId}
@@ -1729,8 +1728,7 @@ function SidebarTaskListContent({
                 isCollapsed={false}
                 onToggleCollapsed={() => undefined}
                 onCreateChat={() => {
-                  navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
-                  onNavigate?.();
+                  navigateToNewChat(navigate, '/chat/new?projectScope=none', { state: { forceNewChat: true } }, onNavigate);
                 }}
                 onLoadMore={loadMoreInbox}
                 activeConversationId={activeConversationId}

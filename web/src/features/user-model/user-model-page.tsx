@@ -74,16 +74,16 @@ import {
 } from './user-model-api';
 
 type Language = 'en' | 'zh';
-type PrimaryView = 'overview' | 'understanding' | 'privacy';
+type PrimaryView = 'overview' | 'understanding' | 'work' | 'privacy';
 type View = PrimaryView;
-type MemorySection = 'personal' | 'work';
 type UnderstandingFilter = 'all' | 'explicit' | 'learned';
 type KnowledgeKindFilter = 'all' | KnowledgeItem['kind'];
 type RefreshFeedback = 'idle' | 'refreshing' | 'success' | 'error';
 
 function viewFromSearchParams(searchParams: URLSearchParams): View {
   const value = searchParams.get('tab');
-  return value === 'understanding' || value === 'privacy' ? value : 'overview';
+  if (value === 'understanding' && searchParams.get('section') === 'work') return 'work';
+  return value === 'understanding' || value === 'work' || value === 'privacy' ? value : 'overview';
 }
 
 const copy = {
@@ -140,13 +140,13 @@ const copy = {
     refreshComplete: 'Refreshed',
     refreshFailed: 'Refresh failed',
     aboutYouTitle: 'A view you can correct',
-    aboutYouHint: 'xopc quietly maintains this working context from collaboration. You can edit or retire any item.',
+    aboutYouHint: 'Your identity, preferences, habits and collaboration style, grounded in what you tell xopc. Repeated choices may form tentative understanding. You can inspect, edit or delete each item.',
     identity: 'Who you are',
     preferences: 'Preferences and working rhythm',
     relationships: 'People and relationships',
     currentState: 'Current context',
     insights: 'My current read',
-    emptyGroup: 'No understanding has formed here yet.',
+    emptyGroup: 'No usable personal understanding yet. Ongoing preferences will build through collaboration; project facts and progress are in Work memory.',
     correct: 'Correct',
     save: 'Save correction',
     cancel: 'Cancel',
@@ -220,13 +220,13 @@ const copy = {
     refreshComplete: '已刷新',
     refreshFailed: '刷新失败',
     aboutYouTitle: '一份可以共同修正的理解',
-    aboutYouHint: 'xopc 会在协作中安静地维护这份工作认知。你仍可随时修改或停止使用任何一条。',
+    aboutYouHint: '基于你的表达，逐渐了解你的身份、偏好、习惯和协作方式。多次选择形成的理解会标为推测；每条都可以查看依据、修改或删除。',
     identity: '关于你是谁',
     preferences: '偏好与工作节奏',
     relationships: '重要的人与关系',
     currentState: '当前状态',
     insights: '我形成的判断',
-    emptyGroup: '这里还没有形成理解。',
+    emptyGroup: '还没有形成可用的个人理解。明确表达的长期偏好会在协作中逐渐积累；项目事实和进展在「工作记忆」中查看。',
     correct: '修正',
     save: '保存修正',
     cancel: '取消',
@@ -796,7 +796,6 @@ export function UserModelPage() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [understandingFilter, setUnderstandingFilter] = useState<UnderstandingFilter>('all');
-  const [memorySection, setMemorySection] = useState<MemorySection>('personal');
   const [knowledgeKindFilter, setKnowledgeKindFilter] = useState<KnowledgeKindFilter>('all');
   const [refreshFeedback, setRefreshFeedback] = useState<RefreshFeedback>('idle');
   const refreshResetTimer = useRef<number | undefined>(undefined);
@@ -807,6 +806,7 @@ export function UserModelPage() {
     if (typeof main?.scrollTo === 'function') main.scrollTo({ top: 0, behavior: 'auto' });
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
+      next.delete('section');
       if (nextView === 'overview') next.delete('tab');
       else next.set('tab', nextView);
       return next;
@@ -1074,7 +1074,6 @@ export function UserModelPage() {
 
   const openUnderstanding = (filter: UnderstandingFilter) => {
     setUnderstandingFilter(filter);
-    setMemorySection('personal');
     setView('understanding');
   };
 
@@ -1082,8 +1081,7 @@ export function UserModelPage() {
     setKnowledgeKindFilter(kind);
     setQuery('');
     setKnowledgeLimit(24);
-    setMemorySection('work');
-    setView('understanding');
+    setView('work');
   };
 
   const assertionRow = (item: UserAssertion) => (
@@ -1111,10 +1109,11 @@ export function UserModelPage() {
           { id: 'overview', label: t.overview, icon: Sparkles },
           {
             id: 'understanding',
-            label: <><span className="sm:hidden">{language === 'zh' ? '记忆' : 'Memory'}</span><span className="hidden sm:inline">{t.understanding}</span></>,
+            label: <><span className="sm:hidden">{language === 'zh' ? '了解我' : 'About me'}</span><span className="hidden sm:inline">{t.understanding}</span></>,
             icon: UserRound,
             count: assertions.length,
           },
+          { id: 'work', label: <><span className="sm:hidden">{language === 'zh' ? '工作' : 'Work'}</span><span className="hidden sm:inline">{t.knowledge}</span></>, title: t.knowledge, icon: BriefcaseBusiness, count: visibleKnowledge.length },
           {
             id: 'privacy',
             label: <><span className="sm:hidden">{language === 'zh' ? '隐私' : 'Privacy'}</span><span className="hidden sm:inline">{t.privacy}</span></>,
@@ -1127,7 +1126,8 @@ export function UserModelPage() {
         tabIdPrefix="understanding-tab"
         panelIdPrefix="understanding-panel"
         className="w-full max-w-full gap-1 rounded-full bg-surface-panel p-1 shadow-surface sm:w-fit"
-        buttonClassName="min-w-0 flex-1 justify-center rounded-full px-2 py-2 sm:flex-none sm:px-3.5"
+        buttonClassName="min-h-11 min-w-0 flex-1 justify-center whitespace-nowrap rounded-full px-2 py-2 sm:min-h-9 sm:flex-none sm:px-3.5 [&_svg]:hidden sm:[&_svg]:block"
+        countClassName="hidden sm:inline-flex"
         selectedClassName="bg-surface-active text-fg"
         unselectedClassName="text-fg-muted hover:bg-surface-hover hover:text-fg"
       />
@@ -1305,17 +1305,6 @@ export function UserModelPage() {
 
       {view === 'understanding' ? (
         <div id="understanding-panel-understanding" role="tabpanel" aria-labelledby="understanding-tab-understanding" className="space-y-10">
-          <SlidingTabList className="flex w-full gap-1 rounded-xl bg-surface-panel p-1 sm:w-fit" role="group" aria-label={language === 'zh' ? '记忆分类' : 'Memory category'}>
-            {([
-              { id: 'personal', label: language === 'zh' ? '关于我' : 'About me', icon: UserRound, count: assertions.length },
-              { id: 'work', label: language === 'zh' ? '工作记忆' : 'Work memory', icon: BriefcaseBusiness, count: visibleKnowledge.length },
-            ] as const).map(({ id, label, icon: Icon, count }) => (
-              <button key={id} type="button" aria-pressed={memorySection === id} className={`touch-target flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors sm:flex-none ${memorySection === id ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`} onClick={() => setMemorySection(id)}>
-                <Icon className="size-4" aria-hidden="true" />{label}<span className="text-xs tabular-nums text-fg-subtle">{count}</span>
-              </button>
-            ))}
-          </SlidingTabList>
-          {memorySection === 'personal' ? <>
           <div className="px-1 pt-1">
             <div className="flex items-start gap-3">
               <Brain className="mt-0.5 size-5 shrink-0 text-accent-fg" aria-hidden="true" />
@@ -1344,7 +1333,10 @@ export function UserModelPage() {
               <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>
             </div>
           )}
-          </> : <div className="space-y-8">
+        </div>
+      ) : null}
+      {view === 'work' ? (
+        <div id="understanding-panel-work" role="tabpanel" aria-labelledby="understanding-tab-work" className="space-y-8">
           <div className="px-1 pt-1">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="max-w-2xl">
@@ -1427,7 +1419,6 @@ export function UserModelPage() {
               <Empty icon={<Search className="size-5" />}>{query.trim() ? t.noKnowledgeMatch : t.noKnowledge}</Empty>
             </div>
           )}
-          </div>}
         </div>
       ) : null}
       {view === 'privacy' ? (
@@ -1484,7 +1475,7 @@ export function UserModelPage() {
           <section className="rounded-2xl bg-surface-panel px-5 py-5 sm:px-6">
             <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '纠正与忘记' : 'Correct and forget'}</h2>
             <p className="mt-1 text-xs leading-5 text-fg-muted">{language === 'zh' ? '在“记忆”中打开任意一条内容的菜单，即可修改、调整作用范围或彻底删除。' : 'Open any item in Memory to edit it, change where it applies, or delete it permanently.'}</p>
-            <Button variant="ghost" className="mt-3" onClick={() => { setMemorySection('personal'); setView('understanding'); }}>{language === 'zh' ? '管理记忆' : 'Manage memory'}</Button>
+            <Button variant="ghost" className="mt-3" onClick={() => { setView('understanding'); }}>{language === 'zh' ? '管理记忆' : 'Manage memory'}</Button>
           </section>
         </div>
       ) : null}

@@ -20,8 +20,9 @@ describe('summarizeTaskCriteria', () => {
     expect(summarizeTaskCriteria(detail())[0]).toMatchObject({ status: 'passed', runId: 'current' });
   });
 
-  it('lets the current human review decide a criterion', () => {
+  it.each(['manual', 'verified_then_review', 'verified_auto'] as const)('lets the current human review decide a criterion under %s', (acceptancePolicy) => {
     const task = detail();
+    task.task.contract!.acceptancePolicy = acceptancePolicy;
     task.criterionReviews = [{ contractVersion: 2, criterionIndex: 0, criterionText: 'Tests pass',
       status: 'failed', reviewedBy: { kind: 'user' }, reviewedAt: 300 }];
     expect(summarizeTaskCriteria(task)[0]).toMatchObject({ status: 'failed', review: { reviewedAt: 300 } });

@@ -414,22 +414,27 @@ async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => 
     finishContextExtractionRun({ runId: extraction.run.id, status: 'skipped', errorCode: 'policy_changed' });
     failLearningJob(job, 'policy_changed', true); return;
   }
+  const personalRebuild = job.extractor_version?.startsWith('understanding-') === true;
   let committed = false;
   try {
     committed = finishLearningJob(job, () => {
       const access = resolveUserContextSessionAccess(current, job.conversation_id);
       const projectId = getSessionMetadata(job.conversation_id)?.projectId;
-      const result = access.userModel ? executeUserModelInterpretation({ interpretation, evidence,
+      const result = access.userModel ? executeUserModelInterpretation({ interpretation: personalRebuild ? {
+        ...interpretation, intent: 'user_assertion', targetAssertionIds: [], goals: [], collaborationRules: [],
+        assertions: interpretation.intent === 'forget' ? [] : interpretation.assertions,
+      } : interpretation, evidence,
         extractionRunId: extraction.run.id, extractorId: 'transcript-synthesis',
+        allowRestoreDeleted: !personalRebuild,
         scopeContext: { conversationId: job.conversation_id, agentId, workspaceId: job.workspace_id, projectId },
         policy: { write: current.userContext.userModel.writePolicy,
           sensitiveWrite: current.userContext.userModel.sensitiveWritePolicy, processing: runtime.processingPolicy },
       }) : emptyUserModelCaptureResult();
       const deletionContext = { conversationId: job.conversation_id, agentId, workspaceId: job.workspace_id, projectId };
-      const deletions = access.knowledge ? applyKnowledgeDeletions({ interpretation, evidence, context: deletionContext,
+      const deletions = !personalRebuild && access.knowledge ? applyKnowledgeDeletions({ interpretation, evidence, context: deletionContext,
         allowedTargetIds: listKnowledgeItems({ recordClass: 'memory', limit: 200 }).filter(item =>
           canUseKnowledge(item, deletionContext, access.knowledgePolicy)).map(item => item.id) }) : [];
-      const work = interpretation.intent !== 'forget' && !interpretation.knowledgeDeletions?.length
+      const work = !personalRebuild && interpretation.intent !== 'forget' && !interpretation.knowledgeDeletions?.length
         && access.knowledge && current.userContext.knowledgeMemory.writePolicy === 'allow'
         && access.knowledgePolicy.contentSources.includes('memory') ? applyWorkCandidates({
           candidates: (interpretation.knowledge ?? []).filter(candidate => access.knowledgePolicy.scopes.includes(candidate.scope)),

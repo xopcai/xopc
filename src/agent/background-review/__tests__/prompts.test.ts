@@ -23,6 +23,9 @@ describe('background user-model prompt', () => {
     expect(prompt).toContain('Every assertion operation needs an exact quote');
     expect(prompt).toContain('Resolve relative time');
     expect(prompt).toContain('Use merge whenever');
+    expect(prompt).toContain('top-level intent describes the main request only');
+    expect(prompt).toContain('at least two distinct user messages');
+    expect(prompt).toContain('If no exact project ID is supplied');
     expect(prompt).toContain('identity.personality.mbti');
     expect(prompt).not.toContain('candidates=[]');
   });

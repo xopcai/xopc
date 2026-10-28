@@ -340,10 +340,10 @@ export function AssistantStepsBlock({
               stepLabels={timelineLabels} cardLabels={cardLabels} conversationId={conversationId} runActive={anyActive} />
           ))}
         </div> : null}
-        {anyActive ? <div className="mt-2 flex h-11 w-[72px] items-center justify-center rounded-full bg-surface-hover"
-          data-assistant-running role="status" aria-label={pendingLabel ?? fallbackLabel}
-          data-status-phase={statusPhase}>
-          <span className="xopc-personal-thinking-dots [&>i]:size-[7px]" aria-hidden="true"><i /><i /><i /></span>
+        {anyActive ? <div className="mt-2 flex h-11 w-full min-w-0 items-center gap-2 px-1 text-sm text-fg-muted"
+          data-assistant-running>
+          <Sparkles className="assistant-activity-busy size-4 shrink-0" aria-hidden />
+          <div className="flex h-6 min-w-0 flex-1 items-center">{headerMain}</div>
         </div> : needsAttention ? <p className="text-sm text-fg-muted">
           {failedWithoutAnswer || workLog.status === 'failed' ? stepLabels.workLogFailed : stepLabels.workLogPartial}
         </p> : null}

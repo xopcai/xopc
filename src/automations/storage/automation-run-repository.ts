@@ -230,41 +230,42 @@ export function getAutomationRun(runId: string): AutomationRun | null {
   return row ? rowToRun(row) : null;
 }
 
-export function listAutomationRuns(options?: {
+export interface AutomationRunListOptions {
   automationId?: string;
   projectId?: string;
   limit?: number;
-}): AutomationRun[] {
+  before?: { createdAtMs: number; id: string };
+}
+
+export function listAutomationRuns(options?: AutomationRunListOptions): AutomationRun[] {
   const limit = Math.min(Math.max(options?.limit ?? 50, 1), 500);
-  const db = getSqliteDatabase();
-  const base = `SELECT run_id, automation_id, automation_name, status, trigger_snapshot_json,
-                       action_snapshot_json, manual, created_at_ms, started_at_ms, ended_at_ms,
-                       duration_ms, summary, error, conversation_id, model,
-                       deadline_at_ms, current_phase, cancel_requested_at_ms, cancel_confirmed_at_ms,
-                       termination_json, heartbeat_at_ms, lease_owner, lease_expires_at_ms,
-                       attempt_number, root_run_id, read_at_ms
-                FROM automation_runs`;
-  let rows: unknown[];
-  if (options?.automationId) {
-    rows = db.prepare(`${base} WHERE automation_id = ? ORDER BY created_at_ms DESC LIMIT ?`).all(options.automationId, limit);
-  } else if (options?.projectId) {
-    rows = db.prepare(
-      `SELECT r.run_id, r.automation_id, r.automation_name, r.status, r.trigger_snapshot_json,
-              r.action_snapshot_json, r.manual, r.created_at_ms, r.started_at_ms, r.ended_at_ms,
-              r.duration_ms, r.summary, r.error, r.conversation_id, r.model,
-              r.deadline_at_ms, r.current_phase, r.cancel_requested_at_ms, r.cancel_confirmed_at_ms,
-              r.termination_json, r.heartbeat_at_ms, r.lease_owner, r.lease_expires_at_ms,
-              r.attempt_number, r.root_run_id, r.read_at_ms
-       FROM automation_runs r
-       JOIN automations a ON a.automation_id = r.automation_id
-       WHERE a.project_id = ?
-       ORDER BY r.created_at_ms DESC
-       LIMIT ?`,
-    ).all(options.projectId, limit);
-  } else {
-    rows = db.prepare(`${base} ORDER BY created_at_ms DESC LIMIT ?`).all(limit);
+  const clauses: string[] = [];
+  const params: Array<string | number> = [];
+  if (options?.automationId) { clauses.push('automation_id = ?'); params.push(options.automationId); }
+  if (options?.projectId) {
+    clauses.push('EXISTS (SELECT 1 FROM automations a WHERE a.automation_id = automation_runs.automation_id AND a.project_id = ?)');
+    params.push(options.projectId);
   }
-  return (rows as AutomationRunRow[]).map(rowToRun);
+  if (options?.before) {
+    clauses.push('(created_at_ms < ? OR (created_at_ms = ? AND run_id < ?))');
+    params.push(options.before.createdAtMs, options.before.createdAtMs, options.before.id);
+  }
+  const rows = getSqliteDatabase().prepare(`SELECT * FROM automation_runs
+    ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''}
+    ORDER BY created_at_ms DESC, run_id DESC LIMIT ?`).all(...params, limit) as AutomationRunRow[];
+  return rows.map(rowToRun);
+}
+
+export function isAutomationConversationShared(automationId: string, conversationId: string, runId: string): boolean {
+  return Boolean(getSqliteDatabase().prepare('SELECT 1 FROM automation_runs WHERE automation_id = ? AND conversation_id = ? AND run_id != ? LIMIT 1').get(automationId, conversationId, runId));
+}
+
+export function getAutomationExecutionSummaries(projectId?: string): Record<string, { unreadCount: number }> {
+  const rows = getSqliteDatabase().prepare(`SELECT r.automation_id,
+    SUM(CASE WHEN r.ended_at_ms IS NOT NULL AND r.read_at_ms IS NULL THEN 1 ELSE 0 END) AS unread_count
+    FROM automation_runs r JOIN automations a ON a.automation_id = r.automation_id
+    ${projectId ? 'WHERE a.project_id = ?' : ''} GROUP BY r.automation_id`).all(...(projectId ? [projectId] : [])) as Array<{ automation_id: string; unread_count: number }>;
+  return Object.fromEntries(rows.map(row => [row.automation_id, { unreadCount: row.unread_count }]));
 }
 
 export function listAutomationRunsForProductEvent(options: {

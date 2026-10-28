@@ -127,7 +127,7 @@ async function fetchCapabilityReadiness(): Promise<CapabilityReadinessPayload> {
   return body.payload;
 }
 
-export function ModelCatalogStatus({ showCapabilities = true }: { showCapabilities?: boolean } = {}) {
+export function ModelCatalogStatus({ showCapabilities = true, embedded = false }: { showCapabilities?: boolean; embedded?: boolean } = {}) {
   const zh = useLocaleStore((state) => state.language) === 'zh';
   const { data, error, isLoading } = useSWR(MODEL_CATALOG_SWR_KEY, fetchCatalog, {
     revalidateOnFocus: true,
@@ -188,8 +188,38 @@ export function ModelCatalogStatus({ showCapabilities = true }: { showCapabiliti
     }
   };
 
+  const diagnosticDetails = (
+    <div className="mt-2 space-y-1 rounded-lg bg-surface-base/45 p-2 font-mono text-[11px] leading-5" aria-label={zh ? '同步错误详情' : 'Sync error details'}>
+      {diagnosticErrors.map(([source, message], index) => (
+        <p className="break-words" key={`${source}-${index}`}>{source}: {message}</p>
+      ))}
+    </div>
+  );
+
+  const catalogSummary = (
+    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 text-xs text-fg-muted">
+        <p>
+          {zh
+            ? `${sources.length} 个来源，${availableCount} 个可用模型${lastSuccessAt ? ` · 最近同步 ${new Date(lastSuccessAt).toLocaleString()}` : ''}`
+            : `${sources.length} sources, ${availableCount} available models${lastSuccessAt ? ` · Last synced ${new Date(lastSuccessAt).toLocaleString()}` : ''}`}
+        </p>
+        {diagnosticErrors.length > 0 ? embedded ? (
+          <details className="mt-2 rounded-lg bg-surface-base/45 p-2">
+            <summary className="cursor-pointer rounded text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '高级诊断' : 'Advanced diagnostics'}</summary>
+            {diagnosticDetails}
+          </details>
+        ) : diagnosticDetails : null}
+      </div>
+      <Button className="shrink-0" type="button" variant="secondary" disabled={refreshing} onClick={() => void refresh()}>
+        {refreshing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
+        {refreshing ? (zh ? '刷新中…' : 'Refreshing…') : (zh ? '刷新目录' : 'Refresh catalog')}
+      </Button>
+    </div>
+  );
+
   return (
-    <section className="rounded-xl bg-surface-hover/25 p-4 sm:p-5">
+    <section className={embedded ? "mt-4 border-t border-edge-subtle pt-1" : "rounded-xl bg-surface-hover/25 p-4 sm:p-5"}>
       {showCapabilities ? <details ref={capabilityDetails} className="group">
         <summary className="cursor-pointer list-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <div className="flex min-h-10 items-center gap-2">
@@ -365,31 +395,12 @@ export function ModelCatalogStatus({ showCapabilities = true }: { showCapabiliti
             : (zh ? '重新检测失败，请稍后重试；详细信息可在高级诊断中查看。' : 'The check failed. Try again later; details are available in Advanced diagnostics.')}
         </p>
       ) : null}
-      <details className="mt-4 border-t border-edge-subtle pt-3">
+      {embedded ? catalogSummary : <details className="mt-4 border-t border-edge-subtle pt-3">
         <summary className="min-h-8 cursor-pointer rounded-md py-1.5 text-xs font-medium text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           {zh ? '高级诊断' : 'Advanced diagnostics'}
         </summary>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 text-xs text-fg-muted">
-            <p>
-              {zh
-                ? `${sources.length} 个来源，${availableCount} 个可用模型${lastSuccessAt ? ` · 最近同步 ${new Date(lastSuccessAt).toLocaleString()}` : ''}`
-                : `${sources.length} sources, ${availableCount} available models${lastSuccessAt ? ` · Last synced ${new Date(lastSuccessAt).toLocaleString()}` : ''}`}
-            </p>
-            {diagnosticErrors.length > 0 ? (
-              <div className="mt-2 space-y-1 rounded-lg bg-surface-base/45 p-2 font-mono text-[11px] leading-5" aria-label={zh ? '同步错误详情' : 'Sync error details'}>
-                {diagnosticErrors.map(([source, message], index) => (
-                  <p className="break-words" key={`${source}-${index}`}>{source}: {message}</p>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <Button className="shrink-0" type="button" variant="secondary" disabled={refreshing} onClick={() => void refresh()}>
-            {refreshing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
-            {refreshing ? (zh ? '刷新中…' : 'Refreshing…') : (zh ? '刷新目录' : 'Refresh catalog')}
-          </Button>
-        </div>
-      </details>
+        {catalogSummary}
+      </details>}
     </section>
   );
 }

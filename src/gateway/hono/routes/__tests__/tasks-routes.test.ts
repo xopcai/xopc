@@ -148,9 +148,9 @@ describe('task routes', () => {
       metrics: { delegatedTasks: 0, pendingDeliveries: 0, interruptedRuns: 0 } });
   });
 
-  it('records a human criterion review and rejects stale task versions', async () => {
+  it.each(['manual', 'verified_then_review', 'verified_auto'] as const)('records a human criterion review for %s and rejects stale task versions', async (acceptancePolicy) => {
     const task = new TaskRepository().create({ title: 'Review route', objective: 'Check result',
-      acceptanceCriteria: ['User accepts the result'], acceptancePolicy: 'manual' });
+      acceptanceCriteria: ['User accepts the result'], acceptancePolicy });
     const url = `/api/tasks/${task.id}/criteria/0/review`;
     const input = { expectedVersion: task.version, contractVersion: task.latestContractVersion, status: 'passed' };
     const response = await app.request(url, { method: 'PUT',

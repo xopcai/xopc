@@ -43,6 +43,7 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
   const [manageTarget, setManageTarget] = useState<{ providerId: string; isCustom: boolean } | null>(null);
   const servicesRef = useRef<HTMLElement>(null);
   const providerData = useConnectedProviders();
+  const hasCloudAccount = providerData.cards.some(row => row.id === 'xopc-cloud' && !row.isCustom);
   const handleSaved = useCallback(() => { void revalidateModelsHubCaches(); }, []);
   useEffect(() => { onPendingChange?.(settingsPending); return () => onPendingChange?.(false); }, [settingsPending, onPendingChange]);
   useEffect(() => {
@@ -91,9 +92,9 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
     <ModelUsesList data={providerData} zh={zh} disabled={settingsPending} onPendingChange={setModelPending} onChange={openConnection} onSettings={use => { if (!settingsPending) openCapabilitySettings(use); }} />
     <section ref={servicesRef} tabIndex={-1} aria-labelledby="model-services-heading" className="space-y-4 scroll-mt-4 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
       <div><h2 id="model-services-heading" className="text-base font-semibold text-fg">{zh ? '连接的服务' : 'Connected services'}</h2><p className="mt-1 text-sm text-fg-muted">{zh ? '在这里管理账户和密钥；各项能力的模型与参数在上方调整。' : 'Manage accounts and keys here. Choose models and adjust capability settings above.'}</p></div>
-      {providerData.cards.some(row => row.id === 'xopc-cloud' && !row.isCustom) ? <XopcCloudAccountCard labels={c.xopcCloudAccount} /> : null}
+      {hasCloudAccount ? <XopcCloudAccountCard labels={c.xopcCloudAccount}><ModelCatalogStatus showCapabilities={false} embedded /></XopcCloudAccountCard> : null}
       <ConnectedProvidersGrid labels={c.connectedProviders} data={providerData} onAdd={() => setAddDialogOpen(true)} onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })} />
-      {providerData.cards.length > 0 ? <ModelCatalogStatus showCapabilities={false} /> : null}
+      {!hasCloudAccount && providerData.cards.length > 0 ? <ModelCatalogStatus showCapabilities={false} /> : null}
     </section>
     <AddProviderDialog open={addDialogOpen} connectOnly onOpenChange={setAddDialogOpen} builtinRows={providerData.builtinRows} customConfig={providerData.customConfig} labels={c.addProviderDialog} language={language} onSaved={() => { handleSaved(); setAddDialogOpen(false); }} />
     {manageTarget ? <ProviderManageDialog open onOpenChange={open => { if (!open) setManageTarget(null); }} providerId={manageTarget.providerId} isCustom={manageTarget.isCustom} builtinRows={providerData.builtinRows} customConfig={providerData.customConfig} allModels={providerData.allModels} labels={c.manageProviderDialog} language={language} onSaved={handleSaved} /> : null}

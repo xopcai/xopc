@@ -44,6 +44,8 @@ import {
   listUnfinishedAutomationRuns,
   listAutomationRunEvents,
   listAutomationRuns,
+  getAutomationExecutionSummaries,
+  isAutomationConversationShared,
   listAutomationRunsForProductEvent,
   listAutomations,
   markAllAutomationRunsRead,
@@ -258,6 +260,10 @@ export class AutomationService {
     return listAutomations(options);
   }
 
+  executionSummaries(projectId?: string) {
+    return getAutomationExecutionSummaries(projectId);
+  }
+
   async get(id: string): Promise<Automation | null> {
     return getAutomation(id);
   }
@@ -468,7 +474,7 @@ export class AutomationService {
     return Math.max(0, this.maxConcurrentRuns - this.activeRuns.size);
   }
 
-  async listRuns(options?: { automationId?: string; projectId?: string; limit?: number }): Promise<AutomationRun[]> {
+  async listRuns(options?: { automationId?: string; projectId?: string; limit?: number; before?: { createdAtMs: number; id: string } }): Promise<AutomationRun[]> {
     return listAutomationRuns(options);
   }
 
@@ -483,7 +489,8 @@ export class AutomationService {
   }
 
   async getRun(runId: string): Promise<AutomationRun | null> {
-    return getAutomationRun(runId);
+    const run = getAutomationRun(runId);
+    return run ? { ...run, conversationShared: Boolean(run.conversationId && isAutomationConversationShared(run.automationId, run.conversationId, runId)) } : null;
   }
 
   async listRunEvents(runId: string): Promise<AutomationRunEvent[]> {

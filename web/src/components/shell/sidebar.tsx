@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { NewChatLink } from '@/features/chat/session/new-chat-navigation';
 
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -103,7 +103,7 @@ export function SidebarNav({
           scrollHeader={
             <>
               <div className="app-sidebar-sticky-surface sticky top-0 z-20 px-4 pt-1.5 pb-0.5">
-                <Link
+                <NewChatLink
                   to="/chat/new"
                   state={{ forceNewChat: true }}
                   className={cn(
@@ -116,7 +116,7 @@ export function SidebarNav({
                 >
                   <Plus className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
                   <span className="truncate">{m.sidebar.newTask}</span>
-                </Link>
+                </NewChatLink>
               </div>
 
               <nav className="px-4" aria-label="Main">

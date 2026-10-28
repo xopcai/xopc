@@ -4,7 +4,7 @@ import { ChevronDown, Clock3, ExternalLink, History, RefreshCw, X } from 'lucide
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { HomeEvidenceLink } from './home-evidence-link';
+import { HomeEvidenceList } from './home-evidence-list';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -206,9 +206,7 @@ export function HomeAdvisorHistoryDialog({
                                 {copy.advisorHistoryEvidence}
                                 <ChevronDown className="size-3.5 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
                               </summary>
-                              <ul className="mt-2 space-y-1.5 border-l border-edge pl-3 text-xs leading-5 text-fg-muted">
-                                {item.opportunity.evidence.map((evidence) => <li key={evidence.id}><HomeEvidenceLink href={evidence.href} onOpen={() => onOpenChange(false)}>{evidence.observation}</HomeEvidenceLink></li>)}
-                              </ul>
+                              <HomeEvidenceList opportunity={item.opportunity} onOpen={() => onOpenChange(false)} />
                             </details>
                             {canOpen || canReevaluate ? (
                               <div className="mt-3 flex flex-wrap gap-2">

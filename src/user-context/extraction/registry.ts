@@ -36,11 +36,11 @@ const DEFINITIONS: Record<ExtractorId, ExtractorDefinition> = {
     maxAutomaticStatus: 'active', timeoutMs: 30_000,
   },
   'turn-semantics': {
-    id: 'turn-semantics', version: '1', inputKinds: ['conversation'], requiredProcessingPolicy: 'local_only',
+    id: 'turn-semantics', version: '2', inputKinds: ['conversation'], requiredProcessingPolicy: 'local_only',
     authorityCeiling: 'user_explicit', candidateKinds: UNDERSTANDING_KINDS, maxAutomaticStatus: 'active', timeoutMs: 30_000,
   },
   'transcript-synthesis': {
-    id: 'transcript-synthesis', version: '1', inputKinds: ['conversation'], requiredProcessingPolicy: 'local_only',
+    id: 'transcript-synthesis', version: '2', inputKinds: ['conversation'], requiredProcessingPolicy: 'local_only',
     authorityCeiling: 'system_inferred', candidateKinds: UNDERSTANDING_KINDS, maxAutomaticStatus: 'candidate', timeoutMs: 30_000,
   },
   'connector-semantic': {

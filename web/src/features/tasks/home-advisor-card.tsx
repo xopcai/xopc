@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
-import { HomeEvidenceLink } from './home-evidence-link';
+import { HomeEvidenceList } from './home-evidence-list';
 
 type FeedbackKind = HomeOpportunityFeedbackRequest['kind'];
 
@@ -107,13 +107,7 @@ function OpportunityBody({
           {copy.evidence}
           <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />
         </summary>
-        <ul className="mt-2 space-y-2 border-l border-edge pl-3 text-xs leading-5 text-fg-muted">
-          {opportunity.evidence.map((item) => (
-            <li key={item.id}>
-              <HomeEvidenceLink href={item.href}>{item.observation}</HomeEvidenceLink>
-            </li>
-          ))}
-        </ul>
+        <HomeEvidenceList opportunity={opportunity} />
       </details>
     </>
   );

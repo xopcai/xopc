@@ -1,3 +1,4 @@
+import { useInitialTurnNavigation } from '@/features/chat/session/use-initial-turn-navigation';
 import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
 import { AutomationConfigurationPanel } from '@/features/automations/automation-task-card';
 import { chatVirtualScroll, pauseChatTailFollowing } from '@/features/chat/scroll/chat-virtual-scroll';
@@ -98,9 +99,14 @@ type EditingUserTurn = {
   turnId: string;
 };
 
-export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome, automationWorkspace = false, automationTimelineEntries }: {
+export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome, automationWorkspace = false, automationTimelineEntries, readOnly = false, onHistoryReady, automationExecution = false, initialTurnId, onInitialTurnLocated }: {
   embedded?: boolean;
   automationWorkspace?: boolean;
+  automationExecution?: boolean;
+  initialTurnId?: string;
+  onInitialTurnLocated?: (found: boolean) => void;
+  readOnly?: boolean;
+  onHistoryReady?: () => void;
   automationTimelineEntries?: ChatTimelineEntry[];
   conversationId?: string;
   taskId?: string;
@@ -137,8 +143,14 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     personal,
   });
 
+  const readableHistoryReady = useChatSessionStore(state => Boolean(session.conversationId && !state.shellError
+    && state.sessions[session.conversationId]?.historyStatus === 'ready'));
+  useEffect(() => {
+    if (readableHistoryReady && msgSlice.items.length > 0) onHistoryReady?.();
+  }, [readableHistoryReady, msgSlice.items.length, onHistoryReady]);
+
   useLayoutEffect(() => {
-    if (!automationWorkspace || !session.conversationId) return;
+    if ((!automationWorkspace && !automationExecution) || !session.conversationId) return;
     const id = session.conversationId;
     useWorkspacePanelStore.setState({ conversationIdOverride: id });
     return () => {
@@ -146,7 +158,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         useWorkspacePanelStore.setState({ conversationIdOverride: null });
       }
     };
-  }, [automationWorkspace, session.conversationId]);
+  }, [automationWorkspace, automationExecution, session.conversationId]);
 
   const skillDiscovery = !personal && !embedded && !taskId && searchParams.get('scene') === 'find-skills';
   const automationSetupRequested = automationWorkspace || searchParams.get('setup') === 'automation';
@@ -433,6 +445,11 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       timelineDisplayOffset,
     ],
   );
+  useInitialTurnNavigation({
+    conversationId: session.conversationId, turnId: initialTurnId, messages: msgSlice.items, ready: readableHistoryReady,
+    hasMore: session.hasMore, loadingMore: session.loadingMore, loadMore: session.loadMoreMessages,
+    reveal: scrollToLocalMessageIndex, onLocated: onInitialTurnLocated,
+  });
   const chatFind = useChatFind({
     conversationId: session.conversationId,
     taskId,
@@ -1261,6 +1278,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             <div className={embedded && !personal ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
               <div
                 data-chat-composer-frame
+                data-primary-chat-composer={!embedded || undefined}
                 className={cn(
                   'pointer-events-auto relative mx-auto w-full min-w-0 pb-[var(--chat-composer-bottom-space)]',
                   (!embedded || personal || automationWorkspace) && 'max-w-[calc(var(--max-width-chat-frame)+14px)]',
@@ -1344,9 +1362,9 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                   onRemove={() => pageContextDrafts.remove(pageContextKey, pageContextDraft)} /> : undefined}
                 setContextRefs={setComposerContextRefs}
                 onDraftAttachmentsChange={setComposerAttachmentSummaries}
-                disabled={isLoadingHistory || projectComposer.busy || updatingContext}
+                disabled={readOnly || isLoadingHistory || projectComposer.busy || updatingContext}
                 sendDisabled={
-                  !session.modelConfigReady || (!session.projectPreparation && isSessionTransitioning) ||
+                  readOnly || !session.modelConfigReady || (!session.projectPreparation && isSessionTransitioning) ||
                   Boolean(session.projectPreparation && !projectComposer.allowed) ||
                   session.modelConfigSaving || projectComposer.busy || updatingContext
                 }

@@ -28,7 +28,7 @@ import {
   listDiscussionDrafts,
   saveDiscussionLiveSegment,
 } from './discussion-draft-store';
-import { readDiscussionConsent, rememberDiscussionConsent } from './discussion-consent-cache';
+import { forgetDiscussionConsent, readDiscussionConsent, rememberDiscussionConsent } from './discussion-consent-cache';
 import { OPEN_DISCUSSION_CAPTURE_EVENT } from './discussion-events';
 import { drainDiscussionSegmentUploadQueue } from './discussion-segment-upload-queue';
 import type { DiscussionDetail, DiscussionDraft, DiscussionTranscript } from './discussion-types';
@@ -40,6 +40,10 @@ import { acquireRecordingLease } from './recording-lease';
 import { exportLocalRecording } from './recording-local-export';
 import { uploadDraftRecording } from './recording-upload';
 import { useDiscussionRecorder } from './use-discussion-recorder';
+
+function isConsentError(error: unknown): boolean {
+  return error instanceof Error && /Recording consent (must be acknowledged first|policy changed)/.test(error.message);
+}
 
 function formatDuration(durationMs: number): string {
   const seconds = Math.max(0, Math.floor(durationMs / 1_000));
@@ -63,6 +67,7 @@ export function GlobalDiscussionCaptureHost() {
   const [compact, setCompact] = useState(false);
   const [visible, setVisible] = useState(false);
   const [consentVersion, setConsentVersion] = useState<number | null>(null);
+  const [pendingRecovery, setPendingRecovery] = useState<DiscussionDraft | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | undefined>();
   const [detail, setDetail] = useState<DiscussionDetail | null>(null);
   const [transcript, setTranscript] = useState<DiscussionTranscript | null>(null);
@@ -185,9 +190,12 @@ export function GlobalDiscussionCaptureHost() {
       void connectSegmentQueue(draft.id, created.discussion.id);
     } catch (error) {
       setSyncStage('failed');
-      setCaptureSyncError(error instanceof Error ? error.message : copy.saveFailed);
+      if (isConsentError(error)) forgetDiscussionConsent();
+      setCaptureSyncError(isConsentError(error)
+        ? (language === 'zh' ? '录音授权需要重新确认。结束录音后可确认并同步，本机录音会保留。' : 'Recording consent needs confirmation. Stop recording to confirm and sync; local audio is retained.')
+        : error instanceof Error ? error.message : copy.saveFailed);
     }
-  }, [connectSegmentQueue, copy.saveFailed, recorder, uploadLiveSegment, gatewayUrl]);
+  }, [connectSegmentQueue, copy.saveFailed, recorder, uploadLiveSegment, gatewayUrl, language]);
 
   useEffect(() => () => segmentQueueAbortRef.current?.abort(), []);
 
@@ -262,7 +270,14 @@ export function GlobalDiscussionCaptureHost() {
     startInFlight.current = true; setPreparing(true);
     try {
       rememberDiscussionConsent(await acknowledgeDiscussionConsent(consentVersion));
-      await beginRecording(pendingProjectId, consentVersion);
+      setConsentVersion(null);
+      if (pendingRecovery) {
+        const candidate = { ...pendingRecovery, consentPolicyVersion: consentVersion };
+        setPendingRecovery(null);
+        await recoverDraft(candidate);
+      } else {
+        await beginRecording(pendingProjectId, consentVersion);
+      }
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
     } finally { startInFlight.current = false; setPreparing(false); }
@@ -280,13 +295,23 @@ export function GlobalDiscussionCaptureHost() {
       if (!stopped) throw new Error(copy.emptyRecording);
       setLocalReleased(false); setLocallyFinalized(stopped);
       releaseLease = await acquireRecordingLease(stopped.id);
-      const created = await createPromiseRef.current?.catch(() => null) ?? await createDiscussion({
-        clientRequestId: stopped.id,
-        ...(stopped.projectId ? { contextProjectId: stopped.projectId } : {}),
-        consentPolicyVersion: stopped.consentPolicyVersion ?? (await getDiscussionCaptureSettings()).consentPolicyVersion,
-        source: isElectron() ? 'electron' : 'web',
-        recordedAt: stopped.startedAt,
-      });
+      let created = await createPromiseRef.current?.catch(() => null);
+      if (!created) {
+        const settings = await getDiscussionCaptureSettings();
+        rememberDiscussionConsent(settings);
+        if (settings.consentAcknowledgedAt == null || stopped.consentPolicyVersion !== settings.consentPolicyVersion) {
+          setPendingRecovery(stopped);
+          setConsentVersion(settings.consentPolicyVersion);
+          return;
+        }
+        created = await createDiscussion({
+          clientRequestId: stopped.id,
+          ...(stopped.projectId ? { contextProjectId: stopped.projectId } : {}),
+          consentPolicyVersion: settings.consentPolicyVersion,
+          source: isElectron() ? 'electron' : 'web',
+          recordedAt: stopped.startedAt,
+        });
+      }
       createPromiseRef.current = Promise.resolve(created);
       setDetail(created);
       await recorder.setServerDiscussionId(created.discussion.id);
@@ -349,17 +374,21 @@ export function GlobalDiscussionCaptureHost() {
     setRecovering(true);
     setVisible(true);
     setOperationError(null);
+    setCaptureSyncError(null);
     setUploadProgress(0);
     let releaseLease: (() => void) | undefined;
     try {
       releaseLease = await acquireRecordingLease(candidate.id);
       if (candidate.gatewayUrl !== gatewayUrl) throw new Error(language === 'zh' ? '请切回录制时的 Gateway 后恢复' : 'Return to the original Gateway to recover');
-      candidate = await recorder.restore(candidate);
+      const consentPolicyVersion = candidate.consentPolicyVersion;
+      candidate = { ...await recorder.restore(candidate), consentPolicyVersion };
       setLocalReleased(false); setLocallyFinalized(candidate);
-      const settings = readDiscussionConsent() ?? await getDiscussionCaptureSettings();
+      const settings = await getDiscussionCaptureSettings();
       rememberDiscussionConsent(settings);
-      if (settings.consentAcknowledgedAt == null) {
-        throw new Error(copy.consent);
+      if (settings.consentAcknowledgedAt == null || candidate.consentPolicyVersion !== settings.consentPolicyVersion) {
+        setPendingRecovery(candidate);
+        setConsentVersion(settings.consentPolicyVersion);
+        return;
       }
       let created = candidate.serverDiscussionId
         ? await getDiscussion(candidate.serverDiscussionId)
@@ -499,14 +528,14 @@ export function GlobalDiscussionCaptureHost() {
               <h2 className="text-base font-semibold text-fg">{copy.consentTitle}</h2>
               <p className="mt-2 text-sm leading-6 text-fg-muted">{copy.consent}</p>
             </div>
-            <button type="button" className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover" onClick={() => setVisible(false)}>
+            <button type="button" className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover" onClick={() => { setConsentVersion(null); setPendingRecovery(null); setVisible(false); }}>
               <X className="size-4" aria-hidden />
             </button>
           </div>
           {operationError ? <p className="mt-3 text-sm text-danger">{operationError}</p> : null}
           <Button variant="primary" className="mt-5 w-full" disabled={preparing} onClick={() => void confirmConsent()}>
             <Mic className="size-4" aria-hidden />
-            {copy.consentAction}
+            {pendingRecovery ? (language === 'zh' ? '确认并同步已有录音' : 'Confirm and sync recording') : copy.consentAction}
           </Button>
         </div>
       </div>

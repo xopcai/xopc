@@ -6,8 +6,10 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { ensureSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
-import { claimLearningJob, enqueueConversationLearning } from '../repository.js';
+import { claimLearningJob, enqueueConversationLearning, PERSONAL_UNDERSTANDING_VERSION } from '../repository.js';
 import { writeKnowledgeItem, listKnowledgeItems } from '../../knowledge-memory/index.js';
+import { listUserAssertions, deleteUserAssertion } from '../../user-model/repository.js';
+import { buildExecutionContext } from '../../agent/context/execution-context.js';
 import { runPersistentLearningJob } from '../../agent/background-review/run-background-review.js';
 
 const prompt = vi.hoisted(() => vi.fn());
@@ -56,6 +58,39 @@ describe('learning worker integration', () => {
     expect(prompt).toHaveBeenCalledTimes(2);
     expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM knowledge_items').get()).toEqual({ n: 1 });
   });
+  it('learns personal and work context together, uses the preference next turn, and honors deletion during history rebuild', async () => {
+    ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat',
+      routing: { agentId: 'main', source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner' } });
+    const row = appendTranscriptEntry(id, { role: 'user', content: 'Use SQLite for local deployment. From now on keep your answers concise.', timestamp: Date.now() });
+    appendTranscriptEntry(id, { role: 'assistant', content: 'Done.', timestamp: Date.now() } as never);
+    prompt.mockResolvedValue(JSON.stringify({ intent: 'task', targetAssertionIds: [], assertions: [{
+      action: 'create', subject: { type: 'user', id: 'self' }, predicate: 'preference.response.detail',
+      cardinality: 'single', scope: { type: 'global' }, kind: 'preference', value: 'concise', normalizedValue: 'concise',
+      statement: 'Keep answers concise.', authority: 'user_explicit', confidence: 1, inferredImportance: 0.7,
+      consequence: 'medium', actionability: 1, volatility: 'stable', sensitivity: 'normal', disclosurePolicy: 'referenceable',
+      applicability: { operation: 'response' }, temporalResolution: 'exact',
+      evidence: [{ ref: row.entry_id, quote: 'From now on keep your answers concise.' }], selfContained: true, unresolvedReferences: [],
+    }], knowledge: [{ kind: 'decision', topicKey: 'atlas', predicate: 'storage.choice', scope: 'workspace',
+      statement: 'Atlas uses SQLite for local deployment.', confidence: 0.9, importance: 0.8,
+      evidence: [{ ref: row.entry_id, quote: 'Use SQLite for local deployment.' }] }] }));
+    const config = ConfigSchema.parse({});
+    enqueueConversationLearning(config, id, '/workspace', true);
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    const preference = listUserAssertions()[0]!;
+    expect(preference).toMatchObject({ status: 'active', authority: 'user_explicit' });
+    expect(listKnowledgeItems()).toHaveLength(1);
+    const next = buildExecutionContext({ conversationId: id, agentId: 'main', workspaceId: '/workspace', query: 'Plan my day.' });
+    expect(next.assertions[0]).toMatchObject({ assertion: { id: preference.id }, usage: 'confirmed' });
+    const otherProject = buildExecutionContext({ conversationId: id, agentId: 'main', workspaceId: '/workspace', projectId: 'other', query: 'Plan my day.' });
+    expect(otherProject.assertions[0]?.assertion.id).toBe(preference.id);
+    deleteUserAssertion(preference.id);
+    const workBefore = listKnowledgeItems()[0];
+    enqueueConversationLearning(config, id, '/workspace', true, Date.now(), { version: PERSONAL_UNDERSTANDING_VERSION });
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(listUserAssertions()).toHaveLength(0);
+    expect(listKnowledgeItems()[0]).toEqual(workBefore);
+  });
+
   it('learns an actual wrapped owner forget instruction while excluding attached source facts', async () => {
     ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat',
       routing: { agentId: 'main', source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner' } });

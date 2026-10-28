@@ -34,11 +34,20 @@ describe('assistant reply completion layout', () => {
     ));
   }
 
+  it.each(['sending', 'waiting'] as const)('shows a text status while %s without a dot bubble', (pendingResponseStatus) => {
+    render({ role: 'assistant', content: [], pendingResponseStatus }, true);
+    const status = container.querySelector('[data-assistant-running] [role="status"]');
+    expect(status?.getAttribute('data-status-phase')).toBe(pendingResponseStatus);
+    expect(status?.textContent?.trim()).toBeTruthy();
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(container.querySelector('.xopc-personal-thinking-dots')).toBeNull();
+  });
+
   it('removes the waiting label when answer text starts and reserves the completed action row', () => {
     const waiting: Message = { role: 'assistant', content: [], pendingResponseStatus: 'waiting' };
     render(waiting, true);
-    expect(container.querySelector('[data-status-phase="waiting"]')?.getAttribute('aria-label')).toContain('waiting for a response');
-    expect(container.textContent).not.toContain('waiting for a response');
+    expect(container.querySelector('[data-status-phase="waiting"]')?.textContent).toContain('waiting for a response');
+    expect(container.querySelector('.xopc-personal-thinking-dots')).toBeNull();
 
     const answer: Message = { role: 'assistant', content: [{ type: 'text', text: 'The answer.' }] };
     render(answer, true);

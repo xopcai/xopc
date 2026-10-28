@@ -102,7 +102,7 @@ export class TaskCriterionReviewRepository {
       .sort((a, b) => b.finalizedAt - a.finalizedAt);
     return criteria.every((criterion, index) => {
       const reviewed = reviews.get(index);
-      if (reviewed && task.contract?.acceptancePolicy !== 'verified_auto') return reviewed === 'passed';
+      if (reviewed) return reviewed === 'passed';
       if (task.contract?.acceptancePolicy === 'manual') return false;
       for (const receipt of receipts) {
         const check = receipt.verification.checks.find((item) => item.criterion === criterion);

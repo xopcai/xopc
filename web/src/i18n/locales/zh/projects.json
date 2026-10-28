@@ -67,6 +67,25 @@
       "advisorStatusModelUnavailable": "待配置",
       "advisorWhy": "为什么是现在",
       "advisorEvidence": "查看依据",
+      "advisorEvidenceCopy": {
+        "aiNote": "AI 整理，原始记录可核对",
+        "unavailable": "此记录尚无中文摘要，可查看原始记录。",
+        "originals": "查看原始记录",
+        "sourceCount": "{{count}} 条记录",
+        "openSource": "打开来源",
+        "noSource": "暂无可打开的来源",
+        "more": "展开其余 {{count}} 组",
+        "sources": {
+          "project": "项目",
+          "task": "任务",
+          "conversation": "对话",
+          "calendar": "日历记录",
+          "mail": "邮件记录",
+          "communication": "沟通记录",
+          "file": "文件",
+          "user_model": "知识记录"
+        }
+      },
       "advisorNeedsSetup": "需要配置",
       "advisorStart": "交给 xopc 开始",
       "advisorDiscuss": "先聊聊",
@@ -118,7 +137,7 @@
       "advisorHistoryStatusSourceIncorrect": "依据有误",
       "advisorHistoryStatusLessLikeThis": "偏好已更新",
       "advisorHistoryReturnsAt": "再次出现",
-      "advisorHistoryEvidence": "查看原始依据",
+      "advisorHistoryEvidence": "查看依据",
       "advisorHistoryContinueDiscussion": "继续讨论",
       "advisorHistoryViewProgress": "查看进度",
       "advisorHistoryReevaluate": "重新评估"

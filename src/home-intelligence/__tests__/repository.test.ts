@@ -53,6 +53,25 @@ describe('HomeIntelligenceRepository', () => {
     repository = new HomeIntelligenceRepository(db);
   });
 
+  it('round-trips display projections alongside legacy advice and historical evidence', () => {
+    const item = opportunity('localized');
+    item.evidencePresentation = { version: 1, locale: 'zh', groups: [{
+      summary: '项目本周计划发布。', evidenceIds: [item.evidence[0].id],
+    }] };
+    repository.enqueue(principal, { idempotencyKey: 'presentation', reasons: ['manual_refresh'], requestedAt: 1_000 });
+    const claim = repository.claimNext(principal, 'worker', 1_001)!;
+    repository.complete(claim, {
+      result: { state: 'ready', opportunities: [item, { ...opportunity('legacy'), outcome: '另一个目标。' }] },
+      snapshotHash: 'localized', evidenceIds: [item.evidence[0].id], completedAt: 1_002,
+    });
+    const advisor = repository.getAdvisor(principal, 1_003);
+    expect(advisor).toMatchObject({ state: 'ready', primary: {
+      evidence: item.evidence, evidencePresentation: item.evidencePresentation,
+    }, alternatives: [{ id: 'legacy' }] });
+    expect(repository.listHistory(principal).find((row) => row.opportunity.id === item.id)?.opportunity)
+      .toMatchObject({ evidence: item.evidence, evidencePresentation: item.evidencePresentation });
+  });
+
   it('coalesces refresh requests and marks a running generation dirty', () => {
     const first = repository.enqueue(principal, {
       idempotencyKey: 'task:1', reasons: ['task_changed'], requestedAt: 1_000,

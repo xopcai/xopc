@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { createAutomationTool } from '../../agent/tools/automation-tool.js';
+import { saveAutomationRun } from '../../automations/storage/index.js';
 import { AutomationService } from '../../automations/service/automation-service.js';
 import { computeNextScheduleRunAtMs, timerDelayUntil } from '../../automations/domain/schedule.js';
 import { getAutomationSetup, buildAutomationSetupContext } from '../../automations/configuration-conversation.js';
@@ -86,6 +87,38 @@ describe('automation reliability through authenticated lazy HTTP and persisted s
     closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
     vi.useRealTimers();
     rmSync(directory, { recursive: true, force: true });
+  });
+
+  it('pages history through authenticated lazy routes and aggregates unread runs beyond the latest 50', async () => {
+    const task = await service.create({ name: 'History fixture', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Report' } });
+    for (let i = 0; i < 55; i++) saveAutomationRun({
+      id: `history-${String(i).padStart(3, '0')}`, automationId: task.id, automationName: task.name,
+      status: 'succeeded', manual: false, createdAtMs: 1000, endedAtMs: 2000,
+      triggerSnapshot: task.trigger, actionSnapshot: task.action, conversationId: i < 2 ? 'shared-history-conversation' : undefined,
+    });
+    const unauthenticated = await fetch(`${base}/automation-runs?automationId=${task.id}`);
+    expect(unauthenticated.status).toBe(401);
+    const first = await request(`/automation-runs?automationId=${task.id}&limit=20`);
+    expect(first.runs.map((run: { id: string }) => run.id)).toEqual(Array.from({ length: 20 }, (_, i) => `history-${String(54 - i).padStart(3, '0')}`));
+    expect(first.hasMore).toBe(true);
+    // New executions inserted between pages must not displace or duplicate older rows.
+    saveAutomationRun({ id: 'history-new', automationId: task.id, automationName: task.name, status: 'running', manual: false,
+      createdAtMs: 3000, triggerSnapshot: task.trigger, actionSnapshot: task.action });
+    const second = await request(`/automation-runs?automationId=${task.id}&limit=20&cursor=${encodeURIComponent(first.nextCursor)}`);
+    const third = await request(`/automation-runs?automationId=${task.id}&limit=20&cursor=${encodeURIComponent(second.nextCursor)}`);
+    const ids = [...first.runs, ...second.runs, ...third.runs].map(run => run.id);
+    expect(new Set(ids).size).toBe(55);
+    expect(ids.at(-1)).toBe('history-000');
+    expect(third.hasMore).toBe(false);
+    expect(third.nextCursor).toBeUndefined();
+    expect((await request('/automations')).executionSummaries[task.id].unreadCount).toBe(55);
+    await request('/automation-runs/history-000/read', 'POST');
+    expect((await request('/automations')).executionSummaries[task.id].unreadCount).toBe(54);
+    expect((await request('/automation-runs/history-000')).run.conversationShared).toBe(true);
+    expect((await request('/automation-runs/history-054')).run.conversationShared).toBe(false);
+    const other = await service.create({ name: 'Other fixture', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Other' } });
+    await expect(request(`/automation-runs?automationId=${other.id}&cursor=${encodeURIComponent(first.nextCursor)}`)).rejects.toThrow('400');
+    await expect(request('/automation-runs?cursor=invalid')).rejects.toThrow('400');
   });
 
   it('repairs a failed run in its configuration chat and retries with current settings without enabling the schedule', async () => {

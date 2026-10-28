@@ -86,6 +86,7 @@ export function executeUserModelInterpretation(input: {
   scopeContext: CaptureScopeContext;
   policy: UserModelCapturePolicy;
   turnId?: string;
+  allowRestoreDeleted?: boolean;
 }): UserModelCaptureResult {
   const result = emptyUserModelCaptureResult();
   const targets = input.interpretation.targetAssertionIds.flatMap((id) => getUserAssertion(id) ?? []);
@@ -165,11 +166,10 @@ export function executeUserModelInterpretation(input: {
 
   const latestUserRef = input.evidence.filter((item) => item.role === 'user')
     .sort((a, b) => b.createdAt - a.createdAt)[0]?.ref;
-  const explicitCommand = input.interpretation.intent === 'remember'
-    || input.interpretation.intent === 'correct';
   for (const source of input.interpretation.assertions) {
     result.proposed += 1;
     const key = candidateKey(source.predicate, source.scope.type, source.scope.id);
+    const sourceExplicitCommand = ['remember', 'correct'].includes(source.intent ?? input.interpretation.intent);
     const sensitive = source.sensitivity !== 'normal';
     if (input.policy.write === 'deny'
       || (sensitive && (source.authority !== 'user_explicit' || input.policy.sensitiveWrite === 'deny'))
@@ -178,7 +178,7 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: key, outcome: 'rejected' });
       continue;
     }
-    const requiresConfirmation = !explicitCommand && sensitive && input.policy.sensitiveWrite === 'confirm';
+    const requiresConfirmation = !sourceExplicitCommand && sensitive && input.policy.sensitiveWrite === 'confirm';
     const refs = source.evidenceRefs.flatMap((ref) => evidenceIds.get(ref) ?? []);
     const candidate: AssertionCandidate = {
       ...source,
@@ -219,7 +219,7 @@ export function executeUserModelInterpretation(input: {
     }
     let candidateToApply = candidate;
     if (source.action === 'replace') {
-      if (candidate.authority !== 'user_explicit') {
+      if (candidate.authority !== 'user_explicit' || candidate.observedAt < target!.observedAt) {
         result.rejected += 1;
         result.outputs.push({ candidateKey: key, outcome: 'rejected' });
         continue;
@@ -248,7 +248,7 @@ export function executeUserModelInterpretation(input: {
       };
     }
     const applied = reconcileAssertion(candidateToApply, Date.now(), {
-      restoreDeleted: explicitCommand && source.evidenceRefs.includes(latestUserRef),
+      restoreDeleted: input.allowRestoreDeleted !== false && sourceExplicitCommand && source.evidenceRefs.includes(latestUserRef),
     });
     if (applied.action === 'suppressed') {
       result.rejected += 1;
@@ -287,7 +287,7 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: key, outcome: 'deduplicated' });
       continue;
     }
-    const active = explicitCommand;
+    const active = ['remember', 'correct'].includes(source.intent ?? input.interpretation.intent);
     const goal = createUserGoal({
       title: source.title,
       desiredOutcome: source.desiredOutcome,
@@ -323,7 +323,7 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: key, outcome: 'deduplicated' });
       continue;
     }
-    const active = explicitCommand;
+    const active = ['remember', 'correct'].includes(source.intent ?? input.interpretation.intent);
     const rule = createCollaborationRule({
       category: source.category,
       priority: source.priority,

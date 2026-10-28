@@ -1,7 +1,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal, Plus, Search, Share2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
@@ -25,6 +25,7 @@ import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
+import { NewChatLink } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { SessionShareButton } from '@/features/shares/session-share-button';
 
@@ -168,7 +169,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const header = useMemo(() => ({
       className: 'bg-surface-panel',
       startExtra: showNewChatLink ? (
-        <Link
+        <NewChatLink
           to={newChatHrefForProject(projectId)}
           state={{ forceNewChat: true, agentId: chatAgentId, temporary: userContextMode === 'temporary' }}
           className={cn(
@@ -179,7 +180,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
           title={m.sidebar.newTask}
         >
           <Plus className="size-4 shrink-0 text-accent-fg" strokeWidth={2} aria-hidden />
-        </Link>
+        </NewChatLink>
       ) : null,
       main: (
         <div className="flex w-full min-w-0 max-w-(--max-width-chat-frame) items-center gap-3 px-3 sm:px-5 xl:px-6">

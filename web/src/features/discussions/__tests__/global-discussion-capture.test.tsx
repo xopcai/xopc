@@ -6,14 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const recorder: Record<string, unknown> = {};
   return { recorder, pathname: '/notes', create: vi.fn(), settings: vi.fn(), get: vi.fn(),
-    upload: vi.fn(), cancel: vi.fn(), navigate: vi.fn(), drain: vi.fn(), annotations: vi.fn(async () => {}) };
+    acknowledge: vi.fn(), upload: vi.fn(), cancel: vi.fn(), navigate: vi.fn(), drain: vi.fn(), annotations: vi.fn(async () => {}) };
 });
 vi.mock('../discussion-annotation-sync', () => ({ syncDiscussionAnnotations: mocks.annotations }));
 vi.mock('../use-discussion-recorder', () => ({ useDiscussionRecorder: () => mocks.recorder }));
 vi.mock('../discussion-api', () => ({
   createDiscussion: mocks.create, getDiscussionCaptureSettings: mocks.settings, getDiscussion: mocks.get,
   getDiscussionTranscript: vi.fn(async () => ({ text: '' })),
-  acknowledgeDiscussionConsent: vi.fn(), cancelDiscussion: mocks.cancel, unlinkDiscussionProject: vi.fn(), uploadDiscussionSegment: vi.fn(),
+  acknowledgeDiscussionConsent: mocks.acknowledge, cancelDiscussion: mocks.cancel, unlinkDiscussionProject: vi.fn(), uploadDiscussionSegment: vi.fn(),
 }));
 vi.mock('../recording-upload', () => ({ uploadDraftRecording: mocks.upload }));
 vi.mock('../discussion-draft-store', () => ({
@@ -52,6 +52,12 @@ beforeEach(async () => {
     setServerDiscussionId: vi.fn(async () => {}), discard: vi.fn(async () => {}),
     markUploadFailed: vi.fn(async () => {}), refreshRecoverableDrafts: vi.fn(), pause: vi.fn(), resume: vi.fn(),
   });
+  mocks.settings.mockResolvedValue({ consentPolicyVersion: 1, consentAcknowledgedAt: 1 });
+  mocks.acknowledge.mockImplementation(async (version) => {
+    const settings = { consentPolicyVersion: version, consentAcknowledgedAt: 2 };
+    mocks.settings.mockResolvedValue(settings);
+    return settings;
+  });
   mocks.create.mockResolvedValue(detail); mocks.get.mockResolvedValue(detail); mocks.upload.mockResolvedValue(detail);
   mocks.drain.mockResolvedValue(undefined);
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -60,6 +66,41 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
 describe('recording completion and recovery orchestration', () => {
+  it('reconfirms stale consent and uploads the retained recording without starting another capture', async () => {
+    mocks.settings.mockResolvedValue({ consentPolicyVersion: 2 });
+    await click(copy.recover);
+    expect(container.textContent).toContain('Confirm and sync recording');
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.recorder.discard).not.toHaveBeenCalled();
+    await click('Confirm and sync recording');
+    expect(mocks.acknowledge).toHaveBeenCalledWith(2);
+    expect(mocks.recorder.start).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ clientRequestId: 'local', recordedAt: 42, consentPolicyVersion: 2 }));
+    expect(mocks.recorder.discard).toHaveBeenCalledWith('local');
+  });
+
+  it('requires review when the server has a newer acknowledged policy', async () => {
+    mocks.settings.mockResolvedValue({ consentPolicyVersion: 2, consentAcknowledgedAt: 3 });
+    await click(copy.recover);
+    expect(container.textContent).toContain('Confirm and sync recording');
+    expect(mocks.acknowledge).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
+    expect(mocks.recorder.discard).not.toHaveBeenCalled();
+  });
+
+  it('offers consent recovery after the server rejects cached consent during capture', async () => {
+    mocks.create.mockRejectedValueOnce(new Error('Recording consent must be acknowledged first'));
+    mocks.settings.mockResolvedValue({ consentPolicyVersion: 1 });
+    await act(async () => window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)));
+    expect(container.textContent).toContain('Recording consent needs confirmation');
+    await click(copy.stop);
+    expect(container.textContent).toContain('Confirm and sync recording');
+    expect(mocks.recorder.discard).not.toHaveBeenCalled();
+    await click('Confirm and sync recording');
+    expect(mocks.recorder.start).toHaveBeenCalledTimes(1);
+    expect(mocks.recorder.discard).toHaveBeenCalledWith('local');
+  });
+
   it('retains the confirmed original duration after local recorder state is released', async () => {
     mocks.get.mockResolvedValue({ ...detail, discussion: { ...detail.discussion, durationMs: 7200840 } });
     await click(copy.recover);

@@ -316,6 +316,25 @@ describe('automation state capability', () => {
     await expect(invoke('stale')).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
   });
 
+  it('intersects history and unread projections with the requested project', async () => {
+    const service = new AutomationService();
+    const projects = new ProjectService();
+    const a = projects.create({ name: 'Project A' });
+    const b = projects.create({ name: 'Project B' });
+    const taskA = await service.create({ name: 'A', projectId: a.id, trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Report' } });
+    const taskB = await service.create({ name: 'B', projectId: b.id, trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Report' } });
+    for (const task of [taskA, taskB]) saveAutomationRun({ id: `run-${task.id}`, automationId: task.id, automationName: task.name,
+      status: 'succeeded', manual: false, createdAtMs: 1, endedAtMs: 2, triggerSnapshot: task.trigger, actionSnapshot: task.action });
+    const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service, getProjects: () => projects });
+    const context = { ...caller, scopes: ['automations.read'] };
+    expect(await dispatcher.call('xopc.automations.history', { automationId: taskA.id, projectId: b.id }, context))
+      .toMatchObject({ items: [], hasMore: false });
+    const history = await dispatcher.call('xopc.automations.history', { automationId: taskA.id, projectId: a.id }, context);
+    expect(history).toMatchObject({ items: [{ automationId: taskA.id }] });
+    const list = await dispatcher.call('xopc.automations.list', { projectId: a.id }, context) as { executionSummaries: Record<string, unknown> };
+    expect(list.executionSummaries).toEqual({ [taskA.id]: { unreadCount: 1 } });
+  });
+
   it('validates projects, runtime-owned state, and nonempty patches before writing', async () => {
     const { service, automation } = await fixture();
     const projects = new ProjectService();

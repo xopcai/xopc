@@ -7,7 +7,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
-import { getUserAssertion } from '../../repository.js';
+import { getUserAssertion, deleteUserAssertion } from '../../repository.js';
 import { listUserGoals } from '../../goals.js';
 import { executeUserModelInterpretation } from '../executor.js';
 import type { CaptureEvidence, UserModelInterpretation } from '../semantic.js';
@@ -166,6 +166,27 @@ describe('user model capture admission', () => {
     });
     expect(result.createdAssertions[0]?.status).toBe('active');
     expect(result.createdRules[0]?.status).toBe('disabled');
+  });
+
+  it('does not restore a deleted preference when replaying an old remember command', () => {
+    const initial = executeUserModelInterpretation({ ...executionBase, interpretation: interpretation() });
+    const id = initial.createdAssertions[0]!.id;
+    deleteUserAssertion(id);
+    const replay = executeUserModelInterpretation({ ...executionBase, allowRestoreDeleted: false, interpretation: interpretation() });
+    expect(replay.rejected).toBe(1);
+    expect(replay.created).toBe(0);
+    expect(getUserAssertion(id)).toBeUndefined();
+  });
+
+  it('does not allow historical evidence to replace a newer correction', () => {
+    const initial = executeUserModelInterpretation({ ...executionBase, interpretation: interpretation() });
+    const id = initial.createdAssertions[0]!.id;
+    const old = { ...interpretation().assertions[0]!, action: 'replace' as const, targetAssertionId: id,
+      normalizedValue: 'detailed', value: 'detailed', statement: 'Prefers detailed answers.', observedAt: source.createdAt - 1 };
+    const result = executeUserModelInterpretation({ ...executionBase, allowRestoreDeleted: false,
+      interpretation: interpretation({ assertions: [old] }) });
+    expect(result.rejected).toBe(1);
+    expect(getUserAssertion(id)?.statement).toBe('The user prefers concise answers.');
   });
 
   it('does not capture sensitive inferences even when automatic writes are allowed', () => {

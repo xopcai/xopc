@@ -45,6 +45,7 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const zh = language === 'zh';
   const update = (patch: Partial<FormState>) => setForm(previous => ({ ...previous, ...patch }));
   const requestClose = () => {
@@ -107,7 +108,7 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
   const choiceClass = 'min-h-10 w-32 shrink-0 justify-end border-0 bg-transparent py-2 pl-3 pr-0 text-right text-sm text-fg-muted shadow-none';
   return <Dialog.Root open onOpenChange={open => { if (!open) requestClose(); }}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-65 bg-scrim" />
-    <Dialog.Content onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus?.isConnected) returnFocus.focus(); }} onOpenAutoFocus={event => { event.preventDefault(); descriptionRef.current?.focus(); }} style={{ height: `min(${snapshot ? 600 : 440}px, calc(100dvh - 2rem))` }} className="fixed left-1/2 top-1/2 z-66 flex w-[min(42.5rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover">
+    <Dialog.Content onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus?.isConnected) returnFocus.focus(); }} onOpenAutoFocus={event => { event.preventDefault(); descriptionRef.current?.focus(); }} style={{ height: `min(${advancedOpen ? 760 : snapshot ? 600 : 440}px, calc(100dvh - 2rem))` }} className="fixed left-1/2 top-1/2 z-66 flex w-[min(42.5rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover">
       <header className="flex shrink-0 items-center justify-between px-5 pb-3 pt-5"><Dialog.Title className="text-base font-semibold text-fg">{snapshot ? (zh ? '编辑定时任务' : 'Edit scheduled task') : (zh ? '设定定时任务' : 'Schedule a task')}</Dialog.Title><Dialog.Close asChild><Button variant="ghost" disabled={busy} aria-label={zh ? '关闭' : 'Close'}><X className="size-4" /></Button></Dialog.Close></header>
       <Dialog.Description className="sr-only">{zh ? '描述要做的事，选择重复频率和时间。' : 'Describe the task and choose its frequency and time.'}</Dialog.Description>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-3">
@@ -129,7 +130,7 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
         </section>
         {nextPreview ? <p className="text-xs text-fg-muted" role="status">{nextPreview}</p> : null}
         {form.triggerMode === 'once' ? <p className="text-xs text-fg-muted">{zh ? '按你所在时区输入，换时区后仍在同一时刻运行。' : 'Enter your local time. Changing timezone keeps the same instant.'}</p> : null}
-        <details className="group"><summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-md px-1 py-2 text-sm text-fg-muted focus-visible:outline-accent">{zh ? '高级' : 'Advanced'}<ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden /></summary><div className="mt-2 grid gap-4 pb-2">
+        <details className="group" onToggle={event => setAdvancedOpen(event.currentTarget.open)}><summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-md px-1 py-2 text-sm text-fg-muted focus-visible:outline-accent">{zh ? '高级' : 'Advanced'}<ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden /></summary><div className="mt-2 grid gap-4 pb-2">
           {!snapshot ? <FormField label={zh ? '任务名称（可选）' : 'Task name (optional)'}><input className={inputClass} value={form.name} onChange={event => update({ name: event.target.value })} placeholder={zh ? '根据说明自动命名' : 'Named from your description'} /></FormField> : null}
           <FormField label={zh ? '时区' : 'Timezone'}><input className={inputClass} value={form.timezone ?? ''} placeholder="Asia/Shanghai" onChange={event => update({ timezone: event.target.value })} /></FormField>
           <FormField label={zh ? '执行助手' : 'Run with'}><Select aria-label={zh ? '执行助手' : 'Run with'} className={inputClass} value={form.agentId} onChange={event => update({ agentId: event.target.value })}>

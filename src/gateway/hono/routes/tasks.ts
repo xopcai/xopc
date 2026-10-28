@@ -134,9 +134,6 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     if (task.contract?.acceptanceCriteria[index] === undefined) {
       return c.json({ ok: false, error: 'Criterion not found' }, 404);
     }
-    if (task.contract.acceptancePolicy === 'verified_auto') {
-      return c.json({ ok: false, error: 'This criterion requires verified execution evidence' }, 409);
-    }
     const review = criterionReviews.set({ task, expectedVersion: parsed.data.expectedVersion,
       criterionIndex: index, status: parsed.data.status, note: parsed.data.note,
       actor: { kind: 'user', id: principal.principalId } });

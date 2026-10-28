@@ -218,18 +218,22 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
 
     const focusKey = autoFocusKey ?? null;
     const shouldFocusAfterEnable = pendingFocusAfterEnableRef.current;
-    const shouldFocusForRoute = focusKey != null && focusKey !== lastAutoFocusKeyRef.current;
+    const shouldFocusForRoute = focusKey !== lastAutoFocusKeyRef.current;
     if (!shouldFocusAfterEnable && !shouldFocusForRoute) return;
 
-    pendingFocusAfterEnableRef.current = false;
-    if (focusKey != null) lastAutoFocusKeyRef.current = focusKey;
-
+    pendingFocusAfterEnableRef.current = true;
     const id = requestAnimationFrame(() => {
       const allowAutoFocus =
         typeof globalThis.matchMedia === 'function' &&
         globalThis.matchMedia('(hover: hover) and (pointer: fine)').matches;
       if (!allowAutoFocus) return;
-      editorRef.current?.focus({ preventScroll: true });
+      const el = editorRef.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      // Cancelled frames (including StrictMode replay) must not consume the request.
+      if (document.activeElement !== el) return;
+      pendingFocusAfterEnableRef.current = false;
+      lastAutoFocusKeyRef.current = focusKey;
     });
     return () => cancelAnimationFrame(id);
   }, [disabled, autoFocusKey]);
