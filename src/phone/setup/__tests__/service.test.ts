@@ -146,15 +146,15 @@ it('automates configuration, dependency repair, registration and verification th
   expect(f.service.current(context)).not.toHaveProperty('canConfigure');
   setup = await f.service.command('source', { setupId: setup.id, source: 'local', expectedRevision: setup.revision }, context) as PhoneSetupView;
   f.ready.enabled = false;
-  await f.service.command('configure', { setupId: setup.id, enabled: true, expectedRevision: setup.revision }, context);
-  expect(f.deps.configure).toHaveBeenCalledWith(true);
-  await f.service.command('install_dependency', { setupId: setup.id, kind: 'adb', expectedRevision: setup.revision }, context);
+  setup = await f.service.command('configure', { setupId: setup.id, enabled: true, expectedRevision: setup.revision }, context) as PhoneSetupView;
+  expect(f.deps.configure).toHaveBeenCalledWith(true, expect.objectContaining({ check: expect.any(Function), signal: expect.any(AbortSignal) }));
+  setup = await f.service.command('install_dependency', { setupId: setup.id, kind: 'adb', expectedRevision: setup.revision }, context) as PhoneSetupView;
   expect(f.deps.install).not.toHaveBeenCalled();
   f.ready.dependencies[0].state = 'corrupted';
-  await f.service.command('install_dependency', { setupId: setup.id, kind: 'adb', repair: true, expectedRevision: setup.revision }, context);
-  expect(f.deps.install).toHaveBeenCalledWith('adb', true);
-  await f.service.command('register_local', { setupId: setup.id, serial: 'discovered-serial', expectedRevision: setup.revision }, context);
-  expect(f.deps.registerLocal).toHaveBeenCalledWith('discovered-serial', undefined);
+  setup = await f.service.command('install_dependency', { setupId: setup.id, kind: 'adb', repair: true, expectedRevision: setup.revision }, context) as PhoneSetupView;
+  expect(f.deps.install).toHaveBeenCalledWith('adb', true, expect.any(Object));
+  setup = await f.service.command('register_local', { setupId: setup.id, serial: 'discovered-serial', expectedRevision: setup.revision }, context) as PhoneSetupView;
+  expect(f.deps.registerLocal).toHaveBeenCalledWith('discovered-serial', undefined, expect.any(Object));
   expect(await f.service.command('models', {}, context)).toMatchObject({ models: [{ ref: 'real/phone' }] });
   const attempt = await f.service.command('begin_verification', { setupId: setup.id, deviceId: 'device-one', expectedRevision: setup.revision }, context) as PhoneSetupView;
   expect(attempt.state).toBe('verifying');
@@ -182,4 +182,73 @@ it('caps automatic verification retries within a host run without exposing the r
   }
   await expect(f.service.command('begin_verification', { setupId: setup.id, expectedRevision: setup.revision, deviceId: 'device-one' }, context)).rejects.toThrow('RETRY_LIMIT');
   expect((await f.service.command('begin_verification', { setupId: setup.id, expectedRevision: setup.revision, deviceId: 'device-one' }, { ...context, runId: 'fresh-user-turn' }) as PhoneSetupView).state).toBe('verifying');
+});
+
+it.each(['configure', 'set_model', 'install_dependency'] as const)('does not commit %s after cancellation during readiness inspection', async command => {
+  const f = fixture(); const context = { ...f.context, canConfigure: true };
+  let setup = await f.service.command('start', {}, context) as PhoneSetupView;
+  setup = await f.service.command('source', { setupId: setup.id, expectedRevision: setup.revision, source: 'local' }, context) as PhoneSetupView;
+  f.ready.enabled = false; f.ready.model.ref = undefined; f.ready.dependencies[0].state = 'absent';
+  let resume!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { resume = resolve; });
+  const inspected = new Promise<void>(resolve => { entered = resolve; });
+  f.deps.inspect = vi.fn().mockImplementationOnce(async () => { entered(); await gate; return f.ready; }).mockImplementation(async () => f.ready);
+  f.deps.configure = vi.fn(); f.deps.setModel = vi.fn(); f.deps.install = vi.fn();
+  const pending = f.service.command(command, { setupId: setup.id, expectedRevision: setup.revision, enabled: true, modelRef: 'real/new', kind: 'adb' }, context);
+  const rejection = expect(pending).rejects.toThrow();
+  await inspected;
+  expect((await f.service.command('cancel', { setupId: setup.id }, context) as PhoneSetupView).state).toBe('cancelled');
+  resume(); await rejection;
+  expect(f.deps.configure).not.toHaveBeenCalled(); expect(f.deps.setModel).not.toHaveBeenCalled(); expect(f.deps.install).not.toHaveBeenCalled();
+});
+
+it('reserves the setup revision, rejects overlapping writes, and rechecks live authority', async () => {
+  const f = fixture(); let authorized = true;
+  const context = { ...f.context, canConfigure: true, isAuthorized: () => authorized };
+  const setup = await f.service.command('start', {}, context) as PhoneSetupView;
+  f.ready.enabled = false; f.deps.configure = vi.fn();
+  let resume!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { resume = resolve; }); const inspected = new Promise<void>(resolve => { entered = resolve; });
+  f.deps.inspect = vi.fn().mockImplementationOnce(async () => { entered(); await gate; return f.ready; }).mockImplementation(async () => f.ready);
+  const pending = f.service.command('configure', { setupId: setup.id, expectedRevision: setup.revision, enabled: true }, context);
+  const rejection = expect(pending).rejects.toThrow('authority'); await inspected;
+  const claimed = f.service.current(context)!;
+  expect(claimed.revision).toBeGreaterThan(setup.revision);
+  await expect(f.service.command('configure', { setupId: setup.id, expectedRevision: claimed.revision, enabled: true }, context)).rejects.toThrow('BUSY');
+  authorized = false; resume(); await rejection; expect(f.deps.configure).not.toHaveBeenCalled();
+});
+
+it('cancellation waits for an already-started commit to settle and never revives the request', async () => {
+  const f = fixture(); const context = { ...f.context, canConfigure: true };
+  const setup = await f.service.command('start', {}, context) as PhoneSetupView;
+  f.ready.enabled = false;
+  let resume!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { resume = resolve; }); const committed = new Promise<void>(resolve => { entered = resolve; });
+  f.deps.configure = vi.fn(async () => { entered(); await gate; });
+  const pending = f.service.command('configure', { setupId: setup.id, expectedRevision: setup.revision, enabled: true }, context);
+  const rejection = expect(pending).rejects.toThrow(); await committed;
+  let cancelled = false;
+  const cancellation = f.service.command('cancel', { setupId: setup.id }, context).then(value => { cancelled = true; return value; });
+  await Promise.resolve(); expect(cancelled).toBe(false);
+  resume(); await rejection; expect(await cancellation).toMatchObject({ state: 'cancelled' });
+});
+
+it('cancels every setup owner for a conversation and confirms release before reset', async () => {
+  const f = fixture(); const setup = await f.begin();
+  const binding = f.service.beforeInput(f.context, { op: 'open', deviceId: 'device-one', mode: 'control', appPackage: 'com.android.settings' })!;
+  f.putReport(binding.owner); f.service.afterInput(f.context, binding.owner, 'open');
+  await f.service.cancelConversation(f.context.conversationId);
+  expect(f.runtime.stop).toHaveBeenCalledWith(binding.owner, 'close');
+  expect(await f.service.command('get', { setupId: setup.id }, f.context)).toMatchObject({ state: 'cancelled', checks: { released: true } });
+  expect(() => f.service.beforeInput(f.context, { op: 'open', deviceId: 'device-one', mode: 'control', appPackage: 'com.android.settings' })).not.toThrow();
+});
+
+it('invalidates a real conversation transcript grant after reset without reviving old evidence', async () => {
+  const { createConversation } = await import('../../../storage/sqlite/conversation-repository.js');
+  const { resetSessionRecord } = await import('../../../storage/sqlite/session-repository.js');
+  const f = fixture(); createConversation({ agentId: 'main' }, root, f.context.conversationId);
+  const setup = await f.begin(); resetSessionRecord(f.context.conversationId, root);
+  expect(await f.service.command('get', { setupId: setup.id }, f.context)).toMatchObject({ stale: true });
+  await expect(f.service.source(f.context, setup.id, 'local', setup.revision)).rejects.toThrow('SCOPE_CHANGED');
+  expect(() => f.service.beforeInput(f.context, { op: 'open', deviceId: 'device-one', mode: 'control', appPackage: 'com.android.settings' })).toThrow('STOPPED');
 });

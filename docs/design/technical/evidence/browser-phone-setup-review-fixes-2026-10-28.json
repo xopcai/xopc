@@ -1,0 +1,136 @@
+{
+  "date": "2026-10-28",
+  "baseCommit": "9897be4f5a1fd3eaa1b24f48481534f702e0e140",
+  "workingTree": "uncommitted fixes; unrelated external-file-intake work excluded from this report",
+  "browser": {
+    "ok": true,
+    "capturedAt": "2026-10-28T10:22:14.939Z",
+    "sourceSha256": "b22b01ba6a2ae3bc982163a27d8a198a10fc2113989f090fe2e025b7a04c7b7d",
+    "model": "openai-codex/gpt-5.6-sol",
+    "upstreamProvider": "xopc-cloud",
+    "gateway": "production CLI",
+    "extension": "production manifest/background/sidepanel",
+    "browser": "148.0.7778.96",
+    "stages": [
+      {
+        "stage": "isolated_gateway",
+        "productionEntry": true,
+        "originalStateUntouched": true
+      },
+      {
+        "stage": "owner_approved_and_prepared",
+        "nativeHostFilesInIsolatedHome": true
+      },
+      {
+        "stage": "native_bootstrap_pairing_realtime",
+        "productionAuth": true,
+        "endpointCount": 1,
+        "transport": "gateway-realtime"
+      },
+      {
+        "stage": "secure_modal_return_to_original_chat",
+        "clickedActualChatLink": true,
+        "userTypedContinue": false,
+        "selectedExactEndpoint": true
+      }
+    ],
+    "progressiveResources": [
+      "SKILL.md",
+      "references/browser/overview.md",
+      "references/browser/chrome-extension.md",
+      "references/browser/acceptance.md"
+    ],
+    "browserActions": [
+      "navigate",
+      "click",
+      "fill",
+      "close"
+    ],
+    "browserToolErrors": 0,
+    "debuggerReleased": true,
+    "demoTabsClosed": true,
+    "checks": {
+      "configured": true,
+      "read": true,
+      "clicked": true,
+      "filled": true,
+      "released": true
+    },
+    "modelRequests": {
+      "count": 21,
+      "httpStatuses": [
+        200
+      ],
+      "completed": true
+    },
+    "boundaries": [
+      "Extension loaded with Chromium launch flags rather than the manual Load unpacked picker",
+      "Production-generated native host manifest copied into the isolated Chromium user-data-dir, matching Chromium host lookup",
+      "Native messaging, device pairing and Realtime use production code with isolated state and HOME"
+    ]
+  },
+  "phone": {
+    "ok": true,
+    "status": "passed",
+    "capturedAt": "2026-10-28T10:11:11.446Z",
+    "sourceSha256": "ebaf445da9bf19ff12a241e7f7241d5efa9441ec63c300fedf4b9b432bae41ac",
+    "chatModel": "xopc-cloud/openai-codex/gpt-5.6-sol",
+    "phoneModelRef": "xopc-cloud/phone-doubao",
+    "results": [
+      {
+        "scenario": "phone",
+        "state": "completed",
+        "checks": {
+          "configured": true,
+          "read": true,
+          "operated": true,
+          "verified": true,
+          "released": true
+        },
+        "commands": [
+          "inspect",
+          "start",
+          "get",
+          "source",
+          "models",
+          "set_model",
+          "configure",
+          "begin_verification",
+          "get",
+          "verification_report"
+        ],
+        "noEmbeddedConfigurationUi": true
+      }
+    ],
+    "modelRequests": {
+      "count": 26,
+      "httpStatuses": [
+        200,
+        null
+      ],
+      "completed": false
+    },
+    "boundaries": [
+      "Existing dedicated Aliyun test phone and secure stored credentials",
+      "Real cloud phone action model and native Android Settings verification",
+      "No fresh USB RSA, cloud phone purchase or credential rotation acceptance"
+    ]
+  },
+  "regression": {
+    "files": 11,
+    "tests": 125,
+    "passed": true,
+    "rootAndElectronTypecheck": true,
+    "webTypecheck": true,
+    "webBuild": true,
+    "setupScriptTypecheck": true,
+    "targetedEslint": true,
+    "diffCheck": true
+  },
+  "exclusions": [
+    "Computer Use configuration guidance",
+    "Official Weixin client acceptance",
+    "Manual Chrome Load unpacked file picker and macOS Gatekeeper/TCC dialogs",
+    "Fresh local USB phone onboarding"
+  ]
+}

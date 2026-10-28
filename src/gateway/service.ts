@@ -1944,8 +1944,8 @@ export class GatewayService {
     return this.configCoordinator.afterFeishuCredentialsPersisted();
   }
 
-  saveConfig(config: Config, expectedConfig?: Config): Promise<{ saved: boolean; error?: string; persisted?: boolean; conflict?: boolean }> {
-    return this.configCoordinator.saveConfig(config, expectedConfig);
+  saveConfig(config: Config, expectedConfig?: Config, beforeCommit?: () => void): Promise<{ saved: boolean; error?: string; persisted?: boolean; conflict?: boolean }> {
+    return this.configCoordinator.saveConfig(config, expectedConfig, beforeCommit);
   }
 
   async syncVoiceLanguage(language: ProductLanguage): Promise<{

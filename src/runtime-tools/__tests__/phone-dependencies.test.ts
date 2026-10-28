@@ -68,3 +68,10 @@ it('does not provision when disabled or bypass the website-only download policy'
   await expect(manager(RuntimeToolsConfigSchema.parse({ download: { source: 'website-only' } })).install('adb')).rejects.toThrow('official downloads');
   expect(downloadVerifiedArchive).not.toHaveBeenCalled();
 });
+
+it('does not install downloaded ADB files after cancellation', async () => {
+  const controller = new AbortController(); const runtime = manager();
+  vi.mocked(downloadVerifiedArchive).mockImplementationOnce(async () => { controller.abort(); return fixture.archive; });
+  await expect(runtime.install('adb', { signal: controller.signal })).rejects.toThrow();
+  await expect(readFile(managedPhoneAdbPath(root))).rejects.toMatchObject({ code: 'ENOENT' });
+});

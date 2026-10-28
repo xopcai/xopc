@@ -1,4 +1,4 @@
-// Historical panel-based acceptance for d03530103; current setup uses verify-conversational-setup-live.mts.
+// Set XOPC_BROWSER_CONVERSATION_ONLY=1 for the current conversation flow; panel paths remain historical.
 // Real-model, production pairing + Realtime acceptance. All App and Chrome state is isolated.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -11,12 +11,17 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
+// These bindings are evaluated inside the real extension context, never in Node.
+declare const chrome: { storage: { local: { set(value: Record<string, unknown>): Promise<void> } }; runtime: { sendMessage(value: unknown): Promise<any> }; debugger: { getTargets(): Promise<Array<{ id: string; attached?: boolean }>> } };
+
 import type { BrowserContext, Page } from 'playwright-core';
 const { chromium } = createRequire(import.meta.url)('playwright-core') as typeof import('playwright-core');
 assert.equal(process.platform, 'darwin', 'This live acceptance currently covers macOS');
+const conversationOnly = process.env.XOPC_BROWSER_CONVERSATION_ONLY === '1';
 const nativePermissions = process.env.XOPC_BROWSER_NATIVE_PERMISSIONS === '1';
 const recovery = process.env.XOPC_BROWSER_RECOVERY === '1';
-const cloud = nativePermissions || recovery || process.env.XOPC_BROWSER_SETUP_CLOUD === '1';
+assert(!conversationOnly || !nativePermissions && !recovery, 'Conversation acceptance does not use historical panel recovery paths');
+const cloud = conversationOnly || nativePermissions || recovery || process.env.XOPC_BROWSER_SETUP_CLOUD === '1';
 const credentialEnv = { ...process.env };
 const cloudCredentialPath = resolve(process.env.HOME!, '.xopc/credentials/oauth/xopc-cloud.json');
 const pairingOnly = process.env.XOPC_BROWSER_PAIRING_ONLY === '1';
@@ -106,7 +111,7 @@ launchGateway();
 let context: BrowserContext | undefined;
 let ui: Page | undefined;
 let extensionPage: Page | undefined;
-const conversationId = randomUUID();
+let conversationId: string = randomUUID();
 const stages: Array<Record<string, unknown>> = [];
 const recordedTurns: Array<{ input: string; tools: Array<{ name: string; input: unknown }>; answer: string }> = [];
 const request = async (path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST') => {
@@ -124,6 +129,25 @@ async function readHistory() { return request(`/api/sessions/${conversationId}?i
 async function send(content: string, initial = false) {
   const start = Date.now();
   let input;
+  if (conversationOnly) {
+    if (initial) await ui!.goto(`${base}/#/chat/new?skill=configure-xopc`);
+    const previousHistory = initial ? undefined : await readHistory();
+    const previous = (previousHistory?.transcriptRows ?? previousHistory?.session?.transcriptRows ?? []).length;
+    const editor = ui!.locator('[role="textbox"][contenteditable="true"]').first();
+    await editor.fill(content); await ui!.getByRole('button', { name: /^(Send|发送)$/ }).click();
+    await until(async () => {
+      const match = /#\/chat\/([0-9a-f-]{36})/.exec(ui!.url()); if (!match) return;
+      conversationId = match[1];
+      try {
+        const state = await request(`/api/sessions/${conversationId}/input-state`);
+        const history = await readHistory();
+        return (history.transcriptRows ?? history.session?.transcriptRows ?? []).length > previous && !state.activeRunId && !state.inputs?.some((row: any) => ['queued', 'running'].includes(row.status)) ? true : undefined;
+      } catch (error) {
+        if (/: 404 .*Session not found/.test(String(error))) return;
+        throw error;
+      }
+    }, 'actual App conversation turn', 250_000);
+  } else {
   if (initial) input = { kind: 'start', creation: { agentId: 'main', projectId: null, execution: null, temporary: false, model: modelRef, thinkingLevel: 'off' } };
   else {
     const session = await readHistory();
@@ -132,7 +156,8 @@ async function send(content: string, initial = false) {
       configVersion: config.configVersion ?? config.version ?? 0, delivery: 'next', interrupt: false };
   }
   const response = await request(`/api/sessions/${conversationId}/inputs`, { ...input, clientMessageId: randomUUID(), input: { content }, origin: { type: 'system', source: 'cli' } });
-  console.log(JSON.stringify({ stage: 'input_accepted', text: content, resultKeys: Object.keys(response) }));
+  }
+  console.log(JSON.stringify({ stage: 'input_accepted', text: content }));
   await until(async () => {
     const state = await request(`/api/sessions/${conversationId}/input-state`);
     return !state.activeRunId && !state.inputs?.some((i: { status: string }) => ['queued', 'running'].includes(i.status)) ? true : undefined;
@@ -156,33 +181,38 @@ try {
     (await import('../src/storage/sqlite/conversation-repository.js')).createConversation({ agentId: 'main' }, root, conversationId);
     db.closeXopcDatabase();
     await request('/api/browser/setup', { conversationId, action: 'start' });
-  } else await send('帮我配置 Browser Use', true);
-  let inspection = await request('/api/browser/setup', { conversationId, action: 'inspect' });
-  if (!inspection.setup) {
+  } else if (!conversationOnly) await send('帮我配置 Browser Use', true);
+  let inspection = conversationOnly ? undefined : await request('/api/browser/setup', { conversationId, action: 'inspect' });
+  if (!conversationOnly && !inspection.setup) {
     await send('我要连接本机 Chrome，请带我完成配置和验收。');
     inspection = await request('/api/browser/setup', { conversationId, action: 'inspect' });
   }
-  assert(inspection.setup, 'Model did not start Browser setup');
-  const setupId = inspection.setup.id;
-  console.log(JSON.stringify({ stage: 'setup_created', state: inspection.setup.state }));
+  if (!conversationOnly) assert(inspection.setup, 'Model did not start Browser setup');
+  let setupId = inspection?.setup?.id;
   const extension = join(root, 'bundled-extension');
   context = await chromium.launchPersistentContext(join(root, 'chrome-profile'), { channel: 'chromium', headless: !nativePermissions, locale: 'en-US',
     env: { ...childEnv, CFFIXED_USER_HOME: home }, ignoreDefaultArgs: ['--disable-extensions', ...(nativePermissions ? ['--enable-automation'] : [])], args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] });
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
   await worker.evaluate(async () => { await chrome.storage.local.set({ 'xopc.browser.auto-connect': false }); });
   ui = await context.newPage(); ui.setDefaultTimeout(30_000);
-  await ui.goto(`${base}/#/chat/${conversationId}?scene=configure-xopc`);
+  await ui.goto(conversationOnly ? `${base}/#/chat/new?skill=configure-xopc` : `${base}/#/chat/${conversationId}?scene=configure-xopc`);
   await ui.getByPlaceholder(/Token or password|Token 或 Password/).fill(token);
   await ui.getByRole('button', { name: /^Connect$|^连接$/ }).click();
   for (const name of ['Maybe later, keep using my current model', 'Skip for now', '以后再说，继续使用当前模型', '暂时跳过']) {
     try { await ui.getByRole('button', { name, exact: true }).click({ timeout: 1500 }); } catch {}
   }
-  await ui.goto(`${base}/#/chat/${conversationId}?scene=configure-xopc`);
+  if (!conversationOnly) await ui.goto(`${base}/#/chat/${conversationId}?scene=configure-xopc`);
+  if (conversationOnly) {
+    await send('帮我配置 Browser Use，自动完成本机 Chrome 扩展和 Native Host 的准备。只准备连接，不操作任何业务网页。', true);
+    inspection = await request('/api/browser/setup', { conversationId, action: 'inspect' });
+    assert(inspection.setup, 'The real Agent must create the setup'); setupId = inspection.setup.id;
+    assert.equal(await ui.getByRole('region', { name: /Browser Use setup|Browser Use 配置/ }).count(), 0, 'Do not restore the historical setup panel');
+  }
   const panel = ui.getByRole('region', { name: /Browser Use/ });
   if (pairingOnly) {
     await request('/api/browser/setup', { conversationId, setupId, action: 'approve', expectedRevision: inspection.setup.revision });
     await request('/api/browser/setup', { conversationId, setupId, action: 'prepare' });
-  } else await panel.getByRole('button', { name: /Enable Chrome and prepare files|启用 Chrome 连接并准备文件/ }).click();
+  } else if (!conversationOnly) await panel.getByRole('button', { name: /Enable Chrome and prepare files|启用 Chrome 连接并准备文件/ }).click();
   await until(async () => { const value = await request('/api/browser/setup', { conversationId, action: 'inspect' }); return value.setup?.state === 'waiting_extension' ? value.setup : undefined; }, 'real extension preparation', 90_000);
   stages.push({ stage: 'owner_approved_and_prepared', nativeHostFilesInIsolatedHome: true });
   console.log(JSON.stringify(stages.at(-1)));
@@ -228,14 +258,28 @@ try {
   assert.equal(endpoints.length, 1);
   stages.push({ stage: 'native_bootstrap_pairing_realtime', productionAuth: true, endpointCount: endpoints.length, transport: 'gateway-realtime' });
   if (pairingOnly) { console.log(JSON.stringify({ stage: 'pairing_only_passed', stages })); break acceptance; }
+  const baselineDebuggerTargets = await worker.evaluate(() => chrome.debugger.getTargets());
+  const baselineTargetIds = new Set(baselineDebuggerTargets.map(target => target.id));
+  if (conversationOnly) {
+    const interaction = (await request('/api/browser/setup', { conversationId, action: 'inspect' })).setup.interactionPath;
+    assert(interaction?.startsWith('/configuration/browser/'), 'The host must supply the secure manual-step path');
+    const setupLink = ui.locator(`a[href="#${interaction}"]`);
+    assert.equal(await setupLink.count(), 1, 'The actual chat must offer the exact host-returned internal setup link');
+    await setupLink.click();
+    await ui.getByRole('dialog').waitFor();
+    await ui.getByRole('button', { name: /^(用于验收的 Chrome|Chrome to verify)$/ }).click();
+    await ui.getByRole('button', { name: endpoints[0].displayName, exact: true }).click();
+    await ui.getByRole('button', { name: /^(核对并开始安全验收|Recheck and start safe test)$/ }).click();
+    await ui.waitForURL(new RegExp(`#/chat/${conversationId}`));
+    stages.push({ stage: 'secure_modal_return_to_original_chat', clickedActualChatLink: true, userTypedContinue: false, selectedExactEndpoint: true });
+  } else {
   await ui.reload();
   const select = panel.getByRole('button', { name: /Choose Chrome to test|选择用于验收的 Chrome/ });
   await select.click(); await ui.getByRole('button', { name: `${endpoints[0].displayName} · ${endpoints[0].endpointId.slice(0, 12)}`, exact: true }).click();
   // The owner product action starts a real model turn in the existing conversation.
-  const baselineDebuggerTargets = await worker.evaluate(() => chrome.debugger.getTargets());
-  const baselineTargetIds = new Set(baselineDebuggerTargets.map(target => target.id));
   if (nativePermissions) { pauseAfterRead = true; pausedAfterRead = false; }
   await panel.getByRole('button', { name: /Start demo test|开始演示验收/ }).click();
+  }
   if (nativePermissions) {
     const interrupted = await until(async () => { const value = (await request('/api/browser/setup', { conversationId, action: 'inspect' })).setup;
       return value?.attempt?.read && pausedAfterRead ? value : undefined; }, 'native stop ready');
@@ -380,7 +424,7 @@ try {
   await ui.screenshot({ path: join(evidence, 'completed.png'), fullPage: true });
   await until(async () => modelRequests.every(r => r.elapsedMs !== undefined) ? true : undefined, 'pending model request completion', 60_000);
   const report = { ok: true, model: modelId, gateway: 'production CLI', extension: 'production manifest/background/sidepanel',
-    stages, upstreamProvider: cloud ? 'xopc-cloud' : 'dashscope', recoveryResults, nativePermissionResults, initialInput: '帮我配置 Browser Use', progressiveResources: resources, browserActions: actions, browserToolErrors: browserErrors.length, debuggerReleased: true, demoTabsClosed: true, checks: completed.checks, modelRequests, browser: await context.browser()?.version(),
+    stages, upstreamProvider: cloud ? 'xopc-cloud' : 'dashscope', recoveryResults, nativePermissionResults, interaction: conversationOnly ? 'actual App chat, no setup panel' : 'historical setup panel', initialInput: '帮我配置 Browser Use', progressiveResources: resources, browserActions: actions, browserToolErrors: browserErrors.length, debuggerReleased: true, demoTabsClosed: true, checks: completed.checks, modelRequests, browser: await context.browser()?.version(),
     boundaries: ['Extension loaded with Chromium launch flags rather than the manual Load unpacked picker', 'Production-generated native host manifest copied into the isolated Chromium user-data-dir, matching Chromium host lookup', 'Native messaging, device pairing and Realtime use production code with isolated state and HOME', ...(nativePermissions ? ['Chrome debugger Cancel and extension Resume were operated through native UI', 'OS executable denial uses real EACCES, not an observed Gatekeeper or TCC dialog'] : [])] };
   await writeFile(join(evidence, 'result.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ stage: 'completed', evidence, checks: completed.checks }));

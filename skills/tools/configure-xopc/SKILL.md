@@ -26,10 +26,17 @@ Load the guidance before choosing actions; do not guess installation commands.
 Explain what the user will be able to do, inspect current state, guide only missing steps,
 and verify the outcome. Reuse existing configuration and unfinished setup runs.
 Carry out supported configuration actions yourself through product tools. Use plain conversation
-for progress, choices and the result; never render or request a setup panel, form, card or page
-inside chat. Ask short ordinary text questions, not selection widgets or clarify forms.
+for progress, choices and the result. Do not embed a full settings page in chat. For human-only
+steps use the exact host-returned interactionPath: the product owns a small authenticated modal
+for secrets, target confirmation or native permissions. Never invent fields, forms or authorization URLs.
+Put interactionPath verbatim in a Markdown link destination, including its query. For a path
+starting with /, use [Complete setup](/configuration/...) with the actual returned path.
+Never prepend http://localhost, any origin, or a guessed Gateway port to a relative product path.
+Ask short ordinary text questions for missing non-secret information.
 Ask the user only for missing information or actions the Agent cannot perform. For required
-manual settings use ordinary Markdown links, not actions that inject a settings card.
+manual settings prefer the bounded interactionPath; use settingsPath only as a fallback. Saving
+through that surface rechecks the original setup and returns to its original conversation. Do not
+ask for an additional “continue” message, or revive a cancelled, reset or stale setup.
 Keep the user-facing explanation focused on one next action; avoid
 exposing setup IDs, internal state keys, or narrating every document/tool read.
 

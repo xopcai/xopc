@@ -1019,6 +1019,14 @@ export class AgentService {
     this.agentManager.removeAgent(key);
   }
 
+  /** Revoke setup grants and release independent verification sessions before resetting. */
+  async cancelConfigurationSetups(conversationId: string): Promise<void> {
+    await Promise.all([
+      this.config.getPhoneSetupService?.()?.cancelConversation(conversationId),
+      this.config.getBrowserSetupService?.()?.cancelConversation(conversationId),
+    ]);
+  }
+
   /**
    * Reset session transcript (archive + new session id) and evict in-memory agent state.
    * Preserves the session key and persisted per-session overrides.
@@ -1028,6 +1036,10 @@ export class AgentService {
   ): Promise<{ transcriptId: string; previousTranscriptId: string } | null> {
     const { abortEmbeddedRun } = await import('./embedded/runs.js');
     await abortEmbeddedRun(key);
+    await this.cancelConfigurationSetups(key);
+    const { getPhoneRuntime } = await import('../phone/runtime.js');
+    const { cancelPhoneAssistance } = await import('../phone/assistance.js');
+    cancelPhoneAssistance(key); await getPhoneRuntime().stop(key, 'close');
     const task = await this.sessionStore.reset(key);
     if (!task) {
       return null;

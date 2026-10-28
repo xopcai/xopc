@@ -12,10 +12,10 @@ import { fetchPhoneDevices, type PhoneDevices } from './phone-api';
 import { phoneConnectionMethods, type PhoneConnectionMethod } from './phone-connection-methods';
 
 type DiscoveredDevice = PhoneDevices['discovery'][number];
-export function AddPhoneDialog({ zh, onClose, onSelect, onAdded }: {
-  zh: boolean; onClose(): void; onSelect(device: DiscoveredDevice): void; onAdded?(): void;
+export function AddPhoneDialog({ zh, onClose, onSelect, onAdded, initialMethod }: {
+  zh: boolean; initialMethod?: PhoneConnectionMethod; onClose(): void; onSelect(device: DiscoveredDevice): void; onAdded?(): void;
 }) {
-  const [method, setMethod] = useState<PhoneConnectionMethod>();
+  const [method, setMethod] = useState<PhoneConnectionMethod | undefined>(initialMethod);
   const devices = useSWR(method === 'local-adb' ? 'phone-devices' : null, fetchPhoneDevices, { refreshInterval: 3000 });
   const selected = phoneConnectionMethods.find(item => item.id === method);
   const index = zh ? 0 : 1;

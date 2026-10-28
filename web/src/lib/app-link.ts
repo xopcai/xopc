@@ -14,6 +14,7 @@ const INTERNAL_ROUTE_ROOTS = new Set([
   'chat',
   'connectors',
   'mcp-setup',
+  'configuration',
   'extensions',
   'local-apps',
   'notes',

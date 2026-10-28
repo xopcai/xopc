@@ -127,10 +127,11 @@ export class GatewayConfigCoordinator {
 
   // ── Persist (PATCH /api/config, marketplace install, etc.) ─────────────
 
-  async saveConfig(config: Config, expectedConfig = this.opts.getConfig()): Promise<{ saved: boolean; error?: string; persisted?: boolean; conflict?: boolean }> {
+  async saveConfig(config: Config, expectedConfig = this.opts.getConfig(), beforeCommit?: () => void): Promise<{ saved: boolean; error?: string; persisted?: boolean; conflict?: boolean }> {
     const candidate = structuredClone(config), expected = structuredClone(expectedConfig);
     return this.queueConfigWrite(async () => {
       if (!isDeepStrictEqual(this.opts.getConfig(), expected)) return { saved: false, conflict: true, error: 'Configuration changed before saving. Please retry.' };
+      beforeCommit?.();
       return this.persistConfig(candidate);
     });
   }

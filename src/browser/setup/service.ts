@@ -6,9 +6,10 @@ import type { BrowserSetupView } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-read-repository.js';
 import { getBrowserTabBinding } from '../../storage/sqlite/browser-tab-binding-repository.js';
 import { createLogger } from '../../utils/logger.js';
-import { createBrowserSetup, findBrowserSetup, readBrowserSetup, saveBrowserSetup } from './repository.js';
+import { createBrowserSetup, findBrowserSetup, listConversationBrowserSetups, readBrowserSetup, saveBrowserSetup } from './repository.js';
 import type { BrowserSetup } from './types.js';
 
 const log = createLogger('BrowserSetup');
@@ -35,7 +36,20 @@ export interface BrowserSetupDeps {
 /** Setup writes use host-authorized interactive turns or existing owner grants. */
 export class BrowserSetupService {
   private readonly preparing = new Set<string>();
+  private readonly preparationSettled = new Map<string, Promise<void>>();
   constructor(private readonly deps: BrowserSetupDeps) {}
+
+  private scopeCurrent(setup: BrowserSetup) {
+    const metadata = getSessionMetadata(setup.conversationId);
+    return setup.transcriptId ? metadata?.transcriptId === setup.transcriptId && metadata.agentId === setup.agentId : !metadata;
+  }
+  async cancelConversation(conversationId: string) {
+    const setups = listConversationBrowserSetups(conversationId).map(setup => this.cancel(setup));
+    await Promise.all(setups.map(async setup => {
+      await this.preparationSettled.get(setup.id);
+      await this.release(readBrowserSetup(setup.id)!);
+    }));
+  }
 
   private policyRevision(agentId: string) { return this.deps.policyRevision?.(agentId) ?? String(this.deps.canUseBrowser(agentId)); }
 
@@ -56,8 +70,9 @@ export class BrowserSetupService {
     }
     const attempt = setup.attempt ? (({ observation: _observation, ...summary }) => summary)(setup.attempt) : undefined;
     const endpoint = setup.attempt ? this.endpoints().find(e => e.endpointId === setup.attempt!.endpointId) : undefined;
-    const changed = setup.configRevision !== browserConfigRevision(this.deps.getConfig()) || Boolean(setup.attempt && (setup.attempt.policyRevision !== this.policyRevision(setup.agentId) || !this.deps.canUseBrowser(setup.agentId) || (endpoint && (endpoint.principalId !== setup.attempt.principalId || endpoint.appVersion !== setup.attempt.appVersion))));
+    const changed = !this.scopeCurrent(setup) || setup.configRevision !== browserConfigRevision(this.deps.getConfig()) || Boolean(setup.attempt && (setup.attempt.policyRevision !== this.policyRevision(setup.agentId) || !this.deps.canUseBrowser(setup.agentId) || (endpoint && (endpoint.principalId !== setup.attempt.principalId || endpoint.appVersion !== setup.attempt.appVersion))));
     return { ...setup, attempt: setup.attempt ? attempt : undefined, sceneId: 'browser', skillName: 'configure-xopc', resourceVersion: VERSION,
+      interactionPath: `/configuration/browser/${setup.id}?conversationId=${encodeURIComponent(setup.conversationId)}`,
       stale: changed, toolPermission: this.deps.canUseBrowser(setup.agentId) ? 'allowed' : 'denied', currentDriverKind: this.deps.getConfig().browser.driver.kind, endpoints: this.endpoints(), settingsPath: `/settings/agent-browser?browserSetup=${setup.id}&conversationId=${setup.conversationId}`,
       checks: { configured: this.deps.getConfig().browser.enabled && this.deps.getConfig().browser.driver.kind === 'extension',
         read: setup.attempt?.read ?? false, clicked: setup.attempt?.clicked ?? false, filled: setup.attempt?.filled ?? false, released: setup.attempt?.released ?? false },
@@ -96,6 +111,7 @@ export class BrowserSetupService {
     if (command === 'recheck') return this.view(await this.recheck(setup));
     if (command === 'release') return this.view(await this.release(setup));
     if (['prepare', 'advance', 'open', 'begin_verification'].includes(command)) {
+      if (!this.scopeCurrent(setup)) throw new Error('SETUP_SCOPE_CHANGED: Start a new setup in the current conversation.');
       if (!context.canConfigure) throw new Error('SETUP_INTERACTIVE_REQUIRED: Continue in an authorized interactive conversation.');
       if (!Number.isInteger(args.expectedRevision) || args.expectedRevision !== setup.revision) throw new Error('SETUP_CONFLICT: Read the current progress.');
       if (!this.deps.canUseBrowser(context.agentId)) throw new Error('AGENT_BROWSER_DENIED: Review this Agent tool permission in settings.');
@@ -122,7 +138,7 @@ export class BrowserSetupService {
 
   approve(setup: BrowserSetup, principalId: string, revision: number) {
     this.revision(setup, revision);
-    if (setup.state === 'cancelled' || setup.state === 'verifying' || setup.state === 'completed') throw new Error('SETUP_STATE_CHANGED');
+    if (!this.scopeCurrent(setup) || setup.state === 'cancelled' || setup.state === 'verifying' || setup.state === 'completed') throw new Error('SETUP_STATE_CHANGED');
     if (setup.configRevision !== browserConfigRevision(this.deps.getConfig())) throw new Error('CONFIG_CHANGED: Review the current configuration before approving.');
     return saveBrowserSetup({ ...setup, approvedBy: principalId, error: undefined }, setup.revision);
   }
@@ -132,7 +148,7 @@ export class BrowserSetupService {
   }
 
   async prepare(setup: BrowserSetup) {
-    if (!setup.approvedBy || setup.state === 'cancelled' || setup.state === 'verifying' || setup.state === 'completed') throw new Error('OWNER_APPROVAL_REQUIRED');
+    if (!this.scopeCurrent(setup) || !setup.approvedBy || setup.state === 'cancelled' || setup.state === 'verifying' || setup.state === 'completed') throw new Error('OWNER_APPROVAL_REQUIRED');
     if (setup.attempt && !setup.attempt.released) throw new Error('CONTROL_RELEASE_REQUIRED');
     if (this.preparing.has(setup.id)) return readBrowserSetup(setup.id)!;
     if (['waiting_extension', 'ready_for_verification'].includes(setup.state) && !setup.error) return this.recheck(setup);
@@ -141,9 +157,12 @@ export class BrowserSetupService {
     if (config.browser.enabled && config.browser.driver.kind !== 'extension' && this.deps.canSwitchDriver?.(setup.conversationId) === false) {
       return saveBrowserSetup({ ...setup, state: 'needs_attention', error: 'BROWSER_BUSY: Release existing browser sessions and wait for other runs before switching the shared driver.' }, setup.revision);
     }
+    let settled!: () => void;
+    this.preparationSettled.set(setup.id, new Promise<void>(resolve => { settled = resolve; }));
     this.preparing.add(setup.id);
-    let current = saveBrowserSetup({ ...setup, state: 'preparing', error: undefined, operation: { key: setup.operation?.key ?? randomUUID(), startedAt: Date.now() } }, setup.revision);
+    let current = setup;
     try {
+      current = saveBrowserSetup({ ...setup, state: 'preparing', error: undefined, operation: { key: setup.operation?.key ?? randomUUID(), startedAt: Date.now() } }, setup.revision);
       const next = structuredClone(config);
       next.browser.enabled = true;
       next.browser.driver = { kind: 'extension' };
@@ -164,7 +183,7 @@ export class BrowserSetupService {
       current = readBrowserSetup(setup.id)!;
       if (current.state === 'cancelled') return current;
       return saveBrowserSetup({ ...current, state: 'needs_attention', operation: undefined, error: 'PREPARE_FAILED: Check the local installation and retry. Existing settings and files may have been prepared.' }, current.revision);
-    } finally { this.preparing.delete(setup.id); }
+    } finally { this.preparing.delete(setup.id); this.preparationSettled.delete(setup.id); settled(); }
   }
 
   async recheck(setup: BrowserSetup) {
@@ -182,13 +201,13 @@ export class BrowserSetupService {
   }
 
   async open(setup: BrowserSetup, action: 'chrome' | 'folder' | 'both') {
-    if (!setup.approvedBy || setup.state === 'cancelled') throw new Error('OWNER_APPROVAL_REQUIRED');
+    if (!this.scopeCurrent(setup) || !setup.approvedBy || setup.state === 'cancelled') throw new Error('OWNER_APPROVAL_REQUIRED');
     return this.deps.open(action);
   }
 
   begin(setup: BrowserSetup, endpointId: string, origin: string, revision: number) {
     this.revision(setup, revision);
-    if (!setup.approvedBy || setup.state !== 'ready_for_verification') throw new Error('SETUP_NOT_READY');
+    if (!this.scopeCurrent(setup) || !setup.approvedBy || setup.state !== 'ready_for_verification') throw new Error('SETUP_NOT_READY');
     if (setup.configRevision !== browserConfigRevision(this.deps.getConfig())) throw new Error('CONFIG_CHANGED');
     if (setup.attempt && !setup.attempt.released) throw new Error('CONTROL_RELEASE_REQUIRED');
     if (!this.deps.canUseBrowser(setup.agentId)) throw new Error('AGENT_BROWSER_DENIED: Enable browser_use for this Agent and start a refreshed turn.');
@@ -231,7 +250,7 @@ export class BrowserSetupService {
     const [prefix, setupId, attemptId] = taskKey.split(':');
     if (prefix !== 'browser-setup' || !setupId) return false;
     const setup = readBrowserSetup(setupId);
-    return Boolean(setup?.approvedBy && setup.state === 'verifying' && setup.attempt?.id === attemptId
+    return Boolean(setup && this.scopeCurrent(setup) && setup.approvedBy && setup.state === 'verifying' && setup.attempt?.id === attemptId
       && setup.attempt.fixtureUrl === url && Date.now() <= setup.attempt.expiresAt
       && setup.configRevision === browserConfigRevision(this.deps.getConfig()));
   }
@@ -244,7 +263,7 @@ export class BrowserSetupService {
     const a = setup.attempt;
     const closing = input.action === 'close';
     if (!closing) {
-      if (setup.state !== 'verifying') throw new Error('VERIFICATION_STOPPED: Close the verification session first.');
+      if (!this.scopeCurrent(setup) || setup.state !== 'verifying') throw new Error('VERIFICATION_STOPPED: Close the verification session first.');
       if (Date.now() > a.expiresAt || a.actions >= MAX_ACTIONS) throw new Error('VERIFICATION_BUDGET_EXCEEDED: Close the verification session.');
       if (setup.configRevision !== browserConfigRevision(this.deps.getConfig()) || a.policyRevision !== this.policyRevision(setup.agentId)) throw new Error('CONFIG_CHANGED: Close the verification session.');
       const endpoint = this.endpoints().find(e => e.endpointId === a.endpointId);
@@ -270,7 +289,7 @@ export class BrowserSetupService {
     if (input.action === 'close' && result.ok && result.receipt.action === 'close' && result.receipt.verified) {
       a.released = true;
       delete a.observation;
-      const complete = setup.state === 'verifying' && setup.configRevision === browserConfigRevision(this.deps.getConfig()) && Date.now() <= a.expiresAt && a.policyRevision === this.policyRevision(setup.agentId) && this.deps.canUseBrowser(setup.agentId) && a.read && a.clicked && a.filled;
+      const complete = this.scopeCurrent(setup) && setup.state === 'verifying' && setup.configRevision === browserConfigRevision(this.deps.getConfig()) && Date.now() <= a.expiresAt && a.policyRevision === this.policyRevision(setup.agentId) && this.deps.canUseBrowser(setup.agentId) && a.read && a.clicked && a.filled;
       return saveBrowserSetup({ ...setup, attempt: a, state: setup.state === 'cancelled' ? 'cancelled' : complete ? 'completed' : 'needs_attention', error: complete || setup.state === 'cancelled' ? undefined : setup.error?.startsWith('BROWSER_CONTROL_REVOKED') ? setup.error : 'VERIFICATION_INCOMPLETE: Review the checks and start a new test.' }, setup.revision);
     }
     if ('error' in result) return saveBrowserSetup({ ...setup, state: setup.state === 'cancelled' ? 'cancelled' : 'needs_attention', error: result.error.message.includes('BROWSER_CONTROL_REVOKED') ? 'BROWSER_CONTROL_REVOKED: Chrome control was stopped by the user. Release the demo, then resume control in the extension before starting a new test.' : 'BROWSER_ACTION_FAILED: Close the verification session before retrying.' }, setup.revision);

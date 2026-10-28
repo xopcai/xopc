@@ -24,7 +24,7 @@ configured server requires its revision from inspect. Do not alter managed conne
 Then advance {setupId,expectedVersion} using the returned version. get {setupId} refreshes
 status; cancel requires the current version. OAuth/Token steps provide interactionPath:
 link to that trusted product page, never request credentials or OAuth callbacks in chat.
-Use the exact returned interactionPath in a Markdown link; Weixin paths are absolute. do not invent a URL
+Use the exact returned interactionPath in a Markdown link; Weixin paths are absolute. Never prepend localhost or an origin to a relative product path. Do not invent a URL
 scheme or setup id. The host also displays a trusted Complete connection action above input.
 The page owns sign-in, safe credential entry, verification and automatic return to the
 original objective. When ready/continuationQueued is returned, stop this turn; the host
@@ -69,8 +69,8 @@ inspect first and retain the original idempotency key. A permission denial is no
 do not switch identity, target or tools to bypass it. Inspect returned product ok and saved
 fields before reporting success. A saved model reference does not prove it can be called.`,
   phone_setup: `# Phone setup
-Use configure-xopc and references/phone/overview.md. Use plain conversation, never embedded chat
-configuration panels. mode phone_setup inspect/preview/start inspect or resume; models lists
+Use configure-xopc and references/phone/overview.md. Use plain conversation, no full settings page embedded in chat. Human-only steps use the returned interactionPath
+for a small secure product modal; saving rechecks scope and returns to the original conversation. mode phone_setup inspect/preview/start inspect or resume; models lists
 compatible models. get/recheck/verification_report/cancel/release take {setupId}.
 Automate source {setupId,source:local|aliyun,expectedRevision}, configure {setupId,enabled:true,
 expectedRevision}, install_dependency {setupId,kind:adb|scrcpy,repair?:true,expectedRevision},
@@ -79,14 +79,14 @@ register_local {setupId,serial:<discovered online serial>,name?,expectedRevision
 begin_verification {setupId,deviceId,expectedRevision}. Writes require a host-authorized
 interactive turn and preserve current policy. dryRun never writes. Do not silently select a
 phone, change the chat model, widen app access, use shell installs or submit keys in chat.
-Use set_model for the dedicated Phone model only; it cannot change the chat model; credentials use secure settings.
+Use set_model for the dedicated Phone model only; it cannot change the chat model; credentials use the host interactionPath.
 Explain the Settings-only goal, screenshot sharing and model costs before testing. Get provides
 attempt.goal/completion/maxActions. Use phone_use open, observe, run, close, then verification_report.
 User-only work is physical USB/RSA, login/OAuth, private-key entry/upload and cloud purchase.
 After interruption recheck, release the old test, resolve the cause and continue here.`,
   browser_setup: `# Browser setup
-Use configure-xopc and its Browser references. Plain conversation only; no configuration panel
-inside chat. mode browser_setup inspect/preview/start inspect or resume. get/recheck/
+Use configure-xopc and its Browser references. Plain conversation for routine steps. Human-only steps use the returned interactionPath
+for a small secure product modal; never collect credentials in chat. mode browser_setup inspect/preview/start inspect or resume. get/recheck/
 verification_report/cancel/release take {setupId}. prepare/advance {setupId,expectedRevision}
 automatically prepares the managed extension/native host and enables the extension route in
 an authorized interactive turn. Explain and confirm a shared driver change before switchDriver:true.
@@ -96,7 +96,7 @@ resolve the intended Chrome with the user, explain the bounded read/click/fill d
 begin_verification {setupId,endpointId,expectedRevision}. The host derives the fixture origin.
 Use normal browser_use calls on the returned attempt; close and read verification_report.
 No API Key is needed. Preserve policy refusals and existing pairing; only manual steps need
-an ordinary link to settingsPath. dryRun never writes; opening a page is not proof of success.`,
+an ordinary link to interactionPath (settingsPath is the fallback). dryRun never writes; opening a page is not proof of success.`,
   settings: `# xopc settings and capability checks
 settings open is navigation only; it does not read, apply or verify configuration.
 Voice: {section:"capabilities/voice",title:"语音设置"}; models: section:"capabilities/models";

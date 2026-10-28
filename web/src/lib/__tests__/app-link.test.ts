@@ -16,6 +16,7 @@ describe('app links', () => {
   it('keeps trusted setup routes inside the app and rejects unsafe scheme aliases', () => {
     expect(resolveAppLink('xopc://app/mcp-setup/goal')).toEqual({ kind: 'internal-route', route: '/mcp-setup/goal' });
     expect(resolveAppLink('/mcp-setup/goal')).toEqual({ kind: 'internal-route', route: '/mcp-setup/goal' });
+    expect(resolveAppLink('/configuration/browser/goal?conversationId=original')).toEqual({ kind: 'internal-route', route: '/configuration/browser/goal?conversationId=original' });
     expect(resolveAppLink('xopc://evil/mcp-setup/goal')).toEqual({ kind: 'blocked' });
     expect(resolveAppLink('xopc://user:secret@app/mcp-setup/goal')).toEqual({ kind: 'blocked' });
     expect(resolveAppLink('xopc://app//evil.example')).toEqual({ kind: 'blocked' });

@@ -59,7 +59,9 @@ export class PhoneDependencyManager extends EventEmitter {
       throw new RuntimeError(`scrcpy server must match the pinned ${SCRCPY_VERSION} checksum`, 'RUNTIME_CHECKSUM_MISMATCH', 'scrcpy', 'verify', true);
   }
   /** Installation is explicit; readiness checks and phone viewing never provision tools. */
-  async install(kind: PhoneDependencyKind, options: { repair?: boolean; sourcePath?: string } = {}): Promise<void> {
+  async install(kind: PhoneDependencyKind, options: { repair?: boolean; sourcePath?: string; signal?: AbortSignal; beforeCommit?: () => void } = {}): Promise<void> {
+    const check = () => { options.signal?.throwIfAborted(); options.beforeCommit?.(); };
+    check();
     const asset = phoneDependencyAsset(kind);
     if (!this.options.config.enabled) throw new RuntimeError('Managed runtime installation is disabled', 'RUNTIME_DISABLED', kind, 'install', false);
     if (!asset) throw new RuntimeError('Managed ADB is unavailable on this platform. Configure an existing compatible ADB executable.', 'RUNTIME_UNSUPPORTED', kind, 'install', false);
@@ -69,6 +71,7 @@ export class PhoneDependencyManager extends EventEmitter {
     operations.add(key);
     try {
       await withInstallLock(join(this.options.stateDir, 'tools', 'locks', `phone-${kind}.lock`), { kind }, async () => {
+        check();
         if (!options.repair && !options.sourcePath) {
           if (kind === 'scrcpy' && await this.verifyServer(managedScrcpyServerPath(this.options.stateDir)).then(() => true, () => false)) return;
           if (kind === 'adb' && await probePhoneAdb(managedPhoneAdbPath(this.options.stateDir)).then(() => true, () => false)) return;
@@ -86,15 +89,16 @@ export class PhoneDependencyManager extends EventEmitter {
           this.progress(kind, 'download');
           source = await downloadVerifiedArchive({ runtime: kind, url: asset.url, expectedSha256: asset.sha256,
             targetPath: runtimeDownloadPath(this.options.stateDir, asset.filename), timeoutMs: this.options.config.download.timeoutMs,
-            proxy: this.options.config.download.proxy,
+            proxy: this.options.config.download.proxy, signal: options.signal,
             onProgress: (downloadedBytes, totalBytes) => this.progress(kind, 'download', { downloadedBytes, totalBytes }) });
         }
+        check();
         this.progress(kind, 'verify');
         if (await sha256File(source) !== asset.sha256) throw new RuntimeError('Dependency checksum mismatch', 'RUNTIME_CHECKSUM_MISMATCH', kind, 'verify', true);
         if (kind === 'scrcpy') {
           const target = managedScrcpyServerPath(this.options.stateDir); const temporary = `${target}.${randomUUID()}.tmp`;
           await mkdir(dirname(target), { recursive: true });
-          try { await copyFile(source, temporary); await chmod(temporary, 0o600); await this.verifyServer(temporary); this.progress(kind, 'install'); await rename(temporary, target); }
+          try { await copyFile(source, temporary); await chmod(temporary, 0o600); await this.verifyServer(temporary); check(); this.progress(kind, 'install'); await rename(temporary, target); }
           finally { await rm(temporary, { force: true }); }
         } else {
           const stagingDir = join(this.options.stateDir, 'tools', 'staging', `phone-adb-${randomUUID()}`);
@@ -108,6 +112,7 @@ export class PhoneDependencyManager extends EventEmitter {
             this.progress(kind, 'probe');
             if ((await probePhoneAdb(executable)).version !== ADB_VERSION) throw new Error('ADB package version does not match the catalog');
             await mkdir(dirname(target), { recursive: true });
+            check();
             try { await rename(target, backup); backedUp = true; } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
             this.progress(kind, 'install');
             try { await rename(root, target); } catch (error) { if (backedUp) { await rename(backup, target); backedUp = false; } throw error; }
