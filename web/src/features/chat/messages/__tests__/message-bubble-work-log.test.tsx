@@ -138,7 +138,7 @@ describe('lightweight assistant activity', () => {
     expect(container.textContent).not.toContain('正在核对相关资料。');
     const answer = container.querySelector('[data-chat-find-text]')!;
     const status = container.querySelector('[data-assistant-work-log] [role="status"]')!;
-    expect(answer.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(status.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     render(false, '保留这段答案。');
     expect(container.querySelector('[data-chat-find-text]')).toBe(answer);
     expect(container.querySelector('[data-assistant-work-log] [role="status"]')).toBeNull();

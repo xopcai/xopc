@@ -638,6 +638,7 @@ export const MessageBubble = memo(function MessageBubble({
                 <span className="xopc-personal-thinking-dots" aria-hidden="true"><i /><i /><i /></span>
               </div>
             ) : null}
+            {assistantStepsBlock}
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 <div
@@ -689,8 +690,6 @@ export const MessageBubble = memo(function MessageBubble({
                 ) : null}
               </>
             ) : null}
-
-            {assistantStepsBlock}
 
             {!personal && !isUser && message.taskResultDelivery && conversationId ? (
               <div className="flex flex-wrap items-center gap-2" data-result-follow-up>
