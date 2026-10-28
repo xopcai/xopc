@@ -139,8 +139,9 @@ jobs:
           CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
           PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_MAIN_BASE64 }}
+          SHARE_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_SHARE_BASE64 }}
         run: |
-          for value in CERTIFICATE_BASE64 CERTIFICATE_PASSWORD PROFILE_BASE64 APPLE_TEAM_ID; do
+          for value in CERTIFICATE_BASE64 CERTIFICATE_PASSWORD PROFILE_BASE64 SHARE_PROFILE_BASE64 APPLE_TEAM_ID; do
             if [[ -z "${!value}" ]]; then
               echo "Missing GitHub secret value: $value" >&2
               exit 1
@@ -172,10 +173,21 @@ jobs:
           cp "$profile_path" "$profile_dir/$profile_uuid.mobileprovision"
           echo "profile_uuid=$profile_uuid" >> "$GITHUB_OUTPUT"
 
+          share_profile_path="$RUNNER_TEMP/share.mobileprovision"
+          share_profile_plist="$RUNNER_TEMP/share-profile.plist"
+          printf '%s' "$SHARE_PROFILE_BASE64" | base64 -D > "$share_profile_path"
+          security cms -D -i "$share_profile_path" > "$share_profile_plist"
+          share_profile_uuid="$(plutil -extract UUID raw -o - "$share_profile_plist")"
+          share_application_identifier="$(plutil -extract Entitlements.application-identifier raw -o - "$share_profile_plist")"
+          test "$share_application_identifier" = "$APPLE_TEAM_ID.ai.xopc.xopc.share"
+          cp "$share_profile_path" "$profile_dir/$share_profile_uuid.mobileprovision"
+          echo "share_profile_uuid=$share_profile_uuid" >> "$GITHUB_OUTPUT"
+
       - name: Archive and export signed IPA
         working-directory: apps/mobile-ios
         env:
           PROFILE_UUID: ${{ steps.signing.outputs.profile_uuid }}
+          SHARE_PROFILE_UUID: ${{ steps.signing.outputs.share_profile_uuid }}
         run: |
           archive_path="$RUNNER_TEMP/XopcMobile.xcarchive"
           export_path="$RUNNER_TEMP/xopc-native-ios-export"
@@ -190,11 +202,12 @@ jobs:
             "CURRENT_PROJECT_VERSION=$IOS_BUILD_NUMBER" \
             "DEVELOPMENT_TEAM=$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
-            "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_UUID" \
+            "XOPC_MAIN_PROFILE_UUID=$PROFILE_UUID" \
+            "XOPC_SHARE_PROFILE_UUID=$SHARE_PROFILE_UUID" \
             'CODE_SIGN_IDENTITY=Apple Distribution' \
             archive
 
-          python3 -c 'import os, plistlib, sys; plistlib.dump({"method": "app-store-connect", "signingStyle": "manual", "teamID": os.environ["APPLE_TEAM_ID"], "signingCertificate": "Apple Distribution", "provisioningProfiles": {"ai.xopc.xopc": os.environ["PROFILE_UUID"]}, "stripSwiftSymbols": True, "manageAppVersionAndBuildNumber": False}, open(sys.argv[1], "wb"))' "$options_path"
+          python3 -c 'import os, plistlib, sys; plistlib.dump({"method": "app-store-connect", "signingStyle": "manual", "teamID": os.environ["APPLE_TEAM_ID"], "signingCertificate": "Apple Distribution", "provisioningProfiles": {"ai.xopc.xopc": os.environ["PROFILE_UUID"], "ai.xopc.xopc.share": os.environ["SHARE_PROFILE_UUID"]}, "stripSwiftSymbols": True, "manageAppVersionAndBuildNumber": False}, open(sys.argv[1], "wb"))' "$options_path"
           xcodebuild \
             -exportArchive \
             -archivePath "$archive_path" \
