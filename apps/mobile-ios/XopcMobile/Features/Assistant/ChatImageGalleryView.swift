@@ -57,17 +57,21 @@ struct ChatImageGalleryView: View {
                                     let ratio = next / start
                                     let focal = CGSize(
                                         width: (value.startAnchor.x - 0.5) * geometry.size.width,
-                                        height: (value.startAnchor.y - 0.5) * geometry.size.height)
+                                        height: (value.startAnchor.y - 0.5) * geometry.size.height
+                                    )
                                     zoom = next
                                     imageOffset = bounded(CGSize(
                                         width: focal.width - (focal.width - pinchStartOffset.width) * ratio,
-                                        height: focal.height - (focal.height - pinchStartOffset.height) * ratio),
-                                        image: image, viewport: geometry.size)
+                                        height: focal.height - (focal.height - pinchStartOffset.height) * ratio
+                                    ),
+                                    image: image, viewport: geometry.size)
                                 }
                                 .onEnded { _ in pinchStartZoom = nil })
                             .simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { value in
                                 guard !isPinching, zoom > 1 else { return }
-                                if dragStartOffset == nil { dragStartOffset = imageOffset }
+                                if dragStartOffset == nil {
+                                    dragStartOffset = imageOffset
+                                }
                                 let start = dragStartOffset ?? .zero
                                 imageOffset = bounded(CGSize(width: start.width + value.translation.width,
                                                              height: start.height + value.translation.height),
@@ -79,8 +83,9 @@ struct ChatImageGalleryView: View {
                                 move(value.translation.width < 0 ? 1 : -1)
                             })
                             .onTapGesture(count: 2) { location in
-                                if zoom > 1 { zoom = 1; imageOffset = .zero }
-                                else {
+                                if zoom > 1 {
+                                    zoom = 1; imageOffset = .zero
+                                } else {
                                     zoom = 2
                                     imageOffset = bounded(CGSize(width: geometry.size.width / 2 - location.x,
                                                                  height: geometry.size.height / 2 - location.y),
@@ -88,7 +93,9 @@ struct ChatImageGalleryView: View {
                                 }
                             }
                             .onChange(of: isPinching) { _, active in
-                                if !active { pinchStartZoom = nil; dragStartOffset = nil }
+                                if !active {
+                                    pinchStartZoom = nil; dragStartOffset = nil
+                                }
                             }
                             .accessibilityLabel(items[index].title)
                     } else if let error {
@@ -102,7 +109,9 @@ struct ChatImageGalleryView: View {
                 .onAppear { viewportSize = geometry.size }
                 .onChange(of: geometry.size) { _, newSize in
                     viewportSize = newSize
-                    if let image { imageOffset = bounded(imageOffset, image: image, viewport: newSize) }
+                    if let image {
+                        imageOffset = bounded(imageOffset, image: image, viewport: newSize)
+                    }
                 }
             }
             .navigationTitle("图片")
@@ -138,8 +147,12 @@ struct ChatImageGalleryView: View {
         let ratio = next / zoom
         imageOffset = CGSize(width: imageOffset.width * ratio, height: imageOffset.height * ratio)
         zoom = next
-        if let image { imageOffset = bounded(imageOffset, image: image, viewport: viewportSize) }
-        if next == 1 { imageOffset = .zero }
+        if let image {
+            imageOffset = bounded(imageOffset, image: image, viewport: viewportSize)
+        }
+        if next == 1 {
+            imageOffset = .zero
+        }
     }
 
     private func bounded(_ proposed: CGSize, image: UIImage, viewport: CGSize) -> CGSize {

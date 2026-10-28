@@ -3,7 +3,7 @@ import Foundation
 struct GatewayConfiguration: Hashable, Sendable {
     var baseURL: URL
     var token: String
-    var localIdentity: String? = nil
+    var localIdentity: String?
 
     static let local = GatewayConfiguration(
         baseURL: URL(string: "http://127.0.0.1:18790")!,
@@ -176,8 +176,8 @@ struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
 
     static func intakeDraft(_ target: ExternalIntakeTarget) -> ConversationSelection {
         ConversationSelection(id: target.conversationID, title: target.title, agentId: target.agentID,
-            transcriptId: nil, isDraft: true, model: target.model, thinkingLevel: target.thinkingLevel,
-            projectId: target.projectID, executionMode: target.executionMode)
+                              transcriptId: nil, isDraft: true, model: target.model, thinkingLevel: target.thinkingLevel,
+                              projectId: target.projectID, executionMode: target.executionMode)
     }
 
     static func projectDraft(

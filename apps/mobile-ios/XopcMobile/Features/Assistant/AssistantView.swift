@@ -17,7 +17,7 @@ struct AssistantView<Dock: View>: View {
     let onPersonalAgentUpdated: (PersonalAgentRecord) -> Void
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
-    var externalIntake: ExternalIntakeBatch? = nil
+    var externalIntake: ExternalIntakeBatch?
     var onExternalIntakeFinished: (UUID, String?) -> Void = { _, _ in }
     let bottomDock: (AssistantComposer, Bool) -> Dock
 
@@ -121,176 +121,176 @@ struct AssistantView<Dock: View>: View {
 
     private var chatLifecycle: some View {
         chatLayout
-        .fullScreenCover(isPresented: $showingMessageSearch) {
-            ChatMessageSearchView(messages: state.messages, configuration: configuration,
-                                  conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
-                                  canReadAloud: realtimeVoiceCall.phase == .idle)
-        }
-        .sheet(isPresented: $showingPersonalProfile) {
-            if let personalAgent, let conversation {
-                PersonalAgentProfileView(configuration: configuration, record: personalAgent,
-                                         conversation: conversation, onSaved: onPersonalAgentUpdated)
-                    .presentationDetents([.fraction(0.65)])
+            .fullScreenCover(isPresented: $showingMessageSearch) {
+                ChatMessageSearchView(messages: state.messages, configuration: configuration,
+                                      conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
+                                      canReadAloud: realtimeVoiceCall.phase == .idle)
             }
-        }
-        .task(id: configuration) {
-            await state.load(using: GatewayClient(configuration: configuration))
-            if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
-                state.select(agent)
+            .sheet(isPresented: $showingPersonalProfile) {
+                if let personalAgent, let conversation {
+                    PersonalAgentProfileView(configuration: configuration, record: personalAgent,
+                                             conversation: conversation, onSaved: onPersonalAgentUpdated)
+                        .presentationDetents([.fraction(0.65)])
+                }
             }
-        }
-        .task(id: ConversationLoadKey(
-            configuration: configuration,
-            conversationID: conversation?.id,
-            transcriptID: conversation?.transcriptId,
-            isDraft: conversation?.isDraft,
-            isForeground: scenePhase == .active && isActive
-        )) {
-            guard scenePhase == .active, isActive else { state.pauseConversation(); return }
-            await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
-        }
-        .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                           isActive: isActive && scenePhase == .active))
-        {
-            guard scenePhase == .active, isActive, let conversation, !conversation.isDraft else { return }
-            await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
-        }
-        .onChange(of: scenePhase) {
-            if scenePhase != .active {
+            .task(id: configuration) {
+                await state.load(using: GatewayClient(configuration: configuration))
+                if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
+                    state.select(agent)
+                }
+            }
+            .task(id: ConversationLoadKey(
+                configuration: configuration,
+                conversationID: conversation?.id,
+                transcriptID: conversation?.transcriptId,
+                isDraft: conversation?.isDraft,
+                isForeground: scenePhase == .active && isActive
+            )) {
+                guard scenePhase == .active, isActive else { state.pauseConversation(); return }
+                await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
+            }
+            .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
+                                               isActive: isActive && scenePhase == .active))
+            {
+                guard scenePhase == .active, isActive, let conversation, !conversation.isDraft else { return }
+                await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
+            }
+            .onChange(of: scenePhase) {
+                if scenePhase != .active {
+                    state.pauseConversation()
+                }
+            }
+            .onChange(of: isActive) {
+                if !isActive {
+                    state.pauseConversation()
+                }
+            }
+            .onChange(of: conversation?.id, initial: true) {
+                readAloud.stop()
+                assistantAudio.stop()
+                executionPresentation = nil
+                isAtBottom = true
+                followingBottom = true
+                replySpace = ChatReplySpace()
+                replyRowHeights = [:]
+                replyUserText = nil
+                activityHeight = 0
+                if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
+                    state.select(agent)
+                }
+                restoreComposerDraft()
+                isActionPanelExpanded = false
+            }
+            .onChange(of: configuration) { restoreComposerDraft() }
+            .onChange(of: draft) { scheduleComposerSave() }
+            .onChange(of: attachments) { scheduleComposerSave() }
+            .onChange(of: references) { scheduleComposerSave() }
+            .onChange(of: externalIntake?.id) { handleExternalIntake() }
+            .onChange(of: quickChatHandoff?.id) {
+                handleQuickChatHandoff()
+            }
+            .onAppear(perform: handleQuickChatHandoff)
+            .onDisappear {
+                saveComposerDraft()
                 state.pauseConversation()
+                readAloud.stop()
+                assistantAudio.stop()
+                onInputFocusChanged(false)
             }
-        }
-        .onChange(of: isActive) {
-            if !isActive {
-                state.pauseConversation()
-            }
-        }
-        .onChange(of: conversation?.id, initial: true) {
-            readAloud.stop()
-            assistantAudio.stop()
-            executionPresentation = nil
-            isAtBottom = true
-            followingBottom = true
-            replySpace = ChatReplySpace()
-            replyRowHeights = [:]
-            replyUserText = nil
-            activityHeight = 0
-            if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
-                state.select(agent)
-            }
-            restoreComposerDraft()
-            isActionPanelExpanded = false
-        }
-        .onChange(of: configuration) { restoreComposerDraft() }
-        .onChange(of: draft) { scheduleComposerSave() }
-        .onChange(of: attachments) { scheduleComposerSave() }
-        .onChange(of: references) { scheduleComposerSave() }
-        .onChange(of: externalIntake?.id) { handleExternalIntake() }
-        .onChange(of: quickChatHandoff?.id) {
-            handleQuickChatHandoff()
-        }
-        .onAppear(perform: handleQuickChatHandoff)
-        .onDisappear {
-            saveComposerDraft()
-            state.pauseConversation()
-            readAloud.stop()
-            assistantAudio.stop()
-            onInputFocusChanged(false)
-        }
     }
 
     private var chatBody: some View {
         chatLifecycle
-        .onChange(of: assistantAudioObservation, initial: true) { _, observation in
-            assistantAudio.observe(observation, configuration: configuration)
-        }
-        .modifier(AttachmentPickerModifier(
-            attachments: $attachments,
-            errorMessage: $attachmentError,
-            showingPhotoPicker: $showingPhotoPicker,
-            showingFilePicker: $showingFilePicker,
-            showingCameraPicker: $showingCameraPicker
-        ))
-        .sheet(isPresented: $showingSessionActions) {
-            AssistantSessionActionsView(
-                configuration: configuration,
-                conversation: conversation,
-                state: state,
-                onStartConversation: { requestConversation($0) },
-                pendingReferences: references,
-                onAddReference: { reference in
-                    guard references.count < 5,
-                          !references.contains(where: { $0.id == reference.id }) else { return }
+            .onChange(of: assistantAudioObservation, initial: true) { _, observation in
+                assistantAudio.observe(observation, configuration: configuration)
+            }
+            .modifier(AttachmentPickerModifier(
+                attachments: $attachments,
+                errorMessage: $attachmentError,
+                showingPhotoPicker: $showingPhotoPicker,
+                showingFilePicker: $showingFilePicker,
+                showingCameraPicker: $showingCameraPicker
+            ))
+            .sheet(isPresented: $showingSessionActions) {
+                AssistantSessionActionsView(
+                    configuration: configuration,
+                    conversation: conversation,
+                    state: state,
+                    onStartConversation: { requestConversation($0) },
+                    pendingReferences: references,
+                    onAddReference: { reference in
+                        guard references.count < 5,
+                              !references.contains(where: { $0.id == reference.id }) else { return }
+                        references.append(reference)
+                    },
+                    onConversationUpdated: onConversationUpdated,
+                    onStartScopedConversation: { project, mode in
+                        requestStart(.scoped(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main"))
+                    }
+                )
+            }
+            .sheet(item: $executionPresentation) { presentation in
+                AssistantExecutionSheet(
+                    presentation: presentation,
+                    configuration: configuration,
+                    assistantState: state,
+                    onDismiss: { executionPresentation = nil }
+                )
+            }
+            .sheet(isPresented: $showingReferencePicker) {
+                ReferencePickerView(
+                    gateway: GatewayClient(configuration: configuration),
+                    selectedReferences: references,
+                    initialKind: referenceKind,
+                    conversationID: conversation?.isDraft == false ? conversation?.id : nil
+                ) { reference in
+                    guard references.count < 5, !references.contains(where: { $0.id == reference.id }) else {
+                        return
+                    }
                     references.append(reference)
-                },
-                onConversationUpdated: onConversationUpdated,
-                onStartScopedConversation: { project, mode in
-                    requestStart(.scoped(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main"))
                 }
-            )
-        }
-        .sheet(item: $executionPresentation) { presentation in
-            AssistantExecutionSheet(
-                presentation: presentation,
-                configuration: configuration,
-                assistantState: state,
-                onDismiss: { executionPresentation = nil }
-            )
-        }
-        .sheet(isPresented: $showingReferencePicker) {
-            ReferencePickerView(
-                gateway: GatewayClient(configuration: configuration),
-                selectedReferences: references,
-                initialKind: referenceKind,
-                conversationID: conversation?.isDraft == false ? conversation?.id : nil
-            ) { reference in
-                guard references.count < 5, !references.contains(where: { $0.id == reference.id }) else {
-                    return
-                }
-                references.append(reference)
             }
-        }
-        .sheet(isPresented: $showingVoiceRecorder) {
-            VoiceAttachmentRecorderView(configuration: configuration) { attachment in
-                do {
-                    try AttachmentPolicy.validateChat(size: attachment.size, current: attachments)
-                    attachments.append(attachment)
-                } catch {
-                    attachmentError = error.localizedDescription
-                    return
+            .sheet(isPresented: $showingVoiceRecorder) {
+                VoiceAttachmentRecorderView(configuration: configuration) { attachment in
+                    do {
+                        try AttachmentPolicy.validateChat(size: attachment.size, current: attachments)
+                        attachments.append(attachment)
+                    } catch {
+                        attachmentError = error.localizedDescription
+                        return
+                    }
+                } onTranscribed: { text in
+                    let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    draft = existing.isEmpty ? text : "\(existing) \(text)"
                 }
-            } onTranscribed: { text in
-                let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                draft = existing.isEmpty ? text : "\(existing) \(text)"
             }
-        }
-        .confirmationDialog("开始新对话？", isPresented: Binding(
-            get: { pendingStart != nil }, set: {
-                if !$0 {
+            .confirmationDialog("开始新对话？", isPresented: Binding(
+                get: { pendingStart != nil }, set: {
+                    if !$0 {
+                        pendingStart = nil
+                    }
+                }
+            )) {
+                Button("开始新对话", role: .destructive) {
+                    if let start = pendingStart {
+                        performStart(start)
+                    }
                     pendingStart = nil
                 }
-            }
-        )) {
-            Button("开始新对话", role: .destructive) {
-                if let start = pendingStart {
-                    performStart(start)
+                Button("取消", role: .cancel) { pendingStart = nil }
+            } message: { Text("当前未发送的文字、附件和引用将被清空。") }
+            .alert("无法开始语音", isPresented: Binding(
+                get: { voiceStartError != nil },
+                set: {
+                    if !$0 {
+                        voiceStartError = nil
+                    }
                 }
-                pendingStart = nil
+            )) {
+                Button("好") { voiceStartError = nil }
+            } message: {
+                Text(voiceStartError ?? "请稍后重试")
             }
-            Button("取消", role: .cancel) { pendingStart = nil }
-        } message: { Text("当前未发送的文字、附件和引用将被清空。") }
-        .alert("无法开始语音", isPresented: Binding(
-            get: { voiceStartError != nil },
-            set: {
-                if !$0 {
-                    voiceStartError = nil
-                }
-            }
-        )) {
-            Button("好") { voiceStartError = nil }
-        } message: {
-            Text(voiceStartError ?? "请稍后重试")
-        }
     }
 
     @ViewBuilder

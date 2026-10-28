@@ -15,16 +15,19 @@ final class AppState {
         externalIntake = batch
         selectedTab = .assistant
     }
+
     func externalIntakeFinished(_ id: UUID, error: String?) {
         guard externalIntake?.id == id else { return }
         externalIntake = nil
         externalIntakeError = error
         externalIntakeRevision += 1
     }
+
     private(set) var quickChatHandoff: QuickChatHandoff?
     private(set) var gatewayConfiguration: GatewayConfiguration {
         didSet { restoreConversationSelection() }
     }
+
     private(set) var selectedConversation: ConversationSelection? {
         didSet {
             if let selectedConversation {
@@ -33,6 +36,7 @@ final class AppState {
             }
         }
     }
+
     private var selectionScope = ""
     private func restoreConversationSelection() {
         let scope = ComposerDraftStore.accountScope(gatewayConfiguration)
@@ -41,6 +45,7 @@ final class AppState {
         do { selectedConversation = try ComposerDraftStore().readSelection(configuration: gatewayConfiguration) }
         catch { selectedConversation = nil; connectionStorageError = error.localizedDescription }
     }
+
     private(set) var connectionStorageError: String?
     private(set) var gatewayProfiles: [GatewayProfile]
     private(set) var activeGatewayProfileID: String?

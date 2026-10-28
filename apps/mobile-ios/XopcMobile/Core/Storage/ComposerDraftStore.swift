@@ -7,22 +7,23 @@ struct SavedComposerDraft: Codable, Equatable {
     var references: [ContextReference] = []
     var intakeReceipts: [UUID] = []
     func addingExternalFiles(_ batch: ExternalIntakeBatch, store: ExternalIntakeStore) throws -> SavedComposerDraft {
-        if intakeReceipts.contains(batch.id) { return self }
+        if intakeReceipts.contains(batch.id) {
+            return self
+        }
         var result = self
         for file in batch.files where !result.attachments.contains(where: { $0.id == file.id }) {
             try AttachmentPolicy.validateChat(size: file.size, current: result.attachments)
             let bytes = try store.data(file, in: batch)
             result.attachments.append(MessageAttachment(id: file.id, type: file.mimeType.hasPrefix("image/") ? "image" : "file",
-                name: file.name, mimeType: file.mimeType, size: file.size, data: bytes.base64EncodedString()))
+                                                        name: file.name, mimeType: file.mimeType, size: file.size, data: bytes.base64EncodedString()))
         }
         result.intakeReceipts.append(batch.id)
         return result
     }
-
 }
 
 struct ComposerDraftStore {
-    var baseDirectory: URL? = nil
+    var baseDirectory: URL?
     static func accountScope(_ configuration: GatewayConfiguration) -> String {
         SHA256.hash(data: Data((configuration.localIdentity ?? (configuration.baseURL.absoluteString + "\n" + configuration.token)).utf8))
             .map { String(format: "%02x", $0) }.joined()
