@@ -6,6 +6,7 @@ import { StdioTransport, StreamableHttpTransport, type AuthProvider, type JsonRp
 import type { McpTransportFactory } from '@earendil-works/pi-coding-agent';
 import { Agent, fetch as safeFetch } from 'undici';
 
+import { mcpStdioSupervisor } from '../../process/mcp-stdio-supervisor.js';
 import { checkUrlSafety } from '../tools/url-safety.js';
 
 export type McpObservation = { method: string; stage: string; status: number; contentType: string; retryAt?: number; challenge?: string };
@@ -16,19 +17,6 @@ export function retryAfter(value: string | null, now = Date.now()): number | und
   return Number.isFinite(at) ? Math.max(now, at) : undefined;
 }
 
-// This supervisor relays stdio only; pi continues to own JSON-RPC and the MCP session.
-const supervisor = `
-import {spawn} from 'node:child_process';
-const p=JSON.parse(process.argv[1]);
-const child=spawn(p.command,p.args,{cwd:p.cwd,env:process.env,detached:process.platform!=='win32',stdio:['pipe','pipe','ignore'],windowsHide:true});
-let stopping=false;
-const stop=()=>{if(stopping)return;stopping=true;try{if(process.platform==='win32')spawn('taskkill',['/pid',String(child.pid),'/T','/F'],{stdio:'ignore',windowsHide:true});else process.kill(-child.pid,'SIGTERM');}catch{}setTimeout(()=>{try{if(process.platform!=='win32')process.kill(-child.pid,'SIGKILL');}catch{}process.exit(0);},500);};
-process.on('SIGTERM',stop);process.on('SIGINT',stop);process.stdin.on('end',stop);process.stdin.on('error',stop);
-child.on('error',()=>{process.stderr.write('Local MCP executable could not start');process.exit(1);});
-child.on('exit',code=>{stop();process.exitCode=code||0;});
-process.stdin.pipe(child.stdin);child.stdin.on('error',()=>{});child.stdout.pipe(process.stdout);
-`;
-
 /** Adapts native transports; credentials are already resolved by prepareNativeMcpConfig. */
 export function createXopcMcpTransport(diagnostics: McpTransportDiagnostics = {}): McpTransportFactory {
   return (entry, cwd, authProvider) => {
@@ -38,7 +26,7 @@ export function createXopcMcpTransport(diagnostics: McpTransportDiagnostics = {}
       const command = String(config.command), args = config.args as string[] | undefined, directory = resolve(cwd, String(config.cwd ?? '.'));
       if (!config.xopcManagedStdio) return new StdioTransport({ command, args, cwd: directory, env, stderr: 'pipe' });
       const inherited = Object.fromEntries(['PATH', 'LANG', 'LC_ALL', 'SystemRoot', 'TEMP', 'TMP'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
-      return new StdioTransport({ command: process.execPath, args: ['--input-type=module', '-e', supervisor, JSON.stringify({ command, args: args ?? [], cwd: directory })],
+      return new StdioTransport({ command: process.execPath, args: ['--input-type=module', '-e', mcpStdioSupervisor, JSON.stringify({ command, args: args ?? [], cwd: directory })],
         cwd: directory, env: { ...inherited, NPM_CONFIG_USERCONFIG: process.platform === 'win32' ? 'NUL' : '/dev/null', ...env }, inheritEnv: false, stderr: 'pipe', closeTimeoutMs: 2000 });
     }
     const url = new URL(String(config.url));

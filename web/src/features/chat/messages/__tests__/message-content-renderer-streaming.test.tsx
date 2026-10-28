@@ -584,7 +584,8 @@ describe('streaming assistant Markdown rendering', () => {
 
     expect(container.querySelector('.animate-spin')).toBeNull();
     expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
-    expect(container.textContent).not.toContain('30');
+    expect(container.querySelector('[role="status"]')?.textContent).not.toContain('30');
+    expect(container.textContent).toContain('30s');
   });
 
   it('keeps technical failure data in on-demand details', () => {
