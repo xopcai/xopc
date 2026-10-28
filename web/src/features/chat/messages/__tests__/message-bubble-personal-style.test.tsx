@@ -6,9 +6,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageBubble } from '@/features/chat/messages/message-bubble';
+import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import type { Message } from '@/features/chat/messages/messages.types';
 import * as workspaceApi from '@/features/workspace/workspace-api';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useDevViewStore } from '@/stores/dev-view-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 describe('Personal AI message styling', () => {
@@ -19,12 +21,14 @@ describe('Personal AI message styling', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
       .IS_REACT_ACT_ENVIRONMENT = true;
     useLocaleStore.setState({ language: 'en' });
+    useDevViewStore.setState({ showRawToolData: false });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
   });
 
   afterEach(() => {
+    useDevViewStore.setState({ showRawToolData: false });
     useWorkspacePreviewStore.getState().setPath(null);
     vi.restoreAllMocks();
     act(() => root.unmount());
@@ -33,9 +37,9 @@ describe('Personal AI message styling', () => {
 
   function render(message: Message, personal: boolean, isStreaming: boolean) {
     act(() => root.render(
-      <MemoryRouter>
+      <ExtensionProvider><MemoryRouter>
         <MessageBubble message={message} personal={personal} isStreaming={isStreaming} progress={null} conversationId="personal-chat" />
-      </MemoryRouter>,
+      </MemoryRouter></ExtensionProvider>,
     ));
   }
 
@@ -114,8 +118,10 @@ describe('Personal AI message styling', () => {
 
   it('shows the waiting bubble until an assistant answer starts', () => {
     render({ role: 'assistant', content: [], pendingResponseStatus: 'waiting' }, true, true);
-    expect(container.querySelector('[data-status-phase="waiting"]')).not.toBeNull();
-    expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
+    expect(container.querySelector('[data-status-phase="waiting"]')).toBeNull();
+    expect(container.querySelectorAll('.xopc-personal-thinking-dots i')).toHaveLength(3);
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(container.querySelector('[data-assistant-work-log]')).toBeNull();
 
     render({ role: 'assistant', content: [{ type: 'text', text: 'Hello back' }] }, true, true);
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
@@ -127,7 +133,8 @@ describe('Personal AI message styling', () => {
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
   });
 
-  it('groups live Personal narration and keeps it inspectable after completion', () => {
+  it.each([false, true])('uses only dots during Personal activity with raw tool data=%s', (showRawToolData) => {
+    useDevViewStore.setState({ showRawToolData });
     const opening: Message = { role: 'assistant', content: [{ type: 'text', text: '我先核对论文里的数值。', segmentId: 'first', presentation: 'pending' }] };
     render(opening, true, true);
     expect(container.querySelector('.assistant-markdown-content')?.textContent).toContain('我先核对论文里的数值。');
@@ -137,9 +144,23 @@ describe('Personal AI message styling', () => {
     expect(container.querySelector('.assistant-markdown-content')?.textContent).not.toContain('我先核对论文里的数值。');
     expect(container.textContent).toContain('这项结果检验的是轨道衰减。');
     render({ ...opening, content: [{ type: 'text', text: '我先核对论文里的数值。', presentation: 'narration' }] }, true, false);
-    expect(container.querySelector('[data-assistant-work-log] button[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
-    act(() => container.querySelector<HTMLButtonElement>('[data-assistant-work-log] button[aria-expanded]')?.click());
-    expect(container.querySelector('[data-assistant-activity-flow]')?.textContent).toContain('我先核对论文里的数值。');
+    expect(container.querySelector('[data-assistant-work-log]')).toBeNull();
+    expect(container.textContent).not.toContain('我先核对论文里的数值。');
+    render({ role: 'assistant', content: [
+      { type: 'thinking', text: 'Private reasoning', streaming: true },
+      { type: 'tool_use', id: 'lookup', name: 'read_file', status: 'running' },
+    ] }, true, true);
+    expect(container.querySelectorAll('.xopc-personal-thinking-dots i')).toHaveLength(3);
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(container.querySelector('[data-assistant-work-log]')).toBeNull();
+    expect(container.querySelector('.assistant-activity-busy')).toBeNull();
+    render({ role: 'assistant', content: [
+      { type: 'tool_use', id: 'lookup', name: 'read_file', status: 'done' },
+      { type: 'text', text: 'Done.', presentation: 'answer' },
+    ] }, true, false);
+    expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
+    expect(container.querySelector('[data-assistant-work-log]')).toBeNull();
+    expect(container.textContent).toContain('Done.');
   });
 
   it('does not reveal a fragmented silent-reply marker in the Personal conversation', () => {

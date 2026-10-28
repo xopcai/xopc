@@ -105,9 +105,11 @@ export function AssistantStepsBlock({
   cardLabels,
   conversationId,
   simplified = true,
+  personal = false,
   answerStarted = false,
 }: {
   simplified?: boolean;
+  personal?: boolean;
   answerStarted?: boolean;
   workLog: AssistantTurnWorkLogPresentation;
   pendingStatus?: 'sending' | 'waiting';
@@ -273,6 +275,15 @@ export function AssistantStepsBlock({
     runningActions: clusterLabels.ing,
     memoryActivity: stepLabels.memoryActivity,
   };
+
+  if (personal) {
+    return <>
+      {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
+        <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
+          cardLabels={cardLabels} conversationId={conversationId} surfaceOnly runActive={anyActive} />
+      ))}
+    </>;
+  }
 
   const headerMain = anyActive ? (
     <>
