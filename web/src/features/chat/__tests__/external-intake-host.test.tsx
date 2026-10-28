@@ -56,7 +56,7 @@ it('defaults to a local new conversation, resolves the default agent and deliver
 
 it('uses the explicitly selected existing conversation without creating a new conversation', async () => {
   await render();
-  const radio = document.querySelectorAll<HTMLInputElement>('input[type=radio]')[1]!;
+  const radio = document.querySelectorAll<HTMLInputElement>('input[type=radio]')[1];
   await act(async () => radio.click());
   await act(async () => button('加入输入框').click());
   expect(mocks.create).not.toHaveBeenCalled();
