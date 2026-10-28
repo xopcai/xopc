@@ -1159,7 +1159,9 @@ it('uses host conversation authority for setup commands rather than model-suppli
   const deps = { getCurrentAgentId: () => 'main', getCurrentConversationId: () => 'actual-conversation',
     getPhoneSetupService: () => ({ command }) as any, canConfigureFromConversation: () => false };
   await createXopcUseTool(deps).execute('denied', { mode: 'phone_setup', command: 'configure', args: { canConfigure: true, conversationId: 'forged', enabled: true } });
-  expect(command).toHaveBeenLastCalledWith('configure', expect.any(Object), { conversationId: 'actual-conversation', agentId: 'main', canConfigure: false, runId: undefined }, false);
+  expect(command).toHaveBeenLastCalledWith('configure', expect.any(Object), { conversationId: 'actual-conversation', agentId: 'main', canConfigure: false, isAuthorized: expect.any(Function), runId: undefined }, false);
+  expect(command.mock.lastCall?.[2].isAuthorized()).toBe(false);
   await createXopcUseTool({ ...deps, canConfigureFromConversation: () => true }).execute('authorized', { mode: 'phone_setup', command: 'configure', args: { enabled: true } });
-  expect(command).toHaveBeenLastCalledWith('configure', expect.any(Object), { conversationId: 'actual-conversation', agentId: 'main', canConfigure: true, runId: undefined }, false);
+  expect(command).toHaveBeenLastCalledWith('configure', expect.any(Object), { conversationId: 'actual-conversation', agentId: 'main', canConfigure: true, isAuthorized: expect.any(Function), runId: undefined }, false);
+  expect(command.mock.lastCall?.[2].isAuthorized()).toBe(true);
 });

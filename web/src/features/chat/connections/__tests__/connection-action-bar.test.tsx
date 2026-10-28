@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConnectionWaitView } from '@xopcai/gateway-contract';
 import { ConnectionActionBar } from '../connection-action-bar';
@@ -25,7 +26,7 @@ vi.mock('@/features/connectors/components/install-connector-dialog', () => ({
 describe('single connection action area', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
-  const render = async () => { await act(async () => root.render(<ConnectionActionBar conversationId="one" />)); };
+  const render = async () => { await act(async () => root.render(<MemoryRouter><ConnectionActionBar conversationId="one" /></MemoryRouter>)); };
   const click = async (text: string) => {
     const button = [...document.querySelectorAll('button')].find(node => node.textContent?.trim() === text);
     expect(button, text).toBeTruthy();
@@ -137,7 +138,7 @@ describe('single connection action area', () => {
 
     // An uncached session switch must not briefly insert a placeholder either.
     mocked.state.isLoading = true;
-    await act(async () => root.render(<ConnectionActionBar key="two" conversationId="two" />));
+    await act(async () => root.render(<MemoryRouter><ConnectionActionBar key="two" conversationId="two" /></MemoryRouter>));
     expect(container.childElementCount).toBe(0);
   });
   it('shows a connection need when it arrives after the initial check', async () => {
