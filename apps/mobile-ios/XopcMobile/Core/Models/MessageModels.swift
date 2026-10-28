@@ -1,6 +1,7 @@
 import Foundation
 
 struct WireMessage: Decodable, Sendable {
+    var display: Bool? = nil
     let id: String?
     let messageId: String?
     let turnId: String?
@@ -49,6 +50,7 @@ struct HistoryToolCall: Decodable, Sendable {
 }
 
 struct WireMessageMetadata: Decodable, Sendable {
+    var hiddenFromClient: Bool? = nil
     let sourceContexts: [SourceContextMetadata]?
     var turnOutcome: HistoryTurnOutcome?
 }

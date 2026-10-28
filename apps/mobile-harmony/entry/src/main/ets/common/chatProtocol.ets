@@ -42,6 +42,7 @@ export function historyRows(history: XopcHistory, page: string = 'latest'): Xopc
   if (!history.session || !Array.isArray(history.session.messages) || !history.pagination) throw new Error('INVALID_HISTORY');
   const rows: XopcChatRow[] = [];
   history.session.messages.forEach((message, index: number): void => {
+    if (message.display === false || message.metadata?.hiddenFromClient === true) return;
     if (!['user', 'user-with-attachments', 'assistant', 'tool', 'toolResult'].includes(message.role)) return;
     const clientId = message.metadata?.clientMessageId;
     const userIdentity = (message.role === 'user' || message.role === 'user-with-attachments')

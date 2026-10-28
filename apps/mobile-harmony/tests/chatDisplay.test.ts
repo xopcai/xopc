@@ -32,3 +32,14 @@ describe('user display contract', () => {
     expect(rows[1].text).toBe(text); expect(input.session.messages[0].content).toBe(text);
   });
 });
+
+it('hides internal continuation rows while retaining actual user text and connection feedback', () => {
+  const rows = historyRows({ session: { key: 'conversation', messages: [
+    { id: 'hidden', role: 'user', display: false, content: 'Internal continuation instructions' },
+    { id: 'private', role: 'user', metadata: { hiddenFromClient: true }, content: 'Internal setup data' },
+    { id: 'context', role: 'custom', display: false, content: 'Internal tools instructions' },
+    { id: 'user', role: 'user', content: 'MCP configuration is saved. What does this mean?' },
+    { id: 'answer', role: 'assistant', content: '已连接，可以继续使用。' },
+  ] }, pagination: { hasMore: false } });
+  expect(rows.map(row => row.id)).toEqual(['user', 'answer']);
+});
