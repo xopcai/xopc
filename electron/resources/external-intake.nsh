@@ -12,10 +12,10 @@
 
 !macro customInstall
   WriteRegStr HKCU "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}" "FriendlyAppName" "xopc"
-  WriteRegStr HKCU "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\shell\open\command" "" '$"$INSTDIR\${APP_EXECUTABLE_FILENAME}$" $"%1$"'
+  WriteRegStr HKCU "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
   WriteRegStr HKCU "Software\Classes\xopc.attachment" "" "xopc chat attachment"
-  WriteRegStr HKCU "Software\Classes\xopc.attachment\DefaultIcon" "" '$"$INSTDIR\${APP_EXECUTABLE_FILENAME}$",0'
-  WriteRegStr HKCU "Software\Classes\xopc.attachment\shell\open\command" "" '$"$INSTDIR\${APP_EXECUTABLE_FILENAME}$" $"%1$"'
+  WriteRegStr HKCU "Software\Classes\xopc.attachment\DefaultIcon" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}",0'
+  WriteRegStr HKCU "Software\Classes\xopc.attachment\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
   !insertmacro xopcOpenWithExtension png
   !insertmacro xopcOpenWithExtension jpg
   !insertmacro xopcOpenWithExtension jpeg
