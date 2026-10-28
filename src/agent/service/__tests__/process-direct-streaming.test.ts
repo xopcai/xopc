@@ -3,6 +3,7 @@ import { contextRefWireToken } from '@xopcai/gateway-contract';
 
 const mocks = vi.hoisted(() => ({
   resume: vi.fn(),
+  mcpResume: vi.fn(),
   run: vi.fn(),
   pending: vi.fn(),
   clearPending: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   voiceInspection: vi.fn(),
   isVoice: vi.fn(),
 }));
+vi.mock('../../mcp/continuation-input.js', () => ({ getMcpSetupResumeInput: mocks.mcpResume }));
 vi.mock('../../../storage/sqlite/connection-wait-repository.js', () => ({ getConnectionResumeInput: mocks.resume }));
 vi.mock('../../../session/index.js', () => ({
   resolveConfiguredActivityDetailDefault: () => 'stream',
@@ -58,6 +60,7 @@ describe('direct stream input visibility', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resume.mockReturnValue(undefined);
+    mocks.mcpResume.mockReturnValue(undefined);
     mocks.isVoice.mockReturnValue(false);
     mocks.voiceInspection.mockReturnValue(false);
     mocks.voiceMerge.mockImplementation(async (_attachments: unknown, text: string) => ({
@@ -78,6 +81,21 @@ describe('direct stream input visibility', () => {
     const events = [];
     for await (const event of runProcessDirectStreaming(deps, {
       content: 'Internal recovery instruction', conversationId: 'agent:main:main', runId: 'resume-run',
+      origin: { type: 'system', source: 'internal' },
+    })) events.push(event);
+    expect(events.map(event => event.type)).toEqual(['message_end']);
+    expect(mocks.run).toHaveBeenCalledOnce();
+    expect(title).not.toHaveBeenCalled();
+    expect(mocks.pending).not.toHaveBeenCalled();
+    expect(mocks.clearPending).not.toHaveBeenCalled();
+  });
+
+  it('keeps MCP setup resume instructions out of visible messages, titles and pending user rows', async () => {
+    mocks.mcpResume.mockReturnValue({ content: 'MCP configuration is saved. Internal tool instructions.' });
+    const { deps, title } = setup();
+    const events = [];
+    for await (const event of runProcessDirectStreaming(deps, {
+      content: 'MCP configuration is saved. Internal tool instructions.', conversationId: 'conversation', runId: 'mcp-run',
       origin: { type: 'system', source: 'internal' },
     })) events.push(event);
     expect(events.map(event => event.type)).toEqual(['message_end']);

@@ -15,6 +15,7 @@ See [Documentation information architecture](./documentation-information-archite
 Active proposed designs:
 
 - [对话优先配置：Skill、MCP 与定时任务](./conversation-first-configuration-product-plan-2026-10-28.md)：当前实现与缺口、原 Chat 配置闭环、安全输入，以及第一阶段任务和验收标准。
+- [从服务名称到 MCP 连接：技术方案](technical/mcp-name-to-connection-technical-plan-2026-10-28.md)：有来源的服务发现、认证不确定性、有限恢复、接入方式分期及从名称开始的 E2E 门槛。
 - [微信对话配置：安全输入、OAuth 回流与原私聊续跑](technical/weixin-conversation-configuration-2026-10-28.md)
 - [Browser / Phone 对话配置审查修复](technical/browser-phone-setup-review-fixes-2026-10-28.md)：取消与重置保护、人工步骤弹窗、原对话续跑和真实 E2E 验收边界。
 - [Benchmark 驱动 Harness 持续自我迭代](./benchmark-driven-harness-evolution-plan.md)：统一评测证据、并发快速验证、开发者 Dashboard 与执行收敛/可靠交付试点的分阶段建设计划。

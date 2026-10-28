@@ -1022,6 +1022,7 @@ export class AgentService {
   /** Revoke setup grants and release independent verification sessions before resetting. */
   async cancelConfigurationSetups(conversationId: string): Promise<void> {
     await Promise.all([
+      this.config.getMcpSetupService?.()?.cancelConversation(conversationId),
       this.config.getPhoneSetupService?.()?.cancelConversation(conversationId),
       this.config.getBrowserSetupService?.()?.cancelConversation(conversationId),
     ]);

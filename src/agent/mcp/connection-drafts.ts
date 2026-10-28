@@ -8,6 +8,7 @@ import { createNativeMcpCredentials, type NativeMcpCredentials } from './credent
 import { cancelMcpAuthorization, getMcpAuthorization, probeMcpConnection, startMcpAuthorization, submitMcpRedirect,
   type McpConnectionProbe } from './connection-setup.js';
 import { discoverMcpTools } from './tool-catalog.js';
+import type { McpTransportDiagnostics } from './transport.js';
 
 const TTL_MS = 10 * 60_000;
 function canonical(value: unknown): unknown {
@@ -69,10 +70,10 @@ export class McpConnectionDrafts {
     return { id, serverId: draft.serverId, expiresAt: draft.expiresAt };
   }
 
-  async probe(owner: string, id: string): Promise<McpConnectionProbe> {
+  async probe(owner: string, id: string, diagnostics?: McpTransportDiagnostics): Promise<McpConnectionProbe> {
     const draft = this.get(owner, id); this.assertIdle(draft); draft.authorizationId = undefined; draft.running = true; draft.probe = undefined; draft.checkedAt = undefined;
     try {
-      const result = await probeMcpConnection(draft.config, draft.workspace, draft.serverId, { credentials: draft.credentials, signal: draft.controller.signal });
+      const result = await probeMcpConnection(draft.config, draft.workspace, draft.serverId, { credentials: draft.credentials, signal: draft.controller.signal, diagnostics });
       this.get(owner, id);
       draft.probe = result; if (result.state === 'connected') draft.checkedAt = new Date().toISOString(); return result;
     } finally { draft.running = false; }

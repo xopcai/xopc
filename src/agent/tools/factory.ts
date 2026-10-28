@@ -229,7 +229,7 @@ export class AgentToolsFactory {
     const registered = tools.some(tool => tool.name === name);
     const taskActivatable = TASK_EXECUTION_TOOL_IDS.includes(name) && !denied.has(name)
       && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name));
-    const activatable = this.getLazyCapabilityToolNames().includes(name) || taskActivatable;
+    const activatable = (this.getLazyCapabilityToolNames().includes(name) || taskActivatable) && !denied.has(name) && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name));
     return { condition: `tool:${name}`, state: registered || activatable ? 'verified' as const : 'blocked' as const,
       reasonCode: registered ? 'tool_registered' : activatable ? 'tool_activatable' : 'tool_not_registered',
       detail: candidate.tools[name]?.mode === 'ask' ? 'Runtime approval is still required' : 'Registration checked; execution environment is checked by the tool' };

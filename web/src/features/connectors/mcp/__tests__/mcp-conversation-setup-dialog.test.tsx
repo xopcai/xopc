@@ -34,6 +34,18 @@ it('keeps keyboard focus in a labelled dialog and hides secondary connection act
   expect(document.querySelector('input')!.type).toBe('password');
 });
 
+it('offers first-time Token input for a blocked access refusal without claiming a key was rejected', async () => {
+  mocks.data = { ...mocks.data, phase: 'blocked', errorCode: 'access_denied', canProvideToken: true, canReplaceToken: false };
+  await render(); expect(document.querySelector('input')!.type).toBe('password');
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain('账号或服务权限');
+  expect(document.querySelector('[role="alert"]')).toBeNull(); expect(button('保存并连接')).toBeTruthy();
+});
+
+it('keeps non-authentication failures out of the Token form', async () => {
+  mocks.data = { ...mocks.data, phase: 'blocked', errorCode: 'tls', canProvideToken: false };
+  await render(); expect(document.querySelector('input')).toBeNull(); expect(button('重新检查')).toBeTruthy();
+});
+
 it('clears the secret before a pending save and uses the current form version', async () => {
   await render(); const input = document.querySelector('input')!;
   await act(async () => {
@@ -85,4 +97,28 @@ it('offers the native OAuth link without entering secrets into the conversation'
   expect(link.textContent).toBe('继续登录');
   expect(link.target).toBe('_blank'); expect(link.rel).toContain('noopener');
   expect(document.querySelector('input')).toBeNull();
+});
+
+it('submits all documented secret fields together and clears them before the pending request', async () => {
+  mocks.data = { ...mocks.data, secretFields: [{ id: 'api', label: 'API key', name: 'X-API-Key', location: 'header' }, { id: 'tenant', label: 'Tenant token', name: 'X-Tenant-Token', location: 'header' }] };
+  await render();
+  for (const [id, value] of [['api', 'fixture-api'], ['tenant', 'fixture-tenant']]) await act(async () => {
+    const input = document.getElementById(`mcp-setup-${id}`)!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  let finish!: () => void;
+  mocks.fetch.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({}); }));
+  await act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+  expect([...document.querySelectorAll('input')].every(input => input.value === '')).toBe(true);
+  expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toEqual({ action: 'token', expectedVersion: 3, value: { api: 'fixture-api', tenant: 'fixture-tenant' } });
+  await act(async () => finish());
+});
+
+it('disables every recheck action and credential input during the service cooldown', async () => {
+  mocks.data = { ...mocks.data, phase: 'auth_unknown', canProvideToken: true, nextRetryAt: Date.now() + 120000 };
+  await render();
+  expect([...document.querySelectorAll('input')].every(input => input.disabled)).toBe(true);
+  expect([...document.querySelectorAll('button')].filter(node => node.textContent === '重新检查').every(node => node.disabled)).toBe(true);
+  expect(mocks.fetch).not.toHaveBeenCalled();
 });

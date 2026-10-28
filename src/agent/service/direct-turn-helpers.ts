@@ -1,3 +1,4 @@
+import { getMcpSetupResumeInput } from '../mcp/continuation-input.js';
 import { phoneResumeForRun } from '../../phone/assistance.js';
 /**
  * Shared building blocks for the two direct-turn entry points (streaming
@@ -193,7 +194,8 @@ export async function runDirectAgentTurn(
   const turnId = input.runId ?? crypto.randomUUID();
   const isConnectionResume = Boolean(getConnectionResumeInput(input.conversationId, turnId));
   const isClarificationResume = Boolean(getClarificationResumeInput(input.conversationId, turnId));
-  const isResume = Boolean(phoneResumeForRun(input.conversationId, turnId)) || isConnectionResume || isClarificationResume || Boolean(getTaskContinuation(input.conversationId, turnId));
+  const isResume = Boolean(phoneResumeForRun(input.conversationId, turnId)) || isConnectionResume || isClarificationResume || Boolean(getTaskContinuation(input.conversationId, turnId))
+    || Boolean(getMcpSetupResumeInput(input.conversationId, turnId));
   const userContext = await deps.agentManager.prepareUserTurnContext(
     input.userMessage,
     input.conversationId,

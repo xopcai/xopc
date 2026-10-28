@@ -21,7 +21,7 @@ import { materializePluginServers } from './mcp-adapter.js';
 import { pluginConfigMissing, savePluginUserConfig } from './user-config.js';
 import { preparePluginResources } from './resources.js';
 
-const connection = z.object({ name: z.string(), state: z.enum(['pending', 'connected', 'oauth_required', 'token_required', 'error', 'skipped']), toolCount: z.number().optional(), authorizationId: z.string().optional() });
+const connection = z.object({ name: z.string(), state: z.enum(['pending', 'connected', 'oauth_required', 'token_required', 'auth_unknown', 'error', 'skipped']), toolCount: z.number().optional(), authorizationId: z.string().optional() });
 const schema = z.object({
   id: z.string().uuid(), pluginId: pluginName, owner: z.string(), packageRevision: z.string().uuid(), revision: z.number().int(),
   state: z.enum(['pending', 'running', 'action_required', 'completed', 'cancelled', 'interrupted', 'failed']),

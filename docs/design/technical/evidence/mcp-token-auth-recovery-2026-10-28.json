@@ -1,0 +1,122 @@
+{
+  "date": "2026-10-28",
+  "passed": true,
+  "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "inference": "real",
+  "entry": "production Web Chat, 390px",
+  "scope": "First-time Token HTTP 403 recovery and explicit Bearer setup, real model and production Web Chat; not the complete MCP acceptance matrix or official McDonald service.",
+  "fixture": "Independent real HTTP MCP server: HTTP 403 JSON without WWW-Authenticate until the correct Bearer Token is supplied.",
+  "sourceSha256": "41c4132c6aa03286a254f589e46588f892f60901b7cb798b2e5ae5423cb4b759",
+  "cases": [
+    {
+      "id": "mcp-403-auto-start",
+      "checks": {
+        "notPublished": true,
+        "noRead": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "mcp-403-first-token-form",
+      "checks": {
+        "actualChatLink": true,
+        "passwordInput": true,
+        "noFalseRejectedToken": true,
+        "refusedWithoutCredential": true
+      },
+      "passed": true
+    },
+    {
+      "id": "mcp-403-wrong-token-after-restart",
+      "checks": {
+        "sameSetup": true,
+        "notPublished": true,
+        "noRead": true,
+        "inputCleared": true,
+        "credentialRejected": true
+      },
+      "passed": true
+    },
+    {
+      "id": "mcp-403-original-chat-resume",
+      "checks": {
+        "actualRead": true,
+        "uniqueResult": true,
+        "noSecretsInTranscript": true,
+        "noSecretsInConfig": true,
+        "returnedToOriginalChat": true
+      },
+      "passed": true
+    },
+    {
+      "id": "mcp-403-resumed-once",
+      "checks": {
+        "sameSetup": true,
+        "queuedOnce": true
+      },
+      "passed": true
+    },
+    {
+      "id": "mcp-bearer-explicit-start",
+      "checks": {
+        "notPublished": true,
+        "noStorageBypass": true,
+        "visibleReply": true,
+        "noHorizontalOverflow": true
+      },
+      "passed": true
+    },
+    {
+      "id": "mcp-bearer-original-chat-resume",
+      "checks": {
+        "actualRead": true,
+        "uniqueResult": true,
+        "noSecretsInTranscript": true,
+        "noSecretsInConfig": true,
+        "returnedToOriginalChat": true
+      },
+      "passed": true
+    },
+    {
+      "id": "mcp-bearer-no-unauthenticated-probe",
+      "checks": {
+        "noNewRefusal": true,
+        "freshRealRead": true
+      },
+      "passed": true
+    },
+    {
+      "id": "mcp-403-secret-isolation",
+      "checks": {
+        "noSecretsInLogs": true,
+        "noSecretsInUrls": true,
+        "realModel": true
+      },
+      "passed": true
+    }
+  ],
+  "modelRequests": {
+    "count": 18,
+    "httpStatuses": [
+      200
+    ]
+  },
+  "regression": {
+    "files": 7,
+    "tests": 153,
+    "passed": true,
+    "rootAndElectronTypecheck": true,
+    "webTypecheck": true,
+    "webProductionBuild": true,
+    "e2eScriptTypecheck": true,
+    "targetedEslint": true
+  },
+  "boundaries": [
+    "Local protocol servers reproduce the unauthenticated HTTP 403 response; no official McDonald Token used",
+    "No order, coupon or other business mutation performed",
+    "Unrelated chat rendering changes excluded"
+  ]
+}

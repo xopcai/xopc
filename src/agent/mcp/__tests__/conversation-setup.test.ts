@@ -10,6 +10,7 @@ import { ConfigSchema, type Config } from '../../../config/schema.js';
 import { openXopcDatabase, closeXopcDatabase } from '../../../storage/sqlite/connection.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { McpConversationSetup } from '../conversation-setup.js';
+import { McpDiscovery } from '../discovery.js';
 import { resolveConnectorSecretReferences } from '../../../connectors/secret-store.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { mcpConfigRevision } from '../connection-drafts.js';
@@ -33,8 +34,118 @@ beforeEach(() => {
   service = new McpConversationSetup({ readConfig: () => config, saveConfig: async next => { config = next; return { saved: true }; }, withConfigLock: operation => operation(), resume });
   native.probeMcpConnection.mockResolvedValue({ state: 'connected', toolCount: 1 });
 });
-afterEach(() => { vi.restoreAllMocks(); closeXopcDatabase(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { service.dispose(); vi.useRealTimers(); vi.restoreAllMocks(); closeXopcDatabase(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
 async function start() { return await service.command('start', { serverId: 'docs', url: 'http://127.0.0.1:12345/mcp', purpose: 'Read my profile' }, context) as any; }
+
+it('stores multiple custom header fields only as secret references and verifies them before commit', async () => {
+  const goal = await service.command('start', { serverId: 'docs', url: 'https://fixture.example/mcp', purpose: 'Read', authentication: 'header',
+    secretFields: [{ id: 'key', label: 'API key', location: 'header', name: 'X-API-Key' }, { id: 'tenant', label: 'Tenant', location: 'header', name: 'X-Tenant-Token' }] }, context) as any;
+  const pending = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;
+  expect(pending.phase).toBe('token_required'); expect(native.probeMcpConnection).not.toHaveBeenCalled();
+  await expect(service.interact(goal.setupId, 'token', { key: 'private-key' }, pending.version)).rejects.toThrow('every requested');
+  const ready = await service.interact(goal.setupId, 'token', { key: 'private-key', tenant: 'private-tenant' }, pending.version) as any;
+  expect(ready.phase).toBe('ready');
+  expect(await resolveConnectorSecretReferences(config.mcp!.servers!.docs.headers)).toEqual({ 'X-API-Key': 'private-key', 'X-Tenant-Token': 'private-tenant' });
+  expect(JSON.stringify(config)).not.toMatch(/private-key|private-tenant/); expect(resume).toHaveBeenCalledTimes(1);
+});
+
+it('requires an exact owner-reviewed stdio plan before connecting or saving environment credentials', async () => {
+  const goal = await service.command('start', { serverId: 'docs', purpose: 'Read', transport: 'stdio', objective: 'complete_task',
+    execution: { command: process.execPath, args: ['fixture.mjs'], sourceUrl: 'https://fixture.example/guide' },
+    secretFields: [{ id: 'key', label: 'Access key', location: 'env', name: 'FIXTURE_ACCESS_KEY' }] }, context) as any;
+  expect(goal.phase).toBe('approval_required'); expect(goal.planApproval.execution.command).toBe(process.execPath);
+  await expect(service.interact(goal.setupId, 'token', { key: 'private-env' }, goal.version)).rejects.toThrow('Approve');
+  expect(native.probeMcpConnection).not.toHaveBeenCalled();
+  const approved = await service.interact(goal.setupId, 'approve', undefined, goal.version, 'owner') as any;
+  expect(approved.phase).toBe('token_required'); expect(native.probeMcpConnection).not.toHaveBeenCalled();
+  expect(await service.interact(goal.setupId, 'token', { key: 'private-env' }, approved.version)).toMatchObject({ phase: 'ready' });
+  expect(config.mcp!.servers!.docs).toMatchObject({ type: 'stdio', command: process.execPath, xopcManagedStdio: true });
+  expect(await resolveConnectorSecretReferences(config.mcp!.servers!.docs.env)).toEqual({ FIXTURE_ACCESS_KEY: 'private-env' });
+  expect(JSON.stringify(config)).not.toContain('private-env');
+});
+
+it('persists Retry-After across a Gateway restart and does not probe early', async () => {
+  vi.useFakeTimers(); const retryAt = Date.now() + 5000;
+  native.probeMcpConnection.mockResolvedValueOnce({ state: 'error', errorCode: 'rate_limited', recovery: { kind: 'wait', retryAt } }).mockResolvedValue({ state: 'connected', toolCount: 1 });
+  const goal = await start(); const waiting = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;
+  expect(waiting.nextRetryAt).toBe(retryAt);
+  await service.command('advance', { setupId: goal.setupId, expectedVersion: waiting.version }, context); expect(native.probeMcpConnection).toHaveBeenCalledTimes(1);
+  service.dispose(); service = new McpConversationSetup({ readConfig: () => config, saveConfig: async next => { config = next; return { saved: true }; }, withConfigLock: fn => fn(), resume });
+  await service.resumePending(true); await vi.advanceTimersByTimeAsync(4999); expect(native.probeMcpConnection).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(2); expect(native.probeMcpConnection).toHaveBeenCalledTimes(2); expect(resume).toHaveBeenCalledTimes(1);
+});
+
+it('stops retrying after cancellation and after three failed probes', async () => {
+  vi.useFakeTimers(); native.probeMcpConnection.mockResolvedValue({ state: 'error', errorCode: 'network' });
+  const first = await start(); const waiting = await service.command('advance', { setupId: first.setupId, expectedVersion: first.version }, context) as any;
+  await service.command('cancel', { setupId: first.setupId, expectedVersion: waiting.version }, context); await vi.advanceTimersByTimeAsync(10_000);
+  expect(native.probeMcpConnection).toHaveBeenCalledTimes(1);
+  const next = await start(); await service.command('advance', { setupId: next.setupId, expectedVersion: next.version }, context);
+  await vi.advanceTimersByTimeAsync(20_000); expect(native.probeMcpConnection).toHaveBeenCalledTimes(4);
+  const final = await service.command('get', { setupId: next.setupId }, context) as any;
+  await service.command('advance', { setupId: next.setupId, expectedVersion: final.version }, context);
+  expect(native.probeMcpConnection).toHaveBeenCalledTimes(4); expect(resume).not.toHaveBeenCalled();
+});
+
+it('requests a known Bearer Token before any unauthenticated connection probe', async () => {
+  const goal = await service.command('start', { serverId: 'docs', url: 'https://fixture.example/mcp', purpose: 'Read', authentication: 'bearer' }, context) as any;
+  const pending = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;
+  expect(pending.phase).toBe('token_required'); expect(native.probeMcpConnection).not.toHaveBeenCalled();
+  expect(await service.interact(goal.setupId, 'get')).toMatchObject({ requiresRecheck: false });
+  const ready = await service.interact(goal.setupId, 'token', 'private-first-token', pending.version) as any;
+  expect(ready.phase).toBe('ready'); expect(native.probeMcpConnection).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(config)).not.toContain('private-first-token'); expect(resume).toHaveBeenCalledTimes(1);
+});
+
+it('recovers first-time Token input from an access-denied goal after Gateway restart', async () => {
+  native.probeMcpConnection.mockResolvedValue({ state: 'error', errorCode: 'access_denied' });
+  const goal = await start();
+  const blocked = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;
+  expect(blocked).toMatchObject({ phase: 'blocked', canProvideToken: true });
+  const restarted = new McpConversationSetup({ readConfig: () => config, saveConfig: async next => { config = next; return { saved: true }; }, withConfigLock: operation => operation(), resume });
+  expect(await restarted.interact(goal.setupId, 'get')).toMatchObject({ canProvideToken: true, requiresRecheck: true });
+  const refreshed = await restarted.interact(goal.setupId, 'advance', undefined, blocked.version) as any;
+  native.probeMcpConnection.mockResolvedValueOnce({ state: 'token_required' });
+  const rejected = await restarted.interact(goal.setupId, 'token', 'wrong-first-token', refreshed.version) as any;
+  expect(rejected).toMatchObject({ phase: 'token_required', errorCode: 'credential_rejected' });
+  expect(config.mcp!.servers!.docs).toBeUndefined(); expect(resume).not.toHaveBeenCalled();
+  native.probeMcpConnection.mockResolvedValueOnce({ state: 'connected', toolCount: 1 });
+  expect(await restarted.interact(goal.setupId, 'token', 'correct-first-token', rejected.version)).toMatchObject({ phase: 'ready' });
+  expect(resume).toHaveBeenCalledTimes(1);
+});
+
+it.each(['network', 'tls', 'rate_limited'])('does not turn %s errors into first-time Token input', async errorCode => {
+  native.probeMcpConnection.mockResolvedValueOnce({ state: 'error', errorCode });
+  const goal = await start(); const blocked = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;
+  expect(blocked.canProvideToken).toBe(false);
+  await expect(service.interact(goal.setupId, 'token', 'private-value', blocked.version)).rejects.toThrow('token is required');
+});
+
+it('refuses first-time Token input after cancellation or reset and rejects nonsecure Bearer hints', async () => {
+  native.probeMcpConnection.mockResolvedValue({ state: 'error', errorCode: 'access_denied' });
+  await expect(service.command('start', { serverId: 'docs', url: 'http://remote.example/mcp', purpose: 'Read', authentication: 'bearer' }, context)).rejects.toThrow('requires HTTPS');
+  const goal = await start(); const blocked = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;
+  const cancelled = await service.command('cancel', { setupId: goal.setupId, expectedVersion: blocked.version }, context) as any;
+  await expect(service.interact(goal.setupId, 'token', 'private-value', cancelled.version)).rejects.toThrow('cancelled');
+  const fresh = await start(); const waiting = await service.command('advance', { setupId: fresh.setupId, expectedVersion: fresh.version }, context) as any;
+  const { resetSessionRecord } = await import('../../../storage/sqlite/session-repository.js');
+  resetSessionRecord(context.conversationId, root);
+  await expect(service.interact(fresh.setupId, 'token', 'private-value', waiting.version)).rejects.toThrow('changed');
+  expect(resume).not.toHaveBeenCalled();
+});
+
+it('rejects expired forms and nonsecure remote first-time Token recovery', async () => {
+  native.probeMcpConnection.mockResolvedValue({ state: 'error', errorCode: 'access_denied' });
+  const remote = await service.command('start', { serverId: 'remote', url: 'http://remote.example/mcp', purpose: 'Read' }, context) as any;
+  const denied = await service.command('advance', { setupId: remote.setupId, expectedVersion: remote.version }, context) as any;
+  expect(denied.canProvideToken).toBe(false);
+  await expect(service.interact(remote.setupId, 'token', 'private-value', denied.version)).rejects.toThrow('token is required');
+  const goal = await start(); const blocked = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;
+  await expect(service.interact(goal.setupId, 'token', 'private-value', blocked.version - 1)).rejects.toThrow('changed');
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 16 * 60_000);
+  await expect(service.interact(goal.setupId, 'token', 'private-value', blocked.version)).rejects.toThrow('no longer accepts');
+  expect(resume).not.toHaveBeenCalled();
+});
 
 it('makes the small direct configuration entry available without relaxing host authority', async () => {
   const tool = withCoreToolExposure(createMcpSetupTool({ getMcpSetupService: () => service,
@@ -97,7 +208,8 @@ it('does not commit or resume after cancellation during a network check', async 
   const goal = await start();
   const advancing = service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context);
   await vi.waitFor(() => expect(release).toBeTypeOf('function'));
-  await service.command('cancel', { setupId: goal.setupId, expectedVersion: goal.version }, context);
+  const pending = await service.command('get', { setupId: goal.setupId }, context) as any;
+  await service.command('cancel', { setupId: goal.setupId, expectedVersion: pending.version }, context);
   release(); await expect(advancing).rejects.toThrow('cancelled');
   expect(config.mcp!.servers!.docs).toBeUndefined(); expect(resume).not.toHaveBeenCalled();
 });
@@ -183,6 +295,16 @@ it('requires exact owner approval before a paired Weixin request can probe or ac
   expect(approved.phase).toBe('token_required');
   expect((await service.interact(goal.setupId, 'get') as any).approval).toMatchObject({ accountId: 'bot-a', peerId: 'alice@im.wechat', endpoint: 'https://data.example.com/mcp' });
   await expect(service.interact(goal.setupId, 'approve', undefined, goal.version, 'owner')).rejects.toThrow('changed');
+  expect(config.mcp!.servers![goal.serverId]).toBeUndefined();
+});
+
+it('keeps explicit Bearer setup behind exact Weixin owner approval', async () => {
+  const ctx = weixinContext();
+  const goal = await service.command('start', { serverId: 'docs', url: 'https://fixture.example/mcp', purpose: 'Read', authentication: 'bearer' }, ctx) as any;
+  expect(goal.phase).toBe('approval_required');
+  await expect(service.interact(goal.setupId, 'token', 'do-not-save', goal.version)).rejects.toThrow('Approve');
+  const approved = await service.interact(goal.setupId, 'approve', undefined, goal.version, 'owner') as any;
+  expect(approved.phase).toBe('token_required'); expect(native.probeMcpConnection).not.toHaveBeenCalled();
   expect(config.mcp!.servers![goal.serverId]).toBeUndefined();
 });
 
@@ -313,6 +435,19 @@ it('aborts native authorization on shutdown but preserves the durable objective 
   service = new McpConversationSetup({ readConfig: () => config, saveConfig: async next => { config = next; return { saved: true }; },
     withConfigLock: operation => operation(), resume });
   expect(await service.interact(goal.setupId, 'get')).toMatchObject({ requiresRecheck: true, phase: 'authorizing' });
+  expect(resume).not.toHaveBeenCalled();
+});
+
+it('requires owner review for every discovered plan even if a legacy candidate reports trusted', async () => {
+  vi.spyOn(McpDiscovery.prototype, 'selected').mockReturnValue({
+    id: 'candidate', trusted: true, evidence: [], sources: [{ url: 'https://docs.example/guide', hash: 'fixture' }], purpose: 'Connect only',
+    plan: { displayName: 'Any service', url: 'https://data.example.com/mcp', transport: 'streamable-http', authentication: 'none', secretFields: [], objective: 'connect_only' },
+  });
+  const goal = await service.command('start', { planId: '00000000-0000-4000-8000-000000000000', expectedPlanVersion: 1, serverId: 'discovered', purpose: 'Connect only' }, context) as any;
+  expect(goal.phase).toBe('approval_required');
+  expect(await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context)).toMatchObject({ phase: 'approval_required' });
+  expect(native.probeMcpConnection).not.toHaveBeenCalled();
+  expect(config.mcp!.servers!.discovered).toBeUndefined();
   expect(resume).not.toHaveBeenCalled();
 });
 

@@ -11,6 +11,7 @@ import type { Config } from '../../config/schema.js';
 import { createEmbeddedModelRuntime } from '../embedded/model-runtime.js';
 import type { NativeMcpCredentials } from './credential-store.js';
 import { getNativePiAgentDir, prepareNativeMcpConfig } from './native-mcp.js';
+import { createXopcMcpTransport, type McpTransportDiagnostics } from './transport.js';
 
 export type McpCatalogTool = {
   name: string;
@@ -28,7 +29,7 @@ export type McpLoginInteraction = {
   requestRedirectUrl: (signal?: AbortSignal) => Promise<string | undefined>;
 };
 
-export type McpSessionOptions = { credentials?: NativeMcpCredentials; signal?: AbortSignal; callbackRelayUrl?: string };
+export type McpSessionOptions = { credentials?: NativeMcpCredentials; signal?: AbortSignal; callbackRelayUrl?: string; diagnostics?: McpTransportDiagnostics };
 
 /** A short-lived native session discovers tools without making a model request. */
 export async function discoverMcpTools(config: Config, workspaceDir: string, serverId: string, options?: McpSessionOptions): Promise<McpCatalogTool[]> {
@@ -61,6 +62,7 @@ async function runNativeMcpSession(config: Config, workspaceDir: string, serverI
   const loader = new DefaultResourceLoader({ cwd: workspaceDir, agentDir, settingsManager,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
     extensionFactories: [createToolSearchExtension(), createMcpExtension({
+      createTransport: createXopcMcpTransport({ probe: !interaction, ...options?.diagnostics }),
       credentials: options?.credentials ?? loaded.credentials,
       loadConfig: () => ({ servers: [entry], errors: [], autoEnableCodemode: false }),
       logPath: join(agentDir, 'mcp.log'),
@@ -87,7 +89,8 @@ async function runNativeMcpSession(config: Config, workspaceDir: string, serverI
     if (!runner) throw new Error('Native MCP extension is unavailable.');
     signal?.throwIfAborted();
     signal?.addEventListener('abort', abort, { once: true });
-    await session.bindExtensions({ uiContext: { ...runner.getUIContext(), notify(message) {
+    await session.bindExtensions({ uiContext: { ...runner.getUIContext(), notify(message, type) {
+      if (type === 'error') failure = message;
       if (message.startsWith('MCP servers need attention:') || message.startsWith('MCP failed to load:')) failure = message;
       if (message.startsWith('Signed in to MCP server')) signedIn = true;
       if (message.startsWith('Sign-in ') || message.startsWith('Signed in, but')) failure = message;

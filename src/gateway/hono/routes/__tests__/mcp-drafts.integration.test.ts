@@ -102,7 +102,7 @@ it('isolates MCP drafts and OAuth until an explicit version-checked commit throu
     expect((await fetch(`${base}/drafts`, { method: 'POST' })).status).toBe(401);
     const original = await readFile(configPath, 'utf8');
     const bad = await createDraft('docs', { url: `${origin}/token` }, true);
-    expect((await request(`/drafts/${bad}/probe`, 'POST')).data.payload.state).toBe('token_required');
+    expect((await request(`/drafts/${bad}/probe`, 'POST')).data.payload.state).toBe('auth_unknown');
     expect((await request(`/drafts/${bad}/commit`, 'POST', {})).response.status).toBe(409);
     expect(await readFile(configPath, 'utf8')).toBe(original); expect(service.currentConfig).toBe(config);
     await request(`/drafts/${bad}`, 'DELETE');

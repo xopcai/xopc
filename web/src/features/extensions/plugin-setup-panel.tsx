@@ -34,7 +34,7 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
   const declared = extension.setup?.authorizations ?? [];
   const covered = new Set(declared.flatMap(value => value.servers));
   const accounts: PluginAccount[] = [...declared, ...(job?.connections ?? []).filter(server => !covered.has(server.name) && (extension.components?.mcp.find(value => value.name === server.name)?.type !== 'stdio' || server.state === 'token_required')).map(server => {
-    const token = server.state === 'token_required' || extension.components?.mcp.find(value => value.name === server.name)?.connectionAuth?.mode === 'api-key';
+    const token = server.state === 'token_required' || server.state === 'auth_unknown' || extension.components?.mcp.find(value => value.name === server.name)?.connectionAuth?.mode === 'api-key';
     return { id: server.name, title: server.name, servers: [server.name], methods: [{ id: token ? 'api-key' : 'oauth', title: token ? t('访问令牌', 'Access token') : t('浏览器登录', 'Browser sign-in'), type: token ? 'form' as const : 'oauth' as const, ...(token ? { fields: ['__apiKey'] } : { server: server.name }) }] };
   })];
   const connected = (account: PluginAccount) => account.servers.every(name => job?.connections.find(value => value.name === name)?.state === 'connected') && (!declared.some(value => value.id === account.id) || job?.authorizations?.find(value => value.id === account.id)?.state === 'connected');

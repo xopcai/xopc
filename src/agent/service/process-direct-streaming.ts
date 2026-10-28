@@ -1,3 +1,4 @@
+import { getMcpSetupResumeInput } from '../mcp/continuation-input.js';
 import { phoneResumeForRun } from '../../phone/assistance.js';
 import { withModelUsageOrigin, modelUsageOriginFromTurn } from '../../providers/model-usage.js';
 import { resolveAgentMainConversationId } from '../../routing/agent-session-key.js';
@@ -279,6 +280,7 @@ async function* runProcessDirectStreamingInner(
   const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(conversationId, input.runId));
   const isClarificationResume = Boolean(input.runId && getClarificationResumeInput(conversationId, input.runId));
   const isInternalResume = Boolean(input.runId && phoneResumeForRun(conversationId, input.runId)) || isConnectionResume || isClarificationResume
+    || Boolean(input.runId && input.origin.type === 'system' && input.origin.source === 'internal' && getMcpSetupResumeInput(conversationId, input.runId))
     || Boolean(input.runId && getTaskContinuation(conversationId, input.runId));
   const isTaskUpdate = input.origin.type === 'system' && input.origin.source === 'task_update';
   const { channel, chatId } = await deps.resolveSessionEndpoint(conversationId);

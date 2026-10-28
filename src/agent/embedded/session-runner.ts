@@ -27,6 +27,8 @@ import { isCodemodeCoreRead } from '../tools/codemode-permissions.js';
 import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
 import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-search-extension.js';
 import { type NativeMcpConfig, getNativePiAgentDir } from '../mcp/native-mcp.js';
+import { createXopcMcpTransport } from '../mcp/transport.js';
+import { createMcpSetupContinuationGuard } from '../mcp/continuation-guard.js';
 import { abortEmbeddedRun } from './runs.js';
 import { filterExecutionTools, resolveExecutionToolPolicy, type ExecutionToolPolicy } from './execution-tool-policy.js';
 import { createAutomationMcpSourceGuard } from '../../automations/mcp-source.js';
@@ -358,10 +360,11 @@ export class EmbeddedSessionRunnerPool {
       noContextFiles: true,
       noExtensions: true,
       extensionFactories: [
+        createMcpSetupContinuationGuard(runtimeId, tools.some(tool => tool.name === 'mcp_setup')),
         ...(mcp?.automationSourceRunId ? [createAutomationMcpSourceGuard(mcp.automationSourceRunId)] : []),
         ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
         ...(discovery ? [createXopcToolSearchExtension(tools)] : []),
-        ...(mcp ? [createMcpExtension({ loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
+        ...(mcp ? [createMcpExtension({ createTransport: createXopcMcpTransport(), loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
         createAgentProfileContextExtension(runtimeId),
       ],
     });
