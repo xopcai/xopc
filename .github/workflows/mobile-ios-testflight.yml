@@ -180,6 +180,7 @@ jobs:
           share_profile_uuid="$(plutil -extract UUID raw -o - "$share_profile_plist")"
           share_application_identifier="$(plutil -extract Entitlements.application-identifier raw -o - "$share_profile_plist")"
           test "$share_application_identifier" = "$APPLE_TEAM_ID.ai.xopc.xopc.share"
+          python3 -c 'import plistlib, sys; p=plistlib.load(open(sys.argv[1], "rb")); assert "group.ai.xopc.xopc" in p["Entitlements"].get("com.apple.security.application-groups", []), "Share profile lacks the xopc App Group"' "$share_profile_plist"
           cp "$share_profile_path" "$profile_dir/$share_profile_uuid.mobileprovision"
           echo "share_profile_uuid=$share_profile_uuid" >> "$GITHUB_OUTPUT"
 
