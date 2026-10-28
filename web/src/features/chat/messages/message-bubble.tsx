@@ -320,7 +320,7 @@ export const MessageBubble = memo(function MessageBubble({
   const showStreamingCursor = isAssistant
     ? Boolean(assistantTurnView?.answer.showStreamingCursor)
     : isStreaming;
-  const showPersonalThinkingBubble = personal && !showAssistantWorkLog && isAssistant && isStreaming
+  const showPersonalThinkingBubble = personal && isAssistant && isStreaming
     && !assistantTurnView?.answer.started && !attachmentsForBubble?.length;
 
   const showPendingThinking = isStreaming && !streamingThinking
@@ -567,6 +567,7 @@ export const MessageBubble = memo(function MessageBubble({
         cardLabels={cardLabels}
         conversationId={conversationId}
         simplified={!personal}
+        personal={personal}
         answerStarted={assistantTurnView.answer.started}
       />
     : null;

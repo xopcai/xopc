@@ -66,7 +66,7 @@ describe('MessageBubble assistant work log', () => {
     const table = container.querySelector('[data-chat-find-text] table');
     expect(table).not.toBeNull();
     expect(table?.closest('[data-assistant-work-log]')).toBeNull();
-    expect(container.querySelector('[data-assistant-work-log]')?.textContent).not.toContain('Final file');
+    expect(container.querySelector('[data-assistant-work-log]')?.textContent ?? '').not.toContain('Final file');
     expect(container.textContent).not.toContain('Private reasoning');
     content[3] = { ...content[3], presentation: 'answer' } as Message['content'][number];
     show(false);
