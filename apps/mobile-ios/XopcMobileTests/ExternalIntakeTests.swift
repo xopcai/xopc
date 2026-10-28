@@ -26,7 +26,7 @@ struct ExternalIntakeTests {
         let restored = try drafts.read("account:conversation")
         #expect(try restored.addingExternalFiles(recovered, store: intake) == combined)
         #expect(try drafts.read("other-account:conversation").attachments.isEmpty)
-        let configuration = GatewayConfiguration(baseURL: URL(string: "https://example.test")!, token: "token", localIdentity: "stable-profile")
+        let configuration = try GatewayConfiguration(baseURL: #require(URL(string: "https://example.test")), token: "token", localIdentity: "stable-profile")
         let selection = ConversationSelection.draft(agentId: "agent", id: UUID().uuidString.lowercased())
         try drafts.saveSelection(selection, configuration: configuration)
         #expect(try drafts.readSelection(configuration: configuration) == selection)
@@ -34,9 +34,9 @@ struct ExternalIntakeTests {
         #expect(try intake.pending().isEmpty)
     }
 
-    @Test func stableProfileScopeSurvivesTokenAndRouteRefresh() {
-        let first = GatewayConfiguration(baseURL: URL(string: "https://first.example")!, token: "old", localIdentity: "profile-a")
-        let refreshed = GatewayConfiguration(baseURL: URL(string: "https://second.example")!, token: "new", localIdentity: "profile-a")
+    @Test func stableProfileScopeSurvivesTokenAndRouteRefresh() throws {
+        let first = try GatewayConfiguration(baseURL: #require(URL(string: "https://first.example")), token: "old", localIdentity: "profile-a")
+        let refreshed = try GatewayConfiguration(baseURL: #require(URL(string: "https://second.example")), token: "new", localIdentity: "profile-a")
         let other = GatewayConfiguration(baseURL: first.baseURL, token: "old", localIdentity: "profile-b")
         #expect(ComposerDraftStore.accountScope(first) == ComposerDraftStore.accountScope(refreshed))
         #expect(ComposerDraftStore.accountScope(first) != ComposerDraftStore.accountScope(other))

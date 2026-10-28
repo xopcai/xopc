@@ -4,7 +4,7 @@ struct ExternalIntakeSheet: View {
     let batch: ExternalIntakeBatch
     let configuration: GatewayConfiguration
     let current: ConversationSelection?
-    var importError: String? = nil
+    var importError: String?
     let onSelect: (ExternalIntakeBatch, ConversationSelection) -> Void
     let onCancel: () -> Void
     @State private var search = ""
@@ -14,7 +14,10 @@ struct ExternalIntakeSheet: View {
     @State private var busy = false
     @State private var errorMessage: String?
     @State private var chooseAgain = false
-    private var effectiveTarget: ExternalIntakeTarget? { chooseAgain ? nil : batch.target }
+    private var effectiveTarget: ExternalIntakeTarget? {
+        chooseAgain ? nil : batch.target
+    }
+
     @State private var excluded: Set<UUID> = []
 
     var body: some View {
@@ -26,7 +29,11 @@ struct ExternalIntakeSheet: View {
                             Label(file.name, systemImage: file.mimeType.hasPrefix("image/") ? "photo" : "doc")
                             Spacer()
                             Button(excluded.contains(file.id) ? "恢复" : "移除") {
-                                if excluded.contains(file.id) { excluded.remove(file.id) } else { excluded.insert(file.id) }
+                                if excluded.contains(file.id) {
+                                    excluded.remove(file.id)
+                                } else {
+                                    excluded.insert(file.id)
+                                }
                             }.buttonStyle(.borderless)
                         }
                     }
@@ -43,15 +50,21 @@ struct ExternalIntakeSheet: View {
                         }
                     } else {
                         targetRow("new", title: "新对话（推荐）")
-                        if let current { targetRow(current.id, title: "当前对话 · \(current.title)") }
+                        if let current {
+                            targetRow(current.id, title: "当前对话 · \(current.title)")
+                        }
                         TextField("搜索已有对话", text: $search)
-                        if loading { RoundedRectangle(cornerRadius: 8).fill(.quaternary).frame(height: 48) }
+                        if loading {
+                            RoundedRectangle(cornerRadius: 8).fill(.quaternary).frame(height: 48)
+                        }
                         ForEach(results.filter { $0.id != current?.id && $0.status != "archived" }) { summary in
                             targetRow(summary.id, title: summary.displayName, detail: summary.agentId)
                         }
                     }
                 }
-                if let message = errorMessage ?? importError { Text(message).foregroundStyle(.red) }
+                if let message = errorMessage ?? importError {
+                    Text(message).foregroundStyle(.red)
+                }
             }
             .navigationTitle("添加到对话")
             .safeAreaInset(edge: .bottom) {
@@ -81,7 +94,11 @@ struct ExternalIntakeSheet: View {
         Button { selected = id } label: {
             HStack {
                 Image(systemName: selected == id ? "largecircle.fill.circle" : "circle")
-                VStack(alignment: .leading) { Text(title); if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) } }
+                VStack(alignment: .leading) {
+                    Text(title); if let detail {
+                        Text(detail).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }.frame(minHeight: 44)
         }.buttonStyle(.plain).disabled(busy)
     }
@@ -97,16 +114,29 @@ struct ExternalIntakeSheet: View {
             } else if selected == "new" {
                 let agents = try await GatewayClient(configuration: configuration).fetchAgents()
                 conversation = .draft(agentId: agents.defaultId)
-            } else if let current, current.id == selected { conversation = current }
-            else if let summary = results.first(where: { $0.id == selected }) { conversation = ConversationSelection(summary: summary) }
-            else { throw CocoaError(.fileNoSuchFile) }
+            } else if let current, current.id == selected {
+                conversation = current
+            } else if let summary = results.first(where: { $0.id == selected }) {
+                conversation = ConversationSelection(summary: summary)
+            } else {
+                throw CocoaError(.fileNoSuchFile)
+            }
             if !conversation.isDraft {
                 _ = try await GatewayClient(configuration: configuration).fetchAgentConfiguration(conversationID: conversation.id)
             }
             guard !Task.isCancelled else { return }
             var assigned = batch
-            assigned.target = ExternalIntakeTarget(scope: ComposerDraftStore.accountScope(configuration),
-                conversationID: conversation.id, title: conversation.title, agentID: conversation.agentId, isDraft: conversation.isDraft, projectID: conversation.projectId, executionMode: conversation.executionMode, model: conversation.model, thinkingLevel: conversation.thinkingLevel)
+            assigned.target = ExternalIntakeTarget(
+                scope: ComposerDraftStore.accountScope(configuration),
+                conversationID: conversation.id,
+                title: conversation.title,
+                agentID: conversation.agentId,
+                isDraft: conversation.isDraft,
+                projectID: conversation.projectId,
+                executionMode: conversation.executionMode,
+                model: conversation.model,
+                thinkingLevel: conversation.thinkingLevel
+            )
             assigned.files.removeAll { excluded.contains($0.id) }
             try ExternalIntakeStore().save(assigned)
             onSelect(assigned, conversation)
