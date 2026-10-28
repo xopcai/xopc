@@ -64,6 +64,12 @@ export interface XopcSessionShareAttachment {
 export interface XopcSessionSharePreviewEnvelope { ok: boolean; payload: XopcSessionSharePreview; }
 
 export interface XopcIncomingShare {
+  intakeId?: string;
+  createdAt?: number;
+  targetConversationId?: string;
+  targetScope?: string;
+  sharedText?: string;
+  issues?: string[];
   title: string;
   content: string;
   chatPrompt: string;

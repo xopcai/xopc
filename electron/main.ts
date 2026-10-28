@@ -22,6 +22,7 @@ import {
 import './thread-stream-bundle-shim.js';
 
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
+import { ExternalIntakeQueue, intakePaths } from './external-intake.js';
 import { xopcDeepLinkTarget } from './deep-link.js';
 import {
   isCliBundlePresent,
@@ -322,7 +323,27 @@ if (electronUserDataDir) {
 
 startLocalCrashReporter();
 
+const externalIntake = new ExternalIntakeQueue(join(app.getPath('userData'), 'external-intake'));
+function receiveExternalFiles(paths: string[]): void {
+  void externalIntake.receive(paths).then(() => {
+    if (app.isReady()) focusOrCreateMainWindow();
+    mainWindow?.webContents.send('intake:changed');
+  }).catch(error => {
+    console.error('[ExternalIntake] File capture failed', error);
+    void app.whenReady().then(() => dialog.showErrorBox('Unable to add files', error instanceof Error ? error.message : String(error)));
+  });
+}
+let externalOpenTimer: ReturnType<typeof setTimeout> | undefined;
+let externalOpenPaths: string[] = [];
+app.on('open-file', (event, path) => {
+  event.preventDefault(); externalOpenPaths.push(path);
+  clearTimeout(externalOpenTimer);
+  externalOpenTimer = setTimeout(() => {
+    const paths = externalOpenPaths; externalOpenPaths = []; receiveExternalFiles(paths);
+  }, 80);
+});
 const gotTheLock = app.requestSingleInstanceLock();
+if (gotTheLock && process.platform !== 'darwin') receiveExternalFiles(intakePaths(process.argv.slice(process.defaultApp ? 2 : 1), process.cwd()));
 if (!gotTheLock) {
   app.quit();
 }
@@ -363,7 +384,8 @@ if (process.platform === 'darwin') {
 }
 
 if (gotTheLock) {
-  app.on('second-instance', (_event, commandLine) => {
+  app.on('second-instance', (_event, commandLine, workingDirectory) => {
+    receiveExternalFiles(intakePaths(commandLine.slice(1), workingDirectory));
     const url = commandLine.find((arg) => arg.startsWith('xopc://'));
     if (url) handleDeepLink(url);
 
@@ -1226,6 +1248,15 @@ app.whenReady().then(async () => {
   ipcMain.handle('computer:reenroll', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
   const { fileIpcRoots } = gatewayConfig;
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
+  const intakeGuard = (event: IpcMainInvokeEvent) => {
+    assertTrustedRenderer(event);
+    if (event.sender !== mainWindow?.webContents || event.senderFrame !== event.sender.mainFrame) throw new Error('Intake requires the main window');
+  };
+  ipcMain.handle('intake:list', event => { intakeGuard(event); return externalIntake.list(); });
+  ipcMain.handle('intake:read', (event, id: string, itemId: string) => { intakeGuard(event); return externalIntake.read(id, itemId); });
+  ipcMain.handle('intake:target', (event, id: string, scope: string, conversationId: string) => { intakeGuard(event); return externalIntake.target(id, scope, conversationId); });
+  ipcMain.handle('intake:release', (event, id: string, scope: string) => { intakeGuard(event); return externalIntake.release(id, scope); });
+  ipcMain.handle('intake:remove', (event, id: string) => { intakeGuard(event); return externalIntake.remove(id); });
   registerSearchIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerAgentIpc(ipcMain);
   registerBrowserIpc(ipcMain, () => mainWindow);

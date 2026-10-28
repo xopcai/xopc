@@ -177,10 +177,10 @@ export struct XopcHomeView {
       this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
     }
   }
-  private async exploreShare(value: XopcIncomingShare): Promise<boolean> {
+  private async exploreShare(value: XopcIncomingShare, targetId: string): Promise<boolean> {
     try {
-      const id = await this.chatRepository.create();
-      this.intake.targetChat(id, value.chatPrompt); this.switchToChat(id, value.chatPrompt);
+      const id = value.targetConversationId || targetId || await this.chatRepository.create();
+      await this.intake.addToChat(id); this.switchToChat(id, '');
       return true;
     } catch (error) { this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') }); return false; }
   }
@@ -697,7 +697,7 @@ export struct XopcHomeView {
           onOpenNote: (id: string): void => { this.recordingPanel.setCompact(true); this.navigate({ page: 'notes',itemId: id }); },
           onRecovery: (): void => { this.pathStack.clear(); this.selectTab(3); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
       }
-      XopcShareIntakeDialog({ onExplore: async (value: XopcIncomingShare): Promise<boolean> => await this.exploreShare(value),
+      XopcShareIntakeDialog({ currentConversationId: this.activeChatId, onExplore: async (value: XopcIncomingShare, targetId: string): Promise<boolean> => await this.exploreShare(value, targetId),
         onSaved: (noteId: string): void => { this.navigate({ page: 'notes', itemId: noteId }); } })
     }.width('100%').height('100%')
       .onAreaChange((_previous: Area,current: Area): void => { this.recordingViewportWidth = Number(current.width); this.recordingViewportHeight = Number(current.height); })

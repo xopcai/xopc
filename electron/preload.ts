@@ -25,6 +25,17 @@ function notifyPreload(
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  intake: {
+    list: () => ipcRenderer.invoke('intake:list'),
+    read: (id: string, itemId: string) => ipcRenderer.invoke('intake:read', id, itemId),
+    target: (id: string, scope: string, conversationId: string) => ipcRenderer.invoke('intake:target', id, scope, conversationId),
+    remove: (id: string) => ipcRenderer.invoke('intake:remove', id),
+    release: (id: string, scope: string) => ipcRenderer.invoke('intake:release', id, scope),
+    onChanged: (callback: () => void) => {
+      ipcRenderer.on('intake:changed', callback);
+      return () => ipcRenderer.removeListener('intake:changed', callback);
+    },
+  },
   browser: {
     ensure: (input: unknown) => ipcRenderer.invoke('browser:ensure', input),
     navigate: (id: string, url: string) => ipcRenderer.invoke('browser:navigate', id, url),

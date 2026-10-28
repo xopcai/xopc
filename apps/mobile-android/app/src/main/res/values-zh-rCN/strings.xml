@@ -859,4 +859,15 @@
     <string name="clarify_next">下一题</string>
     <string name="clarify_retry">重试提交</string>
     <string name="clarify_too_long">回答内容过长，请精简后再提交</string>
+    <string name="intake_title">添加到对话</string>
+    <string name="intake_new">新对话（推荐）</string>
+    <string name="intake_current">当前对话</string>
+    <string name="intake_search">搜索已有对话</string>
+    <string name="intake_selected">继续加入已选择的对话</string>
+    <string name="intake_hint">保留原草稿，点击发送后才交给 AI</string>
+    <string name="intake_cancel">取消</string>
+    <string name="intake_add">加入输入框</string>
+    <string name="intake_adding">正在加入…</string>
+    <string name="intake_wrong_connection">请切换回原网关和账号继续。</string>
+    <string name="intake_capture_failed">文件接收失败，请重试分享。</string>
 </resources>

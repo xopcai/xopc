@@ -1,6 +1,13 @@
 package ai.xopc.mobile
 
 import android.os.Bundle
+import android.content.Intent
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.widget.Toast
+import ai.xopc.mobile.gateway.ExternalFileIntake
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,6 +35,24 @@ class MainActivity : ComponentActivity() {
   private val personalPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ai.xopc.mobile.gateway.DevicePersonalTools.permissionResult() }
   override fun onResume() { super.onResume(); ai.xopc.mobile.gateway.DeviceLocation.attach(this, locationPermissions); ai.xopc.mobile.gateway.DevicePersonalTools.attach(this, personalPicker, personalPermission) }
   override fun onStop() { ai.xopc.mobile.gateway.DeviceLocation.detach(this); ai.xopc.mobile.gateway.DevicePersonalTools.detach(this); super.onStop() }
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    captureExternalIntent(intent)
+  }
+  private fun captureExternalIntent(shared: Intent?) {
+    lifecycleScope.launch {
+      try {
+        withContext(Dispatchers.IO) {
+          val intake = ExternalFileIntake.get(applicationContext)
+          intake.refresh()
+          if (shared != null) intake.capture(shared)
+        }
+      } catch (_: Exception) {
+        Toast.makeText(this@MainActivity, R.string.intake_capture_failed, Toast.LENGTH_LONG).show()
+      }
+    }
+  }
   override fun attachBaseContext(newBase: Context) {
     super.attachBaseContext(LanguagePreference.localizedContext(newBase))
   }
@@ -36,6 +61,7 @@ class MainActivity : ComponentActivity() {
     setTheme(R.style.Theme_Xopc)
     super.onCreate(savedInstanceState)
 
+    captureExternalIntent(if (savedInstanceState == null) intent else null)
     enableEdgeToEdge()
     setContent {
       var appearanceMode by remember { mutableStateOf(AppearancePreference.read(this)) }

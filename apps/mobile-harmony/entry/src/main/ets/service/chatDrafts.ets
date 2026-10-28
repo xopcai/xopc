@@ -1,7 +1,7 @@
 import { XopcChatAttachment, XopcContextRef } from '../model/chat';
 import { localSessionStore } from './localSessionStore';
 
-export interface XopcChatDraft { text: string; refs: XopcContextRef[]; files: XopcChatAttachment[]; }
+export interface XopcChatDraft { intakeReceipts?: string[]; text: string; refs: XopcContextRef[]; files: XopcChatAttachment[]; }
 export class XopcChatDrafts {
   private writes: Promise<void> = Promise.resolve();
   async read(scope: string): Promise<XopcChatDraft | undefined> {
@@ -18,13 +18,13 @@ export class XopcChatDrafts {
   async save(scope: string, value: XopcChatDraft): Promise<void> {
     if (!scope) return;
     const draft = this.normalized(value);
-    const payload = !draft.text.trim() && !draft.refs.length && !draft.files.length ? undefined : JSON.stringify(draft);
+    const payload = !draft.text.trim() && !draft.refs.length && !draft.files.length && !draft.intakeReceipts?.length ? undefined : JSON.stringify(draft);
     const pending = this.writes.then((): Promise<void> => localSessionStore.writeComposer(scope, payload));
     this.writes = pending.catch((_error: Error): void => {});
     await pending;
   }
   private normalized(value: XopcChatDraft): XopcChatDraft {
-    return { text: value.text.slice(0, 20000),
+    const normalized: XopcChatDraft = { text: value.text.slice(0, 20000),
       refs: value.refs.filter((ref: XopcContextRef): boolean => !!ref && ['note', 'task'].includes(ref.kind)
         && typeof ref.sourceId === 'string' && typeof ref.expectedVersion === 'string').slice(0, 5)
         .map((ref: XopcContextRef): XopcContextRef => ({ kind: ref.kind, sourceId: ref.sourceId, expectedVersion: ref.expectedVersion, title: ref.title || '' })),
@@ -34,5 +34,7 @@ export class XopcChatDrafts {
         && Number.isFinite(file.size) && file.size >= 0).slice(0, 10)
         .map((file: XopcChatAttachment): XopcChatAttachment => ({ type: file.type, name: file.name, mimeType: file.mimeType,
           size: file.size, data: file.data, uri: file.uri, duration: file.duration, workspaceRelativePath: file.workspaceRelativePath })) };
+    if (Array.isArray(value.intakeReceipts)) normalized.intakeReceipts = value.intakeReceipts.filter((id: string): boolean => typeof id === 'string');
+    return normalized;
   }
 }

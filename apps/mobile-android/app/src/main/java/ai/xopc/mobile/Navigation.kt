@@ -37,6 +37,8 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
           GatewayForegroundRecovery(onForeground = gateway::onForeground, onBackground = gateway::onBackground)
           MainScreen(phoneRepository = gateway.phoneRepository,connection = connection, onPair = gateway::pair,
             onCancelPairing = gateway::cancelPairing,
+            onSearchExternalConversations = gateway::searchExternalConversations,
+            onAppendExternalFiles = gateway::appendExternalFiles,
             appearanceMode = appearanceMode, onAppearanceModeChange = onAppearanceModeChange,
             colorScheme = colorScheme, onColorSchemeChange = onColorSchemeChange,
             language = language, onLanguageChange = onLanguageChange,

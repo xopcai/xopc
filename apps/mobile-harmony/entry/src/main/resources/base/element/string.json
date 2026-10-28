@@ -1421,6 +1421,12 @@
     {"name":"clarify_previous","value":"Previous"},
     {"name":"clarify_next","value":"Next"},
     {"name":"clarify_retry","value":"Retry submission"},
-    {"name":"clarify_too_long","value":"Answers are too long. Shorten them before submitting."}
+    {"name":"clarify_too_long","value":"Answers are too long. Shorten them before submitting."},
+    {"name": "intake_chat_title", "value": "Add to conversation"},
+    {"name": "intake_new_chat", "value": "New conversation (recommended)"},
+    {"name": "intake_current_chat", "value": "Current conversation"},
+    {"name": "intake_search_chat", "value": "Search conversations"},
+    {"name": "intake_draft_hint", "value": "Keeps your draft. AI starts only when you send."},
+    {"name": "intake_add_chat", "value": "Add to input"}
   ]
 }

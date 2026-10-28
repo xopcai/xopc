@@ -12,6 +12,7 @@ import { pushNotifications } from '../service/pushNotifications';
 import { notificationNavigation } from '../service/notificationNavigation';
 import { layoutState } from '../service/layoutState';
 import { chatReadAloud } from '../service/chatReadAloud';
+import { XopcIncomingShareAttachment } from '../model/share';
 import { decodeShareHandoff, shareIntake, SHARE_INTAKE_URI } from '../service/shareIntake';
 import { voiceCall } from '../service/voiceCall';
 import { localSessionStore } from '../service/localSessionStore';
@@ -30,11 +31,14 @@ export default class EntryAbility extends UIAbility {
     this.mainWindow = undefined; layoutState.keyboardVisible = false; layoutState.systemTopInsetPx = 0;
   }
   private receiveWant(want: Want): void {
+    if (want.action === 'ohos.want.action.viewData' && want.uri?.startsWith('file://')) {
+      void shareIntake.receiveFile(this.context.filesDir, want.uri); return;
+    }
     if (want.uri === SHARE_INTAKE_URI) {
       const payload = want.parameters?.xopcSharePayload;
       if (typeof payload === 'string') {
         const shared = decodeShareHandoff(payload);
-        if (shared) shareIntake.receive(shared);
+        if (shared && (shared.attachments ?? []).every((file: XopcIncomingShareAttachment): boolean => file.path.startsWith(this.context.filesDir + '/share-'))) shareIntake.receive(shared);
       }
       return;
     }
@@ -57,6 +61,7 @@ export default class EntryAbility extends UIAbility {
   }
   private async restoreAndLoad(stage: window.WindowStage): Promise<void> {
     await localSessionStore.initialize(this.context);
+    await shareIntake.initialize(this.context.filesDir).catch((error: Error): void => { hilog.warn(0x0000, 'XopcShare', 'Share recovery failed: %{public}s', error.message); });
     try { await appSettings.restore(this.context); }
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Preferences could not be restored'); }
     stage.loadContent('pages/Index', (error: BusinessError): void => {

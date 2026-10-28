@@ -20,6 +20,71 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatAttachmentStoreTest {
+  @Test fun externalFilesPreserveExistingAttachmentsAndReceiptSurvivesRetryAfterSend() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val intake = ExternalFileIntake.get(context)
+    val uri = CameraCaptureStore.create(context)
+    val gateway = UUID.randomUUID().toString()
+    val conversation = UUID.randomUUID().toString()
+    val store = ChatAttachmentStore(context)
+    var batch: ExternalFileBatch? = null
+    try {
+      context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(0, 1, 2, 3)) }
+      intake.refresh()
+      val before = intake.batches.value.map { it.id }.toSet()
+      intake.capture(Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, uri))
+      batch = intake.batches.value.single { it.id !in before }
+      val captured = batch
+      CameraCaptureStore.discard(context, uri)
+      val existing = store.addBytes(gateway, conversation, "existing.txt", "text/plain", byteArrayOf(9))
+      intake.bind(captured, gateway, "device", conversation)
+      val files = intake.commit(captured, gateway, conversation)
+      assertEquals(2, files.size)
+      assertTrue(files.any { it.id == existing.id })
+      val imported = files.single { it.id != existing.id }
+      assertEquals(listOf(0, 1, 2, 3), Base64.getDecoder().decode(store.wirePayloads(gateway, conversation, listOf(imported))
+        .getJSONObject(0).getString("data")).map { it.toInt() })
+      assertEquals(2, intake.commit(captured, gateway, conversation).size)
+      store.removeConversation(gateway, conversation)
+      assertTrue(intake.commit(captured, gateway, conversation).isEmpty())
+    } finally {
+      batch?.let { intake.dismiss(it.id) }
+      store.removeGateway(gateway)
+      CameraCaptureStore.discard(context, uri)
+    }
+  }
+
+  @Test fun externalMultiShareKeepsOneBatchAndRegistersSystemOpenTargets() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val intake = ExternalFileIntake.get(context)
+    val first = CameraCaptureStore.create(context)
+    val second = CameraCaptureStore.create(context)
+    var batch: ExternalFileBatch? = null
+    try {
+      for (uri in listOf(first, second)) context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3)) }
+      for (action in listOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE, Intent.ACTION_VIEW)) {
+        val probe = Intent(action).setDataAndType(first, "image/jpeg").setPackage(context.packageName)
+        assertTrue(context.packageManager.queryIntentActivities(probe, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+          .any { it.activityInfo.name == "ai.xopc.mobile.MainActivity" })
+      }
+      intake.refresh(); val before = intake.batches.value.map { it.id }.toSet()
+      val intent = Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/jpeg")
+        .putParcelableArrayListExtra(Intent.EXTRA_STREAM, arrayListOf(first, second)).apply {
+          clipData = android.content.ClipData.newUri(context.contentResolver, "image", first)
+        }
+      intake.capture(intent)
+      batch = intake.batches.value.single { it.id !in before }
+      assertEquals(2, batch.files.size)
+      val gateway = UUID.randomUUID().toString(); val conversation = UUID.randomUUID().toString()
+      intake.bind(batch, gateway, "device", conversation)
+      val captured = batch
+      assertThrows(IllegalArgumentException::class.java) { intake.bind(captured, gateway, "other-device", conversation) }
+    } finally {
+      batch?.let { intake.dismiss(it.id) }
+      CameraCaptureStore.discard(context, first); CameraCaptureStore.discard(context, second)
+    }
+  }
+
   @Test fun workspaceFileReferenceSurvivesDraftReloadAndSendsRelativePath() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val gatewayId = UUID.randomUUID().toString()

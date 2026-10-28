@@ -1419,6 +1419,12 @@
     {"name":"clarify_previous","value":"上一题"},
     {"name":"clarify_next","value":"下一题"},
     {"name":"clarify_retry","value":"重试提交"},
-    {"name":"clarify_too_long","value":"回答内容过长，请精简后再提交"}
+    {"name":"clarify_too_long","value":"回答内容过长，请精简后再提交"},
+    {"name": "intake_chat_title", "value": "添加到对话"},
+    {"name": "intake_new_chat", "value": "新对话（推荐）"},
+    {"name": "intake_current_chat", "value": "当前对话"},
+    {"name": "intake_search_chat", "value": "搜索已有对话"},
+    {"name": "intake_draft_hint", "value": "保留原草稿，点击发送后才交给 AI"},
+    {"name": "intake_add_chat", "value": "加入输入框"}
   ]
 }

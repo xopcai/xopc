@@ -386,6 +386,8 @@ fun MainScreen(
   onSelectConversation: (String) -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
+  onSearchExternalConversations: suspend (String) -> List<ConversationSummary> = { emptyList() },
+  onAppendExternalFiles: suspend (ai.xopc.mobile.gateway.ExternalFileBatch, String?) -> Unit = { _, _ -> },
   onCreateProjectConversation: (String) -> Unit = {},
   onCreateReferenceConversation: (String) -> Unit = {},
   onReferenceRequestHandled: (String, String) -> Unit = { _, _ -> },
@@ -678,6 +680,7 @@ fun MainScreen(
     }
   }
   var selectedTab by rememberSaveable { mutableStateOf(HomeTab.Assistant) }
+  ExternalIntakeHost(connection, onSearchExternalConversations, onAppendExternalFiles) { selectedTab = HomeTab.Assistant }
   var wasUnpaired by remember { mutableStateOf(connection.profile == null) }
   LaunchedEffect(connection.profile?.gatewayId) {
     if (connection.profile == null) wasUnpaired = true

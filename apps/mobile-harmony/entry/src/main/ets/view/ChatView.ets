@@ -43,6 +43,7 @@ import { XopcChatPaletteViewModel } from '../viewmodel/chatPaletteViewModel';
 import { XopcPaletteItem } from '../common/composerTokens';
 import { COMPOSER_INPUT_MIN, COMPOSER_INPUT_MAX, COMPOSER_TOOL_SIZE,
   composerExpanded, composerHasPayload } from '../common/composerLayout';
+import { XopcChatDraft } from '../service/chatDrafts';
 import { shareIntake } from '../service/shareIntake';
 import { voiceCall, XopcVoiceCall } from '../service/voiceCall';
 import { resolveVoiceRecordingDestination, XopcVoiceRecordingDestination } from '../common/voiceRecordingGesture';
@@ -236,6 +237,7 @@ export struct XopcChatView {
   private cursor: number = 0;
   private drafts: XopcChatDrafts = new XopcChatDrafts();
   private draftScope: string = '';
+  private intakeReceipts: string[] = [];
   private voiceStartX: number = 0;
   private voiceStartY: number = 0;
   private voicePointerId: number = -1;
@@ -324,7 +326,7 @@ export struct XopcChatView {
 
   private saveDraft(): void {
     if (this.restoringDraft || !this.draftScope) return;
-    this.drafts.save(this.draftScope, { text: this.draft, refs: this.refs, files: this.attachments })
+    this.drafts.save(this.draftScope, { text: this.draft, refs: this.refs, files: this.attachments, intakeReceipts: this.intakeReceipts })
       .catch((_error: Error): void => { if (this.visible) this.chat.error = 'DRAFT_SAVE_FAILED'; });
   }
   @Monitor('draft', 'refs', 'attachments')
@@ -347,12 +349,12 @@ export struct XopcChatView {
     if (this.reader.continuousConversationId !== this.chat.selectedId) this.reader.leaveForeground();
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     const generation = ++this.draftGeneration;
-    this.restoringDraft = true; this.draftScope = scope; this.draft = ''; this.refs = []; this.attachments = [];
+    this.restoringDraft = true; this.draftScope = scope; this.intakeReceipts = []; this.draft = ''; this.refs = []; this.attachments = [];
     this.editingQueuedId = ''; this.editingTurnId = '';
     try {
       const saved = await this.drafts.read(scope);
       if (generation !== this.draftGeneration) return;
-      if (saved) { this.draft = saved.text; this.refs = saved.refs; this.attachments = saved.files; }
+      if (saved) { this.draft = saved.text; this.refs = saved.refs; this.attachments = saved.files; this.intakeReceipts = saved.intakeReceipts ?? []; }
     } catch (_error) { if (generation === this.draftGeneration) this.chat.error = 'DRAFT_RESTORE_FAILED'; }
     finally { if (generation === this.draftGeneration) { this.restoringDraft = false; this.applyShareIntake(); } }
   }
@@ -777,6 +779,11 @@ export struct XopcChatView {
   }
 
   aboutToAppear(): void {
+    shareIntake.liveDraftScope = (): string => this.restoringDraft || this.disposed ? '' : this.draftScope;
+    shareIntake.readLiveDraft = (): XopcChatDraft => ({ text: this.draft, files: this.attachments, refs: this.refs, intakeReceipts: this.intakeReceipts });
+    shareIntake.applyLiveDraft = (draft: XopcChatDraft): void => {
+      this.draft = draft.text; this.attachments = draft.files; this.intakeReceipts = draft.intakeReceipts ?? []; this.cursor = this.draft.length;
+    };
     this.visible = this.activePage;
     if (this.visible) { this.bindBack(); }
     this.appliedRequestRevision = this.requestRevision;

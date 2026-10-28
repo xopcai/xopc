@@ -5,9 +5,42 @@ import Observation
 @Observable
 final class AppState {
     var selectedTab = AppTab.assistant
+    private(set) var externalIntake: ExternalIntakeBatch?
+    private(set) var externalIntakeRevision = 0
+    private(set) var externalIntakeError: String?
+    func openExternalIntake(_ batch: ExternalIntakeBatch, conversation: ConversationSelection) {
+        guard batch.target?.scope == ComposerDraftStore.accountScope(gatewayConfiguration) else { externalIntakeRevision += 1; return }
+        externalIntakeError = nil
+        selectedConversation = conversation
+        externalIntake = batch
+        selectedTab = .assistant
+    }
+    func externalIntakeFinished(_ id: UUID, error: String?) {
+        guard externalIntake?.id == id else { return }
+        externalIntake = nil
+        externalIntakeError = error
+        externalIntakeRevision += 1
+    }
     private(set) var quickChatHandoff: QuickChatHandoff?
-    private(set) var gatewayConfiguration: GatewayConfiguration
-    private(set) var selectedConversation: ConversationSelection?
+    private(set) var gatewayConfiguration: GatewayConfiguration {
+        didSet { restoreConversationSelection() }
+    }
+    private(set) var selectedConversation: ConversationSelection? {
+        didSet {
+            if let selectedConversation {
+                do { try ComposerDraftStore().saveSelection(selectedConversation, configuration: gatewayConfiguration) }
+                catch { connectionStorageError = error.localizedDescription }
+            }
+        }
+    }
+    private var selectionScope = ""
+    private func restoreConversationSelection() {
+        let scope = ComposerDraftStore.accountScope(gatewayConfiguration)
+        guard scope != selectionScope else { return }
+        selectionScope = scope
+        do { selectedConversation = try ComposerDraftStore().readSelection(configuration: gatewayConfiguration) }
+        catch { selectedConversation = nil; connectionStorageError = error.localizedDescription }
+    }
     private(set) var connectionStorageError: String?
     private(set) var gatewayProfiles: [GatewayProfile]
     private(set) var activeGatewayProfileID: String?
@@ -28,6 +61,7 @@ final class AppState {
         #else
             gatewayConfiguration = configurationStore.load()
         #endif
+        restoreConversationSelection()
         Task { await refreshActiveGateway() }
     }
 
@@ -104,7 +138,7 @@ final class AppState {
             gatewayConfiguration = configurationStore.load()
             scheduleGatewayRefresh(expiry: connection.accessTokenExpiresAt)
         }
-        return GatewayConfiguration(baseURL: connection.baseURL, token: connection.accessToken)
+        return GatewayConfiguration(baseURL: connection.baseURL, token: connection.accessToken, localIdentity: id)
     }
 
     private func refreshActiveGateway() async {

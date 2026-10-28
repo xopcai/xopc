@@ -28,6 +28,7 @@ struct AppRootView: View {
                 tabShell
             }
         }
+        .modifier(ExternalIntakeModifier(appState: appState))
         .mobileTextStyle(.body)
         .tint(.blue)
         .environment(\.openURL, OpenURLAction { url in
@@ -112,7 +113,9 @@ struct AppRootView: View {
                     onQuickChatHandled: appState.consumeQuickChatHandoff,
                     onPersonalAgentUpdated: personalAgent.applyProfile,
                     onOpenSettings: { settingsPresented = true },
-                    onInputFocusChanged: { _ in }
+                    onInputFocusChanged: { _ in },
+                    externalIntake: appState.externalIntake,
+                    onExternalIntakeFinished: appState.externalIntakeFinished
                 ) { composer, isActionPanelExpanded in
                     bottomDock(showTabs: !isActionPanelExpanded) { composer }
                 }

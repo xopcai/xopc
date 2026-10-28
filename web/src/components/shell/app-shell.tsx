@@ -1,3 +1,4 @@
+import { ExternalIntakeHost } from '@/features/chat/external-intake-host';
 import { MobilePrimaryNav } from '@/components/shell/mobile-primary-nav';
 import { GlobalPhoneWorkspace } from '@/features/phone/global-phone-workspace';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
@@ -155,6 +156,7 @@ function AppShellContent() {
         </a>
         <WindowsTitlebar />
         <ElectronMenuListener />
+        <ExternalIntakeHost />
         <div className="min-h-0 flex-1">
           <GatewayConnectLanding />
         </div>
@@ -176,6 +178,7 @@ function AppShellContent() {
         <UnderstandingActivityCoordinator />
         <ProductNotificationCoordinator />
         <ElectronMenuListener />
+        <ExternalIntakeHost />
         <WindowsTitlebar />
         {isElectronDarwin() ? (
           <div
@@ -203,6 +206,7 @@ function AppShellContent() {
       <UnderstandingActivityCoordinator />
       <ProductNotificationCoordinator />
       <ElectronMenuListener />
+      <ExternalIntakeHost />
       <NavigateToChatListener />
       <ExtensionNavigateListener />
       <GlobalCommandPaletteHost />

@@ -6,5 +6,9 @@
 	<array>
 		<string>$(AppIdentifierPrefix)ai.xopc.xopc</string>
 	</array>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.ai.xopc.xopc</string>
+	</array>
 </dict>
 </plist>
