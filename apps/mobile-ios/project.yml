@@ -32,7 +32,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.xopc.xopc
         CODE_SIGN_ENTITLEMENTS: XopcMobile/XopcMobile.entitlements
-        MARKETING_VERSION: 0.0.111
+        MARKETING_VERSION: 0.0.112
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_FILE: XopcMobile/Resources/Info.plist
@@ -64,7 +64,7 @@ targets:
         INFOPLIST_FILE: ShareExtension/Info.plist
         APPLICATION_EXTENSION_API_ONLY: true
         SKIP_INSTALL: true
-        MARKETING_VERSION: 0.0.111
+        MARKETING_VERSION: 0.0.112
         CURRENT_PROJECT_VERSION: 1
   XopcMobileTests:
     type: bundle.unit-test
