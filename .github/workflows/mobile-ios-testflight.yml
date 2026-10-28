@@ -37,9 +37,11 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          declared_version="$(sed -n 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*\([0-9][0-9.]*\)[[:space:]]*$/\1/p' apps/mobile-ios/project.yml)"
-          if [[ ! "$declared_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Unable to read one native iOS version from apps/mobile-ios/project.yml" >&2
+          version_lines="$(sed -n 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*\([0-9][0-9.]*\)[[:space:]]*$/\1/p' apps/mobile-ios/project.yml)"
+          declared_version="$(printf '%s\n' "$version_lines" | sort -u)"
+          version_count="$(printf '%s\n' "$version_lines" | grep -c . || true)"
+          if [[ "$version_count" -ne 2 || ! "$declared_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected matching native iOS app and extension versions in apps/mobile-ios/project.yml" >&2
             exit 1
           fi
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
