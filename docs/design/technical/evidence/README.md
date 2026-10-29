@@ -1,10 +1,7 @@
 # Retained acceptance evidence
 
-This directory retains records with audit details or cross-run comparisons that are not fully reproduced in the accompanying technical reports:
+Retain small records that are used by executable analysis, current work, or independent cross-run comparisons. This includes harness decisions/usage accounting, computer-flow trials, recent setup/latency summaries, and Phone Use v1/v2 frozen source/traces used by `scripts/phone-apps-live/analyze-execution-latency.py`. Raw evidence is historical, not a current availability claim.
 
-- `computer-use-flows*.json`: native dispatch, access checks and uncertain-delivery results for deterministic, hosted-model and network validation.
-- `harness-stage-one*.json`: campaign hashes, immutable decisions, request and usage accounting, failures and independent comparisons.
+Historical screenshots, intermediate Phone Use candidates/pilots and unconsumed raw runs were removed on 2026-10-29 after preserving useful results and limitations in the accompanying reports. References inside immutable historical JSON to omitted screenshots/archives record original run paths; recover the original files from Git history if needed. Untracked evidence from ongoing work was left intact.
 
-Routine development runs belong outside the repository, for example under `/tmp` or the ignored `.xopc-evals/` directory. Summarize useful results, measurement definitions, failures and limitations in the relevant technical document rather than committing each run's JSON, local paths or temporary screenshots. Keep executable tests and reproduction scripts in their existing source directories.
-
-The Phone Use, Workflow removal and historical compatibility cleanup reports contain their acceptance summaries. Their temporary or duplicate evidence files were removed on 2026-10-24; previously committed files remain available in Git history. This cleanup does not represent a new execution of those acceptance checks.
+New routine runs belong under `/tmp` or ignored `.xopc-evals/`. Commit a concise technical summary and only the data required to reproduce a meaningful comparison or verify a maintained contract. This was a retention cleanup, not a new acceptance run.

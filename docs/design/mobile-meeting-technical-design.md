@@ -2,9 +2,9 @@
 
 日期：2026-09-15 · 基线：`37368b509` · 状态：分阶段实施。
 
-实施进展：[移动实施与自查](./mobile-meeting-implementation-review.md)。已接入原生桥接、移动录音页、手动分块同步与会议总结。具体契约见 [本批技术方案](./mobile-meeting-ui-upload-design.md)；完整多轨、实时及后台能力仍为目标设计，真机验收尚未完成。
+实施状态：早期跨平台客户端已退役，其桥接/同步自查仅保留历史边界，见文末；完整多轨、实时及后台能力仍为目标设计，当前各原生端须分别核实与验收。
 
-关联：[PRD](./mobile-meeting-prd.md) · [研究与平台依据](./mobile-meeting-research.md) · [共用 P1/P2 契约](./voice-meeting-p1-p2-technical-design.md) · [现有实施状态](./voice-meeting-p1-p2-implementation-review.md)
+关联：[PRD](./mobile-meeting-prd.md) · [研究与平台依据](./mobile-meeting-research.md) · [共用 P1/P2 契约](./voice-meeting-p1-p2-technical-design.md) · [现有实施状态](voice-meeting-p1-p2-technical-design.md)
 
 ## 1. 架构决策
 
@@ -267,3 +267,11 @@ M1 允许 JS 暂停后上传停止，录音照常；前台重连从 journal 继�
 7. 系统音频宣传、Live Activity、retired cross-platform client 后台开关均未被写成无条件平台能力。
 
 仍需实验的结论：真实 OS 支持范围、远场输入模式、电量预算、断电尾段损失、竞品当前手机 UI。已给出具体实验和默认路线，不以未知项阻止完成设计，也不把它们伪装成已通过测试。
+
+## 已退役移动工程的实施记录范围
+
+2026-09-15的移动自查和单麦克风上传设计已于2026-10-29移除。它们针对已退役的跨平台客户端、XopcVoice桥接、MMKV索引与React Query同步，不能作为当前Kotlin/SwiftUI/HarmonyOS客户端已交付能力的证明。当前Android/iOS工程及发布入口见[移动发布手册](release/mobile-build-release.md)；通用录音可靠性见[录音契约](note-recording-reliability-phase-one.md)。本文完整多轨/后台/实时路线仍为目标设计，应按当前各原生端重新验证落地情况。
+
+保留的通用约束：音频文件journal为权威数据，稳定本地ID先登记、录制按样本时钟，单写入锁/不可变回执/尾片恢复；原生命令串行、扫描/哈希/停止排空不阻塞主线程。恢复只处理已保存材料，不自动重新开麦或跨未知缺口续录；麦克风权限失败不创建假录音。网关绑定隔离，仅显式同步时绑定未归属录音；不承诺后台自动上传。
+
+同步复用Discussion的binary PUT/哈希长度回执/clientRequestId、后台seal查询，queued/running不重复提交；independent_wav逐块规范头验证/去头合成，不能直接拼完整WAV。取消、坏索引、工作区切换、回执冲突和共享麦克风所有权须留测试。历史后端34项及原模块Android27项/Swift文件系统检查仅验证当时模块与合成两小时数据；未安装或发布整App，未证明真实供应商、锁屏/来电/蓝牙/低空间、真实两小时、耗电、系统文件保护。完整后台上传、Live Activity、空间管理、外部导入和多轨继续独立验收。

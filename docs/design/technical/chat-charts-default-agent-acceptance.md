@@ -44,10 +44,10 @@
 ## 证据与复现
 
 - [总报告及各用例运行标识](../chat-charts-matrix-results/report.json)
-- [缺失值折线图截图](../chat-charts-matrix-results/qwen-token-plan-cn--qwen3.8-flash--line-gaps/chart.png)
-- [负数与零值柱状图截图](../chat-charts-matrix-results/minimax-cn--MiniMax-M2.7--bar-negative/chart.png)
-- [多序列分组柱状图截图](../chat-charts-matrix-results/deepseek--deepseek-v4-pro--bar-multi-series/chart.png)
-- 总报告同目录下，每个用例保留 `result.json`，作图用例另有 `chart.png`。
+- 缺失值折线图截图（历史产物已移入 Git 历史）
+- 负数与零值柱状图截图（历史产物已移入 Git 历史）
+- 多序列分组柱状图截图（历史产物已移入 Git 历史）
+- 仅保留矩阵总报告；分用例重复 JSON 与截图已于 2026-10-29 清理。
 
 逐用例生成的回答 Markdown 已清理；其中的 chart 数据与汇总报告中的 `cases[].charts` 一致。全部缺失用例的无图结果与检查结论也保留在汇总报告中。复验脚本仍可在指定输出目录生成完整回答。
 
@@ -59,3 +59,23 @@ pnpm vitest run scripts/__tests__/chat-charts-matrix-cases.test.ts
 支持 `XOPC_CHART_MATRIX_MODELS`、`XOPC_CHART_MATRIX_CASES`、`XOPC_CHART_MATRIX_DIR` 筛选或留存结果；需要正在运行且已有模型连接的 Gateway，以及本机 Google Chrome。测试会发起真实模型请求。
 
 本轮每种组合仅测一次，16/16 表示当前观察结果，不代表长期成功率或其他模型、任意数据规模的保证。长会话多图压力、其他客户端的降级与实时数据源不属于本轮验收范围。
+
+## 合并的渲染压力与首轮模型验证
+
+较早单模型运行使用受限 skills_list/skill_view 工具集，生成两张示例折线/柱图并刷新恢复；它不扩大为默认 Agent 全目录成功率。参考路径修正为 references/ 前缀，检查实际 Skill 内容，不能只看 isError。
+
+2026-10-17 压力验收使用独立生产 renderer、真实 MessageList/Virtuoso/ECharts，固定合成数据，无模型调用。覆盖两份 1000 消息/500 图会话、单回复 40 图、8×1000 点、每轮滚动/8次预览/8次主题变化/6次会话切换，六轮卸载和 GC。修复图表焦点误触发全历史挂载、主题 store 先于 DOM 更新导致颜色滞后。
+
+| 指标 | 修复前两轮 | 修复后六轮原速 | 修复后六轮 4x CPU |
+| --- | --- | --- | --- |
+| 焦点后挂载行/DOM 元素 | 1000 / 27032 | 9 / 278 | 9 / 278 |
+| 焦点 rAF P95 | 483–1117ms | 16.6–16.7ms | 单独门禁通过 |
+| 滚动 rAF P95 | 16.7–16.8ms | 16.7–16.8ms | 16.7–16.8ms |
+| 实例创建/释放 | 237/237 | 582/582 | 513/513 |
+| 六轮保留堆增长 | 轮次不同不比较 | 2.18MiB | 2.03MiB |
+
+门禁为行数≤80、内联实例≤2/含弹窗≤3、卸载归零、最终创建释放相等、保留 JS 堆增长≤8MiB；滚动 P95 原速≤34ms/4x≤50ms，>50ms比例≤5%。原速一次会话切换最大466.6ms，4x滚动最大100ms，不能只凭 P95 隐去长尾。RSS 原速397–427MiB、4x424–489MiB，包含浏览器分配，不是图表/GPU独占内存。文字选区保留历史的路径单独测试，300/1000消息 prepend漂移0px。小样本与六轮时长不能证明多小时无泄漏或所有设备60fps。
+
+32项相关回归、类型/lint/构建通过。复跑 `node scripts/verify-chat-chart-stress.mjs fixed-1x`、`CHART_STRESS_CPU=4 node scripts/verify-chat-chart-stress.mjs fixed-4x`，历史回归 `CHAT_RENDER_RUNS=1 node scripts/test-chat-rendering.mjs chart-stability`。历史截图、分用例重复 JSON 和压力运行原始文件已清理，保留本页摘要、矩阵总报告与可执行校验器。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

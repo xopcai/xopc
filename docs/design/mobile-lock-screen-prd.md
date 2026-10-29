@@ -1,6 +1,6 @@
 # 移动锁屏体验：产品方案与竞品依据
 
-日期：2026-09-15。状态：设计交付，尚未实施。关联：[技术方案](./mobile-lock-screen-technical-design.md)、[当前移动录音实现](./mobile-meeting-ui-upload-design.md)。
+日期：2026-09-15。状态：设计交付，尚未实施。关联：[技术方案](./mobile-lock-screen-technical-design.md)、[当前移动录音实现](mobile-meeting-technical-design.md)。
 
 ## 1. 产品目标与决策
 

@@ -2,7 +2,7 @@
 
 后续 Apple 公证已完成：应用与 DMG 均 Accepted，真实下载隔离、首次安装/启动与 Gatekeeper 通过，详见 [公证验收记录](./electron-notarization-acceptance-2026-10-18.md)。下文保留当时打包验收的历史状态和原始哈希。
 
-本轮继续 [原生工作区验收](./electron-workspace-e2e-2026-10-18.md)，改为运行生产主进程和安装包内资源，不使用测试宿主或 Vite。
+本轮继续 原生工作区验收（见本页合并摘要），改为运行生产主进程和安装包内资源，不使用测试宿主或 Vite。
 
 ## 验收方式
 
@@ -65,3 +65,13 @@
 - Developer ID 签名完整性通过；打包日志提示未配置公证凭据，**本次没有 Apple notarization**，不据此声称已通过下载隔离后的 Gatekeeper 公证验收。未绕过系统安全提示。
 - 浏览器表单/历史与 PTY 进程保活覆盖应用运行期间的工具/会话切换。退出进程后，原生网页与 shell 进程会释放；本轮未增加跨进程恢复网页历史或 PTY 的新能力。
 - 本地模型返回确定性流式文本，未模拟后台记忆/理解的结构化输出；由此产生的后台提取警告不属于此次工具交互结果。验收不涵盖后台记忆质量、发布更新与系统权限授予。
+
+## 合并保留的前序集成验证
+
+较早浏览器21项、原生测试宿主70项（28浏览器/33工作区/9新草稿）与本页最终DMG84项存在重叠，不相加。测试宿主使用独立ad-hoc签名Electron身份、真实生产preload/IPC/WebContentsView/PTY及隔离认证Gateway；完整包结果以本页84项为准。缺少模型的新草稿先校验model再保存materialize命令，错误后保留可编辑草稿和原地Retry terminal；不能留下空模型pending命令阻止恢复。
+
+浏览器前序验证保留：外部文件改写导致revision冲突时保留本地稿，取消/确认放弃不覆盖外部版本；引用只加草稿不发送；Sidechat后台流式、停止和晋升正式聊天；375px窄栏、标签键盘操作/焦点恢复、刷新恢复文件标签。未保存正文/本地附件不作为持久标签内容。图表/Office/大目录、多小时Sidechat、完整审批/澄清和弱网未逐项由该21项套件验收。Codex对比仅据用户静态截图，不作实时行为或动画参数复刻声明。
+
+测试宿主70项动画样本6716渲染任务，P95 1.342ms、最大25.564ms，非生产保证；最终DMG采样见本页。前序全量Web存在已在未改HEAD复现的message-list-visibility.test.tsx既有失败（keeps task result follow-ups without answer text and drops empty successful outcomes），没有放宽断言。测试宿主复跑入口保留scripts/workspace-e2e-server.mjs、browser-e2e-site.mjs、build-browser-e2e.mjs、start-workspace-desktop-e2e.mjs及workspace-desktop-e2e-cua.mjs；应使用独立fixture，不能对日常窗口运行。原生浏览器契约见[统一工作区方案](unified-workspace-and-embedded-browser.md)。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

@@ -20,8 +20,8 @@
 
 ### 2.1 已完成的调查
 
-- [Accio 交互、安装机制与业务包调查](./accio-plugin-research-2026-10-18.md)：包含 Computer Use 实测、12 个导出插件、宿主安装代码的静态分析，以及证据边界。
-- [Store 价值审计与清理记录](./store-plugin-value-audit-2026-10-18.md)：线上原有 84 个 Plugin 中，79 个是高度同质的轻量内容包；已按授权清理这些包和 9 个演示 Extension。保留 5 个 Plugin。保留代表有继续评估价值，不等于已获精品认证。
+- Accio 交互、安装机制与业务包调查已收敛至文末摘要，原始稿可从 Git 历史恢复。
+- Store 价值审查及已完成清理的范围、备份和历史数量见文末摘要。
 - 本地 OpenAI 插件样本固定在提交 `11c74d6ba24d3a6d48f54a194cd00ef3beea18f9`：180 个 `.codex-plugin` 包，154 个有 `.app.json`，72 个有 skills 目录，14 个有 agents 目录，6 个有 commands 目录，8 个有 `.mcp.json`。这些计数存在重叠，不代表当前官方市场总量或运行兼容率。
 - 本地 Claude 样本包含 Superpowers：存在 marketplace、Skills、SessionStart Hook。不能通过“Skill 文件读入成功”认定整个插件运行成功。
 
@@ -410,3 +410,11 @@ update bindings(expectedRevision, agentIds, workspaceScope, components)
 本轮完成 Accio 的交互与机制调查、Store 价值审计及已授权清理，并给出上述技术方案。方案不引入另一套 MCP / OAuth / Agent Runtime，也不要求第三方先发布到 xopc Store。
 
 下一步从 P0 开始，以完整兼容报告约束实现，再交付 P1～P2 的首个可用里程碑。首先承诺用户可自由安装并理解实际可用范围，随后用 Commands / Agents / Hooks 和经过验收的平台适配扩展运行能力。
+
+## 调研结论与已完成目录清理摘要
+
+2026-10-29 删除单独的 Accio 调研与 Store 清理流水，保留本节及安装/授权契约。Accio 证据来自用户截图、实际浏览器操作、12个导出包和本机ASAR静态核查；不代表其后端、全部商家服务或私有业务API已被复现。可借鉴声明式准备、资源与账号分离、逐项就绪、可跳过并恢复授权、Skill方法加确定性脚本和结构化交接；不直接复制任意宿主JS Hook、全量私有格式或另一套Agent/MCP/OAuth Runtime。安装期Agent绑定已由[后续安装契约](plugin-install-authorization-2026-10-19.md)取代，不能照搬旧调研流程。
+
+Store 2026-10-18 审查快照为84个Plugin，其中79个只有950–1188字节的单Skill，无成体系reference/脚本/资产；另20个Native Extension含演示包。按当时授权于23:20:56 +08:00删除79内容包和9演示扩展、332版本/审核记录及411个无共享引用文件。先SQLite一致备份、归档哈希核对，再精确ID事务删除，验证保留包版本不变、integrity/foreign keys通过、825保留版本文件存在；备份在`/var/backups/xopc-store/plugin-cleanup-20261018T232053+0800`。当次剩5个Plugin/11个Extension，10 Connector/156 Skill保留；这些是历史数量，不作当前目录宣称。本次文档清理未操作Store。
+
+准入以明确任务、输入输出、独有知识/可复用资产或执行能力、代表性E2E、授权与失败续办、维护责任判断；不以文件数量、必须有MCP、发布者verified或组件数量代替价值，也不否定高质量纯知识包。后续精品/平台扩展仍以本文P3–P5、[扩展调研](plugin-expansion-research-2026-10-19.md)及实际发布验收为准。

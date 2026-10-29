@@ -54,13 +54,13 @@ Vitest 新增/扩展覆盖：copy-on-write 与 part 身份、无 payload 身份�
 
 最终完整 Web 回归：428 个测试文件、2040 条测试通过；lint、TypeScript 检查、production build 和 git diff --check 通过。
 
-最终数值见下方及[原始报告](./chat-rendering-results/final.json)。已有构建警告涉及大 chunk 和其他功能的无效动态导入；不是编译失败。
+最终数值见下方及原始报告（历史产物已移入 Git 历史）。已有构建警告涉及大 chunk 和其他功能的无效动态导入；不是编译失败。
 
 ## 基准解释与边界
 
 `commitMs` 测量调用 `flushSync(root.render)` 的同步耗时，**不是整个解析/异步高亮/真实绘制的总时间**。`deltaMs` 测量 store mutation 与同步通知，**不等于 receive→DOM 延迟**。`mountMs` 是初始同步挂载，虚拟列表需要后续 effect/测量，必须同时看 `readyMs`（出现首批行并经过下一帧）。不能用虚拟列表的亚毫秒空壳挂载宣称完整历史已经显示。
 
-[baseline.json](./chat-rendering-results/baseline.json) 和 [streamdown.json](./chat-rendering-results/streamdown.json) 是 renderer-only harness，JS gzip 总量分别约 877KiB、1016KiB（约 +140KiB）。最终 harness 额外引入真实 MessageList/store/工具/附件等完整消息依赖，因此最终约 2MiB 的 gzip 总量不能和 renderer-only 的 877KiB 比较为首屏增量。这也没有证明技术方案的 chat 首屏 +50KiB 预算通过；Streamdown 增加解析依赖是明确成本，高亮/图表继续 lazy。
+baseline.json（历史产物已移入 Git 历史） 和 streamdown.json（历史产物已移入 Git 历史） 是 renderer-only harness，JS gzip 总量分别约 877KiB、1016KiB（约 +140KiB）。最终 harness 额外引入真实 MessageList/store/工具/附件等完整消息依赖，因此最终约 2MiB 的 gzip 总量不能和 renderer-only 的 877KiB 比较为首屏增量。这也没有证明技术方案的 chat 首屏 +50KiB 预算通过；Streamdown 增加解析依赖是明确成本，高亮/图表继续 lazy。
 
 本次尚未量化端到端 receive→DOM p95、输入交互延迟、强制 GC 后的长期堆趋势与 chat 首屏 chunk 对比，亦未进行 Safari/Firefox 真浏览器验收。上述预算不能宣称已通过。引用式文档与单条超长回复仍可能需要较多 DOM/解析；窗口化限制历史行，不会虚拟化一条消息的每个 Markdown 块。
 
@@ -84,11 +84,11 @@ Vitest 新增/扩展覆盖：copy-on-write 与 part 身份、无 payload 身份�
 
 窗口化前的单次控制测量：1000 行普通列表同步挂载约 353.9ms、23,534 个 DOM 节点、store delta p95 约 1.3ms。此值来自窗口实施前的诊断，不属于 renderer-only baseline；不把单次测量比较作为稳定倍数承诺。最终长历史尾部挂载 13 行，普通阅读时 DOM 不再随已加载历史总行数线性增加。300/1000 行均成功定位未挂载的第 50 行，选择并滚动后选区节点保持连接，前插 20 行可见锚点实测偏移 0px。
 
-真实动画抽样为 39 个 active animation，computed opacity 处于 0–1；终态 span 清理成功，浏览器 pageerror 为 0。参考[渐显截图](./chat-rendering-results/final-streaming.png)与[历史定位截图](./chat-rendering-results/final-history.png)。
+真实动画抽样为 39 个 active animation，computed opacity 处于 0–1；终态 span 清理成功，浏览器 pageerror 为 0。参考渐显截图（历史产物已移入 Git 历史）与历史定位截图（历史产物已移入 Git 历史）。
 
 ## 二次效果验收
 
-后续链接与排版复查修复了外链错误反馈、脚注/中文 fragment 定位、内部 ID 与文件路径识别的优先级、裸 JSX/TSX 文件名、列表标记、表格独立滚动和代码重复 padding，并恢复无语言标签 Mermaid 识别。细节及截图见下方“链接与排版复查”。上述早期基准 JSON 保留其测量时版本；不能将它们当作新增修复后的重新测量。
+后续链接与排版复查修复了外链错误反馈、脚注/中文 fragment 定位、内部 ID 与文件路径识别的优先级、裸 JSX/TSX 文件名、列表标记、表格独立滚动和代码重复 padding，并恢复无语言标签 Mermaid 识别。细节及截图见下方“链接与排版复查”。上述早期基准 JSON 已归入 Git 历史，表中仍是测量时版本的数字，不能当作新增修复后的重新测量。
 
 ## 链接与排版复查
 
@@ -122,7 +122,7 @@ Vitest 新增/扩展覆盖：copy-on-write 与 part 身份、无 payload 身份�
 | 不支持或危险协议 | 缺少目标的 xopc、javascript、mailto 等维持不可操作的普通文字，不添加可用性噪音 |
 | 脚注 | 当前消息内定位、回链、中文标识、独立 ID、焦点；不打开外部页面或改变 HashRouter 路由 |
 
-[浏览器采集的链接属性](./chat-rendering-results/review-links.json)包含 16 个预期链接；流式完成后的动画包装 span 为 0。单元测试进一步覆盖 ID 形状、reference image、描述性 title、过期错误与两个消息之间的 fragment 隔离。
+浏览器采集的链接属性（历史产物已移入 Git 历史）包含 16 个预期链接；流式完成后的动画包装 span 为 0。单元测试进一步覆盖 ID 形状、reference image、描述性 title、过期错误与两个消息之间的 fragment 隔离。
 
 ### 排版与视觉检查
 
@@ -134,13 +134,13 @@ Vitest 新增/扩展覆盖：copy-on-write 与 part 身份、无 payload 身份�
 
 效果截图：
 
-![浅色排版](./chat-rendering-results/review-typography-light.jpg)
+浅色排版（历史产物已移入 Git 历史）
 
-![深色表格与代码](./chat-rendering-results/review-table-code-dark.jpg)
+深色表格与代码（历史产物已移入 Git 历史）
 
-![窄阅读栏宽表](./chat-rendering-results/review-wide-table.jpg)
+窄阅读栏宽表（历史产物已移入 Git 历史）
 
-![链接样例](./chat-rendering-results/review-links.jpg)
+链接样例（历史产物已移入 Git 历史）
 
 ### 复现
 
@@ -186,7 +186,7 @@ Chrome 155.0.8059.40 共 **32 个场景**：12 / 300 条历史消息、普通 / 
 - 按绘制帧采样，完成后的额外滚动最大 **0px**，向上阅读时位置漂移最大 **0px**；浏览器错误为 0。
 - 单元回归覆盖完成正文原子提交、首次正文提交、留白耗尽后的收缩恢复、消息壳数组稳定时的完成重测，以及阅读位置保护。
 
-[浏览器采集结果](./chat-rendering-results/completion-stability.json)保留完成前、首次提交、首次绘制和最终几何数据。
+浏览器采集结果（历史产物已移入 Git 历史）保留完成前、首次提交、首次绘制和最终几何数据。
 
 完整 Web 回归 **432 个测试文件、2114 条测试通过**；lint、TypeScript 编译、生产构建和 git diff --check 通过。
 
@@ -200,3 +200,5 @@ pnpm --dir web run build
 ```
 
 浏览器脚本使用本机 Chrome，通过 playwright-core 运行。完整逐帧数据和截图写入临时结果目录；临时构建与浏览器在退出时清理。浏览器验证范围为 Chrome，未运行 Safari / Firefox 或真实模型请求。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

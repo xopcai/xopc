@@ -22,8 +22,10 @@ Started a new main conversation through the Gateway chat UI and used the configu
 
 The native facts included `Android 版本`, `12` and `Android 安全更新`. The completion condition was satisfied with `verified=true` and `verificationLevel=ui`. The Agent reported Android 12, then closed the phone session, releasing control. No settings were changed. The post-handback chat turn took 163 seconds, exceeding the old limit; it used 9 model requests. Seven total input actions include the initial app launch and one human gesture, leaving five model actions. There was no `PHONE_CANCELLED` in this continuation.
 
-Evidence: [metadata and filtered UI facts](evidence/phone-use-handoff-cancellation-2026-10-24.json). Conversation: `1adb2ac7-b82c-4f32-92ae-6aa6e0bb11fa`; phone session: `1abe1ff2-ed3b-47f0-821f-cb413be03c2a`.
+Evidence: metadata and filtered UI facts（历史产物已移入 Git 历史）. Conversation: `1adb2ac7-b82c-4f32-92ae-6aa6e0bb11fa`; phone session: `1abe1ff2-ed3b-47f0-821f-cb413be03c2a`.
 
 ## Regression coverage
 
 139 tests passed across 16 phone, Gateway route and web test files. Added checks cover a 100-second model goal, active time excluding human pauses, recoverable deadline expiry, unknown dispatch preservation, real caller cancellation, direct handback after tool pause and failed observation cleanup. Core typecheck, web production build, targeted lint and diff whitespace checks passed.
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

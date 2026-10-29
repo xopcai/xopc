@@ -48,3 +48,33 @@ Removed obsolete documents on 2026-10-24:
 - The old realtime voice review stub referring to protocol v2; use [persistent voice delivery](./persistent-voice-delivery.md) and the [v3 protocol](./realtime-voice-websocket-protocol.md).
 - The two early one-click discussion capture designs describing a 30-minute limit and whole-recording upload; use the [meeting technical design](./voice-meeting-technical-design.md), [recording reliability implementation](./note-recording-reliability-phase-one.md) and [recording roadmap](./note-recording-product-technical-roadmap.md).
 - Generated per-case chart answer Markdown; the [matrix acceptance report](./technical/chat-charts-default-agent-acceptance.md), structured results and screenshots retain the validation evidence.
+
+## Retention review — 2026-10-29
+
+Removed 31 redundant development artifacts: 28 unreferenced intermediate JSON runs (Personal AI performance, result reading, handoff and tool optimization; provider/settings/navigation checks; a retired local AutoGLM probe), two unreferenced rendering screenshots (including a byte-identical copy of the retained final history screenshot), and the generated chart answer Markdown whose chart specifications remain in the structured report. Final acceptance summaries, failure descriptions and reproduction scripts remain; later retention reviews below describe further artifact cleanup. Previously committed artifacts are recoverable from Git history. This was a documentation cleanup, not a new acceptance run.
+
+Keep current specifications, unfinished scope, security and migration boundaries, final acceptance evidence, and raw records needed for cross-run comparisons. Intermediate numbered runs and generated answers should stay under `/tmp` or `.xopc-evals/` once their useful findings are summarized; a date or lack of incoming links alone does not make a design obsolete.
+
+## Markdown consolidation — 2026-10-29
+
+Nine superseded Markdown documents were removed after retaining their useful decisions, failures and acceptance limits in the references below. This review did not rerun any product, device or account acceptance. Deleted drafts remain recoverable from Git history.
+
+| Removed material | Maintained reference |
+| --- | --- |
+| Workflow removal assessment and completed implementation plan (2) | [Removal decision and scoped acceptance](technical/workflow-removal-acceptance-2026-10-23.md) |
+| Initial workspace verification and screenshot-based Codex parity report (2) | [Workspace acceptance and browser baseline](electron-packaged-acceptance-2026-10-18.md) |
+| Early Store lifecycle and real-account acceptance reports (2) | [Complete plugin-chain rerun](plugin-e2e-rerun-2026-10-19.md), [installation contract](plugin-install-authorization-2026-10-19.md) and [permission recovery](plugin-permission-recovery-2026-10-19.md) |
+| Initial local Phone Use delivery and screenshot-era V2 proposal (2) | [V2 implementation, baseline and acceptance](technical/phone-use-video-v2.md) and [current workspace contract](phone-use-product-technical-design.md) |
+| Phone setup report blocked by the former model's quota (1) | [Setup fixes, current acceptance and historical blocker](technical/browser-phone-setup-review-fixes-2026-10-28.md) |
+
+Completed implementation alone is not a deletion criterion. Architecture contracts, security/migration decisions, unfinished remote Runner/cloud designs, provider native-catalog research and distinct performance comparisons remain where they still carry unique scope or evidence.
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。
+
+## Further consolidation — 2026-10-29
+
+The later retention pass consolidates 17 more Markdown files: seven recording implementation/audit notes into the [recording contract](note-recording-reliability-phase-one.md), four recording acceptance reports into the [recording acceptance summary](note-web-two-hour-realtime-acceptance-2026-10-16.md), two chart runs into the [chart acceptance](technical/chat-charts-default-agent-acceptance.md), P0/P1 delivery reports into [P2 acceptance](technical/personal-task-delivery-p2-verification-2026-10-14.md), and two earlier desktop/browser reports into [packaged acceptance](electron-packaged-acceptance-2026-10-18.md) and the [browser contract](unified-workspace-and-embedded-browser.md).
+
+Historical screenshots, duplicate per-case results and intermediate run archives were removed. Keep executable consumers' inputs, current work evidence and unique comparison data; old screenshots and raw paths mentioned inside immutable run metadata refer to the original historical run and may require Git-history recovery. Routine future runs should write to `/tmp` or ignored `.xopc-evals/`. This cleanup does not change recorded test outcomes or imply new device/vendor acceptance.
+
+The final snapshot review also removes seven obsolete notes: Accio research and the completed Store catalog audit now live in the [plugin architecture](plugin-ecosystem-compatibility-and-setup.md); voice delivery and two meeting implementation logs are summarized in their maintained technical designs; the retired cross-platform mobile recording review/upload design is replaced by a historical boundary in the [mobile meeting design](mobile-meeting-technical-design.md). Its old bridge/module tests are explicitly not evidence for current native apps. Together with the preceding pass, this turn removed 24 Markdown files and 124 historical assets. All images under this internal design directory were removed; public documentation illustrations and product assets outside it were not part of this cleanup.

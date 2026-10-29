@@ -1,5 +1,0 @@
-{
-  "success": false,
-  "failure": "Verification interrupted during code review: capability snapshot must persist the normalized explicit executor ID for the pre-execution recheck. Final verification is rerun after fixing this issue.",
-  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-arceLY"
-}

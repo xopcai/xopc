@@ -38,8 +38,10 @@ Final real-model run selected `data-analyst` in one actual Router model call. Th
 
 Durations are a single run, not evidence of a throughput or model-latency improvement. Result-return timing includes the harness observation interval. The fast persistence boundary and main conversation responsiveness are verified independently of worker duration.
 
-Evidence: [final real-model report](./personal-tools-optimization-live-2026-10-14.json). Earlier reports preserve the empty-optional-ID recovery and pre-compaction receipt runs.
+Evidence: final real-model report（历史产物已移入 Git 历史）. Earlier reports preserve the empty-optional-ID recovery and pre-compaction receipt runs.
 
 ## Repeated stability verification
 
 Follow-up testing tightened the read/submit boundary, clarified the worker shell contract and reduced redundant Task brief generation. The final version passed three consecutive real-model runs with no main or worker tool errors. See [stability verification and timings](./personal-tools-stability-2026-10-14.md).
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

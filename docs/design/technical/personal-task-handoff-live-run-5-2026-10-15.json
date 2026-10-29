@@ -1,6 +1,0 @@
-{
-  "success": false,
-  "failure": "Task brief standalone workspace path was parsed as a slash command. Worker never executed and no delivery was generated; stopped harness before timeout.",
-  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-gHHOU4",
-  "discoveredFix": "System workflow input bypasses slash command handling."
-}

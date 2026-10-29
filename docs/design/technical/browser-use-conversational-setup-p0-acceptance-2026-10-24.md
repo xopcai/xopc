@@ -41,13 +41,13 @@ pnpm exec tsx scripts/verify-browser-setup.mts
 
 脚本使用临时数据库、临时 Chrome 配置和隔离扩展，不修改日常 Chrome 的标签页或 xopc 用户配置。报告默认输出到 `/tmp/xopc-browser-setup-live.json`，可使用 `XOPC_BROWSER_SETUP_REPORT` 指定路径。
 
-[机器报告](evidence/browser-use-conversational-setup-p0-chrome-2026-10-24.json)记录真实 Chromium 148.0.7778.96 的配置、读取、点击、输入及释放检查通过；脚本也确认演示标签页已关闭。
+机器报告（历史产物已移入 Git 历史）记录真实 Chromium 148.0.7778.96 的配置、读取、点击、输入及释放检查通过；脚本也确认演示标签页已关闭。
 
 测试边界：使用生产 Browser 控制器与真实 Chrome CDP，但以隔离适配器替代生产端点传输。未覆盖完整的原生发现/Realtime 配对，也没有让真实语言模型自主选择与执行整个引导。安装与权限函数另有回归覆盖；脚本通过 Chromium 启动参数加载测试扩展，不能代替首次用户手动安装的体验验收。
 
 ## 生产协议与真实模型完整验收
 
-后续已使用 `scripts/verify-browser-setup-production.mts` 跑通真实模型完整流程，补齐上面隔离适配器验证的边界。[生产链路机器报告](evidence/browser-use-conversational-setup-production-2026-10-24.json)仅保存不含凭据的结果；完整对话和排障日志保留在本机临时目录，不提交。
+后续已使用 `scripts/verify-browser-setup-production.mts` 跑通真实模型完整流程，补齐上面隔离适配器验证的边界。生产链路机器报告（历史产物已移入 Git 历史）仅保存不含凭据的结果；完整对话和排障日志保留在本机临时目录，不提交。
 
 - 从原句“帮我配置 Browser Use”开始，通过生产会话输入 API 调用真实 `qwen3.8-flash`，共 17 次模型请求，全部 HTTP 200。没有脚本化模型回复或控制传输适配器。
 - 实际 `skill_view` 顺序为统一 `SKILL.md` → Browser overview → Chrome extension → acceptance，没有加载其他场景。配置工具与 `browser_use` 通过正常 `tool_search` 渐进发现。
@@ -80,7 +80,7 @@ XOPC_BROWSER_PRODUCTION_UI_ROOT=/tmp/xopc-browser-production-ui pnpm exec tsx sc
 
 ## 已有安装修复、权限拒绝与中断恢复（XOPC Cloud）
 
-按后续指定，本轮全部真实模型调用使用 **xopc-cloud / openai-codex/gpt-5.6-sol**。[恢复流程机器报告](evidence/browser-use-conversational-setup-recovery-cloud-2026-10-24.json)记录 50 次真实模型请求，全部成功，Browser 工具错误为 0。三个恢复场景均沿用从“帮我配置 Browser Use”开始的同一个 conversationId，生产配对和 Realtime 传输没有适配替身。
+按后续指定，本轮全部真实模型调用使用 **xopc-cloud / openai-codex/gpt-5.6-sol**。恢复流程机器报告（历史产物已移入 Git 历史）记录 50 次真实模型请求，全部成功，Browser 工具错误为 0。三个恢复场景均沿用从“帮我配置 Browser Use”开始的同一个 conversationId，生产配对和 Realtime 传输没有适配替身。
 
 | 场景 | 实际故障与用户动作 | 验收结果 |
 | --- | --- | --- |
@@ -110,7 +110,7 @@ XOPC_BROWSER_RECOVERY=1 XOPC_BROWSER_PRODUCTION_UI_ROOT=/tmp/xopc-browser-produc
 
 ## Chrome 原生控制撤销与系统启动受阻
 
-本轮继续使用 **xopc-cloud / openai-codex/gpt-5.6-sol**，在有界面的真实 Chromium 148 中进行原生 UI 操作。[机器报告](evidence/browser-use-conversational-setup-native-permissions-2026-10-24.json)保留阶段、动作、预期拒绝及适用范围，不包含登录令牌或配对邀请。
+本轮继续使用 **xopc-cloud / openai-codex/gpt-5.6-sol**，在有界面的真实 Chromium 148 中进行原生 UI 操作。机器报告（历史产物已移入 Git 历史）保留阶段、动作、预期拒绝及适用范围，不包含登录令牌或配对邀请。
 
 ### Chrome 原生 UI 实测
 
@@ -148,3 +148,5 @@ XOPC_BROWSER_NATIVE_PERMISSIONS=1 XOPC_BROWSER_PRODUCTION_UI_ROOT=/tmp/xopc-brow
 仍需人工记录首次安装文件选择器、不同平台的安装体验，以及在确实出现 Gatekeeper／TCC 等系统安全弹窗时的用户决策过程。当前已覆盖 Agent 工具策略拒绝、Chrome 原生调试提示条撤销，以及系统原生宿主执行受阻；不将其泛化为所有浏览器或系统权限弹窗均已验收。
 
 macOS、Windows、Linux 的首次安装体验应分别记录。本轮真实 Chrome 测试在 macOS 上完成，不据此承诺其他平台均已完成实机验收。P1 的远程配对、Playwright 与远程服务安全凭据流程仍按设计后续实现。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

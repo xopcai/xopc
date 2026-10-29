@@ -1,7 +1,0 @@
-{
-  "success": false,
-  "failure": "Background model returned nested objects in expectedOutputs/acceptanceCriteria instead of flat string arrays; capability planning correctly blocked execution. Harness stopped before its waiting timeout.",
-  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-pzEOE5",
-  "discoveredFix": "Explicit flat-array JSON example and one bounded background format repair.",
-  "initialAttemptBlocked": true
-}

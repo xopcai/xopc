@@ -1,8 +1,8 @@
 # 语音与会议助手 PRD
 
-日期：2026-09-15  
-状态：P0 工程主体已实施，验证边界见 [实施与自查](./voice-meeting-implementation-review.md)；P1/P2 已完成设计，P1-A [正在实施](./voice-meeting-p1-p2-implementation-review.md)。
-依据：[调研与总体方案](./voice-meeting-research-and-proposal.md)  
+日期：2026-09-15
+状态：保留产品目标与后续分期；P0 实施范围见[技术设计](voice-meeting-technical-design.md)，后续已交付的录音恢复、重点与搜索见[录音契约](note-recording-reliability-phase-one.md)。其余 P1/P2 不作为已完成声明。
+依据：[调研与总体方案](./voice-meeting-research-and-proposal.md)
 配套：[技术设计](./voice-meeting-technical-design.md) · [P1/P2 技术设计](./voice-meeting-p1-p2-technical-design.md) · [分阶段实施与验收](./voice-meeting-p1-p2-delivery-plan.md)
 
 ## 1. 产品目标

@@ -38,12 +38,14 @@ Personal 使用 `deepseek/deepseek-flash`，Task Router 和执行者继承全局
 XOPC_ALLOCATION_LIVE=1 XOPC_ALLOCATION_REPORT=docs/design/technical/personal-tools-stability-next.json pnpm exec tsx scripts/personal-allocation-live-smoke.mts
 ```
 
-[汇总 JSON](./personal-tools-stability-2026-10-14.json) 保存各轮度量、验收结果和源码 SHA256。原始报告保留完整时序、使用记录、输入状态与主对话历史。
+汇总 JSON（历史产物已移入 Git 历史） 保存各轮度量、验收结果和源码 SHA256。原始报告保留完整时序、使用记录、输入状态与主对话历史。
 
-- [第 1 轮](./personal-tools-stability-2026-10-14-run-1.json)：initial-observation；主工具 ['read_file', 'personal_task']，执行者工具错误 1。
-- [第 2 轮](./personal-tools-stability-2026-10-14-run-2.json)：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
-- [第 3 轮](./personal-tools-stability-2026-10-14-run-3.json)：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
-- [第 4 轮](./personal-tools-stability-2026-10-14-run-4.json)：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
-- [第 5 轮](./personal-tools-stability-2026-10-14-run-5.json)：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。
-- [第 6 轮](./personal-tools-stability-2026-10-14-run-6.json)：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。
-- [第 7 轮](./personal-tools-stability-2026-10-14-run-7.json)：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- 第 1 轮（历史产物已移入 Git 历史）：initial-observation；主工具 ['read_file', 'personal_task']，执行者工具错误 1。
+- 第 2 轮（历史产物已移入 Git 历史）：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- 第 3 轮（历史产物已移入 Git 历史）：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- 第 4 轮（历史产物已移入 Git 历史）：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- 第 5 轮（历史产物已移入 Git 历史）：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- 第 6 轮（历史产物已移入 Git 历史）：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- 第 7 轮（历史产物已移入 Git 历史）：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。
