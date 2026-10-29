@@ -127,7 +127,7 @@ export function useChatSessionStreaming(deps: {
         const msg = ensureAssistantMessage(cachedBubble, Date.now());
         finalizePendingText(msg.content, terminalStatus === 'success');
         finalizeStreamingThinking(msg.content);
-        finalizeRunningTools(msg.content);
+        finalizeRunningTools(msg.content, terminalStatus === 'success');
         finalizeRunningReviews(msg.content);
         msg.completedAt = Date.now();
         finalMsg = cloneMessageForRender(msg);

@@ -2,9 +2,27 @@ import { describe, expect, it } from 'vitest';
 
 import { parseMarkdown } from '@/components/markdown/parse-markdown';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
-import { appendTextDelta } from '@/features/chat/messages/streaming';
+import { appendTextDelta, appendThinkingDelta, finalizeStreamingThinking } from '@/features/chat/messages/streaming';
+import { sessionWireToUiMessages } from '../agent-messages';
 
 describe('streaming text assembly', () => {
+  it('rebinds a history-derived segment to the resumed live identity without replaying text', () => {
+    const [history] = sessionWireToUiMessages([{ role: 'assistant', id: 'stored', content: 'Existing answer' }]);
+    appendTextDelta(history.content, 'Existing', 'live-message', { offset: 0, reconcileHydratedSegment: true });
+    expect(history.content).toEqual([{ type: 'text', text: 'Existing answer', presentation: 'pending', segmentId: 'live-message' }]);
+  });
+  it('preserves repeated reasoning deltas and separates model message identities', () => {
+    const content: MessageContent[] = [];
+    appendThinkingDelta(content, '检查', true, 'first');
+    appendThinkingDelta(content, '检查', true, 'first');
+    finalizeStreamingThinking(content, 'first');
+    appendThinkingDelta(content, '再检查', true, 'second');
+    finalizeStreamingThinking(content, 'first');
+    expect(content).toMatchObject([
+      { type: 'thinking', text: '检查检查', segmentId: 'first', streaming: false },
+      { type: 'thinking', text: '再检查', segmentId: 'second', streaming: true },
+    ]);
+  });
   it('preserves adjacent repeated text deltas', () => {
     const content: MessageContent[] = [];
 

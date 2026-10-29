@@ -233,9 +233,20 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
       )
     ) {
       nextMessage.renderKey = existing.renderKey;
+      const matchedParts = new Set<Message['content'][number]>();
       nextMessage.content.forEach((part, partIndex) => {
-        const prior = existing.content[partIndex];
+        const prior = part.type === 'text' && part.hydrated
+          ? existing.content.find(candidate => candidate.type === 'text' && candidate.text === part.text && !matchedParts.has(candidate))
+          : part.type === 'tool_use'
+            ? existing.content.find(candidate => candidate.type === 'tool_use'
+              && (candidate.toolCallId ?? candidate.id) === (part.toolCallId ?? part.id))
+            : existing.content[partIndex];
         if (!prior || prior.type !== part.type) return;
+        matchedParts.add(prior);
+        if (part.type === 'text' && prior.type === 'text' && part.hydrated && prior.segmentId) {
+          part.segmentId = prior.segmentId;
+          delete part.hydrated;
+        }
         if (part.type === 'text' && prior.type === 'text'
           && prior.segmentId && part.segmentId && prior.segmentId !== part.segmentId) return;
         if (part.type === 'tool_use' && prior.type === 'tool_use'

@@ -148,39 +148,41 @@ export function startThinkingSegment(content: MessageContent[]): void {
 }
 
 /** Append or replace text in the current thinking block, creating one if needed. */
-export function appendThinkingDelta(content: MessageContent[], text: string, isDelta: boolean): void {
+export function appendThinkingDelta(content: MessageContent[], text: string, isDelta: boolean, segmentId?: string): void {
   const last = content[content.length - 1];
-  if (last?.type === 'thinking') {
+  if (last?.type === 'thinking' && last.segmentId === segmentId && last.streaming) {
     if (isDelta) {
-      last.text = appendWithOverlap(last.text || '', text);
+      last.text = appendStreamDelta(last.text, text);
     } else {
       last.text = text;
     }
     last.streaming = true;
     return;
   }
-  content.push({ type: 'thinking', text: isDelta ? text : text, streaming: true });
+  closeStreamingThinkingIfAny(content);
+  content.push({ type: 'thinking', text, streaming: true, ...(segmentId ? { segmentId } : {}) });
 }
 
-/** Mark the last open thinking segment as no longer streaming (e.g. `thinking_end`). */
-export function finalizeStreamingThinking(content: MessageContent[]): void {
-  closeStreamingThinkingIfAny(content);
+/** End reasoning for one model message, or all segments when the run terminates. */
+export function finalizeStreamingThinking(content: MessageContent[], segmentId?: string): void {
   for (const b of content) {
-    if (b.type === 'thinking' && typeof b.text === 'string') {
+    if (b.type === 'thinking' && (!segmentId || b.segmentId === segmentId)) {
+      b.streaming = false;
       b.text = b.text.trim();
     }
   }
 }
 
 /**
- * Mark any `tool_use` still `running` as `done` when the turn commits.
+ * Settle both tool states when a turn commits or is interrupted.
  * Matches persisted session after refresh: run `tool_end` can be missed (parse edge cases)
  * or `toolName` may not match `completeTool`'s strict equality vs `tool_start`.
  */
-export function finalizeRunningTools(content: MessageContent[]): void {
+export function finalizeRunningTools(content: MessageContent[], successful = true): void {
   for (const b of content) {
     if (b.type === 'tool_use' && b.status === 'running') {
-      b.status = 'done';
+      b.status = successful ? 'done' : 'error';
+      b.activity = resolveToolActivity(b.name, successful ? 'completed' : 'failed', b.result);
     }
   }
 }
@@ -207,12 +209,13 @@ export function appendTextDelta(
     options?.reconcileHydratedSegment
     && segmentId
     && last?.type === 'text'
-    && !last.segmentId
+    && (!last.segmentId || last.hydrated)
   ) {
     const reconciled = reconcileStreamDeltaAtOffset(last.text, delta, options.offset);
     if (reconciled !== null) {
       last.text = reconciled;
       last.segmentId = segmentId;
+      delete last.hydrated;
       last.presentation = 'pending';
       return;
     }
@@ -360,12 +363,14 @@ export function appendToolStart(
   activity?: ToolActivity,
   metadata?: AgentStreamToolExecutionMetadata,
 ): void {
+  if (toolCallId && content.some(block => block.type === 'tool_use'
+    && (block.toolCallId === toolCallId || block.id === toolCallId))) return;
   confirmPendingNarration(content);
   closeStreamingThinkingIfAny(content);
 
   const block: ToolUseContent = {
     type: 'tool_use',
-    id: crypto.randomUUID(),
+    id: toolCallId ?? crypto.randomUUID(),
     toolCallId,
     ...metadata,
     name: toolName,
@@ -389,9 +394,9 @@ export function completeTool(
 ): void {
   for (let i = content.length - 1; i >= 0; i--) {
     const b = content[i];
-    if (b.type !== 'tool_use' || b.status !== 'running') continue;
+    if (b.type !== 'tool_use') continue;
     if (toolCallId && b.toolCallId !== toolCallId && b.id !== toolCallId) continue;
-    if (!toolCallId && !toolNameMatches(b.name, toolName)) continue;
+    if (!toolCallId && (b.status !== 'running' || !toolNameMatches(b.name, toolName))) continue;
     b.status = isError ? 'error' : 'done';
     b.result = result;
     b.activity = activity ?? resolveToolActivity(toolName, isError ? 'failed' : 'completed', result);

@@ -4,6 +4,8 @@ import type { Message } from '@/features/chat/messages/messages.types';
 import { messageRowKey } from '@/features/chat/messages/thinking-blocks';
 import { setOptimisticUserMessageDelivery } from '@/features/chat/messages/optimistic-user-message';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
+import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
+import { knownPartRenderKey } from '@/features/chat/rendering/part-identity';
 import {
   getChatSessionSnapshot,
   isSessionAgentRunActive,
@@ -33,6 +35,29 @@ const idleSlice = {
 };
 
 describe('useChatSessionStore', () => {
+  it('preserves live text identities when history adds an earlier activity item', () => {
+    useChatSessionStore.setState({ sessions: {} });
+    const store = useChatSessionStore.getState();
+    store.initSessionSnapshot(conversationId, idleSlice);
+    store.mutateSessionStreaming(conversationId, message => {
+      message.turnId = 'turn';
+      message.content.push({ type: 'text', text: 'Checking.', segmentId: 'live-opening', presentation: 'narration' },
+        { type: 'text', text: '| Result |\\n| --- |\\n| Done |', segmentId: 'live-final', presentation: 'answer' });
+    });
+    const live = getChatSessionSnapshot(conversationId)!.streamingMsg!;
+    const finalKey = knownPartRenderKey(live.content[1]);
+    store.finalizeStreamingTurn(conversationId, live);
+    const history = sessionWireToUiMessages([
+      { role: 'assistant', id: 'stored-first', turnId: 'turn', content: [
+        { type: 'text', text: 'Checking.' }, { type: 'toolCall', id: 'read', name: 'read_file' },
+      ] },
+      { role: 'assistant', id: 'stored-last', turnId: 'turn', content: [{ type: 'text', text: '| Result |\\n| --- |\\n| Done |' }] },
+    ]);
+    store.setCommittedSnapshot(conversationId, { messages: [userMsg, ...history], hasMore: false });
+    const final = getChatSessionSnapshot(conversationId)!.messages[1].content.at(-1)!;
+    expect(knownPartRenderKey(final)).toBe(finalKey);
+    expect(final).toMatchObject({ segmentId: 'live-final', presentation: 'answer' });
+  });
   beforeEach(() => {
     useChatSessionStore.setState({
       focusedConversationId: null,

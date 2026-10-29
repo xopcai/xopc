@@ -5,12 +5,31 @@ import {
   appendToolStart,
   completeTool,
   finishReview,
+  finalizeRunningTools,
   startReview,
   updateToolDetails,
 } from '@/features/chat/messages/streaming';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 
 describe('streaming tool updates', () => {
+  it('keeps one tool item when a hydrated start and completed event are replayed', () => {
+    const content: MessageContent[] = [];
+    appendToolStart(content, 'read_file', { path: 'first.ts' }, 'call-1', 1000);
+    appendToolStart(content, 'read_file', { path: 'first.ts' }, 'call-1', 1000);
+    completeTool(content, 'read_file', false, 'result', 'call-1', 1500);
+    appendToolStart(content, 'read_file', {}, 'call-1', 1000);
+    completeTool(content, 'read_file', false, 'result', 'call-1', 1500);
+    expect(content).toHaveLength(1);
+    expect(content[0]).toMatchObject({ status: 'done', result: 'result', activity: { status: 'completed' } });
+  });
+
+  it.each([true, false])('settles both tool states when successful=%s', successful => {
+    const content: MessageContent[] = [];
+    appendToolStart(content, 'read_file', {}, 'call-1', 1000);
+    finalizeRunningTools(content, successful);
+    expect(content[0]).toMatchObject({ status: successful ? 'done' : 'error',
+      activity: { status: successful ? 'completed' : 'failed' } });
+  });
   it('completes a running tool by toolCallId before falling back to tool name', () => {
     const content: MessageContent[] = [];
 

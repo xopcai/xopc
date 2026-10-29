@@ -16,9 +16,11 @@ export interface WireContentBlock {
   mimeType?: string;
   id?: string;
   presentation?: 'pending' | 'narration' | 'answer';
+  segmentId?: string;
 }
 
 export interface WireMessage {
+  id?: string;
   role?: string;
   turnId?: string;
   startsNewBubble?: boolean;

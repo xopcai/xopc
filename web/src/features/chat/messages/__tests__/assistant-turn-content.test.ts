@@ -9,6 +9,14 @@ import type { MessageContent, ToolUseContent } from '../messages.types';
 const tool = (id: string): ToolUseContent => ({ type: 'tool_use', id, name: 'read_file', status: 'done' });
 
 describe('assistant turn projection', () => {
+  it('preserves explicit and historical message identities when selecting the final answer', () => {
+    const [message] = sessionWireToUiMessages([
+      { role: 'assistant', id: 'first-row', content: [{ type: 'text', text: 'First response' }] },
+      { role: 'assistant', id: 'last-row', content: [{ type: 'text', text: 'Final response', segmentId: 'live-final' }] },
+    ]);
+    expect(message.content).toMatchObject([{ segmentId: 'first-row' }, { segmentId: 'live-final' }]);
+    expect(assistantAnswerContent(message.content)).toMatchObject([{ text: 'Final response' }]);
+  });
   it('keeps earlier tool-free responses in the process when the model continues', () => {
     const content: MessageContent[] = [
       { type: 'text', text: 'Checking', presentation: 'answer', segmentId: 'first' },

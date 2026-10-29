@@ -4,7 +4,8 @@ import type { Message, ReasoningLevel } from './messages.types';
 
 export function shouldShowAssistantWorkLog(view: AssistantTurnViewModel, enabled: boolean): boolean {
   // Failed tools remain inspectable when routine activity is hidden.
-  return enabled || view.workLog.items.some(item => item.type === 'tool_use' && item.status === 'error');
+  return enabled || view.workLog.items.some(item => item.type === 'tool_use'
+    && (item.status === 'error' || item.activity?.status === 'failed'));
 }
 
 /** Decide before creating a list row so hidden content cannot leave a flex gap. */
@@ -28,6 +29,8 @@ export function hasVisibleMessageRow(message: Message, options: {
       || view.outcome.evidence.length || view.outcome.deliverables.length))
     || message.taskResultDelivery
     || message.personalProvenance
-    || (shouldShowAssistantWorkLog(view, options.showAssistantWorkLog) && view.workLog.items.length),
+    || (shouldShowAssistantWorkLog(view, options.showAssistantWorkLog) && view.workLog.items.some(item =>
+      options.personal || (!view.workLog.compact && options.showAssistantWorkLog)
+      || (item.type === 'tool_use' && (item.status === 'error' || item.activity?.status === 'failed')))),
   );
 }
