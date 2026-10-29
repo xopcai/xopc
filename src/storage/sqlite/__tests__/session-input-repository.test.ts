@@ -13,6 +13,7 @@ import {
   findSessionInput,
   finishSessionInputRun,
   getSessionInputState,
+  getSqliteDatabase,
   insertSessionInput,
   listActiveSessionInputExecutions,
   listActiveSessionInputRuns,
@@ -22,6 +23,7 @@ import {
   recoverSessionInputState,
   resetXopcDatabaseSingletonForTest,
 } from '../index.js';
+import { ensureXopcDatabaseSchema, setSchemaVersion } from '../schema.js';
 
 describe('session input repository', () => {
   let dir: string;
@@ -98,6 +100,45 @@ describe('session input repository', () => {
       ['running', 'interrupted'],
       ['queued', 'queued'],
     ]);
+  });
+
+  it('upgrades retired task origins before recovering persisted inputs', () => {
+    const db = getSqliteDatabase();
+    const statuses = ['queued', 'running', 'injecting', 'interrupted', 'completed', 'failed', 'cancelled', 'suspended'] as const;
+    for (const status of statuses) {
+      insertSessionInput({
+        id: status, conversationId, clientMessageId: `client-${status}`,
+        requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued',
+        content: `Keep ${status}`, origin: { type: 'system', source: 'task' },
+        taskRunId: `task-${status}`,
+      });
+      db.prepare('UPDATE session_inputs SET status = ?, origin_json = ? WHERE id = ?')
+        .run(status, JSON.stringify({ type: 'system', source: 'workflow' }), status);
+    }
+    insertSessionInput({
+      id: 'endpoint', conversationId, clientMessageId: 'client-endpoint',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Endpoint', origin,
+    });
+    // Recreate the schema immediately before the data migration without changing tables.
+    setSchemaVersion(db, 260);
+    ensureXopcDatabaseSchema(db);
+
+    for (const status of statuses) {
+      expect(findSessionInput(conversationId, `client-${status}`)).toMatchObject({
+        origin: { type: 'system', source: 'task' }, status,
+        content: `Keep ${status}`, taskRunId: `task-${status}`, version: 2,
+      });
+    }
+    expect(findSessionInput(conversationId, 'client-endpoint')).toMatchObject({ origin, version: 1 });
+    ensureXopcDatabaseSchema(db);
+    expect(findSessionInput(conversationId, 'client-completed')?.version).toBe(2);
+    expect(recoverSessionInputState()).toContain(conversationId);
+    expect(getSessionInputState(conversationId).inputs.map(input => [input.id, input.status])).toEqual([
+      ['queued', 'queued'], ['running', 'interrupted'], ['injecting', 'interrupted'],
+      ['interrupted', 'interrupted'], ['endpoint', 'queued'],
+    ]);
+    expect(claimNextSessionInput(conversationId, 'recovered-run')?.origin).toEqual({ type: 'system', source: 'task' });
+    expect(listActiveSessionInputExecutions()[0]?.origin).toEqual({ type: 'system', source: 'task' });
   });
 
   it('persists context snapshots without publishing their full text in queue state', () => {

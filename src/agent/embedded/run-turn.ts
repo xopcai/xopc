@@ -2,7 +2,7 @@ import { getMcpSetupResumeInput } from '../mcp/continuation-input.js';
 import { isPhoneAssistanceSuspended, phoneAssistance, phoneResumeForRun } from '../../phone/assistance.js';
 import { isNestedCodemodePolicy } from './codemode-extension.js';
 import { ProviderUsageScopeError } from '../../providers/model-usage.js';
-import { traceRun, traceTools, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
+import { traceRun, traceTools, traceOperation, setTraceIdentity, recordTraceLatency } from '../../observability/runtime.js';
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
 import { isComputerControlActive, isComputerLeaseTool, stopComputerControl } from '../../computer/control-guard.js';
 import { bindComputerAgentTurn, computerImagesForRequest, computerRequestFrameCleanup,
@@ -700,6 +700,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       latencyReasoning = options?.reasoning;
       if (firstModelRequestAt === undefined) {
         firstModelRequestAt = currentModelRequestAt;
+        recordTraceLatency({ embeddedPreparationMs: firstModelRequestAt - preparationStartedAt });
         log.info({ conversationId, runId, modelRef: latencyModelRef, thinking: latencyReasoning ?? 'off',
           phase: 'first_model_request', preparationMs: firstModelRequestAt - preparationStartedAt,
           messageCount: effectiveContext.messages.length, systemPromptLength: effectiveSystemPrompt.length,
@@ -877,9 +878,12 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (!firstModelTextSeen && firstModelRequestAt !== undefined && currentModelRequestAt !== undefined && event.type === 'message_update'
         && event.assistantMessageEvent?.type === 'text_delta' && event.assistantMessageEvent.delta.trim()) {
         firstModelTextSeen = true;
+        const textSeenAt = performance.now();
+        recordTraceLatency({ modelFirstTextMs: textSeenAt - currentModelRequestAt,
+          firstRequestToTextMs: textSeenAt - firstModelRequestAt, modelRequestNumber });
         log.info({ conversationId, runId, modelRef: latencyModelRef, thinking: latencyReasoning ?? 'off',
-          phase: 'first_model_text', modelFirstTextMs: performance.now() - currentModelRequestAt,
-          firstRequestToTextMs: performance.now() - firstModelRequestAt, modelRequestNumber },
+          phase: 'first_model_text', modelFirstTextMs: textSeenAt - currentModelRequestAt,
+          firstRequestToTextMs: textSeenAt - firstModelRequestAt, modelRequestNumber },
         'Embedded first response text ready');
       }
       if (event.type === 'message_end' && event.message.role === 'assistant') {

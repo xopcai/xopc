@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { memorySearchText } from '../../../knowledge-memory/search-text.js';
 import { closeXopcDatabase, openXopcDatabase } from '../connection.js';
-import { ensureXopcDatabaseSchema, readSchemaVersion, setSchemaVersion } from '../schema.js';
+import { ensureXopcDatabaseSchema, readSchemaVersion, setSchemaVersion, XOPC_DB_SCHEMA_VERSION } from '../schema.js';
 import { readSqliteAsset, resolveSqliteAssetPath } from '../sql-assets.js';
 
 const historicalSchema = readFileSync(new URL('./fixtures/schema-v202.sql', import.meta.url), 'utf8');
@@ -41,6 +41,10 @@ function historicalDatabase(version: number, path = ':memory:', clean = false): 
     INSERT INTO connector_accounts(id, connector_id, principal_id, identity_json, created_at, updated_at)
       VALUES ('account-1', 'mail', 'owner', '{"email":"test@example.com"}', '2026-09-24T00:00:00Z', '2026-09-24T00:00:00Z');
   `);
+  db.exec(`INSERT INTO session_inputs(id, conversation_id, client_message_id, requested_delivery,
+    effective_delivery, status, content, origin_json, position, created_at_ms, updated_at_ms)
+    VALUES ('legacy-task-input', 'conversation-1', 'task-collaboration:legacy', 'next',
+      'next', 'interrupted', 'Keep task input', '{"type":"system","source":"workflow"}', 1, 1, 2)`);
   if (clean) db.exec(`UPDATE automations SET delivery_json = '{"notificationPolicy":"attention"}'`);
   for (const file of files) {
     const target = Number(file.slice(0, 3));
@@ -53,7 +57,7 @@ function historicalDatabase(version: number, path = ':memory:', clean = false): 
 }
 
 function expectPreserved(db: DatabaseSync): void {
-  expect(readSchemaVersion(db)).toBe(260);
+  expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
   expect(db.prepare('SELECT conversation_id, active_transcript_id FROM sessions').all()).toEqual([{ conversation_id: 'conversation-1', active_transcript_id: 'transcript-1' }]);
   expect(db.prepare('SELECT payload_json FROM transcript_entries').get()?.payload_json).toBe('{"text":"keep my history"}');
   expect(db.prepare('SELECT title FROM notes').get()?.title).toBe('Keep my note');
@@ -62,12 +66,14 @@ function expectPreserved(db: DatabaseSync): void {
   expect(db.prepare('SELECT thinking_level FROM session_config').get()?.thinking_level).toBe('high');
   expect(db.prepare('SELECT name FROM automations').get()?.name).toBe('Keep my automation');
   expect(db.prepare('SELECT identity_json FROM connector_accounts').get()?.identity_json).toBe('{"email":"test@example.com"}');
+  expect(db.prepare('SELECT content, origin_json, status FROM session_inputs WHERE id = ?').get('legacy-task-input'))
+    .toEqual({ content: 'Keep task input', origin_json: '{"type":"system","source":"task"}', status: 'interrupted' });
   expect(db.prepare('PRAGMA integrity_check').get()?.integrity_check).toBe('ok');
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 }
 
 describe('supported installed database upgrades', () => {
-  it.each(Array.from({ length: 58 }, (_, index) => 202 + index))('preserves data upgrading historical schema v%i to v260', version => {
+  it.each(Array.from({ length: XOPC_DB_SCHEMA_VERSION - 202 }, (_, index) => 202 + index))('preserves data upgrading historical schema v%i to the current schema', version => {
     const db = historicalDatabase(version);
     try {
       db.exec('PRAGMA foreign_keys = ON');
@@ -80,7 +86,7 @@ describe('supported installed database upgrades', () => {
     } finally { db.close(); }
   });
 
-  it.each([217, 257, 258])('also upgrades the consolidated v217 schema at v%i', version => {
+  it.each([217, 257, 258, 259, 260])('also upgrades the consolidated v217 schema at v%i', version => {
     const db = historicalDatabase(version, ':memory:', true);
     try {
       ensureXopcDatabaseSchema(db);
@@ -138,9 +144,9 @@ describe('supported installed database upgrades', () => {
     const db = new DatabaseSync(':memory:');
     try {
       ensureXopcDatabaseSchema(db);
-      setSchemaVersion(db, 261);
+      setSchemaVersion(db, XOPC_DB_SCHEMA_VERSION + 1);
       expect(() => ensureXopcDatabaseSchema(db)).toThrow('newer than');
-      expect(readSchemaVersion(db)).toBe(261);
+      expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION + 1);
     } finally { db.close(); }
   });
 
