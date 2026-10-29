@@ -1,0 +1,928 @@
+{
+  "createdAt": "2026-10-29T01:00:20.745Z",
+  "selection": {
+    "agentId": "personal-f815d4b478fa",
+    "model": "xopc-cloud/auto",
+    "thinking": "off"
+  },
+  "base": "http://127.0.0.1:18790",
+  "observations": [
+    {
+      "phase": "baseline",
+      "index": 0,
+      "warmup": true,
+      "scenario": "ack",
+      "conversationId": "14648fc0-3d3f-4cc0-968e-27e7d2d50015",
+      "runId": "dd48154c-cab1-40d8-8aaf-e91e8d7e4ea3",
+      "status": "success",
+      "firstTextMs": 9028.989667,
+      "lastTextMs": 9028.989667,
+      "messageEndMs": 9172.189375,
+      "completeMs": 9213.1805,
+      "responseText": "收到",
+      "qualityPassed": true,
+      "traceId": "07a4164c574c66a49da9739c982e86d3",
+      "backendRunMs": 8869,
+      "firstRequestOffsetMs": 81,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 58.63966700000037,
+        "xopc.latency.modelFirstTextMs": 8616.997542,
+        "xopc.latency.firstRequestToTextMs": 8616.997542,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 6800,
+      "outputTokens": 1,
+      "generationMs": [
+        8753
+      ],
+      "promptHash": "57bc1ae975c49a3e77cf0e18b433f28c075cdc234ce3a8418ec3f4aa7b3b9b24"
+    },
+    {
+      "phase": "baseline",
+      "index": 1,
+      "warmup": true,
+      "scenario": "arithmetic",
+      "conversationId": "e19c04bc-3d0b-437a-b4a1-7f3d2c064520",
+      "runId": "90a3749c-c44f-40ec-96a7-b8c07f945e9b",
+      "status": "success",
+      "firstTextMs": 2168.642958999999,
+      "lastTextMs": 2168.642958999999,
+      "messageEndMs": 2302.949666999999,
+      "completeMs": 2338.342333999999,
+      "responseText": "42",
+      "qualityPassed": true,
+      "traceId": "bbeecd0383d4552a4e84fed3aeeddabd",
+      "backendRunMs": 2008,
+      "firstRequestOffsetMs": 66,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 46.87620799999968,
+        "xopc.latency.modelFirstTextMs": 1779.1519590000007,
+        "xopc.latency.firstRequestToTextMs": 1779.1519590000007,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 151,
+      "outputTokens": 1,
+      "generationMs": [
+        1903
+      ],
+      "promptHash": "02cbd67909ae12e0f9096555101101a4853a76bf41f61969e326173630c4c79d"
+    },
+    {
+      "phase": "baseline",
+      "index": 0,
+      "warmup": false,
+      "scenario": "ack",
+      "conversationId": "e68045da-d6f1-4eb6-a63e-2feb8b4daa46",
+      "runId": "80f390db-9b87-438c-a5f3-ed276fd3ad11",
+      "status": "success",
+      "firstTextMs": 1866.8202079999992,
+      "lastTextMs": 1866.8202079999992,
+      "messageEndMs": 1997.783958,
+      "completeMs": 2033.8823329999996,
+      "responseText": "收到",
+      "qualityPassed": true,
+      "traceId": "7732f8f33043fbc3e64ecb6268687124",
+      "backendRunMs": 1707,
+      "firstRequestOffsetMs": 63,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 44.74187499999971,
+        "xopc.latency.modelFirstTextMs": 1484.8596670000006,
+        "xopc.latency.firstRequestToTextMs": 1484.8596670000006,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 144,
+      "outputTokens": 1,
+      "generationMs": [
+        1606
+      ],
+      "promptHash": "57bc1ae975c49a3e77cf0e18b433f28c075cdc234ce3a8418ec3f4aa7b3b9b24"
+    },
+    {
+      "phase": "baseline",
+      "index": 1,
+      "warmup": false,
+      "scenario": "arithmetic",
+      "conversationId": "f884adc3-2fea-4069-a019-57eaa5dbdb8e",
+      "runId": "bf86fbf7-67fe-43e9-812c-f4e7f3c1a797",
+      "status": "success",
+      "firstTextMs": 2229.5085830000007,
+      "lastTextMs": 2229.5085830000007,
+      "messageEndMs": 2358.8436660000007,
+      "completeMs": 2407.815291000001,
+      "responseText": "42",
+      "qualityPassed": true,
+      "traceId": "b4e94441cb0779624937f1a9350b3cad",
+      "backendRunMs": 2083,
+      "firstRequestOffsetMs": 64,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 46.58270800000173,
+        "xopc.latency.modelFirstTextMs": 1847.4243749999987,
+        "xopc.latency.firstRequestToTextMs": 1847.4243749999987,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 151,
+      "outputTokens": 1,
+      "generationMs": [
+        1968
+      ],
+      "promptHash": "02cbd67909ae12e0f9096555101101a4853a76bf41f61969e326173630c4c79d"
+    },
+    {
+      "phase": "baseline",
+      "index": 2,
+      "warmup": false,
+      "scenario": "rewrite",
+      "conversationId": "673ad8a5-95c0-49f7-b8bc-9de7710ed731",
+      "runId": "423d3911-cb07-4e6f-9dd9-735a70d2e40a",
+      "status": "success",
+      "firstTextMs": 1867.4252500000002,
+      "lastTextMs": 2027.6714170000014,
+      "messageEndMs": 2074.597750000001,
+      "completeMs": 2110.0972500000025,
+      "responseText": "这项工作我已经完成了。",
+      "qualityPassed": true,
+      "traceId": "ba791944534e9db3c37d9475972664b2",
+      "backendRunMs": 1787,
+      "firstRequestOffsetMs": 63,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 49.72304200000144,
+        "xopc.latency.modelFirstTextMs": 1487.669915999999,
+        "xopc.latency.firstRequestToTextMs": 1487.669915999999,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 152,
+      "outputTokens": 4,
+      "generationMs": [
+        1686
+      ],
+      "promptHash": "edb41c6d00481d2d5df22bea2c423f04544e66d73e436ba621462f9cdd99e38b"
+    },
+    {
+      "phase": "baseline",
+      "index": 3,
+      "warmup": false,
+      "scenario": "prioritize",
+      "conversationId": "600cf306-2ac2-433f-b922-33e518d73bc8",
+      "runId": "4c1a79a4-8cb8-4786-9dea-224d59f4a726",
+      "status": "success",
+      "firstTextMs": 1866.0045839999984,
+      "lastTextMs": 1902.7425000000003,
+      "messageEndMs": 1950.2335840000014,
+      "completeMs": 1987.5677499999983,
+      "responseText": "报销。",
+      "qualityPassed": true,
+      "traceId": "3f23c0df80ee9cb98a889d7266965b4e",
+      "backendRunMs": 1658,
+      "firstRequestOffsetMs": 65,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 52.69920800000182,
+        "xopc.latency.modelFirstTextMs": 1479.339291999997,
+        "xopc.latency.firstRequestToTextMs": 1479.339291999997,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 162,
+      "outputTokens": 2,
+      "generationMs": [
+        1556
+      ],
+      "promptHash": "250b78126a7ed773c033500a8901b8d416c6cc28f8707e80a1e5e944b81c4c7b"
+    },
+    {
+      "phase": "baseline",
+      "index": 4,
+      "warmup": false,
+      "scenario": "attachment_code",
+      "conversationId": "3af289c2-65a2-460f-8521-fa2722e76635",
+      "runId": "8186a237-c232-48a1-bfd5-c4ac1322a766",
+      "status": "success",
+      "firstTextMs": 1756.7269159999996,
+      "lastTextMs": 1837.1811659999985,
+      "messageEndMs": 1852.5012080000015,
+      "completeMs": 1885.8445829999982,
+      "responseText": "核对码：CEDAR-42。",
+      "qualityPassed": true,
+      "traceId": "933c5bd53645ea324640c9cab9f477d4",
+      "backendRunMs": 1554,
+      "firstRequestOffsetMs": 62,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 43.72791700000016,
+        "xopc.latency.modelFirstTextMs": 1370.7843329999996,
+        "xopc.latency.firstRequestToTextMs": 1370.7843329999996,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 173,
+      "outputTokens": 8,
+      "generationMs": [
+        1459
+      ],
+      "promptHash": "0e8ce5daef42d2a8e6768ba3c2b2fbb78f487995022f96ded917b92a23be51f9"
+    },
+    {
+      "phase": "baseline",
+      "index": 5,
+      "warmup": false,
+      "scenario": "attachment_sum",
+      "conversationId": "2ab6484f-8230-4c1d-9b03-de5213a9af38",
+      "runId": "7cc4dd8b-5002-4ae6-bba7-b53616696ea9",
+      "status": "success",
+      "firstTextMs": 1952.2177919999995,
+      "lastTextMs": 1952.2177919999995,
+      "messageEndMs": 2121.6496670000015,
+      "completeMs": 2158.3262920000016,
+      "responseText": "42",
+      "qualityPassed": true,
+      "traceId": "1b3643748b97c46404ab58c93e0abe85",
+      "backendRunMs": 1838,
+      "firstRequestOffsetMs": 62,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 47.78254200000083,
+        "xopc.latency.modelFirstTextMs": 1577.6058330000014,
+        "xopc.latency.firstRequestToTextMs": 1577.6058330000014,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 166,
+      "outputTokens": 1,
+      "generationMs": [
+        1738
+      ],
+      "promptHash": "545669a2204a138ff34c2fa31426b01c7a435eebf6956132a44e6ed9186c6c91"
+    },
+    {
+      "phase": "baseline",
+      "index": 6,
+      "warmup": false,
+      "scenario": "red_image",
+      "conversationId": "584ff6c9-d88b-47c6-85c9-35cb7219f38d",
+      "runId": "16c6981c-d591-4999-9cba-6c4f72b6cbc4",
+      "status": "success",
+      "firstTextMs": 2311.8588329999984,
+      "lastTextMs": 2311.985249999998,
+      "messageEndMs": 2362.2025829999984,
+      "completeMs": 2396.5137909999976,
+      "responseText": "红橙色",
+      "qualityPassed": true,
+      "traceId": "78754e9758da6ad16394db0500898875",
+      "backendRunMs": 2072,
+      "firstRequestOffsetMs": 81,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 69.14079200000197,
+        "xopc.latency.modelFirstTextMs": 1911.6375419999968,
+        "xopc.latency.firstRequestToTextMs": 1911.6375419999968,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 207,
+      "outputTokens": 2,
+      "generationMs": [
+        1952
+      ],
+      "promptHash": "f4bfefcc0a47d691f474981ea69e2db9ef6346444702f3893dc31e063e539657"
+    },
+    {
+      "phase": "baseline",
+      "index": 7,
+      "warmup": false,
+      "scenario": "blue_image",
+      "conversationId": "4d5f9340-e720-46f1-acbd-27f7a13a9d2a",
+      "runId": "19273a6c-be5b-4731-be01-b8ac1bf2c0f0",
+      "status": "success",
+      "firstTextMs": 1977.6665840000023,
+      "lastTextMs": 1977.6665840000023,
+      "messageEndMs": 2074.2263340000027,
+      "completeMs": 2114.6932500000003,
+      "responseText": "蓝色",
+      "qualityPassed": true,
+      "traceId": "2ca3b0b9783199b587dce5688389f728",
+      "backendRunMs": 1787,
+      "firstRequestOffsetMs": 90,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 77.36899999999878,
+        "xopc.latency.modelFirstTextMs": 1569.232333,
+        "xopc.latency.firstRequestToTextMs": 1569.232333,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 207,
+      "outputTokens": 1,
+      "generationMs": [
+        1656
+      ],
+      "promptHash": "f4bfefcc0a47d691f474981ea69e2db9ef6346444702f3893dc31e063e539657"
+    },
+    {
+      "phase": "optimized",
+      "index": 0,
+      "warmup": true,
+      "scenario": "ack",
+      "conversationId": "e3a5a5b4-ffec-471a-b32d-bb224594cb79",
+      "runId": "74f03017-48b5-44fc-aa14-6779b5ff2330",
+      "status": "success",
+      "firstTextMs": 2493.7613330000004,
+      "lastTextMs": 2493.7613330000004,
+      "messageEndMs": 2650.3392919999997,
+      "completeMs": 2650.4579999999996,
+      "responseText": "收到",
+      "qualityPassed": true,
+      "traceId": "c1cd67b990e7a3ccd0c8adf99fe8b8c0",
+      "backendRunMs": 2294,
+      "firstRequestOffsetMs": 56,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 36.97387499999968,
+        "xopc.latency.modelFirstTextMs": 2096.168458,
+        "xopc.latency.firstRequestToTextMs": 2096.168458,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 272,
+      "outputTokens": 1,
+      "generationMs": [
+        2221
+      ],
+      "promptHash": "57bc1ae975c49a3e77cf0e18b433f28c075cdc234ce3a8418ec3f4aa7b3b9b24"
+    },
+    {
+      "phase": "optimized",
+      "index": 1,
+      "warmup": true,
+      "scenario": "arithmetic",
+      "conversationId": "5fab82f5-8b7b-4653-a7f9-5706450ee887",
+      "runId": "e94b29c4-5baf-468e-843f-f8bbc9c8385e",
+      "status": "success",
+      "firstTextMs": 1913.8273750000003,
+      "lastTextMs": 1913.8273750000003,
+      "messageEndMs": 2062.921917,
+      "completeMs": 2062.9802919999997,
+      "responseText": "42",
+      "qualityPassed": true,
+      "traceId": "dc31706a3ba6f32a0c4fbe48dd98349c",
+      "backendRunMs": 1730,
+      "firstRequestOffsetMs": 39,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 24.451208000000406,
+        "xopc.latency.modelFirstTextMs": 1551.9562919999998,
+        "xopc.latency.firstRequestToTextMs": 1551.9562919999998,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 151,
+      "outputTokens": 1,
+      "generationMs": [
+        1673
+      ],
+      "promptHash": "02cbd67909ae12e0f9096555101101a4853a76bf41f61969e326173630c4c79d"
+    },
+    {
+      "phase": "optimized",
+      "index": 0,
+      "warmup": false,
+      "scenario": "ack",
+      "conversationId": "3be95855-dc09-46d5-abc9-3d2b556b68c4",
+      "runId": "6697d981-ee51-46a6-afaf-1b1524035742",
+      "status": "success",
+      "firstTextMs": 1963.9953750000004,
+      "lastTextMs": 1963.9953750000004,
+      "messageEndMs": 2112.693792,
+      "completeMs": 2112.815375,
+      "responseText": "收到",
+      "qualityPassed": true,
+      "traceId": "1ff10046e5c3e14cbe442b8eb74883c1",
+      "backendRunMs": 1780,
+      "firstRequestOffsetMs": 39,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 24.837250000000495,
+        "xopc.latency.modelFirstTextMs": 1601.1836669999993,
+        "xopc.latency.firstRequestToTextMs": 1601.1836669999993,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 144,
+      "outputTokens": 1,
+      "generationMs": [
+        1724
+      ],
+      "promptHash": "57bc1ae975c49a3e77cf0e18b433f28c075cdc234ce3a8418ec3f4aa7b3b9b24"
+    },
+    {
+      "phase": "optimized",
+      "index": 1,
+      "warmup": false,
+      "scenario": "arithmetic",
+      "conversationId": "48df2984-1a3e-4716-aa1a-5aa0f9dd7ace",
+      "runId": "2750bc54-1152-4b6b-bd07-cb8a6672e090",
+      "status": "success",
+      "firstTextMs": 3257.9723749999994,
+      "lastTextMs": 3257.9723749999994,
+      "messageEndMs": 3444.1446670000005,
+      "completeMs": 3444.2192919999998,
+      "responseText": "42",
+      "qualityPassed": true,
+      "traceId": "3b43e5fcf82517ea59ecaa45459da5c8",
+      "backendRunMs": 3118,
+      "firstRequestOffsetMs": 43,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 28.951624999999694,
+        "xopc.latency.modelFirstTextMs": 2897.5435419999994,
+        "xopc.latency.firstRequestToTextMs": 2897.5435419999994,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 151,
+      "outputTokens": 1,
+      "generationMs": [
+        3057
+      ],
+      "promptHash": "02cbd67909ae12e0f9096555101101a4853a76bf41f61969e326173630c4c79d"
+    },
+    {
+      "phase": "optimized",
+      "index": 2,
+      "warmup": false,
+      "scenario": "rewrite",
+      "conversationId": "b73ae5d1-18c2-4944-a71c-13dde2ab2f85",
+      "runId": "ee8e0a61-6d1d-49ff-9763-290bc115e4b6",
+      "status": "success",
+      "firstTextMs": 1941.997707999999,
+      "lastTextMs": 2061.894708,
+      "messageEndMs": 2128.896917,
+      "completeMs": 2128.9779579999995,
+      "responseText": "这项工作我已经完成了。",
+      "qualityPassed": true,
+      "traceId": "63b66902e3eab7767b9ba018dfa0c18f",
+      "backendRunMs": 1802,
+      "firstRequestOffsetMs": 49,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 30.113792000000103,
+        "xopc.latency.modelFirstTextMs": 1575.268915999999,
+        "xopc.latency.firstRequestToTextMs": 1575.268915999999,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 152,
+      "outputTokens": 4,
+      "generationMs": [
+        1736
+      ],
+      "promptHash": "edb41c6d00481d2d5df22bea2c423f04544e66d73e436ba621462f9cdd99e38b"
+    },
+    {
+      "phase": "optimized",
+      "index": 3,
+      "warmup": false,
+      "scenario": "prioritize",
+      "conversationId": "586f0443-5af6-4c7c-be6a-fb23120edd59",
+      "runId": "90bde655-be28-436a-8c82-30d8cc8cd927",
+      "status": "success",
+      "firstTextMs": 2094.1252079999995,
+      "lastTextMs": 2258.4366250000003,
+      "messageEndMs": 2279.6958749999994,
+      "completeMs": 2279.7515000000003,
+      "responseText": "今天到期的报销。",
+      "qualityPassed": true,
+      "traceId": "a5aa9b53153086a708ebd8c9bc151c8c",
+      "backendRunMs": 1948,
+      "firstRequestOffsetMs": 44,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 30.011499999996886,
+        "xopc.latency.modelFirstTextMs": 1726.225875,
+        "xopc.latency.firstRequestToTextMs": 1726.225875,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 162,
+      "outputTokens": 5,
+      "generationMs": [
+        1891
+      ],
+      "promptHash": "250b78126a7ed773c033500a8901b8d416c6cc28f8707e80a1e5e944b81c4c7b"
+    },
+    {
+      "phase": "optimized",
+      "index": 4,
+      "warmup": false,
+      "scenario": "attachment_code",
+      "conversationId": "2298db12-10f1-47fb-8bdb-df850d4ed629",
+      "runId": "ac4944f9-0bc5-41f1-822a-43ff577a256f",
+      "status": "success",
+      "firstTextMs": 2042.970875000001,
+      "lastTextMs": 2169.941417,
+      "messageEndMs": 2237.704499999998,
+      "completeMs": 2237.7916669999995,
+      "responseText": "CEDAR-42",
+      "qualityPassed": true,
+      "traceId": "8c12622ddbc3e1d911f39c7c0e5b4bcf",
+      "backendRunMs": 1906,
+      "firstRequestOffsetMs": 43,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 26.261915999999474,
+        "xopc.latency.modelFirstTextMs": 1678.5899170000012,
+        "xopc.latency.firstRequestToTextMs": 1678.5899170000012,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 181,
+      "outputTokens": 4,
+      "generationMs": [
+        1846
+      ],
+      "promptHash": "0e8ce5daef42d2a8e6768ba3c2b2fbb78f487995022f96ded917b92a23be51f9"
+    },
+    {
+      "phase": "optimized",
+      "index": 5,
+      "warmup": false,
+      "scenario": "attachment_sum",
+      "conversationId": "1e6efb75-25c4-464c-b6bc-8e8929bc3bd1",
+      "runId": "1788d9f8-0de8-4d96-9576-65539a0ceadb",
+      "status": "success",
+      "firstTextMs": 1794.5980830000008,
+      "lastTextMs": 1794.5980830000008,
+      "messageEndMs": 2018.0709580000002,
+      "completeMs": 2018.1355409999996,
+      "responseText": "42",
+      "qualityPassed": true,
+      "traceId": "442e6af0be981f8f7d0501fa7343ea9a",
+      "backendRunMs": 1692,
+      "firstRequestOffsetMs": 49,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 35.56420799999978,
+        "xopc.latency.modelFirstTextMs": 1426.9097089999996,
+        "xopc.latency.firstRequestToTextMs": 1426.9097089999996,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 172,
+      "outputTokens": 1,
+      "generationMs": [
+        1630
+      ],
+      "promptHash": "545669a2204a138ff34c2fa31426b01c7a435eebf6956132a44e6ed9186c6c91"
+    },
+    {
+      "phase": "optimized",
+      "index": 6,
+      "warmup": false,
+      "scenario": "red_image",
+      "conversationId": "3e77506b-7708-4a25-9368-51e86d1b8632",
+      "runId": "b3d1ab72-e9c6-444e-830b-e82e7facae3b",
+      "status": "success",
+      "firstTextMs": 2203.1592920000003,
+      "lastTextMs": 2203.1592920000003,
+      "messageEndMs": 2312.7704169999997,
+      "completeMs": 2312.820667,
+      "responseText": "蓝色",
+      "qualityPassed": false,
+      "traceId": "35309a91b14306f7759ef1f3a8351237",
+      "backendRunMs": 1980,
+      "firstRequestOffsetMs": 73,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 59.2345000000023,
+        "xopc.latency.modelFirstTextMs": 1807.1834999999992,
+        "xopc.latency.firstRequestToTextMs": 1807.1834999999992,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 207,
+      "outputTokens": 1,
+      "generationMs": [
+        1890
+      ],
+      "promptHash": "f4bfefcc0a47d691f474981ea69e2db9ef6346444702f3893dc31e063e539657"
+    },
+    {
+      "phase": "optimized",
+      "index": 7,
+      "warmup": false,
+      "scenario": "blue_image",
+      "conversationId": "3801d7b5-9ad6-406e-90be-808c51e1b01e",
+      "runId": "ec8cb67f-57a4-46ef-90a1-def825c628b0",
+      "status": "success",
+      "firstTextMs": 2005.8386659999996,
+      "lastTextMs": 2005.8386659999996,
+      "messageEndMs": 2114.3438749999987,
+      "completeMs": 2114.424082999998,
+      "responseText": "蓝色",
+      "qualityPassed": true,
+      "traceId": "9fb10ea0a80100dc859b5b05e565ed10",
+      "backendRunMs": 1785,
+      "firstRequestOffsetMs": 71,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 55.11787499999991,
+        "xopc.latency.modelFirstTextMs": 1614.3062500000015,
+        "xopc.latency.firstRequestToTextMs": 1614.3062500000015,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 207,
+      "outputTokens": 1,
+      "generationMs": [
+        1696
+      ],
+      "promptHash": "f4bfefcc0a47d691f474981ea69e2db9ef6346444702f3893dc31e063e539657"
+    }
+  ],
+  "scope": "Fresh temporary Personal Agent conversations on the real Gateway; HTTP send to Realtime first text and run_end. No browser rendering measurement.",
+  "baselineGatewayStatus": {
+    "status": "ok",
+    "version": "0.0.428",
+    "channels": {
+      "telegram": {
+        "status": "disabled"
+      },
+      "weixin": {
+        "status": "disabled"
+      },
+      "feishu": {
+        "status": "disabled"
+      }
+    },
+    "uptime": 3,
+    "voice": {
+      "sttAvailable": true,
+      "sttEnabled": true,
+      "sttProvider": "xopc-cloud",
+      "dictation": {
+        "mode": "streaming",
+        "provider": "xopc-cloud"
+      },
+      "refineAvailable": true
+    }
+  },
+  "optimizedGatewayStatus": {
+    "status": "ok",
+    "version": "0.0.428",
+    "channels": {
+      "telegram": {
+        "status": "disabled"
+      },
+      "weixin": {
+        "status": "disabled"
+      },
+      "feishu": {
+        "status": "disabled"
+      }
+    },
+    "uptime": 2,
+    "voice": {
+      "sttAvailable": true,
+      "sttEnabled": true,
+      "sttProvider": "xopc-cloud",
+      "dictation": {
+        "mode": "streaming",
+        "provider": "xopc-cloud"
+      },
+      "refineAvailable": true
+    }
+  },
+  "summary": {
+    "baseline": {
+      "count": 8,
+      "qualityPassed": 8,
+      "statuses": {
+        "success": 8
+      },
+      "firstTextMs": {
+        "count": 8,
+        "p50Ms": 1867.4252500000002,
+        "meanMs": 1978.5285937499998,
+        "minMs": 1756.7269159999996,
+        "maxMs": 2311.8588329999984
+      },
+      "completeMs": {
+        "count": 8,
+        "p50Ms": 2110.0972500000025,
+        "meanMs": 2136.8425675,
+        "minMs": 1885.8445829999982,
+        "maxMs": 2407.815291000001
+      },
+      "firstRequestOffsetMs": {
+        "count": 8,
+        "p50Ms": 63,
+        "meanMs": 68.75,
+        "minMs": 62,
+        "maxMs": 90
+      },
+      "backendRunMs": {
+        "count": 8,
+        "p50Ms": 1787,
+        "meanMs": 1810.75,
+        "minMs": 1554,
+        "maxMs": 2083
+      },
+      "generationMs": {
+        "count": 8,
+        "p50Ms": 1656,
+        "meanMs": 1702.625,
+        "minMs": 1459,
+        "maxMs": 1968
+      },
+      "embeddedPreparationMs": {
+        "count": 8,
+        "p50Ms": 47.78254200000083,
+        "meanMs": 53.970885500000804,
+        "minMs": 43.72791700000016,
+        "maxMs": 77.36899999999878
+      }
+    },
+    "optimized": {
+      "count": 8,
+      "qualityPassed": 7,
+      "statuses": {
+        "success": 8
+      },
+      "firstTextMs": {
+        "count": 8,
+        "p50Ms": 2005.8386659999996,
+        "meanMs": 2163.08219775,
+        "minMs": 1794.5980830000008,
+        "maxMs": 3257.9723749999994
+      },
+      "completeMs": {
+        "count": 8,
+        "p50Ms": 2128.9779579999995,
+        "meanMs": 2331.1170103749996,
+        "minMs": 2018.1355409999996,
+        "maxMs": 3444.2192919999998
+      },
+      "firstRequestOffsetMs": {
+        "count": 8,
+        "p50Ms": 44,
+        "meanMs": 51.375,
+        "minMs": 39,
+        "maxMs": 73
+      },
+      "backendRunMs": {
+        "count": 8,
+        "p50Ms": 1802,
+        "meanMs": 2001.375,
+        "minMs": 1692,
+        "maxMs": 3118
+      },
+      "generationMs": {
+        "count": 8,
+        "p50Ms": 1736,
+        "meanMs": 1933.75,
+        "minMs": 1630,
+        "maxMs": 3057
+      },
+      "embeddedPreparationMs": {
+        "count": 8,
+        "p50Ms": 30.011499999996886,
+        "meanMs": 36.26158324999983,
+        "minMs": 24.837250000000495,
+        "maxMs": 59.2345000000023
+      }
+    }
+  },
+  "pairs": [
+    {
+      "scenario": "ack",
+      "identicalPrompt": true,
+      "firstTextDeltaMs": 97.17516700000124,
+      "completeDeltaMs": 78.93304200000057,
+      "preparationDeltaMs": -24
+    },
+    {
+      "scenario": "arithmetic",
+      "identicalPrompt": true,
+      "firstTextDeltaMs": 1028.4637919999986,
+      "completeDeltaMs": 1036.404000999999,
+      "preparationDeltaMs": -21
+    },
+    {
+      "scenario": "rewrite",
+      "identicalPrompt": true,
+      "firstTextDeltaMs": 74.57245799999873,
+      "completeDeltaMs": 18.880707999996957,
+      "preparationDeltaMs": -14
+    },
+    {
+      "scenario": "prioritize",
+      "identicalPrompt": true,
+      "firstTextDeltaMs": 228.12062400000104,
+      "completeDeltaMs": 292.18375000000196,
+      "preparationDeltaMs": -21
+    },
+    {
+      "scenario": "attachment_code",
+      "identicalPrompt": true,
+      "firstTextDeltaMs": 286.24395900000127,
+      "completeDeltaMs": 351.94708400000127,
+      "preparationDeltaMs": -19
+    },
+    {
+      "scenario": "attachment_sum",
+      "identicalPrompt": true,
+      "firstTextDeltaMs": -157.6197089999987,
+      "completeDeltaMs": -140.1907510000019,
+      "preparationDeltaMs": -13
+    },
+    {
+      "scenario": "red_image",
+      "identicalPrompt": true,
+      "firstTextDeltaMs": -108.69954099999813,
+      "completeDeltaMs": -83.69312399999762,
+      "preparationDeltaMs": -8
+    },
+    {
+      "scenario": "blue_image",
+      "identicalPrompt": true,
+      "firstTextDeltaMs": 28.172081999997317,
+      "completeDeltaMs": -0.2691670000021986,
+      "preparationDeltaMs": -19
+    }
+  ],
+  "versions": {
+    "headAtBaselineSnapshot": "57e30cb01eb0d75b96ef5b757229ca1236ca764b",
+    "sourceHashes": {
+      "src/agent/coding/run-verification.ts": {
+        "baseline": "70d7a9b9321245d836f83582d50527d8e22eb385b275f300690ffa20e1bcb7bf",
+        "optimized": "20b69e7abfea57b1e3a7ddd3ed0fa32cb94667a0af642aba65465c16874e58a7"
+      },
+      "src/agent/embedded/run-turn.ts": {
+        "baseline": "86cf7a41f58aa9047e2ce9625429def24bb0a127c07364fc0ff2820d0f5a1f59",
+        "optimized": "590bbed02312dde5296e94988dfbbb5a7c3997aabdc0e137324117df33523fc9"
+      },
+      "src/agent/service/direct-turn-helpers.ts": {
+        "baseline": "dbe01e2b97288d7c55d0b304a94de3e2aba1f4f243b90d7806f7fec68d20bc72",
+        "optimized": "ca3efea3a59e87ab103fbd908ed6859db0aea1c07b08809a88eb2b31d091d3ea"
+      },
+      "src/gateway/service/run-gateway-agent.ts": {
+        "baseline": "a23a32d49fd5b08cb3f3946e2b241adb6dddbee6cf02198a53fa49add67a22d9",
+        "optimized": "6634ba98017c24319fdf10388fe592d98652935a268aee6aa77b1bdbece865dd"
+      }
+    },
+    "baselinePid": 78472,
+    "optimizedPid": 79715,
+    "runtime": "node --import tsx/esm src/cli/bin.ts gateway"
+  },
+  "deployment": {
+    "verifiedAt": "2026-10-29T01:03:19.007168+00:00",
+    "pid": 79715,
+    "health": {
+      "status": "ok",
+      "ready": true,
+      "clarificationVersions": [
+        1,
+        2
+      ]
+    },
+    "status": {
+      "status": "ok",
+      "version": "0.0.428",
+      "channels": {
+        "telegram": {
+          "status": "disabled"
+        },
+        "weixin": {
+          "status": "disabled"
+        },
+        "feishu": {
+          "status": "disabled"
+        }
+      },
+      "uptime": 131,
+      "voice": {
+        "sttAvailable": true,
+        "sttEnabled": true,
+        "sttProvider": "xopc-cloud",
+        "dictation": {
+          "mode": "streaming",
+          "provider": "xopc-cloud"
+        },
+        "refineAvailable": true
+      }
+    },
+    "activeRuns": [],
+    "tracing": {
+      "local": {
+        "traces": 1598,
+        "spans": 4907,
+        "bytes": 18417192,
+        "physicalBytes": 31350784,
+        "dropped": 0,
+        "paused": false,
+        "lastPruned": 1793235790398,
+        "epoch": 0,
+        "pending": 0,
+        "pendingBytes": 0,
+        "queueDropped": 0
+      },
+      "langfuse": {
+        "state": "disabled",
+        "pending": 0,
+        "dropped": 0
+      },
+      "active": 0,
+      "dropped": 0
+    },
+    "configHashUnchangedSinceOptimizedStart": true
+  }
+}

@@ -717,7 +717,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       return stream;
     };
     session.agent.streamFunction = loggingStreamFn;
-    const verification = await RunVerification.open(workspaceDir, { required: params.verifyChanges === true, toolNames: tools.map(tool => tool.name) });
+    const verification = await RunVerification.open(workspaceDir, {
+      required: params.verifyChanges === true, toolNames: tools.map(tool => tool.name),
+      // The persisted personal-main policy filters out workspace mutation tools.
+      trackWorkspace: executionToolPolicy.surface !== 'personal_main',
+    });
     const checkpoints = runner.piSm.getBranch?.() ?? [];
     const recoveryTurn = params.resumeLastUserMessage === true || Boolean(params.recoveryMessage);
     const lastStart = checkpoints.findLastIndex(entry => entry.type === 'custom' && entry.customType === 'coding_run_started');

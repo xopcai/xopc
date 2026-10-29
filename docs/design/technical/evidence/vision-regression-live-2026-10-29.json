@@ -1,0 +1,162 @@
+{
+  "createdAt": "2026-10-29T01:22:36.134Z",
+  "selection": {
+    "agentId": "personal-f815d4b478fa",
+    "model": "xopc-cloud/auto",
+    "thinking": "off"
+  },
+  "base": "http://127.0.0.1:18790",
+  "observations": [
+    {
+      "phase": "optimized",
+      "index": 0,
+      "warmup": false,
+      "scenario": "red_image",
+      "conversationId": "8a800dd3-9f19-420c-aee4-c477b8c30663",
+      "runId": "3900b131-0e6b-4015-9ecf-0fb3156a8b58",
+      "status": "success",
+      "firstTextMs": 3040.589959,
+      "lastTextMs": 3040.589959,
+      "messageEndMs": 3163.747542,
+      "completeMs": 3163.830417,
+      "responseText": "红色",
+      "qualityPassed": true,
+      "traceId": "993e71c793a4b15e17959c34f5e82b1b",
+      "backendRunMs": 2798,
+      "firstRequestOffsetMs": 124,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 99.08016700000007,
+        "xopc.latency.modelFirstTextMs": 2566.863000000001,
+        "xopc.latency.firstRequestToTextMs": 2566.863000000001,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 463,
+      "outputTokens": 1,
+      "generationMs": [
+        2658
+      ],
+      "promptHash": "f4bfefcc0a47d691f474981ea69e2db9ef6346444702f3893dc31e063e539657"
+    },
+    {
+      "phase": "optimized",
+      "index": 1,
+      "warmup": false,
+      "scenario": "blue_image",
+      "conversationId": "7fb07f6c-34da-4a60-b467-0a5393a52b64",
+      "runId": "898565a5-0d7e-4fc6-9fd6-b225c6ab437b",
+      "status": "success",
+      "firstTextMs": 2202.305625,
+      "lastTextMs": 2202.305625,
+      "messageEndMs": 2311.7115410000006,
+      "completeMs": 2311.808666,
+      "responseText": "蓝色",
+      "qualityPassed": true,
+      "traceId": "6cb879d18db4132baceb7ee8bcd87d41",
+      "backendRunMs": 1992,
+      "firstRequestOffsetMs": 104,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 85.58220799999981,
+        "xopc.latency.modelFirstTextMs": 1786.344083,
+        "xopc.latency.firstRequestToTextMs": 1786.344083,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 335,
+      "outputTokens": 1,
+      "generationMs": [
+        1868
+      ],
+      "promptHash": "f4bfefcc0a47d691f474981ea69e2db9ef6346444702f3893dc31e063e539657"
+    },
+    {
+      "phase": "optimized",
+      "index": 2,
+      "warmup": false,
+      "scenario": "red_image",
+      "conversationId": "8d376b40-b179-4766-ad7b-4d39044c9844",
+      "runId": "98400dad-3ee1-4718-b714-c69345fdb1b3",
+      "status": "success",
+      "firstTextMs": 1842.2498329999999,
+      "lastTextMs": 1842.2498329999999,
+      "messageEndMs": 1944.2270829999998,
+      "completeMs": 1944.2914580000006,
+      "responseText": "红色",
+      "qualityPassed": true,
+      "traceId": "700eab39132ec913b559301b952ae7e6",
+      "backendRunMs": 1611,
+      "firstRequestOffsetMs": 100,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 85.36295799999971,
+        "xopc.latency.modelFirstTextMs": 1415.9386670000004,
+        "xopc.latency.firstRequestToTextMs": 1415.9386670000004,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 207,
+      "outputTokens": 1,
+      "generationMs": [
+        1498
+      ],
+      "promptHash": "f4bfefcc0a47d691f474981ea69e2db9ef6346444702f3893dc31e063e539657"
+    },
+    {
+      "phase": "optimized",
+      "index": 3,
+      "warmup": false,
+      "scenario": "blue_image",
+      "conversationId": "0107379b-90fc-4343-811c-af8b3ef480e8",
+      "runId": "4b809e78-298c-4b93-b0bd-4a5aad860e52",
+      "status": "success",
+      "firstTextMs": 1799.6759170000005,
+      "lastTextMs": 1799.6759170000005,
+      "messageEndMs": 1912.045333,
+      "completeMs": 1912.1367499999997,
+      "responseText": "蓝色",
+      "qualityPassed": true,
+      "traceId": "038137b535b049074068a6246f602738",
+      "backendRunMs": 1583,
+      "firstRequestOffsetMs": 100,
+      "traceLatency": {
+        "xopc.latency.embeddedPreparationMs": 84.2790419999983,
+        "xopc.latency.modelFirstTextMs": 1383.4437079999989,
+        "xopc.latency.firstRequestToTextMs": 1383.4437079999989,
+        "xopc.latency.modelRequestNumber": 1
+      },
+      "modelCalls": 1,
+      "inputTokens": 207,
+      "outputTokens": 1,
+      "generationMs": [
+        1464
+      ],
+      "promptHash": "f4bfefcc0a47d691f474981ea69e2db9ef6346444702f3893dc31e063e539657"
+    }
+  ],
+  "scope": "Fresh temporary Personal Agent conversations on the real Gateway; HTTP send to Realtime first text and run_end. No browser rendering measurement.",
+  "optimizedGatewayStatus": {
+    "status": "ok",
+    "version": "0.0.428",
+    "channels": {
+      "telegram": {
+        "status": "disabled"
+      },
+      "weixin": {
+        "status": "disabled"
+      },
+      "feishu": {
+        "status": "disabled"
+      }
+    },
+    "uptime": 6,
+    "voice": {
+      "sttAvailable": true,
+      "sttEnabled": true,
+      "sttProvider": "xopc-cloud",
+      "dictation": {
+        "mode": "streaming",
+        "provider": "xopc-cloud"
+      },
+      "refineAvailable": true
+    }
+  }
+}

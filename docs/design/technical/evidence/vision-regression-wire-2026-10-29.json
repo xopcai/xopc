@@ -1,0 +1,1644 @@
+{
+  "method": "Serial snapshot disables only the Promise.allSettled preparation overlap; both versions use the remaining latency changes. Requests were sent sequentially to fresh temporary conversations.",
+  "manifest": {
+    "serialRoot": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-vision-serial-29m4nqnq",
+    "parallelRoot": "/Users/micjoyce/develop/github/xopc",
+    "helperHashes": {
+      "serial": "dbe01e2b97288d7c55d0b304a94de3e2aba1f4f243b90d7806f7fec68d20bc72",
+      "parallel": "ca3efea3a59e87ab103fbd908ed6859db0aea1c07b08809a88eb2b31d091d3ea"
+    },
+    "serialPid": 95776,
+    "parallelPid": 97913,
+    "restoredPid": 2604,
+    "restoredCommand": "node --import tsx/esm src/cli/bin.ts -- gateway --force",
+    "restoredHealth": {
+      "status": "ok",
+      "ready": true,
+      "clarificationVersions": [
+        1,
+        2
+      ]
+    },
+    "diagnosticPreloadEnabled": false
+  },
+  "wire": {
+    "baseline": [
+      {
+        "type": "request",
+        "id": "10208caa-0c91-4fe5-ac8d-ee10f73cda34",
+        "at": 1793237060917,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "10208caa-0c91-4fe5-ac8d-ee10f73cda34",
+        "at": 1793237063532,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "49de93d6-089c-4f30-a241-b89fe0eb3d18",
+        "at": 1793237064212,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "49de93d6-089c-4f30-a241-b89fe0eb3d18",
+        "at": 1793237066155,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "f084496a-9596-4398-b15f-bfcdd3bd7c34",
+        "at": 1793237066745,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "f084496a-9596-4398-b15f-bfcdd3bd7c34",
+        "at": 1793237068501,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "7ea521ed-e14b-4c6a-a2d3-ef5263d95ff7",
+        "at": 1793237069010,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "7ea521ed-e14b-4c6a-a2d3-ef5263d95ff7",
+        "at": 1793237071359,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "74ee0f19-40aa-40e0-90c2-207a723072c9",
+        "at": 1793237071900,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "74ee0f19-40aa-40e0-90c2-207a723072c9",
+        "at": 1793237073637,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "6267790e-aa46-444f-bcd8-89d50de7ec10",
+        "at": 1793237074147,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "6267790e-aa46-444f-bcd8-89d50de7ec10",
+        "at": 1793237075504,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "3464532b-d772-4f80-baa5-7d7dae537fd1",
+        "at": 1793237075971,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "3464532b-d772-4f80-baa5-7d7dae537fd1",
+        "at": 1793237078880,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "571bc9bf-6bea-42f7-b8b6-fd5b1aa340e1",
+        "at": 1793237079377,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "571bc9bf-6bea-42f7-b8b6-fd5b1aa340e1",
+        "at": 1793237081964,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "紫罗兰"
+      },
+      {
+        "type": "request",
+        "id": "e8d5d8ea-1440-47e0-882b-3e0fc251e709",
+        "at": 1793237082431,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "e8d5d8ea-1440-47e0-882b-3e0fc251e709",
+        "at": 1793237084512,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "白色"
+      },
+      {
+        "type": "request",
+        "id": "f8ff3e36-691d-4435-b785-77b987513b84",
+        "at": 1793237084973,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "f8ff3e36-691d-4435-b785-77b987513b84",
+        "at": 1793237086457,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "4171a858-8c7b-41de-845a-c8f1702c626f",
+        "at": 1793237086933,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "4171a858-8c7b-41de-845a-c8f1702c626f",
+        "at": 1793237088950,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "80026af2-2cdf-48d4-95cc-4445506a37a1",
+        "at": 1793237089407,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "80026af2-2cdf-48d4-95cc-4445506a37a1",
+        "at": 1793237091003,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      }
+    ],
+    "optimized": [
+      {
+        "type": "request",
+        "id": "1711d578-27b3-4ae9-8f69-ff3bf788fa4f",
+        "at": 1793237164880,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "1711d578-27b3-4ae9-8f69-ff3bf788fa4f",
+        "at": 1793237167247,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "239cc9f0-8b65-4ede-8cd2-37e067a6b357",
+        "at": 1793237167760,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "239cc9f0-8b65-4ede-8cd2-37e067a6b357",
+        "at": 1793237169224,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "10caba84-dae6-4ac8-a5a2-672141fc833e",
+        "at": 1793237169727,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "10caba84-dae6-4ac8-a5a2-672141fc833e",
+        "at": 1793237171168,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "白色"
+      },
+      {
+        "type": "request",
+        "id": "59568b09-ce39-4299-b3d6-68ef6617d0c9",
+        "at": 1793237171648,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "59568b09-ce39-4299-b3d6-68ef6617d0c9",
+        "at": 1793237173157,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "76fb0282-3f59-4f37-adb7-5ce647ffa102",
+        "at": 1793237173638,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "76fb0282-3f59-4f37-adb7-5ce647ffa102",
+        "at": 1793237174856,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "062da1a4-bb82-49b4-9b61-254651b38ece",
+        "at": 1793237175334,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "062da1a4-bb82-49b4-9b61-254651b38ece",
+        "at": 1793237176965,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "e6c37b10-ed52-4770-ac4a-8f21749d39da",
+        "at": 1793237177450,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "e6c37b10-ed52-4770-ac4a-8f21749d39da",
+        "at": 1793237179316,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "05b644f3-73f0-4c7f-9a7d-1428795a6ac6",
+        "at": 1793237179812,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "05b644f3-73f0-4c7f-9a7d-1428795a6ac6",
+        "at": 1793237181739,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "b9439953-5d8c-48a1-9c51-f2655db4543d",
+        "at": 1793237182231,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "b9439953-5d8c-48a1-9c51-f2655db4543d",
+        "at": 1793237183766,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "075d159e-b992-4520-a905-e31d8fc3a803",
+        "at": 1793237184239,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "075d159e-b992-4520-a905-e31d8fc3a803",
+        "at": 1793237185666,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      },
+      {
+        "type": "request",
+        "id": "371bdb24-0be8-4bb0-aeed-d31536afe3a0",
+        "at": 1793237186140,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "means": [
+              255,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "371bdb24-0be8-4bb0-aeed-d31536afe3a0",
+        "at": 1793237188002,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "红色"
+      },
+      {
+        "type": "request",
+        "id": "e87b2685-fefd-417a-b2e1-22190e047111",
+        "at": 1793237188487,
+        "path": "/v1/chat/completions",
+        "model": "auto",
+        "messages": [
+          {
+            "role": "developer",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text"
+            ]
+          },
+          {
+            "role": "user",
+            "contentTypes": [
+              "text",
+              "image_url"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "hash": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "means": [
+              0,
+              0,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "type": "response",
+        "id": "e87b2685-fefd-417a-b2e1-22190e047111",
+        "at": 1793237189981,
+        "status": 200,
+        "models": [
+          "auto"
+        ],
+        "text": "蓝色"
+      }
+    ]
+  },
+  "minimalRequests": {
+    "64": [
+      {
+        "index": 0,
+        "size": 64,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 1,
+        "size": 64,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 2,
+        "size": 64,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 3,
+        "size": 64,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 4,
+        "size": 64,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 5,
+        "size": 64,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 6,
+        "size": 64,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 7,
+        "size": 64,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 8,
+        "size": 64,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 9,
+        "size": 64,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 10,
+        "size": 64,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "0af39b98b9995e12e81db3974aff7a870ab8c1571a99735804c03d842ff882e0",
+            "bytes": 228,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 11,
+        "size": 64,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "92f993b37460a45476d5315d4a94e43373188ff3bf5190ed99f4a1d2a6bfd2d9",
+            "bytes": 228,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      }
+    ],
+    "544": [
+      {
+        "index": 0,
+        "size": 544,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "751ce1359aebb36b05f577b72d85b3f5da12e2976df5aadc53bf49725186caf1",
+            "bytes": 5479,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 1,
+        "size": 544,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "c81a9ef3b1657cf6fd441a4042def8e88f2526d73e92a19031c341d8fcfa2382",
+            "bytes": 5478,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 2,
+        "size": 544,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "751ce1359aebb36b05f577b72d85b3f5da12e2976df5aadc53bf49725186caf1",
+            "bytes": 5479,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 3,
+        "size": 544,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "c81a9ef3b1657cf6fd441a4042def8e88f2526d73e92a19031c341d8fcfa2382",
+            "bytes": 5478,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 4,
+        "size": 544,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "751ce1359aebb36b05f577b72d85b3f5da12e2976df5aadc53bf49725186caf1",
+            "bytes": 5479,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 5,
+        "size": 544,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "c81a9ef3b1657cf6fd441a4042def8e88f2526d73e92a19031c341d8fcfa2382",
+            "bytes": 5478,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 6,
+        "size": 544,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "751ce1359aebb36b05f577b72d85b3f5da12e2976df5aadc53bf49725186caf1",
+            "bytes": 5479,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 7,
+        "size": 544,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "c81a9ef3b1657cf6fd441a4042def8e88f2526d73e92a19031c341d8fcfa2382",
+            "bytes": 5478,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 8,
+        "size": 544,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "751ce1359aebb36b05f577b72d85b3f5da12e2976df5aadc53bf49725186caf1",
+            "bytes": 5479,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 9,
+        "size": 544,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "c81a9ef3b1657cf6fd441a4042def8e88f2526d73e92a19031c341d8fcfa2382",
+            "bytes": 5478,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      },
+      {
+        "index": 10,
+        "size": 544,
+        "color": "#ff0000",
+        "wireImages": [
+          {
+            "sha256": "751ce1359aebb36b05f577b72d85b3f5da12e2976df5aadc53bf49725186caf1",
+            "bytes": 5479,
+            "channelMeans": [
+              255,
+              0,
+              0
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "红色"
+      },
+      {
+        "index": 11,
+        "size": 544,
+        "color": "#0000ff",
+        "wireImages": [
+          {
+            "sha256": "c81a9ef3b1657cf6fd441a4042def8e88f2526d73e92a19031c341d8fcfa2382",
+            "bytes": 5478,
+            "channelMeans": [
+              0,
+              0,
+              255
+            ]
+          }
+        ],
+        "stopReason": "stop",
+        "text": "蓝色"
+      }
+    ]
+  }
+}
