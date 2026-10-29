@@ -177,8 +177,8 @@ describe('task detail action-first layout', () => {
     expect(followUp.querySelector('a')?.getAttribute('href')).toBe('/chat/task/task-1');
     const acceptance = container.querySelector(`[aria-label="${copy.successDefinition}"]`)!;
     expect(acceptance.querySelectorAll('summary')[0].textContent).toBe('验收 · 0/2');
-    expect(acceptance.textContent!.split(note)).toHaveLength(2);
-    const evidencePanels = [...acceptance.querySelectorAll('summary')].filter((item) => item.textContent!.startsWith('查看依据'));
+    expect(acceptance.textContent.split(note)).toHaveLength(2);
+    const evidencePanels = [...acceptance.querySelectorAll('summary')].filter((item) => item.textContent.startsWith('查看依据'));
     expect(evidencePanels).toHaveLength(2);
     for (const summary of evidencePanels) expect((summary.parentElement as HTMLDetailsElement).open).toBe(false);
     const toolbar = container.querySelector('[aria-label="任务操作"]')!;
