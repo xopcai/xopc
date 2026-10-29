@@ -280,7 +280,7 @@ describe('phone runtime reliability integration', () => {
     const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Replace search text' }, f.context) as PhoneReport;
     expect(inputs[1].trajectory).toEqual([expect.objectContaining({
       action: { type: 'typeText', text: 'private search query', mode: 'replace' }, dispatch: 'completed', effect: 'changed',
-      beforeApp: 'com.test.editor', afterApp: 'com.test.editor', facts: ['private search query'],
+      beforeApp: 'com.test.editor', afterApp: 'com.test.editor', beforeFacts: ['old query'], facts: ['private search query'],
     })]);
     expect(result.stopReason).toBe('model_finished_unverified');
     const persisted = JSON.stringify(f.repository.history());

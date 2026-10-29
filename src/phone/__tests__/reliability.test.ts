@@ -9,6 +9,24 @@ const screen = (elements: PhoneElement[]): PhoneObservation => ({ frameId: 'capt
 const tap = { type: 'tap' as const, point: [200, 300] };
 
 describe('phone target freshness', () => {
+  it('allows an unchanged search-entry hit stack across a rotating promotion, but rejects overlays and movement', () => {
+    const entry = { ...target, description: '搜索栏', text: '', resourceId: 'search-entry', clickable: false };
+    const hit = { ...target, text: '', resourceId: 'search-hit' };
+    const promo = { ...target, text: 'Promotion A', resourceId: 'promo', bounds: [0, 500, 1000, 700] as PhoneElement['bounds'] };
+    const before = screen([entry, hit, promo]);
+    const fresh = screen([entry, hit, { ...promo, text: 'Promotion B' }]);
+    expect(canDispatchPhoneAction(tap, before, fresh)).toBe(true);
+    const hint = { ...target, resourceId: '', clickable: false, text: 'Suggested product', bounds: [110, 220, 290, 380] as PhoneElement['bounds'] };
+    expect(canDispatchPhoneAction(tap, screen([...before.elements, hint]), screen([...fresh.elements, { ...hint, text: 'Other suggestion' }]))).toBe(true);
+    const wrapper = { ...hit, resourceId: '', bounds: [110, 220, 210, 380] as PhoneElement['bounds'] };
+    const shorter = { ...wrapper, bounds: [110, 220, 170, 380] as PhoneElement['bounds'] };
+    expect(canDispatchPhoneAction(tap, screen([...before.elements, wrapper, { ...hint, bounds: wrapper.bounds }]),
+      screen([...fresh.elements, shorter, { ...hint, text: 'Short', bounds: shorter.bounds }]))).toBe(true);
+    expect(canDispatchPhoneAction(tap, before, { ...fresh, elements: [...fresh.elements, { ...target, resourceId: 'overlay' }] })).toBe(false);
+    expect(canDispatchPhoneAction(tap, before, screen([{ ...entry, bounds: [400, 200, 600, 400] }, hit, promo]))).toBe(false);
+    expect(canDispatchPhoneAction({ type: 'typeText', text: 'query' }, before, fresh)).toBe(false);
+  });
+
   it('ignores an unrelated countdown but still rejects target text, position, focus and app changes', () => {
     const clock = { ...target, text: '10:00', resourceId: 'com.android.systemui:id/clock', clickable: false, bounds: [0, 800, 500, 900] as PhoneElement['bounds'] };
     const before = screen([target, clock]);
@@ -28,6 +46,13 @@ describe('phone target freshness', () => {
     expect(canDispatchPhoneAction(tap, screen([header, target]), screen([{ ...header, text: 'Product B' }, target]))).toBe(false);
     const editor = { ...target, focused: true, editable: true };
     expect(canDispatchPhoneAction({ type: 'typeText', text: 'hello' }, screen([header, editor]), screen([{ ...header, text: 'Other recipient' }, editor]))).toBe(false);
+  });
+  it('allows read-only waiting while content loads, while preserving app and geometry checks', () => {
+    const action = { type: 'wait' as const, durationMs: 1000 };
+    expect(canDispatchPhoneAction(action, screen([target]), screen([{ ...target, text: 'Loading' }]))).toBe(true);
+    expect(canDispatchPhoneAction(action, screen([]), { ...screen([]), frame: Buffer.from('new') })).toBe(true);
+    expect(canDispatchPhoneAction(action, screen([target]), { ...screen([target]), package: 'com.other' })).toBe(false);
+    expect(canDispatchPhoneAction(action, screen([target]), { ...screen([target]), width: 500 })).toBe(false);
   });
   it('does not relax swipes against changing layouts', () => {
     expect(canDispatchPhoneAction({ type: 'swipe', start: [500, 800], end: [500, 300], durationMs: 500 }, screen([target]), screen([{ ...target, text: 'changed' }]))).toBe(false);

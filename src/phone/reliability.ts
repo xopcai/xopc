@@ -46,13 +46,52 @@ function atPoint(elements: PhoneElement[], x: number, y: number): PhoneElement[]
   return elements.filter(node => node.bounds[0] <= x && x < node.bounds[2] && node.bounds[1] <= y && y < node.bounds[3]);
 }
 
+/** Search-entry navigation can survive unrelated carousels; its hit stack stays identical except for the rotating placeholder. */
+function stableSearchEntry(action: PhoneAction, before: PhoneObservation, fresh: PhoneObservation): boolean {
+  if (action.type !== 'tap') return false;
+  const x = action.point[0] * before.width / 1000;
+  const y = action.point[1] * before.height / 1000;
+  const isSearchEntry = (node: PhoneElement) => !node.password && !node.editable
+    && /^(?:搜索栏|搜索框|search bar|search box)$/i.test(node.description || node.text)
+    && node.bounds[0] >= 0 && node.bounds[1] >= 0 && node.bounds[2] <= before.width && node.bounds[3] <= before.height
+    && (node.bounds[2] - node.bounds[0]) * (node.bounds[3] - node.bounds[1]) < before.width * before.height / 5;
+  const entries = before.elements.filter(isSearchEntry);
+  if (entries.length !== 1 || fresh.elements.filter(isSearchEntry).length !== 1) return false;
+  const entry = entries[0];
+  const hits = atPoint(before.elements, x, y);
+  const insideEntry = (node: PhoneElement) => node.bounds[0] >= entry.bounds[0] && node.bounds[1] >= entry.bounds[1]
+    && node.bounds[2] <= entry.bounds[2] && node.bounds[3] <= entry.bounds[3];
+  const placeholderWrappers = (screen: PhoneObservation) => screen.elements.filter(node => insideEntry(node)
+    && node.clickable && !node.editable && !node.password && !node.resourceId && !node.text && !node.description
+    && node.bounds[2] - node.bounds[0] < (entry.bounds[2] - entry.bounds[0]) * 0.7
+    && screen.elements.some(child => inert(child) && !child.resourceId && Boolean(child.text)
+      && child.bounds[0] >= node.bounds[0] && child.bounds[1] >= node.bounds[1]
+      && child.bounds[2] <= node.bounds[2] && child.bounds[3] <= node.bounds[3]));
+  const oldWrappers = placeholderWrappers(before); const newWrappers = placeholderWrappers(fresh);
+  if (oldWrappers.length !== newWrappers.length || oldWrappers.length > 1) return false;
+  const hitStack = (screen: PhoneObservation) => atPoint(screen.elements, x, y).filter(node => {
+    if ((screen === before ? oldWrappers : newWrappers).includes(node)) return false;
+    // A rotating placeholder is decoration inside the search entry, not its identity.
+    const placeholder = inert(node) && !node.resourceId && node !== entry
+      && node.bounds[0] >= entry.bounds[0] && node.bounds[1] >= entry.bounds[1]
+      && node.bounds[2] <= entry.bounds[2] && node.bounds[3] <= entry.bounds[3]
+      && !isSearchEntry(node);
+    return !placeholder;
+  });
+  return hits.includes(entry) && !hits.some(node => node.password || node.editable)
+    && hits.some(node => node.clickable)
+    && JSON.stringify(hitStack(before)) === JSON.stringify(hitStack(fresh));
+}
+
 /** Preserve page semantics and geometry while ignoring recognized ambient counters. */
 export function canDispatchPhoneAction(action: PhoneAction, before: PhoneObservation, fresh: PhoneObservation): boolean {
   if (!geometryMatches(before, fresh)) return false;
+  if (action.type === 'wait') return true;
   if (JSON.stringify(before.elements) === JSON.stringify(fresh.elements)) {
     return before.elements.length > 0 || fresh.frame.equals(before.frame);
   }
-  if (JSON.stringify(semanticElements(before)) !== JSON.stringify(semanticElements(fresh))) return false;
+  if (JSON.stringify(semanticElements(before)) !== JSON.stringify(semanticElements(fresh)))
+    return stableSearchEntry(action, before, fresh);
   if (action.type === 'tap' || action.type === 'doubleTap' || action.type === 'longPress') {
     const [x, y] = [action.point[0] * before.width / 1000, action.point[1] * before.height / 1000];
     const targets = atPoint(before.elements, x, y);
@@ -71,7 +110,7 @@ export function canDispatchPhoneAction(action: PhoneAction, before: PhoneObserva
     return previous.length === 1 && current.length === 1 && Boolean(previous[0].resourceId)
       && JSON.stringify(previous) === JSON.stringify(current);
   }
-  return action.type === 'back' || action.type === 'swipe' || action.type === 'wait';
+  return action.type === 'back' || action.type === 'swipe';
 }
 
 /** Evaluate all native nodes, separately from the truncated display facts. */

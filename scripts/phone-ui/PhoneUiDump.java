@@ -40,6 +40,7 @@ public final class PhoneUiDump {
             xml.attribute(null, "content-desc", node.isPassword() ? "" : text(node.getContentDescription(), 300));
             xml.attribute(null, "clickable", String.valueOf(node.isClickable()));
             xml.attribute(null, "focused", String.valueOf(node.isFocused()));
+            xml.attribute(null, "editable", String.valueOf(node.isEditable()));
             xml.attribute(null, "bounds", "[" + Math.max(0, bounds.left) + "," + Math.max(0, bounds.top) + "][" + Math.max(0, bounds.right) + "," + Math.max(0, bounds.bottom) + "]");
             for (int i = 0; i < node.getChildCount() && nodes < 500; i++) dump(xml, node.getChild(i), depth + 1);
             xml.endTag(null, "node");
