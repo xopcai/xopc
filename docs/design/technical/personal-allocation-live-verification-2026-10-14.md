@@ -88,3 +88,5 @@ XOPC_ALLOCATION_LIVE=1 pnpm exec tsx scripts/personal-allocation-live-smoke.mts
 脚本保留当前模型配置，仅共享认证存储及锁；业务数据仍隔离。它会在个人首次回复后、执行完成前提交第二条消息，要求立即回复唯一 READY 标记；记录任务提交、分配、执行开始/结束、结果保存、个人结果回复和第二条消息的耗时。验收还要求真实 router 选中 data-analyst、实际报告有正确数值、复现脚本存在，以及结果回复进入原个人会话。
 
 结构化最终记录：`personal-allocation-live-verification-2026-10-14.json`；优化前成功记录：`personal-allocation-live-before-prompt-optimization-2026-10-14.json`；首轮弃用记录：`personal-allocation-live-initial-attempt-2026-10-14.json`。记录均不含凭据。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

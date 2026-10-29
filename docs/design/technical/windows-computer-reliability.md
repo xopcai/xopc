@@ -65,6 +65,8 @@ node --import tsx scripts/run-windows-reliability-validation.mts --matrix-only -
 
 需要登录的 Windows x64 交互桌面。脚本只操作自行创建的原生样例和临时 Notepad 文档；若已有 Calculator/Notepad 窗口，会跳过对应系统应用。Calculator 测试窗口会保留，已有窗口不会被清空。临时样例会关闭；现代 Notepad 可能把文档交给另一 PID，清理辅助脚本只关闭命令行会话中包含本次唯一临时文档路径的进程。
 
-配置、数据库、应用状态和原始计时位于 `.cache/windows-reliability-<uuid>/`。测试截图只在内存及真实上传链路中使用，不写入持久证据。脱敏汇总包含实际执行 bundle 和结果文件的 SHA-256：[故障、矩阵与耗时证据](./evidence/windows-computer-reliability-2026-10-25.json)。
+配置、数据库、应用状态和原始计时位于 `.cache/windows-reliability-<uuid>/`。测试截图只在内存及真实上传链路中使用，不写入持久证据。脱敏汇总包含实际执行 bundle 和结果文件的 SHA-256：故障、矩阵与耗时证据（历史产物已移入 Git 历史）。
 
 尚未覆盖长时间浸泡、混合 DPI、多显示器、锁屏/RDP、提权窗口及所有第三方应用。本轮也不重新认证模型、安装包或签名升级链路；这些范围保留原有的独立验证记录。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

@@ -52,7 +52,7 @@ Chinese overrides; restoration of the initial profile. Tests included stale SOUL
 notes, old answers, a role-specific activity, and self-introduction in French
 checking both current name and language. Replies were evaluated for the expected
 identity, specialty, and language; full replies and actual model ids are retained
-in [the acceptance report](./agent-identity-live-2026-10-14.json).
+in the acceptance report（历史产物已移入 Git 历史）.
 
 The original personal Agent's existing conversation also passed five name checks
 (`haha` → 阿沐 → 岚舟 → `haha`), and its starting configuration was restored.
@@ -68,3 +68,5 @@ Optional environment variables select models, Gateway, config path, state root,
 and report destination; see the script. Credentials are never written to reports.
 The results are a finite sample of these models and text-session paths, not a
 guarantee for every model or a validation of voice paths.
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

@@ -1,7 +1,7 @@
 # xopc 语音与会议助手：调研及产品设计方案
 
-日期：2026-09-15  
-状态：设计提案，尚未实施。现状以本次读取的工作区代码为准。  
+日期：2026-09-15
+状态：设计提案，尚未实施。现状以本次读取的工作区代码为准。
 范围：语音输入、语音对话、会议记录、纪要、会后执行及知识复用。
 
 后续规格：[产品 PRD](./voice-meeting-prd.md)、[技术设计](./voice-meeting-technical-design.md)。实施细节以这两份配套规格为准；本文保留调研依据与总体取舍。
@@ -57,7 +57,7 @@ xopc 已有语音通话、讨论录音、近实时转写、结构化整理、项
 - [分析器](../../src/discussions/analyzer.ts)、[讨论数据类型](../../src/discussions/types.ts)、[STT 契约](../../src/voice/stt/types.ts)。
 - [讨论阅读界面](../../web/src/features/discussions/discussion-note-sections.tsx)。
 - [旧行动转换表删除](../../src/storage/sqlite/migrations/082_one_click_live_discussions.sql)。
-- [现有语音说明](../voice.md)、[实时语音交付与真机验收边界](./voice-experience-delivery.md)。
+- [现有语音说明](../voice.md)、[实时语音交付与真机验收边界](mobile-voice-technical-design.md)。
 
 ## 4. 竞品产品设计对比
 

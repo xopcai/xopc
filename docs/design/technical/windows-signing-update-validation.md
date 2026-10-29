@@ -26,7 +26,7 @@ node --import tsx scripts/run-windows-updater-negative-validation.mts
 - 错误 SHA-512：`ERR_CHECKSUM_MISMATCH`。
 - 两项都没有 `update-downloaded` 事件，没有安装或重启尝试。
 
-HTTPS 使用仅限测试 updater session、仅限 loopback 主机和单张证书指纹的信任规则；不安装系统根证书，不关闭 TLS 校验，不跳过 Authenticode。临时 TLS 证书不是代码签名证书。结果位于 `.cache/windows-updater-negative-<uuid>/result.json`，脱敏记录见 [真实负向验证证据](./evidence/windows-updater-negative-2026-10-25.json)。
+HTTPS 使用仅限测试 updater session、仅限 loopback 主机和单张证书指纹的信任规则；不安装系统根证书，不关闭 TLS 校验，不跳过 Authenticode。临时 TLS 证书不是代码签名证书。结果位于 `.cache/windows-updater-negative-<uuid>/result.json`，脱敏记录见 真实负向验证证据（历史产物已移入 Git 历史）。
 
 应用中的历史 `XOPC_WIN_UPDATER_SKIP_SIGNATURE_VERIFY` 开关不再绕过签名检查。存在发布者信息的签名版本检查 Windows 信任状态、完整 Subject DN、Code Signing EKU 和时间戳；PowerShell 失败或输出无法解析时拒绝更新。缺少发布者信息的现有 unsigned 版本不因此被禁止构建、发布或检查更新。
 
@@ -59,3 +59,5 @@ node --import tsx scripts/run-windows-updater-download-validation.mts `
 本机尚无 Windows 代码签名证书；签名正向下载和已安装 A → B 升级、自动重启、升级后真实模型验证尚未实测。工具准备完成不等于这些项目已经通过，也不代表 SmartScreen 已建立信誉。取得证书后需用真实签名的两个版本补做安装升级验收，再决定是否启用强制发布门禁。
 
 参考：[electron-builder Windows 签名](https://www.electron.build/v26/docs/features/code-signing/code-signing-win/)、[Windows 发布者和更新校验配置](https://www.electron.build/v26/docs/win/)。实现同时核对了项目安装的 electron-builder `26.15.3` 和 electron-updater `6.8.9` 源码。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

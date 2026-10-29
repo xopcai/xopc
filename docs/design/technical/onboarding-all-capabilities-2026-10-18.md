@@ -22,7 +22,7 @@ Desktop onboarding submitted `selected: ['chat']`, so completing the wizard did 
 - Coverage includes persisted all-use configuration, idempotence, CLI/Gateway equivalence, retained explicit OAuth choices, chat, image generation/understanding, TTS, STT, assistant/natural WebSocket audio, and React microphone capture/playback.
 - First live run: natural voice returned `OMNI_PROVIDER_ERROR` (reference `00aedc60-1e2e-420e-9386-44f9a0cf3322`). A subsequent full run passed natural voice. This is an observed transient Cloud failure; catalog readiness alone cannot guarantee provider uptime.
 
-Machine-readable results: [cloud-onboarding-all-capabilities-2026-10-18.json](./cloud-onboarding-all-capabilities-2026-10-18.json).
+Machine-readable results: cloud-onboarding-all-capabilities-2026-10-18.json（历史产物已移入 Git 历史）.
 
 Re-run with a current authorized Cloud credential:
 
@@ -33,3 +33,5 @@ pnpm exec tsx scripts/cloud-onboarding-live-smoke.mts
 ```
 
 This invokes real model services and uses account quota. It leaves the original config intact. A normal credential refresh may be necessary before starting if the access token is near expiry.
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

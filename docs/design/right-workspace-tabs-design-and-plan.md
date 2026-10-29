@@ -448,4 +448,6 @@ URL 使用经过校验的标签/资源引用，不暴露原始绝对路径、媒
 - [Sidechat UI 与订阅](../../web/src/features/side-chat/side-chat-column.tsx)
 - [Sidechat 状态](../../web/src/stores/side-chat-store.ts)
 
-最初调研轮次只新增本文档。后续用户已授权实施；实现与验证结果见 [首版验证记录](./right-workspace-tabs-verification.md)，Sidechat 生命周期定义继续沿用。
+最初调研轮次只新增本文档。后续用户已授权实施；实现与验证结果见 [工作区验收记录](electron-packaged-acceptance-2026-10-18.md)，Sidechat 生命周期定义继续沿用。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

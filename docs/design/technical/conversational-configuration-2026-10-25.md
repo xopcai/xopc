@@ -41,4 +41,6 @@
 
 当前复跑入口：`XOPC_PHONE_REAL_MODEL=1 node --import tsx scripts/verify-conversational-setup-live.mts`。可用 `XOPC_SETUP_LIVE_SCENE=browser` 或 `phone` 单独验证。旧 `verify-phone-setup-live.mts` 转向当前的 Phone 纯对话测试；10-24 的 Browser 面板验收脚本仅用于对应历史提交。
 
-[结构化实测记录](evidence/conversational-configuration-2026-10-25.json) · [Browser 纯对话截图](evidence/browser-setup-conversation-2026-10-25.png) · [Phone 纯对话截图](evidence/phone-setup-conversation-2026-10-25.png)
+结构化实测记录（历史产物已移入 Git 历史） · Browser 纯对话截图（历史产物已移入 Git 历史） · Phone 纯对话截图（历史产物已移入 Git 历史）
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

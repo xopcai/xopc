@@ -1,8 +1,8 @@
 # 会议助手 P1/P2 实施拆分与验收
 
 日期：2026-09-15
-状态：P1-A 实施中，进展见 [实施与自查](./voice-meeting-p1-p2-implementation-review.md)；以下指标是目标，不是实测结果。
-契约：[P1/P2 技术设计](./voice-meeting-p1-p2-technical-design.md) · [PRD](./voice-meeting-prd.md) · [P0 实施记录](./voice-meeting-implementation-review.md)
+状态：P1-A 实施中，进展见 [实施与自查](voice-meeting-p1-p2-technical-design.md)；以下指标是目标，不是实测结果。
+契约：[P1/P2 技术设计](./voice-meeting-p1-p2-technical-design.md) · [PRD](./voice-meeting-prd.md) · [P0 实施记录](voice-meeting-technical-design.md)
 
 ## 1. 实施顺序
 

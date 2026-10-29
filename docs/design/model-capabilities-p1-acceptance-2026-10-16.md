@@ -59,9 +59,9 @@
 
 ## 证据与复现
 
-- [模型用途切换](./technical/model-use-switching-browser-2026-10-16.json)
-- [同页设置 E2E](./technical/model-inline-e2e-2026-10-16.json)
-- [配置与听写收敛 E2E](./technical/model-config-consolidation-e2e-2026-10-16.json)
+- 模型用途切换（历史产物已移入 Git 历史）
+- 同页设置 E2E（历史产物已移入 Git 历史）
+- 配置与听写收敛 E2E（历史产物已移入 Git 历史）
 
 ```bash
 pnpm exec tsx scripts/verify-model-use-switching.mts
@@ -72,3 +72,5 @@ pnpm exec tsx scripts/verify-bailian-live.mts --only=text --chat --vision
 ```
 
 真实脚本使用当前本机凭据，媒体验证会产生供应商调用；应依次运行，避免导航事件互相干扰。`verify-model-inline-live.mts` 默认只验证真实网关与配置，显式设置 `XOPC_VENDOR_E2E=1` 才执行供应商验证。截图/报告输出临时目录，原始 JSON 保留原批次口径。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

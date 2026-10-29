@@ -166,7 +166,7 @@ XOPC_PLUGIN_SMOKE_BROWSER_CHANNEL=chrome pnpm run test:plugins:browser
 
 脚本从真实 Store 安装 Plugin Lab，下载 Store 上的程序和数据，使用公开的合成账号 OAuth / MCP 服务，实际点击资源准备、配置、刷新继续、浏览器授权和全局启用，并通过 pi 调用工具。检查桌面、375px 窄屏、深色横屏及 reduced-motion，不使用真实业务账号。
 
-完整多场景命令：`XOPC_PLUGIN_SMOKE_BROWSER_CHANNEL=chrome pnpm run test:plugins:e2e`。它先构建 Node / Web，再验证两种 Plugin 的 Store 安装 / 升级 / 回滚 / 凭据清理、原生 Extension、真实 Gateway 进程和完整 Web 页面。详见 [Store E2E 验收记录](https://github.com/xopcai/xopc/blob/main/docs/design/plugin-store-e2e-2026-10-19.md)。
+完整多场景命令：`XOPC_PLUGIN_SMOKE_BROWSER_CHANNEL=chrome pnpm run test:plugins:e2e`。它先构建 Node / Web，再验证两种 Plugin 的 Store 安装 / 升级 / 回滚 / 凭据清理、原生 Extension、真实 Gateway 进程和完整 Web 页面。详见 [Store E2E 验收记录](https://github.com/xopcai/xopc/blob/main/docs/design/plugin-e2e-rerun-2026-10-19.md)。
 
 固定 OpenAI 本地样本与真实 Superpowers Git 来源的静态检查，用于识别格式和兼容边界，不作为这些插件已通过真实业务场景验收的证据。
 

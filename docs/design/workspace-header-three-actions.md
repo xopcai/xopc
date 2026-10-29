@@ -28,4 +28,6 @@ Menus enter in 120 ms using opacity and a small transform. Existing pane opening
 - 73 tests passed across 13 files: header registration, shell/task Sidechat, workspace, browser host/UI and sharing.
 - Live isolated Gateway UI checks: menu search opens and focuses find, sharing opens the existing review dialog without publishing, Tools opens Files, Markdown preview renders, Sidechat draft survives tab changes, Sidechat sends a real streamed fixture-model response, and repeated outer Plus clicks reuse a single Tools tab.
 - Screenshot: `/tmp/xopc-header-three-actions.png` (web UI; native-only Tools cards are intentionally absent).
-- Final Electron acceptance (2026-10-18) resolved the native capture/accessibility blockers: **70 native checks passed**, including all three entries, files, Sidechat, terminal, browser, narrow layouts and motion. The related regression suite passed 98 tests; full Web regression has one unchanged-baseline failure. See [final acceptance record](./electron-workspace-e2e-2026-10-18.md) for evidence and scope.
+- Final Electron acceptance (2026-10-18) resolved the native capture/accessibility blockers: **70 native checks passed**, including all three entries, files, Sidechat, terminal, browser, narrow layouts and motion. The related regression suite passed 98 tests; full Web regression has one unchanged-baseline failure. See [final acceptance record](electron-packaged-acceptance-2026-10-18.md) for evidence and scope.
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

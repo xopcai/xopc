@@ -46,4 +46,6 @@ node --import tsx/esm scripts/verify-research-gateway.mjs
 
 The full test takes about two minutes because it waits for the real research deadline. Set `XOPC_RESEARCH_GATEWAY_SEARCH_ONLY=1` for the shorter search/quota run. Set `XOPC_RESEARCH_GATEWAY_REPORT=/absolute/path/report.json` to choose the report location. The script preserves failed test state for diagnosis; successful state is cleaned up unless `XOPC_RESEARCH_GATEWAY_KEEP_STATE=1`.
 
-Machine evidence: [initial failure](./research-gateway-failure-before-fix-2026-10-14.json), [full run](./research-gateway-acceptance-2026-10-14.json), [search/quota run](./research-gateway-quota-acceptance-2026-10-14.json). Reports include source hashes, request counts, timestamps and observed model tool results.
+Machine evidence: initial failure（历史产物已移入 Git 历史）, full run（历史产物已移入 Git 历史）, search/quota run（历史产物已移入 Git 历史）. Reports include source hashes, request counts, timestamps and observed model tool results.
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

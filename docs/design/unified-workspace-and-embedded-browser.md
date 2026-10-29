@@ -2,11 +2,11 @@
 
 后续安装包验收：见 [Electron 打包后验收记录](./electron-packaged-acceptance-2026-10-18.md)，最终 DMG 的 84 项原生检查全部通过。
 
-最终验收（2026-10-18）：70 项 Electron 原生检查全部通过，详见 [完整验证记录](./electron-workspace-e2e-2026-10-18.md)。
+最终验收（2026-10-18）：70 项 Electron 原生检查全部通过，详见 [完整验证记录](electron-packaged-acceptance-2026-10-18.md)。
 
 最新顶栏交互以 [三入口设计](./workspace-header-three-actions.md) 为准。
 
-实施更新（2026-10-18）：B1 核心用户浏览已接入，原生 Electron 验收结果与边界见 [内置浏览器实现与 E2E](./embedded-browser-implementation-and-e2e.md)。B2 网页引用和 Agent 接管仍属后续阶段。
+实施更新（2026-10-18）：B1 核心用户浏览已接入，原生 Electron 验收结果与边界见 [内置浏览器实现与 E2E](electron-packaged-acceptance-2026-10-18.md)。B2 网页引用和 Agent 接管仍属后续阶段。
 
 状态：整体方案与后续浏览器实施设计。日期：2026-10-18。
 
@@ -302,3 +302,15 @@ WebContentsView 不是 React DOM。不能假设 CSS z-index、圆角、overflow 
 - `src/storage/sqlite/browser-tab-binding-repository.ts`：复用或扩展桌面目标绑定及撤销语义；数据库变更遵循当前迁移机制。
 
 浏览器新增工作应先完成 B0，再细化实现任务。当前文件/Sidechat 的统一工作区可独立交付，不依赖浏览器内核接入完成。
+
+## 已实施的原生浏览器边界（合并记录）
+
+2026-10-29 从早期实施/E2E报告保留：主进程 browser-host 管理 registry、独立 profile、导航、下载、bounds；preload 窄 bridge 只信任精确 main window/main frame，localhost guest/iframe 不获宿主权限。远端 sandbox/contextIsolation、无 Node/应用 preload/webviewTag；未为手动浏览开放全局 CDP 或 Agent 控制权。
+
+native id 由 main 创建并绑定 workspaceTabId；profile 与应用 session 分离，按公开 Gateway/浏览会话身份哈希分区。最多24个原生网页，身份切换/宿主重载/崩溃/窗口销毁释放。网站登录数据由持久 partition 保存，但 URL、标题、native id 不进入长期会话存储，重启不恢复网页历史/表单。切页或收起保留原生页，非活动页静音，不承诺暂停站点任务；关闭走真实 beforeunload，拒绝关闭不先移除标签。
+
+地址编辑和导航状态分离，HTTP(S)/域名/localhost 保留query/hash；搜索先选引擎，无远程联想。弹窗转新标签，不能保证 window.opener 协议全兼容。下载原生保存/上传原生选择；站点摄像头/位置权限默认拒绝，不继承宿主权限、不绕过证书。DOM菜单/dialog/文件树遮罩需协调隐藏guest，不能仅用CSS层级覆盖；bounds经rAF合并、zoom换算和裁剪，动画中隐藏原生层，遵循reduced-motion。
+
+StrictMode清理以真实成员关系判定、registry独立持有webContents、迟到hide幂等、每profile共享下载监听，防止复用关闭、销毁空引用和监听积累。B2网页引用快照/Agent指定标签控制、逐站权限、特殊DRM/WebAuthn/客户端证书、跨显示器DPI及Windows/Linux仍不由2026-10-18的macOS记录证明。最终包验收与复跑见[安装包报告](electron-packaged-acceptance-2026-10-18.md)。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

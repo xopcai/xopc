@@ -111,10 +111,10 @@ result 使用现有共同结果 outbox / Personal 最终回复路径，保留结
 
 ### 迭代证据
 
-- [第 1 轮](personal-connected-collaboration-live-run-1.json)：失败。原工具只有 objective，Personal 将分阶段要求缩成短目标，执行者没有收到明确步骤。修复为独立完整 description，不用“按指定流程”代替原文。
-- [第 2 轮](personal-connected-collaboration-live-run-2.json)：完整协作和原账户重新授权均通过，包括长读取期间补充要求。
-- [第 3 轮](personal-connected-collaboration-live-run-3.json)：完整协作、重新授权和四个实际工具越权探针均通过。执行者为 researcher；原账户未变，模型工具错误为 0。
-- [第 4 轮](personal-connected-collaboration-live-run-4.json)：改为 readOnly=true、batchRead=false 的只读应用契约，完整协作、重新授权和四个越权探针均通过。原模型与账户约束不变，模型工具错误为 0，合成未回退。
+- 第 1 轮（历史产物已移入 Git 历史）：失败。原工具只有 objective，Personal 将分阶段要求缩成短目标，执行者没有收到明确步骤。修复为独立完整 description，不用“按指定流程”代替原文。
+- 第 2 轮（历史产物已移入 Git 历史）：完整协作和原账户重新授权均通过，包括长读取期间补充要求。
+- 第 3 轮（历史产物已移入 Git 历史）：完整协作、重新授权和四个实际工具越权探针均通过。执行者为 researcher；原账户未变，模型工具错误为 0。
+- 第 4 轮（历史产物已移入 Git 历史）：改为 readOnly=true、batchRead=false 的只读应用契约，完整协作、重新授权和四个越权探针均通过。原模型与账户约束不变，模型工具错误为 0，合成未回退。
 
 ```sh
 XOPC_CONNECTED_COLLABORATION_LIVE=1 \
@@ -143,3 +143,5 @@ pnpm exec tsx scripts/personal-connected-collaboration-live-smoke.mts
 | 总计（含合成读取延迟） | 106380.00 ms |
 
 第 2–4 轮提交工具为 11.79–14.61 ms，等待期间回复为 1.23–1.43 s。第二轮补充指令在 20 秒读操作中收到，约 24 s 后确认；第三、四轮约 9.3–9.5 s 确认。账户授权仍会暂停执行，但不会让主对话等待；样本不是生产延迟 SLA。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。

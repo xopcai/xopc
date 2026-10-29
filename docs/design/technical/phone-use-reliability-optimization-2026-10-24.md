@@ -35,7 +35,7 @@
 
 整套固定场景的策略调用减少 38.5%；普通静态页面没有引入已观察到的退化。该差异主要由时钟误拦截和有界无进展处理产生，不能外推为真实模型或真实 App 的完成率提升。重复三轮主要验证可重复性，不提供统计独立性或泛化结论。
 
-证据：[模拟回放 JSON](evidence/phone-reliability-replay-2026-10-24.json)。
+证据：模拟回放 JSON（历史产物已移入 Git 历史）。
 
 **3. 真实 Android 输入验证**
 
@@ -49,7 +49,7 @@
 
 验证发现：清空 Settings 搜索框后，原生节点把 `Search settings` 占位文字当作字段值返回，导致最初的空字符串验证误判。最终实现改为选择现有内容后单次输入替换，以最终准确值判断结果，不再依赖空字符串检查。不安装 ADB Keyboard，不切换输入法，不读取历史剪贴板。
 
-证据：[真实输入 JSON](evidence/phone-reliability-input-2026-10-24.json)。
+证据：真实输入 JSON（历史产物已移入 Git 历史）。
 
 **4. 真实 AutoGLM 配对测试与发现**
 
@@ -70,9 +70,9 @@
 
 所有开发阶段合计 50 次真实 API 调用：无效启动设置 2 次，完成复核前 9 次，仅完成复核后 9 次，完成条件上下文前 12 次，最终配对 18 次。中间结果用于定位问题，不能挑选较好的轮次作为最终成绩。最终证据包含生产源码 SHA-256，可区分工作区版本。
 
-数据见[最终真实模型 JSON](evidence/phone-reliability-live-final-2026-10-24.json)。样本只有两个任务、每臂一次；即使最终通过，也不能据此宣称一般真实任务完成率提升。应在更多 App、更多初始状态和重复运行中继续收集结果。
+数据见最终真实模型 JSON（历史产物已移入 Git 历史）。样本只有两个任务、每臂一次；即使最终通过，也不能据此宣称一般真实任务完成率提升。应在更多 App、更多初始状态和重复运行中继续收集结果。
 
-保留记录：[完成复核修复前](evidence/phone-reliability-live-before-confirmation-2026-10-24.json)、[仅完成复核之后](evidence/phone-reliability-live-after-confirmation-2026-10-24.json)、[显式条件传入模型之前](evidence/phone-reliability-live-before-criteria-context-2026-10-24.json)、[启动设置失败](evidence/phone-reliability-live-setup-failure-2026-10-24.json)。证据不包含截图或密钥。
+保留记录：完成复核修复前（历史产物已移入 Git 历史）、仅完成复核之后（历史产物已移入 Git 历史）、显式条件传入模型之前（历史产物已移入 Git 历史）、启动设置失败（历史产物已移入 Git 历史）。证据不包含截图或密钥。
 
 **5. 回归验证**
 
@@ -127,3 +127,5 @@ pnpm run build
 参考：[Open-AutoGLM Agent 循环](https://github.com/zai-org/Open-AutoGLM/blob/86f55382982fb054e8fc98ca80609dff8a2cdc3c/phone_agent/agent.py)、[提示与纠错规则](https://github.com/zai-org/Open-AutoGLM/blob/86f55382982fb054e8fc98ca80609dff8a2cdc3c/phone_agent/config/prompts_zh.py)、[动作执行](https://github.com/zai-org/Open-AutoGLM/blob/86f55382982fb054e8fc98ca80609dff8a2cdc3c/phone_agent/actions/handler.py)。
 
 **真实 App 续轮验证**：后续两组候选没有改善真实完成率，已撤回；完整负面结果、失败定位和当前生产恢复状态见[真实 App 续轮报告](phone-use-real-app-optimization-2026-10-24.md)。
+
+历史产物保留说明（2026-10-29）：本页所涉已清理截图、逐次 JSON 与源码快照可从 Git 历史恢复；上文数字和失败限制保留为历史观测，不代表本次重新验收。复跑输出应指定临时目录；旧路径仅记录当次运行位置。
