@@ -143,7 +143,7 @@ export function completeXopcCloudModelRoutes(models: AgentDefaults['models'], so
     && isComputerModel({ ...model, provider: source.providerId, api: source.api }))
     .sort((left, right) => compareCatalogModels(left, right))[0];
   if (computer) next.computerUse ??= route(computer);
-  const preferredPhone = ['phone-doubao', 'phone-gui-plus', 'phone'].find(id => source.models.some(model =>
+  const preferredPhone = ['phone', 'phone-doubao', 'phone-gui-plus'].find(id => source.models.some(model =>
     model.id === id && model.availability === 'available' && phoneModelProfile({ ...model, provider: source.providerId, api: source.api })));
   const phone = source.models.filter(model => model.availability === 'available'
     && phoneModelProfile({ ...model, provider: source.providerId, api: source.api }))
