@@ -7,6 +7,6 @@ export interface DefaultModelTarget {
 
 export function defaultModelCandidates(models: ConfiguredModel[], target: DefaultModelTarget) {
   return models.filter(model => model.id.startsWith(`${target.providerId}/`)
-    && !model.computerUse && !model.phoneUse
+    && (!model.computerUse || model.computerUse.dedicated === false) && (!model.phoneUse || model.phoneUse.dedicated === false)
     && (!target.modelIds || target.modelIds.includes(model.id.slice(target.providerId.length + 1))));
 }

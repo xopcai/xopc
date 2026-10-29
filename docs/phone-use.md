@@ -40,11 +40,13 @@ After connecting to XOPC Cloud, an unset global phone model defaults to `xopc-cl
 
 Select a supported phone model in Phone Use and save it. The page shows its provider and credential status. Add or edit providers, API keys, model IDs and Phone Use action profiles centrally under **Intelligence → Models**.
 
-For BigModel, configure Zhipu GLM China with model ID `autoglm-phone`, image input and the AutoGLM Phone action profile. Vision support alone does not qualify a model for Phone Use. The phone model selection is separate from the chat model. The mock model is reserved for internal development tests and is not listed in model settings.
+For BigModel, configure Zhipu GLM China with model ID `autoglm-phone`, image input and the AutoGLM Phone action profile. Dedicated phone models must declare a matching action profile. The phone model selection is separate from the chat model. The mock model is reserved for internal development tests and is not listed in model settings.
 
 Select AutoGLM and save it as the phone model. **Test model connection** sends a synthetic test image, not the current phone screen, and reports protocol validity and button grounding separately. This is a real model request and may incur provider charges. A successful connection test is not a task-success benchmark.
 
-Other compatible models can be added in Models settings using image input, OpenAI Chat Completions and an explicit Phone Use profile. Supported profiles are `autoglm-phone-v1`, `structured-phone-v1`, `doubao-seed-phone-v1`, and `gui-owl-phone-v1`. No automatic model fallback is performed. Agent settings can override the global phone model without changing the chat model.
+General visual models with image input and function tools are discovered automatically for OpenAI Chat Completions and Responses APIs, unless `supportsTools: false` excludes them. They use `structured-tools-phone-v1`; no dedicated phone training or native computer tool is required. In xopc, sign in with ChatGPT under the OpenAI provider, then select an image-capable GPT model in Phone Use and save. This reuses the existing credentials and OAuth refresh, with no separate phone key. Chat and vision selections remain available. Managed services and dedicated desktop models still require explicit phone support.
+
+Dedicated phone models can be added with image input, OpenAI Chat Completions and an explicit Phone Use profile. Supported profiles are `autoglm-phone-v1`, `structured-phone-v1`, `doubao-seed-phone-v1`, `gui-owl-phone-v1`, and `structured-tools-phone-v1` (also supports Responses). No automatic model fallback is performed. Agent settings can override the global phone model without changing the chat model.
 
 ### Cloud models with your own key (BYOK)
 

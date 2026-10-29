@@ -6,12 +6,13 @@ import { fetchPhoneModels } from './phone-api';
 
 export function PhoneModelPicker({ value, onChange, zh, disabled = false }: { value: string; onChange(value: string): void; zh: boolean; disabled?: boolean }) {
   const models = useSWR('phone-models', fetchPhoneModels);
+  const availableModels = models.data?.models.filter(model => model.configured) ?? [];
   if (!models.data && !models.error) return <Skeleton className="h-11 w-full rounded-lg" />;
   return <div className="space-y-2">
     <Select aria-label={zh ? '手机模型' : 'Phone model'} value={value} disabled={disabled || Boolean(models.error)} onChange={event => onChange(event.target.value)}>
       <SelectOption value="">{zh ? '未配置' : 'Not configured'}</SelectOption>
-      {value && !models.data?.models.some(model => model.id === value) && <SelectOption value={value} disabled>{zh ? '当前模型不可用，请重新选择' : 'Current model unavailable; choose another'}</SelectOption>}
-      {models.data?.models.map(model => <SelectOption key={model.id} value={model.id}>{`${model.name} · ${model.id.split('/')[0]}${model.configured ? '' : zh ? ' · 待配置凭据' : ' · Credentials needed'}`}</SelectOption>)}
+      {value && !availableModels.some(model => model.id === value) && <SelectOption value={value} disabled>{zh ? '当前模型不可用，请重新选择' : 'Current model unavailable; choose another'}</SelectOption>}
+      {availableModels.map(model => <SelectOption key={model.id} value={model.id}>{`${model.name} · ${model.id.split('/')[0]}`}</SelectOption>)}
     </Select>
     {models.error && <p role="alert" className="text-sm text-danger">{String(models.error)}</p>}
   </div>;

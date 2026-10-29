@@ -1,4 +1,4 @@
-import { phoneModelProfile } from '../../../phone/model-adapter.js';
+import { phoneModelProfile, isDedicatedPhoneModel } from '../../../phone/model-policy.js';
 import { withModelUsageOrigin } from '../../../providers/model-usage.js';
 import { getProviderSetupProfile } from '../../../providers/setup/profiles.js';
 import { registerProviderSetupRoutes } from './provider-setup.js';
@@ -387,7 +387,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       name: m.name,
       ...catalogDisplayNames(m.provider, m.id),
       provider: m.provider,
-      ...(phoneModelProfile(m) ? { phoneUse: { profile: phoneModelProfile(m)! } } : {}),
+      ...(phoneModelProfile(m) ? { phoneUse: { profile: phoneModelProfile(m)!, dedicated: isDedicatedPhoneModel(m) } } : {}),
       ...(computerModelProfile(m) ? { computerUse: { profile: computerModelProfile(m)!, dedicated: isDedicatedComputerModel(m) } } : {}),
       contextWindow: m.contextWindow ?? 128000,
       maxTokens: m.maxTokens ?? 4096,
@@ -826,7 +826,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       name: m.name,
       ...catalogDisplayNames(m.provider, m.id),
       provider: m.provider,
-      ...(phoneModelProfile(m) ? { phoneUse: { profile: phoneModelProfile(m)! } } : {}),
+      ...(phoneModelProfile(m) ? { phoneUse: { profile: phoneModelProfile(m)!, dedicated: isDedicatedPhoneModel(m) } } : {}),
       contextWindow: m.contextWindow ?? 128000,
       maxTokens: m.maxTokens ?? 4096,
       reasoning: m.reasoning ?? false,

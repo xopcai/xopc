@@ -255,13 +255,14 @@ function ModelEditForm({
         <div className="mt-3 space-y-2">
           <Select aria-label={zh ? '手机操作协议' : 'Phone Use protocol'} value={form.phoneUse?.profile ?? ''}
             onChange={event => update('phoneUse', event.target.value ? { profile: event.target.value as NonNullable<CustomModel['phoneUse']>['profile'] } : undefined)}>
-            <SelectOption value="">{zh ? '未声明' : 'Not declared'}</SelectOption>
+            <SelectOption value="">{zh ? '自动识别' : 'Automatic'}</SelectOption>
             <SelectOption value="autoglm-phone-v1">AutoGLM Phone</SelectOption>
             <SelectOption value="structured-phone-v1">Structured Phone</SelectOption>
+            <SelectOption value="structured-tools-phone-v1">Visual function tools</SelectOption>
             <SelectOption value="doubao-seed-phone-v1">Doubao Seed GUI</SelectOption>
             <SelectOption value="gui-owl-phone-v1">GUI-Owl 1.5</SelectOption>
           </Select>
-          <p className="text-xs text-fg-muted">{zh ? '需要图片输入与 OpenAI Chat Completions API；配置后在手机控制中选择。' : 'Requires image input and an OpenAI Chat Completions API. Select the model in Phone Use settings.'}</p>
+          <p className="text-xs text-fg-muted">{zh ? '通用视觉模型支持图片输入和工具调用时会自动显示；也可指定专用手机协议。' : 'Visual models with image input and function tools appear automatically. Dedicated phone protocols can also be selected.'}</p>
         </div>
       </details>
       <details className="mt-4 rounded-lg border border-edge p-3 text-sm text-fg">
@@ -269,7 +270,7 @@ function ModelEditForm({
         <div className="mt-3 space-y-2">
           <Select aria-label={zh ? '电脑控制协议' : 'Computer Use protocol'} value={form.computerUse?.profile ?? ''}
             onChange={event => update('computerUse', event.target.value ? { profile: event.target.value as NonNullable<CustomModel['computerUse']>['profile'] } : undefined)}>
-            <SelectOption value="">{zh ? '未声明' : 'Not declared'}</SelectOption>
+            <SelectOption value="">{zh ? '自动识别' : 'Automatic'}</SelectOption>
             <SelectOption value="gui-plus-2026-02-26">GUI-Plus (2026-02-26)</SelectOption>
             <SelectOption value="structured-tools-v1">structured-tools-v1</SelectOption>
             <SelectOption value="openai-responses-computer-v1">OpenAI Responses Computer</SelectOption>

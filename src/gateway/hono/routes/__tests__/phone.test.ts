@@ -149,7 +149,9 @@ it('registers local phones, persists default selection and validates settings', 
   const { app, runtime } = fixture();
   const models = await app.request('/api/phone/models');
   expect(models.status).toBe(200);
-  expect((await models.json()).payload.models).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: MOCK_PHONE_MODEL })]));
+  const availableModels = (await models.json()).payload.models;
+  expect(availableModels).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: MOCK_PHONE_MODEL })]));
+  expect(availableModels).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'openai/gpt-6.1-sol', profile: 'structured-tools-phone-v1' })]));
   const added = await app.request('/api/phone/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ serial: 'emulator-5554', name: 'Emulator', allowedApps: ['com.android.settings'] }) });
   expect(added.status).toBe(201);
   const body = await added.json(); expect(runtime.repository.defaultDevice()).toBe(body.payload.id);

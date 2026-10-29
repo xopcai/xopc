@@ -1,0 +1,146 @@
+{
+  "passed": true,
+  "testedAt": "2026-10-29T01:40:09.700Z",
+  "modelRef": "openai/gpt-6.1-sol",
+  "auth": "ChatGPT OAuth",
+  "device": "阿里云测试手机",
+  "transport": "aliyun-adb",
+  "stateIsolated": true,
+  "personalScreenshots": false,
+  "evidence": "/tmp/xopc-chatgpt-phone-aliyun-live-2026-10-29-3",
+  "authenticatedGateway": true,
+  "synthetic": {
+    "protocolValid": true,
+    "groundingVerified": true,
+    "mock": false,
+    "deviceActions": 0
+  },
+  "registeredDeviceLease": true,
+  "native": {
+    "status": "completed",
+    "verified": true,
+    "verificationLevel": "ui",
+    "stopReason": "condition_satisfied",
+    "actions": 2,
+    "modelRequests": 2,
+    "steps": [
+      {
+        "action": "swipe",
+        "at": 1793238046882,
+        "dispatch": "completed",
+        "actor": "agent"
+      },
+      {
+        "action": "tap",
+        "at": 1793238057456,
+        "dispatch": "completed",
+        "actor": "agent"
+      }
+    ],
+    "performance": {
+      "operationId": "93ea5340-7e6f-46c8-8f43-58d551ccd625",
+      "durationMs": 26168.48,
+      "phases": {
+        "hierarchy": {
+          "count": 6,
+          "errors": 0,
+          "totalMs": 1896.21,
+          "maxMs": 602.28
+        },
+        "foreground": {
+          "count": 12,
+          "errors": 0,
+          "totalMs": 3015.72,
+          "maxMs": 497.01
+        },
+        "display": {
+          "count": 6,
+          "errors": 0,
+          "totalMs": 1193.45,
+          "maxMs": 456.13
+        },
+        "screenshot": {
+          "count": 6,
+          "errors": 0,
+          "totalMs": 2900.13,
+          "maxMs": 653.88
+        },
+        "capture": {
+          "count": 6,
+          "errors": 0,
+          "totalMs": 5926.07,
+          "maxMs": 1276.24
+        },
+        "observation": {
+          "count": 6,
+          "errors": 0,
+          "totalMs": 7822.64,
+          "maxMs": 1664.18
+        },
+        "model_request": {
+          "count": 2,
+          "errors": 0,
+          "totalMs": 16875.38,
+          "maxMs": 10331.49
+        },
+        "input": {
+          "count": 2,
+          "errors": 0,
+          "totalMs": 715.83,
+          "maxMs": 638.68
+        },
+        "settle": {
+          "count": 2,
+          "errors": 0,
+          "totalMs": 702.22,
+          "maxMs": 351.49
+        },
+        "dispatch": {
+          "count": 2,
+          "errors": 0,
+          "totalMs": 1418.63,
+          "maxMs": 990.68
+        }
+      },
+      "modelCalls": [
+        {
+          "imageBytes": 80142,
+          "protocol": "structured-tools-phone-v1",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "responses-stream",
+          "preparationMs": 11,
+          "requestBytes": 118339,
+          "httpStatus": 200,
+          "firstByteMs": 7417,
+          "responseBytes": 22902,
+          "finishReason": "toolUse",
+          "promptTokens": 3375,
+          "completionTokens": 46,
+          "totalTokens": 3421,
+          "durationMs": 10342
+        },
+        {
+          "imageBytes": 100610,
+          "protocol": "structured-tools-phone-v1",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "responses-stream",
+          "preparationMs": 12,
+          "requestBytes": 147340,
+          "httpStatus": 200,
+          "firstByteMs": 3487,
+          "responseBytes": 20653,
+          "finishReason": "toolUse",
+          "promptTokens": 3782,
+          "completionTokens": 35,
+          "totalTokens": 3817,
+          "durationMs": 6555
+        }
+      ],
+      "droppedModelCalls": 0
+    }
+  },
+  "independentNativeCheck": true,
+  "settingsUnchanged": true
+}

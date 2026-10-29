@@ -8,7 +8,7 @@ export interface ModelCost {
 }
 
 export interface CustomModel {
-  phoneUse?: { profile: 'autoglm-phone-v1' | 'structured-phone-v1' | 'doubao-seed-phone-v1' | 'gui-owl-phone-v1' };
+  phoneUse?: { profile: 'autoglm-phone-v1' | 'structured-phone-v1' | 'structured-tools-phone-v1' | 'doubao-seed-phone-v1' | 'gui-owl-phone-v1' };
   id: string;
   name?: string;
   input?: string[];
