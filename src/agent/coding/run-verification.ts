@@ -27,7 +27,7 @@ export function toolResultFailed(result: AgentToolResult<unknown>, isError = fal
     || details.timedOut === true || (typeof details.exitCode === 'number' && details.exitCode !== 0);
 }
 
-type VerificationOptions = { required?: boolean; toolNames?: string[]; workspace?: string };
+type VerificationOptions = { required?: boolean; toolNames?: string[]; workspace?: string; trackWorkspace?: boolean };
 
 function mutationPaths(name: string, args: Record<string, unknown>): string[] {
   return (name === 'write_file' ? [args.path]
@@ -54,7 +54,10 @@ export class RunVerification {
   constructor(private readonly snapshot: () => Promise<string | undefined>, private readonly options: VerificationOptions = {}) {}
 
   static async open(workspace: string, options: VerificationOptions = {}): Promise<RunVerification> {
-    const run = new RunVerification(() => readWorkspaceRevision(workspace), { ...options, workspace });
+    const snapshot = options.trackWorkspace === false && options.required === false
+      ? async () => undefined
+      : () => readWorkspaceRevision(workspace);
+    const run = new RunVerification(snapshot, { ...options, workspace });
     run.revision = await run.snapshot();
     return run;
   }

@@ -219,7 +219,6 @@ export async function *runGatewayAgent(
       const stampedMessage = message.trimStart().startsWith('/')
         ? message
         : prependEnvelopeTimestamp(message, timezone);
-      const prepared = await agentService.prepareInboundAttachments(conversationId, cappedAttachments);
 
       const runAbort = runAbortControllers.get(runId);
       if (!runAbort) {
@@ -251,7 +250,7 @@ export async function *runGatewayAgent(
           stampedMessage,
           conversationId,
           origin,
-          prepared,
+          cappedAttachments,
           thinking,
           {
             signal: mergedSignal, runId, sourceContexts: runOptions?.sourceContexts, presentation: runOptions?.presentation,

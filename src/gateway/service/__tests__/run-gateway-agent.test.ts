@@ -34,6 +34,7 @@ import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { insertSessionInput, claimNextSessionInput, finishSessionInputRun, getSessionInputState } from '../../../storage/sqlite/session-input-repository.js';
 import { requireSessionConnection, getConnectionWait, updateConnectionWait, queueConnectionResolution } from '../../../storage/sqlite/connection-wait-repository.js';
 import { resolveConnectionCandidate } from '../../../connectors/connection-candidates.js';
+import { persistInboundAttachments, type InboundAttachmentInput } from '../../../channels/attachments/inbound-persist.js';
 
 describe('runGatewayAgent', () => {
   let stateDir: string;
@@ -51,6 +52,47 @@ describe('runGatewayAgent', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it.each([false, true])('normalizes attachments once and releases ownership when invalid=%s', async invalid => {
+    const conversationId = 'd3dcfc3b-3238-4056-8feb-c95014705996';
+    const attachments: InboundAttachmentInput[] = invalid
+      ? [{ type: 'file', uri: 'file:///unsupported' }]
+      : [{ type: 'file', mimeType: 'text/plain', name: 'message.txt', data: Buffer.from('hello').toString('base64') }];
+    const prepare = vi.fn(async (_conversationId: string, files?: InboundAttachmentInput[]) => persistInboundAttachments(files));
+    let refs: Awaited<ReturnType<typeof persistInboundAttachments>>;
+    const process = vi.fn(async function* (_message: string, id: string, _origin: unknown, files?: InboundAttachmentInput[]) {
+      refs = await prepare(id, files);
+      yield { type: 'message_end', message: { role: 'assistant', content: [] } };
+    });
+    const deps = {
+      config: {}, agentService: {
+        resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: prepare,
+        beginInboundTurn: () => {}, endInboundTurn: () => {},
+        turnDispatcher: { processDirectStreaming: process },
+        getLastAssistantPlainText: () => '', takeTaskReviewStreamHint: () => undefined,
+        outboundCoordinator: { emitSessionTurnComplete: async () => {} },
+      }, bus: { publishInbound: async () => {} }, runAbortControllers: new Map(),
+      activeWebchatRunBySession: new Map(), activeExecutionBySession: new Map(),
+      sessionIndex: { getSessionMetadata: async () => ({ transcriptId: 'attachments' }) },
+      emit: () => {}, publishRealtime: () => {}, completeRealtimeTopic: () => {},
+    } as unknown as RunGatewayAgentDeps;
+    const events = [];
+    for await (const event of runGatewayAgent(deps, 'Read this', 'webchat', conversationId,
+      { type: 'channel', channel: 'webchat' }, attachments)) events.push(event);
+    expect(process).toHaveBeenCalledWith(expect.anything(), conversationId, expect.anything(), attachments,
+      undefined, expect.anything());
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(prepare).toHaveBeenCalledWith(conversationId, attachments);
+    expect(events.filter(event => event.type === 'run_end')).toEqual([
+      expect.objectContaining({ payload: expect.objectContaining({ status: invalid ? 'error' : 'success' }) }),
+    ]);
+    expect(deps.activeWebchatRunBySession.size).toBe(0);
+    expect(deps.runAbortControllers.size).toBe(0);
+    if (!invalid) {
+      expect(refs?.[0]).toMatchObject({ uri: expect.stringMatching(/^media:\/\/inbound\//), size: 5 });
+      expect(refs?.[0]).not.toHaveProperty('data');
+    }
   });
 
   it.each(['heartbeat', 'automation', 'internal', 'task_update'] as const)(
@@ -396,8 +438,7 @@ describe('runGatewayAgent', () => {
     const deps = {
       config: {},
       agentService: {
-        resolveUserTimezoneForSession: () => 'UTC',
-        prepareInboundAttachments: async () => { throw new Error('attachment setup failed'); },
+        resolveUserTimezoneForSession: () => { throw new Error('timezone setup failed'); },
         beginInboundTurn: () => {},
         getLastAssistantPlainText: () => '',
         takeTaskReviewStreamHint: () => undefined,

@@ -196,11 +196,17 @@ export async function runDirectAgentTurn(
   const isClarificationResume = Boolean(getClarificationResumeInput(input.conversationId, turnId));
   const isResume = Boolean(phoneResumeForRun(input.conversationId, turnId)) || isConnectionResume || isClarificationResume || Boolean(getTaskContinuation(input.conversationId, turnId))
     || Boolean(getMcpSetupResumeInput(input.conversationId, turnId));
-  const userContext = await deps.agentManager.prepareUserTurnContext(
-    input.userMessage,
-    input.conversationId,
-    turnId,
-  );
+  const modelRef = deps.modelManager.getModelForSession(input.conversationId);
+  // Media hydration does not depend on memory retrieval. Settle both before
+  // returning an error so context preparation cannot outlive this turn.
+  const [contextResult, mediaResult] = await Promise.allSettled([
+    deps.agentManager.prepareUserTurnContext(input.userMessage, input.conversationId, turnId),
+    hydrateUserTurnForLlm({ message: input.userMessage as TranscriptUserMessage, modelRef }),
+  ]);
+  if (contextResult.status === 'rejected') throw contextResult.reason;
+  if (mediaResult.status === 'rejected') throw mediaResult.reason;
+  const userContext = contextResult.value;
+  const llmTurn = mediaResult.value;
   const sourceContexts = input.sourceContexts ?? [];
   const sourceEnrichedMessage = injectSourceContextsIntoUserMessage(
     input.userMessage,
@@ -208,11 +214,6 @@ export async function runDirectAgentTurn(
   );
   const taskContext = [buildTaskExecutionDirective(input.conversationId), buildDelegatedTaskDirective(input.conversationId)]
     .filter(Boolean).join('\n');
-  const modelRef = deps.modelManager.getModelForSession(input.conversationId);
-  const llmTurn = await hydrateUserTurnForLlm({
-    message: input.userMessage as TranscriptUserMessage,
-    modelRef,
-  });
   const contextImages = sourceContexts.flatMap((context) => context.images ?? []);
   const sourceImages = resolveImageHandlingStrategy(modelRef) === 'native'
     ? [...(input.sourceImages ?? []), ...contextImages]
