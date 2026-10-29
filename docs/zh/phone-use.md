@@ -36,15 +36,17 @@ ADB 与 mDNS 均运行在 Gateway 电脑。发现失败时检查 Platform Tools�
 
 ## 配置手机模型
 
-在「手机操作模型」选择一个已声明支持手机操作的模型并保存。页面显示所属服务商与凭据配置状态；新增服务商、API Key、模型 ID 和手机动作协议统一在「智能 → 模型」管理。手机控制页不再重复维护服务商连接。
+在「手机操作模型」选择兼容的专用手机模型或通用视觉模型并保存。页面显示所属服务商与凭据配置状态；新增服务商、API Key、模型 ID 和手机动作协议统一在「智能 → 模型」管理。手机控制页不再重复维护服务商连接。
 
 连接 XOPC Cloud 后，尚未设置的全局手机模型会自动补为 `xopc-cloud/phone`，复用现有 Cloud 登录凭据，无需在客户端另填智谱 Key。已有手机模型选择和 Agent 覆盖保持不变。也可以在此页选择自己的独立模型；云端服务可用性与账户配额以 Cloud 为准。
 
-使用 AutoGLM 时，在模型管理中配置相应服务商与 `autoglm-phone`，声明图像输入和 AutoGLM Phone 动作协议。模型须支持所选协议，仅支持看图并不足以用于手机控制。模拟模型仅用于内部开发测试，不在用户模型列表中提供。
+使用 AutoGLM 时，在模型管理中配置相应服务商与 `autoglm-phone`，声明图像输入和 AutoGLM Phone 动作协议。专用模型须支持所选协议；通用视觉模型须同时支持图片输入与函数工具调用。模拟模型仅用于内部开发测试，不在用户模型列表中提供。
 
 选择 AutoGLM 并保存后，「测试模型连接」只发送内置合成图片，不读取手机截图。测试分别检查动作协议与按钮定位，会产生真实模型调用，费用以平台账户为准。
 
-自定义模型需配置图片输入、OpenAI Chat Completions API 和受支持的手机协议：`autoglm-phone-v1`、`structured-phone-v1`、`doubao-seed-phone-v1` 或 `gui-owl-phone-v1`。Agent 的模型设置可覆盖全局手机模型，聊天模型保持独立；当前不自动切换备用手机模型。
+通用视觉模型使用 OpenAI Chat Completions 或 Responses API、支持图片输入与函数工具调用时，会自动出现在手机模型列表中，使用 `structured-tools-phone-v1`，无需专门训练的手机模型或原生 computer 工具。可在 xopc 的 OpenAI 服务商中通过 ChatGPT OAuth 登录，再到手机操作设置中选择支持图片输入的 GPT 模型并保存；复用现有登录和凭据刷新，无需另填手机 Key。模型仍可用于普通聊天与看图。`supportsTools: false` 会排除不支持工具调用的模型；托管服务与专用电脑模型仍需显式声明手机支持。
+
+专用手机模型需配置图片输入、OpenAI Chat Completions API 和受支持的手机协议：`autoglm-phone-v1`、`structured-phone-v1`、`doubao-seed-phone-v1` 或 `gui-owl-phone-v1`。通用函数工具协议 `structured-tools-phone-v1` 也可显式声明，支持 Responses。Agent 的模型设置可覆盖全局手机模型，聊天模型保持独立；当前不自动切换备用手机模型。
 
 ### 使用自己的云端模型 Key（BYOK）
 

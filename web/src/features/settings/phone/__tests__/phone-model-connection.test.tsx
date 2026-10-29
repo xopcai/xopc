@@ -18,6 +18,7 @@ vi.mock('../phone-api', () => ({
   fetchPhoneModels: async () => ({ models: [
     { id: 'phone-provider/autoglm-phone', name: 'AutoGLM Phone', configured: fixture.configured, mock: false },
     { id: 'phone-mock/settings-about', name: 'Mock', configured: true, mock: true },
+    { id: 'opencode/gpt-visual', name: 'Unconfigured GPT', configured: false, mock: false },
   ] }),
 }));
 import { PhoneModelConnection } from '../phone-model-connection';
@@ -49,7 +50,10 @@ it('saves only the chosen phone route without modifying shared credentials', asy
   expect(container.textContent).toContain('手机模型已保存');
 });
 it('directs unconfigured models to central management instead of accepting a new key here', async () => {
-  fixture.configured = false; await render(); await choose('phone-provider/autoglm-phone');
+  fixture.configured = false; await render('phone-provider/autoglm-phone');
+  const selected = container.querySelector<HTMLOptionElement>('option[value="phone-provider/autoglm-phone"]')!;
+  expect(selected.disabled).toBe(true);
+  expect(selected.textContent).toContain('当前模型不可用');
   expect(container.textContent).toContain('请先配置凭据');
   expect(saveButton().disabled).toBe(true);
   expect(container.querySelector('input')).toBeNull(); expect(onSave).not.toHaveBeenCalled();
@@ -69,4 +73,13 @@ it('opens service configuration in place and retains an unsaved phone model choi
     expect(container.querySelector('select')?.value).toBe('phone-provider/autoglm-phone');
     expect(onSave).not.toHaveBeenCalled();
   } finally { window.removeEventListener('open-capability-settings', listener); }
+});
+
+it('only offers models with configured credentials in the phone picker', async () => {
+  await render('phone-provider/autoglm-phone');
+  const options = [...container.querySelectorAll('option')];
+  expect(options.some(option => option.value === 'phone-provider/autoglm-phone' && !option.disabled)).toBe(true);
+  expect(options.some(option => option.value.startsWith('opencode/'))).toBe(false);
+  expect(container.textContent).not.toContain('待配置凭据');
+  expect(container.textContent).not.toContain('Unconfigured GPT');
 });

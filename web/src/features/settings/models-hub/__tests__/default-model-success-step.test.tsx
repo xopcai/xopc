@@ -92,3 +92,12 @@ it('still filters dedicated computer models and unrelated providers for legacy p
   const model = {id:'custom/model',name:'Model',provider:'custom'};
   expect(defaultModelCandidates([model,{...model,id:'custom/gui',computerUse:{profile:'structured-tools-v1'}},{...model,id:'other/model',provider:'other'}],{providerId:'custom'})).toEqual([model]);
 });
+
+it('retains general visual models with phone and computer support as default chat candidates', () => {
+  const general = { id: 'openai/gpt-visual', name: 'GPT visual', provider: 'openai', vision: true,
+    phoneUse: { profile: 'structured-tools-phone-v1' as const, dedicated: false },
+    computerUse: { profile: 'structured-tools-v1' as const, dedicated: false } };
+  const specialist = { id: 'openai/gui', name: 'GUI', provider: 'openai', vision: true,
+    phoneUse: { profile: 'autoglm-phone-v1' as const, dedicated: true } };
+  expect(defaultModelCandidates([general, specialist], { providerId: 'openai' })).toEqual([general]);
+});

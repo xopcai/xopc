@@ -25,3 +25,11 @@ it('keeps inferred visual function-tool models in chat, vision and computer choi
     expect(buildPickerModels([model], filter, '')).toEqual([model]);
   }
 });
+
+it('keeps generic phone-capable GPT models in chat and vision while hiding phone specialists', () => {
+  const general: ConfiguredModel = { id: 'openai/gpt-visual', name: 'GPT visual', provider: 'openai', vision: true,
+    phoneUse: { profile: 'structured-tools-phone-v1', dedicated: false }, computerUse: { profile: 'structured-tools-v1', dedicated: false } };
+  const specialist: ConfiguredModel = { id: 'phone/autoglm', name: 'AutoGLM', provider: 'phone', vision: true,
+    phoneUse: { profile: 'autoglm-phone-v1', dedicated: true } };
+  for (const filter of [undefined, 'vision'] as const) expect(buildPickerModels([general, specialist], filter, '')).toEqual([general]);
+});

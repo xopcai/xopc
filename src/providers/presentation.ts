@@ -15,6 +15,7 @@ import {
   type DomesticProviderModelPreset,
 } from './domestic-presets.js';
 import { getProviderRegistry } from './plugin-registry.js';
+import { isDedicatedPhoneModel } from '../phone/model-policy.js';
 import { isDedicatedComputerModel } from '../computer/model-policy.js';
 
 export interface ModelCatalogView {
@@ -179,7 +180,7 @@ export function modelToCatalogView(model: Model<Api>): ModelCatalogView {
     ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
     ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}),
     vision: input.includes('image'),
-    recommended: !('phoneUse' in model && model.phoneUse) && !isDedicatedComputerModel(model) && isRecommendedModel(model.provider, model.id),
+    recommended: !isDedicatedPhoneModel(model) && !isDedicatedComputerModel(model) && isRecommendedModel(model.provider, model.id),
   };
 }
 
@@ -212,7 +213,7 @@ export function sortModelsForPicker(models: readonly Model<Api>[]): Model<Api>[]
 export function getRecommendedModelsForProvider(provider: string, limit = 4): ModelCatalogView[] {
   const models = sortModelsForPicker(getModelsByProvider(provider));
   const fromRegistry = models
-    .filter((model) => !('phoneUse' in model && model.phoneUse) && !isDedicatedComputerModel(model) && isRecommendedModel(provider, model.id))
+    .filter((model) => !isDedicatedPhoneModel(model) && !isDedicatedComputerModel(model) && isRecommendedModel(provider, model.id))
     .slice(0, limit)
     .map(modelToCatalogView);
   if (fromRegistry.length > 0) return fromRegistry;

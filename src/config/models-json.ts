@@ -1,3 +1,4 @@
+import { phoneModelProfile } from '../phone/model-policy.js';
 import { PhoneModelMetadataSchema } from '../phone/contracts.js';
 /**
  * Models.json configuration types and schema
@@ -419,8 +420,8 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 		if (providerConfig.models) {
 			for (let i = 0; i < providerConfig.models.length; i++) {
 				const model = providerConfig.models[i];
-                if (model.phoneUse && (!model.input?.includes('image') || (model.api ?? providerConfig.api) !== 'openai-completions')) {
-                  errors.push({ path: `providers.${providerName}.models[${i}].phoneUse`, message: 'Phone Use requires image input and OpenAI Chat Completions', severity: 'error' });
+                if (model.phoneUse && !phoneModelProfile({ ...model, api: model.api ?? providerConfig.api })) {
+                  errors.push({ path: `providers.${providerName}.models[${i}].phoneUse`, message: 'Phone Use requires image input and an API matching its protocol', severity: 'error' });
                 }
 				if (model.computerUse && !isComputerModel({ ...model, api: model.api ?? providerConfig.api })) {
 					errors.push({ path: `providers.${providerName}.models[${i}].computerUse`,

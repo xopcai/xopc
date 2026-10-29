@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { cloudCreditBudgetHeaders, reportCloudCreditError } from '../providers/xopc-cloud-credit-budget.js';
 
 import { currentPhoneTrace, measurePhonePhase, type PhoneModelMetric } from './execution-trace.js';
+import { phoneModelProfile } from './model-policy.js';
+import { predictPhoneToolDecision } from './structured-model.js';
 import { readPhoneModelResponse } from './model-response.js';
 import { AutoGlmHistory, autoGlmSystemPrompt, buildAutoGlmMessages } from './autoglm-protocol.js';
 
@@ -16,15 +18,11 @@ import { guiPhonePrompt, parseDoubaoPhone, parseGuiOwlPhone } from './gui-protoc
 import { getApiKey, resolveModel } from '../providers/index.js';
 import type { Config } from '../config/schema.js';
 import {
-  MOCK_PHONE_MODEL, PhoneDecisionSchema, PhoneError, PhoneModelMetadataSchema,
+  MOCK_PHONE_MODEL, PhoneDecisionSchema, PhoneError,
   type PhoneAction, type PhoneApplication, type PhoneDecision, type PhoneObservation, type PhoneCompletion, type PhoneTaskContract, type PhoneRequestedOutput,
 } from './contracts.js';
 
-export function phoneModelProfile(model: unknown) {
-  const candidate = model as { api?: string; input?: string[]; phoneUse?: unknown } | undefined;
-  const metadata = PhoneModelMetadataSchema.safeParse(candidate?.phoneUse);
-  return metadata.success && candidate?.api === 'openai-completions' && candidate.input?.includes('image') ? metadata.data.profile : undefined;
-}
+export { phoneModelProfile } from './model-policy.js';
 
 export function validatePhoneModelChange(next: { primary: string } | null | undefined, previous?: { primary: string } | null): void {
   if (!next || next.primary === previous?.primary || next.primary === MOCK_PHONE_MODEL) return;
@@ -310,6 +308,23 @@ export async function createPhoneModel(modelRef: string, config: Config, agentId
       const metric: PhoneModelMetric = { imageBytes: input.observation.frame.length, protocol: config.phone?.autoGlmProtocol ?? 'current',
         prompt: config.phone?.autoGlmPrompt ?? 'current', sampling: config.phone?.autoGlmSampling ?? 'current', transport: config.phone?.modelResponseMode ?? 'json' };
       try {
+        if (profile === 'structured-tools-phone-v1') {
+          metric.protocol = profile;
+          const deadline = AbortSignal.timeout(config.phone?.modelRequestTimeoutMs ?? 45_000);
+          try {
+            const requestSignal = AbortSignal.any([signal, deadline]);
+            requestSignal.throwIfAborted();
+            const currentKey = await getApiKey(model.provider, { agentId, appConfig: config });
+            if (!currentKey) throw new PhoneError('PHONE_MODEL_KEY_MISSING', 'Reconnect the model provider on the Gateway host');
+            const modelInput = { ...input, enhancements: { ...input.enhancements, hierarchicalPlanning: false } };
+            const instructions = `Operate the authorized Android phone using exactly one phone_decision function call. Coordinates are normalized to 0..1000 on both axes. Ground actions in the current screenshot and native UI. Use typeText only for a focused non-password editable field; mode replace changes existing contents, insert appends. Request needsUser for passwords, login, verification codes, CAPTCHA or an effect outside the authorized goal. Completion is a claim, verified separately by the host. ${input.readOnly ? PHONE_SCREEN_READING_RULES : PHONE_RECOVERY_RULES}${input.readingFields ? ' Return the requested readingFields as a compact JSON object encoded in complete.summary, with exactly those keys and visible string values or null. Do not merge fields.' : ''}${input.enhancements?.semanticControls ? ` ${PHONE_SEMANTIC_RULES}` : ''}`;
+            return await measurePhonePhase('model_request', () => predictPhoneToolDecision(model, currentKey, instructions,
+              buildPhoneModelContext(modelInput), modelInput, requestSignal, metric, started));
+          } catch (error) {
+            if (!signal.aborted && deadline.aborted) throw new PhoneError('PHONE_MODEL_TIMEOUT', 'Phone model request timed out; no action from this request was dispatched', 502);
+            throw error;
+          }
+        }
         // Native GUI profiles retain their action vocabulary; controllers run in the host.
         const nativeGui = profile === 'doubao-seed-phone-v1' || profile === 'gui-owl-phone-v1';
         const modelInput = profile !== 'structured-phone-v1'

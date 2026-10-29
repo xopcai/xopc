@@ -312,7 +312,7 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
             className={cn('flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-fg hover:bg-surface-hover disabled:opacity-50', interaction.focusRingPanel, model.id === value && 'bg-surface-hover')}
             onClick={() => onChange(model.id)}>
             <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2"><span className="truncate font-medium">{modelDisplayName(model, language)}</span>{(model.phoneUse || model.computerUse?.dedicated || model.reasoning) && <span className="shrink-0 text-xs text-fg-muted">{model.phoneUse ? (language === 'zh' ? '手机控制' : 'Phone control') : model.computerUse?.dedicated ? (language === 'zh' ? '电脑控制' : 'Computer control') : (language === 'zh' ? '推理' : 'Reasoning')}</span>}</span>
+              <span className="flex items-center gap-2"><span className="truncate font-medium">{modelDisplayName(model, language)}</span>{((model.phoneUse && model.phoneUse.dedicated !== false) || model.computerUse?.dedicated || model.reasoning) && <span className="shrink-0 text-xs text-fg-muted">{model.phoneUse && model.phoneUse.dedicated !== false ? (language === 'zh' ? '手机控制' : 'Phone control') : model.computerUse?.dedicated ? (language === 'zh' ? '电脑控制' : 'Computer control') : (language === 'zh' ? '推理' : 'Reasoning')}</span>}</span>
               {!groupByProvider && <span className="block truncate text-xs text-fg-muted">{model.provider}</span>}
               {outOfFilterNote && !model.vision && model.id === value && <span className="block text-xs text-fg-muted">{outOfFilterNote}</span>}
             </span>
