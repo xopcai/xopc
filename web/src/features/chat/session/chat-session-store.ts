@@ -24,6 +24,7 @@ import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { cloneMessageForRender } from '@/features/chat/messages/streaming';
+import { assistantAnswerContent } from '@/features/chat/messages/assistant-turn-content';
 
 /** Per-session chat UI and agent config. @see docs/web/chat-session-semantics.md */
 export type SessionHistoryStatus = 'unknown' | 'loading' | 'ready';
@@ -233,6 +234,19 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
       )
     ) {
       nextMessage.renderKey = existing.renderKey;
+      const finalText = (row: Message) => assistantAnswerContent(row.content)
+        .flatMap(part => part.type === 'text' ? [part.text] : []).join('\n\n');
+      const sameCompletedAnswer = existing.runStatus && message.fromHistory && samePersistedRow(existing, message)
+        && (!existing.outcome || !message.outcome || existing.outcome.runId === message.outcome.runId)
+        && Boolean(finalText(existing)) && finalText(existing) === finalText(message);
+      if (sameCompletedAnswer || assistantTurnVisuallyEquivalent(existing, message)) {
+        nextMessage.startedAt = existing.startedAt ?? (existing.completedAt != null ? existing.timestamp : undefined)
+          ?? nextMessage.startedAt;
+        nextMessage.completedAt ??= existing.completedAt;
+        if (!nextMessage.outcome || nextMessage.outcome.status === existing.outcome?.status) {
+          nextMessage.runStatus ??= existing.runStatus;
+        }
+      }
       const matchedParts = new Set<Message['content'][number]>();
       nextMessage.content.forEach((part, partIndex) => {
         const prior = part.type === 'text' && part.hydrated
@@ -662,6 +676,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         if (!current) return state;
         const base = current.streamingMsg ?? { role: 'assistant' as const, content: [], timestamp };
         const shell = produce(base, draft => {
+          delete draft.fromHistory;
+          delete draft.runStatus;
           draft.renderKey ??= `assistant-stream:${key}:${timestamp}`;
           draft.progressiveRender = true;
           delete draft.pendingResponseStatus;

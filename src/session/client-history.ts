@@ -20,6 +20,8 @@ export interface ClientHistoryMessage {
   taskTrigger?: TaskUpdateTrigger;
   displayIndex?: number;
   rawContent?: string | unknown[];
+  /** Preserve interruption semantics for clients rendering the final reply. */
+  stopReason?: 'aborted' | 'error';
   /** Persisted inbound attachment metadata used by chat clients to reload media. */
   media?: Message['media'];
   deliveries?: import('@xopcai/gateway-contract').ProductDeliveryEnvelope[];
@@ -315,6 +317,7 @@ export function messagesToClientHistory(
     }
 
     if (m.role === 'assistant') {
+      const stopReason = (m as Message & { stopReason?: string }).stopReason;
       const text = flattenMessageContent(m.content);
       const toolCalls = toolCallsWithResults(
         collectMessageToolCalls(m.content, m.tool_calls),
@@ -322,6 +325,7 @@ export function messagesToClientHistory(
       );
       out.push({
         role: 'assistant',
+        ...(stopReason === 'aborted' || stopReason === 'error' ? { stopReason } : {}),
         ...(PersonalProvenanceSchema.safeParse((m.metadata as Record<string, unknown> | undefined)?.personalProvenance).success
           ? { startsNewBubble: true, metadata: { personalProvenance: PersonalProvenanceSchema.parse((m.metadata as Record<string, unknown>)?.personalProvenance) } } : {}),
         ...(parseTaskResultDelivery((m.metadata as Record<string, unknown> | undefined)?.taskResultDelivery)
@@ -344,6 +348,7 @@ export function messagesToClientHistory(
 }
 
 type HistoryMessageRow = {
+  stopReason?: string;
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
   content?: string | unknown[];
   turnId?: string;
@@ -809,6 +814,7 @@ export function transcriptRowsToClientHistory(
     const rawContent = rawAssistantContent(messageRow.content);
     out.push({
       id,
+      ...(messageRow.stopReason === 'aborted' || messageRow.stopReason === 'error' ? { stopReason: messageRow.stopReason } : {}),
       ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
       ...(PersonalProvenanceSchema.safeParse((messageRow.metadata as Record<string, unknown> | undefined)?.personalProvenance).success
         ? { startsNewBubble: true, metadata: { personalProvenance: PersonalProvenanceSchema.parse((messageRow.metadata as Record<string, unknown>).personalProvenance) } } : {}),

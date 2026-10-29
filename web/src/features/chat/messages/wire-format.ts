@@ -21,6 +21,7 @@ export interface WireContentBlock {
 
 export interface WireMessage {
   id?: string;
+  stopReason?: string;
   role?: string;
   turnId?: string;
   startsNewBubble?: boolean;

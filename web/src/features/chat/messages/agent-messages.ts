@@ -127,6 +127,13 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       && !previous.personalProvenance && !m.personalProvenance
       && !(m.startsNewBubble && previous.turnId !== m.turnId)) {
       const prev = { ...previous, content: mergeAssistantContentFragments(previous.content, m.content) };
+      if (m.content.length > 0) {
+        delete prev.runStatus;
+        if (!m.fromHistory || (m.turnId && previous.turnId && m.turnId !== previous.turnId)) {
+          delete prev.outcome;
+          delete prev.completedAt;
+        }
+      }
       out[out.length - 1] = prev;
       if (m.timestamp != null) {
         prev.startedAt = Math.min(previous.startedAt ?? previous.timestamp ?? m.timestamp, m.startedAt ?? m.timestamp);
@@ -138,6 +145,8 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       if (m.progressiveRender) prev.progressiveRender = true;
       if (m.usage) prev.usage = m.usage;
       if (m.outcome) prev.outcome = m.outcome;
+      if (m.runStatus) prev.runStatus = m.runStatus;
+      prev.fromHistory = m.fromHistory;
       if (m.attachments?.length) {
         prev.attachments = dedupeAttachments([...(prev.attachments ?? []), ...m.attachments]);
       }
@@ -231,6 +240,9 @@ export function reconcileSessionSnapshot(prev: Message[], loaded: Message[]): Me
   const prevLast = prev[prevLastIdx];
   const loadedLast = loaded[loadedLastIdx];
   if (!prevLast || !loadedLast) return loaded;
+  // An authoritative history result can settle a stream whose terminal was lost.
+  if ((loadedLast.runStatus && loadedLast.runStatus !== prevLast.runStatus)
+    || (loadedLast.fromHistory && !prevLast.fromHistory && !prevLast.runStatus)) return loaded;
 
   if (!assistantTurnVisuallyEquivalent(prevLast, loadedLast)) {
     return loaded;
@@ -404,11 +416,13 @@ function normalizeUserTurnDocument(metadata: unknown): Message['userTurnDocument
 
 function buildAssistantMessage(m: WireMessage, segmentId: string): Message {
   const content = mergeAssistantContent(m);
+  const interrupted = m.stopReason === 'aborted' || m.stopReason === 'error';
   for (const block of content) {
     if (block.type === 'text' && !block.segmentId) {
       block.segmentId = segmentId;
       block.hydrated = true;
     }
+    if (block.type === 'text' && block.presentation !== 'narration' && interrupted) block.presentation = 'pending';
   }
   appendReviewFromMetadata(content, m.metadata);
   const outcome = parseTurnOutcome(asRecord(m.metadata)?.turnOutcome);
@@ -416,6 +430,8 @@ function buildAssistantMessage(m: WireMessage, segmentId: string): Message {
   const taskResultDelivery = parseTaskResultDelivery(asRecord(m.metadata)?.taskResultDelivery);
   return {
     role: 'assistant',
+    fromHistory: true,
+    ...(interrupted ? { runStatus: m.stopReason === 'aborted' ? 'cancelled' as const : 'error' as const } : {}),
     ...(m.turnId ? { turnId: m.turnId } : {}),
     ...(m.startsNewBubble ? { startsNewBubble: true } : {}),
     content,

@@ -1,4 +1,4 @@
-import type { PersonalProvenance } from '@xopcai/gateway-contract';
+import type { AgentStreamRunStatus, PersonalProvenance } from '@xopcai/gateway-contract';
 import type { AppContextEnvelope, TaskResultDelivery, ToolActivity, TurnOutcome, UserTurnDocument } from '@xopcai/gateway-contract';
 
 /** Canonical chat message model for the web UI (gateway chat + embedded agent chat). */
@@ -144,6 +144,10 @@ export interface Message {
   pendingAppContext?: AppContextEnvelope;
   /** Stable server run identifier used to attribute context and feedback. */
   turnId?: string;
+  /** Last authoritative run terminal; a disconnected stream alone is not completion. */
+  runStatus?: AgentStreamRunStatus;
+  /** A normalized transcript snapshot, as opposed to a locally interrupted stream. */
+  fromHistory?: boolean;
   /** Separates an unsolicited Agent update from the preceding assistant reply. */
   startsNewBubble?: boolean;
   /** Client-only identity that survives live-to-persisted message reconciliation. */

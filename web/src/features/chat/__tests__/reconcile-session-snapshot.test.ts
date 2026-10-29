@@ -3,10 +3,20 @@ import { describe, expect, it } from 'vitest';
 import {
   assistantTurnVisuallyEquivalent,
   reconcileSessionSnapshot,
+  sessionWireToUiMessages,
 } from '@/features/chat/messages/agent-messages';
 import type { Message } from '@/features/chat/messages/messages.types';
 
 describe('reconcileSessionSnapshot', () => {
+  it('adopts a settled history snapshot when the live terminal or message classification was lost', () => {
+    const local: Message[] = [{ role: 'assistant', turnId: 'run', content: [
+      { type: 'text', text: 'Result', presentation: 'pending', segmentId: 'live' },
+    ] }];
+    const history = sessionWireToUiMessages([{ role: 'assistant', turnId: 'run', content: 'Result' }]);
+    expect(reconcileSessionSnapshot(local, history)).toBe(history);
+    expect(reconcileSessionSnapshot([{ ...local[0], runStatus: 'suspended' }], history)).not.toBe(history);
+  });
+
   const user: Message = {
     role: 'user',
     content: [{ type: 'text', text: 'Hi' }],

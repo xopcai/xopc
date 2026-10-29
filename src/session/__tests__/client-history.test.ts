@@ -5,6 +5,12 @@ import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
+  it.each(['aborted', 'error'] as const)('preserves %s assistant stop semantics in both history projections', stopReason => {
+    const message = { role: 'assistant', content: 'Interrupted draft', stopReason } as never;
+    expect(messagesToClientHistory([message])[0]).toMatchObject({ stopReason });
+    expect(transcriptRowsToClientHistory([message])[0]).toMatchObject({ stopReason });
+  });
+
   it('hides routine allocation receipts, including old visible rows, while retaining actionable updates', () => {
     const rows = ['pending', 'selecting', 'assigned', 'blocked', 'failed', 'cancelled'].map(status => ({
       role: 'custom' as const, customType: 'task_allocation_status', display: true,
