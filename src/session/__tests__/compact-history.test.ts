@@ -3,6 +3,10 @@ import { compactHistory, productDeliveries } from '../compact-history.js';
 import { transcriptRowsToClientHistory } from '../client-history.js';
 
 describe('compact history', () => {
+  it('retains interrupted reply semantics in the compact projection', () => {
+    const [message] = compactHistory([{ role: 'assistant', content: 'Draft', stopReason: 'aborted' }]);
+    expect(message?.stopReason).toBe('aborted');
+  });
   it('removes private reasoning and tool data without modifying the default response', () => {
     const messages = transcriptRowsToClientHistory([
       { role: 'user', content: 'hello', metadata: { clientMessageId: 'client' } },

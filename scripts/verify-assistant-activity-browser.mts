@@ -173,8 +173,13 @@ try {
   await page.screenshot({ path: join(evidence, 'running-tools.png') });
   // Public narration remains in place; completed activity can be inspected separately.
   await disclosure.click();
+  await disclosure.evaluate(element => (element as HTMLButtonElement).blur());
   releaseResult();
   await workLog.locator('[data-status-phase]').waitFor({ state: 'detached' });
+  const processToggle = page.locator('[data-assistant-process-toggle]');
+  await processToggle.waitFor();
+  assert.equal(await processToggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.getByText('I will inspect the two activity fixtures.', { exact: true }).isVisible(), false);
   await page.locator('[data-chat-find-text]').filter({ hasText: 'ACTIVITY_E2E_FINAL' }).waitFor();
   assert.equal(await disclosure.getAttribute('aria-expanded'), 'false');
   assert.equal(await page.locator('[data-chat-find-text]').filter({ hasText: 'I will inspect' }).count(), 1);
@@ -188,6 +193,7 @@ try {
   assert(copied.includes('Verified'));
   assert(!copied.includes('I will inspect'));
   if (dropEnd !== 'all') assert(await finalBody.getByRole('table').evaluate((table, original) => table === original, streamingTable));
+  await processToggle.click();
   await disclosure.click();
   await page.getByText('I will inspect the two activity fixtures.', { exact: true }).waitFor();
   await workLog.locator('[data-activity-group] summary').first().click();
@@ -198,6 +204,8 @@ try {
   await page.locator('[data-chat-find-text]').filter({ hasText: 'ACTIVITY_E2E_FINAL' }).waitFor();
   assert.equal(page.url(), url);
   const history = page.locator('[data-assistant-work-log]').nth(1);
+  assert.equal(await processToggle.getAttribute('aria-expanded'), 'false');
+  await processToggle.click();
   assert.equal(await history.locator(':scope > button[aria-expanded]').getAttribute('aria-expanded'), 'false');
   await history.locator(':scope > button[aria-expanded]').click();
   assert(await history.locator('[data-activity-group]').count() >= 1);
@@ -228,10 +236,14 @@ try {
     await page.locator('[data-chat-find-text]').filter({ hasText: 'ACTIVITY_E2E_FINAL' }).waitFor();
     if (level === 'off') {
       // Failed tools remain inspectable even when routine activity is hidden.
+      await processToggle.waitFor({ state: 'hidden' });
       await page.getByText('I will inspect the two activity fixtures.', { exact: true }).waitFor({ state: 'hidden' });
       assert.equal(await page.locator('[data-assistant-thinking]').count(), 0);
       assert.equal(await page.getByText('I will inspect the two activity fixtures.', { exact: true }).isVisible(), false);
     } else {
+      await processToggle.waitFor();
+      assert.equal(await processToggle.getAttribute('aria-expanded'), 'false');
+      await processToggle.click();
       const toggle = page.locator('[data-assistant-work-log] > button[aria-expanded]').last();
       await toggle.waitFor();
       assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
@@ -245,6 +257,7 @@ try {
   await page.getByRole('checkbox', { name: 'Toggle advanced settings navigation' }).check();
   await page.getByLabel('Show tool debugging data', { exact: false }).check();
   await page.goto(url);
+  await processToggle.click();
   const debugToggle = page.locator('[data-assistant-work-log] > button[aria-expanded]').first();
   await debugToggle.click();
   assert.equal(await page.locator('[data-activity-group]').count(), 0);

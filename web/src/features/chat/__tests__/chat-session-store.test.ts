@@ -577,6 +577,47 @@ describe('useChatSessionStore', () => {
     });
   });
 
+  it('preserves authoritative terminal status and elapsed time through an equivalent history refresh', () => {
+    const store = useChatSessionStore.getState();
+    store.initSessionSnapshot(conversationId, idleSlice);
+    store.mutateSessionStreaming(conversationId, message => {
+      message.turnId = 'finished';
+      message.startedAt = 1000;
+      message.completedAt = 12000;
+      message.runStatus = 'success';
+      message.content.push({ type: 'text', text: 'Final answer', segmentId: 'live', presentation: 'answer' });
+    });
+    store.finalizeStreamingTurn(conversationId, getChatSessionSnapshot(conversationId)!.streamingMsg!);
+    const history = sessionWireToUiMessages([{ role: 'assistant', turnId: 'finished', id: 'stored', content: 'Final answer' }]);
+    store.setCommittedSnapshot(conversationId, { messages: [userMsg, ...history], hasMore: false });
+    expect(getChatSessionSnapshot(conversationId)!.messages[1]).toMatchObject({
+      runStatus: 'success', startedAt: 1000, completedAt: 12000,
+    });
+  });
+
+  it('keeps elapsed time when history normalizes tool output but preserves the final answer', () => {
+    const store = useChatSessionStore.getState();
+    store.initSessionSnapshot(conversationId, idleSlice);
+    store.mutateSessionStreaming(conversationId, message => {
+      message.turnId = 'finished';
+      message.startedAt = 1000;
+      message.completedAt = 12000;
+      message.runStatus = 'success';
+      message.content.push({ type: 'tool_use', id: 't', name: 'read_file', status: 'done', result: { content: [{ type: 'text', text: 'ok' }] } },
+        { type: 'text', text: 'Final answer', segmentId: 'live', presentation: 'answer' });
+    });
+    store.finalizeStreamingTurn(conversationId, getChatSessionSnapshot(conversationId)!.streamingMsg!);
+    const history = sessionWireToUiMessages([
+      { role: 'assistant', turnId: 'finished', id: 'tool', content: [{ type: 'toolCall', id: 't', name: 'read_file' }] },
+      { role: 'toolResult', toolCallId: 't', content: 'ok' },
+      { role: 'assistant', turnId: 'finished', id: 'stored', content: 'Final answer' },
+    ]);
+    store.setCommittedSnapshot(conversationId, { messages: [userMsg, ...history], hasMore: false });
+    expect(getChatSessionSnapshot(conversationId)!.messages[1]).toMatchObject({
+      runStatus: 'success', startedAt: 1000, completedAt: 12000,
+    });
+  });
+
   it('keeps the live row identity when the persisted snapshot has a different timestamp', () => {
     useChatSessionStore.getState().initSessionSnapshot(conversationId, {
       ...idleSlice,

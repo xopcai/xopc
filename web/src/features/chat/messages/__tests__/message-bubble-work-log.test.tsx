@@ -207,7 +207,7 @@ describe('ordered assistant conversation', () => {
       { type: 'text', text: '再核对一次。', presentation: 'narration', segmentId: 'two' },
       ...Array.from({ length: 4 }, (_, index) => ({ type: 'tool_use' as const, id: `read-${index}`, name: 'read_file', status: 'running' as const })),
     ] }, true, { reasoningLevel: 'stream' });
-    expect(container.querySelectorAll('[data-chat-find-text] > .assistant-markdown-content')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-chat-find-text] .assistant-markdown-content')).toHaveLength(2);
     expect(container.querySelectorAll('[data-activity-status="running"]')).toHaveLength(4);
     expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
   });

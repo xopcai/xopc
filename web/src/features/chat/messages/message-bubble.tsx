@@ -44,6 +44,7 @@ import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-task
 import { assistantVisibleMessage } from '@/features/chat/messages/assistant-visible-message';
 import { shouldShowAssistantWorkLog } from '@/features/chat/messages/message-row-visibility';
 import { getActivityTiming } from '@/features/chat/messages/activity-timing';
+import { useAssistantProcessDisclosure } from '@/features/chat/messages/assistant-process-disclosure';
 import { usesConversationText } from '@/features/chat/messages/personal-text-surface';
 import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { MessageContextAttachments } from '@/features/chat/messages/message-context-attachments';
@@ -306,6 +307,12 @@ export const MessageBubble = memo(function MessageBubble({
     if (assistantTurnView) return assistantTurnView.attachments;
     return message.attachments;
   }, [assistantTurnView, message.attachments]);
+  const processEnabled = isAssistant && !personal && !reasoningHidden && showAssistantWorkLog;
+  const processDisclosure = useAssistantProcessDisclosure({ message, isStreaming, enabled: processEnabled,
+    items: assistantTurnView?.workLog.items ?? [],
+    durationMs: message.completedAt != null ? assistantTurnView?.workLog.durationMs : undefined });
+  const processItems = useMemo(() => processEnabled ? new Set(assistantTurnView?.workLog.items) : undefined,
+    [processEnabled, assistantTurnView]);
   const detachedContextRefs = useMemo(() => {
     const inlineIds = new Set(message.userTurnDocument?.parts.flatMap(
       part => part.type === 'context_ref' ? [part.refId] : [],
@@ -563,7 +570,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [isUser, userCopyText]);
 
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
-  const assistantStepsBlock = assistantTurnView && (personal || reasoningHidden || !showAssistantWorkLog)
+  const assistantStepsBlock = assistantTurnView
     && shouldShowAssistantWorkLog(assistantTurnView, showAssistantWorkLog)
     && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0)
     ? <AssistantStepsBlock
@@ -648,11 +655,11 @@ export const MessageBubble = memo(function MessageBubble({
                 <span className="xopc-personal-thinking-dots" aria-hidden="true"><i /><i /><i /></span>
               </div>
             ) : null}
-            {assistantStepsBlock}
+            {personal ? assistantStepsBlock : null}
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 <div
-                  ref={isUser ? userMessageContentRef : undefined}
+                  ref={isUser ? userMessageContentRef : processDisclosure.contentRef}
                   data-chat-find-text
                   className={cn(
                     'relative min-w-0',
@@ -661,6 +668,7 @@ export const MessageBubble = memo(function MessageBubble({
                   )}
                   style={isUser && !userMessageExpanded ? { maxHeight: 'calc(10lh)' } : undefined}
                 >
+                  {processDisclosure.summary}
                   <ChunkedContent
                     taskRunId={message.taskResultDelivery?.taskRunId}
                     content={displayForFlow}
@@ -677,6 +685,8 @@ export const MessageBubble = memo(function MessageBubble({
                     contextRefs={message.contextRefs}
                     responseRunId={isAssistant ? message.turnId : undefined}
                     immediateFirstCommit={usesConversationText(message, personal)}
+                    processItems={processItems}
+                    processCollapsed={processDisclosure.collapsed}
                     renderActivity={!personal && assistantTurnView ? (blocks, isTail) => {
                       const active = isStreaming && (isTail || blocks.some(block => block.type === 'tool_use'
                         && block.status === 'running'));
@@ -688,7 +698,7 @@ export const MessageBubble = memo(function MessageBubble({
                         compact: false, expandedByDefault: reasoningLevel === 'stream' && active,
                         startedAt: timing.startedAt, durationMs: timing.durationMs }}
                         toolLabels={toolLabels} stepLabels={stepLabels} clusterLabels={clusterLabels}
-                        cardLabels={cardLabels} conversationId={conversationId} simplified={false} showThinking
+                        cardLabels={cardLabels} conversationId={conversationId} simplified={false} showThinking renderSurfaces={false}
                       />;
                     } : undefined}
                   />
@@ -714,6 +724,8 @@ export const MessageBubble = memo(function MessageBubble({
                 ) : null}
               </>
             ) : null}
+
+            {!personal ? assistantStepsBlock : null}
 
             {!personal && assistantTurnView && !assistantTurnView.answer.started && isStreaming
               && !displayForFlow.some(block => block.type === 'thinking' || block.type === 'tool_use') ? (

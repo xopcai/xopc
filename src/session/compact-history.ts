@@ -34,6 +34,7 @@ export function compactHistory(messages: ClientHistoryMessage[]): ClientHistoryM
     const outcome = message.metadata?.turnOutcome;
     if (!content && !mediaAndReview.length && !message.media?.length && !outcome && !deliveries.length && !activities.length) return [];
     return [{ id: message.id, turnId: message.turnId, startsNewBubble: message.startsNewBubble,
+      ...(message.stopReason ? { stopReason: message.stopReason } : {}),
       role: message.role, content, timestamp: message.timestamp,
       media: message.media, deliveries,
       rawContent: [...(content ? [{ type: 'text', text: content, presentation: narration ? 'narration' : 'answer' }] : []), ...activities, ...mediaAndReview],

@@ -109,8 +109,10 @@ export function AssistantStepsBlock({
   answerStarted = false,
   showThinking = false,
   surfacesOnly = false,
+  renderSurfaces = true,
 }: {
   surfacesOnly?: boolean;
+  renderSurfaces?: boolean;
   showThinking?: boolean;
   simplified?: boolean;
   personal?: boolean;
@@ -288,7 +290,7 @@ export function AssistantStepsBlock({
 
   if (personal || surfacesOnly) {
     return <>
-      {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
+      {renderSurfaces && workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
         <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
           cardLabels={cardLabels} conversationId={conversationId} surfaceOnly runActive={anyActive} />
       ))}
@@ -351,7 +353,7 @@ export function AssistantStepsBlock({
       }) : [];
     return (
       <div data-assistant-work-log data-work-log-status={workLog.status} className="my-1 min-w-0 w-full text-left">
-        {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
+        {renderSurfaces && workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
           <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
             cardLabels={cardLabels} conversationId={conversationId} surfaceOnly runActive={anyActive} />
         ))}
@@ -405,7 +407,7 @@ export function AssistantStepsBlock({
           aria-hidden
         /> : null}
       </button> : null}
-      {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
+      {renderSurfaces && workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
         <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
           cardLabels={cardLabels} conversationId={conversationId}surfaceOnly runActive={anyActive} />
       ))}

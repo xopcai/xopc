@@ -538,6 +538,8 @@ export function ChunkedContent({
   responseRunId,
   immediateFirstCommit = false,
   renderActivity,
+  processItems,
+  processCollapsed = false,
 }: {
   content: MessageContent[];
   taskRunId?: string;
@@ -555,8 +557,13 @@ export function ChunkedContent({
   responseRunId?: string;
   immediateFirstCommit?: boolean;
   renderActivity?: (blocks: Array<ThinkingContent | ToolUseContent>, isTail: boolean) => ReactNode;
+  processItems?: ReadonlySet<MessageContent>;
+  processCollapsed?: boolean;
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
+  const processKeys = new Set(processItems ? [...processItems].map(knownPartRenderKey).filter(Boolean) : []);
+  const isProcess = (block: MessageContent) => processItems?.has(block)
+    || Boolean(knownPartRenderKey(block) && processKeys.has(knownPartRenderKey(block)));
   const pendingTextIndex = renderContent.findLastIndex(
     (block) => block.type === 'text' && block.presentation === 'pending',
   );
@@ -585,7 +592,8 @@ export function ChunkedContent({
         i++;
       }
       if (renderActivity) nodes.push(
-        <div key={knownPartRenderKey(b) ?? `activity-${start}`} data-assistant-activity>
+        <div key={knownPartRenderKey(b) ?? `activity-${start}`} data-assistant-activity
+          data-assistant-process-item={processItems ? true : undefined} hidden={processCollapsed}>
           {renderActivity(activity, i === renderContent.length)}
         </div>,
       );
@@ -610,7 +618,10 @@ export function ChunkedContent({
         responseRunId,
         immediateFirstCommit,
       );
-      if (el) nodes.push(el);
+      if (el) nodes.push(processItems ? (
+        <div key={knownPartRenderKey(b) ?? `block-${i}`} data-assistant-process-item={isProcess(b) || undefined}
+          hidden={processCollapsed && isProcess(b)}>{el}</div>
+      ) : el);
       i++;
     }
   }

@@ -125,11 +125,12 @@ export function useChatSessionStreaming(deps: {
       let finalMsg: Message | null = null;
       if (cachedBubble) {
         const msg = ensureAssistantMessage(cachedBubble, Date.now());
+        msg.runStatus = terminalStatus;
         finalizePendingText(msg.content, terminalStatus === 'success');
         finalizeStreamingThinking(msg.content);
-        finalizeRunningTools(msg.content, terminalStatus === 'success');
+        if (terminalStatus !== 'suspended') finalizeRunningTools(msg.content, terminalStatus === 'success');
         finalizeRunningReviews(msg.content);
-        msg.completedAt = Date.now();
+        msg.completedAt = terminalStatus && terminalStatus !== 'suspended' ? Date.now() : undefined;
         finalMsg = cloneMessageForRender(msg);
       }
       if (finalMsg && hasRenderableAssistantContent(finalMsg) && cacheKey) {
