@@ -1650,6 +1650,12 @@ html.dark[data-color-scheme="porcelain"] {
   padding-inline-end: 0;
 }
 
+/* Previews must occlude the workspace even when the theme uses translucent surfaces. */
+.file-preview-surface {
+  background-color: var(--color-surface-base);
+  background-image: linear-gradient(var(--color-surface-inset), var(--color-surface-inset));
+}
+
 /* Composite translucent theme panels over a solid base so history never shows through. */
 .chat-composer-surface,
 .chat-composer-dock::before {

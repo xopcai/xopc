@@ -539,7 +539,7 @@ async function loadStartupRecoveryPage(
 ): Promise<void> {
   currentStartupFailure = enrichStartupFailureForElectron(failure);
   appendElectronStartupLog(`startup recovery kind=${currentStartupFailure.kind} message=${currentStartupFailure.message}`);
-  await loadMainWindowUrl(win, getStartupRecoveryPageDataUrl(app.getLocale(), currentStartupFailure));
+  await loadMainWindowUrl(win, getStartupRecoveryPageDataUrl(getElectronShellLanguage(), currentStartupFailure));
 }
 
 function assertStartupRecoveryRenderer(event: IpcMainInvokeEvent): void {
@@ -1022,7 +1022,7 @@ function createWindow(): void {
           if (!win.isDestroyed()) {
             void win
               .loadURL(
-                getRendererCrashPageDataUrl(app.getLocale(), msg, {
+                getRendererCrashPageDataUrl(getElectronShellLanguage(), msg, {
                   openedExternal: openBrowserOnRendererCrash && canOpenExternal,
                 }),
               )

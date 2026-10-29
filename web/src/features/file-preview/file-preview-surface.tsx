@@ -10,7 +10,7 @@ export function FilePreviewSurface({ expanded, children }: { expanded: boolean; 
   const contentSurface = expanded ? anchorRef.current?.closest<HTMLElement>('.app-main-surface')
     ?? document.querySelector<HTMLElement>('.app-main-surface') : null;
   const panel = <div data-file-preview-expanded={expanded || undefined} data-browser-occluder={expanded || undefined}
-    className={cn('flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-inset [&_.markdown-body_h1]:border-b-0! [&_.markdown-body_h2]:border-b-0!',
+    className={cn('file-preview-surface flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden [&_.markdown-body_h1]:border-b-0! [&_.markdown-body_h2]:border-b-0!',
       expanded && (contentSurface ? 'absolute inset-0 z-[115]' : 'fixed inset-0 z-[115] h-[100dvh] w-screen'),
       expanded && !contentSurface && electronPreviewViewportClass())}>
     {children}
