@@ -9,6 +9,8 @@ vi.mock('@/features/extensions/extension-provider', () => ({ useUiExtensions: ()
 
 import { MessageBubble } from '@/features/chat/messages/message-bubble';
 import { useLocaleStore } from '@/stores/locale-store';
+import { sessionWireToUiMessages } from '../agent-messages';
+import { useDevViewStore } from '@/stores/dev-view-store';
 import type { Message, ReasoningLevel } from '../messages.types';
 
 describe('MessageBubble assistant work log', () => {
@@ -92,119 +94,132 @@ describe('MessageBubble assistant work log', () => {
   });
 });
 
-// Exercise a complete live-to-final transition through the real message renderer.
-describe('lightweight assistant activity', () => {
+describe('ordered assistant conversation', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     useLocaleStore.setState({ language: 'zh' });
+    useDevViewStore.setState({ showRawToolData: false });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
   });
-  afterEach(() => { act(() => root.unmount()); container.remove(); });
-  const tool = { type: 'tool_use' as const, id: 'query', name: 'vendor__customer_export', status: 'running' as const,
-    input: { command: 'cat /private/secret' } };
-  function render(active: boolean, answer = '', failed = false) {
-    act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', timestamp: 1000,
-      ...(failed ? { outcome: { version: 1, outcomeId: 'o', runId: 'r', turnId: 'r', status: 'failed', deliverables: [], evidence: [], createdAt: '2026-10-17' } as const } : {}),
-      content: [{ type: 'text', text: '正在核对相关资料。', presentation: 'narration', segmentId: 'progress' },
-        { ...tool, status: active ? 'running' : failed ? 'error' : 'done', result: failed ? 'INTERNAL_ERROR /private/secret' : 'ok' },
-        ...(answer ? [{ type: 'text' as const, text: answer, presentation: 'answer' as const, segmentId: 'answer' }] : [])] }}
-      isStreaming={active} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
+  afterEach(() => { act(() => root.unmount()); container.remove(); useDevViewStore.setState({ showRawToolData: false }); });
+  const content: Message['content'] = [
+    { type: 'text', text: '先核对文件。', presentation: 'narration', segmentId: 'opening' },
+    { type: 'thinking', text: '分析文件之间的关系。', streaming: true },
+    { type: 'tool_use', id: 'read', toolCallId: 'read', name: 'read_file', status: 'running', input: { path: 'report.ts' }, result: 'file contents' },
+    { type: 'text', text: '核对结果。', presentation: 'pending', segmentId: 'final' },
+  ];
+  function render(message: Message, active: boolean, options: { reasoningLevel?: ReasoningLevel; personal?: boolean; showAssistantWorkLog?: boolean } = {}) {
+    act(() => root.render(<MemoryRouter><MessageBubble message={message} isStreaming={active} progress={null}
+      responseFeedbackEnabled={false} {...options} /></MemoryRouter>));
   }
-  it('shows concrete progress with a text status and no three-dot bubble', () => {
-    render(true);
-    expect(container.textContent).toContain('正在核对相关资料。');
-    expect(container.textContent).not.toMatch(/customer.export|private\/secret|其他操作|cat /);
-    expect(container.querySelector('[data-assistant-running] svg')).not.toBeNull();
+  function complete(): Message['content'] {
+    return content.map(block => block.type === 'tool_use' ? { ...block, status: 'done' }
+      : block.type === 'thinking' ? { ...block, streaming: false }
+      : block.type === 'text' && block.segmentId === 'final' ? { ...block, presentation: 'answer' } : block);
+  }
+  function disclosure(): HTMLButtonElement {
+    return container.querySelector('[data-assistant-work-log] button[aria-expanded]')!;
+  }
+  it('preserves public messages around tool items through completion and hydration', () => {
+    const check = () => {
+      const messages = [...container.querySelectorAll('.assistant-markdown-content')];
+      expect(messages.map(node => node.textContent)).toEqual(['先核对文件。', '核对结果。']);
+      const activity = container.querySelector('[data-assistant-activity]')!;
+      expect(messages[0].compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(activity.compareDocumentPosition(messages[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(container.querySelector('.xopc-personal-thinking-dots')).toBeNull();
+    };
+    render({ role: 'assistant', content }, true);
+    check();
+    const final = container.querySelectorAll('.assistant-markdown-content')[1];
+    render({ role: 'assistant', content: complete() }, false);
+    check();
+    expect(container.querySelectorAll('.assistant-markdown-content')[1]).toBe(final);
+    const [history] = sessionWireToUiMessages([
+      { role: 'assistant', id: 'opening', content: complete().slice(0, 3) },
+      { role: 'toolResult', toolCallId: 'read', content: 'ok' },
+      { role: 'assistant', id: 'final', content: complete().slice(3) },
+    ]);
+    render(history, false);
+    check();
+  });
+  it('keeps lightweight process details collapsed and inspectable', () => {
+    render({ role: 'assistant', content: complete() }, false, { reasoningLevel: 'on' });
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector('[data-assistant-thinking]')).toBeNull();
+    act(() => disclosure().click());
+    expect(container.querySelector('[data-assistant-thinking]')?.textContent).toContain('分析文件之间的关系。');
+    expect(container.querySelector('[data-activity-status="completed"]')).not.toBeNull();
+    expect(container.querySelector('[data-assistant-activity-flow]')?.textContent).not.toContain('先核对文件。');
+    expect(container.querySelector('[data-assistant-activity-flow] details')?.hasAttribute('open')).toBe(false);
+  });
+  it('automatically expands live details only in realtime mode and closes them on completion', () => {
+    render({ role: 'assistant', content: content.slice(0, 3) }, true, { reasoningLevel: 'stream' });
+    expect(disclosure().getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('[data-assistant-thinking]')?.textContent).toContain('分析文件之间的关系。');
+    expect(container.querySelector('[data-activity-status="running"]')).not.toBeNull();
+    render({ role: 'assistant', content: complete() }, false, { reasoningLevel: 'stream' });
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector('[role="status"]')).toBeNull();
+  });
+  it('respects a user closing realtime details while tokens continue', () => {
+    render({ role: 'assistant', content: content.slice(0, 3) }, true, { reasoningLevel: 'stream' });
+    act(() => disclosure().click());
+    render({ role: 'assistant', content: [...content.slice(0, 3), { type: 'thinking', text: '继续检查', streaming: true }] }, true, { reasoningLevel: 'stream' });
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
+  });
+  it.each([{ reasoningLevel: 'off' as const }, { reasoningLevel: 'stream' as const, showAssistantWorkLog: false }])('honors concise configuration: %j', options => {
+    render({ role: 'assistant', content: complete() }, false, options);
+    expect(container.textContent).toContain('核对结果。');
+    expect(container.textContent).not.toMatch(/先核对文件|分析文件|读取文件/);
+    expect(container.querySelector('[data-assistant-activity]')).toBeNull();
+    render({ role: 'assistant', content: content.slice(0, 3) }, true, options);
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
     expect(container.querySelector('.xopc-personal-thinking-dots')).toBeNull();
-    expect(container.querySelector('[data-assistant-running] [role="status"]')?.textContent).toBeTruthy();
-    expect(container.querySelector('[data-assistant-running] .tabular-nums')).not.toBeNull();
-    expect(container.querySelector('button[aria-expanded]')).toBeNull();
-    expect(container.querySelectorAll('[data-assistant-work-log] [role="status"]')).toHaveLength(1);
-    const flow = container.querySelector('[data-assistant-activity-flow]')!;
-    const status = container.querySelector('[data-assistant-work-log] [role="status"]')!;
-    expect(flow.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    render(false, '最终结果保持完整。');
-    expect(container.textContent).not.toContain('正在核对相关资料。');
-    expect(container.textContent).toContain('最终结果保持完整。');
-    expect(container.querySelector('[data-assistant-work-log] [role="status"]')).toBeNull();
   });
-
-  it('keeps one bottom indicator while the final answer streams and preserves the answer DOM', () => {
-    render(true, '保留这段答案。');
-    expect(container.textContent).not.toContain('正在核对相关资料。');
-    const answer = container.querySelector('[data-chat-find-text]')!;
-    const status = container.querySelector('[data-assistant-work-log] [role="status"]')!;
-    expect(status.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    render(false, '保留这段答案。');
-    expect(container.querySelector('[data-chat-find-text]')).toBe(answer);
-    expect(container.querySelector('[data-assistant-work-log] [role="status"]')).toBeNull();
+  it('keeps failed tools inspectable in concise mode', () => {
+    render({ role: 'assistant', content: [
+      { type: 'tool_use', id: 'failed', name: 'exec_command', status: 'error', result: 'PRIVATE_INTERNAL_ERROR' },
+      { type: 'text', text: '这部分暂时无法获取。', presentation: 'answer' },
+    ] }, false, { reasoningLevel: 'off', showAssistantWorkLog: false });
+    expect(disclosure()).not.toBeNull();
+    expect(container.textContent).toContain('这部分暂时无法获取。');
+    expect(container.textContent).not.toContain('PRIVATE_INTERNAL_ERROR');
+    act(() => disclosure().click());
+    expect(container.querySelector('[data-activity-status="failed"]')).not.toBeNull();
   });
-
-  it('keeps failures human-readable and stops loading without exposing technical errors', () => {
-    render(true);
-    render(false, '这部分暂时无法获取。', true);
-    expect(container.textContent).toContain('暂时没能完成');
-    expect(container.textContent).not.toMatch(/INTERNAL_ERROR|private\/secret|已完成 ·/);
-    expect(container.querySelector('[data-assistant-work-log] [role="status"]')).toBeNull();
+  it('does not replay process as plain tool-title paragraphs for partial outcomes', () => {
+    render({ role: 'assistant', content: complete(), outcome: { version: 1, outcomeId: 'o', runId: 'r', turnId: 'r',
+      status: 'partial', deliverables: [], evidence: [], createdAt: '2026-10-29' } }, false);
+    expect([...container.querySelectorAll('.assistant-markdown-content')].map(node => node.textContent))
+      .toEqual(['先核对文件。', '核对结果。']);
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector('[data-assistant-activity-flow]')).toBeNull();
+    expect(container.textContent).not.toContain('已完成部分内容');
   });
-
-  it('uses only one indicator for unknown parallel tools and generic narration', () => {
-    act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', content: [
-      { type: 'thinking', text: 'Private reasoning', streaming: true },
-      { type: 'text', text: '正在处理...', presentation: 'narration' },
-      ...Array.from({ length: 6 }, (_, index) => ({ ...tool, id: `tool-${index}` })),
-    ] }} isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
-    expect(container.textContent).not.toMatch(/其他操作|Private reasoning|customer.export/);
-    expect(container.querySelector('[data-assistant-running]')?.textContent).toContain('6');
-    expect(container.querySelectorAll('[data-assistant-work-log] [role="status"]')).toHaveLength(1);
-    expect(container.querySelector('[data-activity-group]')).toBeNull();
-    expect(container.querySelector('[data-assistant-running] [role="status"]')?.textContent).toBeTruthy();
+  it('retains distinct repeated narration and each parallel tool identity', () => {
+    render({ role: 'assistant', content: [
+      { type: 'text', text: '再核对一次。', presentation: 'narration', segmentId: 'one' },
+      { type: 'text', text: '再核对一次。', presentation: 'narration', segmentId: 'two' },
+      ...Array.from({ length: 4 }, (_, index) => ({ type: 'tool_use' as const, id: `read-${index}`, name: 'read_file', status: 'running' as const })),
+    ] }, true, { reasoningLevel: 'stream' });
+    expect(container.querySelectorAll('[data-chat-find-text] > .assistant-markdown-content')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-activity-status="running"]')).toHaveLength(4);
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+  it.each([false, true])('uses only three dots for Personal activity even with developer mode=%s', showRawToolData => {
+    useDevViewStore.setState({ showRawToolData });
+    render({ role: 'assistant', content: content.slice(0, 3) }, true, { personal: true, reasoningLevel: 'stream' });
+    expect(container.querySelectorAll('.xopc-personal-thinking-dots i')).toHaveLength(3);
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(container.textContent).not.toMatch(/先核对文件|分析文件|读取文件/);
+    render({ role: 'assistant', content: complete() }, false, { personal: true });
+    expect(container.textContent).toContain('核对结果。');
+    expect(container.textContent).not.toMatch(/先核对文件|分析文件|读取文件/);
     expect(container.querySelector('.xopc-personal-thinking-dots')).toBeNull();
-  });
-
-  it('shows concrete phone operations even when the assistant has not sent narration', () => {
-    const show = (active: boolean) => act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', content: [
-      { ...tool, id: 'connect', name: 'phone_use', input: { op: 'open', deviceId: 'private-device' }, status: 'done' },
-      { ...tool, id: 'inspect', name: 'phone_use', input: { op: 'observe' }, status: 'done' },
-      { ...tool, id: 'operate', name: 'phone_use', input: { op: 'run', goal: 'private task with credentials' }, status: active ? 'running' : 'done' },
-      ...(!active ? [{ type: 'text' as const, text: '手机任务结果。', presentation: 'answer' as const }] : []),
-    ] }} isStreaming={active} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
-    show(true);
-    const flow = container.querySelector('[data-assistant-activity-flow]')!;
-    expect(flow.textContent).toContain('已检查手机连接');
-    expect(flow.textContent).toContain('已查看手机当前画面');
-    expect(flow.textContent).toContain('正在执行手机任务');
-    expect(container.textContent).not.toMatch(/private|phone_use|正在处理|其他操作/);
-    expect(flow.querySelector('svg')).toBeNull();
-    expect(container.querySelectorAll('[data-assistant-running]')).toHaveLength(1);
-    show(false);
-    expect(container.textContent).toContain('手机任务结果。');
-    expect(container.textContent).not.toContain('已查看手机当前画面');
-  });
-
-  it('deduplicates known parallel operations without hiding the actual activity', () => {
-    act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', content:
-      Array.from({ length: 4 }, (_, index) => ({ ...tool, id: `read-${index}`, name: 'read_file' })),
-    }} isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
-    const flow = container.querySelector('[data-assistant-activity-flow]')!;
-    expect(flow.textContent).toContain('正在读取文件');
-    expect(flow.querySelectorAll('.markdown-body')).toHaveLength(1);
-    expect(container.querySelectorAll('[data-assistant-running]')).toHaveLength(1);
-  });
-
-  it('shows all concrete narration in order and deduplicates replay without folding', () => {
-    const progress = Array.from({ length: 7 }, (_, index) => ({ type: 'text' as const,
-      text: `已核对资料 ${index + 1}`, presentation: 'narration' as const, segmentId: `stage-${index}` }));
-    act(() => root.render(<MemoryRouter><MessageBubble message={{ role: 'assistant', content: [
-      ...progress, { ...progress[0], segmentId: 'replay' },
-    ] }} isStreaming progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
-    const flow = container.querySelector('[data-assistant-activity-flow]')!;
-    expect(flow.textContent).toBe(progress.map(item => item.text).join(''));
-    expect(flow.querySelectorAll('.markdown-body')).toHaveLength(7);
-    expect(container.querySelector('button[aria-expanded]')).toBeNull();
   });
 });

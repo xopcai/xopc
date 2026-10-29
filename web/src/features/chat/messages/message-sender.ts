@@ -256,8 +256,8 @@ export type MessagingCallbacks = {
     presentation: 'narration' | 'answer',
     usage?: Message['usage'],
   ) => void;
-  onThinking: (content: string, isDelta: boolean) => void;
-  onThinkingEnd: () => void;
+  onThinking: (content: string, isDelta: boolean, messageId?: string) => void;
+  onThinkingEnd: (messageId?: string) => void;
   onToolStart: (
     toolName: string,
     args: unknown,
@@ -759,13 +759,14 @@ export class MessageSender {
         }
         break;
       case 'thinking_delta':
-        if (typeof payload.delta === 'string' && payload.delta) cb?.onThinking(payload.delta, true);
+        if (typeof payload.delta === 'string' && payload.delta) cb?.onThinking(payload.delta, true,
+          typeof payload.messageId === 'string' ? payload.messageId : undefined);
         break;
       case 'thinking_end':
-        cb?.onThinkingEnd();
+        cb?.onThinkingEnd(typeof payload.messageId === 'string' ? payload.messageId : undefined);
         break;
       case 'assistant_message_end':
-        cb?.onThinkingEnd();
+        cb?.onThinkingEnd(typeof payload.messageId === 'string' ? payload.messageId : undefined);
         if (
           typeof payload.messageId === 'string'
           && (payload.presentation === 'narration' || payload.presentation === 'answer')

@@ -21,6 +21,8 @@ import type {
   MessageContextRef,
   MessageContent,
   ReviewContent,
+  ThinkingContent,
+  ToolUseContent,
 } from '@/features/chat/messages/messages.types';
 import { UserMessageSegments } from '@/features/chat/messages/user-message-segments';
 import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
@@ -535,6 +537,7 @@ export function ChunkedContent({
   contextRefs,
   responseRunId,
   immediateFirstCommit = false,
+  renderActivity,
 }: {
   content: MessageContent[];
   taskRunId?: string;
@@ -551,6 +554,7 @@ export function ChunkedContent({
   contextRefs?: MessageContextRef[];
   responseRunId?: string;
   immediateFirstCommit?: boolean;
+  renderActivity?: (blocks: Array<ThinkingContent | ToolUseContent>, isTail: boolean) => ReactNode;
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const pendingTextIndex = renderContent.findLastIndex(
@@ -572,11 +576,19 @@ export function ChunkedContent({
     const b = renderContent[i];
 
     if (b.type === 'thinking' || b.type === 'tool_use') {
+      const start = i;
+      const activity: Array<ThinkingContent | ToolUseContent> = [];
       while (i < renderContent.length) {
         const activityBlock = renderContent[i];
         if (activityBlock.type !== 'thinking' && activityBlock.type !== 'tool_use') break;
+        activity.push(activityBlock);
         i++;
       }
+      if (renderActivity) nodes.push(
+        <div key={knownPartRenderKey(b) ?? `activity-${start}`} data-assistant-activity>
+          {renderActivity(activity, i === renderContent.length)}
+        </div>,
+      );
     } else {
       const imgIdx = b.type === 'image' ? imageOrdinal++ : 0;
       const el = renderTextOrImageBlock(

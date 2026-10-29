@@ -64,7 +64,7 @@ describe('MessageList visible rows', () => {
     render([tool, thinking], { personal: false, showAssistantWorkLog: true });
     expect(rows()).toHaveLength(2);
     render([tool, thinking], { personal: false, showAssistantWorkLog: true, reasoningLevel: 'off' });
-    expect(rows()).toHaveLength(1);
+    expect(rows()).toHaveLength(0);
   });
 
   it('keeps task prompts and their anchors even when the associated assistant reply is empty or silent', () => {
@@ -98,7 +98,7 @@ describe('MessageList visible rows', () => {
       { type: 'tool_use', id: 'failed-tool', name: 'read', status: 'error', result: 'Tool failed' },
     ] }], { personal: false });
     expect(rows()).toHaveLength(1);
-    expect(container.querySelector('button[aria-expanded]')).toBeNull();
+    expect(container.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
     expect(container.querySelector('[data-assistant-work-log]')?.textContent).toBeTruthy();
     expect(container.textContent).not.toContain('Tool failed');
   });

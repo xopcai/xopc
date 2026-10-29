@@ -293,7 +293,7 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
     }
 
     if (role === 'assistant') {
-      out.push(buildAssistantMessage(m));
+      out.push(buildAssistantMessage(m, m.id ?? `history:${out.length}`));
       continue;
     }
   }
@@ -402,8 +402,14 @@ function normalizeUserTurnDocument(metadata: unknown): Message['userTurnDocument
   };
 }
 
-function buildAssistantMessage(m: WireMessage): Message {
+function buildAssistantMessage(m: WireMessage, segmentId: string): Message {
   const content = mergeAssistantContent(m);
+  for (const block of content) {
+    if (block.type === 'text' && !block.segmentId) {
+      block.segmentId = segmentId;
+      block.hydrated = true;
+    }
+  }
   appendReviewFromMetadata(content, m.metadata);
   const outcome = parseTurnOutcome(asRecord(m.metadata)?.turnOutcome);
   const personalProvenance = PersonalProvenanceSchema.safeParse(asRecord(m.metadata)?.personalProvenance);
@@ -700,6 +706,7 @@ function normalizeContentBlocks(raw: unknown, messageStartedAt?: number): Messag
       out.push({
         type: 'text',
         text: item.text,
+        ...(item.segmentId ? { segmentId: item.segmentId } : {}),
         ...(presentation ? { presentation } : {}),
       });
     } else if (t === 'thinking') {

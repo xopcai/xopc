@@ -8,6 +8,8 @@ export type TextContent = {
   text: string;
   /** One model message segment within an assistant turn. */
   segmentId?: string;
+  /** History-derived identity may be rebound to the live message id using its offset. */
+  hydrated?: boolean;
   /** Pending text stays in the public answer area until the segment is classified. */
   presentation?: 'pending' | 'narration' | 'answer';
 };
@@ -48,6 +50,7 @@ export type ToolUseContent = {
 export type ThinkingContent = {
   type: 'thinking';
   text: string;
+  segmentId?: string;
   streaming?: boolean;
 };
 

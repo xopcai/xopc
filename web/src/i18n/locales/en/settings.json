@@ -1091,12 +1091,12 @@
     "aboutApp": "About",
     "activityDetailDefaultTitle": "AI activity detail",
     "activityDetailDefaultDescription": "Choose how conversations present analysis and tool execution.",
-    "activityDetailDefaultHint": "This setting applies globally to all web conversations.",
+    "activityDetailDefaultHint": "Applies to Agent chats. Personal AI always uses a three-dot activity indicator.",
     "activityDetailSaving": "Saving…",
     "activityDetailSaveError": "Could not save the activity detail default.",
     "activityDetailLevels": {
       "off": "Concise · hide normal activity",
-      "on": "Lightweight activity · collapses on completion",
+      "on": "Lightweight · collapse activity details",
       "stream": "Live · expand while working"
     },
     "developerGroupTitle": "Developer",

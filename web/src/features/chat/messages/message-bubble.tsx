@@ -43,6 +43,7 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
 import { assistantVisibleMessage } from '@/features/chat/messages/assistant-visible-message';
 import { shouldShowAssistantWorkLog } from '@/features/chat/messages/message-row-visibility';
+import { getActivityTiming } from '@/features/chat/messages/activity-timing';
 import { usesConversationText } from '@/features/chat/messages/personal-text-surface';
 import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { MessageContextAttachments } from '@/features/chat/messages/message-context-attachments';
@@ -290,9 +291,15 @@ export const MessageBubble = memo(function MessageBubble({
   );
   /** Images use AttachmentRenderer rather than rendering inline in the text column. */
   const displayForFlow = useMemo(
-    () => assistantTurnView?.answerContent
-      ?? (message.content ?? []).filter((block) => block.type !== 'image'),
-    [assistantTurnView, message.content],
+    () => {
+      if (!assistantTurnView) return (message.content ?? []).filter(block => block.type !== 'image');
+      if (personal) return assistantTurnView.answerContent;
+      if (!reasoningHidden && showAssistantWorkLog) return (message.content ?? []).filter(block => block.type !== 'image');
+      const answer = new Set(assistantTurnView.answerContent);
+      return (message.content ?? []).filter(block => answer.has(block) || (block.type === 'tool_use'
+        && (block.status === 'error' || block.activity?.status === 'failed')));
+    },
+    [assistantTurnView, message.content, personal, reasoningHidden, showAssistantWorkLog],
   );
 
   const attachmentsForBubble = useMemo(() => {
@@ -556,7 +563,8 @@ export const MessageBubble = memo(function MessageBubble({
   }, [isUser, userCopyText]);
 
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
-  const assistantStepsBlock = assistantTurnView && shouldShowAssistantWorkLog(assistantTurnView, showAssistantWorkLog)
+  const assistantStepsBlock = assistantTurnView && (personal || reasoningHidden || !showAssistantWorkLog)
+    && shouldShowAssistantWorkLog(assistantTurnView, showAssistantWorkLog)
     && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0)
     ? <AssistantStepsBlock
         workLog={assistantTurnView.workLog}
@@ -568,6 +576,7 @@ export const MessageBubble = memo(function MessageBubble({
         conversationId={conversationId}
         simplified={!personal}
         personal={personal}
+        surfacesOnly={!personal}
         answerStarted={assistantTurnView.answer.started}
       />
     : null;
@@ -647,7 +656,7 @@ export const MessageBubble = memo(function MessageBubble({
                   data-chat-find-text
                   className={cn(
                     'relative min-w-0',
-                    isUser && 'flex flex-col gap-2',
+                    'flex flex-col gap-3',
                     isUser && !userMessageExpanded && 'overflow-hidden',
                   )}
                   style={isUser && !userMessageExpanded ? { maxHeight: 'calc(10lh)' } : undefined}
@@ -668,6 +677,20 @@ export const MessageBubble = memo(function MessageBubble({
                     contextRefs={message.contextRefs}
                     responseRunId={isAssistant ? message.turnId : undefined}
                     immediateFirstCommit={usesConversationText(message, personal)}
+                    renderActivity={!personal && assistantTurnView ? (blocks, isTail) => {
+                      const active = isStreaming && (isTail || blocks.some(block => block.type === 'tool_use'
+                        && block.status === 'running'));
+                      const timing = getActivityTiming(blocks);
+                      return <AssistantStepsBlock
+                        workLog={{ items: blocks, active, status: active ? 'running'
+                          : blocks.some(block => block.type === 'tool_use' && (block.status === 'error'
+                            || block.activity?.status === 'failed')) ? 'failed' : 'completed',
+                        compact: false, expandedByDefault: reasoningLevel === 'stream' && active,
+                        startedAt: timing.startedAt, durationMs: timing.durationMs }}
+                        toolLabels={toolLabels} stepLabels={stepLabels} clusterLabels={clusterLabels}
+                        cardLabels={cardLabels} conversationId={conversationId} simplified={false} showThinking
+                      />;
+                    } : undefined}
                   />
                   {showStreamingCursor ? (
                     <span aria-hidden data-chat-streaming-cursor
@@ -691,6 +714,13 @@ export const MessageBubble = memo(function MessageBubble({
                 ) : null}
               </>
             ) : null}
+
+            {!personal && assistantTurnView && !assistantTurnView.answer.started && isStreaming
+              && !displayForFlow.some(block => block.type === 'thinking' || block.type === 'tool_use') ? (
+                <AssistantStepsBlock workLog={{ items: [], active: true, status: 'running', compact: true, expandedByDefault: false }}
+                  pendingStatus={message.pendingResponseStatus} toolLabels={toolLabels} stepLabels={stepLabels}
+                  clusterLabels={clusterLabels} cardLabels={cardLabels} conversationId={conversationId} />
+              ) : null}
 
             {!personal && !isUser && message.taskResultDelivery && conversationId ? (
               <div className="flex flex-wrap items-center gap-2" data-result-follow-up>

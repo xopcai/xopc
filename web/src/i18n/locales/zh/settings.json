@@ -1091,12 +1091,12 @@
     "aboutApp": "关于",
     "activityDetailDefaultTitle": "AI 执行动态",
     "activityDetailDefaultDescription": "设置所有对话如何展示分析过程与工具执行。",
-    "activityDetailDefaultHint": "此设置全局应用于所有网页对话。",
+    "activityDetailDefaultHint": "应用于 Agent 对话。Personal AI 始终使用三个点表示执行状态。",
     "activityDetailSaving": "保存中…",
     "activityDetailSaveError": "无法保存执行动态默认值。",
     "activityDetailLevels": {
       "off": "简洁 · 隐藏正常动态",
-      "on": "轻量过程流 · 完成后收起",
+      "on": "轻量 · 折叠分析与工具详情",
       "stream": "实时 · 执行时自动展开"
     },
     "developerGroupTitle": "开发者选项",

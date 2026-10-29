@@ -51,7 +51,10 @@ describe('assistant reply completion layout', () => {
       const answer = container.querySelector('[data-chat-find-text]')!;
       const process = container.querySelector('[data-assistant-work-log]');
       expect(answer?.textContent).toContain('Configuration is complete.');
-      if (process) expect(process.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      if (process) {
+        const finalText = [...answer.querySelectorAll('.assistant-markdown-content')].at(-1)!;
+        expect(process.compareDocumentPosition(finalText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
       const actions = container.querySelector('[data-assistant-message-actions]');
       if (actions) expect(answer.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       expect(answer.closest('[data-assistant-work-log]')).toBeNull();

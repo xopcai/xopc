@@ -148,7 +148,7 @@ try {
   await composer.click();
   await page.keyboard.insertText('ACTIVITY_E2E_START: Read the two fixtures, check the missing file, and report the final result.');
   await composer.press('Enter');
-  const workLog = page.locator('[data-assistant-work-log]').last();
+  const workLog = page.locator('[data-assistant-work-log]').nth(1);
   const disclosure = workLog.locator(':scope > button[aria-expanded]');
   await page.getByText('I will inspect the two activity fixtures.', { exact: true }).waitFor();
   assert.equal(await page.locator('[data-chat-find-text]').filter({ hasText: 'I will inspect' }).count(), 1);
@@ -171,12 +171,13 @@ try {
   assert(await workLog.locator('[data-activity-group] summary').first().textContent());
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(evidence, 'running-tools.png') });
-  // Finishing resets the live expansion choice; reopening completed details remains possible.
+  // Public narration remains in place; completed activity can be inspected separately.
+  await disclosure.click();
   releaseResult();
   await workLog.locator('[data-status-phase]').waitFor({ state: 'detached' });
   await page.locator('[data-chat-find-text]').filter({ hasText: 'ACTIVITY_E2E_FINAL' }).waitFor();
   assert.equal(await disclosure.getAttribute('aria-expanded'), 'false');
-  assert.equal(await page.locator('[data-chat-find-text]').filter({ hasText: 'I will inspect' }).count(), 0);
+  assert.equal(await page.locator('[data-chat-find-text]').filter({ hasText: 'I will inspect' }).count(), 1);
   await page.waitForTimeout(300);
   assert.equal(await workLog.locator('[data-assistant-activity-flow]').isVisible(), false);
   await page.screenshot({ path: join(evidence, 'completed-result.png') });
@@ -188,19 +189,19 @@ try {
   assert(!copied.includes('I will inspect'));
   if (dropEnd !== 'all') assert(await finalBody.getByRole('table').evaluate((table, original) => table === original, streamingTable));
   await disclosure.click();
-  await workLog.getByText('I will inspect the two activity fixtures.', { exact: true }).waitFor();
+  await page.getByText('I will inspect the two activity fixtures.', { exact: true }).waitFor();
   await workLog.locator('[data-activity-group] summary').first().click();
-  assert(await workLog.locator('[data-activity-status]').count() >= 3);
+  assert(await workLog.locator('[data-activity-status]').count() >= 2);
   await page.screenshot({ path: join(evidence, 'expanded-process.png') });
   const url = page.url();
   await page.reload();
   await page.locator('[data-chat-find-text]').filter({ hasText: 'ACTIVITY_E2E_FINAL' }).waitFor();
   assert.equal(page.url(), url);
-  const history = page.locator('[data-assistant-work-log]').last();
+  const history = page.locator('[data-assistant-work-log]').nth(1);
   assert.equal(await history.locator(':scope > button[aria-expanded]').getAttribute('aria-expanded'), 'false');
   await history.locator(':scope > button[aria-expanded]').click();
   assert(await history.locator('[data-activity-group]').count() >= 1);
-  await history.getByText('The fixtures are read. I will check the missing file before reporting.', { exact: true }).waitFor();
+  await page.getByText('The fixtures are read. I will check the missing file before reporting.', { exact: true }).waitFor();
   await page.screenshot({ path: join(evidence, 'history-reloaded.png') });
   await page.setViewportSize({ width: 375, height: 812 });
   const closeMenu = page.getByRole('button', { name: 'Close menu', exact: true }).first();
@@ -212,7 +213,7 @@ try {
   for (const [level, label] of [
     ['off', 'Concise · hide normal activity'],
     ['stream', 'Live · expand while working'],
-    ['on', 'Lightweight activity · collapses on completion'],
+    ['on', 'Lightweight · collapse activity details'],
   ] as const) {
     await page.goto(base + '/#/settings/appearance');
     const section = page.getByText('AI activity detail', { exact: true }).locator('..');
@@ -226,8 +227,9 @@ try {
     await page.goto(url);
     await page.locator('[data-chat-find-text]').filter({ hasText: 'ACTIVITY_E2E_FINAL' }).waitFor();
     if (level === 'off') {
-      await page.waitForFunction(() => !document.querySelector('[data-assistant-work-log] button[aria-expanded]'));
-      assert.equal(await page.locator('[data-assistant-work-log] button[aria-expanded]').count(), 0);
+      // Failed tools remain inspectable even when routine activity is hidden.
+      await page.getByText('I will inspect the two activity fixtures.', { exact: true }).waitFor({ state: 'hidden' });
+      assert.equal(await page.locator('[data-assistant-thinking]').count(), 0);
       assert.equal(await page.getByText('I will inspect the two activity fixtures.', { exact: true }).isVisible(), false);
     } else {
       const toggle = page.locator('[data-assistant-work-log] > button[aria-expanded]').last();
@@ -243,7 +245,7 @@ try {
   await page.getByRole('checkbox', { name: 'Toggle advanced settings navigation' }).check();
   await page.getByLabel('Show tool debugging data', { exact: false }).check();
   await page.goto(url);
-  const debugToggle = page.locator('[data-assistant-work-log] > button[aria-expanded]').last();
+  const debugToggle = page.locator('[data-assistant-work-log] > button[aria-expanded]').first();
   await debugToggle.click();
   assert.equal(await page.locator('[data-activity-group]').count(), 0);
   assert(await page.getByText('Raw thinking data (developer)', { exact: true }).count() > 0);
@@ -275,7 +277,7 @@ try {
   if (dropEnd !== 'none') assert(dropped.message >= 3);
   if (dropEnd === 'all') { assert(dropped.run >= 1); assert(dropped.sessions >= 1); }
   await Promise.all(['failure.png', 'failure.html', 'model.json'].map(name => rm(join(evidence, name), { force: true })));
-  await writeFile(join(evidence, 'result.json'), JSON.stringify({ ok: true, checks: ['production WebUI and authenticated Gateway', 'actual Agent file tools', 'live unclassified text outside process', 'streaming final Markdown table outside process', 'pure text streaming table without activity container', 'private thinking hidden', 'consecutive tool aggregation', 'completion auto-collapse', 'final result isolated', 'completed process can reopen', 'SQLite history reload', 'narrow viewport', 'existing off/on/stream settings via UI', 'developer details toggle', 'simple/advanced settings preserved', 'clipboard contains only final result'], observed, dropEnd, dropped }, null, 2));
+  await writeFile(join(evidence, 'result.json'), JSON.stringify({ ok: true, checks: ['production WebUI and authenticated Gateway', 'actual Agent file tools', 'live unclassified text outside process', 'streaming final Markdown table outside process', 'pure text streaming table without activity container', 'reasoning collapsed by default', 'consecutive tool aggregation', 'completion auto-collapse', 'public narration and result retain their order', 'completed process can reopen', 'SQLite history reload', 'narrow viewport', 'existing off/on/stream settings via UI', 'developer details toggle', 'simple/advanced settings preserved', 'clipboard contains only final result'], observed, dropEnd, dropped }, null, 2));
   console.log(JSON.stringify({ ok: true, evidence }));
 } catch (error) {
   if (browser) for (const context of browser.contexts()) for (const page of context.pages()) {

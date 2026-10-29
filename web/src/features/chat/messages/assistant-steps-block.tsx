@@ -107,7 +107,11 @@ export function AssistantStepsBlock({
   simplified = true,
   personal = false,
   answerStarted = false,
+  showThinking = false,
+  surfacesOnly = false,
 }: {
+  surfacesOnly?: boolean;
+  showThinking?: boolean;
   simplified?: boolean;
   personal?: boolean;
   answerStarted?: boolean;
@@ -157,8 +161,8 @@ export function AssistantStepsBlock({
   const chatLabels = messages(language).chat;
   const showRawToolData = useDevViewStore((s) => s.showRawToolData);
   const visibleItems = useMemo(() => workLog.items.filter((item) => (
-    item.type !== 'thinking' || showRawToolData
-  )), [workLog.items, showRawToolData]);
+    item.type !== 'thinking' || showRawToolData || showThinking
+  )), [workLog.items, showRawToolData, showThinking]);
   const activityBlocks = useMemo(
     () => workLog.items.filter(
       (item): item is ThinkingContent | ToolUseContent => item.type !== 'text',
@@ -248,6 +252,12 @@ export function AssistantStepsBlock({
     ? 'tool' : activityBlocks.some((block) => block.type === 'thinking' && block.streaming)
       ? 'thinking' : activityBlocks.length > 0 ? 'organizing' : 'working');
   const activeHeaderLabel = streamingHeaderText ?? pendingLabel ?? fallbackLabel;
+  const completedTools = activityBlocks.filter((block): block is ToolUseContent => block.type === 'tool_use');
+  const completedSummary = showThinking && completedTools.length > 0
+    ? summarizeToolActivity(completedTools, block => semanticTitle(block, 'completed'), {
+      repeated: chatLabels.activityRepeated, more: chatLabels.activityMore, failed: chatLabels.activityFailed,
+      separator: language === 'zh' ? '、' : ', ',
+    }) : showThinking ? stepLabels.thoughts : null;
 
   if (workLog.items.length === 0 && !anyActive) {
     return null;
@@ -276,7 +286,7 @@ export function AssistantStepsBlock({
     memoryActivity: stepLabels.memoryActivity,
   };
 
-  if (personal) {
+  if (personal || surfacesOnly) {
     return <>
       {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
         <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
@@ -308,11 +318,11 @@ export function AssistantStepsBlock({
     </>
   ) : (
     <span className="[overflow-wrap:anywhere]">
-      {workLog.status === 'failed'
+      {completedSummary ?? (workLog.status === 'failed'
         ? stepLabels.workLogFailed
         : workLog.status === 'partial'
           ? stepLabels.workLogPartial
-          : completedDurationMs == null ? stepLabels.workLogTitle : stepLabels.workLogComplete}
+          : completedDurationMs == null ? stepLabels.workLogTitle : stepLabels.workLogComplete)}
     </span>
   );
 
@@ -414,6 +424,7 @@ export function AssistantStepsBlock({
                 conversationId={conversationId}
                 animateNew={anyActive && expanded && !showEarlier}
                 runActive={anyActive}
+                showThinking={showThinking}
               />
             </div>
           </div>
@@ -432,7 +443,9 @@ export function AssistantStepsTimeline({
   conversationId,
   animateNew = false,
   runActive,
+  showThinking = false,
 }: {
+  showThinking?: boolean;
   animateNew?: boolean;
   runActive?: boolean;
   blocks: AssistantWorkLogItem[];
@@ -493,7 +506,11 @@ export function AssistantStepsTimeline({
                 <ToolActivityGroup tools={group.tools} runActive={runActive} labels={stepLabels}
                   language={language} renderTool={renderTool} />
               ) : (
-                <StepRow block={group.item} toolLabels={toolLabels} stepLabels={stepLabels}
+                group.item.type === 'thinking' && showThinking && !showRawToolData ? (
+                  <div data-assistant-thinking className="text-sm leading-relaxed text-fg-muted">
+                    <MarkdownView content={group.item.text} compact streaming={Boolean(runActive && group.item.streaming)} />
+                  </div>
+                ) : <StepRow block={group.item} toolLabels={toolLabels} stepLabels={stepLabels}
                   cardLabels={cardLabels} conversationId={conversationId} runActive={runActive} />
               )}
             </div>
@@ -529,7 +546,7 @@ function ToolActivityGroup({ tools, runActive, labels, language, renderTool }: {
           <span>{summary}</span>
         </summary>
         <div className="mt-2 min-w-0 space-y-2.5 border-l border-edge-subtle pl-3">
-          {tools.map(renderTool)}
+          {tools.filter(tool => tool !== activeTool).map(renderTool)}
         </div>
       </details>
     </div>
