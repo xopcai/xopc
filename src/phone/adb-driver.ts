@@ -51,7 +51,7 @@ export function parsePhoneUi(xml: string): PhoneElement[] {
     const password = attribute('password') === 'true';
     return [{ text: password ? '' : (attribute('text') ?? '').slice(0, 500), description: password ? '' : (attribute('content-desc') ?? '').slice(0, 300),
       resourceId: attribute('resource-id') ?? '', clickable: attribute('clickable') === 'true', focused: attribute('focused') === 'true', password,
-      editable: /(?:EditText|AutoCompleteTextView)$/.test(attribute('class') ?? ''),
+      editable: attribute('editable') === 'true' || attribute('editable') === undefined && /(?:EditText|AutoCompleteTextView)$/.test(attribute('class') ?? ''),
       bounds: bounds.slice(1).map(Number) as [number, number, number, number] }];
   });
 }
@@ -318,8 +318,9 @@ export class AdbPhoneDriver implements PhoneDriver {
         const observer = action.mode === 'replace' ? await this.observer(serial, signal) : undefined;
         if (observer) {
           const target = editors[0];
-          if (!target.resourceId || target.resourceId === 'android:active-editor' || target.text.length >= 500)
+          if (target.resourceId === 'android:active-editor' || target.text.length >= 500)
             throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'Replacing text requires an identifiable field with a complete current value', 409);
+          // Native replacement rechecks focused node, bounds and value, then confirms the same node after writing.
           await observer.replace(observation.package, target, action.text, signal);
           break;
         }

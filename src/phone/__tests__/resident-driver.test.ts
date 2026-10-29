@@ -60,3 +60,19 @@ it('decodes XML field text exactly once, including literal entity-looking conten
   const [field] = parsePhoneUi('<hierarchy><node class="android.widget.EditText" text="A&amp;B &lt;C&gt; &quot;D&quot; &amp;lt; 😀" content-desc="X&amp;Y" bounds="[0,0][100,100]"/></hierarchy>');
   expect(field.text).toBe('A&B <C> "D" &lt; 😀'); expect(field.description).toBe('X&Y');
 });
+
+
+it('replaces an unnamed editable field through the guarded native transaction', async () => {
+  const f = observer(); const command = vi.fn();
+  const driver = new AdbPhoneDriver('adb', command, false, undefined, undefined, undefined, undefined, async () => f.session);
+  const observation = screen(); observation.elements[0].resourceId = '';
+  await driver.execute('phone', { type: 'typeText', mode: 'replace', text: 'AI 眼镜' }, observation, signal(), { settleMs: 0 });
+  expect(f.replace).toHaveBeenCalledWith('com.test.app', observation.elements[0], 'AI 眼镜', expect.any(AbortSignal));
+  expect(command).not.toHaveBeenCalled(); await driver.releaseInput();
+});
+
+it('honors native editability for custom classes and explicit false for EditText', async () => {
+  const { parsePhoneUi } = await import('../adb-driver.js');
+  const nodes = parsePhoneUi('<hierarchy><node class="com.vendor.SearchInput" editable="true" focused="true" bounds="[0,0][100,100]"/><node class="android.widget.EditText" editable="false" bounds="[0,100][100,200]"/><node class="android.widget.EditText" bounds="[0,200][100,300]"/></hierarchy>');
+  expect(nodes.map(node => node.editable)).toEqual([true, false, true]);
+});

@@ -82,6 +82,23 @@ describe('read-only phone screenshot transcription', () => {
 });
 
 describe('phone model context and protocol', () => {
+  it('retains product rows beyond navigation and both sides of a scroll within a shared budget', () => {
+    const input = prediction();
+    input.trajectory = Array.from({ length: 8 }, () => ({
+      action: { type: 'swipe' as const, start: [500, 800] as [number, number], end: [500, 300] as [number, number] },
+      dispatch: 'completed' as const, beforeApp: 'com.example.app',
+      beforeFacts: Array.from({ length: 40 }, (_, i) => `before-${i}-` + 'x'.repeat(200)),
+      facts: Array.from({ length: 40 }, (_, i) => `product-${i}-` + 'y'.repeat(200)),
+    }));
+    const context = buildPhoneModelContext(input);
+    const latest = context.trajectory!.at(-1)!;
+    expect(latest.facts![20]).toContain('product-20');
+    expect(latest.beforeFacts![20]).toContain('before-20');
+    const texts = context.trajectory!.flatMap(entry => [...(entry.facts ?? []), ...(entry.beforeFacts ?? [])]);
+    expect(texts.reduce((sum, text) => sum + text.length, 0)).toBeLessThanOrEqual(16000);
+    expect(input.trajectory[0].facts).toHaveLength(40);
+  });
+
   it('preserves attempted targets and queries in bounded context while excluding password nodes', () => {
     const input = prediction();
     input.observation.elements = [element({ text: 'secret-password', description: 'secret-description', resourceId: 'secret-id', password: true }),

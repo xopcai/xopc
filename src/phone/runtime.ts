@@ -59,6 +59,15 @@ type Session = {
 const log = createLogger('PhoneRuntime');
 const terminal = new Set(['closed']);
 
+/** Keep visible list content across scrolling without retaining pixels or password fields. */
+function phoneTrajectoryFacts(observation: PhoneObservation): string[] {
+  return [...new Set(observation.elements.filter(node => !node.password
+    && node.bounds[0] >= 0 && node.bounds[1] >= 0
+    && node.bounds[2] <= observation.width && node.bounds[3] <= observation.height
+    && node.bounds[2] > node.bounds[0] && node.bounds[3] > node.bounds[1])
+    .flatMap(node => [node.text, node.description]).filter(Boolean))].slice(0, 40).map(text => text.slice(0, 200));
+}
+
 export class PhoneRuntime {
   private reconnecting = new Map<string, Promise<PhoneDevice>>();
   private reconnectAfter = new Map<string, number>();
@@ -896,7 +905,7 @@ export class PhoneRuntime {
         if (entry && entry.actor === 'agent' && epoch === session.report.controlEpoch) {
           const unchanged = beforeSignature === observationSignature(observation);
           entry.afterApp = observation.package; entry.effect = unchanged ? 'unchanged' : 'changed';
-          entry.facts = observation.elements.filter(node => !node.password).flatMap(node => [node.text, node.description]).filter(Boolean).slice(0, 12).map(text => text.slice(0, 160));
+          entry.facts = phoneTrajectoryFacts(observation);
           if (unchanged) session.report.diagnostics!.unchangedActions++;
           recoveryHint = unchanged
             ? 'The last dispatched action produced no observable change. Wait if loading, otherwise try a different target or route; do not repeat an uncertain input.'
@@ -1033,7 +1042,7 @@ export class PhoneRuntime {
       session.report.steps.push(step); session.report.actions++;
       if (session.human) { session.report.humanActions = (session.report.humanActions ?? 0) + 1; session.report.steps = session.report.steps.slice(-200); }
       this.publish(session);
-      const entry: PhoneTrajectoryEntry = { action: structuredClone(action), dispatch: 'unknown', actor: step.actor, beforeApp: observation.package, effect: 'unknown' };
+      const entry: PhoneTrajectoryEntry = { action: structuredClone(action), dispatch: 'unknown', actor: step.actor, beforeApp: observation.package, beforeFacts: phoneTrajectoryFacts(observation), effect: 'unknown' };
       session.trajectory.push(entry); session.trajectoryCount++;
       if (session.trajectory.length > 24) {
         const earlier = session.trajectory.shift()!;

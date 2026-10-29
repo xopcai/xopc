@@ -131,6 +131,7 @@ export interface PhoneTrajectoryEntry {
   afterApp?: string;
   effect?: 'changed' | 'unchanged' | 'unknown';
   facts?: string[];
+  beforeFacts?: string[];
 }
 
 export interface PhonePrediction {
@@ -185,11 +186,18 @@ export function buildPhoneModelContext(input: PhonePrediction) {
     .slice(0, 40).map(node => ({ text: node.text.slice(0, 200), description: node.description.slice(0, 160),
       resourceId: node.resourceId.slice(0, 160), clickable: node.clickable, focused: node.focused, editable: Boolean(node.editable),
       bounds: [normalizeX(node.bounds[0]), normalizeY(node.bounds[1]), normalizeX(node.bounds[2]), normalizeY(node.bounds[3])] }));
-  const trajectory = input.trajectory?.slice(-8).map(entry => ({
+  let remainingFacts = 16000;
+  const boundedFacts = (facts?: string[]) => facts?.slice(0, 40).map(text => {
+    const value = text.slice(0, Math.min(200, remainingFacts));
+    remainingFacts -= value.length;
+    return value;
+  }).filter(Boolean);
+  // Allocate the shared text budget to the newest screens first.
+  const trajectory = input.trajectory?.slice(-8).reverse().map(entry => ({
     action: entry.action.type === 'typeText' ? { ...entry.action, text: entry.action.text.slice(0, 500) } : entry.action,
     dispatch: entry.dispatch, actor: entry.actor ?? 'agent', beforeApp: entry.beforeApp,
-    afterApp: entry.afterApp, effect: entry.effect, facts: entry.facts?.slice(0, 8).map(text => text.slice(0, 160)),
-  }));
+    afterApp: entry.afterApp, effect: entry.effect, facts: boundedFacts(entry.facts), beforeFacts: boundedFacts(entry.beforeFacts),
+  })).reverse();
   return { ...(input.readingFields ? { readingFields: input.readingFields.map(({ key, description }) => ({ key, description })) } : {}), ...(input.task ? { task: input.task } : {}), goal: input.goal, completion: input.completion ? { ...input.completion,
     field: input.completion.field ? { ...input.completion.field, value: input.completion.field.value.slice(0, 500) } : undefined,
   } : undefined, completionStatus: input.completion ? 'pending_native_ui_verification' : undefined, appAccess: input.appAccess ?? 'selected', allowedApps: input.allowedApps,
