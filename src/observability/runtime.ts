@@ -21,7 +21,7 @@ function storageWarning(message: string) {
 }
 
 export type TraceIdentity = { conversationId?: string; runId?: string; agentId?: string; transcriptId?: string };
-type Scope = { config: TracingConfig; target?: LangfuseTarget; identity: TraceIdentity; name: string; count: number; bytes: number; root?: Span; epoch?: Promise<number> };
+type Scope = { config: TracingConfig; target?: LangfuseTarget; identity: TraceIdentity; name: string; count: number; bytes: number; root?: Span; epoch?: Promise<number>; metrics?: Set<string> };
 const localEpochKey = createContextKey('xopc.trace.localEpoch');
 const scopes = new AsyncLocalStorage<Scope>();
 let config = defaultTracingConfig();
@@ -222,4 +222,16 @@ export async function traceOperation<T>(name: string, fn: () => Promise<T>, attr
 export function setTraceIdentity(identity: TraceIdentity): void {
   const scope = scopes.getStore(); if (!scope) return;
   scope.identity = { ...scope.identity, ...identity }; scope.root?.setAttributes(attrs(scope.identity, 'agent'));
+}
+
+/** Keep the first timing for each milestone on the run root, including fallback runs. */
+export function recordTraceLatency(metrics: Record<string, number>): void {
+  const scope = scopes.getStore();
+  if (!scope?.root) return;
+  scope.metrics ??= new Set();
+  for (const [name, value] of Object.entries(metrics)) {
+    if (!Number.isFinite(value) || value < 0 || scope.metrics.has(name)) continue;
+    scope.root.setAttribute(`xopc.latency.${name}`, value);
+    scope.metrics.add(name);
+  }
 }

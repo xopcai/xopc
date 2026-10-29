@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { defaultTracingConfig } from '../config.js';
-import { closeTracing, configureTracing, flushTracing, localStore, startObservation, traceRun, traceTools, tracingStatus } from '../runtime.js';
+import { closeTracing, configureTracing, flushTracing, localStore, recordTraceLatency, startObservation, traceRun, traceTools, tracingStatus } from '../runtime.js';
 
 let directory: string; let server: Server; let endpoint: string; const uploads: any[] = [];
 const previous = { state: process.env.XOPC_STATE_DIR, pub: process.env.LANGFUSE_PUBLIC_KEY, secret: process.env.LANGFUSE_SECRET_KEY };
@@ -50,6 +50,31 @@ describe('trace runtime', () => {
     await expect(traceRun('agent.run', { runId: 'failed' }, async () => { throw new Error('failure'); })).rejects.toThrow('failure');
     await localStore().flush();
     expect((await localStore().request('list', {})).traces[0].status).toBe('error');
+  });
+  it('exports first latency milestones on each root without mixing concurrent runs or nested spans', async () => {
+    await Promise.all([10, 20].map(duration => traceRun('agent.run', { runId: `latency-${duration}` }, async () => {
+      recordTraceLatency({ embeddedPreparationMs: duration, invalid: Number.NaN, negative: -1 });
+      const child = startObservation('model.attempt', 'span');
+      await child.run(async () => {
+        await Promise.resolve();
+        recordTraceLatency({ embeddedPreparationMs: 999, firstRequestToTextMs: duration + 1 });
+      });
+      child.finish();
+      return { ok: true };
+    })));
+    await flushTracing();
+    for (const duration of [10, 20]) {
+      const list = await localStore().request('list', { runId: `latency-${duration}` });
+      const detail = await localStore().request('detail', list.traces[0].traceId);
+      const root = detail.spans.find((span: any) => span.name === 'agent.run');
+      expect(root.attributes['xopc.latency.embeddedPreparationMs']).toBe(duration);
+      expect(root.attributes['xopc.latency.firstRequestToTextMs']).toBe(duration + 1);
+      expect(root.attributes).not.toHaveProperty('xopc.latency.invalid');
+      expect(root.attributes).not.toHaveProperty('xopc.latency.negative');
+      const exported = uploads.flatMap(row => row.body.resourceSpans[0].scopeSpans[0].spans)
+        .find(span => span.traceId === root.traceId && span.name === 'agent.run');
+      expect(exported.attributes).toContainEqual({ key: 'xopc.latency.firstRequestToTextMs', value: { doubleValue: duration + 1 } });
+    }
   });
   it('continues local recording when remote ingestion fails', async () => {
     const cfg = defaultTracingConfig(); cfg.langfuse = { enabled: true, baseUrl: 'http://127.0.0.1:1' }; await configureTracing(cfg);
