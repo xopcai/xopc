@@ -8,7 +8,6 @@ import { Loopi } from '@/components/brand/loopi';
 import { SidebarAppMenu } from '@/components/shell/sidebar-app-menu';
 import { openSupportReport } from '@/features/support/support-report-events';
 import { messages } from '@/i18n/messages';
-import { NotificationInbox } from '@/features/notifications/notification-inbox';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -73,7 +72,6 @@ export function SidebarFooter({
                 <Settings className="size-[17px]" strokeWidth={1.5} />
               </button>
             </Popover.Trigger>
-            <NotificationInbox />
           </div>
         ) : (
           <div className="flex w-full min-w-0 items-center gap-1 rounded-xl p-1">
@@ -112,7 +110,6 @@ export function SidebarFooter({
                 <Settings className="size-[18px] shrink-0" strokeWidth={1.5} />
               </button>
             </Popover.Trigger>
-            <NotificationInbox />
           </div>
         )}
 
