@@ -5,6 +5,7 @@ export default [
   {
     ignores: [
       "dist/**",
+      ".xopc-evals/**",
       "docs/**",
       "node_modules/**",
       "ui/**",
