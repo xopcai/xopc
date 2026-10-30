@@ -57,7 +57,24 @@ describe('embedded gateway shutdown', () => {
     mocks.spawnSync.mockReset();
     vi.stubGlobal('process', { ...process, platform: 'darwin' });
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+  it('rejects an unconfirmed shutdown and retains the owned handle for cleanup', async () => {
+    vi.useFakeTimers();
+    const child = new FakeChildProcess(false);
+    child.kill = vi.fn(() => false);
+    spawnFakeGateway(child);
+    const stopped = expect(stopGatewayProcessAndWait(10)).rejects.toThrow('did not exit');
+    await vi.advanceTimersByTimeAsync(2010);
+    await stopped;
+    child.kill = vi.fn(() => {
+      child.signalCode = 'SIGKILL';
+      queueMicrotask(() => child.emit('exit', null, 'SIGKILL'));
+      return true;
+    });
+    await stopGatewayProcessAndWait(10);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+  });
 
   it('waits for a graceful SIGTERM exit', async () => {
     const child = new FakeChildProcess(true);
