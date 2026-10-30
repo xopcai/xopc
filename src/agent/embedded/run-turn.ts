@@ -33,6 +33,7 @@ import { acquireEmbeddedRunLease, EmbeddedRunConflictError } from './runs.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import {
+  classifyLlmFailure,
   getAssistantTurnErrorMessage,
   isAssistantTurnAborted,
   isAssistantTurnFailed,
@@ -451,9 +452,10 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     const { session, reused } = runner;
     const configurationTurnStart = session.agent.state.messages.length;
     await runLease.attach(session, async () => session.abort());
-    const runAbortSignal = params.abortSignal
-      ? AbortSignal.any([runLease.signal, params.abortSignal])
-      : runLease.signal;
+    const turnDeadline = new AbortController();
+    const runAbortSignal = AbortSignal.any([
+      runLease.signal, turnDeadline.signal, ...(params.abortSignal ? [params.abortSignal] : []),
+    ]);
     if (runAbortSignal.aborted) {
       await session.abort();
       return { ok: false, terminationReason: resolveAgentAbortReason(runAbortSignal.reason), errorMessage: 'aborted' };
@@ -892,6 +894,13 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       if (event.type === 'message_end' && event.message.role === 'assistant') {
         recordPromptCacheTouch(conversationId, resolvedModel, event.message.usage);
+        if (event.message.stopReason === 'error' || event.message.stopReason === 'aborted') {
+          log.warn({ conversationId, runId, modelRef: latencyModelRef, modelRequestNumber,
+            phase: 'model_request_end', stopReason: event.message.stopReason,
+            errorMessage: event.message.errorMessage, hostSignalAborted: runAbortSignal.aborted,
+            ...(runAbortSignal.aborted ? { terminationReason: resolveAgentAbortReason(runAbortSignal.reason) } : {}),
+          }, 'Model request ended without completing the response');
+        }
       }
       if (event.type === 'tool_execution_end') {
         markTurnToolResult(conversationId, runId, event.toolName);
@@ -1011,7 +1020,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           }
         }),
         timeoutMs,
-        { timeoutExtensionMs: params.timeoutExtensionMs },
+        { timeoutExtensionMs: params.timeoutExtensionMs, onTimeout: reason => turnDeadline.abort(reason) },
       );
 
       if (phoneStopped) {
@@ -1035,7 +1044,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         return { ok: false, retryable: false, terminationReason: resolveAgentAbortReason(runAbortSignal.reason), errorMessage: 'aborted' };
       }
       if (isAssistantTurnAborted(session.agent)) {
-        return { ok: false, retryable: false, terminationReason: 'provider_error', errorMessage: 'aborted', lastAssistantText: lastAssistantPlainText(session) };
+        return { ok: false, retryable: false, terminationReason: 'provider_error', errorMessage: `Model request was interrupted while the agent run was still active; automatic recovery could not complete. ${getAssistantTurnErrorMessage(session.agent) ?? 'Provider returned an aborted stream.'}`, lastAssistantText: lastAssistantPlainText(session) };
       }
       if ((policyStopped && !policyCompleted) || lengthRecoveryExhausted || lastAssistantMessage(session.agent.state.messages)?.stopReason === 'length') {
         return { ok: false, retryable: false, errorMessage: policyStopReason ?? 'Assistant response was truncated before completion',
@@ -1048,7 +1057,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           retryable: canResumeAfterModelFailure(session.agent.state.messages,
             { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS }),
           terminationReason: 'provider_error',
-          errorMessage: getAssistantTurnErrorMessage(session.agent) ?? 'Assistant turn failed',
+          errorMessage: classifyLlmFailure(getAssistantTurnErrorMessage(session.agent) ?? '') === 'aborted'
+            ? `Model request was interrupted while the agent run was still active; automatic recovery could not complete. ${getAssistantTurnErrorMessage(session.agent)}`
+            : getAssistantTurnErrorMessage(session.agent) ?? 'Assistant turn failed',
           lastAssistantText: lastAssistantPlainText(session),
         };
       }
@@ -1091,7 +1102,10 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     }
     quarantineRunner = isAgentTurnUnsettledError(err);
     const em = err instanceof Error ? err.message : String(err);
-    log.error({ err, conversationId, runId }, `Embedded run failed: ${em}`);
+    log.error({ err, conversationId, runId, phase: 'embedded_run_end',
+      terminationReason: isAgentTurnTimeoutError(err) ? 'deadline_exceeded'
+        : params.abortSignal?.aborted ? resolveAgentAbortReason(params.abortSignal.reason) : 'runtime_error',
+    }, `Embedded run failed: ${em}`);
     onEvent?.({ type: 'error', content: em, runId });
     return { ok: false, terminationReason: isAgentTurnTimeoutError(err) ? 'deadline_exceeded'
       : params.abortSignal?.aborted ? resolveAgentAbortReason(params.abortSignal.reason) : 'runtime_error', errorMessage: em };

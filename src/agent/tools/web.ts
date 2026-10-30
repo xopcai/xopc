@@ -2,6 +2,7 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
+import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
 import { classifySearchError, searchFailureInfo, SearchError } from './search/errors.js';
 import type { SearchRequest, SearchResponse } from './search/types.js';
@@ -9,6 +10,8 @@ import { SearchProviderRegistry } from './search/registry.js';
 import { resolveWebSearchConfig } from './search/resolve-config.js';
 import { sanitizeSearchInfo } from './search/search-info.js';
 import { fetchPublicText } from './fetch-text.js';
+
+const log = createLogger('WebFetch');
 
 // =============================================================================
 // Web Search Tool
@@ -126,7 +129,7 @@ export function createWebFetchTool(getConfig: () => Config | undefined): AgentTo
     supportsParallel: true,
 
     async execute(
-      _toolCallId: string,
+      toolCallId: string,
       params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
@@ -164,14 +167,20 @@ export function createWebFetchTool(getConfig: () => Config | undefined): AgentTo
           details: { truncated, complete: !truncated, url: fetched.url },
         };
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const code = signal?.aborted ? 'run_cancelled'
+          : error instanceof Error && error.name === 'TimeoutError' ? 'tool_timeout' : 'fetch_failed';
+        log.warn({ err: error, toolCallId, tool: 'web_fetch', phase: 'web_fetch_end',
+          code, hostSignalAborted: signal?.aborted ?? false,
+        }, `Web fetch failed (${code}): ${errorMessage}`);
         return {
           content: [
             {
               type: 'text',
-              text: `Fetch error: ${error instanceof Error ? error.message : String(error)}`,
+              text: `Fetch error (${code}): ${errorMessage}${code === 'tool_timeout' ? '. This URL timed out; try another source or retry this request.' : ''}`,
             },
           ],
-          details: { error: error instanceof Error ? error.message : String(error) },
+          details: { error: errorMessage, code, retryable: code === 'tool_timeout', scope: 'tool' },
         };
       }
     },

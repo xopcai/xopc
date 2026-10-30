@@ -45,7 +45,7 @@ export async function runAgentTurnWithTimeout(
   agent: Agent,
   runTurn: () => Promise<void>,
   timeoutMs: number,
-  options: { abortGraceMs?: number; timeoutExtensionMs?: () => number } = {},
+  options: { abortGraceMs?: number; timeoutExtensionMs?: () => number; onTimeout?: (reason: AgentRunDeadlineError) => void } = {},
 ): Promise<void> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -59,7 +59,9 @@ export async function runAgentTurnWithTimeout(
         timeoutId = setTimeout(expire, extensionMs);
         return;
       }
-      reject(new AgentRunDeadlineError(`Agent turn timed out after ${effectiveTimeoutMs / 1000}s`));
+      const reason = new AgentRunDeadlineError(`Agent turn timed out after ${effectiveTimeoutMs / 1000}s`);
+      options.onTimeout?.(reason);
+      reject(reason);
     };
     timeoutId = setTimeout(expire, timeoutMs);
   });

@@ -19,7 +19,7 @@ export type LlmFailureKind = 'transient_network' | 'context_overflow' | 'aborted
 
 export function classifyLlmFailure(message: string): LlmFailureKind {
   const normalized = message.trim().toLowerCase();
-  if (normalized === 'aborted' || normalized.includes('aborterror')) return 'aborted';
+  if (normalized === 'aborted' || normalized.includes('aborterror') || normalized === 'request was aborted' || normalized === 'the operation was aborted') return 'aborted';
   if (isContextOverflowError(message)) return 'context_overflow';
   if (isTransientLlmErrorMessage(message)) return 'transient_network';
   return 'permanent';
@@ -39,7 +39,7 @@ export function getAssistantTurnErrorMessage(agent: Agent): string | undefined {
   const last = getLastAssistantMessage(agent.state.messages);
   if (!last) return undefined;
   const stopReason = (last as { stopReason?: string }).stopReason;
-  if (stopReason !== 'error') return undefined;
+  if (stopReason !== 'error' && stopReason !== 'aborted') return undefined;
   const errMsg = (last as { errorMessage?: string }).errorMessage;
   if (typeof errMsg === 'string' && errMsg.trim()) return errMsg.trim();
   return undefined;
@@ -54,7 +54,7 @@ export function isAssistantTurnFailed(agent: Agent): boolean {
   return (last as { stopReason?: string }).stopReason === 'error';
 }
 
-/** User or client aborted the assistant turn — do not try another model. */
+/** Provider reported an aborted stream; the host signal determines whether the run was cancelled. */
 export function isAssistantTurnAborted(agent: Agent): boolean {
   const last = getLastAssistantMessage(agent.state.messages);
   if (!last) {
@@ -133,19 +133,25 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
       return;
     }
     const sr = (last as { stopReason?: string }).stopReason;
-    if (sr !== 'error') {
+    if (sr !== 'error' && sr !== 'aborted') {
       return;
     }
     const errMsg = String((last as { errorMessage?: string }).errorMessage || '');
-    const failureKind = classifyLlmFailure(errMsg);
-    if (failureKind !== 'transient_network') {
+    const failureKind = sr === 'aborted' ? 'aborted' : classifyLlmFailure(errMsg);
+    // An upstream abort is recoverable only when the host can prove the run is still live.
+    const providerAborted = failureKind === 'aborted' && options.signal !== undefined && !options.signal.aborted;
+    if (failureKind !== 'transient_network' && !providerAborted) {
       options.log.warn(
         { conversationId: options.conversationId, errorMessage: errMsg, failureKind },
         'Assistant turn ended with error (not retrying as transient)',
       );
       return;
     }
-    if (!canResumeAfterModelFailure(agent.state.messages)) {
+    const trimmed = stripTrailingErrorAssistantMessages(agent.state.messages);
+    const failedMessages = agent.state.messages.slice(trimmed.length);
+    const hasUnconfirmedCalls = failedMessages.some(message => message.role === 'assistant'
+      && Array.isArray(message.content) && message.content.some(block => block.type === 'toolCall'));
+    if (hasUnconfirmedCalls || !canResumeAfterModelFailure(trimmed)) {
       options.log.warn({ conversationId: options.conversationId }, 'Model recovery stopped because a tool outcome is unconfirmed');
       return;
     }
@@ -161,6 +167,8 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
         conversationId: options.conversationId,
         errorMessage: errMsg,
         failureKind,
+        phase: 'model_request_recovery',
+        hostSignalAborted: options.signal?.aborted ?? false,
         continueAttempt: continues,
         maxContinues,
         retryDelayMs,
@@ -171,7 +179,6 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
     await waitForRetryDelay(retryDelayMs, options.signal);
     options.signal?.throwIfAborted();
     options.onRetry?.();
-    const trimmed = stripTrailingErrorAssistantMessages(agent.state.messages);
     agent.state.messages = trimmed;
     await agent.continue();
     await agent.waitForIdle();
