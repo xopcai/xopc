@@ -2,13 +2,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const media = readFileSync(new URL('../entry/src/main/ets/view/ChatMediaView.ets', import.meta.url), 'utf8');
+const pager = readFileSync(new URL('../entry/src/main/ets/view/ChatImagePager.ets', import.meta.url), 'utf8');
+const grid = readFileSync(new URL('../entry/src/main/ets/view/ChatImageGrid.ets', import.meta.url), 'utf8');
 const resultTail = readFileSync(new URL('../entry/src/main/ets/view/ChatResultTail.ets', import.meta.url), 'utf8');
 const zh = readFileSync(new URL('../entry/src/main/resources/zh_CN/element/string.json', import.meta.url), 'utf8');
 
 describe('chat artifact image preview', () => {
   it('renders image deliverables without file metadata and shares their gallery', () => {
-    expect(resultTail).toContain('compactThumbnail: true, compactMetadata: false');
-    expect(resultTail).toContain('imageGallery: this.imageGallery');
+    expect(grid).toContain('compactThumbnail: true, compactMetadata: false');
+    expect(resultTail).toContain('gallery: this.imageGallery');
     expect(resultTail).toContain('this.nonImageArtifacts');
   });
 
@@ -59,7 +61,7 @@ describe('chat image gallery preview', () => {
   it('passes same-message images into each attachment preview', () => {
     const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
     expect(content).toContain("filePreviewKind(file.name, file.mimeType) === 'image'");
-    expect(content).toContain('imageGallery: this.galleryMedia');
+    expect(content).toContain('gallery: this.galleryMedia');
   });
 
   it('navigates within bounds and keeps actions attached to the active image', () => {
@@ -67,8 +69,10 @@ describe('chat image gallery preview', () => {
     expect(media).toContain('next < 0 || next >= this.imageGallery.length');
     expect(media).toContain(".id('chat-media-previous-image')");
     expect(media).toContain(".id('chat-media-next-image')");
-    expect(media).toContain('PanGesture({ fingers: 1, direction: PanDirection.All, distance: 10 })');
-    expect(media).toContain('this.zoom > 1.05 || Math.abs(event.offsetX) < 60');
+    expect(pager).toContain('Swiper()');
+    expect(pager).toContain('.cachedCount(1)');
+    expect(pager).toContain('.disableSwipe(this.requestedZoom > 1.01)');
+    expect(media).not.toContain('await this.openPreview();\n  }\n  private reset()');
     expect(media).toContain('saveChatMedia(context, this.activeFile(), this.conversationId)');
     expect(media).toContain('createChatMediaShare(this.activeFile(), this.conversationId)');
   });

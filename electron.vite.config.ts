@@ -56,7 +56,9 @@ export default defineConfig({
         // `node-pty` must resolve from its real package directory so it can load native binaries and spawn-helper.
         external: ['electron', '@vscode/ripgrep', 'node-pty', '@trycua/cua-driver'],
         input: {
-          index: resolve(__dirname, 'electron/main.ts'),
+          index: resolve(__dirname, 'electron/index.ts'),
+          // Keep main's import.meta.dirname at out/main for preload and native helper paths.
+          main: resolve(__dirname, 'electron/main.ts'),
           compatibility: resolve(__dirname, 'electron/gateway-compatibility.ts'),
         },
         // electron-vite 6 beta locates the last ESM import with a regex that can overrun into

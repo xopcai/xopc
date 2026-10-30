@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
-  ComputerActionSchema, COMPUTER_FRAME_MAX_BYTES,
+  ComputerActionSchema, ComputerPrimitiveActionSchema, COMPUTER_FRAME_MAX_BYTES,
   type ComputerAction,
   type ComputerProfile,
 } from '@xopcai/computer-control-contract';
@@ -28,6 +28,9 @@ const StructuredProposalSchema = z.union(ComputerProposalSchema.options.map(opti
   ? z.object({ kind: z.literal('action'), action: StructuredActionSchema }).strict() : option));
 
 function validateTypingProposal(proposal: ComputerProposal, input: ComputerPredictionInput): void {
+  if (proposal.kind === 'action' && proposal.action.kind === 'batch') {
+    for (const action of proposal.action.actions) validateTypingProposal({ kind: 'action', action }, input);
+  }
   if (proposal.kind === 'action' && proposal.action.kind === 'pressKeys') {
     let platform: NodeJS.Platform = 'darwin';
     try { if (JSON.parse(input.summary).platform === 'win32') platform = 'win32'; } catch { /* Older desktop contexts can be plain text. */ }
@@ -53,6 +56,8 @@ function validateTypingProposal(proposal: ComputerProposal, input: ComputerPredi
 const Coordinate = z.tuple([z.number().finite().min(0).max(1000), z.number().finite().min(0).max(1000)]);
 const GuiArgs = z.discriminatedUnion('action', [
   z.object({ action: z.enum(['activate', 'show_menu']), ref: z.string().min(1).max(200) }).strict(),
+  z.object({ action: z.literal('activate_sequence'), refs: z.array(z.string().min(1).max(200)).min(2).max(12) }).strict(),
+  z.object({ action: z.literal('batch'), actions: z.array(ComputerPrimitiveActionSchema).min(1).max(12) }).strict(),
   z.object({ action: z.literal('set_value'), ref: z.string().min(1).max(200), text: z.string().max(16_384) }).strict(),
   z.object({ action: z.enum(['left_click', 'right_click', 'double_click']), coordinate: Coordinate }).strict(),
   z.object({ action: z.literal('type'), text: z.string().max(16_384), coordinate: Coordinate }).strict(),
@@ -69,7 +74,9 @@ const GuiArgs = z.discriminatedUnion('action', [
 const GuiPromptParameters = {
   type: 'object', required: ['action'], additionalProperties: false,
   properties: {
-    action: { type: 'string', enum: ['activate', 'show_menu', 'set_value', 'key', 'type', 'left_click', 'right_click', 'double_click', 'scroll', 'hscroll', 'wait', 'terminate', 'answer', 'interact'] },
+    action: { type: 'string', enum: ['activate', 'activate_sequence', 'batch', 'show_menu', 'set_value', 'key', 'type', 'left_click', 'right_click', 'double_click', 'scroll', 'hscroll', 'wait', 'terminate', 'answer', 'interact'] },
+    actions: { type: 'array', minItems: 1, maxItems: 12, items: z.toJSONSchema(ComputerPrimitiveActionSchema), description: 'For batch: ordered native primitive actions with screenshot-pixel coordinates. No nested batches. Use current refs and targets; stop before an uncertain transition. Each input consumes budget.' },
+    refs: { type: 'array', minItems: 2, maxItems: 12, items: { type: 'string', minLength: 1, maxLength: 200 }, description: 'For activate_sequence: ordered current native button refs; repeated refs allowed. Only predictable same-window input on stable native buttons. No observation between presses; verify the final result. Each press consumes the action budget.' },
     ref: { type: 'string', minLength: 1, maxLength: 200, description: 'For activate/show_menu/set_value: exact ref from the current accessibility context; never a label or historical ref.' },
     keys: { type: 'array', items: { type: 'string' }, description: 'For key: the key combination.' },
     text: { type: 'string', description: 'Required for type (inserted text) and set_value (exact replacement text). For answer/interact: the response.' },
@@ -128,6 +135,8 @@ export function parseGuiPlusProposal(content: string, width: number, height: num
   let action: ComputerAction;
   switch (a.action) {
     case 'activate': action = { kind: 'activate', ref: a.ref }; break;
+    case 'activate_sequence': action = { kind: 'activateSequence', refs: a.refs }; break;
+    case 'batch': action = { kind: 'batch', actions: a.actions }; break;
     case 'show_menu': action = { kind: 'showMenu', ref: a.ref }; break;
     case 'set_value': action = { kind: 'setValue', ref: a.ref, text: a.text }; break;
     case 'terminate': return { kind: 'finished', claimedSuccess: a.status === 'success' };
@@ -359,6 +368,7 @@ export class ChatCompletionsComputerAdapter implements ComputerStepAdapter {
       ],
       ...(structured ? { tools: [{ type: 'function', function: { name: toolName, description: input.readOnly ? 'Read-only visual answer' : 'One bounded desktop decision', parameters: z.toJSONSchema(input.readOnly ? answerSchema : z.object({ proposal: proposalSchema }).strict()) } }], tool_choice: { type: 'function', function: { name: toolName } }, parallel_tool_calls: false } : {}),
     };
+    if (!input.readOnly) body.messages[0].content += ` For a predictable same-window sequence, prefer batch with actions containing mixed primitive actions, including native activation, setValue, typeText and pressKeys. The batch observes once at the end and counts every primitive input. Use only currently grounded targets. Do not include uncertain navigation, dialogs or unauthorized consequential effects. Stop for observation when another decision needs fresh state. Remaining per-call input budget is ${input.maxPlanActions ?? 1}; never exceed it. For workflows with conditional observation checkpoints, the main agent can use planner:agent with ui.batch in exec. Never guess targets for a future page.`;
     if (structured && !input.readOnly) body.messages[0].content += input.formatCorrection
       ? ' The preceding proposal could not be safely grounded. Return exactly one action using a current native ref, or typeText with point inside exactly one current editable field bounds. No input from that proposal executed. Do not return a button_plan.' : planPrompt;
     if (!structured && input.formatCorrection && input.correctionReply) {

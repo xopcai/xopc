@@ -578,3 +578,34 @@ it('clears adapter state written by a late prediction after cancellation and nev
   await stopped; await pending;
   expect(retained).toBe(false); expect(f.driver.execute).not.toHaveBeenCalled();
 });
+
+it('uses a fresh native dispatch check while retaining pixel observations for inference and completion', async () => {
+  const predict = vi.fn<PhoneModelAdapter['predict']>(async input => {
+    expect(input.observation.frame.length).toBeGreaterThan(0);
+    return { kind: 'action', action: { type: 'tap', point: [200, 300] } };
+  });
+  const f = fixture(predict);
+  f.driver.observeForDispatch = vi.fn(async (_serial, previous) => ({ ...previous, frameId: randomUUID(), capturedAt: Date.now(), frame: Buffer.alloc(0) }));
+  vi.mocked(f.driver.execute).mockImplementation(async () => { f.set(observation([element('Done')])); });
+  await f.open();
+  const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Open Done', expectText: 'Done' }, f.context) as PhoneReport;
+  expect(result).toMatchObject({ verified: true, actions: 1, modelRequests: 1 });
+  expect(f.driver.observeForDispatch).toHaveBeenCalledOnce();
+  expect(f.driver.observe).toHaveBeenCalledTimes(3);
+});
+
+it('takes a full observation before replanning after a rejected pixel-free semantic prediction', async () => {
+  const predict = vi.fn<PhoneModelAdapter['predict']>(async input => {
+    expect(input.observation.frame.length).toBeGreaterThan(0);
+    return predict.mock.calls.length === 1
+      ? { kind: 'action', action: { type: 'tapElement', frameId: input.observation.frameId, selector: { text: 'Missing' } } }
+      : { kind: 'action', action: { type: 'tap', point: [200, 300] } };
+  });
+  const f = fixture(predict, { semanticControls: true });
+  f.driver.observeForDispatch = vi.fn(async (_serial, previous) => ({ ...previous, frameId: randomUUID(), capturedAt: Date.now(), frame: Buffer.alloc(0) }));
+  vi.mocked(f.driver.execute).mockImplementation(async () => { f.set(observation([element('Done')])); });
+  await f.open();
+  const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Open Done', expectText: 'Done' }, f.context) as PhoneReport;
+  expect(result).toMatchObject({ verified: true, actions: 1, modelRequests: 2, diagnostics: { semanticRejections: 1 } });
+  expect(f.driver.execute).toHaveBeenCalledOnce();
+});

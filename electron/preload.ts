@@ -56,7 +56,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     setAppAccess: (appId: string, allowed: boolean) => ipcRenderer.invoke('computer:set-app-access', appId, allowed),
     stop: () => ipcRenderer.invoke('computer:stop'),
     reenroll: () => ipcRenderer.invoke('computer:reenroll'),
-    resume: () => ipcRenderer.invoke('computer:resume'),
   },
   clipboard: {
     writeText: (text: string) =>

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import {
-  COMPUTER_CONTROL_TOOL, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
+  COMPUTER_CONTROL_TOOL, computerActionInputCount, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
   type ActionEnvelope, type ComputerCommand, type ComputerModelBinding,
 } from '@xopcai/computer-control-contract';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
@@ -17,7 +17,8 @@ import { groundComputerAction } from './semantic-actions.js';
 import { ComputerFlowCapture, ComputerFlowStore, computerFlowMetadata, computerFlowHint, type ComputerFlowRepository } from './flows.js';
 import { ComputerSessionDiagnostics, ComputerNativeTimingSchema, type ComputerNativeTiming, type ComputerSessionReport } from './diagnostics.js';
 import { computerAgentTurn, clearComputerFrames, retainComputerFrame } from './agent-context.js';
-import { executeComputerProgram } from './program-runtime.js';
+import { executeComputerProgram, type ComputerProgramHost } from './program-runtime.js';
+import { executeComputerBatch } from './batch.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
 import { createLogger } from '../utils/logger.js';
 import { ComputerExpectationSchema, ComputerTaskState, verifyComputerExpectation,
@@ -34,7 +35,7 @@ const Reply = z.object({
   errorCode: z.string().optional(),
   diagnostic: ComputerDiagnosticSchema.optional(),
   apps: z.array(ComputerAppSchema).max(100).optional(), windows: z.array(ComputerWindowSchema).max(100).optional(),
-  receipt: z.object({ actionId: z.string(), dispatch: z.enum(['notStarted', 'started', 'completed', 'unknown']), outcome: z.enum(['applied', 'notApplied', 'unknown']), verification: z.enum(['semantic', 'artifact', 'visual', 'none']), errorCode: z.string().optional() }).optional(),
+  receipt: z.object({ actionId: z.string(), inputCount: z.number().int().min(1).max(12).optional(), steps: z.array(z.object({ index: z.number().int().min(0).max(11), dispatch: z.enum(['notStarted', 'started', 'completed', 'unknown']) }).strict()).max(12).optional(), dispatch: z.enum(['notStarted', 'started', 'completed', 'unknown']), outcome: z.enum(['applied', 'notApplied', 'unknown']), verification: z.enum(['semantic', 'artifact', 'visual', 'none']), errorCode: z.string().optional() }).optional(),
 }).strict();
 type ObservationReply = { value: z.infer<typeof Reply>; frame?: Uint8Array; mimeType?: 'image/png' | 'image/jpeg' };
 type GoalContext = { observation?: ObservationReply; observationsReused: number; stabilityObservations: number; actionsRemaining: number; nativeMs: ComputerNativeTiming };
@@ -67,6 +68,7 @@ export const ComputerUseInputSchema = z.discriminatedUnion('op', [
 export type ComputerUseInput = z.infer<typeof ComputerUseInputSchema>;
 export interface ComputerPublicResult {
   status: string; sessionId: string; output?: string; scriptError?: string; scriptErrorMessage?: string; imageRef?: string; pending?: boolean; summary?: string;
+  receipts?: Array<NonNullable<z.infer<typeof Reply>['receipt']>>;
   receipt?: z.infer<typeof Reply>['receipt']; claimedSuccess?: boolean; verified?: boolean;
   verification?: ComputerVerification;
   budget?: { actionsRemaining: number; modelRequestsRemaining: number; rescuesRemaining: number; expiresAt: number; serviceLimits?: ComputerServiceLimits };
@@ -175,6 +177,7 @@ export class ComputerRuntime {
     const combined = AbortSignal.any([signal, s.controller.signal]);
     let current: ObservationReply | undefined;
     let actions = 0;
+    const receipts: Array<NonNullable<ComputerPublicResult['receipt']>> = [];
     let imageRef: string | undefined;
     const observe = async (observationSignal = combined) => {
       current?.frame?.fill(0);
@@ -194,12 +197,30 @@ export class ComputerRuntime {
       return observation;
     };
     try {
-      const result = await executeComputerProgram(input.code, async (method, args, callSignal) => {
+      const host: ComputerProgramHost = async (method, args, callSignal) => {
         callSignal.throwIfAborted();
         if (!this.getConfig().computer.enabled || Date.now() - s.createdAt >= this.getConfig().computer.maxSessionDurationMs) throw new Error('COMPUTER_SESSION_BUDGET');
         if (JSON.stringify(computerAgentTurn(owner).binding) !== JSON.stringify(s.binding)) throw new Error('COMPUTER_AGENT_MODEL_CHANGED');
         await turn.authorize?.(method, args);
         const hostResult = await (async () => {
+        if (method === 'batch') {
+          if (s.mode === 'observe') throw new Error('COMPUTER_READ_ONLY');
+          return executeComputerBatch(args, host, {
+            remainingInputs: (input.maxActions ?? 6) - actions, signal: callSignal,
+            state: id => {
+              const observation = snapshot(id);
+              let data: Record<string, unknown>;
+              try { data = JSON.parse(observation.summary); }
+              catch { data = { text: observation.summary, elements: [], truncated: true }; }
+              return { ...data, snapshotId: id };
+            },
+            verify: expect => {
+              const verification = verifyComputerExpectation(expect, current?.value.observation);
+              s.diagnostics.verify(verification);
+              return verification;
+            },
+          });
+        }
         if (method === 'observe') {
           const options = z.object({ visual: z.boolean().optional() }).strict().parse(args ?? {});
           const state = await observe(callSignal);
@@ -222,39 +243,40 @@ export class ComputerRuntime {
           return candidates[0];
         }
         if (method === 'verify' || method === 'waitFor') {
-          const value = z.object({ expect: ComputerExpectationSchema, timeoutMs: z.number().int().min(0).max(5000).optional() }).strict().parse(args);
+          const value = z.object({ expect: ComputerExpectationSchema, timeoutMs: z.number().int().min(0).max(5000).optional(), fresh: z.boolean().optional() }).strict().parse(args);
           const deadline = Date.now() + (method === 'waitFor' ? value.timeoutMs ?? 2000 : 0);
           for (let sample = 0; sample < 20; sample++) {
-            const state = await observe(callSignal);
+            const cached = current?.value.observation;
+            const reuse = sample === 0 && !value.fresh && cached && Date.now() - cached.capturedAt >= 0 && Date.now() - cached.capturedAt <= 5000;
+            let state: Record<string, unknown>;
+            if (reuse) {
+              try { state = { ...JSON.parse(cached.summary), snapshotId: cached.id }; }
+              catch { state = { text: cached.summary, elements: [], truncated: true, snapshotId: cached.id }; }
+            } else state = await observe(callSignal);
             const verification = verifyComputerExpectation(value.expect, current!.value.observation);
             s.diagnostics.verify(verification);
-            if (verification?.status === 'satisfied' || Date.now() >= deadline || sample === 19) return { ...state, verification };
-            await delay(100, undefined, { signal: callSignal });
+            if (verification?.status === 'satisfied' || Date.now() >= deadline || sample === 19) return { ...state, verification, observationReused: Boolean(reuse) };
+            await delay(Math.min(25 * 2 ** Math.min(sample, 3), 200, Math.max(0, deadline - Date.now())), undefined, { signal: callSignal });
           }
         }
         if (method === 'act') {
           if (s.mode === 'observe') throw new Error('COMPUTER_READ_ONLY');
           const value = z.object({ snapshotId: z.string(), action: ComputerActionSchema, expect: ComputerExpectationSchema.optional() }).strict().parse(args);
           const before = snapshot(value.snapshotId);
-          if (++actions > (input.maxActions ?? 6)) throw new Error('COMPUTER_ACTION_BUDGET');
+          if ((actions += computerActionInputCount(value.action)) > (input.maxActions ?? 6)) throw new Error('COMPUTER_ACTION_BUDGET');
           const action = groundComputerAction(value.action, before);
           s.task.assertProgress(action, before);
           s.pendingContext = { goal: 'Authorized main-agent UI program', before, expectation: value.expect };
           const envelope: ActionEnvelope = { actionId: randomUUID(), sessionId: s.id, observationId: before.id,
             brokerEpoch: before.brokerEpoch, generation: before.generation, grantId: current!.value.grantId!,
             deadlineAt: Date.now() + 120_000, action };
-          const context: GoalContext = { observationsReused: 0, stabilityObservations: 0, actionsRemaining: 1,
+          const context: GoalContext = { observationsReused: 0, stabilityObservations: 0, actionsRemaining: computerActionInputCount(action),
             nativeMs: { precheckMs: 0, inputMs: 0, postObserveMs: 0 } };
           clearComputerFrames(owner); imageRef = undefined;
           current?.frame?.fill(0); current = undefined;
-          const authorizationDeadline = Date.now() + 60_000;
-          let reply = await this.dispatchAction(s, envelope, callSignal, context);
-          while (reply.status === 'pending_action') {
-            if (Date.now() >= authorizationDeadline) throw new Error('COMPUTER_AUTHORIZATION_TIMEOUT');
-            await delay(250, undefined, { signal: callSignal });
-            reply = await this.dispatchAction(s, envelope, callSignal, context);
-          }
+          const reply = await this.dispatchAction(s, envelope, callSignal, context);
           current = context.observation;
+          if (reply.receipt) receipts.push(reply.receipt);
           if (reply.errorCode || reply.receipt?.dispatch !== 'completed') throw new Error(reply.errorCode ?? 'COMPUTER_NATIVE_ACTION_FAILED');
           let state: Record<string, unknown> = {};
           try { state = JSON.parse(current?.value.observation?.summary ?? '{}'); } catch { state = { truncated: true }; }
@@ -264,9 +286,10 @@ export class ComputerRuntime {
         })();
         const checked = await turn.complete?.(method, hostResult);
         return checked ?? hostResult;
-      }, s.programStore ??= Object.create(null), combined, input.timeoutMs);
-      if (result.status === 'program_error') { await this.close(owner); return { ...result, sessionId: s.id }; }
-      return { ...result, sessionId: s.id, ...(imageRef ? { imageRef } : {}), budget: this.budget(s) };
+      };
+      const result = await executeComputerProgram(input.code, host, s.programStore ??= Object.create(null), combined, input.timeoutMs);
+      if (result.status === 'program_error') { await this.close(owner); return { ...result, sessionId: s.id, receipts }; }
+      return { ...result, sessionId: s.id, receipts, ...(imageRef ? { imageRef } : {}), budget: this.budget(s) };
     } catch (error) {
       await this.close(owner);
       throw error;
@@ -291,15 +314,8 @@ export class ComputerRuntime {
         signal.throwIfAborted();
         context.actionsRemaining = (input.maxActions ?? 6) - actionsExecuted;
         let result = await this.executeInput(owner, step, signal, diagnostics, context);
-        const authorizationDeadline = Date.now() + 60_000;
-        while (result.status === 'pending_authorization' || result.status === 'pending_action') {
-          const authorizingSession = result.status === 'pending_authorization';
-          if (Date.now() >= authorizationDeadline) { await this.close(owner); throw new Error('COMPUTER_AUTHORIZATION_TIMEOUT'); }
-          await delay(250, undefined, { signal });
-          result = await this.executeInput(owner, authorizingSession ? { op: 'observe' } : step, signal, diagnostics, context);
-          if (authorizingSession && result.status === 'ready' && !result.errorCode) result = await this.executeInput(owner, step, signal, diagnostics, context);
-        }
-        if (result.receipt?.dispatch === 'completed') actionsExecuted++;
+        if (result.receipt?.dispatch === 'completed') actionsExecuted += result.receipt.inputCount ?? 1;
+        else actionsExecuted += result.receipt?.steps?.filter(step => step.dispatch === 'completed').length ?? 0;
         if (result.errorCode || result.pending || result.receipt && result.receipt.dispatch !== 'completed') return finish(result, 'handoff');
         if (result.verified) return finish({ ...result, status: 'goal_satisfied' }, 'condition_satisfied');
         if (result.status === 'condition_present') return finish(result, 'condition_present');
@@ -393,7 +409,9 @@ export class ComputerRuntime {
         if (reply.value.status === 'stopped') this.forget(s);
         return { ...this.present(reply.value), ...(reply.value.status !== 'stopped' ? { budget: this.budget(s) } : {}) };
       }
-      const status = await this.send(s, { op: 'status', sessionId: s.id, owner }, signal);
+      let status: ObservationReply = goalContext?.observation
+        ?? await this.send(s, { op: 'status', sessionId: s.id, owner }, signal);
+      if (status.value.status === 'pending_authorization') status = await this.send(s, { op: 'settle', sessionId: s.id, owner }, signal);
       if (status.value.status === 'stopped') {
         if (status.value.errorCode) s.diagnostics.fail(new Error(status.value.errorCode), 'observe', 'notStarted');
         this.forget(s); return this.present(status.value);
@@ -471,6 +489,7 @@ export class ComputerRuntime {
           }
           if (proposal.kind === 'takeover') { s.diagnostics.count('takeovers'); return { status: 'takeover', sessionId: s.id, pending: true, budget: this.budget(s), summary: 'The GUI model requests user assistance. Inspect the authorized window locally.' }; }
           const action = groundComputerAction(proposal.action, o);
+          if ((action.kind === 'activateSequence' || action.kind === 'batch') && !goalContext) throw new Error('COMPUTER_ACTION_BUDGET');
           const e: ActionEnvelope = { actionId: randomUUID(), sessionId: s.id, observationId: o.id, brokerEpoch: o.brokerEpoch,
             generation: o.generation, grantId: observed.value.grantId!, deadlineAt: Date.now() + 120_000, action };
           s.diagnostics.phase = 'dispatch'; s.task.assertProgress(action, o);
@@ -508,13 +527,20 @@ export class ComputerRuntime {
   }
   private async dispatchAction(s: Session, envelope: ActionEnvelope, signal?: AbortSignal, goalContext?: GoalContext): Promise<ComputerPublicResult> {
     if (!s.pending) {
-      if (s.actions >= this.getConfig().computer.maxActionsPerSession) throw new Error('COMPUTER_ACTION_BUDGET');
+      if (s.actions + computerActionInputCount(envelope.action) > this.getConfig().computer.maxActionsPerSession
+        || goalContext && computerActionInputCount(envelope.action) > goalContext.actionsRemaining) throw new Error('COMPUTER_ACTION_BUDGET');
       // Reserve once before delivery; resuming the held envelope consumes no extra slot.
-      s.actions++;
+      s.actions += computerActionInputCount(envelope.action);
       s.pending = envelope;
-      s.diagnostics.propose(envelope.actionId, envelope.action.kind);
+      s.diagnostics.propose(envelope.actionId, envelope.action.kind, computerActionInputCount(envelope.action));
     }
     let reply: ObservationReply = await this.send(s, { op: 'act', sessionId: s.id, owner: s.owner, envelope }, signal);
+    if (reply.value.status === 'pending_action') {
+      reply.frame?.fill(0);
+      const settled = await this.send(s, { op: 'settle', sessionId: s.id, owner: s.owner }, signal);
+      if (settled.value.status !== 'pending_action' || settled.value.errorCode) reply = settled;
+      else reply = await this.send(s, { op: 'act', sessionId: s.id, owner: s.owner, envelope }, signal);
+    }
     if (reply.value.receipt && reply.value.receipt.actionId !== envelope.actionId) {
       reply.frame?.fill(0);
       throw new Error('COMPUTER_RECEIPT_MISMATCH');
@@ -562,7 +588,7 @@ export class ComputerRuntime {
     } else reply.frame?.fill(0);
     if (reply.value.status === 'ready' && reply.value.errorCode === 'COMPUTER_OBSERVATION_CHANGED' && !reply.value.receipt) {
       s.diagnostics.discard();
-      s.actions--; s.pendingContext = undefined;
+      s.actions -= computerActionInputCount(envelope.action); s.pendingContext = undefined;
       return { ...this.present(reply.value), budget: this.budget(s) };
     }
     const context = s.pendingContext;

@@ -4,13 +4,95 @@ Use the macOS or Windows x64 desktop app to ask xopc to read or operate one appl
 
 ## Programmable UI preview
 
+Window preparation shares a five-second deadline across launch, restoration,
+window discovery, geometry settling and screenshot checks. After restoration,
+the original process and selected window must remain unchanged, two consecutive
+window bounds must agree, and the selected window must provide a valid frame.
+Pixels need not be identical during this readiness check; normal pre-input state
+checks still apply. Cancellation stops the wait. A visible background window
+does not require activation. A window explicitly reported on another macOS Space
+is refused before activation.
+
+Failures distinguish hidden windows (`COMPUTER_WINDOW_HIDDEN`), readiness timeouts
+(`COMPUTER_WINDOW_READY_TIMEOUT`), other Spaces (`COMPUTER_WINDOW_OTHER_SPACE`),
+unavailable frames (`COMPUTER_CAPTURE_UNAVAILABLE`), and mismatched capture targets.
+Only an explicit native unsupported-background code establishes
+`COMPUTER_BACKGROUND_INPUT_UNSUPPORTED`; a generic refusal does not establish its
+cause. Tool failures include a locally derived `recovery` action and retain
+dispatch evidence. Settings shows localized explanations and preparation progress
+with the existing stop action. These additions do not require new transport fields.
+Capture retries never replay input; completed and uncertain receipts remain intact.
+
+The target application does not need foreground keyboard focus. An already-visible
+window uses background delivery, including when `prepare: true`; preparation only
+launches or restores the app when needed. Keep the xopc desktop window shown and
+not minimized. A target on another macOS Space, a hidden window, and an unfocused
+window are different states: changing focus alone does not resolve another-Space
+capture failures. Keep xopc and the target on the same desktop for those tasks.
+
 The Agent can open `computer_use` with `planner: "agent"` and execute UI-only JavaScript through `op: "exec"`. This uses the current visual main model without a separate GUI model binding. The default GUI planner keeps `step` and `run`. Every exec that acts must first observe and use that snapshot within the same exec; snapshot IDs cannot be copied between model calls.
 
 Programs reuse the existing broker and driver to observe controls, resolve exact labels, perform guarded inputs, wait for conditions and verify results. Operations remain sequential. JSON state survives calls in memory until close. Requested screenshots enter only the current model request; stored transcripts and diagnostic logs exclude pixels. Accessibility text and program source may appear in conversation history.
 
+For predictable input, use mixed batches and explicit observation checkpoints:
+
+```javascript
+const s = await ui.observe({});
+text(await ui.batch({ snapshotId: s.snapshotId, steps: [
+  { kind: 'action', action: { kind: 'setValue', text: 'Draft' },
+    target: { role: 'AXTextField', label: 'Title' } },
+  { kind: 'action', action: { kind: 'setValue', text: 'Details' },
+    target: { role: 'AXTextArea', label: 'Description' } },
+  { kind: 'observe', expect: { kind: 'field', label: 'Title', value: 'Draft' } },
+  { kind: 'action', action: { kind: 'activate' },
+    target: { role: 'AXButton', label: 'Save' } },
+  { kind: 'observe', expect: { kind: 'text', text: 'Saved successfully' },
+    timeoutMs: 2000, visual: true }
+] }));
+```
+
+Adjacent actions form one native dispatch. Each segment has one pre-dispatch
+state check and one post-action observation, with no screenshots between inputs.
+The driver still validates every target, checks native input identity, and honors
+cancellation between inputs. Coordinate inputs also check native window geometry.
+All primitive actions are supported; nested batches are refused. Every input
+consumes the existing call/session budgets, including explicit waits. A batch
+allows at most twelve inputs; exec defaults to six across all calls inside it.
+
+A conditional checkpoint checks the current returned state first. Already-ready
+conditions add no capture or delay; unmet conditions use bounded adaptive polling
+(default two seconds, maximum five seconds and twenty resamples). An unmet or
+unavailable condition stops before later inputs. A checkpoint without a condition,
+or a visual checkpoint before more steps, yields `observation_required` for the
+main model to inspect. Later targets after a conditional checkpoint must use
+unique native role/label selectors resolved against the new complete snapshot;
+stale refs and future-page coordinates are refused. Web/ambiguous targets require
+a fresh model decision. A batch is sequential and does not make a focus or page
+transition ready automatically.
+
+`ui.act` also accepts `{kind:'batch',actions:[...]}` for one mixed segment. GUI
+planners can propose mixed segments inside `run`; `step` remains one input.
+`activateSequence` remains available for native button sequences. Authorization
+is awaited directly; hosts retaining deferred decisions use an event-driven
+`settle` command instead of fixed polling. Inputs no longer sleep for 200ms after
+native acknowledgement. `ui.verify` and `ui.waitFor` can reuse the latest observation
+within five seconds; `fresh:true` forces an independent read. Explicit `ui.observe`
+always captures fresh state. Conditional waits and bounded capture recovery remain.
+
+Check `status`, `nextStep`, verification and `receipts` before continuing.
+`batch_completed` means the declared steps ended, not proof of unrelated business
+outcomes. Per-input receipts preserve completed, unknown and unstarted portions
+when a segment fails. Never replay a completed prefix or uncertain input.
+No application-specific parsing, shortcuts or execution rules are used.
+
+An opt-in macOS native candidate can execute a segment in one driver RPC when
+the driver advertises `input.batch.exact.v1`. Older drivers and Windows keep the
+existing guarded path; submitted native batches are never retried through it.
+See [native batch implementation and local build](design/technical/computer-use-native-batch.md).
+
 Initial macOS validation completed two real fixture inputs using a fixed script. It does not establish real-model task performance or certify the new mode on Windows. See the [validation record](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-programmable-ui-validation-2026-10-27.md).
 
-Native input diagnostics separate identity checks, action validation, SDK calls, response validation and render grace. SDK time includes RPC and OS work. Run opt-in fixture tests with `pnpm exec tsx scripts/benchmark-computer-input-live.mts 30`, or use `1 program` for the programmable path. The macOS live model/network comparison is `pnpm exec tsx scripts/benchmark-computer-paired-live.mts 3` (requires `DASHSCOPE_API_KEY`, sends only its disposable fixture window, and incurs real inference usage). See the [validation report](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-network-paired-validation-2026-10-27.md).
+Native input diagnostics separate identity checks, action validation, SDK calls and response validation; the legacy renderGraceMs field remains zero. SDK time includes RPC and OS work. Run opt-in fixture tests with `pnpm exec tsx scripts/benchmark-computer-input-live.mts 30`, or use `1 program` for the programmable path. The macOS live model/network comparison is `pnpm exec tsx scripts/benchmark-computer-paired-live.mts 3` (requires `DASHSCOPE_API_KEY`, sends only its disposable fixture window, and incurs real inference usage). See the [validation report](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-network-paired-validation-2026-10-27.md).
 
 ## Windows x64 preview
 
@@ -63,7 +145,7 @@ Only fresh post-action frames are reused, for up to five seconds and only inside
 
 For structured function-tool models, `run` can request a conditional plan of two to six native button presses. Before consuming a queued continuation, the executor takes up to three additional post-action observations until two consecutive snapshots agree. Unstable or failed capture hands off with the completed receipt; it never replays that input. These extra checks avoid mistaking an unfinished render for the next step's state. Before each press, the executor checks an exact expected native display value, resolves the button's current ref, and uses the ordinary broker authorization and fresh target/state check. It proceeds only after the previous dispatch completed and its post-action state matches the current observation. Ambiguous/missing/disabled targets, unexpected display values, changed state, read-only mode or a new call discard the plan. Coordinates, key sequences, arbitrary text entry and saved historical refs are excluded. Partial AX text can supply an exact positive static-text guard; it never proves absence or global uniqueness. Unsupported models continue using one decision per action. Model budgets count actual outbound requests, including corrections, rather than locally consumed plan steps.
 
-`run` results include `actionsExecuted`, `modelRequests`, `observationsReused`, `stabilityObservations`, `elapsedMs`, `phaseMs`, `nativeMs` (fresh check, input including render grace, and post-action capture), and `stopReason`. These describe the narrow goal, not proof of unrelated business outcomes. See the [live Calculator validation](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-small-goal-validation.md) for measured results and scope.
+`run` results include `actionsExecuted`, `modelRequests`, `observationsReused`, `stabilityObservations`, `elapsedMs`, `phaseMs`, `nativeMs` (fresh check, native input, and post-action capture), and `stopReason`. These describe the narrow goal, not proof of unrelated business outcomes. See the [live Calculator validation](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-small-goal-validation.md) for measured results and scope.
 
 ## Custom OpenAI-compatible models
 

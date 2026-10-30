@@ -76,3 +76,36 @@ it('honors native editability for custom classes and explicit false for EditText
   const nodes = parsePhoneUi('<hierarchy><node class="com.vendor.SearchInput" editable="true" focused="true" bounds="[0,0][100,100]"/><node class="android.widget.EditText" editable="false" bounds="[0,100][100,200]"/><node class="android.widget.EditText" bounds="[0,200][100,300]"/></hierarchy>');
   expect(nodes.map(node => node.editable)).toEqual([true, false, true]);
 });
+
+it('checks fresh native identity, geometry and foreground without capturing pixels before dispatch', async () => {
+  const f = observer();
+  const command = vi.fn(async (_path: string, args: string[]) => Buffer.from(args.some(arg => arg.includes('dumpsys activity'))
+    ? 'mResumedActivity: ActivityRecord{ u0 com.test.app/.Main }'
+    : 'Viewport INTERNAL: displayId=0, orientation=0, logicalFrame=[0, 0, 720, 1280], isActive=[1]\nSurfaceOrientation: 0'));
+  const driver = new AdbPhoneDriver('adb', command, false, undefined, undefined, undefined, undefined, async () => f.session);
+  const capture = vi.spyOn(driver, 'capture').mockImplementation(async () => screen());
+  const previous = await driver.observe('phone', signal()); capture.mockClear();
+  const fresh = await driver.observeForDispatch('phone', previous, { type: 'tap', point: [100, 100] }, signal());
+  expect(fresh).toMatchObject({ package: previous.package, elements: previous.elements, width: 720, height: 1280, rotation: 0 });
+  expect(fresh.frame).toHaveLength(0); expect(fresh.frameId).not.toBe(previous.frameId);
+  expect(f.snapshot).toHaveBeenCalledTimes(2); expect(capture).not.toHaveBeenCalled();
+  expect(command.mock.calls.filter(([, args]) => args.some(arg => arg.includes('dumpsys activity')))).toHaveLength(2);
+  await driver.releaseInput();
+});
+
+it.each(['tree', 'rotation', 'size', 'unknown-display', 'foreground', 'empty-native', 'current-empty', 'surface-rotation'])('falls back to a fresh screenshot when dispatch guard cannot prove %s stability', async kind => {
+  const f = observer(); let foreground = 0;
+  const command = vi.fn(async (_path: string, args: string[]) => Buffer.from(args.some(arg => arg.includes('dumpsys activity'))
+    ? `mResumedActivity: ActivityRecord{ u0 ${kind === 'foreground' && ++foreground === 2 ? 'com.other.app' : 'com.test.app'}/.Main }`
+    : kind === 'unknown-display' ? 'Unknown viewport' : `Viewport INTERNAL: displayId=0, orientation=${kind === 'rotation' ? 1 : 0}, logicalFrame=[0, 0, ${kind === 'size' ? 1280 : 720}, 1280], isActive=[1]\nSurfaceOrientation: ${kind === 'surface-rotation' ? 1 : 0}`));
+  const driver = new AdbPhoneDriver('adb', command, false, undefined, undefined, undefined, undefined, async () => f.session);
+  vi.spyOn(driver, 'capture').mockImplementation(async () => screen());
+  const previous = await driver.observe('phone', signal());
+  if (kind === 'tree') previous.elements[0].text = 'Changed';
+  if (kind === 'empty-native') previous.elements = [];
+  if (kind === 'current-empty') f.snapshot.mockResolvedValue('<hierarchy><node package="com.test.app"/></hierarchy>');
+  const observe = vi.spyOn(driver, 'observe');
+  const fresh = await driver.observeForDispatch('phone', previous, { type: 'tap', point: [100, 100] }, signal());
+  expect(observe).toHaveBeenCalledOnce(); expect(fresh.frame.length).toBeGreaterThan(0);
+  await driver.releaseInput();
+});

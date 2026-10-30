@@ -435,6 +435,7 @@ class MainScreenTest {
       ConversationMedia("audio-1", "voice.m4a", "audio", "audio/mp4", 2048, "media://audio-1"),
       ConversationMedia("image-1", "one.png", "image", "image/png", png.size.toLong(), "media://image-1"),
       ConversationMedia("image-2", "two.png", "image", "image/png", png.size.toLong(), "media://image-2"),
+      ConversationMedia("image-3", "three.png", "image", "image/png", png.size.toLong(), "media://image-3"),
       ConversationMedia("file-1", "one.txt", "document", "text/plain", 3, "media://file-1"),
       ConversationMedia("file-2", "two.bin", "document", "application/octet-stream", 4, "media://file-2"),
       ConversationMedia("file-3", "three.json", "document", "application/json", 5, "media://file-3"),
@@ -454,13 +455,19 @@ class MainScreenTest {
     val bubbleBounds = composeTestRule.onNodeWithTag("message-more-user-media")
       .fetchSemanticsNode().boundsInRoot
     assertTrue(audioBounds.width < bubbleBounds.width)
-    composeTestRule.onNodeWithTag("message-image-strip-user-media", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithTag("message-image-grid", useUnmergedTree = true).assertExists()
+    val imageBounds = (1..3).map { index -> composeTestRule.onNodeWithTag("message-image-image-$index")
+      .fetchSemanticsNode().boundsInRoot }
+    assertEquals(imageBounds[0].top, imageBounds[2].top, 1f)
+    assertTrue(imageBounds[2].right <= bubbleBounds.right)
     composeTestRule.onNodeWithTag("message-image-thumbnail-image-1", useUnmergedTree = true).assertExists()
     saveAcceptanceScreenshot("message-media-layout.png")
     composeTestRule.onNodeWithTag("message-image-image-1").performClick()
     composeTestRule.onNodeWithTag("message-media-preview-image").assertExists()
     composeTestRule.onNodeWithTag("message-image-next").performClick()
-    composeTestRule.onNodeWithText("two.png").assertExists()
+    composeTestRule.onNodeWithText("2 / 3").assertExists()
+    composeTestRule.onNodeWithTag("message-image-pager").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithText("3 / 3").assertExists()
     composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
 
     composeTestRule.onNodeWithTag("message-attachments-toggle-user-media").performScrollTo().performClick()

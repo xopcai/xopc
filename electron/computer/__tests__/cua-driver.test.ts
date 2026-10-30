@@ -26,14 +26,16 @@ describe('private native driver admission', () => {
     vi.spyOn(driver as any, 'getWindowState').mockImplementation(async (pid: number, windowId: bigint, options: any) => {
       const data = (await call('get_window_state', { pid, window_id: Number(windowId), include_screenshot: options.includeScreenshot,
         max_elements: options.maxElements, max_depth: options.maxDepth, max_dimension: options.maxDimension })).data as any;
-      return { pid: data.pid, windowId: BigInt(data.window_id), degraded: data.degraded,
-        elements: data.elements?.map((element: any, index: number) => ({ elementIndex: BigInt(element.element_index ?? index), ...element })), images: [] };
+      return { pid: data.pid ?? pid, windowId: BigInt(data.window_id ?? windowId), degraded: data.degraded,
+        elements: data.elements?.map((element: any, index: number) => ({ elementIndex: BigInt(element.element_index ?? index), ...element })),
+        windowBounds: { x: 0, y: 0, width: 800, height: 600 }, screenshotWidth: 800, screenshotHeight: 600,
+        images: options.includeScreenshot ? [{ mimeType: 'image/png', dataBase64: 'AQID' }] : [] };
     });
     class WindowTarget { inner: unknown; constructor(inner: unknown) { this.inner = inner; } }
     class Coordinates { inner: unknown; constructor(inner: unknown) { this.inner = inner; } }
     const client = { click: vi.fn().mockResolvedValue({ route: 'ax', effect: 'unverifiable' }), pressKey: vi.fn().mockResolvedValue({ isError: false }), hotkey: vi.fn().mockResolvedValue({ isError: false }), scroll: vi.fn().mockResolvedValue({ isError: false }) };
     Object.assign(driver as any, { client, sdk: { ActionTarget: { Window: WindowTarget }, ClickPosition: { Coordinates, Element: Coordinates },
-      ActionRoute: { Accessibility: 'ax' }, ActionEffect: { Confirmed: 'confirmed', Unverifiable: 'unverifiable' },
+      ActionRoute: { Accessibility: 'ax' }, ActionEffect: { Confirmed: 'confirmed', Unverifiable: 'unverifiable', Refused: 'refused' },
       ClickButton: { Left: 'left', Right: 'right' }, InputDeliveryMode: { Background: 'background' },
       ScrollDirection: { Up: 'up', Down: 'down', Left: 'left', Right: 'right' }, ScrollBy: { Line: 'line' } } });
     return { driver, call, client };
@@ -59,22 +61,25 @@ describe('private native driver admission', () => {
     const f = native([{ ...window(9, 'Calculator', false, 1), on_current_space: false }]);
     await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).rejects.toThrow('COMPUTER_WINDOW_OTHER_SPACE');
   });
-  it('delays post-action observation until the short native render grace ends, without replaying input', async () => {
+  it('returns an acknowledged input without scheduling render grace', async () => {
     const f = native([]); vi.useFakeTimers();
     const target = { appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' };
-    const capture = vi.fn();
-    const performing = f.driver.perform(target, { kind: 'click', point: { x: 5, y: 7 }, button: 'left', count: 1 }, new AbortController().signal).then(capture);
-    await vi.advanceTimersByTimeAsync(199);
-    expect(f.client.click).toHaveBeenCalledOnce(); expect(capture).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1); await performing;
-    expect(capture).toHaveBeenCalledOnce(); expect(f.client.click).toHaveBeenCalledOnce();
+    await f.driver.perform(target, { kind: 'click', point: { x: 5, y: 7 }, button: 'left', count: 1 }, new AbortController().signal);
+    expect(f.client.click).toHaveBeenCalledOnce();
+    expect(f.driver.getLastInputTiming()?.renderGraceMs).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
   });
-  it('honors cancellation during render grace without replaying an acknowledged input', async () => {
-    const f = native([]); vi.useFakeTimers(); const controller = new AbortController();
+  it('honors cancellation during native input without replaying it', async () => {
+    const f = native([]); const controller = new AbortController();
+    let entered!: () => void; const started = new Promise<void>(resolve => { entered = resolve; });
+    f.client.click.mockImplementation(async (_input: unknown, options: any) => {
+      entered();
+      return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true }));
+    });
     const target = { appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' };
     const performing = f.driver.perform(target, { kind: 'click', point: { x: 5, y: 7 }, button: 'left', count: 1 }, controller.signal);
     const rejected = expect(performing).rejects.toThrow();
-    await vi.advanceTimersByTimeAsync(10); controller.abort(); await rejected;
+    await started; controller.abort(); await rejected;
     expect(f.client.click).toHaveBeenCalledOnce();
   });
   it('does not auto-select a sharing accessory above the document even if both expose AXWindow', async () => {
@@ -85,7 +90,7 @@ describe('private native driver admission', () => {
   it('never substitutes a visible accessory for an off-screen document', async () => {
     const f = native([{ ...window(9, 'Document', false, 1), layer: 0 }, { ...window(10, 'Window', true, 99), layer: 102 }]);
     const error = await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false }).catch(error => error);
-    expect(error.message).toBe('COMPUTER_WINDOW_REQUIRED');
+    expect(error.message).toBe('COMPUTER_WINDOW_HIDDEN');
     expect(await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false, windowRef: error.windows[1].windowRef })).toMatchObject({ windowId: '10' });
   });
   it('prefers an actual AXWindow over higher menu/proxy windows without taking screenshots', async () => {
@@ -127,7 +132,8 @@ describe('private native driver admission', () => {
     });
     expect(await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true })).toMatchObject({ windowId: '5' });
     expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42 }, expect.any(AbortSignal));
-    expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42, window_id: 5 }, expect.any(AbortSignal));
+    expect(f.call.mock.calls.filter(([name]) => name === 'bring_to_front')).toHaveLength(1);
+    expect(f.call).not.toHaveBeenCalledWith('bring_to_front', { pid: 42, window_id: 5 }, expect.any(AbortSignal));
   });
   it('refreshes activation after app preparation without a redundant window activation', async () => {
     const rows = [window(9, 'Settings', false), window(10, '', false)];
@@ -177,7 +183,7 @@ describe('private native driver admission', () => {
   });
   it('restores only an explicitly prepared target and checks the resulting visibility', async () => {
     const rows = [window(9, 'First', false)]; const f = native(rows);
-    await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).rejects.toThrow('WINDOW_REQUIRED');
+    await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).rejects.toThrow('WINDOW_HIDDEN');
     expect(f.call).not.toHaveBeenCalledWith('bring_to_front', expect.anything(), expect.anything());
     f.call.mockImplementation(async (name: unknown) => {
       if (name === 'bring_to_front') rows[0].is_on_screen = true;
@@ -186,12 +192,16 @@ describe('private native driver admission', () => {
     expect(await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true })).toMatchObject({ windowId: '9' });
     expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42, window_id: 9 }, expect.any(AbortSignal));
   });
-  it('also brings an already-visible window forward when preparation is authorized', async () => {
+  it('uses a visible background window without requesting foreground activation even when prepared', async () => {
     const f = native([window(9, 'Today', true)]);
+    f.call.mockImplementation(async (name: unknown) => {
+      if (name === 'bring_to_front') throw new Error('COMPUTER_DRIVER_BRING_TO_FRONT_REFUSED');
+      return { data: name === 'list_apps' ? { apps: [{ bundle_id: 'fixture', pid: 42 }] } : { windows: [window(9, 'Today', true)] } };
+    });
     await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false });
     expect(f.call).not.toHaveBeenCalledWith('bring_to_front', expect.anything(), expect.anything());
-    await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true });
-    expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42, window_id: 9 }, expect.any(AbortSignal));
+    await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true })).resolves.toMatchObject({ windowId: '9' });
+    expect(f.call).not.toHaveBeenCalledWith('bring_to_front', expect.anything(), expect.anything());
   });
   it('does not reactivate an already-frontmost sole visible window', async () => {
     const f = native([window(9, 'Today', true)], [{ bundle_id: 'fixture', name: '飞书', pid: 42, running: true, active: true }]);
@@ -281,12 +291,30 @@ describe('private native driver admission', () => {
     expect(f.driver.getCaptureStats()).toEqual({ attempts: 2, invalidFrames: 1, recovered: 1, exhausted: 0 });
     expect(f.client.click).not.toHaveBeenCalled();
   });
+  it('recaptures a missing screenshot without replaying native input', async () => {
+    const f = semanticNative();
+    vi.spyOn(f.driver as any, 'listWindows').mockResolvedValue([{ pid: 42, windowId: 9n, isOnScreen: true, bounds: f.state.windowBounds }]);
+    f.capture.mockResolvedValueOnce({ ...f.state, images: [] }).mockResolvedValueOnce(f.state);
+    await expect(f.driver.observe(f.target, f.signal)).resolves.toHaveProperty('image');
+    expect(f.capture).toHaveBeenCalledTimes(2);
+    expect(f.client.click).not.toHaveBeenCalled();
+  });
+  it.each([
+    [{ code: 'background_delivery_unsupported' }, 'COMPUTER_BACKGROUND_INPUT_UNSUPPORTED'],
+    [{ code: 'refused', hint: 'Try foreground' }, 'COMPUTER_DRIVER_CLICK_REFUSED'],
+  ])('classifies an explicit native refusal without foreground fallback', async (error, code) => {
+    const f = semanticNative();
+    await f.driver.observe(f.target, f.signal);
+    f.client.click.mockResolvedValue({ route: 'ax', effect: 'refused', error } as any);
+    await expect(f.driver.perform(f.target, { kind: 'click', point: { x: 5, y: 5 }, button: 'left', count: 1 }, f.signal)).rejects.toThrow(code);
+    expect(f.client.click).toHaveBeenCalledOnce();
+  });
   it('refuses geometry changes during invalid-frame recovery without accepting pixels', async () => {
     const f = semanticNative();
     vi.spyOn(f.driver as any, 'listWindows').mockResolvedValue([{pid:42,windowId:9n,isOnScreen:true,bounds:f.state.windowBounds}]);
     f.capture.mockResolvedValueOnce({ ...f.state, images: [], screenshotFrameValid: false })
       .mockResolvedValueOnce({ ...f.state, windowBounds: { ...f.state.windowBounds, x: 101 }, screenshotFrameValid: true });
-    await expect(f.driver.observe(f.target, f.signal)).rejects.toThrow('COMPUTER_WINDOW_CHANGED');
+    await expect(f.driver.observe(f.target, f.signal)).rejects.toThrow('COMPUTER_UI_UNSTABLE');
     expect(f.client.click).not.toHaveBeenCalled();
   });
   it.each([
@@ -299,7 +327,7 @@ describe('private native driver admission', () => {
     vi.spyOn(driver as any, 'listWindows').mockResolvedValue([{pid:42,windowId:9n,isOnScreen:true,bounds:{x:0,y:0,width:800,height:600}}]);
     const capture = vi.spyOn(driver as any, 'getWindowState').mockResolvedValue(state);
     await expect(driver.observe({ appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9',
-      width: 800, height: 600, geometryRevision: '1' }, new AbortController().signal)).rejects.toThrow('CAPTURE_TARGET_MISMATCH');
+      width: 800, height: 600, geometryRevision: '1' }, new AbortController().signal)).rejects.toThrow(count === 4 ? 'CAPTURE_UNAVAILABLE' : 'CAPTURE_TARGET_MISMATCH');
     expect(capture).toHaveBeenCalledTimes(count);
   });
   it('cancels invalid-frame resampling before another capture', async () => {
@@ -422,6 +450,112 @@ describe('private native driver admission', () => {
     expect(input.position.inner).toEqual({ elementToken: 'token-refreshed' });
     expect(input).toMatchObject({ deliveryMode: 'background', count: 1, button: kind === 'activate' ? 'left' : 'right' });
     expect(f.call).not.toHaveBeenCalled();
+  });
+  it('executes a native button sequence without render grace or intermediate capture', async () => {
+    const f = semanticNative();
+    await f.driver.observe(f.target, f.signal);
+    const captures = f.capture.mock.calls.length;
+    await f.driver.perform(f.target, { kind: 'activateSequence', refs: ['e1', 'e1', 'e1'] }, f.signal);
+    expect(f.client.click).toHaveBeenCalledTimes(3);
+    expect(f.capture).toHaveBeenCalledTimes(captures);
+    expect(f.driver.getLastInputTiming()?.renderGraceMs).toBe(0);
+  });
+  it('validates every sequence target before sending its first input', async () => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    await expect(f.driver.perform(f.target, { kind: 'activateSequence', refs: ['e1', 'missing'] }, f.signal)).rejects.toThrow('ELEMENT_REF_REQUIRED');
+    expect(f.client.click).not.toHaveBeenCalled();
+    const field = semanticNative({ role: 'AXTextField' }); await field.driver.observe(field.target, field.signal);
+    expect(() => field.driver.validateAction({ kind: 'activateSequence', refs: ['e1', 'e1'] })).toThrow('SEMANTIC_ACTION_UNSUPPORTED');
+  });
+  it('executes mixed native inputs without capture and reports a completed prefix on refusal', async () => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    const progress = vi.fn();
+    f.client.click.mockResolvedValueOnce({ route: 'ax', effect: 'refused' });
+    const captures = f.capture.mock.calls.length;
+    await expect(f.driver.perform(f.target, { kind: 'batch', actions: [
+      { kind: 'pressKeys', keys: ['end'] }, { kind: 'activate', ref: 'e1' }, { kind: 'pressKeys', keys: ['return'] },
+    ] }, f.signal, progress)).rejects.toThrow('SEMANTIC_ACTION_UNCONFIRMED');
+    expect(progress.mock.calls).toEqual([[0, 'started'], [0, 'completed'], [1, 'started'], [1, 'unknown']]);
+    expect(f.client.pressKey).toHaveBeenCalledOnce();
+    expect(f.capture).toHaveBeenCalledTimes(captures);
+  });
+  it('sends a mixed segment in one exact native RPC and performs only one process check', async () => {
+    const f = semanticNative({ role: 'AXTextField' }); await f.driver.observe(f.target, f.signal);
+    const identity = (f.driver as any).processIdentity;
+    const checks = identity.mock.calls.length;
+    const captures = f.capture.mock.calls.length;
+    const callTool = vi.fn().mockResolvedValue({ isError: false, images: [], structuredJson: JSON.stringify({
+      ok: true, strict_targets: true, total: 2, executed: 2, failed_step: null,
+      steps: [{ index: 0, ok: true, dispatch: 'completed' }, { index: 1, ok: true, dispatch: 'completed' }],
+    }) });
+    Object.assign(f.client, { callTool }); Object.assign(f.driver as any, { exactNativeBatch: true });
+    const progress = vi.fn();
+    await f.driver.perform(f.target, { kind: 'batch', actions: [
+      { kind: 'setValue', ref: 'e1', text: 'Draft' }, { kind: 'pressKeys', keys: ['end'] },
+    ] }, f.signal, progress);
+    expect(callTool).toHaveBeenCalledOnce();
+    const [tool, raw] = callTool.mock.calls[0];
+    expect(tool).toBe('run_steps');
+    expect(JSON.parse(raw)).toMatchObject({ strict_targets: true, pid: 42, window_id: 9, delivery_mode: 'background',
+      foreground_fallback: false, delay_ms: 0, expected_bounds: { x: 100, y: 50, width: 800, height: 600 },
+      steps: [{ tool: 'set_value', args: { pid: 42, window_id: 9, element_token: 'token-1', value: 'Draft' } },
+        { tool: 'press_key', args: { pid: 42, window_id: 9, key: 'end' } }] });
+    expect(progress.mock.calls).toEqual([[0, 'started'], [1, 'started'], [0, 'completed'], [1, 'completed']]);
+    expect(identity).toHaveBeenCalledTimes(checks + 1);
+    expect(f.capture).toHaveBeenCalledTimes(captures);
+    expect(f.call).not.toHaveBeenCalled(); expect(f.client.click).not.toHaveBeenCalled(); expect(f.client.pressKey).not.toHaveBeenCalled();
+  });
+  it('preserves the native completed prefix without scalar replay after a batch failure', async () => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    const callTool = vi.fn().mockResolvedValue({ isError: true, images: [], structuredJson: JSON.stringify({
+      ok: false, strict_targets: true, total: 3, executed: 2, failed_step: 1,
+      steps: [{ index: 0, ok: true, dispatch: 'completed' }, { index: 1, ok: false, dispatch: 'unknown' }],
+    }) });
+    Object.assign(f.client, { callTool }); Object.assign(f.driver as any, { exactNativeBatch: true });
+    const progress = vi.fn();
+    await expect(f.driver.perform(f.target, { kind: 'activateSequence', refs: ['e1', 'e1', 'e1'] }, f.signal, progress)).rejects.toThrow('NATIVE_BATCH_FAILED');
+    expect(progress.mock.calls.slice(-3)).toEqual([[0, 'completed'], [1, 'unknown'], [2, 'notStarted']]);
+    expect(callTool).toHaveBeenCalledOnce(); expect(f.client.click).not.toHaveBeenCalled();
+  });
+  it('treats a lost native reply as unknown and never falls back to scalar calls', async () => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    const callTool = vi.fn().mockRejectedValue(new Error('connection lost'));
+    Object.assign(f.client, { callTool }); Object.assign(f.driver as any, { exactNativeBatch: true });
+    const progress = vi.fn();
+    await expect(f.driver.perform(f.target, { kind: 'activateSequence', refs: ['e1', 'e1'] }, f.signal, progress)).rejects.toThrow('connection lost');
+    expect(progress.mock.calls.slice(-2)).toEqual([[0, 'unknown'], [1, 'unknown']]);
+    expect(callTool).toHaveBeenCalledOnce(); expect(f.client.click).not.toHaveBeenCalled();
+  });
+  it('reaps the private driver before returning an aborted native batch', async () => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    const controller = new AbortController();
+    let entered!: () => void; const pending = new Promise<void>(resolve => { entered = resolve; });
+    const callTool = vi.fn(async (_name, _args, options) => {
+      entered(); return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true }));
+    });
+    Object.assign(f.client, { callTool }); Object.assign(f.driver as any, { exactNativeBatch: true });
+    const stop = vi.spyOn(f.driver, 'stop').mockResolvedValue(undefined);
+    const running = f.driver.perform(f.target, { kind: 'activateSequence', refs: ['e1', 'e1'] }, controller.signal);
+    const rejected = expect(running).rejects.toThrow();
+    await pending; controller.abort(); await rejected;
+    expect(stop).toHaveBeenCalledOnce(); expect(f.client.click).not.toHaveBeenCalled();
+  });
+  it('cancels between mixed inputs without starting the next one', async () => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    const controller = new AbortController();
+    const progress = vi.fn((_index, dispatch) => { if (dispatch === 'completed') controller.abort(); });
+    await expect(f.driver.perform(f.target, { kind: 'batch', actions: [
+      { kind: 'activate', ref: 'e1' }, { kind: 'pressKeys', keys: ['return'] },
+    ] }, controller.signal, progress)).rejects.toThrow();
+    expect(progress.mock.calls).toEqual([[0, 'started'], [0, 'completed']]);
+    expect(f.client.click).toHaveBeenCalledOnce();
+    expect(f.client.pressKey).not.toHaveBeenCalled();
+  });
+  it('stops a sequence immediately after native refusal without replaying its prefix', async () => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    f.client.click.mockResolvedValueOnce({ route: 'ax', effect: 'confirmed' }).mockResolvedValueOnce({ route: 'ax', effect: 'refused' });
+    await expect(f.driver.perform(f.target, { kind: 'activateSequence', refs: ['e1', 'e1', 'e1'] }, f.signal)).rejects.toThrow('SEMANTIC_ACTION_UNCONFIRMED');
+    expect(f.client.click).toHaveBeenCalledTimes(2);
   });
   it('does not advertise native actions without an executable private token', async () => {
     const f = semanticNative({ elementToken: undefined });

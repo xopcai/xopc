@@ -24,8 +24,6 @@
     "authorizeApp": "授权",
     "revokeApp": "撤销",
     "stoppedNotice": "桌面控制已停止。",
-    "pausedNotice": "桌面控制已暂停。",
-    "resume": "恢复桌面控制",
     "browser": "浏览器",
     "otherControl": "其他控制",
     "browserEnabled": "已开启",
@@ -61,6 +59,32 @@
     "manageModels": "接入模型服务",
     "retry": "重试",
     "nativeError": "无法读取桌面状态，请检查桌面应用后重试。",
-    "states": { "idle": "无活动会话", "pending_authorization": "等待本机授权", "ready": "就绪", "running": "操作中", "pending_action": "等待操作确认", "paused": "已暂停", "stopped": "已停止" }
+    "states": {
+      "idle": "无活动会话",
+      "pending_authorization": "等待本机授权",
+      "ready": "就绪",
+      "running": "操作中",
+      "pending_action": "等待操作确认",
+      "paused": "已暂停",
+      "stopped": "已停止"
+    },
+    "preparingWindow": "正在恢复应用，等待窗口就绪…",
+    "preparationHint": "最长等待 5 秒，可随时停止。无需保持目标窗口的键盘焦点。",
+    "inputNotStarted": "尚未发送任务输入。",
+    "inputCompleted": "上一步已执行，请勿重复操作。",
+    "inputUnknown": "上一步是否执行尚不确定，请先核对应用状态。",
+    "errors": {
+      "hidden": "目标窗口已隐藏或最小化，请显示窗口后继续。",
+      "readyTimeout": "已尝试准备应用，但窗口在 5 秒内未就绪。请检查应用是否已打开。",
+      "otherSpace": "目标窗口位于其他桌面，请将它与 xopc 放在同一桌面。",
+      "capture": "已找到窗口，但暂时无法读取画面。请检查窗口状态后重试。",
+      "captureMismatch": "窗口画面与选定目标不一致，已停止操作。请重新选择窗口。",
+      "backgroundUnsupported": "此控件明确不支持当前后台输入方式，需要手动完成此步骤。",
+      "inputRefused": "应用拒绝了此次输入，原因尚不明确。请核对实际结果，不要重复输入。",
+      "localUi": "请显示 xopc 窗口后重新开始，无需保持键盘焦点。",
+      "windowChanged": "原窗口已关闭或不再可用，请重新选择窗口。",
+      "permission": "系统报告桌面访问权限不可用，请检查本机权限设置。"
+    },
+    "preparationElapsed": "已等待 {seconds} 秒"
   }
 }

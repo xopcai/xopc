@@ -76,15 +76,8 @@ describe('chat message layout parity', () => {
     expect(content).toContain(".fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)");
     expect(userContent).not.toContain('textAlign(TextAlign.End)');
     expect(content).toContain("if (this.row.role !== 'user')");
-    expect(imageStrip).toContain(".id('chat-user-image-strip-' + this.row.id)");
-    expect(content).toContain('@Computed get userImageThumbnailSize(): number { return this.imageMedia.length === 1 ? 120 : 112; }');
-    expect(imageStrip).toContain('embedded: true, compactThumbnail: true, compactThumbnailWidth: this.userImageThumbnailSize');
-    expect(imageStrip).toContain('compactThumbnailHeight: this.userImageThumbnailSize');
-    expect(imageStrip).toContain('compactThumbnailContain: false, compactMetadata: false, compactDisclosure: false');
-    expect(imageStrip).toContain('imageGallery: this.galleryMedia');
-    expect(imageStrip).toContain('.width(this.userImageThumbnailSize).height(this.userImageThumbnailSize)');
-    expect(imageStrip).toContain('.height(this.userImageThumbnailSize)');
-    expect(imageStrip).toContain(".justifyContent(this.row.role === 'user' && this.imageMedia.length === 1 ? FlexAlign.End : FlexAlign.Start)");
+    expect(imageStrip).toContain('XopcChatImageGrid({ files: this.imageMedia, gallery: this.galleryMedia');
+    expect(imageStrip).not.toContain('ScrollDirection.Horizontal');
     expect(content).toContain(".alignItems(this.row.role === 'user' ? HorizontalAlign.End : HorizontalAlign.Start)");
     expect(content).toContain("if (this.row.role !== 'user')");
     expect(content).toContain("filePreviewKind(file.name, file.mimeType) !== 'image'");

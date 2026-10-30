@@ -4,6 +4,7 @@ import { XopcArtifact, XopcHistoryMedia, XopcChatRow, XopcProductDelivery, XopcP
 import { XopcMobileRoute } from '../model/home';
 import { artifactMedia, chatDeliveries, chatProductCapability } from '../common/chatRichContent';
 import { markdownLink } from '../common/markdown';
+import { XopcChatImageGrid } from './ChatImageGrid';
 import { XopcChatMediaView } from './ChatMediaView';
 import { appSettings } from '../service/settings';
 import { hiddenResultCount, previewArtifacts, previewDeliveries } from '../common/chatResultPreview';
@@ -93,19 +94,8 @@ export struct XopcChatResultTail {
     if (!this.row.live && (this.artifacts.length || this.deliveries.length)) {
       Column({ space: 4 }) {
           if (this.imageArtifacts.length) {
-            Scroll() {
-              Row({ space: 8 }) {
-                Repeat<XopcArtifact>(this.imageArtifacts).each((item: RepeatItem<XopcArtifact>) => {
-                  Column() {
-                    XopcChatMediaView({ file: artifactMedia(item.item), conversationId: this.conversationId,
-                      compact: true, embedded: true, compactThumbnail: true, compactMetadata: false,
-                      compactDisclosure: false, compactThumbnailWidth: this.imageArtifacts.length === 1 ? 240 : 144,
-                      compactThumbnailHeight: this.imageArtifacts.length === 1 ? 240 : 144,
-                      imageGallery: this.imageGallery })
-                  }.width(this.imageArtifacts.length === 1 ? 240 : 144).borderRadius(12).clip(true)
-                }).key((artifact: XopcArtifact): string => artifact.artifactId)
-              }
-            }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+            XopcChatImageGrid({ files: this.imageArtifacts.map((artifact: XopcArtifact): XopcHistoryMedia => artifactMedia(artifact)),
+              gallery: this.imageGallery, conversationId: this.conversationId })
           }
           Repeat<XopcArtifact>(this.visibleArtifacts).each((item: RepeatItem<XopcArtifact>) => {
             if (item.item.availability === 'available' && (item.item.uri || item.item.workspaceRelativePath)) {
@@ -157,7 +147,7 @@ export struct XopcChatResultTail {
               .fontWeight(FontWeight.Medium).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
               .onClick((): void => { this.expanded = !this.expanded; })
           }
-      }.id('chat-result-tail-' + this.row.id).width('88%').constraintSize({ maxWidth: 420 }).padding(4)
+      }.id('chat-result-tail-' + this.row.id).width('100%').constraintSize({ maxWidth: 420 }).padding(4)
         .borderRadius(14).backgroundColor(this.colors.input)
         .margin({ top: 8, bottom: 4 }).accessibilityText($r('app.string.chat_deliverables'))
     }

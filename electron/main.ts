@@ -18,9 +18,6 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 
-/** Before config loader initializes pino (thread-stream worker path breaks when bundled under `out/main/`). */
-import './thread-stream-bundle-shim.js';
-
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
 import { ExternalIntakeQueue, intakePaths } from './external-intake.js';
 import { xopcDeepLinkTarget } from './deep-link.js';
@@ -1244,7 +1241,6 @@ app.whenReady().then(async () => {
     return desktopEndpointHost?.setComputerAppAccess(appId, allowed);
   });
   ipcMain.handle('computer:stop', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.stopControl(); return { ok: true }; });
-  ipcMain.handle('computer:resume', (event) => { assertMainComputerRenderer(event); desktopEndpointHost?.resumeControl(); return desktopEndpointHost?.snapshot(); });
   ipcMain.handle('computer:reenroll', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
   const { fileIpcRoots } = gatewayConfig;
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });

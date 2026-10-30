@@ -22,14 +22,18 @@ import { writeTextAtomic } from '../../src/infra/write-file-atomic.js';
 import { createLogger } from '../../src/utils/logger.js';
 import { uploadDesktopFrame } from './frame-upload.js';
 import { executeComputerCommand } from './execute-command.js';
+import { resolveLocalComputerDriver } from './local-driver.js';
 import { ComputerAccessPolicy } from './access-policy.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
 const log = createLogger('DesktopEndpointHost');
 
-export function resolveComputerDriverPath(options: { packaged: boolean; resourcesPath: string; mainDir: string; platform?: NodeJS.Platform; arch?: string }): string {
+export function resolveComputerDriverPath(options: { packaged: boolean; resourcesPath: string; mainDir: string; platform?: NodeJS.Platform; arch?: string; useLocalBuild?: boolean }): string {
   const platform = options.platform ?? process.platform;
   const name = platform === 'win32' ? 'cua-driver.exe' : 'cua-driver';
+  if (!options.packaged && (options.useLocalBuild ?? process.env.XOPC_COMPUTER_DRIVER_BUILD === 'local')) {
+    return resolveLocalComputerDriver(join(options.mainDir, '..', '..'), platform, options.arch ?? process.arch);
+  }
   return options.packaged
     ? join(options.resourcesPath, 'bin', name)
     : join(options.mainDir, '..', '..', '.cache', 'computer-driver', '0.36.0', ...(platform === 'win32' ? [`win32-${options.arch ?? process.arch}`] : []), name);
@@ -53,11 +57,10 @@ export class DesktopEndpointHost {
   private error?: string;
   private reenrollmentRequired = false;
   private reenrolling = false;
-  private controlPaused = false;
   private readonly lifetime = new AbortController();
   private readonly accessPolicy = new ComputerAccessPolicy();
-  private stopBrokerInBackground(): void {
-    void this.broker.stop().catch(() => {
+  private stopBrokerInBackground(errorCode?: 'COMPUTER_LOCAL_UI_REQUIRED'): void {
+    void this.broker.stop(errorCode).catch(() => {
       if (!this.reenrollmentRequired) this.error = 'COMPUTER_DRIVER_CLEANUP_UNCONFIRMED';
       log.warn({ phase: 'cleanup' }, 'Computer driver stop could not be confirmed');
     });
@@ -68,25 +71,20 @@ export class DesktopEndpointHost {
     const sdkUrl = resolveComputerDriverSdkUrl({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
     const loadSdk = sdkUrl ? () => import(/* @vite-ignore */ sdkUrl) : undefined;
     this.broker = new ComputerBroker(new CuaComputerDriver(binary, app.isPackaged ? 'ai.xopc.xopc' : 'com.github.Electron', loadSdk), {
-      isVisible: () => this.visible() && !this.controlPaused,
+      isVisible: () => this.visible(),
       requestApproval: (request, signal) => this.approve(request, signal),
     }, { enabled: true });
   }
   private visible(): boolean { const w = this.options.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); }
   snapshot() { return { connected: !!this.claim, claim: this.claim, error: this.error, reenrollmentRequired: this.reenrollmentRequired,
-    controlPaused: this.controlPaused, session: this.broker.snapshot(),
+    session: this.broker.snapshot(),
     platform: process.platform,
     capabilities: { supported: process.platform === 'darwin' || (process.platform === 'win32' && process.arch === 'x64'), delivery: 'background',
       textInput: process.platform === 'darwin' || (process.platform === 'win32' && process.arch === 'x64') },
     permissions: { accessibility: process.platform === 'darwin' && systemPreferences.isTrustedAccessibilityClient(false),
       screenRecording: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'unknown' } }; }
   async stopControl(): Promise<void> {
-    this.controlPaused = true;
     await this.broker.stop();
-  }
-  resumeControl(): void {
-    if (this.stopped || !this.visible()) throw new Error('Computer control cannot resume now');
-    this.controlPaused = false;
   }
   private async approve(request: ComputerApproval, signal: AbortSignal): Promise<boolean> {
     if (!this.visible() || signal.aborted) return false;
@@ -237,7 +235,6 @@ export class DesktopEndpointHost {
       })).filter(definition => compatibility.payload?.deviceStateToolsV1 === true || !definition.descriptor.name.includes('.device.get_')),
       { descriptor: structuredClone(COMPUTER_DESCRIPTOR) as any, execute: async (args, context) => {
         const command = ComputerCommandSchema.parse(args);
-        if (this.controlPaused && command.op !== 'status' && command.op !== 'release') throw new Error('COMPUTER_CONTROL_PAUSED');
         return executeComputerCommand(this.broker, command, context);
       } },
     ]);
@@ -284,6 +281,6 @@ export class DesktopEndpointHost {
     });
     this.client = realtime; this.controller = controller; realtime.connect();
   }
-  visibilityChanged(): void { this.controller?.publishAvailability(); if (!this.visible()) this.stopBrokerInBackground(); }
+  visibilityChanged(): void { this.controller?.publishAvailability(); if (!this.visible()) this.stopBrokerInBackground('COMPUTER_LOCAL_UI_REQUIRED'); }
   async close(): Promise<void> { this.stopped = true; this.lifetime.abort(); clearTimeout(this.retry); this.client?.disconnect(); this.controller?.disconnect(); await this.broker.dispose(); }
 }

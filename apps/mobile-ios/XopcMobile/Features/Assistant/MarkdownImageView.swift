@@ -7,6 +7,7 @@ struct MarkdownImageView: View {
     let configuration: GatewayConfiguration
     let conversationID: String?
     var compact = false
+    var tileSize: CGFloat?
     var gallery: [HistoryAttachment] = []
 
     @Environment(\.displayScale) private var displayScale
@@ -24,7 +25,7 @@ struct MarkdownImageView: View {
 
     private var requestIdentity: RequestIdentity {
         RequestIdentity(source: source, configuration: configuration, conversationID: conversationID,
-                        maxPixel: Int((compact ? 108 : 360) * displayScale))
+                        maxPixel: Int((tileSize ?? (compact ? 108 : 360)) * displayScale))
     }
 
     var body: some View {
@@ -35,10 +36,10 @@ struct MarkdownImageView: View {
                 } label: {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFit()
-                        .frame(width: compact ? 108 : nil, height: compact ? 108 : nil)
-                        .frame(maxWidth: compact ? 108 : 360, maxHeight: compact ? 108 : 300)
-                        .frame(minWidth: compact ? 108 : 96, minHeight: compact ? 108 : 72)
+                        .aspectRatio(contentMode: tileSize == nil ? .fit : .fill)
+                        .frame(width: tileSize ?? (compact ? 108 : nil), height: tileSize ?? (compact ? 108 : nil))
+                        .frame(maxWidth: tileSize ?? (compact ? 108 : 360), maxHeight: tileSize ?? (compact ? 108 : 300))
+                        .frame(minWidth: tileSize ?? (compact ? 108 : 96), minHeight: tileSize ?? (compact ? 108 : 72))
                         .clipShape(.rect(cornerRadius: 10))
                 }
                 .buttonStyle(.plain)
@@ -47,7 +48,7 @@ struct MarkdownImageView: View {
             } else if isLoading {
                 Label("正在加载图片…", systemImage: "photo")
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: compact ? 108 : nil, minHeight: compact ? 108 : 72)
+                    .frame(width: tileSize ?? (compact ? 108 : nil), height: tileSize ?? (compact ? 108 : 72))
             } else if failed {
                 HStack {
                     Label("图片无法显示", systemImage: "photo.badge.exclamationmark")
@@ -55,7 +56,7 @@ struct MarkdownImageView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(minWidth: compact ? 108 : nil, minHeight: compact ? 108 : 72)
+                .frame(width: tileSize ?? (compact ? 108 : nil), height: tileSize ?? (compact ? 108 : 72))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

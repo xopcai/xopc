@@ -265,7 +265,7 @@ Advanced experiments can be configured in `xopc.json` without changing the selec
     "autoGlmSampling": "current",
     "modelResponseMode": "json",
     "modelRepetitionGuard": false,
-    "batchReadings": false
+    "batchReadings": true
   }
 }
 ```
@@ -274,6 +274,6 @@ These are the defaults. Each AutoGLM option can independently use `upstream`: th
 
 `modelResponseMode: "stream"` requests SSE and records token timing. The service must support the streaming contract; incomplete streams never dispatch an action. `modelRepetitionGuard: true` can terminate substantial exact repetition while reading a stream. Both settings are experimental and remain opt-in. Compare real task completion, protocol errors, costs and latency before changing defaults; streaming alone does not establish faster action execution.
 
-Cloud UI helpers are deployed by content hash and verified before reuse. Unicode input reuses its text-only channel within an operation and releases it on operation completion, takeover or cancellation. The experimental `batchReadings` option can combine visual outputs into one read-only request and defaults to false; missing values remain unavailable, and visual readings remain unverified.
+Cloud UI helpers are deployed by content hash and verified before reuse. Unicode input reuses its text-only channel within an operation and releases it on operation completion, takeover or cancellation. The `batchReadings` option combines multiple named visual outputs on the same screen into one read-only request when the model adapter supports it, and defaults to true (an explicit false retains sequential reading); missing values remain unavailable, and visual readings remain unverified. Named outputs replace the generic finish transcription. Extraction reuses the final post-action or independent completion observation instead of capturing the screen again; a model finish prediction still triggers a fresh observation before extracting fields. Screenshots are cleared after extraction, and no screenshot is reused across operations. Before dispatch, a fresh native UI and foreground/display geometry check can avoid screenshot capture when the existing action-stability guard passes. Missing or changed native evidence falls back to full observation; pixel-free checks never enter model inference or preview. See the [Top5 performance report](design/technical/phone-use-top5-performance-2026-10-30.md) for measured savings and incomplete JD trials.
 
 Developers can use `scripts/benchmark-phone-apps-live.mts` with `baseline`, `efficiency`, `prompt`, `protocol`, `sampling`, `upstream`, or `stream` arms. It requires the dedicated test emulator, explicit real-model opt-in and a request cap. `scripts/verify-phone-efficiency-live.mts` checks helper deployment and Unicode input on that same dedicated emulator; its local ADB bridge does not measure cloud-network latency.

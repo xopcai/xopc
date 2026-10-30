@@ -30,6 +30,30 @@ export class ComputerTargetError extends Error {
   constructor(code: string, readonly windows: ComputerWindow[] = []) { super(code); }
 }
 
+export const ComputerRecoverySchema = z.object({
+  action: z.enum(['wait_and_observe', 'show_target_window', 'move_to_same_desktop', 'show_xopc_window',
+    'check_capture_permission', 'manual_input', 'reselect_window', 'inspect_result']),
+  automaticRetryAllowed: z.boolean(),
+}).strict();
+
+/** Derived locally, so older desktop transports need no new reply fields. */
+export function computerRecoveryDirective(code: string, dispatch: 'notStarted' | 'started' | 'completed' | 'unknown' = 'notStarted'): z.infer<typeof ComputerRecoverySchema> {
+  if (dispatch === 'unknown' || dispatch === 'started') return { action: 'inspect_result', automaticRetryAllowed: false };
+  if (/^COMPUTER_DRIVER_(CLICK|TYPE_TEXT|SET_VALUE|PRESS_KEY|HOTKEY|KEY|SCROLL|DRAG)_REFUSED$/.test(code)) {
+    return { action: 'manual_input', automaticRetryAllowed: false };
+  }
+  const actions: Record<string, z.infer<typeof ComputerRecoverySchema>['action']> = {
+    COMPUTER_WINDOW_HIDDEN: 'show_target_window', COMPUTER_WINDOW_READY_TIMEOUT: 'show_target_window',
+    COMPUTER_WINDOW_REQUIRED: 'show_target_window', COMPUTER_WINDOW_OTHER_SPACE: 'move_to_same_desktop',
+    COMPUTER_DRIVER_BRING_TO_FRONT_REFUSED: 'show_target_window',
+    COMPUTER_LOCAL_UI_REQUIRED: 'show_xopc_window', COMPUTER_CAPTURE_UNAVAILABLE: 'wait_and_observe',
+    COMPUTER_CAPTURE_REQUIRED: 'wait_and_observe', COMPUTER_OS_PERMISSION_REQUIRED: 'check_capture_permission',
+    COMPUTER_BACKGROUND_INPUT_UNSUPPORTED: 'manual_input', COMPUTER_INPUT_REFUSED: 'manual_input',
+    COMPUTER_WINDOW_CHANGED: 'reselect_window', COMPUTER_CAPTURE_TARGET_MISMATCH: 'reselect_window',
+  };
+  return { action: Object.hasOwn(actions, code) ? actions[code] : 'inspect_result', automaticRetryAllowed: false };
+}
+
 /** Recovery instructions are deterministic; never replay an input with unknown delivery. */
 export function computerRecovery(code: string): string {
   if (code === 'COMPUTER_AGENT_MODEL_REQUIRED') return 'Direct UI programs require an active visual main-model turn. Select a visual model and open with planner:agent; do not change models inside an active desktop session.';
@@ -43,6 +67,18 @@ export function computerRecovery(code: string): string {
     return 'Screenshot upload to the Gateway failed. No automatic retry. Report the diagnosticId and HTTP status; do not change model providers or bypass desktop controls.';
   }
   switch (code) {
+
+    case 'COMPUTER_NATIVE_BATCH_FAILED': case 'COMPUTER_DRIVER_INVALID_BATCH_RESULT':
+      return 'The native batch stopped or its reply could not be validated. Inspect per-input receipts and the current window after releasing control. Completed or unknown inputs must never be replayed; do not retry the batch through scalar calls.';
+    case 'COMPUTER_NATIVE_BATCH_REFUSED':
+      return 'The native driver rejected the batch before any input. Inspect the exact target, native capability and batch arguments; do not bypass this refusal through scalar calls.';
+
+    case 'COMPUTER_WINDOW_HIDDEN': return 'The selected window is hidden or minimized. If restoration is already authorized, open with prepare=true after release; otherwise ask the user to show it. Keyboard focus is not required. Never replay prior inputs.';
+    case 'COMPUTER_WINDOW_READY_TIMEOUT': return 'Window preparation did not become ready within five seconds. No task input was sent during preparation. Ask the user to show the intended window and let it finish opening, then discover/open again; do not repeat activation unchanged.';
+    case 'COMPUTER_CAPTURE_UNAVAILABLE': case 'COMPUTER_CAPTURE_REQUIRED': return 'The selected window could not provide a usable screenshot after bounded capture attempts. This does not establish missing permissions or another desktop. Inspect its visibility and the action receipt; a completed input must not be replayed. Reopen and observe after a local state change.';
+    case 'COMPUTER_CAPTURE_TARGET_MISMATCH': return 'The captured native window does not match the selected target. Control is stopped. Select the intended window again; do not reuse refs, coordinates or replay prior inputs.';
+    case 'COMPUTER_BACKGROUND_INPUT_UNSUPPORTED': return 'The native driver explicitly reports that this input cannot be delivered in the background. Complete this step manually; do not switch to foreground/global injection or replay it.';
+    case 'COMPUTER_INPUT_REFUSED': return 'The application refused this input without an established cause. Inspect the receipt and actual result; do not infer that foreground focus will fix it or automatically replay input.';
 
     case 'COMPUTER_WINDOWS_TEXT_INPUT_UNVERIFIED': case 'COMPUTER_WINDOWS_KEY_INPUT_UNVERIFIED':
       return 'This Windows control cannot be certified for safe input. Ask the user to enter text manually. Do not substitute key presses, paste, shell commands, coordinates or another tool to bypass this refusal.';
@@ -87,7 +123,7 @@ export function computerRecovery(code: string): string {
     case 'COMPUTER_WINDOW_CHANGED': return 'The selected window no longer exists. Discover and open again; never reuse its coordinates.';
     case 'COMPUTER_READ_ONLY': return 'This session is read-only. Do not retry an action or reopen in control mode without user authorization.';
     case 'COMPUTER_DEVICE_BUSY': case 'COMPUTER_BUSY': return 'Another desktop operation is active. Wait for it to finish; do not stop another task.';
-    case 'COMPUTER_CONTROL_PAUSED': case 'COMPUTER_LOCAL_UI_REQUIRED': return 'Ask the user to resume desktop control locally. Do not automatically resume or bypass this stop.';
+    case 'COMPUTER_LOCAL_UI_REQUIRED': return 'Ask the user to show the xopc desktop window before starting a new desktop task.';
     case 'COMPUTER_OS_PERMISSION_REQUIRED': return 'Check local desktop access. On macOS, review Accessibility and Screen Recording. On Windows, use the signed-in interactive desktop and inspect the driver diagnostic; do not request macOS permissions or automatically elevate privileges.';
     default: return 'Do not repeat the same call without a state change. Report this error; never bypass desktop restrictions with shell or other tools.';
   }

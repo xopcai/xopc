@@ -46,6 +46,7 @@ async function click(text: string) {
   expect(button, text).toBeDefined(); await act(async () => button!.click());
 }
 async function fillKey(value: string) {
+  if (!document.querySelector('#provider-setup-key')) await click('更换 API Key');
   const input = document.querySelector<HTMLInputElement>('#provider-setup-key')!;
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input,value); input.dispatchEvent(new Event('input',{bubbles:true})); });
 }
@@ -100,4 +101,40 @@ it('retains general visual models with phone and computer support as default cha
   const specialist = { id: 'openai/gui', name: 'GUI', provider: 'openai', vision: true,
     phoneUse: { profile: 'autoglm-phone-v1' as const, dedicated: true } };
   expect(defaultModelCandidates([general, specialist], { providerId: 'openai' })).toEqual([general]);
+});
+
+it('finishes connection-only setup immediately after OAuth without asking for a key or another save', async () => {
+  const data = preview('openai'); data.profile.credential = 'oauth'; data.configured = false;
+  api.preview.mockResolvedValue(data);
+  await act(async () => root.render(<Dialog.Root open><Dialog.Content><ProviderSetupPanel providerId="openai" connectOnly language="zh" onDone={done} onApplied={applied}
+    row={{ id: 'openai', name: 'OpenAI', category: 'common', supportsOAuth: true, supportsApiKey: true, configured: false, apiKey: '' }} /></Dialog.Content></Dialog.Root>));
+  await click('Connect account');
+  expect(applied).toHaveBeenCalledOnce();
+  expect(document.querySelector('[role="status"]')?.textContent).toContain('服务连接已保存');
+  expect(document.querySelector('#provider-setup-key')).toBeNull();
+  expect(document.body.textContent).not.toContain('仅连接');
+  expect(api.key).not.toHaveBeenCalled(); expect(api.apply).not.toHaveBeenCalled();
+  await click('返回选择模型'); expect(done).toHaveBeenCalledOnce(); expect(applied).toHaveBeenCalledOnce();
+});
+it('keeps model choices after OAuth and hides the optional API key behind an explicit action', async () => {
+  const data = preview('openai'); data.profile.credential = 'oauth';
+  api.preview.mockResolvedValueOnce({ ...data, configured: false }).mockResolvedValue(data);
+  await act(async () => root.render(<Dialog.Root open><Dialog.Content><ProviderSetupPanel providerId="openai" language="zh" onDone={done} onApplied={applied}
+    row={{ id: 'openai', name: 'OpenAI', category: 'common', supportsOAuth: true, supportsApiKey: true, configured: false, apiKey: '' }} /></Dialog.Content></Dialog.Root>));
+  await click('Connect account');
+  expect(document.querySelector('[role="status"]')?.textContent).toContain('服务已连接');
+  expect(document.querySelector('#provider-setup-key')).toBeNull();
+  expect(document.body.textContent).toContain('模型用途');
+  expect(applied).not.toHaveBeenCalled();
+  await click('更换 API Key'); expect(document.querySelector('#provider-setup-key')).toBeTruthy();
+  await click('取消更换'); expect(document.querySelector('#provider-setup-key')).toBeNull();
+  await click('连接并应用'); expect(api.apply).toHaveBeenCalledOnce(); expect(api.key).not.toHaveBeenCalled();
+});
+it('lets an existing connection return to model selection without saving it again', async () => {
+  await act(async () => root.render(<Dialog.Root open><Dialog.Content><ProviderSetupPanel providerId="openai" connectOnly language="zh" onDone={done} onApplied={applied} /></Dialog.Content></Dialog.Root>));
+  expect(document.body.textContent).toContain('服务已连接');
+  expect(document.querySelector('#provider-setup-key')).toBeNull();
+  expect(document.body.textContent).not.toContain('仅更新勾选');
+  await click('返回选择模型'); expect(done).toHaveBeenCalledOnce(); expect(applied).toHaveBeenCalledOnce();
+  expect(api.key).not.toHaveBeenCalled(); expect(api.apply).not.toHaveBeenCalled();
 });

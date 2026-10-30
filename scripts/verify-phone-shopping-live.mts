@@ -1,3 +1,5 @@
+import '../src/infra/http-proxy-env.js';
+
 /** Read-only shopping trials on a registered test phone through an isolated authenticated Gateway. */
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
@@ -29,14 +31,14 @@ const credentials = resolveCredentialsDir();
 const records = JSON.parse(execFileSync('sqlite3', ['-readonly', '-json', join(originalState, 'xopc.db'),
   "SELECT payload FROM durable_state WHERE namespace='phone.devices'"], { encoding: 'utf8' })) as Array<{ payload: string }>;
 const devices = records.map(row => JSON.parse(row.payload) as PhoneDevice);
-const name = process.env.XOPC_PHONE_DEVICE_NAME ?? '阿里云测试手机';
+const name = process.env.XOPC_PHONE_DEVICE_NAME ?? '阿里云手机';
 const selected = devices.find(device => device.name === name && device.enabled && device.connection?.kind === 'aliyun-adb');
 assert(selected?.connection, 'Choose an enabled registered Aliyun test phone with XOPC_PHONE_DEVICE_NAME');
 const leases = JSON.parse(execFileSync('sqlite3', ['-readonly', '-json', join(originalState, 'xopc.db'),
   "SELECT key,payload FROM durable_state WHERE namespace='phone.leases'"], { encoding: 'utf8' }) || '[]') as Array<{ key: string; payload: string }>;
 assert(!leases.some(row => row.key === selected.serial && JSON.parse(row.payload).expiresAt > Date.now()), 'Test phone has an active owner');
 const modelRefs = process.env.XOPC_PHONE_MODEL_REFS?.split(',').map(ref => ref.trim())
-  ?? ['volcengine-ark/doubao-seed-2-1-pro-260915'];
+  ?? ['xopc-cloud/phone-doubao'];
 assert(modelRefs.length > 0 && modelRefs.length <= 6 && modelRefs.every(ref => ref.includes('/')), 'Provide one to six provider/model references');
 if (modelRefs.includes('phone-bigmodel/autoglm-phone')) assert(process.env.ZHIPU_API_KEY, 'Independent BigModel verification requires ZHIPU_API_KEY');
 const trialProviders: Record<string, any> = {};
@@ -48,7 +50,7 @@ for (const [index, ref] of modelRefs.entries()) {
   const envKey = `XOPC_PHONE_TRIAL_KEY_${index}`;
   process.env[envKey] = key;
   trialProviders[resolved.provider] = { baseUrl: resolved.baseUrl, api: resolved.api, apiKey: envKey,
-    models: [{ id: resolved.id, input: resolved.input, maxTokens: resolved.maxTokens, phoneUse: resolved.phoneUse }] };
+    models: [{ id: resolved.id, input: resolved.input, maxTokens: resolved.maxTokens, ...('phoneUse' in resolved ? { phoneUse: resolved.phoneUse } : {}) }] };
 }
 const fetched = modelRefs.some(ref => ref.startsWith('xopc-cloud/')) ? await new XopcCloudModelSource().fetch() : undefined;
 const connection = new CloudAdbConnection(selected.connection.endpoint, await new PhoneCloudKeyStore().load(selected.connection.credentialId));
@@ -67,7 +69,7 @@ Object.assign(process.env, { XOPC_STATE_DIR: state, XOPC_CONFIG_PATH: configPath
   XOPC_WORKSPACE: state, XOPC_MODELS_JSON: join(state, 'models.json'), XOPC_CREDENTIALS_DIR: credentials,
   XOPC_LOG_CONSOLE: 'false', XOPC_LOG_FILE: 'false', XOPC_SKIP_CHANNELS: '1', XOPC_NO_RESPAWN: '1', PI_CODING_AGENT_DIR: join(state, 'pi') });
 const config = ConfigSchema.parse({ gateway: { bind: 'loopback', port, auth: { mode: 'token', token: gatewayToken } },
-  phone: { enabled: true, modelRequestTimeoutMs: 120_000 }, browser: { enabled: false } });
+  phone: { enabled: true, batchReadings: true, modelRequestTimeoutMs: 120_000 }, browser: { enabled: false } });
 await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
 await writeFile(join(state, 'models.json'), JSON.stringify({ providers: trialProviders }), { mode: 0o600 });
 closeXopcDatabase(); openXopcDatabase();
@@ -135,28 +137,66 @@ try {
       const current = await request('/api/global-defaults');
       await request('/api/global-defaults', { defaults: { ...current.defaults, models: { ...current.defaults.models, phoneUse: { primary: ref, fallbacks: [] } } }, scope: 'models', expectedModels: current.defaults.models }, 'PATCH');
     }
-    await command('shell', 'am', 'force-stop', 'com.jingdong.app.mall');
+    const coldStart = process.env.XOPC_PHONE_COLD_START === '1';
+    if (coldStart) await command('shell', 'am', 'force-stop', 'com.jingdong.app.mall');
+    const started = performance.now();
     const opened = await request('/api/phone/sessions', { deviceId: device.id, mode: 'control', agentId: 'main', appPackage: 'com.jingdong.app.mall' });
     sessionId = opened.id;
-    const started = Date.now();
-    await request(`/api/phone/sessions/${sessionId}/execute`, { op: 'run',
-      goal: '打开京东，搜索 AI 眼镜，按默认综合排序收集前 5 个商品，给出商品完整名称和当前可见价格。需要时向下滚动，保留之前看到的商品，去除滚动重叠的重复项。只浏览，不登录、不加购、不购买。', maxActions: Number(process.env.XOPC_PHONE_MAX_ACTIONS ?? 12) });
+    const openMs = performance.now() - started;
+    const products: Array<{ name: string; price: string; introduction: string; shop?: string }> = [];
+    const segments: any[] = [];
+    let taskId: string | undefined;
     let report: any;
-    for (let attempt = 0; attempt < 1200; attempt++) {
-      report = await request(`/api/phone/sessions/${sessionId}`);
-      if (attempt % 20 === 0) console.log(JSON.stringify({ modelRef: ref, elapsedMs: Date.now()-started, status: report.status, actions: report.actions, modelRequests: report.modelRequests, message: report.message }));
-      if (report.status !== 'running') break; await delay(500);
+    for (let segment = 0; segment < 5 && products.length < 5; segment++) {
+      await request(`/api/phone/sessions/${sessionId}/execute`, { op: 'run', taskId,
+        goal: segment === 0
+          ? '在京东搜索“AI 眼镜”，进入默认综合排序的商品结果页即可停止。不要滚动结果页，由主 Agent 在后续片段收集商品。只浏览，不登录、不加购、不购买。'
+          : '在当前京东 AI 眼镜综合排序结果页向下滑动一次，显示后续商品即可停止。保持排序，不进入详情页。只浏览，不登录、不加购、不购买。',
+        ...(segment === 0 ? { completion: { appPackage: 'com.jingdong.app.mall', textAny: ['AI 眼镜', 'AI眼镜'], textAll: ['综合'] } } : {}),
+        constraints: ['只浏览，不登录、不加购、不购买，不改变综合排序'],
+        requestedOutputs: [
+          { key: 'products', description: '读取当前屏幕完整可见的商品卡片，按从上到下、从左到右顺序返回紧凑 JSON 数组。每项包含 name（商品名）、price（可见价格）、introduction（基于卡片可见文字的一句介绍）、shop（店铺，可缺省）。不要猜测遮挡内容，不包含半截商品，不添加当前屏幕外的商品，不输出 Markdown。控制总长度在 900 字符内。' },
+          { key: 'sort', description: '当前商品排序方式；无法确认时返回 null' },
+        ], maxActions: segment === 0 ? Number(process.env.XOPC_PHONE_MAX_ACTIONS ?? 8) : 1,
+        ...(segment === 0 ? { budget: { maxActions: 20, maxModelRequests: 30, maxActiveDurationMs: 300000 } } : {}),
+      });
+      for (let poll = 0; poll < 620; poll++) {
+        report = await request(`/api/phone/sessions/${sessionId}`);
+        if (poll % 20 === 0) console.log(JSON.stringify({ modelRef: ref, segment, elapsedMs: Math.round(performance.now() - started), status: report.status, actions: report.actions, modelRequests: report.modelRequests }));
+        if (report.status !== 'running') break;
+        await delay(500);
+      }
+      taskId = report.task?.taskId;
+      segments.push(structuredClone(report));
+      const output = report.feedback?.outputs?.find((value: any) => value.key === 'products');
+      if (output?.value) {
+        let visible: unknown;
+        try { visible = JSON.parse(output.value); } catch { visible = undefined; }
+        if (Array.isArray(visible)) for (const product of visible) {
+          if (typeof product?.name !== 'string' || !product.name.trim() || typeof product.price !== 'string' || !product.price.trim()) continue;
+          const identity = (value: typeof product) => [value.name, value.shop ?? '', value.price].join('|').replace(/\s+/g, '').normalize('NFKC');
+          if (!products.some(previous => identity(previous) === identity(product))) products.push({ name: product.name, price: product.price,
+            introduction: typeof product.introduction === 'string' ? product.introduction : '', ...(typeof product.shop === 'string' ? { shop: product.shop } : {}) });
+        }
+      }
+      if (!taskId || !['ready', 'completed'].includes(report.status) || ['user', 'inspect'].includes(report.feedback?.nextAction)) break;
+      if (segment === 0 && !products.length) break;
     }
-    await writeFile(join(evidence, `trial-${index + 1}.json`), JSON.stringify({elapsedMs: Date.now()-started, ...report}, null, 2));
-    console.log(JSON.stringify({modelRef: ref, elapsedMs: Date.now()-started, ...report}));
+    const elapsedMs = Math.round(performance.now() - started);
+    const top5 = products.slice(0, 5);
+    const result = { modelRef: ref, coldStart, elapsedMs, openMs: Math.round(openMs), top5, count: top5.length, complete: top5.length === 5,
+      overFiveSecondsMs: Math.max(0, elapsedMs - 5000), segments, provenance: 'Screenshot readings are unverified; inspect stored frames against the product list.' };
+    await writeFile(join(evidence, `trial-${index + 1}.json`), JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(result));
+    trials.push({ modelRef: ref, coldStart, elapsedMs, openMs: Math.round(openMs), complete: result.complete, count: top5.length,
+      actions: report.actions, modelRequests: report.modelRequests, stopReason: report.stopReason });
     await request(`/api/phone/devices/${device.id}/disconnect`, {}); sessionId = undefined;
     const final = await driver.observe(selected.serial, AbortSignal.timeout(30_000));
     await writeFile(join(evidence, `trial-${index + 1}.png`), final.frame); final.frame.fill(0);
     await driver.releaseInput();
-    trials.push({modelRef: ref, status: report.status, verified: report.verified, elapsedMs: Date.now()-started, actions: report.actions, modelRequests: report.modelRequests, diagnostics: report.diagnostics});
   }
   const summary = { device: name, deviceModel: model, authenticatedGateway: true,
-    stateIsolated: true, trials, note: 'Inspect trial summaries and screenshots to assess product count and accuracy; model completion is unverified.' };
+    stateIsolated: true, trials, note: 'Phone workflow timing starts before open and ends after collecting product outputs, includes polling overhead, and excludes Gateway boot, the pre-trial force-stop and a separate chat-model synthesis. Products and ordering require frame inspection; runtime UI verification alone is not Top5 verification.' };
   await writeFile(join(evidence, 'result.json'), JSON.stringify(summary, null, 2)); console.log(JSON.stringify(summary));
 } catch (error) {
   await writeFile(join(evidence, 'failure.json'), JSON.stringify({ passed: false, trials, message: error instanceof Error ? error.message : String(error) }, null, 2));

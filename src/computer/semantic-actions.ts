@@ -2,6 +2,7 @@ import type { ComputerAction, ComputerObservation } from '@xopcai/computer-contr
 
 /** Ground only an unambiguous single click; never reinterpret double clicks or text entry. */
 export function groundComputerAction(action: ComputerAction, observation: ComputerObservation): ComputerAction {
+  if (action.kind === 'batch') return { ...action, actions: action.actions.map(input => groundComputerAction(input, observation) as typeof input) };
   if (action.kind !== 'click' || action.count !== 1 || action.point.x < 0 || action.point.y < 0
     || action.point.x >= observation.imageWidth || action.point.y >= observation.imageHeight) return action;
   const kind = action.button === 'left' ? 'activate' : 'showMenu';

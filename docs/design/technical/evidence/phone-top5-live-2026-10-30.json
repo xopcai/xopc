@@ -1,0 +1,840 @@
+{
+  "date": "2026-10-30",
+  "device": "阿里云手机",
+  "modelRef": "xopc-cloud/phone-doubao",
+  "authenticatedGateway": true,
+  "stateIsolated": true,
+  "completeTop5Measured": false,
+  "trialsBeforeFinalNativeDispatchGuard": [
+    {
+      "coldStart": true,
+      "elapsedMs": 3485,
+      "openMs": 1455,
+      "complete": false,
+      "count": 0,
+      "segments": [
+        {
+          "status": "failed",
+          "errorCode": "PHONE_UI_UNAVAILABLE",
+          "actions": 1,
+          "modelRequests": 0,
+          "performance": {
+            "operationId": "5a132a8f-91b3-4f33-a81a-7c667c53db6c",
+            "durationMs": 1920.38,
+            "phases": {
+              "hierarchy": {
+                "count": 1,
+                "errors": 1,
+                "totalMs": 1916.74,
+                "maxMs": 1916.74
+              },
+              "observation": {
+                "count": 1,
+                "errors": 1,
+                "totalMs": 1916.76,
+                "maxMs": 1916.76
+              }
+            },
+            "modelCalls": [],
+            "droppedModelCalls": 0
+          }
+        }
+      ]
+    },
+    {
+      "coldStart": false,
+      "elapsedMs": 20502,
+      "openMs": 1860,
+      "complete": false,
+      "count": 0,
+      "segments": [
+        {
+          "status": "failed",
+          "errorCode": "PHONE_MODEL_QUOTA_EXHAUSTED",
+          "actions": 2,
+          "modelRequests": 2,
+          "performance": {
+            "operationId": "93f034c6-1d79-492a-bff5-de2c797c4093",
+            "durationMs": 18537.34,
+            "phases": {
+              "hierarchy": {
+                "count": 3,
+                "errors": 0,
+                "totalMs": 345.01,
+                "maxMs": 185.19
+              },
+              "foreground": {
+                "count": 6,
+                "errors": 0,
+                "totalMs": 649.01,
+                "maxMs": 115.85
+              },
+              "display": {
+                "count": 3,
+                "errors": 0,
+                "totalMs": 203.97,
+                "maxMs": 74.3
+              },
+              "screenshot": {
+                "count": 3,
+                "errors": 0,
+                "totalMs": 2520.51,
+                "maxMs": 936.28
+              },
+              "capture": {
+                "count": 3,
+                "errors": 0,
+                "totalMs": 3171.77,
+                "maxMs": 1155.93
+              },
+              "observation": {
+                "count": 3,
+                "errors": 0,
+                "totalMs": 3516.87,
+                "maxMs": 1341.15
+              },
+              "model_request": {
+                "count": 2,
+                "errors": 1,
+                "totalMs": 14580.53,
+                "maxMs": 13949.29
+              },
+              "model_parse": {
+                "count": 1,
+                "errors": 0,
+                "totalMs": 1.23,
+                "maxMs": 1.23
+              },
+              "input": {
+                "count": 1,
+                "errors": 0,
+                "totalMs": 53.73,
+                "maxMs": 53.73
+              },
+              "settle": {
+                "count": 1,
+                "errors": 0,
+                "totalMs": 351.35,
+                "maxMs": 351.35
+              },
+              "dispatch": {
+                "count": 1,
+                "errors": 0,
+                "totalMs": 405.19,
+                "maxMs": 405.19
+              }
+            },
+            "modelCalls": [
+              {
+                "imageBytes": 327232,
+                "protocol": "current",
+                "prompt": "current",
+                "sampling": "current",
+                "transport": "json",
+                "requestBytes": 442829,
+                "preparationMs": 10,
+                "httpStatus": 200,
+                "firstByteMs": 13949,
+                "responseBytes": 887,
+                "promptTokens": 2793,
+                "completionTokens": 268,
+                "totalTokens": 3061,
+                "finishReason": "stop",
+                "durationMs": 13961
+              },
+              {
+                "imageBytes": 413767,
+                "protocol": "current",
+                "prompt": "current",
+                "sampling": "current",
+                "transport": "json",
+                "requestBytes": 565752,
+                "preparationMs": 9,
+                "httpStatus": 429,
+                "errorCode": "PHONE_MODEL_QUOTA_EXHAUSTED",
+                "durationMs": 640
+              }
+            ],
+            "droppedModelCalls": 0
+          }
+        }
+      ]
+    }
+  ],
+  "dispatchGuardReadOnlyFinal": {
+    "scope": "Read-only JD home observation/check pairs for a native search-entry tap, no model or input, n=4; not end-to-end task latency.",
+    "rows": [
+      {
+        "i": 0,
+        "fullMs": 1597,
+        "dispatchCheckMs": 294,
+        "dispatchCapturedPixels": false,
+        "nodes": 105,
+        "phases": {
+          "hierarchy": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 540.54,
+            "maxMs": 386.39
+          },
+          "foreground": {
+            "count": 4,
+            "errors": 0,
+            "totalMs": 345.24,
+            "maxMs": 164.23
+          },
+          "display": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 152.14,
+            "maxMs": 76.33
+          },
+          "screenshot": {
+            "count": 1,
+            "errors": 0,
+            "totalMs": 926.87,
+            "maxMs": 926.87
+          },
+          "capture": {
+            "count": 1,
+            "errors": 0,
+            "totalMs": 1210.32,
+            "maxMs": 1210.32
+          }
+        }
+      },
+      {
+        "i": 1,
+        "fullMs": 1327,
+        "dispatchCheckMs": 303,
+        "dispatchCapturedPixels": false,
+        "nodes": 105,
+        "phases": {
+          "hierarchy": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 332.65,
+            "maxMs": 173.07
+          },
+          "foreground": {
+            "count": 4,
+            "errors": 0,
+            "totalMs": 273.5,
+            "maxMs": 105.61
+          },
+          "display": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 120.15,
+            "maxMs": 60.56
+          },
+          "screenshot": {
+            "count": 1,
+            "errors": 0,
+            "totalMs": 960.92,
+            "maxMs": 960.92
+          },
+          "capture": {
+            "count": 1,
+            "errors": 0,
+            "totalMs": 1167.07,
+            "maxMs": 1167.07
+          }
+        }
+      },
+      {
+        "i": 2,
+        "fullMs": 1342,
+        "dispatchCheckMs": 324,
+        "dispatchCapturedPixels": false,
+        "nodes": 105,
+        "phases": {
+          "hierarchy": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 354.68,
+            "maxMs": 181.15
+          },
+          "foreground": {
+            "count": 4,
+            "errors": 0,
+            "totalMs": 338.73,
+            "maxMs": 151.22
+          },
+          "display": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 119.4,
+            "maxMs": 61.1
+          },
+          "screenshot": {
+            "count": 1,
+            "errors": 0,
+            "totalMs": 913.34,
+            "maxMs": 913.34
+          },
+          "capture": {
+            "count": 1,
+            "errors": 0,
+            "totalMs": 1168.54,
+            "maxMs": 1168.54
+          }
+        }
+      },
+      {
+        "i": 3,
+        "fullMs": 1284,
+        "dispatchCheckMs": 290,
+        "dispatchCapturedPixels": false,
+        "nodes": 105,
+        "phases": {
+          "hierarchy": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 326.25,
+            "maxMs": 167.19
+          },
+          "foreground": {
+            "count": 4,
+            "errors": 0,
+            "totalMs": 285.9,
+            "maxMs": 116.49
+          },
+          "display": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 138.12,
+            "maxMs": 76.3
+          },
+          "screenshot": {
+            "count": 1,
+            "errors": 0,
+            "totalMs": 898.64,
+            "maxMs": 898.64
+          },
+          "capture": {
+            "count": 1,
+            "errors": 0,
+            "totalMs": 1116.54,
+            "maxMs": 1116.54
+          }
+        }
+      }
+    ]
+  },
+  "rejectedExactTreeGuardReadOnly": {
+    "scope": "Read-only JD home observation/check pairs, no model or input, n=4; not end-to-end task latency.",
+    "rows": [
+      {
+        "i": 0,
+        "fullMs": 1656,
+        "dispatchCheckMs": 1738,
+        "dispatchCapturedPixels": true,
+        "nodes": 105,
+        "phases": {
+          "hierarchy": {
+            "count": 3,
+            "errors": 0,
+            "totalMs": 780.87,
+            "maxMs": 415.01
+          },
+          "foreground": {
+            "count": 6,
+            "errors": 0,
+            "totalMs": 567.48,
+            "maxMs": 182.61
+          },
+          "display": {
+            "count": 3,
+            "errors": 0,
+            "totalMs": 189.62,
+            "maxMs": 68.83
+          },
+          "screenshot": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 1982.3,
+            "maxMs": 1026.05
+          },
+          "capture": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 2484.19,
+            "maxMs": 1243.04
+          }
+        }
+      },
+      {
+        "i": 1,
+        "fullMs": 1534,
+        "dispatchCheckMs": 1702,
+        "dispatchCapturedPixels": true,
+        "nodes": 105,
+        "phases": {
+          "hierarchy": {
+            "count": 3,
+            "errors": 0,
+            "totalMs": 638.23,
+            "maxMs": 313.3
+          },
+          "foreground": {
+            "count": 6,
+            "errors": 0,
+            "totalMs": 533.56,
+            "maxMs": 153.63
+          },
+          "display": {
+            "count": 3,
+            "errors": 0,
+            "totalMs": 203.23,
+            "maxMs": 71.4
+          },
+          "screenshot": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 1991.3,
+            "maxMs": 1007.21
+          },
+          "capture": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 2463.92,
+            "maxMs": 1243.78
+          }
+        }
+      },
+      {
+        "i": 2,
+        "fullMs": 1310,
+        "dispatchCheckMs": 1635,
+        "dispatchCapturedPixels": true,
+        "nodes": 105,
+        "phases": {
+          "hierarchy": {
+            "count": 3,
+            "errors": 0,
+            "totalMs": 510.18,
+            "maxMs": 177.93
+          },
+          "foreground": {
+            "count": 6,
+            "errors": 0,
+            "totalMs": 493.38,
+            "maxMs": 108.65
+          },
+          "display": {
+            "count": 3,
+            "errors": 0,
+            "totalMs": 201.36,
+            "maxMs": 75.76
+          },
+          "screenshot": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 1879.79,
+            "maxMs": 947.63
+          },
+          "capture": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 2309.46,
+            "maxMs": 1162.75
+          }
+        }
+      },
+      {
+        "i": 3,
+        "fullMs": 1339,
+        "dispatchCheckMs": 1708,
+        "dispatchCapturedPixels": true,
+        "nodes": 105,
+        "phases": {
+          "hierarchy": {
+            "count": 3,
+            "errors": 0,
+            "totalMs": 491.04,
+            "maxMs": 169.92
+          },
+          "foreground": {
+            "count": 6,
+            "errors": 0,
+            "totalMs": 537.91,
+            "maxMs": 146.37
+          },
+          "display": {
+            "count": 3,
+            "errors": 0,
+            "totalMs": 193.02,
+            "maxMs": 69.31
+          },
+          "screenshot": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 1954.58,
+            "maxMs": 997.2
+          },
+          "capture": {
+            "count": 2,
+            "errors": 0,
+            "totalMs": 2426.21,
+            "maxMs": 1251.32
+          }
+        }
+      }
+    ]
+  },
+  "limitations": [
+    "No successful Top5 end-to-end result: cold-start observation failed, then Cloud model quota exhausted with HTTP 429.",
+    "Full task attempts preceded the final native dispatch guard; final guard was measured read-only without a model request or input.",
+    "Task timer includes phone open, search/collection and polling; excludes Gateway boot, optional force-stop and a separate chat-model summary.",
+    "Read-only guard samples do not establish production P95 or end-to-end latency."
+  ],
+  "retryWithNewModel": {
+    "modelRef": "xopc-cloud/phone",
+    "coldStart": false,
+    "elapsedMs": 105401,
+    "openMs": 2375,
+    "count": 0,
+    "complete": false,
+    "status": "ready",
+    "stopReason": "action_limit",
+    "actions": 9,
+    "modelRequests": 14,
+    "diagnostics": {
+      "stalePredictions": 2,
+      "protocolRepairs": 1,
+      "unchangedActions": 1,
+      "completionCorrections": 2
+    },
+    "performance": {
+      "operationId": "b43396c0-8e5d-400e-a736-70919ae0354c",
+      "durationMs": 102900.31,
+      "phases": {
+        "hierarchy": {
+          "count": 24,
+          "errors": 0,
+          "totalMs": 4365.54,
+          "maxMs": 1120.61
+        },
+        "foreground": {
+          "count": 48,
+          "errors": 0,
+          "totalMs": 4170.83,
+          "maxMs": 165.02
+        },
+        "display": {
+          "count": 24,
+          "errors": 0,
+          "totalMs": 1674.45,
+          "maxMs": 90.33
+        },
+        "screenshot": {
+          "count": 14,
+          "errors": 0,
+          "totalMs": 6034.13,
+          "maxMs": 961.78
+        },
+        "capture": {
+          "count": 14,
+          "errors": 0,
+          "totalMs": 9489.28,
+          "maxMs": 1172.27
+        },
+        "observation": {
+          "count": 22,
+          "errors": 0,
+          "totalMs": 15222.64,
+          "maxMs": 1795.28
+        },
+        "model_request": {
+          "count": 14,
+          "errors": 0,
+          "totalMs": 82448.78,
+          "maxMs": 17860.97
+        },
+        "model_parse": {
+          "count": 13,
+          "errors": 0,
+          "totalMs": 3.43,
+          "maxMs": 1.18
+        },
+        "input": {
+          "count": 4,
+          "errors": 0,
+          "totalMs": 154.96,
+          "maxMs": 55.47
+        },
+        "settle": {
+          "count": 5,
+          "errors": 0,
+          "totalMs": 1756.05,
+          "maxMs": 351.63
+        },
+        "dispatch": {
+          "count": 8,
+          "errors": 0,
+          "totalMs": 5011.4,
+          "maxMs": 1001.46
+        },
+        "field_transaction": {
+          "count": 1,
+          "errors": 0,
+          "totalMs": 97.04,
+          "maxMs": 97.04
+        },
+        "screen_reading": {
+          "count": 1,
+          "errors": 1,
+          "totalMs": 6108.93,
+          "maxMs": 6108.93
+        }
+      },
+      "modelCalls": [
+        {
+          "imageBytes": 419754,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 571305,
+          "preparationMs": 11,
+          "httpStatus": 200,
+          "firstByteMs": 4625,
+          "responseBytes": 969,
+          "promptTokens": 3851,
+          "completionTokens": 166,
+          "totalTokens": 4021,
+          "finishReason": "stop",
+          "durationMs": 4638
+        },
+        {
+          "imageBytes": 175279,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 248664,
+          "preparationMs": 9,
+          "httpStatus": 200,
+          "firstByteMs": 17861,
+          "responseBytes": 8077,
+          "promptTokens": 4228,
+          "completionTokens": 2048,
+          "totalTokens": 6802,
+          "finishReason": "length",
+          "errorCode": "PHONE_MODEL_TRUNCATED",
+          "durationMs": 17871
+        },
+        {
+          "imageBytes": 175279,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 248816,
+          "preparationMs": 10,
+          "httpStatus": 200,
+          "firstByteMs": 5916,
+          "responseBytes": 1542,
+          "promptTokens": 4776,
+          "completionTokens": 290,
+          "totalTokens": 5070,
+          "finishReason": "stop",
+          "durationMs": 5927
+        },
+        {
+          "imageBytes": 105727,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 151771,
+          "preparationMs": 8,
+          "httpStatus": 200,
+          "firstByteMs": 3577,
+          "responseBytes": 1216,
+          "promptTokens": 3781,
+          "completionTokens": 201,
+          "totalTokens": 3986,
+          "finishReason": "stop",
+          "durationMs": 3586
+        },
+        {
+          "imageBytes": 105271,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 151288,
+          "preparationMs": 10,
+          "httpStatus": 200,
+          "firstByteMs": 6564,
+          "responseBytes": 1861,
+          "promptTokens": 3805,
+          "completionTokens": 321,
+          "totalTokens": 4130,
+          "finishReason": "stop",
+          "durationMs": 6574
+        },
+        {
+          "imageBytes": 105482,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 151657,
+          "preparationMs": 6,
+          "httpStatus": 200,
+          "firstByteMs": 3739,
+          "responseBytes": 1527,
+          "promptTokens": 3824,
+          "completionTokens": 255,
+          "totalTokens": 4083,
+          "finishReason": "stop",
+          "durationMs": 3745
+        },
+        {
+          "imageBytes": 105517,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 151705,
+          "preparationMs": 9,
+          "httpStatus": 200,
+          "firstByteMs": 3291,
+          "responseBytes": 1171,
+          "promptTokens": 2905,
+          "completionTokens": 189,
+          "totalTokens": 4017,
+          "finishReason": "stop",
+          "durationMs": 3301
+        },
+        {
+          "imageBytes": 105408,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 152173,
+          "preparationMs": 5,
+          "httpStatus": 200,
+          "firstByteMs": 4852,
+          "responseBytes": 1208,
+          "promptTokens": 3029,
+          "completionTokens": 200,
+          "totalTokens": 4156,
+          "finishReason": "stop",
+          "durationMs": 4858
+        },
+        {
+          "imageBytes": 204532,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 291753,
+          "preparationMs": 8,
+          "httpStatus": 200,
+          "firstByteMs": 5156,
+          "responseBytes": 1168,
+          "promptTokens": 4921,
+          "completionTokens": 199,
+          "totalTokens": 6047,
+          "finishReason": "stop",
+          "durationMs": 5165
+        },
+        {
+          "imageBytes": 174987,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 252482,
+          "preparationMs": 10,
+          "httpStatus": 200,
+          "firstByteMs": 6529,
+          "responseBytes": 1495,
+          "promptTokens": 5868,
+          "completionTokens": 290,
+          "totalTokens": 6162,
+          "finishReason": "stop",
+          "durationMs": 6540
+        },
+        {
+          "imageBytes": 148824,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 219754,
+          "preparationMs": 12,
+          "httpStatus": 200,
+          "firstByteMs": 5201,
+          "responseBytes": 1286,
+          "promptTokens": 5547,
+          "completionTokens": 219,
+          "totalTokens": 6695,
+          "finishReason": "stop",
+          "durationMs": 5214
+        },
+        {
+          "imageBytes": 105396,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 156749,
+          "preparationMs": 6,
+          "httpStatus": 200,
+          "firstByteMs": 4776,
+          "responseBytes": 1433,
+          "promptTokens": 5201,
+          "completionTokens": 241,
+          "totalTokens": 5446,
+          "finishReason": "stop",
+          "durationMs": 4783
+        },
+        {
+          "imageBytes": 105120,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 157028,
+          "preparationMs": 6,
+          "httpStatus": 200,
+          "firstByteMs": 4269,
+          "responseBytes": 1211,
+          "promptTokens": 5336,
+          "completionTokens": 192,
+          "totalTokens": 5532,
+          "finishReason": "stop",
+          "durationMs": 4275
+        },
+        {
+          "imageBytes": 145641,
+          "protocol": "current",
+          "prompt": "current",
+          "sampling": "current",
+          "transport": "json",
+          "requestBytes": 201150,
+          "preparationMs": 16,
+          "httpStatus": 200,
+          "firstByteMs": 6092,
+          "responseBytes": 1934,
+          "promptTokens": 2527,
+          "completionTokens": 360,
+          "totalTokens": 3101,
+          "finishReason": "stop",
+          "durationMs": 6109
+        }
+      ],
+      "droppedModelCalls": 0
+    },
+    "finalScreen": "JD login, phone number required; no credentials entered",
+    "observedAppBlocker": "Search result page showed 活动参与太热情，正在努力加载，片刻后为您呈现 before reaching login.",
+    "rawEvidence": "/tmp/xopc-phone-top5-retry-20261030-1",
+    "limits": "Final optimized code, authenticated isolated Gateway. Failure/partial progress, not successful Top5 latency; 8 task actions plus initial launch; no automatic continuation after the fragment stopped."
+  }
+}

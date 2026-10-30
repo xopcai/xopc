@@ -65,6 +65,8 @@ describe('computer driver paths', () => {
     expect(resolveComputerDriverPath({ platform: 'darwin', packaged: true, resourcesPath: '/Applications/xopc.app/Contents/Resources',
       mainDir: '/Applications/xopc.app/Contents/Resources/app.asar/out/main' }))
       .toBe(join('/Applications/xopc.app/Contents/Resources', 'bin/cua-driver'));
+    expect(resolveComputerDriverPath({ packaged: true, resourcesPath: '/release', mainDir: '/unused', platform: 'darwin', useLocalBuild: true }))
+      .toBe('/release/bin/cua-driver');
   });
 
   it('loads the packaged SDK from its real unpacked path so its dylib can be opened', () => {
@@ -138,8 +140,7 @@ describe('local computer control', () => {
       observationId: observed.observation!.id, brokerEpoch: observed.brokerEpoch, generation: observed.generation,
       grantId: observed.grantId!, deadlineAt: Date.now() + 60_000,
       action: { kind: 'click' as const, point: { x: 10, y: 10 }, button: 'left' as const, count: 1 as const } } };
-    expect((await desktop.broker.command(command)).status).toBe('pending_action');
-    await vi.waitFor(async () => expect((await desktop.broker.command(command)).receipt?.dispatch).toBe('completed'));
+    expect((await desktop.broker.command(command)).receipt?.dispatch).toBe('completed');
     expect(state.dialog).not.toHaveBeenCalled();
     await desktop.setComputerAppAccess('com.example.Notes', false);
     expect(desktop.broker.snapshot().status).toBe('stopped');
@@ -159,15 +160,24 @@ describe('local computer control', () => {
       expect(state.clients).toHaveLength(0);
     } finally { vi.useRealTimers(); }
   });
-  it('latches emergency stop until manual resume', async () => {
+  it('stops the current session and permits a new task without manual resume', async () => {
     const desktop = host();
+    await desktop.setComputerAllAppAccess(true);
+    const discovered = await desktop.broker.command({ op: 'discover', sessionId: 'd', owner: 'owner', query: 'Notes' });
+    const open = (sessionId: string) => desktop.broker.command({ op: 'open', sessionId, owner: 'owner',
+      appRef: discovered.apps![0].appRef, mode: 'control', prepare: false, model: {
+        modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26', origin: 'https://example.com', runtimeLocation: 'local',
+      } });
+    await open('first');
+    await vi.waitFor(() => expect(desktop.broker.snapshot().status).toBe('ready'));
     await desktop.stopControl();
-    expect(desktop.snapshot().controlPaused).toBe(true);
-    await expect(desktop.broker.command({ op: 'open', sessionId: 's', owner: 'o', appRef: 'fixture', mode: 'control', prepare: false, model: {
-      modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26', origin: 'https://example.com', runtimeLocation: 'local',
-    } })).rejects.toThrow('LOCAL_UI_REQUIRED');
-    desktop.resumeControl();
-    expect(desktop.snapshot()).toMatchObject({ controlPaused: false });
+    expect(desktop.broker.snapshot().status).toBe('stopped');
+    await expect(desktop.broker.command({ op: 'observe', sessionId: 'first', owner: 'owner' })).rejects.toThrow('COMPUTER_GRANT_REVOKED');
+    state.visible = false;
+    await expect(open('second')).rejects.toThrow('LOCAL_UI_REQUIRED');
+    state.visible = true;
+    await open('second');
+    await vi.waitFor(() => expect(desktop.broker.snapshot().status).toBe('ready'));
     expect(state.dialog).not.toHaveBeenCalled();
   });
 });

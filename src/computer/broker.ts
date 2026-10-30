@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
-  ActionEnvelopeSchema, ComputerCommandSchema, COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS,
+  ActionEnvelopeSchema, computerActionInputCount, computerActionInputs, ComputerCommandSchema, COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS,
   type ComputerAction, type ComputerCommand, type ComputerModelBinding,
   type ComputerObservation, type ComputerReceipt, type ComputerTarget, type ComputerApp, type ComputerWindow, type ComputerInputTiming,
 } from '@xopcai/computer-control-contract';
@@ -23,11 +23,13 @@ export interface DriverObservation {
   imageHeight: number;
 }
 export interface ComputerDriver {
+  getPreparationState?(): { startedAt: number } | undefined;
   discover(query: string, signal: AbortSignal): Promise<Array<{ appId: string; name: string; running: boolean }>>;
   validateAction?(action: ComputerAction): void;
   resolveTarget(appId: string, signal: AbortSignal, options: { prepare: boolean; windowRef?: string }): Promise<ComputerTarget>;
   observe(target: ComputerTarget, signal: AbortSignal): Promise<DriverObservation>;
-  perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void>;
+  perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal,
+    onProgress?: (index: number, dispatch: 'notStarted' | 'started' | 'completed' | 'unknown') => void): Promise<void>;
   getLastInputTiming?(): ComputerInputTiming | undefined;
   /** Must finish only after no further input can be dispatched. */
   stop(): Promise<void>;
@@ -36,6 +38,8 @@ export type ComputerApproval =
   | { kind: 'session'; id: string; appId: string; appName: string; mode: 'observe' | 'control'; prepare: boolean; model: ComputerModelBinding }
   | { kind: 'action'; id: string; target: ComputerTarget; action: ComputerAction };
 export interface ComputerBrokerHost {
+  /** Hosts exposing a separate approval UI may opt into the legacy held-action protocol. */
+  deferApproval?: boolean;
   requestApproval(request: ComputerApproval, signal: AbortSignal): Promise<boolean>;
   isVisible(): boolean;
   onStateChange?(): void;
@@ -47,7 +51,8 @@ interface Session {
   grantId: string; generation: number; status: Status; createdAt: number; touchedAt: number;
   controller: AbortController; target?: ComputerTarget; observation?: ComputerObservation;
   receipts: Map<string, { digest: string; receipt: ComputerReceipt }>;
-  pending?: { envelope: import('@xopcai/computer-control-contract').ActionEnvelope; digest: string; approved?: boolean };
+  preparation?: Promise<void>;
+  pending?: { envelope: import('@xopcai/computer-control-contract').ActionEnvelope; digest: string; approved?: boolean; decision?: Promise<void> };
   actions: number;
   errorCode?: string;
   windows?: ComputerWindow[];
@@ -81,7 +86,7 @@ export class ComputerBroker {
     this.config = ComputerConfigSchema.parse(config);
     this.timer = setInterval(() => {
       const s = this.session;
-      if (s && s.status !== 'stopped' && (this.expired(s) || !this.host.isVisible())) void this.stop().catch(() => {});
+      if (s && s.status !== 'stopped' && (this.expired(s) || !this.host.isVisible())) void this.stop(!this.host.isVisible() ? 'COMPUTER_LOCAL_UI_REQUIRED' : undefined).catch(() => {});
     }, 1000);
     this.timer.unref?.();
   }
@@ -95,7 +100,8 @@ export class ComputerBroker {
       ...(s.status === 'ready' ? { grantId: s.grantId } : {}) };
   }
   private active(s: Session): void {
-    if (this.session !== s || s.controller.signal.aborted || this.expired(s) || !this.host.isVisible()) throw new Error('COMPUTER_GRANT_REVOKED');
+    if (!this.host.isVisible()) { s.errorCode ??= 'COMPUTER_LOCAL_UI_REQUIRED'; throw new Error('COMPUTER_LOCAL_UI_REQUIRED'); }
+    if (this.session !== s || s.controller.signal.aborted || this.expired(s)) throw new Error('COMPUTER_GRANT_REVOKED');
   }
   /** Settings-only app catalog. It never returns window contents or task-bound refs. */
   async listAppsForSettings(): Promise<Array<{ appId: string; name: string; running: boolean }>> {
@@ -112,6 +118,11 @@ export class ComputerBroker {
     if (!s || s.id !== command.sessionId || s.owner !== command.owner) throw new Error('COMPUTER_SESSION_NOT_FOUND');
     if (command.op === 'release') { await this.stop(); return this.result(s); }
     if (command.op === 'status') return this.result(s);
+    if (command.op === 'settle') {
+      const decision = s.status === 'pending_authorization' ? s.preparation : s.pending?.decision;
+      if (decision) await this.awaitDecision(s, decision);
+      return this.result(s);
+    }
     this.active(s);
     if (this.busy || (s.status !== 'ready' && s.status !== 'pending_action')) throw new Error('COMPUTER_NOT_READY');
     this.busy = true;
@@ -163,7 +174,7 @@ export class ComputerBroker {
       controller: new AbortController(), receipts: new Map(), actions: 0 };
     this.session = s;
     // Catalog metadata is discoverable, but window contents and preparation require consent.
-    void this.host.requestApproval({ kind: 'session', id: s.id, appId: s.appId, appName: app.name, mode: s.mode, prepare: s.prepare, model: s.model }, s.controller.signal).then(async (approved) => {
+    const preparation = this.host.requestApproval({ kind: 'session', id: s.id, appId: s.appId, appName: app.name, mode: s.mode, prepare: s.prepare, model: s.model }, s.controller.signal).then(async (approved) => {
       this.active(s);
       if (!approved) { await this.stop(); return; }
       s.target = await this.driver.resolveTarget(s.appId, s.controller.signal, { prepare: s.prepare, windowRef: s.windowRef });
@@ -176,7 +187,19 @@ export class ComputerBroker {
       if (error instanceof ComputerTargetError) s.windows = error.windows;
       return this.stop().catch(() => {});
     }).finally(() => this.host.onStateChange?.());
+    s.preparation = preparation;
+    if (!this.host.deferApproval) await this.awaitDecision(s, preparation);
     return this.result(s);
+  }
+  private async awaitDecision<T>(s: Session, decision: Promise<T>): Promise<T | undefined> {
+    if (s.controller.signal.aborted) return;
+    let abort!: () => void;
+    const cancelled = new Promise<undefined>(resolve => {
+      abort = () => resolve(undefined);
+      s.controller.signal.addEventListener('abort', abort, { once: true });
+    });
+    try { return await Promise.race([decision, cancelled]); }
+    finally { s.controller.signal.removeEventListener('abort', abort); }
   }
   private async observe(s: Session): Promise<BrokerResult> {
     let frame: DriverObservation | undefined;
@@ -223,6 +246,7 @@ export class ComputerBroker {
     return { ...this.result(s), observation: s.observation, frame: { bytes: frame.image, mimeType: frame.mimeType } };
     } catch (error) {
       frame?.image.fill(0);
+      s.errorCode ??= error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OBSERVE_FAILED';
       await this.stop().catch(() => {
         log.warn({ sessionId: s.id, phase: 'cleanup' }, 'Computer driver cleanup failed after observation failure');
       });
@@ -241,20 +265,28 @@ export class ComputerBroker {
     }
     const observed = s.observation;
     if (!observed || e.observationId !== observed.id || this.now() - observed.capturedAt > 120_000) throw new Error('COMPUTER_STALE_OBSERVATION');
-    if (s.actions >= this.config.maxActionsPerSession) throw new Error('COMPUTER_ACTION_BUDGET');
-    const points = e.action.kind === 'drag' ? [e.action.from, e.action.to]
-      : 'point' in e.action && e.action.point ? [e.action.point] : [];
+    if (s.actions + computerActionInputCount(e.action) > this.config.maxActionsPerSession) throw new Error('COMPUTER_ACTION_BUDGET');
+    const inputs = computerActionInputs(e.action);
+    const points = inputs.flatMap(action => action.kind === 'drag' ? [action.from, action.to]
+      : 'point' in action && action.point ? [action.point] : []);
     if (points.some(point => point.x >= observed.imageWidth || point.y >= observed.imageHeight)) throw new Error('COMPUTER_COORDINATE_OUTSIDE_WINDOW');
-    if (e.action.kind === 'typeText' && !e.action.point && !observed.focusedEditableRef) throw new Error('COMPUTER_EDITABLE_TARGET_REQUIRED');
+    if (inputs.some(action => action.kind === 'typeText' && !action.point && !observed.focusedEditableRef)) throw new Error('COMPUTER_EDITABLE_TARGET_REQUIRED');
     this.driver.validateAction?.(e.action);
     if (e.action.kind !== 'wait') {
       if (!s.pending) {
         s.pending = { envelope: e, digest }; s.status = 'pending_action';
-        void this.host.requestApproval({ kind: 'action', id: e.actionId, target: observed.target, action: e.action }, s.controller.signal).then((approved) => {
+        const decision = this.host.requestApproval({ kind: 'action', id: e.actionId, target: observed.target, action: e.action }, s.controller.signal).then((approved) => {
           this.active(s);
           if (s.pending?.digest === digest) s.pending.approved = approved;
-        }).catch(() => {}).finally(() => this.host.onStateChange?.());
-        return this.result(s);
+        }).catch(async error => {
+          if (this.session !== s) return;
+          s.errorCode ??= error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_APP_NOT_AUTHORIZED';
+          await this.stop();
+        }).finally(() => this.host.onStateChange?.());
+        s.pending.decision = decision;
+        if (this.host.deferApproval) return this.result(s);
+        await this.awaitDecision(s, decision);
+        if (s.controller.signal.aborted) return this.result(s);
       }
       if (s.pending.digest !== digest) throw new Error('COMPUTER_DIFFERENT_ACTION_PENDING');
       if (s.pending.approved === undefined) return this.result(s);
@@ -272,7 +304,10 @@ export class ComputerBroker {
       if (sample) await delay(100, undefined, { signal: s.controller.signal });
       let current: DriverObservation;
       try { current = await this.driver.observe(s.target!, s.controller.signal); }
-      catch (error) { await this.stop().catch(() => {}); throw error; }
+      catch (error) {
+        s.errorCode ??= error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OBSERVE_FAILED';
+        await this.stop().catch(() => {}); throw error;
+      }
       try {
         this.active(s);
         const sameTarget = JSON.stringify(current.target) === JSON.stringify(observed.target);
@@ -288,17 +323,31 @@ export class ComputerBroker {
       return { ...this.result(s), errorCode: 'COMPUTER_OBSERVATION_CHANGED' };
     }
     const nativeMs: ComputerNativeTiming = { precheckMs: Math.max(0, Math.round(this.durationNow() - precheckStarted)), inputMs: 0, postObserveMs: 0, precheckSamples };
-    const receipt: ComputerReceipt = { actionId: e.actionId, dispatch: 'started', outcome: 'unknown', verification: 'none' };
-    s.receipts.set(e.actionId, { digest, receipt }); s.actions++; s.pending = undefined; s.status = 'running';
+    const grouped = e.action.kind === 'activateSequence' || e.action.kind === 'batch';
+    const receipt: ComputerReceipt = { actionId: e.actionId,
+      ...(grouped ? { inputCount: inputs.length, steps: inputs.map((_, index) => ({ index, dispatch: 'notStarted' as const })) } : {}),
+      dispatch: 'started', outcome: 'unknown', verification: 'none' };
+    s.receipts.set(e.actionId, { digest, receipt }); s.actions += computerActionInputCount(e.action); s.pending = undefined; s.status = 'running';
     try {
       const inputStarted = this.durationNow();
-      try { await this.driver.perform(s.target!, e.action, s.controller.signal); }
+      try {
+        if (grouped) await this.driver.perform(s.target!, e.action, s.controller.signal, (index, dispatch) => {
+          if (dispatch === 'started') {
+            this.active(s);
+            if (e.deadlineAt <= this.now()) throw new Error('COMPUTER_STALE_ACTION');
+          }
+          if (!receipt.steps?.[index]) throw new Error('COMPUTER_RECEIPT_MISMATCH');
+          receipt.steps[index].dispatch = dispatch;
+        });
+        else await this.driver.perform(s.target!, e.action, s.controller.signal);
+      }
       finally {
         nativeMs.inputMs = Math.max(0, Math.round(this.durationNow() - inputStarted));
         nativeMs.inputDetail = this.driver.getLastInputTiming?.();
       }
       this.active(s);
       receipt.dispatch = 'completed';
+      for (const step of receipt.steps ?? []) step.dispatch = 'completed';
       s.status = 'ready';
       const observationStarted = this.durationNow();
       let after: BrokerResult;
@@ -318,10 +367,11 @@ export class ComputerBroker {
       return { ...this.result(s), receipt, nativeMs };
     }
   }
-  stop(): Promise<void> {
+  stop(errorCode?: 'COMPUTER_LOCAL_UI_REQUIRED'): Promise<void> {
     this.discovery?.controller.abort();
     const s = this.session;
     if (s && s.status !== 'stopped') {
+      s.errorCode ??= errorCode;
       s.generation++; s.status = 'stopped'; s.pending = undefined; s.observation = undefined;
       s.controller.abort();
     }
@@ -332,8 +382,11 @@ export class ComputerBroker {
     if ((this.session?.id === command.sessionId && this.session.owner === command.owner)
       || (this.discovery?.id === command.sessionId && this.discovery.owner === command.owner)) await this.stop();
   }
-  snapshot(): { status: Status | 'idle'; errorCode?: string; appId?: string } {
-    return this.session ? { status: this.session.status, errorCode: this.session.errorCode, appId: this.session.appId } : { status: 'idle' };
+  snapshot(): { status: Status | 'idle'; errorCode?: string; appId?: string; preparation?: { startedAt: number }; dispatch?: ComputerReceipt['dispatch'] } {
+    const preparation = this.session?.status === 'pending_authorization' ? this.driver.getPreparationState?.() : undefined;
+    return this.session ? { status: this.session.status, errorCode: this.session.errorCode, appId: this.session.appId,
+      dispatch: [...this.session.receipts.values()].at(-1)?.receipt.dispatch ?? 'notStarted',
+      ...(preparation ? { preparation } : {}) } : { status: 'idle' };
   }
   async dispose(): Promise<void> { clearInterval(this.timer); await this.stop(); }
 }
