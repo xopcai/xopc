@@ -40,7 +40,8 @@ it.each(['required', 'connected', 'not_required', undefined] as const)('card act
     else {
       expect(router.state.location.pathname).toBe('/chat/new');
       const params = new URLSearchParams(router.state.location.search);
-      expect(params.get('draft')).toBe('请帮我使用Demo 助手插件。');
+      expect(params.get('draft')).toContain('"type":"plugin","id":"demo-id","name":"Demo 助手"');
+      expect(params.get('draft')).toContain('目前只介绍用法，不执行实际任务');
       expect(params.get('projectScope')).toBe('none');
       expect(params.has('plugin')).toBe(false);
     }

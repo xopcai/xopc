@@ -68,7 +68,6 @@ export function useComputerPreview(conversationId: string | null | undefined) {
     });
     return () => { disposed = true; setSubscriptionId(undefined); if (id) void api.unsubscribe(id).catch(() => {}); };
     // Host state changes must not recreate the media subscription on every status update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, conversationId, previewId, targetEpoch, runId, retry, ended]);
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== 'hidden');
