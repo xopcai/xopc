@@ -275,29 +275,27 @@ private extension MessageBubble {
             VStack(alignment: .leading, spacing: 6) {
                 let images = message.attachments.filter(\.isImage)
                 if !images.isEmpty {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            ForEach(images) { attachment in
+                    let columnCount = images.count == 1 ? 1 : images.count == 2 || images.count == 4 ? 2 : 3
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: columnCount), spacing: 6) {
+                        ForEach(images) { attachment in
+                            GeometryReader { geometry in
                                 if let uri = attachment.uri {
                                     MarkdownImageView(
                                         alt: attachment.name ?? AppLocalization.string("图片", locale: locale),
-                                        source: uri,
-                                        configuration: configuration,
-                                        conversationID: conversationID,
-                                        compact: message.role == "user" || images.count > 1,
-                                        gallery: images
+                                        source: uri, configuration: configuration,
+                                        conversationID: conversationID, compact: true,
+                                        tileSize: geometry.size.width, gallery: images
                                     )
                                 } else {
-                                    ChatAttachmentPreview(
-                                        attachment: attachment,
-                                        configuration: configuration,
-                                        conversationID: conversationID
-                                    )
+                                    ChatAttachmentPreview(attachment: attachment,
+                                                          configuration: configuration, conversationID: conversationID)
                                 }
                             }
+                            .aspectRatio(1, contentMode: .fit)
+                            .clipShape(.rect(cornerRadius: 10))
                         }
                     }
-                    .scrollIndicators(.hidden)
+                    .accessibilityIdentifier("chat-image-grid")
                 }
                 ForEach(message.attachments.filter { !$0.isImage }) { attachment in
                     if attachment.isAudio, let conversationID,

@@ -12,7 +12,7 @@ import type {
   WindowStateOutput,
 } from '@trycua/cua-driver';
 import { z } from 'zod';
-import type { ComputerAction, ComputerTarget, ComputerInputTiming } from '@xopcai/computer-control-contract';
+import { computerActionInputs, type ComputerAction, type ComputerPrimitiveAction, type ComputerTarget, type ComputerInputTiming } from '@xopcai/computer-control-contract';
 import type { ComputerDriver, DriverObservation } from '../../src/computer/broker.js';
 import { ComputerInputTimer } from '../../src/computer/native-timing.js';
 import { ComputerTargetError } from '../../src/computer/errors.js';
@@ -22,6 +22,9 @@ import { windowsAppIdentity, windowsAppMatches, assertWindowsAppAllowed } from '
 import { readWindowsComputerIdentity, type WindowsInputState } from './windows-native.js';
 import { normalizeWindowsAccessibility } from './windows-accessibility.js';
 import { enrichWindowsInput, windowsInputAllowed } from './windows-input.js';
+import { decodeNativeBatchResult, supportsExactNativeBatch, type NativeBatchProgress } from './native-batch.js';
+import { withWindowReadiness } from './window-readiness.js';
+import { computerNativeInputError } from '../../src/computer/native-errors.js';
 
 const exec = promisify(execFile);
 const log = createLogger('ComputerDriver');
@@ -29,6 +32,13 @@ type CuaSdkModule = typeof import('@trycua/cua-driver');
 type CuaSdkLoader = () => Promise<CuaSdkModule>;
 const Bounds = z.object({ x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() });
 const hash = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex');
+function hasWindowFrame(state: WindowStateOutput): boolean {
+  const image = state.images[0];
+  return state.screenshotFrameValid !== false && Number.isSafeInteger(state.screenshotWidth) && state.screenshotWidth! > 0
+    && Number.isSafeInteger(state.screenshotHeight) && state.screenshotHeight! > 0 && Bounds.safeParse(state.windowBounds).success
+    && !!image && ['image/png', 'image/jpeg'].includes(image.mimeType) && image.dataBase64.length > 0
+    && image.dataBase64.length <= 7 * 1024 * 1024;
+}
 const DENIED_APPS = /(^com\.apple\.(Terminal|systempreferences|KeychainAccess)$|password|1password|bitwarden|iterm)/i;
 
 async function cleanupDeadline(operation: () => Promise<unknown>, timeoutMs: number): Promise<void> {
@@ -116,7 +126,10 @@ export class CuaComputerDriver implements ComputerDriver {
   private readonly referenceSalt = randomUUID();
   private readonly windowsApps = new Map<string, AppInfo>();
   private windowsInput?: WindowsInputState;
+  private exactNativeBatch = false;
   private captureStats = { attempts: 0, invalidFrames: 0, recovered: 0, exhausted: 0 };
+  private preparingSince?: number;
+  getPreparationState() { return this.preparingSince === undefined ? undefined : { startedAt: this.preparingSince }; }
   getCaptureStats() { return { ...this.captureStats }; }
   constructor(
     private readonly binary: string,
@@ -163,6 +176,7 @@ export class CuaComputerDriver implements ComputerDriver {
       || metadata.driverVersion !== connection.driverVersion || metadata.contractVersion !== connection.contractVersion) {
       throw new Error('COMPUTER_DRIVER_HOST_IDENTITY_MISMATCH');
     }
+    this.exactNativeBatch = typeof client.listToolsJson === 'function' && supportsExactNativeBatch(await client.listToolsJson());
     this.setupStage = 'PERMISSIONS';
     const permissions = await this.callUntyped('check_permissions', {});
     this.assertGeneration(generation);
@@ -178,7 +192,7 @@ export class CuaComputerDriver implements ComputerDriver {
     const result: ToolResult = await this.timedSdk(() => this.client!.callTool(name, JSON.stringify(args), signal ? { signal } : undefined));
     return this.validateInputResult(() => {
       signal?.throwIfAborted();
-      if (result.isError) throw new Error(`COMPUTER_DRIVER_${name.toUpperCase()}_REFUSED`);
+      if (result.isError) throw computerNativeInputError(result, `COMPUTER_DRIVER_${name.toUpperCase()}_REFUSED`);
       let data: Record<string, unknown>;
       try { data = JSON.parse(result.structuredJson ?? result.rawJson ?? '{}') as Record<string, unknown>; }
       catch { throw new Error('COMPUTER_DRIVER_INVALID_RESULT'); }
@@ -303,13 +317,27 @@ export class CuaComputerDriver implements ComputerDriver {
   async resolveTarget(appId: string, signal: AbortSignal, options: { prepare: boolean; windowRef?: string }): Promise<ComputerTarget> {
     this.assertAppAllowed(appId);
     await this.start(); signal.throwIfAborted();
+    if (!options.prepare) return this.resolveWindow(appId, signal, options);
+    this.preparingSince = Date.now();
+    try {
+      return await withWindowReadiness(signal, (readySignal, poll) => this.resolveWindow(appId, readySignal, options, poll));
+    } finally { this.preparingSince = undefined; }
+  }
+  private async resolveWindow(appId: string, signal: AbortSignal, options: { prepare: boolean; windowRef?: string },
+    poll?: <T>(sample: () => Promise<T | undefined>) => Promise<T>): Promise<ComputerTarget> {
+    let prepared = false;
+    let activated = false;
     let rows = await this.listApps(signal);
     if (!rows.some(app => app.bundleId === appId)) throw new Error('COMPUTER_APP_NOT_FOUND');
     if (options.prepare && !rows.some(app => app.bundleId === appId && app.pid > 0)) {
       // Never accept URLs, argv, debug ports or a model-supplied launch path.
       const launch = this.platform === 'win32' ? windowsAppIdentity(this.windowsApps.get(appId)!)!.launch : { bundle_id: appId };
       await this.callUntyped('launch_app', launch, signal);
-      rows = await this.listApps(signal);
+      prepared = true;
+      rows = await poll!(async () => {
+        const next = await this.listApps(signal);
+        return next.some(app => app.bundleId === appId && app.pid > 0) ? next : undefined;
+      });
     }
     let matches = rows.filter(app => app.bundleId === appId && app.pid > 0);
     if (!matches.length) throw new Error('COMPUTER_APP_NOT_RUNNING');
@@ -317,14 +345,43 @@ export class CuaComputerDriver implements ComputerDriver {
     const pid = matches[0].pid;
     const processIdentity = await this.processIdentity(pid);
     let windows = await this.appWindows(pid, appId, signal);
+    const checkProcess = async () => {
+      signal.throwIfAborted();
+      if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+    };
+    if (options.prepare && !options.windowRef && !windows.length) {
+      if (!prepared) {
+        await checkProcess();
+        await this.callUntyped('bring_to_front', { pid }, signal);
+        activated = true;
+        prepared = true;
+      }
+      windows = await poll!(async () => {
+        await checkProcess();
+        const next = await this.appWindows(pid, appId, signal);
+        return next.length ? next : undefined;
+      });
+    }
     // A hidden app can publish many proxy surfaces before its main window is restored.
     // Preparation authorizes app activation, but not a guessed window or screenshot.
     if (options.prepare && !options.windowRef && windows.length > 1 && windows.every(window => !window.isOnScreen)) {
+      if (windows.every(window => window.onCurrentSpace === false)) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
       if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
-      await this.callUntyped('bring_to_front', { pid }, signal);
+      if (!activated) {
+        await this.callUntyped('bring_to_front', { pid }, signal);
+        activated = true;
+      }
+      prepared = true;
       matches = (await this.listApps(signal)).filter(app => app.bundleId === appId && app.pid > 0);
       if (matches.length !== 1 || matches[0].pid !== pid || await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
-      windows = await this.appWindows(pid, appId, signal);
+      const originalIds = new Set(windows.map(window => window.windowId));
+      windows = await poll!(async () => {
+        await checkProcess();
+        const next = (await this.appWindows(pid, appId, signal)).filter(window => originalIds.has(window.windowId));
+        if (!next.length) throw new Error('COMPUTER_WINDOW_CHANGED');
+        if (next.every(window => window.onCurrentSpace === false)) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
+        return next.some(window => window.isOnScreen) ? next : undefined;
+      });
     }
     const ref = (window: typeof windows[number]) => hash(`${this.referenceSalt}:${appId}:${processIdentity}:${window.windowId}`);
     const candidates = windows.slice(0, 100).map(window => ({ windowRef: ref(window), title: (window.title || 'Untitled window').slice(0, 300), visible: window.isOnScreen }));
@@ -361,17 +418,40 @@ export class CuaComputerDriver implements ComputerDriver {
       // order cannot establish which document the user's task authorized.
     }
     if (!window && windows.length > 1) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
-    // A user may already have brought the sole visible window forward. Avoid a
-    // second activation request, which macOS can refuse even for an approved app.
-    const alreadyFrontmost = matches[0].active && window?.isOnScreen && visible.length === 1;
-    if (window && options.prepare && !alreadyFrontmost) {
+    if (window?.onCurrentSpace === false) throw new ComputerTargetError('COMPUTER_WINDOW_OTHER_SPACE', candidates);
+    // Background delivery needs a visible window, not foreground focus. Avoid
+    // unnecessary activation, which can steal focus or be refused by the OS.
+    if (window && options.prepare && !window.isOnScreen && !activated) {
       signal.throwIfAborted();
       if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
       await this.callUntyped('bring_to_front', { pid, window_id: this.jsonWindowId(window.windowId) }, signal);
-      const restored = await this.appWindows(pid, appId, signal);
-      window = restored.find(item => item.pid === pid && item.windowId === window!.windowId);
+      activated = true;
+      prepared = true;
     }
-    if (!window?.isOnScreen) throw new ComputerTargetError(window?.onCurrentSpace === false ? 'COMPUTER_WINDOW_OTHER_SPACE' : 'COMPUTER_WINDOW_REQUIRED', candidates);
+    if (window && prepared) {
+      const windowId = window.windowId;
+      let previousBounds: string | undefined;
+      window = await poll!(async () => {
+        await checkProcess();
+        const current = (await this.appWindows(pid, appId, signal)).find(item => item.windowId === windowId);
+        if (!current) throw new Error('COMPUTER_WINDOW_CHANGED');
+        if (current.onCurrentSpace === false) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
+        const bounds = Bounds.safeParse(current.bounds);
+        if (!current.isOnScreen || !bounds.success) { previousBounds = undefined; return; }
+        const fingerprint = JSON.stringify(bounds.data);
+        const stable = fingerprint === previousBounds;
+        previousBounds = fingerprint;
+        if (!stable) return;
+        const state = await this.getWindowState(pid, windowId, { includeScreenshot: true, maxElements: 2, maxDepth: 2, maxDimension: 1600 }, signal);
+        if (state.pid !== pid || state.windowId !== windowId) throw new Error('COMPUTER_CAPTURE_TARGET_MISMATCH');
+        if (state.elements?.some(element => element.role === 'AXButton' && element.label === 'WindowSharingSessionButton')) throw new Error('COMPUTER_WINDOW_CHANGED');
+        const capturedBounds = Bounds.safeParse(state.windowBounds);
+        const valid = hasWindowFrame(state) && capturedBounds.success && JSON.stringify(capturedBounds.data) === fingerprint;
+        state.images.length = 0;
+        return valid ? current : undefined;
+      });
+    }
+    if (!window?.isOnScreen) throw new ComputerTargetError(window ? 'COMPUTER_WINDOW_HIDDEN' : 'COMPUTER_WINDOW_REQUIRED', candidates);
     if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     return { appId, pid, processIdentity, windowId: window.windowId.toString(), width: Math.round(window.bounds.width), height: Math.round(window.bounds.height), geometryRevision: hash(JSON.stringify(window.bounds)) };
   }
@@ -395,9 +475,11 @@ export class CuaComputerDriver implements ComputerDriver {
       // retaining the exact AX window. Re-capture only that window; never accept
       // invalid pixels, follow another window or replay the preceding input.
       if (state.pid !== target.pid || state.windowId !== windowId) break;
-      const captureBounds = state.windowBounds == null ? undefined : Bounds.parse(state.windowBounds);
-      if (recoveryBounds && captureBounds && JSON.stringify(captureBounds) !== recoveryBounds) throw new Error('COMPUTER_WINDOW_CHANGED');
-      if (state.screenshotFrameValid !== false) {
+      if (state.elements?.some(element => element.role === 'AXButton' && element.label === 'WindowSharingSessionButton')) throw new Error('COMPUTER_WINDOW_CHANGED');
+      const parsedBounds = Bounds.safeParse(state.windowBounds);
+      const captureBounds = parsedBounds.success ? parsedBounds.data : undefined;
+      if (recoveryBounds && captureBounds && JSON.stringify(captureBounds) !== recoveryBounds) throw new Error('COMPUTER_UI_UNSTABLE');
+      if (hasWindowFrame(state)) {
         if (attempt) this.captureStats.recovered++;
         break;
       }
@@ -408,27 +490,30 @@ export class CuaComputerDriver implements ComputerDriver {
       // stable native geometry, matching AX bounds when available. Never recover a process/window/geometry change.
       const windows = await this.listWindows(target.pid, signal);
       const current = windows.find(window => window.windowId === windowId);
-      if (!current || !current.isOnScreen || current.onCurrentSpace === false) throw new Error('COMPUTER_WINDOW_CHANGED');
+      if (!current) throw new Error('COMPUTER_WINDOW_CHANGED');
+      if (current.onCurrentSpace === false) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
+      if (!current.isOnScreen) throw new Error('COMPUTER_WINDOW_HIDDEN');
       const nativeBounds = JSON.stringify(Bounds.parse(current.bounds));
       if ((captureBounds && nativeBounds !== JSON.stringify(captureBounds))
-        || (recoveryBounds && nativeBounds !== recoveryBounds)) throw new Error('COMPUTER_WINDOW_CHANGED');
+        || (recoveryBounds && nativeBounds !== recoveryBounds)) throw new Error('COMPUTER_UI_UNSTABLE');
       recoveryBounds = nativeBounds;
       await delay(recoveryDelays[attempt], undefined, { signal });
     }
     if (state.elements?.some(element => element.role === 'AXButton' && element.label === 'WindowSharingSessionButton')) throw new Error('COMPUTER_WINDOW_CHANGED');
     // Some platforms cannot produce an affirmative frame-validity bit. An explicit
     // negative is fatal; exact pid/window identity and the image envelope remain required.
-    if (state.pid !== target.pid || state.windowId !== windowId || state.screenshotFrameValid === false) {
+    if (state.pid !== target.pid || state.windowId !== windowId) {
       log.warn({ phase: 'capture', expectedPid: target.pid, actualPid: state.pid, expectedWindowId: String(windowId),
         actualWindowId: String(state.windowId), frameValid: state.screenshotFrameValid, degraded: state.degraded,
         imageCount: state.images?.length, width: state.screenshotWidth, height: state.screenshotHeight }, 'Native window capture rejected');
       throw new Error('COMPUTER_CAPTURE_TARGET_MISMATCH');
     }
+    if (!hasWindowFrame(state)) throw new Error('COMPUTER_CAPTURE_UNAVAILABLE');
     const inputIdentity = await this.assertWindowApp(target, signal, true);
     this.windowsInput = inputIdentity?.input;
     const bounds = Bounds.parse(state.windowBounds);
     const screenshot = state.images[0];
-    if (!screenshot?.dataBase64 || !['image/png', 'image/jpeg'].includes(screenshot.mimeType) || screenshot.dataBase64.length > 7 * 1024 * 1024) throw new Error('COMPUTER_CAPTURE_REQUIRED');
+    if (!screenshot?.dataBase64 || !['image/png', 'image/jpeg'].includes(screenshot.mimeType) || screenshot.dataBase64.length > 7 * 1024 * 1024) throw new Error('COMPUTER_CAPTURE_UNAVAILABLE');
     const image = Buffer.from(screenshot.dataBase64, 'base64');
     const width = z.number().int().positive().parse(state.screenshotWidth);
     const height = z.number().int().positive().parse(state.screenshotHeight);
@@ -501,6 +586,15 @@ export class CuaComputerDriver implements ComputerDriver {
     return candidates[0];
   }
   validateAction(action: ComputerAction): void {
+    if (action.kind === 'batch') {
+      for (const input of action.actions) this.validateAction(input);
+    }
+    if (action.kind === 'activateSequence') {
+      for (const ref of action.refs) {
+        const element = this.semanticElement({ kind: 'activate', ref });
+        if (element.role !== 'AXButton' || element.in_web_content === true) throw new Error('COMPUTER_SEMANTIC_ACTION_UNSUPPORTED');
+      }
+    }
     if (action.kind === 'activate' || action.kind === 'showMenu') this.semanticElement(action);
     if (action.kind === 'typeText' || action.kind === 'setValue') this.editable(action);
     if (action.kind === 'pressKeys') {
@@ -548,21 +642,106 @@ export class CuaComputerDriver implements ComputerDriver {
     return this.inputTimer ? this.inputTimer.measureSync('resultValidationMs', operation) : operation();
   }
   private async timedSdk<T>(operation: () => Promise<T>): Promise<T> {
-    return this.inputTimer ? this.inputTimer.measure('sdkCallMs', operation) : operation();
+    try { return await (this.inputTimer ? this.inputTimer.measure('sdkCallMs', operation) : operation()); }
+    catch (error) {
+      if (computerNativeInputError(error, '').message === 'COMPUTER_BACKGROUND_INPUT_UNSUPPORTED') throw new Error('COMPUTER_BACKGROUND_INPUT_UNSUPPORTED');
+      throw error;
+    }
   }
-  async perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void> {
+  async perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal,
+    onProgress?: (index: number, dispatch: 'notStarted' | 'started' | 'completed' | 'unknown') => void): Promise<void> {
     const timer = new ComputerInputTimer(this.platform === 'win32');
     this.lastInputTiming = undefined;
     this.inputTimer = timer;
     let completed = false;
     try {
-      await this.performInput(target, action, signal);
-      if (action.kind !== 'wait') await timer.measure('renderGraceMs', () => delay(200, undefined, { signal }));
+      if (action.kind === 'batch' || action.kind === 'activateSequence') timer.measureSync('actionValidationMs', () => this.validateAction(action));
+      const inputs = computerActionInputs(action);
+      if ((action.kind === 'batch' || action.kind === 'activateSequence') && this.platform === 'darwin'
+        && this.exactNativeBatch && inputs.every(input => input.kind !== 'wait')) {
+        await this.performNativeBatch(target, inputs, signal, onProgress);
+        completed = true;
+        return;
+      }
+      for (const [index, input] of inputs.entries()) {
+        signal.throwIfAborted();
+        // Coordinate inputs additionally require unchanged native window geometry.
+        // This is metadata-only; observations belong at explicit checkpoints.
+        if (action.kind === 'batch' && ('point' in input || input.kind === 'drag')) {
+          const current = (await this.listWindows(target.pid, signal)).find(window => window.windowId.toString() === target.windowId);
+          if (!current || !current.isOnScreen || current.onCurrentSpace === false
+            || !this.frame || JSON.stringify(Bounds.parse(current.bounds)) !== JSON.stringify(this.frame.bounds)) throw new Error('COMPUTER_WINDOW_CHANGED');
+        }
+        onProgress?.(index, 'started');
+        try {
+          await this.performInput(target, input, signal);
+          onProgress?.(index, 'completed');
+        } catch (error) { onProgress?.(index, 'unknown'); throw error; }
+      }
       completed = true;
     } finally {
       this.lastInputTiming = timer.finish(completed);
       this.inputTimer = undefined;
     }
+  }
+  private async performNativeBatch(target: ComputerTarget, inputs: ComputerPrimitiveAction[], signal: AbortSignal,
+    onProgress?: (index: number, dispatch: NativeBatchProgress) => void): Promise<void> {
+    if (!this.client || !this.frame || !this.observedTarget || this.observedTarget.appId !== target.appId
+      || this.observedTarget.pid !== target.pid || this.observedTarget.processIdentity !== target.processIdentity
+      || this.observedTarget.windowId !== target.windowId) throw new Error('COMPUTER_ELEMENT_TARGET_CHANGED');
+    await this.inputTimer!.measure('identityCheckMs', async () => {
+      if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+    });
+    const windowId = this.jsonWindowId(BigInt(target.windowId));
+    const steps = inputs.map(input => {
+      const args: Record<string, unknown> = { pid: target.pid, window_id: windowId };
+      switch (input.kind) {
+        case 'activate': case 'showMenu': return { tool: 'click', args: { ...args,
+          element_token: this.semanticElement(input).element_token, button: input.kind === 'activate' ? 'left' : 'right', count: 1 } };
+        case 'click': return { tool: 'click', args: { ...args, ...input.point, button: input.button, count: input.count } };
+        case 'setValue': return { tool: 'set_value', args: { ...args, element_token: this.editable(input).element_token, value: input.text } };
+        case 'typeText': {
+          const field = this.editable(input);
+          return { tool: 'type_text', args: { ...args, text: input.text,
+            ...(field.in_web_content === true ? input.point! : { element_token: field.element_token }) } };
+        }
+        case 'pressKeys': {
+          const keys = nativeKeys(input.keys, this.platform);
+          return { tool: keys.length === 1 ? 'press_key' : 'hotkey', args: { ...args, ...(keys.length === 1 ? { key: keys[0] } : { keys }) } };
+        }
+        case 'drag': return { tool: 'drag', args: { ...args, from_x: input.from.x, from_y: input.from.y,
+          to_x: input.to.x, to_y: input.to.y, duration_ms: 500, steps: 20, button: 'left' } };
+        case 'scroll': {
+          const delta = input.deltaY || input.deltaX;
+          return { tool: 'scroll', args: { ...args, ...input.point, by: 'line', amount: Math.min(5, Math.max(1, Math.ceil(Math.abs(delta) / 100))),
+            direction: input.deltaY ? delta > 0 ? 'down' : 'up' : delta > 0 ? 'right' : 'left' } };
+        }
+        default: throw new Error('COMPUTER_INVALID_INPUT');
+      }
+    });
+    signal.throwIfAborted();
+    for (const index of inputs.keys()) onProgress?.(index, 'started');
+    let result: ToolResult;
+    try {
+      result = await this.timedSdk(() => this.client!.callTool('run_steps', JSON.stringify({ strict_targets: true,
+        pid: target.pid, window_id: windowId, expected_bounds: this.frame!.bounds, delivery_mode: 'background',
+        foreground_fallback: false, delay_ms: 0, timeout_ms: 25_000, steps }), { signal }));
+    } catch (error) {
+      for (const index of inputs.keys()) onProgress?.(index, 'unknown');
+      // Dropping an RPC cannot prove the native loop stopped. Reap the private
+      // daemon before returning cancellation; never replay through scalar calls.
+      if (signal.aborted) await this.stop();
+      throw error;
+    }
+    let decoded: ReturnType<typeof decodeNativeBatchResult>;
+    try { decoded = this.validateInputResult(() => {
+      if (result.images.length) throw new Error('COMPUTER_DRIVER_INVALID_BATCH_RESULT');
+      return decodeNativeBatchResult(result.structuredJson ?? result.rawJson ?? '', inputs.length, result.isError);
+    }); }
+    catch (error) { for (const index of inputs.keys()) onProgress?.(index, 'unknown'); throw error; }
+    for (const [index, dispatch] of decoded.progress.entries()) onProgress?.(index, dispatch);
+    if (signal.aborted) { await this.stop(); signal.throwIfAborted(); }
+    if (decoded.errorCode) throw new Error(decoded.errorCode);
   }
   private async performInput(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
@@ -588,6 +767,7 @@ export class CuaComputerDriver implements ComputerDriver {
           deliveryMode: this.sdk!.InputDeliveryMode.Background, count: 1,
           button: action.kind === 'activate' ? this.sdk!.ClickButton.Left : this.sdk!.ClickButton.Right }, { signal }));
         this.validateInputResult(() => {
+          if (result.effect === this.sdk!.ActionEffect.Refused) throw computerNativeInputError(result, 'COMPUTER_SEMANTIC_ACTION_UNCONFIRMED');
           if (result.route !== this.sdk!.ActionRoute.Accessibility || ![
             this.sdk!.ActionEffect.Confirmed, this.sdk!.ActionEffect.Unverifiable,
           ].includes(result.effect)) throw new Error('COMPUTER_SEMANTIC_ACTION_UNCONFIRMED');
@@ -599,7 +779,7 @@ export class CuaComputerDriver implements ComputerDriver {
         const button = action.button === 'right' ? this.sdk.ClickButton.Right : this.sdk.ClickButton.Left;
         const result = await this.timedSdk(() => this.client!.click({ target: actionTarget, position: new this.sdk!.ClickPosition.Coordinates(action.point),
           deliveryMode: this.sdk!.InputDeliveryMode.Background, count: action.count, button }, { signal }));
-        this.validateInputResult(() => { if (result.effect === this.sdk!.ActionEffect.Refused) throw new Error('COMPUTER_DRIVER_CLICK_REFUSED'); });
+        this.validateInputResult(() => { if (result.effect === this.sdk!.ActionEffect.Refused) throw computerNativeInputError(result, 'COMPUTER_DRIVER_CLICK_REFUSED'); });
         return;
       }
       case 'drag':
@@ -629,7 +809,7 @@ export class CuaComputerDriver implements ComputerDriver {
         this.validateInputResult(() => {
           if (result.isError) {
             log.warn({ phase: 'key', nativeErrorCode: /^[a-z_0-9]{1,80}$/i.test(result.errorCode ?? '') ? result.errorCode : undefined }, 'Native window key refused');
-            throw new Error('COMPUTER_DRIVER_KEY_REFUSED');
+            throw computerNativeInputError(result, 'COMPUTER_DRIVER_KEY_REFUSED');
           }
         });
         return;
@@ -642,7 +822,7 @@ export class CuaComputerDriver implements ComputerDriver {
           : (delta > 0 ? this.sdk.ScrollDirection.Right : this.sdk.ScrollDirection.Left);
         const result = await this.timedSdk(() => this.client!.scroll({ target: actionTarget, ...action.point, by: this.sdk!.ScrollBy.Line,
           amount: BigInt(Math.min(5, Math.max(1, Math.ceil(Math.abs(delta) / 100)))), direction }, { signal }));
-        this.validateInputResult(() => { if (result.isError) throw new Error('COMPUTER_DRIVER_SCROLL_REFUSED'); });
+        this.validateInputResult(() => { if (result.isError) throw computerNativeInputError(result, 'COMPUTER_DRIVER_SCROLL_REFUSED'); });
         return;
       }
     }
@@ -665,6 +845,7 @@ export class CuaComputerDriver implements ComputerDriver {
     this.elements = []; this.frame = undefined; this.observedTarget = undefined; this.windowsInput = undefined;
     const client = this.client; this.client = undefined;
     this.sdk = undefined;
+    this.exactNativeBatch = false;
     const host = this.host;
     // A broken RPC connection must not prevent the owned daemon from being stopped.
     if (client) await cleanupDeadline(() => client.shutdown(), 750).catch(() => {});

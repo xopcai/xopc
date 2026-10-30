@@ -19,6 +19,7 @@ export const ComputerFailureSchema = z.object({
 export type ComputerFailure = z.infer<typeof ComputerFailureSchema>;
 
 const categories: Record<string, ComputerFailure['category']> = Object.create(null);
+for (const code of ['NATIVE_BATCH_FAILED', 'NATIVE_BATCH_REFUSED', 'DRIVER_INVALID_BATCH_RESULT']) categories[`COMPUTER_${code}`] = 'native';
 for (const code of ['AGENT_MODEL_REQUIRED', 'AGENT_MODEL_CHANGED', 'PLANNER_MISMATCH']) categories[`COMPUTER_${code}`] = 'model';
 for (const code of ['PROGRAM_BUDGET', 'PROGRAM_STORE_LIMIT']) categories[`COMPUTER_${code}`] = 'budget';
 categories.COMPUTER_PROGRAM_POLICY_REFUSED = 'permission';
@@ -26,11 +27,11 @@ categories.COMPUTER_PROGRAM_FAILED = 'harness';
 categories.COMPUTER_PROGRAM_UNAWAITED_CALL = 'harness';
 for (const [category, codes] of Object.entries({
   permission: ['DISABLED', 'READ_ONLY', 'LOCAL_UI_REQUIRED', 'CONTROL_PAUSED', 'APP_NOT_AUTHORIZED', 'OS_PERMISSION_REQUIRED', 'SELF_CONTROL_DENIED', 'SENSITIVE_APP_MANUAL_ONLY', 'REVOKED', 'GRANT_REVOKED', 'KEY_SCOPE_UNSAFE', 'WINDOWS_TEXT_INPUT_UNVERIFIED', 'WINDOWS_KEY_INPUT_UNVERIFIED', 'WINDOWS_KEY_TARGET_REQUIRED', 'PLATFORM_UNSUPPORTED'],
-  target: ['APP_NOT_FOUND', 'APP_NOT_RUNNING', 'APP_REF_EXPIRED', 'APP_INSTANCE_AMBIGUOUS', 'WINDOW_REQUIRED', 'WINDOW_OTHER_SPACE', 'WINDOW_AMBIGUOUS', 'WINDOW_CHANGED', 'WINDOW_APP_CHANGED', 'NATIVE_IDENTITY_UNAVAILABLE', 'WINDOW_ID_UNSUPPORTED', 'PROCESS_CHANGED', 'PROCESS_EXITED', 'ELEMENT_REF_REQUIRED', 'ELEMENT_TARGET_CHANGED', 'TARGET_CHANGED', 'TARGET_MISMATCH', 'CLOSE_BEFORE_TARGET_CHANGE', 'FLOW_TARGET_MISMATCH', 'FLOW_NOT_FOUND', 'DESKTOP_BINDING_REQUIRED', 'DESKTOP_UPGRADE_REQUIRED'],
-  observation: ['OBSERVATION_CHANGED', 'STALE_OBSERVATION', 'STALE_ACTION', 'UI_UNSTABLE', 'FRAME_REQUIRED', 'CAPTURE_REQUIRED', 'CAPTURE_TARGET_MISMATCH', 'FRAME_HANDOFF_FAILED', 'UNEXPECTED_FRAME', 'SESSION_MISMATCH', 'AMBIGUOUS_WINDOW_TREE', 'OBSERVE_FAILED'],
+  target: ['APP_NOT_FOUND', 'APP_NOT_RUNNING', 'APP_REF_EXPIRED', 'APP_INSTANCE_AMBIGUOUS', 'WINDOW_REQUIRED', 'WINDOW_HIDDEN', 'WINDOW_READY_TIMEOUT', 'WINDOW_OTHER_SPACE', 'WINDOW_AMBIGUOUS', 'WINDOW_CHANGED', 'WINDOW_APP_CHANGED', 'NATIVE_IDENTITY_UNAVAILABLE', 'WINDOW_ID_UNSUPPORTED', 'PROCESS_CHANGED', 'PROCESS_EXITED', 'ELEMENT_REF_REQUIRED', 'ELEMENT_TARGET_CHANGED', 'TARGET_CHANGED', 'TARGET_MISMATCH', 'CLOSE_BEFORE_TARGET_CHANGE', 'FLOW_TARGET_MISMATCH', 'FLOW_NOT_FOUND', 'DESKTOP_BINDING_REQUIRED', 'DESKTOP_UPGRADE_REQUIRED'],
+  observation: ['OBSERVATION_CHANGED', 'STALE_OBSERVATION', 'STALE_ACTION', 'UI_UNSTABLE', 'FRAME_REQUIRED', 'CAPTURE_REQUIRED', 'CAPTURE_UNAVAILABLE', 'CAPTURE_TARGET_MISMATCH', 'FRAME_HANDOFF_FAILED', 'UNEXPECTED_FRAME', 'SESSION_MISMATCH', 'AMBIGUOUS_WINDOW_TREE', 'OBSERVE_FAILED'],
   model: ['MODEL_REQUIRED', 'MODEL_KEY_MISSING', 'MODEL_CAPABILITY_REQUIRED', 'INVALID_MODEL_OUTPUT', 'EXPECTED_SINGLE_ACTION', 'READ_ONLY_MODEL_OUTPUT', 'MODEL_FAILED', 'MODEL_EMPTY_RESPONSE', 'MODEL_INCOMPLETE_RESPONSE', 'MODEL_INVALID_JSON', 'MODEL_PROTOCOL_MISMATCH', 'MODEL_REQUIRES_HTTPS_ORIGIN', 'UNSUPPORTED_MODEL_HEADER', 'DEPLOYMENT_UNAVAILABLE'],
   transport: ['RECEIPT_MISMATCH', 'DISPATCH_FAILED', 'RELEASE_UNCONFIRMED', 'SESSION_NOT_FOUND', 'BUSY', 'DEVICE_BUSY', 'NOT_READY', 'ACTION_ID_REUSED', 'ACTION_PENDING', 'DIFFERENT_ACTION_PENDING'],
-  native: ['NATIVE_SETUP_FAILED', 'NATIVE_ACTION_FAILED', 'POST_ACTION_OBSERVATION_FAILED', 'SEMANTIC_ACTION_UNSUPPORTED', 'SEMANTIC_ACTION_UNCONFIRMED', 'EDITABLE_TARGET_REQUIRED', 'COORDINATE_OUTSIDE_WINDOW', 'KEY_NOT_SUPPORTED', 'SCROLL_REQUIRES_ONE_AXIS', 'DRAG_REQUIRES_MOVEMENT', 'DRIVER_HOST_IDENTITY_MISMATCH', 'DRIVER_INVALID_RESULT', 'DRIVER_OFFLINE', 'DRIVER_REQUIRES_ELECTRON_MAIN'],
+  native: ['BACKGROUND_INPUT_UNSUPPORTED', 'INPUT_REFUSED', 'NATIVE_SETUP_FAILED', 'NATIVE_ACTION_FAILED', 'POST_ACTION_OBSERVATION_FAILED', 'SEMANTIC_ACTION_UNSUPPORTED', 'SEMANTIC_ACTION_UNCONFIRMED', 'EDITABLE_TARGET_REQUIRED', 'COORDINATE_OUTSIDE_WINDOW', 'KEY_NOT_SUPPORTED', 'SCROLL_REQUIRES_ONE_AXIS', 'DRAG_REQUIRES_MOVEMENT', 'DRIVER_HOST_IDENTITY_MISMATCH', 'DRIVER_INVALID_RESULT', 'DRIVER_OFFLINE', 'DRIVER_REQUIRES_ELECTRON_MAIN'],
   budget: ['SESSION_BUDGET', 'ACTION_BUDGET', 'MODEL_BUDGET', 'FRAME_LIMIT', 'INPUT_LIMIT', 'MODEL_OUTPUT_BUDGET', 'MODEL_RESPONSE_LIMIT'],
   no_progress: ['NO_PROGRESS'], cancelled: ['OPERATION_ABORTED', 'AUTHORIZATION_TIMEOUT', 'EVALUATION_ABORTED'],
   harness: ['EVALUATION_PROCESS_FAILED', 'EVALUATION_TIMEOUT', 'EVALUATION_OUTPUT_LIMIT', 'EVALUATION_INVALID_JSON', 'EVALUATION_INVALID_RESULT'],
@@ -76,12 +77,12 @@ export const ComputerSessionReportSchema = z.object({
   phaseMs: z.object({ open: Count, observe: Count, model: Count, dispatch: Count, release: Count }).strict(),
   failure: ComputerFailureSchema.optional(),
   timings: z.array(z.object({ actionId: z.string().max(200), nativeMs: ComputerNativeTimingSchema.optional(),
-    kind: z.enum(['activate', 'showMenu', 'click', 'drag', 'setValue', 'typeText', 'pressKeys', 'scroll', 'wait']).optional(),
+    kind: z.enum(['activate', 'activateSequence', 'batch', 'showMenu', 'click', 'drag', 'setValue', 'typeText', 'pressKeys', 'scroll', 'wait']).optional(),
     transport: ComputerTransportTimingSchema.optional(), endpointRoundTripMs: z.number().finite().nonnegative(),
   }).strict()).max(256).optional(),
   timingsTruncated: z.boolean().optional(),
   recentActions: z.array(z.object({
-    kind: z.enum(['activate', 'showMenu', 'click', 'drag', 'setValue', 'typeText', 'pressKeys', 'scroll', 'wait']),
+    kind: z.enum(['activate', 'activateSequence', 'batch', 'showMenu', 'click', 'drag', 'setValue', 'typeText', 'pressKeys', 'scroll', 'wait']),
     dispatch: z.enum(['notStarted', 'started', 'completed', 'unknown']),
     outcome: z.enum(['applied', 'notApplied', 'unknown']),
     unchanged: z.boolean(), condition: z.enum(['satisfied', 'not_met', 'unavailable']).optional(),
@@ -118,9 +119,9 @@ export class ComputerSessionDiagnostics {
     try { return await fn(); }
     finally { this.data.phaseMs[phase] += Math.max(0, Math.round(this.durationNow() - start)); }
   }
-  propose(id: string, kind: ComputerAction['kind']): void {
+  propose(id: string, kind: ComputerAction['kind'], inputCount = 1): void {
     this.pending = { id, kind };
-    if (kind !== 'wait') this.count('proposedInputs');
+    if (kind !== 'wait') for (let i = 0; i < inputCount; i++) this.count('proposedInputs');
   }
   discard(): void { this.pending = undefined; this.count('observationChanges'); }
   record(receipt: ComputerReceipt, before?: ComputerObservation, after?: ComputerObservation, verification?: ComputerVerification): void {
@@ -128,7 +129,11 @@ export class ComputerSessionDiagnostics {
     this.receipts.add(receipt.actionId);
     const kind = this.pending.kind;
     const unchanged = kind !== 'wait' && receipt.dispatch === 'completed' && !!after && before?.stateDigest === after.stateDigest;
-    if (kind !== 'wait' && receipt.dispatch === 'completed') this.count('completedInputs');
+    if (kind !== 'wait') {
+      const completed = receipt.steps?.filter(step => step.dispatch === 'completed').length
+        ?? (receipt.dispatch === 'completed' ? receipt.inputCount ?? 1 : 0);
+      for (let i = 0; i < completed; i++) this.count('completedInputs');
+    }
     if (receipt.dispatch === 'unknown' || receipt.dispatch === 'started') this.count('unknownDispatches');
     if (unchanged) this.count('unchangedInputs');
     this.verify(verification);

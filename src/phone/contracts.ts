@@ -18,7 +18,7 @@ export const PhoneConfigSchema = z.object({
   autoGlmProtocol: z.enum(['current', 'upstream']).default('current'),
   autoGlmSampling: z.enum(['current', 'upstream']).default('current'),
   modelResponseMode: z.enum(['json', 'stream']).default('json'),
-  batchReadings: z.boolean().default(false),
+  batchReadings: z.boolean().default(true),
   modelRepetitionGuard: z.boolean().default(false),
   semanticControls: z.boolean().default(false),
   hierarchicalPlanning: z.boolean().default(false),

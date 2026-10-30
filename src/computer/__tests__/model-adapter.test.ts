@@ -16,6 +16,12 @@ describe('Windows model key normalization', () => {
   });
 });
 describe('GUI-Plus adapter', () => {
+  it('maps a mixed native batch without flattening its actions into separate decisions', () => {
+    const actions = [{ kind: 'setValue', ref: 'field', text: 'Draft' }, { kind: 'pressKeys', keys: ['return'] }];
+    expect(parseGuiPlusProposal(call({ action: 'batch', actions }), 800, 600))
+      .toEqual({ kind: 'action', action: { kind: 'batch', actions } });
+    expect(() => parseGuiPlusProposal(call({ action: 'batch', actions: [{ kind: 'batch', actions }] }), 800, 600)).toThrow('INVALID_MODEL_OUTPUT');
+  });
   it('supports bounded native field replacement without coordinates or key shortcuts', () => {
     expect(parseGuiPlusProposal(call({ action: 'set_value', ref: 'e7', text: '中文🙂' }), 800, 600))
       .toEqual({ kind: 'action', action: { kind: 'setValue', ref: 'e7', text: '中文🙂' } });
@@ -520,6 +526,18 @@ describe('generic typing target preflight', () => {
   const response = (action: unknown) => Response.json({ choices: [{ message: { tool_calls: [{ function: {
     name: 'computer_proposal', arguments: JSON.stringify({ proposal: { kind: 'action', action } }),
   } }] } }] });
+  it('normalizes every chord inside a mixed batch and rejects an ungrounded nested text input', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(response({ kind: 'batch', actions: [
+      { kind: 'setValue', ref: 'field', text: 'Draft' }, { kind: 'pressKeys', keys: ['Meta', 'S'] },
+    ] })).mockResolvedValueOnce(response({ kind: 'batch', actions: [
+      { kind: 'typeText', text: 'test', point: { x: 500, y: 500 } },
+    ] }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'custom', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    expect(await adapter.predict({ ...input, maxPlanActions: 6 })).toEqual({ kind: 'action', action: { kind: 'batch', actions: [
+      { kind: 'setValue', ref: 'field', text: 'Draft' }, { kind: 'pressKeys', keys: ['cmd', 's'] },
+    ] } });
+    await expect(adapter.predict({ ...input, maxPlanActions: 6 })).rejects.toThrow('INVALID_MODEL_OUTPUT');
+  });
   it('corrects a malformed shortcut before returning any desktop action', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(response({ kind: 'pressKeys', keys: ['cmd+alt+f'] }))
       .mockResolvedValueOnce(response({ kind: 'pressKeys', keys: ['Meta', 'Option', 'F'] }));

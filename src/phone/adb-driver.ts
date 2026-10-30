@@ -9,6 +9,7 @@ import sharp from 'sharp';
 
 import { PhoneUiSession, openLocalPhoneUi } from './ui-session.js';
 import { measurePhonePhase } from './execution-trace.js';
+import { canDispatchPhoneAction } from './reliability.js';
 import { PhoneTextSession, type PhoneTextProvider } from './text-session.js';
 
 import { runPhoneCommandText } from '../process/phone-process.js';
@@ -84,6 +85,8 @@ export interface PhoneDriver {
   applications?(serial: string, signal: AbortSignal): Promise<PhoneApplication[]>;
   textInputStatus?(serial: string, signal: AbortSignal): Promise<PhoneTextInputStatus>;
   observe(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
+  /** Fresh native dispatch guard; empty pixels must never be used for model inference or preview. */
+  observeForDispatch?(serial: string, previous: PhoneObservation, action: PhoneAction, signal: AbortSignal): Promise<PhoneObservation>;
   releaseInput?(): Promise<void>;
   capture?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   observeForText?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
@@ -192,6 +195,29 @@ export class AdbPhoneDriver implements PhoneDriver {
       throw new PhoneError('PHONE_FRAME_CHANGED', 'Application changed between the UI hierarchy and screenshot; retry');
     }
     return { ...observation, elements: native.elements };
+  }
+  async observeForDispatch(serial: string, previous: PhoneObservation, action: PhoneAction, signal: AbortSignal): Promise<PhoneObservation> {
+    if (!previous.elements.length) return this.observe(serial, signal);
+    const foreground = () => measurePhonePhase('foreground', () => this.foreground(serial, signal));
+    const app = await foreground();
+    const native = await measurePhonePhase('hierarchy', () => this.hierarchy(serial, signal));
+    const display = await measurePhonePhase('display', () => this.shell(serial, ['dumpsys', 'input'], signal));
+    const afterApp = await foreground();
+    // Only recognize an active default internal viewport; unfamiliar or conflicting dumps require pixels.
+    const viewports = display.split('\n').filter(line => /Viewport INTERNAL:.*\bdisplayId=0\b/.test(line) && /isActive=\[1\]/.test(line));
+    const geometries = viewports.map(line => {
+      const size = /logicalFrame=\[0,\s*0,\s*(\d+),\s*(\d+)\]/.exec(line);
+      const rotation = /\borientation=([0-3])\b/.exec(line);
+      return size && rotation ? `${size[1]},${size[2]},${rotation[1]}` : '';
+    });
+    const rotations = [...display.matchAll(/SurfaceOrientation:\s*([0-3])/g)].map(match => Number(match[1]));
+    const geometry = `${previous.width},${previous.height},${previous.rotation}`;
+    if (app !== previous.package || afterApp !== app || native.app !== app || !native.elements.length || !geometries.length
+      || !rotations.length || rotations.some(rotation => rotation !== previous.rotation) || geometries.some(value => value !== geometry)) return this.observe(serial, signal);
+    const fresh = { frameId: randomUUID(), capturedAt: Date.now(), width: previous.width, height: previous.height,
+      rotation: previous.rotation, package: app, elements: native.elements, frame: Buffer.alloc(0) };
+    signal.throwIfAborted();
+    return canDispatchPhoneAction(action, previous, fresh) ? fresh : this.observe(serial, signal);
   }
   private async hierarchy(serial: string, signal: AbortSignal): Promise<{ elements: PhoneElement[]; app?: string }> {
     const observer = await this.observer(serial, signal);

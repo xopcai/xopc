@@ -9,6 +9,10 @@ import ai.xopc.mobile.gateway.ConversationTarget
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -262,13 +266,7 @@ private fun MessageMedia(messageId: String, items: List<ConversationMedia>, isUs
     }
   }
 
-  if (images.isNotEmpty()) Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-    .testTag("message-image-strip-$messageId"),
-    horizontalArrangement = if (isUser && images.size == 1) Arrangement.End else Arrangement.spacedBy(8.dp)) {
-    images.forEach { item ->
-      MessageImageThumbnail(item, if (images.size == 1) 120 else 112, load) { onOpen(item, images) }
-    }
-  }
+  if (images.isNotEmpty()) MessageImageGrid(images, load) { onOpen(it, images) }
 
   if (attachments.isNotEmpty()) {
     if (!isUser) Text(stringResource(R.string.message_attachments), style = MaterialTheme.typography.labelMedium,
@@ -295,6 +293,22 @@ private fun MessageMedia(messageId: String, items: List<ConversationMedia>, isUs
       modifier = Modifier.heightIn(min = 48.dp).testTag("message-attachments-toggle-$messageId")) {
       Text(if (expanded) stringResource(R.string.message_fewer_attachments)
         else stringResource(R.string.message_more_attachments, attachments.size - 3))
+    }
+  }
+}
+
+@Composable
+private fun MessageImageGrid(images: List<ConversationMedia>, load: (suspend (ConversationMedia) -> ByteArray)?,
+  onOpen: (ConversationMedia) -> Unit) {
+  val columns = when (images.size) { 1 -> 1; 2, 4 -> 2; else -> 3 }
+  BoxWithConstraints(Modifier.fillMaxWidth().testTag("message-image-grid")) {
+    val tileSize = ((maxWidth - 6.dp * (columns - 1)) / columns).value.toInt().coerceAtLeast(1)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      images.chunked(columns).forEach { row ->
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          row.forEach { image -> key(image.id) { MessageImageThumbnail(image, tileSize, load) { onOpen(image) } } }
+        }
+      }
     }
   }
 }
@@ -339,12 +353,7 @@ private fun MessageOutcome(items: List<ConversationArtifact>, status: String?, s
     (it.kind == "image" || it.mimeType?.startsWith("image/") == true) }
     .map { ConversationMedia(it.artifactId, it.title, "image", it.mimeType.orEmpty(),
       it.sizeBytes ?: 0, it.uri!!, it.workspaceRelativePath) }
-  if (images.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-    images.forEach { image -> MessageImageThumbnail(image, if (images.size == 1) 240 else 144, load) {
-      onPreview(image, images)
-    } }
-  }
+  if (images.isNotEmpty()) MessageImageGrid(images, load) { onPreview(it, images) }
   items.filterNot { item -> images.any { it.id == item.artifactId } }.forEach { item ->
     val enabled = item.availability == "available" && (item.uri != null || item.shareUrl != null)
     Card(onClick = {
@@ -398,11 +407,11 @@ private fun MessageTargets(items: List<ConversationTarget>, onOpen: (Conversatio
 @Composable
 internal fun MessageMediaPreview(request: MessagePreviewRequest,
   load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit) {
-  val gallery = request.imageGallery.takeIf { it.isNotEmpty() } ?: listOf(request.media)
-  var galleryIndex by remember(request) {
-    mutableStateOf(gallery.indexOfFirst { it.id == request.media.id }.coerceAtLeast(0))
+  if (mediaPreviewKind(request.media) == "image") {
+    MessageImageGallery(request, load, onClose)
+    return
   }
-  val activeMedia = gallery[galleryIndex]
+  val activeMedia = request.media
   val result by produceState<Result<ByteArray>?>(initialValue = null, activeMedia) {
     value = null
     value = runCatching { load(request.conversationId, activeMedia) }
@@ -424,29 +433,6 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
     } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) == PreviewFileKind.SVG) {
       FilePreviewContent(activeMedia.name, activeMedia.mimeType, payload,
         modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
-    } else if (mediaPreviewKind(activeMedia) == "image") {
-      val bitmapState = produceState<Result<android.graphics.Bitmap>?>(null, payload) {
-        value = null
-        value = withContext(Dispatchers.Default) { runCatching { requireNotNull(decodeChatThumbnail(payload, 1600)) } }
-      }
-      val bitmap = bitmapState.value?.getOrNull()
-      if (bitmap != null) ZoomableMessageImage(bitmap, activeMedia.name, activeMedia.id) { direction ->
-        galleryIndex = (galleryIndex + direction).coerceIn(0, gallery.lastIndex)
-      }
-      else if (bitmapState.value == null) BrandLoadingPanel(modifier = Modifier.testTag("message-image-decoding"))
-      else Text(stringResource(R.string.message_preview_unavailable))
-      if (gallery.size > 1) Row(modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = { galleryIndex-- }, enabled = galleryIndex > 0,
-          modifier = Modifier.heightIn(min = 48.dp).testTag("message-image-previous")) {
-          Text(stringResource(R.string.message_previous_image))
-        }
-        Text("${galleryIndex + 1} / ${gallery.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedButton(onClick = { galleryIndex++ }, enabled = galleryIndex < gallery.lastIndex,
-          modifier = Modifier.heightIn(min = 48.dp).testTag("message-image-next")) {
-          Text(stringResource(R.string.message_next_image))
-        }
-      }
     } else if (mediaPreviewKind(activeMedia) == "audio") {
       AudioMessagePreview(payload, activeMedia)
     } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) != PreviewFileKind.BINARY) {
@@ -464,17 +450,63 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
 }
 
 @Composable
+private fun MessageImageGallery(request: MessagePreviewRequest,
+  load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit) {
+  val gallery = request.imageGallery.takeIf { it.isNotEmpty() } ?: listOf(request.media)
+  val pager = rememberPagerState(initialPage = gallery.indexOfFirst { it.id == request.media.id }.coerceAtLeast(0),
+    pageCount = { gallery.size })
+  val scope = rememberCoroutineScope()
+  var zoomed by remember(request) { mutableStateOf(false) }
+  LaunchedEffect(pager.currentPage) { zoomed = false }
+  Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+    .testTag("message-media-preview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    HorizontalPager(pager, modifier = Modifier.fillMaxWidth().height(420.dp).testTag("message-image-pager"),
+      beyondViewportPageCount = 1, userScrollEnabled = !zoomed, key = { gallery[it].id }) { page ->
+      val media = gallery[page]
+      val bitmap by produceState<Result<android.graphics.Bitmap>?>(null, media, request.conversationId) {
+        value = null
+        value = runCatching {
+          val bytes = load(request.conversationId, media)
+          withContext(Dispatchers.Default) { requireNotNull(decodeChatThumbnail(bytes, 2560)) }
+        }
+      }
+      Box(Modifier.fillMaxWidth().height(420.dp), contentAlignment = Alignment.Center) {
+        val image = bitmap?.getOrNull()
+        if (image != null) ZoomableMessageImage(image, media.name, media.id, page == pager.currentPage) { zoomed = it }
+        else if (bitmap == null) BrandLoadingPanel(modifier = Modifier.testTag("message-image-decoding"))
+        else Text(stringResource(R.string.message_preview_unavailable), modifier = Modifier.testTag("message-media-preview-error"))
+      }
+    }
+    if (gallery.size > 1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically) {
+      OutlinedButton(onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } },
+        enabled = pager.currentPage > 0, modifier = Modifier.testTag("message-image-previous")) {
+        Text(stringResource(R.string.message_previous_image))
+      }
+      Text("${pager.currentPage + 1} / ${gallery.size}")
+      OutlinedButton(onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } },
+        enabled = pager.currentPage < gallery.lastIndex, modifier = Modifier.testTag("message-image-next")) {
+        Text(stringResource(R.string.message_next_image))
+      }
+    }
+    OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+      .testTag("message-media-preview-close")) { Text(stringResource(R.string.assistant_close)) }
+  }
+}
+
+@Composable
 private fun ZoomableMessageImage(bitmap: android.graphics.Bitmap, label: String, identity: String,
-  onSwipe: (Int) -> Unit) {
+  active: Boolean, onZoomChanged: (Boolean) -> Unit) {
   var zoom by remember(identity) { mutableStateOf(1f) }
   var offset by remember(identity) { mutableStateOf(Offset.Zero) }
-  val swipe by rememberUpdatedState(onSwipe)
-  BoxWithConstraints(Modifier.fillMaxWidth().height(420.dp).clipToBounds()) {
+  val zoomChanged by rememberUpdatedState(onZoomChanged)
+  LaunchedEffect(active) { zoom = 1f; offset = Offset.Zero }
+  Box(Modifier.fillMaxWidth().height(420.dp).clipToBounds()) {
     androidx.compose.foundation.Image(bitmap.asImageBitmap(), label,
       modifier = Modifier.fillMaxWidth().height(420.dp)
         .graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = offset.x; translationY = offset.y }
-        .testTag("message-media-preview-image"), contentScale = ContentScale.Fit)
-    Box(Modifier.matchParentSize().pointerInput(identity, bitmap) {
+        .testTag(if (active) "message-media-preview-image" else "message-media-preview-cached-$identity"), contentScale = ContentScale.Fit)
+    Box(Modifier.matchParentSize().pointerInput(identity, bitmap, active) {
       fun clamp(candidate: Offset, scale: Float): Offset {
         val fit = minOf(size.width.toFloat() / bitmap.width, size.height.toFloat() / bitmap.height)
         val limitX = ((bitmap.width * fit * scale - size.width) / 2).coerceAtLeast(0f)
@@ -483,23 +515,17 @@ private fun ZoomableMessageImage(bitmap: android.graphics.Bitmap, label: String,
       }
       awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)
-        var travel = Offset.Zero
-        var transformed = zoom > 1f
         do {
-          val event = awaitPointerEvent()
-          val pan = event.calculatePan()
-          val factor = event.calculateZoom()
-          if (event.changes.count { it.pressed } > 1 || zoom > 1f) {
-            transformed = true
-            val next = (zoom * factor).coerceIn(1f, 3f)
+          val event = awaitPointerEvent(PointerEventPass.Initial)
+          if (active && (event.changes.count { it.pressed } > 1 || zoom > 1.01f)) {
+            val next = (zoom * event.calculateZoom()).coerceIn(1f, 3f)
             val center = event.calculateCentroid(useCurrent = false) - Offset(size.width / 2f, size.height / 2f)
-            offset = clamp(center - (center - offset) * (next / zoom) + pan, next)
+            if (center.x.isFinite() && center.y.isFinite()) offset = clamp(center - (center - offset) * (next / zoom) + event.calculatePan(), next)
             zoom = next
-          } else travel += pan
-          event.changes.forEach { it.consume() }
+            zoomChanged(zoom > 1.01f)
+            event.changes.forEach { it.consume() }
+          }
         } while (event.changes.any { it.pressed })
-        if (!transformed && kotlin.math.abs(travel.x) > 60.dp.toPx() &&
-          kotlin.math.abs(travel.x) > kotlin.math.abs(travel.y)) swipe(if (travel.x < 0) 1 else -1)
       }
     })
   }

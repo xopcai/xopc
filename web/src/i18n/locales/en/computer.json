@@ -24,8 +24,6 @@
     "authorizeApp": "Authorize",
     "revokeApp": "Revoke",
     "stoppedNotice": "Desktop control stopped.",
-    "pausedNotice": "Desktop control is paused.",
-    "resume": "Resume desktop control",
     "browser": "Browser",
     "otherControl": "Other controls",
     "browserEnabled": "On",
@@ -61,6 +59,32 @@
     "manageModels": "Connect model service",
     "retry": "Retry",
     "nativeError": "Cannot read desktop status. Check the desktop application and try again.",
-    "states": { "idle": "No active session", "pending_authorization": "Waiting for local authorization", "ready": "Ready", "running": "Running", "pending_action": "Waiting for action approval", "paused": "Paused", "stopped": "Stopped" }
+    "states": {
+      "idle": "No active session",
+      "pending_authorization": "Waiting for local authorization",
+      "ready": "Ready",
+      "running": "Running",
+      "pending_action": "Waiting for action approval",
+      "paused": "Paused",
+      "stopped": "Stopped"
+    },
+    "preparingWindow": "Preparing the app and waiting for its window…",
+    "preparationHint": "Waits up to 5 seconds. You can stop at any time. Keyboard focus is not required.",
+    "inputNotStarted": "No task input has been sent.",
+    "inputCompleted": "The previous input completed. Do not repeat it.",
+    "inputUnknown": "The previous input may have executed. Inspect the app before continuing.",
+    "errors": {
+      "hidden": "The target window is hidden or minimized. Show it before continuing.",
+      "readyTimeout": "The window did not become ready within 5 seconds. Check that the app has opened.",
+      "otherSpace": "The target window is on another desktop. Move it and xopc to the same desktop.",
+      "capture": "The window was found, but its image could not be read. Check its state before retrying.",
+      "captureMismatch": "The captured window does not match the selected target. Control stopped. Select the window again.",
+      "backgroundUnsupported": "This control does not support the requested background input. Complete this step manually.",
+      "inputRefused": "The app refused the input for an undetermined reason. Inspect the result before any further input.",
+      "localUi": "Show the xopc window before starting again. Keyboard focus is not required.",
+      "windowChanged": "The original window is no longer available. Select the window again.",
+      "permission": "The system reported unavailable desktop permissions. Check local access settings."
+    },
+    "preparationElapsed": "Waiting: {seconds}s"
   }
 }

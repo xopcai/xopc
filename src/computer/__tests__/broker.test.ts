@@ -4,7 +4,7 @@ import { ComputerBroker, type ComputerApproval, type ComputerDriver } from '../b
 const target = { appId: 'fixture', pid: 1, processIdentity: '1:100', windowId: '10', width: 800, height: 600, geometryRevision: '1' };
 const opening = { op: 'open' as const, sessionId: 's', owner: 'o', appRef: 'fixture', mode: 'control' as const, prepare: false, model: { modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26' as const, origin: 'https://example.com', runtimeLocation: 'local' as const } };
 const brokers: ComputerBroker[] = [];
-function fixture(autoApprove = false) {
+function fixture(autoApprove = false, deferApproval = true) {
   let settle: (approved: boolean) => void;
   let clock = 1000;
   let digest = 'a';
@@ -16,7 +16,7 @@ function fixture(autoApprove = false) {
     observe: vi.fn(async () => ({ target, summary: 'fixture', stateDigest: digest, focusedEditableRef: 'field', image: new Uint8Array([1]), mimeType: 'image/png', imageWidth: 800, imageHeight: 600 })),
     perform: vi.fn(async () => {}), stop: vi.fn(async () => {}),
   };
-  const broker = new ComputerBroker(driver, { isVisible: () => visible, requestApproval: async (request) => {
+  const broker = new ComputerBroker(driver, { deferApproval, isVisible: () => visible, requestApproval: async (request) => {
     approvals.push(request);
     if (autoApprove) return true;
     return new Promise<boolean>((resolve) => { settle = resolve; });
@@ -43,6 +43,51 @@ function envelope(observed: Awaited<ReturnType<typeof ready>>) {
 }
 afterEach(async () => { await Promise.all(brokers.splice(0).map((b) => b.dispose())); });
 describe('desktop computer authority', () => {
+  it('completes inline authorization and input in one command without pending-action polling', async () => {
+    const f = fixture(true, false);
+    await f.open();
+    const observed = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    const result = await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(observed) });
+    expect(result).toMatchObject({ status: 'ready', receipt: { dispatch: 'completed' } });
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.approvals).toHaveLength(2);
+  });
+  it('settles a deferred decision on its promise without dispatching input', async () => {
+    const f = fixture(); const observed = await ready(f);
+    await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(observed) });
+    const settled = f.broker.command({ op: 'settle', sessionId: 's', owner: 'o' });
+    f.settle(true);
+    expect(await settled).toMatchObject({ status: 'pending_action' });
+    expect(f.driver.perform).not.toHaveBeenCalled();
+    expect((await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(observed) })).receipt?.dispatch).toBe('completed');
+  });
+  it('releases a pending decision wait immediately on stop', async () => {
+    const f = fixture(); await f.open();
+    const settled = f.broker.command({ op: 'settle', sessionId: 's', owner: 'o' });
+    await f.broker.stop();
+    expect(await settled).toMatchObject({ status: 'stopped' });
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('keeps a precise capture failure and completed receipt without replaying input', async () => {
+    const f = fixture(true); await f.open();
+    const observed = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    vi.mocked(f.driver.perform).mockImplementation(async () => {
+      vi.mocked(f.driver.observe).mockRejectedValue(new Error('COMPUTER_CAPTURE_UNAVAILABLE'));
+    });
+    const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: envelope(observed) };
+    await f.broker.command(command); await Promise.resolve();
+    expect(await f.broker.command(command)).toMatchObject({ status: 'stopped', errorCode: 'COMPUTER_CAPTURE_UNAVAILABLE', receipt: { dispatch: 'completed' } });
+    expect(f.broker.snapshot()).toMatchObject({ errorCode: 'COMPUTER_CAPTURE_UNAVAILABLE', dispatch: 'completed' });
+    await expect(f.broker.command(command)).rejects.toThrow('REVOKED');
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+  });
+
+  it('reports hidden local UI distinctly before sending input', async () => {
+    const f = fixture(true); await f.open(); f.hide();
+    await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' })).rejects.toThrow('LOCAL_UI_REQUIRED');
+    expect(f.broker.snapshot()).toMatchObject({ errorCode: 'COMPUTER_LOCAL_UI_REQUIRED', dispatch: 'notStarted' });
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
   it('revokes the old grant immediately when a native observation fails', async () => {
     const f = fixture(true); await f.open();
     const observed = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });

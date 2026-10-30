@@ -35,10 +35,11 @@ If a localized name is not found, the agent can list available apps rather than
 guessing a bundle ID. Only genuinely ambiguous targets require a user choice.
 
 `open` requires a discovered `appRef`, `mode` (`observe` or `control`) and an explicit
-`prepare` boolean. Preparation can launch the app or bring a selected window forward,
-including a visible window obscured by another app. Use preparation, not a model-driven
-click or global shortcut, when the task only asks to bring the app forward;
-it must be permitted by the user's task. It never accepts launch arguments or URLs.
+`prepare` boolean. Preparation can launch the app or restore a hidden selected window
+when permitted by the user's task. Already-visible windows use background delivery
+without requesting foreground activation, even with preparation enabled. Keyboard
+focus alone is not a prerequisite. Use preparation, not a model-driven click or global
+shortcut, to restore a hidden window. It never accepts launch arguments or URLs.
 Multiple windows are supported: native stacking order selects the front visible
 window when unambiguous; otherwise the tool returns titled window references.
 A window reference is tied to the process instance and cannot survive its restart.

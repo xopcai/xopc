@@ -31,7 +31,7 @@ function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
       return { target, summary: 'fixture', stateDigest: 'fixed', image, mimeType: 'image/png' as const, imageWidth: 800, imageHeight: 600 };
     }) };
   let approve!: (value: boolean) => void;
-  const broker = new ComputerBroker(driver, { isVisible: () => true,
+  const broker = new ComputerBroker(driver, { deferApproval: !autoApprove, isVisible: () => true,
     requestApproval: () => autoApprove ? Promise.resolve(true) : new Promise(resolve => { approve = resolve; }) }, { enabled: true });
   const frames = new Map<string, Uint8Array>();
   const config = { computer: ComputerConfigSchema.parse({ enabled: true, maxActionsPerSession: 2 }) };
@@ -63,6 +63,80 @@ function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
 describe('agent to broker desktop lifecycle', () => {
+  it('reuses the last in-exec observation for verify and supports a forced independent read', async () => {
+    const f = fixture();
+    const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), summary: JSON.stringify({ text: 'Ready', elements: [{ role: 'AXWindow' }] }) }));
+    bindComputerAgentTurn('owner', 'agent-run', { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['image'] } as any);
+    await f.runtime.execute('owner', { op: 'open', appRef: await f.discover(), mode: 'observe', prepare: false, planner: 'agent' });
+    const result = await f.runtime.execute('owner', { op: 'exec', code: `
+      await ui.observe({});
+      const cached = await ui.verify({expect:{kind:'text',text:'Ready'}});
+      const fresh = await ui.verify({expect:{kind:'text',text:'Ready'},fresh:true});
+      text({cached:cached.observationReused,fresh:fresh.observationReused});
+    ` }, undefined, { toolCallId: 'verify-reuse' });
+    expect(result.status).toBe('program_completed');
+    expect(JSON.parse(result.output!)).toEqual({ cached: true, fresh: false });
+    expect(f.invoke.mock.calls.filter(([call]) => call.arguments.op === 'observe')).toHaveLength(2);
+  });
+  it('runs mixed segments through QuickJS and rebinds a target after a checkpoint without GUI inference', async () => {
+    const f = fixture(); f.config.computer.maxActionsPerSession = 80;
+    let stage = 0;
+    const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: `stage-${stage}`,
+      summary: JSON.stringify({ text: stage >= 2 ? 'Saved' : 'Editing', elements: [
+        { role: 'AXWindow' },
+        { role: 'AXTextField', label: 'Title', ref: `field-${stage}`, value: stage ? 'Draft' : '' },
+        { role: 'AXButton', label: 'Save', ref: `save-${stage}`, semanticActions: ['activate'] },
+      ] }) }));
+    f.driver.perform.mockImplementation(async () => { stage++; });
+    bindComputerAgentTurn('owner', 'agent-run', { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['image'] } as any);
+    await f.runtime.execute('owner', { op: 'open', appRef: await f.discover(), mode: 'control', prepare: false, planner: 'agent' });
+    const result = await f.runtime.execute('owner', { op: 'exec', code: `
+      const s = await ui.observe({});
+      text(await ui.batch({snapshotId:s.snapshotId, steps:[
+        {kind:'action',action:{kind:'setValue',text:'Draft'},target:{role:'AXTextField',label:'Title'}},
+        {kind:'action',action:{kind:'pressKeys',keys:['end']}},
+        {kind:'observe',expect:{kind:'field',label:'Title',value:'Draft'}},
+        {kind:'action',action:{kind:'activate'},target:{role:'AXButton',label:'Save'}},
+        {kind:'observe',expect:{kind:'text',text:'Saved'}}
+      ]}));
+    ` }, undefined, { toolCallId: 'mixed' });
+    expect(result).toMatchObject({ status: 'program_completed', budget: { actionsRemaining: 77 } });
+    expect(JSON.parse(result.output!)).toMatchObject({ status: 'batch_completed', verification: { status: 'satisfied' } });
+    expect(f.driver.perform).toHaveBeenNthCalledWith(1, expect.anything(), { kind: 'batch', actions: [
+      { kind: 'setValue', ref: 'field-0', text: 'Draft' }, { kind: 'pressKeys', keys: ['end'] },
+    ] }, expect.anything(), expect.any(Function));
+    expect(f.driver.perform).toHaveBeenNthCalledWith(2, expect.anything(), { kind: 'batch', actions: [
+      { kind: 'activate', ref: 'save-1' },
+    ] }, expect.anything(), expect.any(Function));
+    expect(f.invoke.mock.calls.filter(([call]) => call.arguments.op === 'observe')).toHaveLength(1);
+    expect(f.invoke.mock.calls.filter(([call]) => call.arguments.op === 'act')).toHaveLength(2);
+    expect(f.fetch).not.toHaveBeenCalled();
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('retains per-input receipts when a mixed batch fails after a completed prefix', async () => {
+    const f = fixture();
+    f.driver.perform.mockImplementation(async (...args: any[]) => {
+      args[3](0, 'started'); args[3](0, 'completed'); args[3](1, 'started'); args[3](1, 'unknown');
+      throw new Error('COMPUTER_NATIVE_ACTION_FAILED');
+    });
+    bindComputerAgentTurn('owner', 'agent-run', { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['image'] } as any);
+    await f.runtime.execute('owner', { op: 'open', appRef: await f.discover(), mode: 'control', prepare: false, planner: 'agent' });
+    const result = await f.runtime.execute('owner', { op: 'exec', code: `
+      const s = await ui.observe({});
+      await ui.batch({snapshotId:s.snapshotId,steps:[
+        {kind:'action',action:{kind:'pressKeys',keys:['end']}},
+        {kind:'action',action:{kind:'pressKeys',keys:['return']}}
+      ]});
+    ` }, undefined, { toolCallId: 'partial-batch' });
+    expect(result).toMatchObject({ status: 'program_error', receipts: [{ dispatch: 'unknown', steps: [
+      { index: 0, dispatch: 'completed' }, { index: 1, dispatch: 'unknown' },
+    ] }] });
+    expect(f.runtime.getReport('owner')?.counters.completedInputs).toBe(1);
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.broker.snapshot().status).toBe('stopped');
+  });
   it('uses real QuickJS with the existing guarded dispatch and no GUI model request', async () => {
     const f = fixture();
     bindComputerAgentTurn('owner', 'agent-run', { id: 'visual-main', provider: 'custom', baseUrl: 'https://main.test/v1', input: ['text', 'image'] } as any);
@@ -355,18 +429,20 @@ describe('agent to broker desktop lifecycle', () => {
       summary: JSON.stringify({ text: 'fixture', elements: [{ role: 'AXWindow' }] }) }));
     await f.open(await f.discover()); f.approve();
     await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('ready'));
-    await f.runtime.execute('owner', { op: 'step', goal: 'Original authorized goal', expect: { kind: 'text', text: 'Original result' } });
-    state = 'changed'; f.approve(); await Promise.resolve(); await Promise.resolve();
-    const rescued = await f.runtime.execute('owner', { op: 'step', goal: 'Replacement goal', expect: { kind: 'text', text: 'fixture' } });
-    expect(rescued.status).toBe('pending_action');
-    expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).not.toHaveBeenCalled();
+    const running = f.runtime.execute('owner', { op: 'step', goal: 'Original authorized goal', expect: { kind: 'text', text: 'Original result' } });
+    await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('pending_action'));
+    state = 'changed'; f.approve();
+    await vi.waitFor(() => expect(f.fetch).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('pending_action'));
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Replacement goal' })).rejects.toThrow('COMPUTER_BUSY');
+    expect(f.driver.perform).not.toHaveBeenCalled();
     const request = JSON.parse((f.fetch.mock.calls as any)[1][1].body);
     expect(JSON.stringify(request)).toContain('Original authorized goal');
     expect(JSON.stringify(request)).not.toContain('Replacement goal');
     const acts = f.invoke.mock.calls.filter(([arg]) => arg.arguments.op === 'act');
     expect(acts[0][0].arguments.envelope.actionId).not.toBe(acts.at(-1)![0].arguments.envelope.actionId);
-    f.approve(); await Promise.resolve(); await Promise.resolve();
-    const result = await f.runtime.execute('owner', { op: 'step', goal: 'Resume' });
+    f.approve();
+    const result = await running;
     expect(result.receipt?.dispatch).toBe('completed');
     expect(result.verification?.status).toBe('not_met');
     expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).toHaveBeenCalledOnce();
@@ -557,12 +633,12 @@ describe('agent to broker desktop lifecycle', () => {
     expect(isComputerControlActive('owner')).toBe(true);
     expect(f.driver.observe).not.toHaveBeenCalled();
     f.approve(); await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('ready'));
-    expect((await f.runtime.execute('owner', { op: 'step', goal: 'Click', expect: { kind: 'text', text: 'Saved' } })).status).toBe('pending_action');
-    expect((await f.runtime.execute('owner', { op: 'step', goal: 'Still waiting' })).status).toBe('pending_action');
-    f.approve(); await Promise.resolve(); await Promise.resolve();
-    expect((await f.runtime.execute('owner', { op: 'observe' })).status).toBe('pending_action');
+    const running = f.runtime.execute('owner', { op: 'step', goal: 'Click', expect: { kind: 'text', text: 'Saved' } });
+    await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('pending_action'));
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Still waiting' })).rejects.toThrow('COMPUTER_BUSY');
     expect(f.driver.perform).not.toHaveBeenCalled();
-    const result = await f.runtime.execute('owner', { op: 'step', goal: 'Continue', expect: { kind: 'text', text: 'Button' } });
+    f.approve();
+    const result = await running;
     expect(f.driver.perform).toHaveBeenCalledTimes(1); expect(f.fetch).toHaveBeenCalledTimes(1);
     expect(f.runtime.getReport('owner')?.counters).toMatchObject({ proposedInputs: 1, completedInputs: 1, modelRequests: 1 });
     expect(result.receipt).toMatchObject({ dispatch: 'completed', outcome: 'unknown' });
@@ -802,6 +878,28 @@ describe('bounded small-goal execution', () => {
     expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
     expect(JSON.stringify(result)).not.toMatch(/base64|mimeType|stateDigest/);
   });
+  it('counts eight presses while observing only before and after a single sequence dispatch', async () => {
+    const f = goalFixture(1); await f.open(await f.discover());
+    const refs = ['e1', 'e2', 'e3', 'e4', 'e3', 'e5', 'e6', 'e7'];
+    f.fetch.mockResolvedValueOnce(Response.json({ choices: [{ finish_reason: 'stop', message: {
+      content: `<tool_call>${JSON.stringify({ name: 'computer_use', arguments: { action: 'activate_sequence', refs } })}</tool_call>`,
+    } }] }));
+    const result = await f.runtime.execute('owner', { ...goal, maxActions: 12 });
+    expect(result).toMatchObject({ status: 'goal_satisfied', verified: true,
+      receipt: { dispatch: 'completed', inputCount: 8 }, run: { actionsExecuted: 8, modelRequests: 1 }, budget: { actionsRemaining: 72 } });
+    expect(f.driver.perform).toHaveBeenCalledExactlyOnceWith(expect.anything(), { kind: 'activateSequence', refs }, expect.anything(), expect.any(Function));
+    // Initial observation, one fresh precheck and one final observation.
+    expect(f.driver.observe).toHaveBeenCalledTimes(3);
+    expect(f.runtime.getReport('owner')?.counters.completedInputs).toBe(8);
+  });
+  it.each([['call', 80, 6], ['session', 7, 12]] as const)('rejects a sequence exceeding the %s input budget before dispatch', async (_name, sessionLimit, maxActions) => {
+    const f = goalFixture(1); f.config.computer.maxActionsPerSession = sessionLimit; await f.open(await f.discover());
+    f.fetch.mockResolvedValueOnce(Response.json({ choices: [{ finish_reason: 'stop', message: {
+      content: `<tool_call>${JSON.stringify({ name: 'computer_use', arguments: { action: 'activate_sequence', refs: Array(8).fill('e1') } })}</tool_call>`,
+    } }] }));
+    await expect(f.runtime.execute('owner', { ...goal, maxActions })).rejects.toThrow('COMPUTER_ACTION_BUDGET');
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
   it('executes a conditional button plan with one model request while checking every dispatch', async () => {
     const f = fixture();
     f.config.computer.maxActionsPerSession = 80;
@@ -901,8 +999,9 @@ describe('bounded small-goal execution', () => {
     const invoke = f.invoke.getMockImplementation()!;
     let now = Date.now(); const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
     f.invoke.mockImplementation(async (args: any) => {
-      if (args.arguments.op === 'status' && f.driver.perform.mock.calls.length) now += 6000;
-      return invoke(args);
+      const result = await invoke(args);
+      if (args.arguments.op === 'act' && f.driver.perform.mock.calls.length) now += 6000;
+      return result;
     });
     try {
       expect(await f.runtime.execute('owner', goal)).toMatchObject({ status: 'goal_satisfied', run: { observationsReused: 0 } });

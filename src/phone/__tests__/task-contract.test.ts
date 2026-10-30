@@ -92,8 +92,8 @@ describe('phone task contract and execution strategies', () => {
     const f = fixture(async () => ({ kind: 'complete', summary: 'Read' }), { readScreen, modelRequests: 2 }); await f.open();
     const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read prices', maxActions: 6,
       requestedOutputs: [{ key: 'price', description: 'Read visible price' }, { key: 'delivery', description: 'Read delivery fee' }] }, f.context) as PhoneReport;
-    // The existing unverified finish reading consumes the second request; field reads cannot exceed it.
-    expect(result.feedback?.outputs).toMatchObject([{ key: 'price', verification: 'unavailable', reason: 'model_request_limit' }, { key: 'delivery', verification: 'unavailable', reason: 'model_request_limit' }]);
+    // The targeted field uses the remaining request; no generic finish reading consumes it first.
+    expect(result.feedback?.outputs).toMatchObject([{ key: 'price', value: '25.50', verification: 'unverified' }, { key: 'delivery', verification: 'unavailable', reason: 'model_request_limit' }]);
     expect(result.modelRequests).toBe(2); expect(result.feedback?.outcome).toBe('partial'); expect(f.driver.execute).not.toHaveBeenCalled();
   });
 
@@ -195,4 +195,103 @@ it('combines named visual outputs into one budgeted reading without a redundant 
   ]);
   expect(result.verified).toBe(false);
   expect(result.performance?.phases.screen_reading?.count).toBe(1);
+});
+
+it('batches five product outputs by default and preserves exact native outputs in the same segment', async () => {
+  const products = Object.fromEntries(Array.from({ length: 5 }, (_, index) => [`product${index + 1}`, `Glasses ${index + 1}: ¥${index + 100}`]));
+  const readFields = vi.fn(async (input: Parameters<NonNullable<PhoneModelAdapter['readFields']>>[0]) => {
+    expect(input.observation.frame.toString()).toBe('synthetic-pixels');
+    return products;
+  });
+  const readScreen = vi.fn(async () => 'Redundant');
+  const f = fixture(vi.fn(), { readFields, readScreen });
+  f.set(observation([element('Results'), element('综合', 'sort')])); await f.open();
+  expect(f.context.config.phone.batchReadings).toBe(true);
+  const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read the first five visible products',
+    completion: { textAll: ['Results'] }, requestedOutputs: [
+      { key: 'sort', description: 'Selected sort', selector: { resourceId: 'sort' } },
+      ...Object.keys(products).map(key => ({ key, description: key })),
+    ] }, f.context) as PhoneReport;
+  expect(readFields).toHaveBeenCalledOnce(); expect(readScreen).not.toHaveBeenCalled();
+  // Initial and independent completion observations only; no third screenshot for extraction.
+  expect(f.driver.observe).toHaveBeenCalledTimes(2);
+  expect(result.feedback?.outputs).toMatchObject([
+    { key: 'sort', value: '综合', verification: 'observed', source: 'native_ui' },
+    ...Object.entries(products).map(([key, value]) => ({ key, value, verification: 'unverified', source: 'screenshot' })),
+  ]);
+  expect(result.modelRequests).toBe(1);
+  expect(readFields.mock.calls[0][0].observation.frame.every(byte => byte === 0)).toBe(true);
+});
+
+it('extracts native fields from the independent confirmation frame without another screenshot or inference', async () => {
+  const f = fixture(vi.fn(), { readScreen: vi.fn(), readFields: vi.fn() }); await f.open();
+  const frames = [observation([element('Results'), element('100', 'price')]), observation([element('Results'), element('200', 'price')])];
+  vi.mocked(f.driver.observe).mockImplementation(async () => frames.shift()!);
+  const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read price', completion: { textAll: ['Results'] },
+    requestedOutputs: [{ key: 'price', description: 'Price', selector: { resourceId: 'price' } }] }, f.context) as PhoneReport;
+  expect(result.feedback?.outputs[0]).toMatchObject({ value: '200', source: 'native_ui', verification: 'observed' });
+  expect(f.driver.observe).toHaveBeenCalledTimes(2); expect(result.modelRequests).toBe(0);
+});
+
+it('refreshes after a finish prediction and reads one requested field without generic transcription', async () => {
+  const readScreen = vi.fn(async (input: Parameters<NonNullable<PhoneModelAdapter['readScreen']>>[0]) => {
+    expect(input.observation.elements[0].text).toBe('Updated'); return '200';
+  });
+  const f = fixture(async () => { f.set(observation([element('Updated')])); return { kind: 'complete', summary: 'Done' }; }, { readScreen });
+  await f.open();
+  const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Read price',
+    requestedOutputs: [{ key: 'price', description: 'Current price' }] }, f.context) as PhoneReport;
+  expect(readScreen).toHaveBeenCalledOnce(); expect(readScreen.mock.calls[0][0].goal).toBe('Current price');
+  expect(f.driver.observe).toHaveBeenCalledTimes(2); expect(result.modelRequests).toBe(2);
+});
+
+it('extracts fields from the last post-action screen when a fragment hits its action limit', async () => {
+  const readFields = vi.fn(async () => ({ first: 'A', second: 'B' }));
+  const f = fixture(async () => ({ kind: 'action', action: { type: 'swipe', start: [500, 800], end: [500, 200], durationMs: 200 } }), { readFields });
+  await f.open();
+  const result = await f.runtime.execute('reliability', { op: 'run', goal: 'Scroll and read', maxActions: 1,
+    requestedOutputs: [{ key: 'first', description: 'First product' }, { key: 'second', description: 'Second product' }] }, f.context) as PhoneReport;
+  expect(f.driver.observe).toHaveBeenCalledTimes(3); expect(readFields).toHaveBeenCalledOnce();
+  expect(result.feedback).toMatchObject({ outcome: 'partial', stopReason: 'action_limit', outputs: [{ value: 'A' }, { value: 'B' }] });
+});
+
+it('keeps sequential extraction available when batching is explicitly disabled', async () => {
+  const readFields = vi.fn(async () => ({ price: 'unexpected', delivery: 'unexpected' }));
+  const readScreen = vi.fn(async () => '25.50');
+  const f = fixture(vi.fn(), { readFields, readScreen, batchReadings: false });
+  await f.open();
+  await f.runtime.execute('reliability', { op: 'run', goal: 'Read', completion: { textAll: ['Initial'] },
+    requestedOutputs: [{ key: 'price', description: 'Price' }, { key: 'delivery', description: 'Delivery' }] }, f.context);
+  expect(readScreen).toHaveBeenCalledTimes(2); expect(readFields).not.toHaveBeenCalled();
+});
+
+it('does not expose completion while named product fields are still being extracted', async () => {
+  let complete!: (values: Record<string, string>) => void;
+  let started!: () => void;
+  const reading = new Promise<void>(resolve => { started = resolve; });
+  const readFields = vi.fn(async () => { started(); return await new Promise<Record<string, string>>(resolve => { complete = resolve; }); });
+  const f = fixture(vi.fn(), { readFields }); await f.open();
+  const execution = f.runtime.execute('reliability', { op: 'run', goal: 'Read products', completion: { textAll: ['Initial'] },
+    requestedOutputs: [{ key: 'first', description: 'First' }, { key: 'second', description: 'Second' }] }, f.context);
+  await reading;
+  expect(f.runtime.status('reliability')?.status).toBe('running');
+  complete({ first: 'A', second: 'B' });
+  expect(await execution).toMatchObject({ status: 'completed', feedback: { outputs: [{ value: 'A' }, { value: 'B' }] } });
+});
+
+it('discards a batch that finishes after human handoff without publishing product values', async () => {
+  let complete!: (values: Record<string, string>) => void;
+  let entered!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const readFields = vi.fn(async () => { entered(); return await new Promise<Record<string, string>>(resolve => { complete = resolve; }); });
+  const f = fixture(vi.fn(), { readFields }); await f.open();
+  const execution = f.runtime.execute('reliability', { op: 'run', goal: 'Read products', completion: { textAll: ['Initial'] },
+    requestedOutputs: [{ key: 'first', description: 'First' }, { key: 'second', description: 'Second' }] }, f.context);
+  await started;
+  const stopped = f.runtime.stop('reliability', 'pause'); complete({ first: 'late A', second: 'late B' });
+  await Promise.allSettled([execution, stopped]);
+  const report = f.runtime.status('reliability')!;
+  expect(report.status).toBe('paused');
+  expect(report.feedback?.outputs.every(output => output.value === undefined)).toBe(true);
+  expect(report.readings?.some(reading => reading.source === 'screenshot')).toBe(false);
 });

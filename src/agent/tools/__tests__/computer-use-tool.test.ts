@@ -9,6 +9,15 @@ describe('computer tool error signaling', () => {
       context: () => ({ conversationId: 'owner', runId: 'run' }) });
     return { execute, close, getReport, tool };
   };
+  it('returns structured recovery with completed-input evidence after capture failure', async () => {
+    const f = setup();
+    f.execute.mockResolvedValue({ status: 'stopped', errorCode: 'COMPUTER_CAPTURE_UNAVAILABLE', receipt: { dispatch: 'completed' } });
+    const error = await f.tool.execute('call', { op: 'step', goal: 'Press the button' }, undefined, undefined).catch(error => error);
+    expect(JSON.parse(error.message)).toMatchObject({ receipt: { dispatch: 'completed' },
+      recovery: { action: 'wait_and_observe', automaticRetryAllowed: false } });
+    expect(JSON.parse(error.message).nextAction).toContain('must not be replayed');
+    expect(f.execute).toHaveBeenCalledOnce();
+  });
   it('throws structured failures because pi ignores returned isError flags', async () => {
     const f = setup();
     f.execute.mockResolvedValue({ status: 'stopped', errorCode: 'COMPUTER_WINDOW_AMBIGUOUS',

@@ -28,7 +28,7 @@ export const ComputerProfileSchema = z.enum([
 export type ComputerProfile = z.infer<typeof ComputerProfileSchema>;
 const Id = z.string().min(1).max(200);
 const Point = z.object({ x: z.number().finite().min(0), y: z.number().finite().min(0) }).strict();
-export const ComputerActionSchema = z.discriminatedUnion('kind', [
+export const ComputerPrimitiveActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('activate'), ref: Id }).strict(),
   z.object({ kind: z.literal('showMenu'), ref: Id }).strict(),
   z.object({ kind: z.literal('click'), point: Point, button: z.enum(['left', 'right']), count: z.union([z.literal(1), z.literal(2)]) }).strict(),
@@ -39,7 +39,19 @@ export const ComputerActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('scroll'), point: Point, deltaX: z.number().int().min(-2000).max(2000), deltaY: z.number().int().min(-2000).max(2000) }).strict(),
   z.object({ kind: z.literal('wait'), durationMs: z.number().int().min(0).max(2000) }).strict(),
 ]);
+export type ComputerPrimitiveAction = z.infer<typeof ComputerPrimitiveActionSchema>;
+export const ComputerActionSchema = z.discriminatedUnion('kind', [
+  ...ComputerPrimitiveActionSchema.options,
+  z.object({ kind: z.literal('activateSequence'), refs: z.array(Id).min(2).max(12) }).strict(),
+  z.object({ kind: z.literal('batch'), actions: z.array(ComputerPrimitiveActionSchema).min(1).max(12) }).strict(),
+]);
 export type ComputerAction = z.infer<typeof ComputerActionSchema>;
+export function computerActionInputs(action: ComputerAction): ComputerPrimitiveAction[] {
+  if (action.kind === 'batch') return action.actions;
+  if (action.kind === 'activateSequence') return action.refs.map(ref => ({ kind: 'activate', ref }));
+  return [action];
+}
+export const computerActionInputCount = (action: ComputerAction): number => computerActionInputs(action).length;
 export const ComputerTargetSchema = z.object({
   appId: Id, pid: z.number().int().positive(), processIdentity: Id, windowId: Id,
   width: z.number().int().positive().max(16384), height: z.number().int().positive().max(16384),
@@ -73,6 +85,8 @@ export const ActionEnvelopeSchema = z.object({
 export type ActionEnvelope = z.infer<typeof ActionEnvelopeSchema>;
 export interface ComputerReceipt {
   actionId: string;
+  inputCount?: number;
+  steps?: Array<{ index: number; dispatch: 'notStarted' | 'started' | 'completed' | 'unknown' }>;
   dispatch: 'notStarted' | 'started' | 'completed' | 'unknown';
   outcome: 'applied' | 'notApplied' | 'unknown';
   verification: 'semantic' | 'artifact' | 'visual' | 'none';
@@ -87,6 +101,7 @@ export const ComputerCommandSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('open'), sessionId: Id, owner: Id, appRef: Id, windowRef: Id.optional(),
     mode: z.enum(['observe', 'control']), prepare: z.boolean(), model: ComputerModelBindingSchema }).strict(),
   z.object({ op: z.literal('status'), sessionId: Id, owner: Id }).strict(),
+  z.object({ op: z.literal('settle'), sessionId: Id, owner: Id }).strict(),
   z.object({ op: z.literal('observe'), sessionId: Id, owner: Id }).strict(),
   z.object({ op: z.literal('act'), sessionId: Id, owner: Id, envelope: ActionEnvelopeSchema }).strict(),
   z.object({ op: z.literal('release'), sessionId: Id, owner: Id }).strict(),

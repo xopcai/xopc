@@ -36,6 +36,17 @@ export function ComputerSettingsPage() {
 
 export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
   const t = messages(zh ? 'zh' : 'en').computerSettings;
+  const errorKeys: Record<string, keyof typeof t.errors> = {
+    COMPUTER_WINDOW_HIDDEN: 'hidden', COMPUTER_WINDOW_READY_TIMEOUT: 'readyTimeout', COMPUTER_WINDOW_OTHER_SPACE: 'otherSpace',
+    COMPUTER_CAPTURE_UNAVAILABLE: 'capture', COMPUTER_CAPTURE_REQUIRED: 'capture', COMPUTER_CAPTURE_TARGET_MISMATCH: 'captureMismatch',
+    COMPUTER_BACKGROUND_INPUT_UNSUPPORTED: 'backgroundUnsupported', COMPUTER_INPUT_REFUSED: 'inputRefused',
+    COMPUTER_LOCAL_UI_REQUIRED: 'localUi', COMPUTER_WINDOW_CHANGED: 'windowChanged', COMPUTER_OS_PERMISSION_REQUIRED: 'permission',
+    COMPUTER_DRIVER_BRING_TO_FRONT_REFUSED: 'hidden', COMPUTER_WINDOW_REQUIRED: 'hidden',
+    COMPUTER_DRIVER_CLICK_REFUSED: 'inputRefused', COMPUTER_DRIVER_KEY_REFUSED: 'inputRefused',
+    COMPUTER_DRIVER_HOTKEY_REFUSED: 'inputRefused', COMPUTER_DRIVER_PRESS_KEY_REFUSED: 'inputRefused',
+    COMPUTER_DRIVER_TYPE_TEXT_REFUSED: 'inputRefused', COMPUTER_DRIVER_SET_VALUE_REFUSED: 'inputRefused',
+    COMPUTER_DRIVER_SCROLL_REFUSED: 'inputRefused', COMPUTER_DRIVER_DRAG_REFUSED: 'inputRefused',
+  };
   const { data, mutate, error: loadError } = useGatewayConfigSwr(true);
   const config = data?.payload?.config as { computer?: { enabled?: boolean }; browser?: { enabled?: boolean } } | undefined;
   const [busy, setBusy] = useState(false);
@@ -97,11 +108,16 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   };
   const sessionStatus = desktop?.session?.status ?? 'idle';
-  const sessionLabel = t.states[sessionStatus as keyof typeof t.states] ?? sessionStatus;
+  const sessionLabel = desktop?.session?.preparation ? t.preparingWindow : t.states[sessionStatus as keyof typeof t.states] ?? sessionStatus;
+  const desktopError = desktop?.error || desktop?.session?.errorCode;
+  const errorKey = desktopError ? errorKeys[desktopError] : undefined;
+  const dispatch = desktop?.session?.dispatch;
+  const inputStatus = dispatch === 'completed' ? t.inputCompleted : dispatch === 'unknown' || dispatch === 'started' ? t.inputUnknown
+    : dispatch === 'notStarted' ? t.inputNotStarted : undefined;
   const controlEnabled = isComputerUseAvailable() && config?.computer?.enabled === true;
-  const controlStatus = desktop?.controlPaused ? t.pausedNotice : !controlEnabled ? t.disabled
+  const controlStatus = !controlEnabled ? t.disabled
     : desktop?.connected ? `${t.connected} · ${sessionLabel}` : desktop ? t.disconnected : t.checking;
-  const needsPermissions = !native || nativeError || desktop?.reenrollmentRequired === true || Boolean(desktop?.error || desktop?.session?.errorCode)
+  const needsPermissions = !native || nativeError || desktop?.reenrollmentRequired === true || Boolean(desktop?.error || desktop?.session?.errorCode === 'COMPUTER_OS_PERMISSION_REQUIRED')
     || (desktop != null && !windows && (!desktop.permissions.accessibility || desktop.permissions.screenRecording !== 'granted'));
   const permissionsReady = (windows ? desktop?.connected === true : desktop?.permissions.accessibility === true && desktop.permissions.screenRecording === 'granted')
     && !desktop?.reenrollmentRequired;
@@ -136,7 +152,6 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
         </>}
         {permissionsReady && <div className="flex justify-end px-4 py-2 sm:px-5"><Button variant="ghost" onClick={() => setShowPermissionDetails(false)}>{t.hideDetails}</Button></div>}
       </div>}
-    {(desktop?.error || desktop?.session?.errorCode) && <p role="alert" className="break-words text-sm text-red-600">{desktop.error || desktop.session?.errorCode}</p>}
   </section>;
 
   return <SettingsPageFrame gap="gap-7">
@@ -147,7 +162,16 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
     {windows && <p className="text-sm leading-relaxed text-fg-muted">{t.windowsAccessDescription}</p>}
 
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+    {desktopError && <div role="alert" className="space-y-1 break-words text-sm text-danger">
+      <p>{errorKey ? t.errors[errorKey] : desktopError}</p>
+      {inputStatus && <p>{inputStatus}</p>}
+      {errorKey && <p className="text-xs text-fg-muted">{desktopError}</p>}
+    </div>}
     {notice && <p role="status" className="text-sm text-fg-muted">{t.stoppedNotice}</p>}
+    {desktop?.session?.preparation && <div role="status" className="space-y-1 rounded-xl border border-edge p-4 text-sm text-fg">
+      <p>{t.preparingWindow}</p><p className="text-xs text-fg-muted">{t.preparationHint}</p>
+      <p className="text-xs text-fg-muted">{t.preparationElapsed.replace('{seconds}', String(Math.max(0, Math.floor((Date.now() - desktop.session.preparation.startedAt) / 1000))))}</p>
+    </div>}
 
     <section aria-labelledby="computer-control-title" className="space-y-3">
       <h2 id="computer-control-title" className="text-sm font-semibold text-fg">{t.control}</h2>
@@ -163,9 +187,6 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
               </span>
             </button>
           </SettingRow>
-          {desktop?.controlPaused && <div className="flex justify-end border-t border-edge-subtle px-4 py-3 sm:px-5">
-            <Button disabled={busy} onClick={() => { void perform(async () => { if (native) setDesktop(await native.resume()); setNotice(false); }); }}>{t.resume}</Button>
-          </div>}
         </div>}
     </section>
 

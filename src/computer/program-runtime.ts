@@ -13,7 +13,7 @@ function computerWorkerUrl(): URL {
   return workerUrl;
 }
 
-export type ComputerProgramMethod = 'observe' | 'resolve' | 'act' | 'waitFor' | 'verify' | 'emitScreenshot';
+export type ComputerProgramMethod = 'observe' | 'resolve' | 'batch' | 'act' | 'waitFor' | 'verify' | 'emitScreenshot';
 export type ComputerProgramHost = (method: ComputerProgramMethod, args: unknown, signal: AbortSignal) => Promise<unknown>;
 
 /** UI-only capability table; no general tool discovery, disk store, or output spill. */
@@ -29,7 +29,7 @@ export async function executeComputerProgram(code: string, host: ComputerProgram
   const combined = AbortSignal.any([signal, lifetime.signal]);
   const inFlight = new Set<Promise<unknown>>();
   const sandbox = new CodemodeSandbox({ timeoutMs, memoryLimitBytes: 64 * 1024 * 1024, workerUrl: computerWorkerUrl(),
-    globals: (['observe', 'resolve', 'act', 'waitFor', 'verify', 'emitScreenshot'] as const).map(method => ({
+    globals: (['observe', 'resolve', 'batch', 'act', 'waitFor', 'verify', 'emitScreenshot'] as const).map(method => ({
       name: `ui.${method}`,
       async execute(args, context) {
         if (ended || ++calls > 64) { lifetime.abort(); throw new Error('COMPUTER_PROGRAM_BUDGET'); }

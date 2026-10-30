@@ -212,23 +212,22 @@ it('reports native status failures instead of showing an unverified connection',
   expect(container.textContent).not.toContain('桌面已连接');
 });
 
-it('refreshes stop state immediately and requires explicit resume', async () => {
-  let paused = false;
-  const status = () => ({ connected: true, controlPaused: paused, permissions: { accessibility: true, screenRecording: 'granted' } });
-  const resume = vi.fn(async () => { paused = false; return status(); });
-  window.electronAPI = { platform: 'darwin', computer: { status: async () => status(), stop: async () => { paused = true; return { ok: true }; }, resume } } as any;
+it('refreshes the stopped session without requiring a resume action', async () => {
+  let stopped = false;
+  const status = () => ({ connected: true, session: { status: stopped ? 'stopped' : 'ready' }, permissions: { accessibility: true, screenRecording: 'granted' } });
+  const stop = vi.fn(async () => { stopped = true; return { ok: true }; });
+  window.electronAPI = { platform: 'darwin', computer: { status: async () => status(), stop } } as any;
   const container = await renderPanel();
   await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!.click());
+  expect(stop).toHaveBeenCalledOnce();
   expect(container.textContent).toContain('桌面控制已停止');
-  expect(container.textContent).toContain('桌面控制已暂停');
-  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '恢复桌面控制')!.click());
-  expect(resume).toHaveBeenCalledOnce();
   expect(container.textContent).not.toContain('桌面控制已暂停');
+  expect(container.textContent).not.toContain('恢复桌面控制');
 });
 
 it('translates an existing stop notice when the app language changes', async () => {
   window.electronAPI = { platform: 'darwin', computer: {
-    status: async () => ({ connected: true, controlPaused: false, permissions: { accessibility: true, screenRecording: 'granted' } }),
+    status: async () => ({ connected: true, permissions: { accessibility: true, screenRecording: 'granted' } }),
     stop: async () => ({ ok: true }),
   } } as any;
   const container = await renderPanel();
@@ -265,4 +264,40 @@ it('rejects invalid model references without writing defaults', async () => {
   await changeModel(container, 'not-a-provider-model');
   expect(updateGlobalDefaults).not.toHaveBeenCalled();
   expect(container.textContent).toContain('此模型当前不可选择');
+});
+
+it.each([
+  ['COMPUTER_WINDOW_HIDDEN', '目标窗口已隐藏或最小化'],
+  ['COMPUTER_WINDOW_OTHER_SPACE', '目标窗口位于其他桌面'],
+  ['COMPUTER_CAPTURE_UNAVAILABLE', '暂时无法读取画面'],
+  ['COMPUTER_BACKGROUND_INPUT_UNSUPPORTED', '明确不支持当前后台输入方式'],
+  ['COMPUTER_DRIVER_CLICK_REFUSED', '原因尚不明确'],
+])('explains %s without misreporting missing permissions', async (errorCode, message) => {
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: true, session: { status: 'stopped', errorCode, dispatch: 'completed' },
+      permissions: { accessibility: true, screenRecording: 'granted' } }),
+  } } as any;
+  const container = await renderPanel();
+  const alert = container.querySelector('[role="alert"]')!;
+  expect(alert.textContent).toContain(message);
+  expect(alert.textContent).toContain('上一步已执行，请勿重复操作');
+  expect(container.textContent).not.toContain('系统报告桌面访问权限不可用');
+});
+
+it('shows a cancellable preparation state without claiming that a task input has executed', async () => {
+  let stopped = false;
+  const stop = vi.fn(async () => { stopped = true; });
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: true, session: stopped ? { status: 'stopped' }
+      : { status: 'pending_authorization', preparation: { startedAt: Date.now() }, dispatch: 'notStarted' },
+      permissions: { accessibility: true, screenRecording: 'granted' } }), stop,
+  } } as any;
+  const container = await renderPanel();
+  expect(container.textContent).toContain('等待窗口就绪');
+  expect(container.textContent).toContain('最长等待 5 秒');
+  const button = [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!;
+  expect(button.disabled).toBe(false);
+  await act(async () => button.click());
+  expect(stop).toHaveBeenCalledOnce();
+  expect(container.textContent).not.toContain('等待窗口就绪');
 });
