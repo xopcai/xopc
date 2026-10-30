@@ -122,6 +122,35 @@ describe('llm-turn-retry', () => {
     expect(agent.continue).not.toHaveBeenCalled();
   });
 
+  it.each(['aborted', 'error'])('recovers provider %s while the host run is live', async (stopReason) => {
+    const controller = new AbortController();
+    const user = { role: 'user', content: 'Research', timestamp: 1 };
+    const agent = { state: { messages: [user,
+      { role: 'assistant', content: [], stopReason, errorMessage: 'Request was aborted' }] },
+      continue: vi.fn(async () => { agent.state.messages.push({ role: 'assistant', content: [], stopReason: 'stop' } as any); }),
+      waitForIdle: vi.fn() } as any;
+    await maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test', log: { warn: vi.fn() },
+      signal: controller.signal, baseDelayMs: 0 });
+    expect(agent.continue).toHaveBeenCalledTimes(1);
+    expect(agent.state.messages).toEqual([user, { role: 'assistant', content: [], stopReason: 'stop' }]);
+    expect(controller.signal.aborted).toBe(false);
+  });
+
+  it.each(['missing_signal', 'cancelled', 'pending_tool', 'partial_tool', 'budget_exhausted'])('does not recover an abort with %s', async (scenario) => {
+    const controller = new AbortController();
+    if (scenario === 'cancelled') controller.abort();
+    const call = { type: 'toolCall', id: 'write', name: 'write_file', arguments: {} };
+    const agent = { state: { messages: [
+      { role: 'user', content: 'Research', timestamp: 1 },
+      ...(scenario === 'pending_tool' ? [{ role: 'assistant', stopReason: 'toolUse', content: [call] }] : []),
+      { role: 'assistant', content: scenario === 'partial_tool' ? [call] : [], stopReason: 'aborted', errorMessage: 'Request was aborted' },
+    ] }, continue: vi.fn(), waitForIdle: vi.fn() } as any;
+    await maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test', log: { warn: vi.fn() }, baseDelayMs: 0,
+      signal: scenario === 'missing_signal' ? undefined : controller.signal,
+      budget: { continues: scenario === 'budget_exhausted' ? 2 : 0 } });
+    expect(agent.continue).not.toHaveBeenCalled();
+  });
+
   it('isAssistantTurnFailed reflects last assistant stopReason', () => {
     const user: AgentMessage = { role: 'user', content: 'hi', timestamp: 1 };
     const okAssistant: AgentMessage = {

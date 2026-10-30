@@ -12,6 +12,7 @@ import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/store.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
+import { resolveAgentAbortReason } from '../orchestration/run-termination.js';
 import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { runXopcEmbeddedTurn } from './run-turn.js';
 import { runWithEmbeddedExecutionSession } from './execution-context.js';
@@ -84,10 +85,18 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     parentSignal: params.abortSignal,
   });
   const finish = async (result: RunXopcEmbeddedTurnResult): Promise<RunXopcEmbeddedTurnResult> => {
-    if (supervisor.signal.aborted && supervisor.signal.reason instanceof Error
-      && supervisor.signal.reason.message === 'Agent run deadline expired') {
-      result = { ...result, ok: false, retryable: false, terminationReason: 'deadline_exceeded', errorMessage: supervisor.signal.reason.message };
+    if (supervisor.signal.aborted) {
+      const terminationReason = resolveAgentAbortReason(supervisor.signal.reason);
+      result = { ...result, ok: false, retryable: false, terminationReason,
+        errorMessage: terminationReason === 'deadline_exceeded'
+          ? supervisor.signal.reason instanceof Error ? supervisor.signal.reason.message : 'Agent run deadline expired'
+          : 'aborted' };
     }
+    log.info({ conversationId, runId, phase: 'agent_run_end', ok: result.ok,
+      terminationReason: result.terminationReason, stopReason: result.stopReason,
+      errorMessage: result.errorMessage, hostSignalAborted: supervisor.signal.aborted,
+      deadlineAtMs: supervisor.deadlineAtMs,
+    }, result.ok ? 'Agent run completed' : `Agent run ended: ${result.errorMessage ?? 'unknown failure'}`);
     turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required' && result.stopReason !== 'phone_assistance_required';
     if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required' || result.stopReason === 'phone_assistance_required') return result;
     try {
@@ -106,7 +115,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
 
       const runStatus = result.ok
         ? 'success'
-        : result.errorMessage === 'aborted'
+        : result.terminationReason === 'user_cancelled' || result.terminationReason === 'parent_cancelled'
+          || (result.errorMessage === 'aborted' && supervisor.signal.aborted)
           ? 'cancelled'
           : 'error';
       const outcome = projectTurnOutcome({

@@ -445,9 +445,13 @@ describe('runXopcEmbeddedTurn image input', () => {
       { id: 'gpt-4o', provider: 'openai' },
       expect.any(String),
       true,
-      { signal: mocks.leaseController?.signal, fallbackModels: [] },
+      { signal: expect.any(AbortSignal), fallbackModels: [] },
     );
     expect(mocks.compact).toHaveBeenCalledOnce();
+    const recoverySignal = mocks.compact.mock.calls[0]![4].signal as AbortSignal;
+    expect(recoverySignal.aborted).toBe(false);
+    mocks.leaseController?.abort(new Error('Cancelled'));
+    expect(recoverySignal.aborted).toBe(true);
     expect(mocks.loadMessages).toHaveBeenCalledTimes(3);
     expect(mocks.session.agent.state.messages).toEqual(compactedMessages);
     expect(mocks.session.agent.continue).toHaveBeenCalledOnce();
