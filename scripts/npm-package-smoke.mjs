@@ -36,7 +36,7 @@ try {
   // npm is intentional here: this reproduces end-user global installs, not workspace dependency management.
   await exec(...packageManagerCommand('npm', ['install', '-g', '--prefix', prefix, archive, '--no-audit', '--no-fund', '--loglevel=error']), {
     cwd: work, timeout: 600_000, maxBuffer: 1024 * 1024,
-    env: { ...process.env, NPM_CONFIG_CACHE: join(work, 'npm-cache') },
+    env: process.env.CI ? { ...process.env, NPM_CONFIG_CACHE: join(work, 'npm-cache') } : process.env,
   });
   const packageRoot = join(prefix, process.platform === 'win32' ? '' : 'lib', 'node_modules', '@xopcai/xopc');
   const manifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'));
