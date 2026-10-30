@@ -5,7 +5,7 @@ import { isComputerControlActive } from '../control-guard.js';
 import { ComputerConfigSchema } from '../config.js';
 import { canonicalJson } from '@xopcai/endpoint-tools-protocol';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
-import { computerDiagnostic } from '../errors.js';
+import { computerDiagnostic, ComputerOperationError } from '../errors.js';
 import { resolveModel } from '../../providers/index.js';
 import { ComputerFlowSchema, type ComputerFlowRepository } from '../flows.js';
 import { bindComputerAgentTurn, endComputerAgentTurn, computerImagesForRequest, setComputerProgramAuthorization } from '../agent-context.js';
@@ -400,7 +400,7 @@ describe('agent to broker desktop lifecycle', () => {
     expect(f.fetch).toHaveBeenCalledTimes(3);
     expect(f.driver.perform).toHaveBeenCalledOnce();
     expect(f.runtime.getReport('owner')).toMatchObject({ status: 'released', counters: { rescueAttempts: 1, rescueExhaustions: 1 },
-      failure: { dispatch: 'notStarted', phase: 'dispatch' } });
+      failure: { dispatch: 'notStarted', phase: 'dispatch', stability: { stage: 'pre_dispatch', action: 'click', samples: 4 } } });
   });
   it.each([0, 2, 3])('bounds stale rescues to the configured session allowance %i', async limit => {
     const f = fixture(); f.config.computer.maxRescuesPerSession = limit;
@@ -925,7 +925,7 @@ describe('bounded small-goal execution', () => {
     expect(f.driver.perform.mock.calls.map(([, action]) => action)).toEqual([0, 1, 2].map(i => ({ kind: 'activate', ref: `e${i}` })));
     expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
   });
-  it.each(['settles', 'unstable', 'capture_failure'] as const)('bounds fast-plan post-action stability checks: %s', async mode => {
+  it.each(['settles', 'unstable', 'capture_failure', 'capture_unstable'] as const)('bounds fast-plan post-action stability checks: %s', async mode => {
     const f = fixture(); f.config.computer.maxActionsPerSession = 80;
     vi.mocked(resolveModel).mockReturnValueOnce({ id: 'custom-vision', provider: 'custom', api: 'openai-completions',
       input: ['text', 'image'], baseUrl: 'https://proxy.test/v1' } as any);
@@ -935,6 +935,10 @@ describe('bounded small-goal execution', () => {
     f.driver.observe.mockImplementation(async () => {
       const read = stage ? ++postReads : 0;
       if (mode === 'capture_failure' && read === 2) throw new Error('COMPUTER_CAPTURE_REQUIRED');
+      if (mode === 'capture_unstable' && read === 2) throw new ComputerOperationError({
+        errorCode: 'COMPUTER_UI_UNSTABLE', phase: 'observe', diagnosticId: crypto.randomUUID(),
+        stability: { stage: 'initial_capture', samples: 6, changes: ['visual_or_unexposed_state'], changedElementIndices: [] },
+      });
       return { ...await observe(), stateDigest: stage && (mode === 'unstable' || read === 1) ? `${stage}-animation-${read}` : `stage-${stage}`,
         summary: JSON.stringify({ text: stage >= 3 ? 'Workflow complete' : `- AXStaticText = "Stage ${stage}"`,
           elements: [{ role: 'AXWindow' }, { role: 'AXButton', label: 'Continue', ref: `e${stage}`, semanticActions: ['activate'] }] }) };
@@ -949,10 +953,14 @@ describe('bounded small-goal execution', () => {
       expect(result).toMatchObject({ status: 'goal_satisfied', run: { modelRequests: 1, actionsExecuted: 3 } });
       expect(f.driver.observe).toHaveBeenCalledTimes(11);
     } else {
-      expect(result).toMatchObject({ errorCode: mode === 'unstable' ? 'COMPUTER_UI_UNSTABLE' : 'COMPUTER_POST_ACTION_OBSERVATION_FAILED',
+      expect(result).toMatchObject({ errorCode: mode === 'unstable' || mode === 'capture_unstable' ? 'COMPUTER_UI_UNSTABLE' : 'COMPUTER_POST_ACTION_OBSERVATION_FAILED',
         receipt: { dispatch: 'completed' }, run: { actionsExecuted: 1, stopReason: 'handoff' } });
       expect(f.driver.perform).toHaveBeenCalledTimes(1);
       expect(f.runtime.getReport('owner')?.counters).toMatchObject({ completedInputs: 1, unknownDispatches: 0 });
+      if (mode === 'capture_unstable') expect(f.runtime.getReport('owner')?.failure).toMatchObject({ dispatch: 'completed',
+        stability: { stage: 'post_action', action: 'activate', samples: 6 } });
+      if (mode === 'unstable') expect(f.runtime.getReport('owner')?.failure).toMatchObject({ dispatch: 'completed',
+        stability: { stage: 'post_action', action: 'activate', samples: 4, changes: ['visual_or_unexposed_state'] } });
     }
     expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
   });

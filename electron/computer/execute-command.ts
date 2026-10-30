@@ -22,7 +22,17 @@ export async function executeComputerCommand(
   const startedAt = performance.now();
   try {
     const brokerStarted = performance.now();
-    const { frame, ...metadata } = await broker.command(command);
+    let result: Awaited<ReturnType<ComputerBroker['command']>>;
+    try { result = await broker.command(command); }
+    catch (error) {
+      context.signal.throwIfAborted();
+      const diagnostic = computerDiagnostic(error);
+      if (!diagnostic || command.op !== 'observe') throw error;
+      // Read stopped-session metadata only; preserve typed capture failures across endpoint transport.
+      const status = await broker.command({ op: 'status', sessionId: command.sessionId, owner: command.owner });
+      result = { ...status, errorCode: diagnostic.errorCode, diagnostic };
+    }
+    const { frame, ...metadata } = result;
     const transport = { brokerWallMs: performance.now() - brokerStarted, frameUploadMs: null as number | null, commandWallMs: 0 };
     const payload = { ...metadata, transportTiming: transport };
     const content: EndpointToolContent[] = [{ type: 'json', value: payload }];

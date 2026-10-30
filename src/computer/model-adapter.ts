@@ -9,6 +9,7 @@ import { ComputerButtonPlan, ComputerButtonPlanSchema } from './semantic-plan.js
 import type { ComputerHistoryEntry, ComputerExpectation } from './task-state.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic } from './errors.js';
 import { normalizeComputerKeys } from './keyboard.js';
+import { modelValidation } from './validation-diagnostics.js';
 
 export const ComputerProposalSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('action'), action: ComputerActionSchema }).strict(),
@@ -27,19 +28,21 @@ const StructuredActionSchema = z.union(ComputerActionSchema.options.map(option =
 const StructuredProposalSchema = z.union(ComputerProposalSchema.options.map(option => option.shape.kind.value === 'action'
   ? z.object({ kind: z.literal('action'), action: StructuredActionSchema }).strict() : option));
 
-function validateTypingProposal(proposal: ComputerProposal, input: ComputerPredictionInput): void {
+function validateTypingProposal(proposal: ComputerProposal, input: ComputerPredictionInput,
+  path: (string | number)[] = ['action'], root = proposal): void {
   if (proposal.kind === 'action' && proposal.action.kind === 'batch') {
-    for (const action of proposal.action.actions) validateTypingProposal({ kind: 'action', action }, input);
+    proposal.action.actions.forEach((action, index) => validateTypingProposal({ kind: 'action', action }, input, [...path, 'actions', index], root));
   }
   if (proposal.kind === 'action' && proposal.action.kind === 'pressKeys') {
     let platform: NodeJS.Platform = 'darwin';
     try { if (JSON.parse(input.summary).platform === 'win32') platform = 'win32'; } catch { /* Older desktop contexts can be plain text. */ }
     try { proposal.action.keys = normalizeComputerKeys(proposal.action.keys, platform); }
-    catch { throw invalidOutput('invalid_arguments'); }
+    catch { throw invalidOutput('invalid_arguments', undefined, modelValidation(root, 'keyboard', undefined, { path: [...path, 'keys'], code: 'unsupported_key' })); }
   }
   if (proposal.kind !== 'action' || proposal.action.kind !== 'typeText') return;
   const point = proposal.action.point;
-  if (!point || point.x >= input.width || point.y >= input.height) throw invalidOutput('invalid_arguments');
+  if (!point || point.x >= input.width || point.y >= input.height) throw invalidOutput('invalid_arguments', undefined,
+    modelValidation(root, 'typing_target', undefined, { path: [...path, 'point'], code: point ? 'outside_frame' : 'missing_point' }));
   try {
     const context = JSON.parse(input.summary);
     const fields = Array.isArray(context.elements) ? context.elements.filter((e: Record<string, unknown>) => {
@@ -49,8 +52,12 @@ function validateTypingProposal(proposal: ComputerProposal, input: ComputerPredi
       return b && [b.x, b.y, b.width, b.height].every(Number.isFinite) && b.width > 0 && b.height > 0
         && point.x >= b.x && point.y >= b.y && point.x < b.x + b.width && point.y < b.y + b.height;
     }) : [];
-    if (fields.length !== 1) throw invalidOutput('invalid_arguments');
-  } catch { throw invalidOutput('invalid_arguments'); }
+    if (fields.length !== 1) throw invalidOutput('invalid_arguments', undefined, modelValidation(root, 'typing_target', undefined,
+      { path: [...path, 'point'], code: fields.length ? 'editable_target_ambiguous' : 'editable_target_missing' }));
+  } catch (error) {
+    if (computerDiagnostic(error)) throw error;
+    throw invalidOutput('invalid_arguments', undefined, modelValidation(root, 'typing_target', undefined, { path: [...path, 'point'], code: 'invalid_context' }));
+  }
 }
 
 const Coordinate = z.tuple([z.number().finite().min(0).max(1000), z.number().finite().min(0).max(1000)]);
@@ -125,7 +132,7 @@ export function parseGuiPlusProposal(content: string, width: number, height: num
     let raw: unknown;
     try { raw = JSON.parse(blocks[0][1]); } catch { throw invalidOutput('invalid_json'); }
     const parsed = z.object({ name: z.literal('computer_use'), arguments: GuiArgs }).strict().safeParse(raw);
-    if (!parsed.success) throw invalidOutput('invalid_arguments');
+    if (!parsed.success) throw invalidOutput('invalid_arguments', undefined, modelValidation(raw, 'schema', parsed.error));
     return parsed.data;
   })();
   const a = call.arguments;
@@ -150,15 +157,16 @@ export function parseGuiPlusProposal(content: string, width: number, height: num
     case 'wait': action = { kind: 'wait', durationMs: Math.round(a.time * 1000) }; break;
   }
   const parsed = ComputerActionSchema.safeParse(action);
-  if (!parsed.success) throw invalidOutput('invalid_arguments');
+  if (!parsed.success) throw invalidOutput('invalid_arguments', undefined, modelValidation(action, 'converted_action', parsed.error));
   return { kind: 'action', action: parsed.data };
 }
 
 type ValidationReason = NonNullable<z.infer<typeof ComputerDiagnosticSchema>['validationReason']>;
 // Private ephemeral feedback, never an enumerable error property or transcript entry.
 const invalidReplies = new WeakMap<Error, string>();
-function invalidOutput(validationReason: ValidationReason, errorCode = 'COMPUTER_INVALID_MODEL_OUTPUT'): ComputerOperationError {
-  return new ComputerOperationError({ errorCode, phase: 'model', diagnosticId: randomUUID(), validationReason });
+function invalidOutput(validationReason: ValidationReason, errorCode = 'COMPUTER_INVALID_MODEL_OUTPUT',
+  validation?: z.infer<typeof ComputerDiagnosticSchema>['validation']): ComputerOperationError {
+  return new ComputerOperationError({ errorCode, phase: 'model', diagnosticId: randomUUID(), validationReason, ...(validation ? { validation } : {}) });
 }
 
 export interface ComputerModelConnection {
@@ -338,11 +346,13 @@ export class ChatCompletionsComputerAdapter implements ComputerStepAdapter {
     const proposalSchema = !input.formatCorrection && input.maxPlanActions && input.maxPlanActions > 1
       ? z.union([StructuredProposalSchema, ComputerButtonPlanSchema]) : StructuredProposalSchema;
     const parseProposal = (args: unknown): ComputerProposal => {
-      const proposal = z.object({ proposal: proposalSchema }).strict().parse(args).proposal;
+      const parsed = z.object({ proposal: proposalSchema }).strict().safeParse(args);
+      if (!parsed.success) throw invalidOutput('invalid_arguments', undefined, modelValidation(args, 'schema', parsed.error));
+      const proposal = parsed.data.proposal;
       if (proposal.kind !== 'button_plan') { validateTypingProposal(proposal, input); return proposal; }
       this.plan.install(proposal, input.goal, Math.min(6, input.maxPlanActions ?? 0));
       const action = this.plan.next(input);
-      if (!action) throw invalidOutput('invalid_arguments');
+      if (!action) throw invalidOutput('invalid_arguments', undefined, modelValidation(proposal, 'plan', undefined, { path: ['steps'], code: 'plan_not_grounded' }));
       return { kind: 'action', action };
     };
     const answerSchema = z.object({ text: z.string().min(1).max(6000) }).strict();
@@ -398,7 +408,10 @@ export class ChatCompletionsComputerAdapter implements ComputerStepAdapter {
       try {
         const args = JSON.parse(calls[0].arguments);
         return input.readOnly ? { kind: 'answer', text: answerSchema.parse(args).text } : parseProposal(args);
-      } catch { throw invalidOutput('invalid_arguments'); }
+      } catch (error) {
+        if (computerDiagnostic(error)) throw error;
+        throw invalidOutput('invalid_arguments', undefined, modelValidation({}, 'schema', error));
+      }
     }
     const envelope = z.object({ choices: z.array(z.object({ finish_reason: z.string().nullish(), message: z.object({
       content: z.string().nullish(), tool_calls: z.array(z.object({ function: z.object({ name: z.string(), arguments: z.string() }) })).optional(),
@@ -423,7 +436,10 @@ export class ChatCompletionsComputerAdapter implements ComputerStepAdapter {
       const args = JSON.parse(message.tool_calls[0].function!.arguments);
       return input.readOnly ? { kind: 'answer', text: answerSchema.parse(args).text } : parseProposal(args);
     }
-    catch { throw invalidOutput('invalid_arguments'); }
+    catch (error) {
+      if (computerDiagnostic(error)) throw error;
+      throw invalidOutput('invalid_arguments', undefined, modelValidation({}, 'schema', error));
+    }
   }
 }
 
@@ -581,7 +597,7 @@ export class OpenAIResponsesComputerAdapter implements ComputerStepAdapter {
     let pointer: { x: number; y: number } | undefined;
     const append = (action: ComputerAction) => {
       const parsed = ComputerActionSchema.safeParse(action);
-      if (!parsed.success) throw invalidOutput('invalid_arguments');
+      if (!parsed.success) throw invalidOutput('invalid_arguments', undefined, modelValidation(action, 'converted_action', parsed.error));
       proposals.push({ kind: 'action', action: parsed.data });
     };
     for (const action of actions) {

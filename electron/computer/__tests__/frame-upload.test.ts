@@ -63,3 +63,16 @@ it.each([false, true])('stops and clears pixels after failed uploads, preserving
   expect(broker.cancel).toHaveBeenCalledWith(command);
   expect(pixels.every(b => b === 0)).toBe(true);
 });
+it('preserves typed unstable-capture diagnostics as metadata without another capture', async () => {
+  const diagnostic = { errorCode: 'COMPUTER_UI_UNSTABLE', phase: 'observe' as const, diagnosticId: randomUUID(),
+    stability: { stage: 'initial_capture' as const, samples: 6, changes: ['visual_or_unexposed_state' as const], changedElementIndices: [] } };
+  const broker = { command: vi.fn().mockRejectedValueOnce(new ComputerOperationError(diagnostic))
+    .mockResolvedValueOnce({ status: 'stopped', sessionId: 'session', brokerEpoch: 'epoch', generation: 0 }), cancel: vi.fn() };
+  const uploadFile = vi.fn();
+  const result = await executeComputerCommand(broker, { op: 'observe', owner: 'owner', sessionId: 'session' }, {
+    signal: new AbortController().signal, invocationId: 'invocation', reportProgress: vi.fn(), uploadFile,
+  });
+  expect(result).toMatchObject({ content: [{ type: 'json', value: { status: 'stopped', errorCode: 'COMPUTER_UI_UNSTABLE', diagnostic } }] });
+  expect(broker.command.mock.calls.map(([command]) => command.op)).toEqual(['observe', 'status']);
+  expect(uploadFile).not.toHaveBeenCalled();
+});

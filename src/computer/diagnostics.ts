@@ -14,6 +14,8 @@ export const ComputerFailureSchema = z.object({
   diagnosticId: z.uuid().optional(), httpStatus: z.number().int().min(100).max(599).optional(),
   requestId: z.string().regex(/^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i).optional(),
   validationReason: ComputerDiagnosticSchema.shape.validationReason,
+  validation: ComputerDiagnosticSchema.shape.validation,
+  stability: ComputerDiagnosticSchema.shape.stability,
   serviceErrorCode: ComputerDiagnosticSchema.shape.serviceErrorCode,
 }).strict();
 export type ComputerFailure = z.infer<typeof ComputerFailureSchema>;
@@ -54,7 +56,7 @@ export function classifyComputerFailure(error: unknown, phase: ComputerFailurePh
   if (!category) { category = 'unknown'; errorCode = 'COMPUTER_OPERATION_FAILED'; }
   return { category, errorCode, phase: diagnostic?.phase === 'frame_upload' ? 'frame_upload' : phase, dispatch,
     ...(diagnostic ? { diagnosticId: diagnostic.diagnosticId, httpStatus: diagnostic.httpStatus, requestId: diagnostic.requestId,
-      validationReason: diagnostic.validationReason, serviceErrorCode: diagnostic.serviceErrorCode } : {}) };
+      validationReason: diagnostic.validationReason, validation: diagnostic.validation, stability: diagnostic.stability, serviceErrorCode: diagnostic.serviceErrorCode } : {}) };
 }
 
 const Count = z.number().int().nonnegative();
