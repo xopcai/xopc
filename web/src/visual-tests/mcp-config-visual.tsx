@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CustomMcpServerDialog } from '@/features/connectors/custom-mcp-server-dialog';
@@ -42,4 +43,4 @@ function Fixture() {
   existingCustomServers={stage in configs ? [row] : []} managedServerIds={new Set()} config={{}} t={m.mcpSettings} cs={m.connectorsSettings}
   onClose={() => setOpen(false)} onSaved={async () => {}} /> : null;
 }
-createRoot(document.getElementById('root')!).render(<Fixture />);
+createRoot(document.getElementById('root')!).render(<MemoryRouter><Fixture /></MemoryRouter>);

@@ -57,7 +57,9 @@ export function readPluginLayout(root: string, read: (path: string) => string, s
   };
   const defaults = has('skills') ? guarded('skills', () => [safe(join(root, 'skills'))], []) : [];
   const declared = paths(overlay.skills, 'skills');
-  const skillRoots = [...new Set(dialect === 'portable' ? defaults : dialect === 'claude' ? [...defaults, ...declared] : overlay.skills === undefined ? defaults : declared)];
+  // Marketplace entries can select a subset of a shared repository's skills.
+  const catalogSelection = !path && importManifest?.skills !== undefined;
+  const skillRoots = [...new Set(catalogSelection ? declared : dialect === 'portable' ? defaults : dialect === 'claude' ? [...defaults, ...declared] : overlay.skills === undefined ? defaults : declared)];
   const mcpConfigs: unknown[] = [];
   if (dialect === 'portable' && has('mcp.json')) { const config = guarded('mcp', () => json('mcp.json'), undefined); if (config) mcpConfigs.push(config); }
   const externalMcpConfig = has('.mcp.json');

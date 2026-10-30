@@ -26,7 +26,7 @@ export function agentPluginInventoryRow(plugin: InstalledAgentPlugin, store = ne
     canRollback: !!plugin.receipt.previous,
     ...(plugin.receipt.provenance ? { provenance: plugin.receipt.provenance } : {}),
     components: {
-      skills: plugin.skills.map(skill => ({ name: skill.name })),
+      skills: plugin.skills.map(skill => ({ name: skill.name, description: skill.description })),
       mcp: Object.entries(plugin.servers).map(([name, server]) => ({ name, id: pluginServerId(plugin.id, name), type: server.type, ...(server.type !== 'stdio' ? { connectionAuth: server.connectionAuth } : {}) })),
     },
     installationSource: plugin.receipt.source,

@@ -1,3 +1,5 @@
+import { connectionUsagePath } from '@/features/connectors/utils/connection-usage';
+
 export type PluginEntryPoint = 'connections' | 'skills' | 'installed';
 
 export function pluginDetailPath(id: string, from: PluginEntryPoint, connect = false, returnTo?: string) {
@@ -16,6 +18,6 @@ export function pluginReturnPath(from: string | null, returnTo?: string | null) 
   return '/capabilities/extensions?tab=user';
 }
 
-export function pluginStartPath(name: string, zh: boolean) {
-  return `/chat/new?${new URLSearchParams({ draft: zh ? `请帮我使用${name}插件。` : `Help me use the ${name} plugin.`, projectScope: 'none' })}`;
+export function pluginStartPath(name: string, zh: boolean, id = name) {
+  return connectionUsagePath({ name, id, kind: 'plugin' }, zh);
 }

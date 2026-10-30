@@ -11,6 +11,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { installConnector, removeConnector, setConnectorEnabled, testConnector, type ConnectorDefinition, type ConnectorInstance } from '../connectors-api';
 
+import { ConnectionUsageGuide } from './connection-usage-guide';
+
 type Authorization = { id: string; status: string; error?: string; accountId?: string; challenge?: ({ type: 'open_url'; url: string } | { type: 'qr_code'; artifactId: string }) & { step: number; totalSteps: number } };
 type Account = { id: string; label?: string; identity: Record<string, unknown>; status: string; enabled: boolean };
 type Accounts = { authorization?: Authorization; accounts: Account[]; policy?: { maxScope: 'read' | 'write' } };
@@ -115,6 +117,7 @@ export function CliConnectorDialog({ definition, instance: initialInstance, onCl
           <Button disabled={busy || Boolean(pending) || !instance.enabled} onClick={() => void manage('test')}>{zh ? '检查连接' : 'Check connection'}</Button>
           <Button variant="ghost" disabled={busy || Boolean(pending)} onClick={() => void manage('remove')}>{zh ? '移除连接' : 'Remove connection'}</Button>
         </div> : null}
+        {instance?.enabled && accounts?.accounts.some(account => account.enabled && account.status === 'active') ? <ConnectionUsageGuide target={{ kind: 'connector', id: definition.id, name: definition.displayName }} onStart={onClose} /> : null}
         {health ? <p className="text-sm text-fg-muted">{health}</p> : null}
         {accounts?.accounts.map(account => <div key={account.id} className="space-y-2 rounded-lg border border-edge p-3">
           <p className="text-sm font-medium">{account.label ?? account.id}</p><p className="break-all text-xs text-fg-muted">{String(account.identity.openId ?? account.identity.botId ?? account.identity.userId ?? account.id)}</p>

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { MemoryRouter } from 'react-router-dom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -19,7 +20,7 @@ const tools: McpToolInfo[] = [
 ];
 beforeEach(() => { container = document.createElement('div'); document.body.append(container); root = createRoot(container); });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.resetAllMocks(); });
-async function render() { await act(async () => root.render(<McpToolsDialog serverId="docs" t={t} onClose={() => {}} />)); }
+async function render() { await act(async () => root.render(<MemoryRouter><McpToolsDialog serverId="docs" t={t} onClose={() => {}} /></MemoryRouter>)); }
 function button(label: string) { return [...document.querySelectorAll('button')].find(node => node.textContent === label)!; }
 
 it('loads a skeleton then shows tools, schemas, filters and refreshes', async () => {
@@ -30,7 +31,7 @@ it('loads a skeleton then shows tools, schemas, filters and refreshes', async ()
   expect(button(t.refreshTools).disabled).toBe(true);
   await act(async () => resolve(tools));
   expect(document.body.textContent).toContain('mcp__docs__lookup');
-  expect(document.querySelector('h3')?.textContent).toBe('lookup');
+  expect(document.querySelector('article h3')?.textContent).toBe('lookup');
   expect(document.body.textContent).toContain(t.exposureLabels.hidden);
   expect(document.querySelector('pre')?.textContent).toContain('query');
   const input = document.querySelector('input')!;
@@ -60,7 +61,7 @@ it('shows connection errors and allows retry', async () => {
 
 it('announces filtered results and clears an empty search without fetching again', async () => {
   vi.mocked(fetchMcpTools).mockResolvedValueOnce(tools);
-  await act(async () => root.render(<McpToolsDialog serverId="docs" displayName="团队知识库" t={t} onClose={() => {}} />));
+  await act(async () => root.render(<MemoryRouter><McpToolsDialog serverId="docs" displayName="团队知识库" t={t} onClose={() => {}} /></MemoryRouter>));
   expect(document.body.textContent).toContain('团队知识库');
   const input = document.querySelector('input')!;
   await act(async () => {
@@ -87,7 +88,7 @@ it('restores focus to the tool-list trigger after closing', async () => {
   vi.mocked(fetchMcpTools).mockResolvedValueOnce(tools);
   const trigger = document.createElement('button');
   document.body.append(trigger);
-  await act(async () => root.render(<McpToolsDialog serverId="docs" returnFocusTo={trigger} t={t} onClose={() => {}} />));
+  await act(async () => root.render(<MemoryRouter><McpToolsDialog serverId="docs" returnFocusTo={trigger} t={t} onClose={() => {}} /></MemoryRouter>));
   await act(async () => root.render(null));
   await act(async () => new Promise(resolve => setTimeout(resolve, 10)));
   expect(document.activeElement).toBe(trigger);
@@ -96,7 +97,7 @@ it('restores focus to the tool-list trigger after closing', async () => {
 
 it('preserves tool names when a server ID contains a namespace separator', async () => {
   vi.mocked(fetchMcpTools).mockResolvedValueOnce([{ ...tools[0], name: 'mcp__team__docs__lookup__note' }]);
-  await act(async () => root.render(<McpToolsDialog serverId="team__docs" t={t} onClose={() => {}} />));
-  expect(document.querySelector('h3')?.textContent).toBe('lookup__note');
+  await act(async () => root.render(<MemoryRouter><McpToolsDialog serverId="team__docs" t={t} onClose={() => {}} /></MemoryRouter>));
+  expect(document.querySelector('article h3')?.textContent).toBe('lookup__note');
   expect(document.body.textContent).toContain('mcp__team__docs__lookup__note');
 });

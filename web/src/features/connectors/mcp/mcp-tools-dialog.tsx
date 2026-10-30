@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { McpSettingsMessages } from '@/i18n/messages';
 
+import { ConnectionUsageGuide } from '../components/connection-usage-guide';
 import { fetchMcpDraftTools, fetchMcpTools, type McpToolInfo } from './mcp-config-api';
 
 export function McpToolsDialog({ serverId, displayName, returnFocusTo, draftId, t, onClose, onConfigure }: {
@@ -50,6 +51,7 @@ export function McpToolsDialog({ serverId, displayName, returnFocusTo, draftId, 
         {needle && !loading && !error ? <p role="status" className="mt-2 text-xs text-fg-muted">{t.toolsSearchSummary.replace('{{visible}}', String(visible.length)).replace('{{count}}', String(tools.length))}</p> : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-5" aria-busy={loading} aria-label={t.toolsTitle.replace('{{count}}', String(tools.length))}>
+        {!loading && !error && tools.length && !needle ? <div className="mb-5"><ConnectionUsageGuide target={{ kind: 'mcp', id: serverId, name: displayName || serverId }} tools={tools} preview={Boolean(draftId)} onStart={onClose} /></div> : null}
         {loading ? <div role="status" aria-label={t.toolsLoading} className="space-y-3">{[0, 1, 2].map(index => <Skeleton key={index} className="h-24 w-full" />)}</div>
           : error ? <div role="alert" className="space-y-3"><p className="whitespace-pre-wrap break-words text-sm text-danger">{error}</p><p className="text-sm text-fg-muted">{t.toolsRetryHint}</p>
             {onConfigure ? <Button variant="secondary" onClick={() => { configuring.current = true; onConfigure(); }}>{t.setupConfigure}</Button> : null}</div>

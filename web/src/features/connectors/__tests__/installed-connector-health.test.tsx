@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { MemoryRouter } from 'react-router-dom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -11,6 +12,7 @@ const { testConnector } = vi.hoisted(() => ({ testConnector: vi.fn() }));
 vi.mock('../connectors-api', async original => ({
   ...await original<typeof import('../connectors-api')>(), testConnector,
 }));
+vi.mock('../mcp/mcp-config-api', () => ({ fetchMcpTools: vi.fn(async () => []) }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: ReturnType<typeof createRoot> | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.innerHTML = ''; vi.clearAllMocks(); });
@@ -25,8 +27,8 @@ async function renderDialog() {
   root = createRoot(container);
   const onChanged = vi.fn(async () => {});
   const m = messages('zh');
-  await act(async () => root!.render(<InstalledConnectorDetailDialog instance={instance} onClose={() => {}}
-    onChanged={onChanged} t={m.connectorsSettings} mcp={m.mcpSettings} />));
+  await act(async () => root!.render(<MemoryRouter><InstalledConnectorDetailDialog instance={instance} onClose={() => {}}
+    onChanged={onChanged} t={m.connectorsSettings} mcp={m.mcpSettings} /></MemoryRouter>));
   const button = Array.from(document.querySelectorAll('button')).find(button => button.textContent === '测试')!;
   return { button, onChanged };
 }

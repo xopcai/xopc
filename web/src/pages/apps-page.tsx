@@ -294,7 +294,7 @@ function ExtensionAppCard({
   const canStart = !!ext.pluginId && pluginCanStart(ext);
   const action = needsAuth ? (zh ? '去授权' : 'Connect account') : canStart ? (zh ? '开始使用' : 'Start using') : (zh ? '管理插件' : 'Manage plugin');
   const onAction = () => {
-    if (canStart) navigate(pluginStartPath(name, zh));
+    if (canStart) navigate(pluginStartPath(name, zh, ext.pluginId));
     else if (needsAuth && ext.pluginId) navigate(pluginDetailPath(ext.pluginId, 'installed', true, location.pathname + location.search));
     else onOpen();
   };
