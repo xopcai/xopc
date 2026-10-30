@@ -1,3 +1,4 @@
+import type { SessionInputControlCommand } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
 import { consumePhoneAssistance, finishPhoneAssistance, phoneAssistance, queuePhoneAssistance, reconcilePhoneAssistance, type PhoneAssistance } from '../../phone/assistance.js';
 import { isDeepStrictEqual } from 'node:util';
@@ -5,6 +6,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ConnectionWait } from '@xopcai/gateway-contract';
 
+import { acceptSessionInputControl, hasSessionInputControlOperation, readSessionInputControl, SessionInputControlConflict } from '../../storage/sqlite/session-input-control-repository.js';
 import { injectSourceContextsIntoUserMessage } from '../../agent/source-context/injector.js';
 import { findSessionInputByRunId, type SessionInput } from '../../storage/sqlite/session-input-repository.js';
 import { consumeConnectionResume, publishConnectionWait, getActiveConnectionWait, getConnectionWait, hasPendingConnectionMessages, interruptedConnectionMessage, cancelConnectionObjective, reconcileConnectionWaits } from '../../storage/sqlite/connection-wait-repository.js';
@@ -106,6 +108,7 @@ function contextRefsMatchFrozenSnapshot(
 }
 
 export type SubmitSessionInput = {
+  controlVersion?: number;
   expectedTranscriptId?: string;
   conversationId: string;
   clientMessageId: string;
@@ -133,7 +136,7 @@ export class SessionInputCoordinator {
 
   constructor(private readonly deps: {
     prioritizeInput?: (input: SubmitSessionInput) => boolean;
-    interrupt?: (conversationId: string, runId: string, reason?: 'connection_cancel') => Promise<void>;
+    interrupt?: (conversationId: string, runId: string, reason?: 'connection_cancel' | 'user_stop') => Promise<void>;
     coalesceWindowMs?: number;
     onInputReceived?: (conversationId: string) => void;
     beforeExecute?: (input: SessionInput) => Promise<boolean>;
@@ -160,9 +163,44 @@ export class SessionInputCoordinator {
       conversationId: string,
       contextRefs?: TurnContextRef[],
     ) => Promise<AgentSourceContext[] | undefined>;
-    steer: (conversationId: string, content: string) => Promise<boolean>;
+    steer: (conversationId: string, content: string, runId?: string) => Promise<boolean>;
     emit: (type: string, payload: unknown) => void;
   }) {}
+
+  async control(conversationId: string, command: SessionInputControlCommand) {
+    if (!await this.deps.sessionExists(conversationId)) throw new SessionInputControlConflict('Conversation not found');
+    const replay = hasSessionInputControlOperation(conversationId, command.operationId);
+    if (!replay && command.turnId) {
+      const target = validateLatestSessionTurnTarget(conversationId, command.turnId);
+      if (!target.ok) throw new SessionInputControlConflict('Only the latest user turn can be edited');
+    }
+    const row = command.inputId ? getSessionInputById(conversationId, command.inputId) : undefined;
+    if (!replay && command.action === 'steer' && (!row || row.attachments?.length || row.contextRefs?.length
+      || !canSteerContexts(this.snapshot(conversationId), row.origin, row.contextSnapshots))) {
+      throw new SessionInputControlConflict('This input cannot steer the active reply');
+    }
+    const accepted = acceptSessionInputControl(conversationId, command);
+    this.publish(conversationId);
+    if (command.action === 'steer') {
+      if (!accepted.replay && row) {
+        try {
+          if (!await this.deps.steer(conversationId, steeringText(row.content, row.contextSnapshots), accepted.runId)) {
+            setSessionInputStatus(row.id, 'interrupted', { effectiveDelivery: 'next', targetRunId: null, error: 'Current reply ended before steering' });
+          }
+        } catch (err) {
+          log.warn({ err, conversationId, inputId: row.id }, 'Steering delivery is awaiting confirmation');
+        }
+      }
+      return this.publish(conversationId);
+    }
+    if (accepted.runId) {
+      // Keep the durable stop fence if cancellation fails. Retrying the same operation
+      // must never capture or cancel a later run.
+      await this.deps.interrupt?.(conversationId, accepted.runId, 'user_stop');
+    }
+    if ((command.action === 'resume' || command.action === 'send') && !accepted.replay) void this.drain(conversationId);
+    return this.publish(conversationId);
+  }
 
   isAcceptingInput(conversationId: string): boolean {
     return (this.pendingSubmissions.get(conversationId) ?? 0) > 0;
@@ -206,7 +244,7 @@ export class SessionInputCoordinator {
     await this.runSubmissionExclusive(input.conversationId, async () => {
       const row = getSessionInputById(conversationId, inputId);
       const state = this.snapshot(input.conversationId);
-      if (!row || row.status !== 'queued') return;
+      if (!row || row.status !== 'queued' || state.control.paused) return;
       if (row.payload?.connectionAction === 'cancel') this.completeConnectionCancellation(row);
       if (row.payload?.connectionAction || this.connectionTarget(row.conversationId, state)) {
         this.requestConnectionStop(row);
@@ -221,7 +259,7 @@ export class SessionInputCoordinator {
         || (state.preparation && state.preparation.state !== 'ready')) return;
       setSessionInputStatus(row.id, 'injecting', { effectiveDelivery: 'steer', targetRunId: state.activeRunId });
       try {
-        if (!await this.deps.steer(row.conversationId, steeringText(row.content, row.contextSnapshots))) {
+        if (!await this.deps.steer(row.conversationId, steeringText(row.content, row.contextSnapshots), state.activeRunId)) {
           setSessionInputStatus(row.id, 'queued', { effectiveDelivery: 'next', targetRunId: null });
         }
       } catch (error) {
@@ -297,7 +335,7 @@ export class SessionInputCoordinator {
 
   async replaceLatestTurn(
     input: ReplaceLatestTurnInput,
-    beforeReplace: () => Promise<void>,
+    beforeReplace: (allowAbort: boolean) => Promise<void>,
   ): Promise<
     | { ok: true; effectiveDelivery: 'next'; state: SessionInputState }
     | { ok: false; code: 'BAD_REQUEST' | 'TARGET_NOT_FOUND' | 'NOT_LATEST' | 'SESSION_BUSY' | 'CONTEXT_UNAVAILABLE' }
@@ -340,10 +378,15 @@ export class SessionInputCoordinator {
         log.warn({ err, conversationId }, 'Session input context preparation failed');
         return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
       }
-      await beforeReplace();
+      const controlState = readSessionInputControl(conversationId);
+      if (input.controlVersion !== undefined && input.controlVersion !== controlState.version) throw new SessionInputControlConflict('Queue control changed');
+      if ((controlState.paused || input.controlVersion !== undefined) && controlState.phase !== 'idle') return { ok: false, code: 'SESSION_BUSY' };
+      await beforeReplace(input.controlVersion === undefined);
       const result = replaceLatestSessionTurnAndQueueInput({
         conversationId,
         targetTurnId,
+        expectedTranscriptId: input.expectedTranscriptId,
+        controlVersion: input.controlVersion,
         clientMessageId,
         content,
         attachments,
@@ -425,8 +468,8 @@ export class SessionInputCoordinator {
     const wait = this.connectionTarget(conversationId, runtime);
     const control = wait?.principalId === 'local-owner' ? connectionControl(input, wait) : undefined;
     const payload = connectionInputPayload(wait, control);
-    const priority = !wait && input.interrupt !== false && this.deps.prioritizeInput?.(input) === true;
-    const canSteer = !wait && !priority && input.delivery === 'steer'
+    const priority = !runtime.control.paused && !wait && input.interrupt !== false && this.deps.prioritizeInput?.(input) === true;
+    const canSteer = !runtime.control.paused && !wait && !priority && input.delivery === 'steer'
       && runtime.activeRunId !== undefined
       && !attachments?.length
       && canSteerContexts(runtime, input.origin, sourceContexts);
@@ -461,7 +504,7 @@ export class SessionInputCoordinator {
       return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
     }
     if (canSteer) {
-      const accepted = await this.deps.steer(conversationId, steeringText(content, sourceContexts));
+      const accepted = await this.deps.steer(conversationId, steeringText(content, sourceContexts), runtime.activeRunId);
       if (!accepted) {
         setSessionInputStatus(row.id, 'queued', { effectiveDelivery: 'next', targetRunId: null });
         void this.drain(conversationId);
@@ -501,6 +544,7 @@ export class SessionInputCoordinator {
             this.publish(conversationId);
             continue;
           }
+          allowed = allowed && readSessionInputControl(conversationId).phase !== 'stopping';
           allowed = allowed && consumeConnectionResume(input) && consumeClarificationResume(input) && consumePhoneAssistance(input);
         } catch (err) {
           log.warn({ err, conversationId, runId, inputId: input.id }, 'Session input preflight failed');

@@ -81,7 +81,7 @@ export class PhoneInteractiveSession {
       if (input.phase === 'down') this.gesture = { x: input.x, y: input.y, at: Date.now() };
       else if (input.phase === 'up' || input.phase === 'cancel') {
         const start = this.gesture; this.gesture = undefined;
-        if (start) this.onGesture(Math.hypot(start.x - input.x, start.y - input.y) > 18 ? 'swipe' : Date.now() - start.at > 600 ? 'longPress' : 'tap');
+        if (start && input.phase === 'up') this.onGesture(Math.hypot(start.x - input.x, start.y - input.y) > 18 ? 'swipe' : (input.durationMs ?? Date.now() - start.at) > 600 ? 'longPress' : 'tap');
       }
     }).finally(() => { this.pending--; });
     this.queue = work; return work;

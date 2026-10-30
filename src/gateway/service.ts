@@ -1176,6 +1176,10 @@ export class GatewayService {
     return this.agentRunner.replaceLatestSessionTurn(...args);
   }
 
+  controlSessionInputs(...args: Parameters<GatewayAgentRunner['inputs']['control']>) {
+    return this.agentRunner.inputs.control(...args);
+  }
+
   getSessionInputState(...args: Parameters<GatewayAgentRunner['getSessionInputState']>) {
     return this.agentRunner.getSessionInputState(...args);
   }

@@ -51,6 +51,7 @@ export function shouldDismissClarificationForTerminal(status: AgentStreamRunStat
  */
 export function createAgentStreamMessagingCallbacks(opts: {
   chatId: string;
+  isCurrentRun?: () => boolean;
   shouldApplyStreamUpdate: (streamConversationId: string) => boolean;
   beforeAssistantDelta: () => void;
   reconcileHydratedAssistantText: boolean;
@@ -84,13 +85,14 @@ export function createAgentStreamMessagingCallbacks(opts: {
     fq,
   } = opts;
 
+  const isCurrentRun = opts.isCurrentRun ?? (() => true);
   const store = () => useChatSessionStore.getState();
 
   const reloadSessionSnapshot = () => {
     const request = { messages: store().sessions[chatId]?.messages };
     return sessionMgrRef.current
       .loadSession(chatId, 0, undefined, undefined, request.messages)
-      .then((data) => applyLoadedSessionSnapshot(chatId, data, request))
+      .then((data) => { if (isCurrentRun()) applyLoadedSessionSnapshot(chatId, data, request); })
       .catch(() => {});
   };
 
@@ -104,6 +106,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       window.clearTimeout(reviewDeltaTimer);
       reviewDeltaTimer = undefined;
     }
+    if (!isCurrentRun()) { pendingReviewDeltas.clear(); return; }
     if (pendingReviewDeltas.size === 0) return;
     const deltas = Array.from(pendingReviewDeltas.entries());
     pendingReviewDeltas.clear();
@@ -132,7 +135,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
     reloadSessionSnapshot();
   };
 
-  return {
+  const callbacks: MessagingCallbacks = {
     onTextSurface: (textSurface) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (message) => { message.textSurface = textSurface; });
@@ -340,6 +343,9 @@ export function createAgentStreamMessagingCallbacks(opts: {
       fq.dismissClarifyForSession(chatId);
     },
   };
+  return Object.fromEntries(Object.entries(callbacks).map(([name, callback]) => [name, (...args: unknown[]) => {
+    if (isCurrentRun()) return Reflect.apply(callback, undefined, args);
+  }])) as MessagingCallbacks;
 }
 
 /** Read streaming bubble from store (for finalize / tests). */

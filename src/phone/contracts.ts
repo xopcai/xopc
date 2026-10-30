@@ -14,6 +14,8 @@ export const PhoneConfigSchema = z.object({
   enabled: z.boolean().default(false),
   executionMode: PhoneExecutionModeSchema.default('collaborative'),
   adbPath: z.string().min(1).optional(),
+  hdcPath: z.string().min(1).optional(),
+  hdcVideo: z.object({ sdkJar: z.string().min(1).optional(), devecoPath: z.string().min(1).optional(), javaHome: z.string().min(1).optional() }).strict().optional(),
   autoGlmPrompt: z.enum(['current', 'upstream']).default('current'),
   autoGlmProtocol: z.enum(['current', 'upstream']).default('current'),
   autoGlmSampling: z.enum(['current', 'upstream']).default('current'),
@@ -34,6 +36,7 @@ export type PhoneConfig = z.infer<typeof PhoneConfigSchema>;
 export const PhoneDeviceSchema = z.object({
   id: z.string().uuid(), serial: z.string().min(1).max(200),
   name: z.string().trim().min(1).max(100),
+  platform: z.enum(['android', 'harmonyos']).optional(),
   enabled: z.boolean().default(true),
   appAccess: z.enum(['all', 'selected']).optional(),
   textInput: z.enum(['auto', 'manual']).optional(),
@@ -44,8 +47,8 @@ export const PhoneDeviceSchema = z.object({
 }).strict();
 export type PhoneDevice = z.infer<typeof PhoneDeviceSchema>;
 export type PhoneApplication = { packageName: string; label: string };
-export type PhoneTextInputStatus = { androidSdk: number; unicode: 'available' | 'setup_required' | 'unsupported'; method: 'scrcpy-clipboard' | 'provider-native'; keyboardRequired: false };
-export type DiscoveredPhone = { serial: string; state: string; name: string; emulator: boolean };
+export type PhoneTextInputStatus = { androidSdk?: number; unicode: 'available' | 'setup_required' | 'unsupported'; method: 'scrcpy-clipboard' | 'provider-native' | 'hdc-uitest'; keyboardRequired: false };
+export type DiscoveredPhone = { serial: string; state: string; name: string; emulator: boolean; platform?: 'android' | 'harmonyos' };
 
 const Point = z.array(z.number().finite().min(0).max(1000)).length(2);
 export const PhoneElementSelectorSchema = z.object({
@@ -75,7 +78,7 @@ export const PhoneDecisionSchema = z.discriminatedUnion('kind', [
 export type PhoneDecision = z.infer<typeof PhoneDecisionSchema>;
 export type PhoneElement = { text: string; description: string; resourceId: string; clickable: boolean; focused: boolean; password: boolean; editable?: boolean; bounds: [number, number, number, number] };
 export type PhoneObservation = {
-  frameId: string; capturedAt: number; width: number; height: number; rotation: number;
+  platform?: 'android' | 'harmonyos'; frameId: string; capturedAt: number; width: number; height: number; rotation: number;
   package: string; frame: Buffer; elements: PhoneElement[];
 };
 export const PhoneCompletionSchema = z.object({

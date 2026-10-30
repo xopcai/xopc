@@ -48,6 +48,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'session-input-control',
+    match: path => /^\/api\/sessions\/[^/]+\/input-control$/.test(path),
+    load: async () => {
+      const { registerSessionInputControlRoutes } = await import('./session-input-control.js');
+      return { register: registerSessionInputControlRoutes };
+    },
+  },
+  {
     id: 'next-turn-suggestions',
     match: path => /^\/api\/sessions\/[^/]+\/(?:next-turn-suggestion|next-turn-suggestion-feedback)$/.test(path),
     load: async () => {

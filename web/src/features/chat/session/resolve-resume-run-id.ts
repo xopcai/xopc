@@ -1,3 +1,4 @@
+import { useGatewayStore } from '@/stores/gateway-store';
 import {
   buildSessionRunPath,
   normalizeSessionActiveRunResponse,
@@ -30,10 +31,14 @@ export async function fetchSessionActiveRun(conversationId: string): Promise<Ses
 export async function resolveResumeRunId(conversationId: string): Promise<string | null> {
   const key = String(conversationId ?? '').trim();
   if (!key) return null;
+  const gatewayAtStart = useGatewayStore.getState().conversationId;
   const fallbackAtStart = readPendingAgentRunId(key);
 
   try {
     const remote = await fetchSessionActiveRun(key);
+    if (useGatewayStore.getState().conversationId !== gatewayAtStart) return null;
+    const pendingNow = readPendingAgentRunId(key);
+    if (pendingNow && pendingNow !== fallbackAtStart) return pendingNow;
     if (remote.active && remote.runId) {
       setPendingAgentRun(key, remote.runId);
       return remote.runId;
@@ -44,5 +49,5 @@ export async function resolveResumeRunId(conversationId: string): Promise<string
     /* gateway may be starting */
   }
 
-  return readPendingAgentRunId(key);
+  return useGatewayStore.getState().conversationId === gatewayAtStart ? readPendingAgentRunId(key) : null;
 }

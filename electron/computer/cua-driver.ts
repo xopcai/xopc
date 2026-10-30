@@ -22,14 +22,25 @@ import { windowsAppIdentity, windowsAppMatches, assertWindowsAppAllowed } from '
 import { readWindowsComputerIdentity, type WindowsInputState } from './windows-native.js';
 import { normalizeWindowsAccessibility } from './windows-accessibility.js';
 import { enrichWindowsInput, windowsInputAllowed } from './windows-input.js';
-import { decodeNativeBatchResult, supportsExactNativeBatch, type NativeBatchProgress } from './native-batch.js';
-import { withWindowReadiness } from './window-readiness.js';
+import { decodeNativeBatchResult, supportsExactNativeBatch, supportsNativeCapability, type NativeBatchProgress } from './native-batch.js';
+import { ReadinessPulse, withWindowReadiness } from './window-readiness.js';
+import { decodeNativeWindowCandidates, type NativeWindowCandidate } from './native-windows.js';
+import { decodeNativeProcessIdentity } from './native-process-identity.js';
 import { computerNativeInputError } from '../../src/computer/native-errors.js';
 
 const exec = promisify(execFile);
 const log = createLogger('ComputerDriver');
 type CuaSdkModule = typeof import('@trycua/cua-driver');
 type CuaSdkLoader = () => Promise<CuaSdkModule>;
+type PreparationStage = 'appCatalog' | 'processIdentity' | 'windowMetadata' | 'windowProbe' | 'capture' | 'pollWait';
+interface PreparationTiming {
+  wallMs: number; hostFocusMs: number; systemOpenMs: number; reusedPreparedFrame: boolean; reusedPendingCapture: boolean; otherMs: number;
+  stagesMs: Record<PreparationStage, number>; calls: Record<PreparationStage, number>;
+  coveredWorkspaceHints: number; observerCleanupMs: number; observerCleanupComplete?: boolean;
+  metadataSamples: Array<{ atMs: number; native: Record<string, unknown> }>;
+  readinessSamples: Array<{ atMs: number; reason: string }>;
+  captureAttempts: Array<{ atMs: number; durationMs: number; reason: string; expectedBounds: z.infer<typeof Bounds>; capturedBounds?: z.infer<typeof Bounds>; width?: number; height?: number; frameValid?: boolean; imageCount: number }>;
+}
 const Bounds = z.object({ x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() });
 const hash = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex');
 function hasWindowFrame(state: WindowStateOutput): boolean {
@@ -127,10 +138,49 @@ export class CuaComputerDriver implements ComputerDriver {
   private readonly windowsApps = new Map<string, AppInfo>();
   private windowsInput?: WindowsInputState;
   private exactNativeBatch = false;
+  private runningAppsOnly = false;
+  private foregroundAppPreparation = false;
+  private inputWindowCandidates = false;
+  private windowLayoutBounds = false;
+  private exactWindowMetadata = false;
+  private kernelProcessIdentity = false;
+  private readinessNotifications = false;
+  private preparationPulse?: ReadinessPulse;
+  private windowProcessIdentity = false;
+  private preparationIdentity?: string;
+  private readinessPid?: number;
+  private readinessNewProcess = false;
+  private readinessWindowKey?: string;
+  private unavailableReadinessKey?: string;
+  private idleTimer?: ReturnType<typeof setTimeout>;
+  private preparedFrame?: { appId: string; pid: number; windowId: bigint; processIdentity: string; capturedAt: number; state: WindowStateOutput };
+  private preparationTiming?: PreparationTiming;
+  private preparationClock = 0;
+  getLastPreparationTiming() { return this.preparationTiming ? structuredClone(this.preparationTiming) : undefined; }
+  private async measurePreparation<T>(stage: PreparationStage, work: () => Promise<T>): Promise<T> {
+    const metrics = this.preparingSince === undefined ? undefined : this.preparationTiming;
+    if (!metrics) return work();
+    const started = performance.now(); metrics.calls[stage]++;
+    try { return await work(); } finally { metrics.stagesMs[stage] += performance.now() - started; }
+  }
+  private preparationSample(reason: string): void {
+    if (this.preparingSince !== undefined && this.preparationTiming && this.preparationTiming.readinessSamples.length < 256) {
+      this.preparationTiming.readinessSamples.push({ atMs: performance.now() - this.preparationClock, reason });
+    }
+  }
   private captureStats = { attempts: 0, invalidFrames: 0, recovered: 0, exhausted: 0 };
   private preparingSince?: number;
   getPreparationState() { return this.preparingSince === undefined ? undefined : { startedAt: this.preparingSince }; }
   getCaptureStats() { return { ...this.captureStats }; }
+  async validatePreviewTarget(target: ComputerTarget, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    if (!this.client || await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+    await this.assertWindowApp(target, signal);
+    const windows = await this.listWindows(target.pid, signal);
+    const window = windows.find(item => item.windowId.toString() === target.windowId);
+    if (!window || window.pid !== target.pid) throw new Error('COMPUTER_WINDOW_CHANGED');
+    signal.throwIfAborted();
+  }
   constructor(
     private readonly binary: string,
     private readonly bundleId: string,
@@ -138,7 +188,19 @@ export class CuaComputerDriver implements ComputerDriver {
     private readonly platform: NodeJS.Platform = process.platform,
   ) {}
 
+  /** Start only the private transport; does not select or authorize a target. */
+  async warmup(): Promise<void> { await this.start(); }
+  /** Broker calls this only after completed work, with no dispatch in flight. */
+  async idle(): Promise<void> {
+    if (this.starting || this.stopping || this.cleanupUnconfirmed) { await this.stop(); return; }
+    this.preparedFrame = undefined; this.elements = []; this.frame = undefined;
+    this.observedTarget = undefined; this.windowsInput = undefined;
+    clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => { void this.stop().catch(error => log.warn({ err: error }, 'Idle driver cleanup failed')); }, 30_000);
+    this.idleTimer.unref();
+  }
   private async start(): Promise<void> {
+    clearTimeout(this.idleTimer);
     if (this.cleanupUnconfirmed) throw new Error('COMPUTER_DRIVER_CLEANUP_UNCONFIRMED');
     if (this.stopping) throw new Error('COMPUTER_DRIVER_STOPPING');
     if (this.client) return;
@@ -176,7 +238,22 @@ export class CuaComputerDriver implements ComputerDriver {
       || metadata.driverVersion !== connection.driverVersion || metadata.contractVersion !== connection.contractVersion) {
       throw new Error('COMPUTER_DRIVER_HOST_IDENTITY_MISMATCH');
     }
-    this.exactNativeBatch = typeof client.listToolsJson === 'function' && supportsExactNativeBatch(await client.listToolsJson());
+    const inventory = typeof client.listToolsJson === 'function' ? await client.listToolsJson() : '';
+    this.exactNativeBatch = supportsExactNativeBatch(inventory);
+    this.runningAppsOnly = this.platform === 'darwin' && supportsNativeCapability(inventory, 'list_apps', 'apps.running.v1');
+    this.foregroundAppPreparation = this.platform === 'darwin';
+    this.inputWindowCandidates = this.platform === 'darwin'
+      && supportsNativeCapability(inventory, 'list_windows', 'window.candidates.positive.v1');
+    this.windowLayoutBounds = this.platform === 'darwin'
+      && supportsNativeCapability(inventory, 'list_windows', 'window.layout_bounds.v1');
+    this.exactWindowMetadata = this.platform === 'darwin'
+      && supportsNativeCapability(inventory, 'list_windows', 'window.metadata.exact.v1');
+    this.windowProcessIdentity = this.platform === 'darwin'
+      && supportsNativeCapability(inventory, 'list_windows', 'window.process_identity.v1');
+    this.readinessNotifications = this.platform === 'darwin'
+      && supportsNativeCapability(inventory, 'list_windows', 'window.readiness.notifications.v1');
+    this.kernelProcessIdentity = this.platform === 'darwin'
+      && supportsNativeCapability(inventory, 'list_apps', 'process.identity.kernel.v1');
     this.setupStage = 'PERMISSIONS';
     const permissions = await this.callUntyped('check_permissions', {});
     this.assertGeneration(generation);
@@ -200,10 +277,18 @@ export class CuaComputerDriver implements ComputerDriver {
       return { data, content };
     });
   }
-  private async listApps(signal?: AbortSignal, query?: string): Promise<AppInfo[]> {
+  private async listApps(signal?: AbortSignal, query?: string, runningOnly = false): Promise<AppInfo[]> {
     signal?.throwIfAborted();
     if (!this.client) throw new Error('COMPUTER_DRIVER_OFFLINE');
-    const result = await this.client.listApps({}, signal ? { signal } : undefined);
+    if (runningOnly && this.runningAppsOnly) {
+      const result = await this.measurePreparation('appCatalog', () => this.callUntyped('list_apps', { running_only: true }, signal));
+      const data = z.object({ apps: z.array(z.object({ pid: z.number().int().positive(), name: z.string(),
+        running: z.literal(true), active: z.boolean(), bundle_id: z.string().optional(), launch_path: z.string().optional(),
+        kind: z.string().optional(), last_used: z.string().optional() })) }).parse(result.data);
+      return data.apps.map(item => ({ pid: item.pid, name: item.name, running: true, active: item.active,
+        bundleId: item.bundle_id, launchPath: item.launch_path, kind: item.kind, lastUsed: item.last_used }));
+    }
+    const result = await this.measurePreparation('appCatalog', () => this.client!.listApps({}, signal ? { signal } : undefined));
     signal?.throwIfAborted();
     if (this.platform !== 'win32') return result.apps;
     const apps: AppInfo[] = [];
@@ -236,12 +321,30 @@ export class CuaComputerDriver implements ComputerDriver {
     }
     return apps.filter((app, i) => !apps.slice(0, i).some(other => other.bundleId === app.bundleId && other.pid === app.pid));
   }
-  private async listWindows(pid: number, signal?: AbortSignal): Promise<WindowInfo[]> {
+  private async listWindows(pid: number, signal?: AbortSignal, windowId?: bigint): Promise<NativeWindowCandidate[]> {
     signal?.throwIfAborted();
     if (!this.client) throw new Error('COMPUTER_DRIVER_OFFLINE');
-    const result = await this.client.listWindows({ pid }, signal ? { signal } : undefined);
+    const pulse = this.preparationPulse; const notificationVersion = pulse?.version;
+    const boundIdentity = this.preparingSince !== undefined && this.windowProcessIdentity ? this.preparationIdentity : undefined;
+    if (boundIdentity || (this.inputWindowCandidates && this.preparingSince !== undefined) || (this.exactWindowMetadata && windowId !== undefined)) {
+      const result = await this.measurePreparation('windowMetadata', () => this.callUntyped('list_windows', { pid, ...(boundIdentity ? { include_process_identity: true } : {}), ...(this.inputWindowCandidates ? { input_candidates: true } : {}), ...(this.windowLayoutBounds && this.preparingSince !== undefined ? { include_layout_bounds: true } : {}),
+        ...(this.exactWindowMetadata && windowId !== undefined ? { window_id: this.jsonWindowId(windowId) } : {}) }, signal));
+      signal?.throwIfAborted();
+      if (notificationVersion !== undefined && pulse!.acknowledge(notificationVersion) && this.preparationTiming) this.preparationTiming.coveredWorkspaceHints++;
+      if (boundIdentity && decodeNativeProcessIdentity(result.data.process_identity, pid) !== boundIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+      if (this.preparationTiming && this.preparingSince !== undefined && result.data.metadata_timing && this.preparationTiming.metadataSamples.length < 128) {
+        this.preparationTiming.metadataSamples.push({ atMs: performance.now() - this.preparationClock, native: result.data.metadata_timing as Record<string, unknown> });
+      }
+      return this.noteReadinessWindows(decodeNativeWindowCandidates(result.data, pid), pid);
+    }
+    const result = await this.measurePreparation('windowMetadata', () => this.client!.listWindows({ pid }, signal ? { signal } : undefined));
     signal?.throwIfAborted();
-    return result.windows.filter(window => window.pid === pid);
+    if (notificationVersion !== undefined && pulse!.acknowledge(notificationVersion) && this.preparationTiming) this.preparationTiming.coveredWorkspaceHints++;
+    return this.noteReadinessWindows(result.windows.filter(window => window.pid === pid), pid);
+  }
+  private noteReadinessWindows<T extends NativeWindowCandidate>(windows: T[], pid: number): T[] {
+    if (this.preparingSince !== undefined) this.readinessWindowKey = `${pid}:${windows.map(w => String(w.windowId)).sort().join(',')}`;
+    return windows;
   }
   private async getWindowState(pid: number, windowId: bigint, options: {
     includeScreenshot?: boolean;
@@ -251,7 +354,7 @@ export class CuaComputerDriver implements ComputerDriver {
   }, signal?: AbortSignal): Promise<WindowStateOutput> {
     signal?.throwIfAborted();
     if (!this.client) throw new Error('COMPUTER_DRIVER_OFFLINE');
-    const result = await this.client.getWindowState({ pid, windowId, includeAccessibilityTree: true, treeFormat: 'both', ...options }, signal ? { signal } : undefined);
+    const result = await this.measurePreparation(options.includeScreenshot ? 'capture' : 'windowProbe', () => this.client!.getWindowState({ pid, windowId, includeAccessibilityTree: true, treeFormat: 'both', ...options }, signal ? { signal } : undefined));
     signal?.throwIfAborted();
     return result;
   }
@@ -261,10 +364,18 @@ export class CuaComputerDriver implements ComputerDriver {
     return value;
   }
   private async processIdentity(pid: number): Promise<string> {
-    if (this.platform === 'win32') return (await readWindowsComputerIdentity(pid)).processIdentity;
-    const { stdout } = await exec('/bin/ps', ['-p', String(pid), '-o', 'lstart='], { timeout: 2000 });
-    if (!stdout.trim()) throw new Error('COMPUTER_PROCESS_EXITED');
-    return `${pid}:${stdout.trim()}`;
+    return this.measurePreparation('processIdentity', async () => {
+      if (this.platform === 'win32') return (await readWindowsComputerIdentity(pid)).processIdentity;
+      if (this.kernelProcessIdentity) {
+        let result: Awaited<ReturnType<CuaComputerDriver['callUntyped']>>;
+        try { result = await this.callUntyped('list_apps', { process_identity_pid: pid }); }
+        catch { throw new Error('COMPUTER_PROCESS_CHANGED'); }
+        return decodeNativeProcessIdentity(result.data.process_identity, pid);
+      }
+      const { stdout } = await exec('/bin/ps', ['-p', String(pid), '-o', 'lstart='], { timeout: 2000 });
+      if (!stdout.trim()) throw new Error('COMPUTER_PROCESS_EXITED');
+      return `${pid}:${stdout.trim()}`;
+    });
   }
   private async assertWindowApp(target: Pick<ComputerTarget, 'appId' | 'pid' | 'windowId'> & Partial<Pick<ComputerTarget, 'processIdentity'>>, signal: AbortSignal, includeInput = false) {
     if (this.platform !== 'win32') return;
@@ -279,8 +390,8 @@ export class CuaComputerDriver implements ComputerDriver {
     if (target.processIdentity && native.processIdentity !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     return native;
   }
-  private async appWindows(pid: number, appId: string, signal: AbortSignal): Promise<WindowInfo[]> {
-    const windows = await this.listWindows(pid, signal);
+  private async appWindows(pid: number, appId: string, signal: AbortSignal, windowId?: bigint): Promise<NativeWindowCandidate[]> {
+    const windows = await this.listWindows(pid, signal, windowId);
     if (this.platform !== 'win32') return windows;
     const allowed: WindowInfo[] = [];
     for (const window of windows) {
@@ -315,56 +426,129 @@ export class CuaComputerDriver implements ComputerDriver {
     return [...result.values()].sort((a, b) => Number(b.running) - Number(a.running) || a.name.localeCompare(b.name));
   }
   async resolveTarget(appId: string, signal: AbortSignal, options: { prepare: boolean; windowRef?: string }): Promise<ComputerTarget> {
+    this.preparedFrame = undefined;
     this.assertAppAllowed(appId);
     await this.start(); signal.throwIfAborted();
     if (!options.prepare) return this.resolveWindow(appId, signal, options);
     this.preparingSince = Date.now();
+    const preparationStarted = performance.now();
+    this.preparationClock = preparationStarted;
+    const stages = () => ({ appCatalog: 0, processIdentity: 0, windowMetadata: 0, windowProbe: 0, capture: 0, pollWait: 0 });
+    this.preparationTiming = { wallMs: 0, hostFocusMs: 0, systemOpenMs: 0, reusedPreparedFrame: false, reusedPendingCapture: false, otherMs: 0,
+      stagesMs: stages(), calls: stages(), coveredWorkspaceHints: 0, observerCleanupMs: 0, metadataSamples: [], readinessSamples: [], captureAttempts: [] };
+    const pulse = new ReadinessPulse(); this.preparationPulse = pulse;
+    const subscriptions: number[] = [];
+    let workspace: typeof import('electron').systemPreferences | undefined;
+    if (this.readinessNotifications) {
+      workspace = (await import('electron')).systemPreferences;
+      try {
+        for (const event of ['NSWorkspaceDidLaunchApplicationNotification', 'NSWorkspaceDidActivateApplicationNotification', 'NSWorkspaceActiveSpaceDidChangeNotification']) {
+          subscriptions.push(workspace.subscribeWorkspaceNotification(event, () => pulse.notify()));
+        }
+      } catch { for (const id of subscriptions.splice(0)) workspace.unsubscribeWorkspaceNotification(id); }
+    }
     try {
-      return await withWindowReadiness(signal, (readySignal, poll) => this.resolveWindow(appId, readySignal, options, poll));
-    } finally { this.preparingSince = undefined; }
+      return await withWindowReadiness(signal, (readySignal, poll) => this.resolveWindow(appId, readySignal, options, poll), ms => {
+        this.preparationTiming!.stagesMs.pollWait += ms; this.preparationTiming!.calls.pollWait++;
+      }, this.readinessNotifications ? async (waitSignal, cadence) => {
+        if (!this.readinessPid) { await pulse.wait(waitSignal, subscriptions.length ? 128 : cadence); return; }
+        // A newly launched process may not have an AX service until it publishes
+        // a window. Workspace notifications cover launch; bounded fallback covers
+        // apps without a window-created notification, without premature AX probes.
+        if (this.readinessNewProcess && this.readinessWindowKey === `${this.readinessPid}:`) {
+          this.preparationSample('wake_waiting_window'); await pulse.wait(waitSignal, cadence); return;
+        }
+        if (this.unavailableReadinessKey && this.unavailableReadinessKey === this.readinessWindowKey) {
+          this.preparationSample('wake_subscription_unavailable');
+          await pulse.wait(waitSignal, cadence); return;
+        }
+        const result = await this.callUntyped('list_windows', { pid: this.readinessPid, readiness_wait_ms: cadence }, waitSignal);
+        this.preparationSample(`wake_${result.data.readiness_wake}`);
+        if (result.data.readiness_wake === 'unsupported') { this.unavailableReadinessKey = this.readinessWindowKey; await pulse.wait(waitSignal, cadence); }
+        else if (!['notification', 'watchdog'].includes(String(result.data.readiness_wake))) throw new Error('COMPUTER_DRIVER_INVALID_RESULT');
+      } : undefined);
+    } finally {
+      for (const id of subscriptions) workspace!.unsubscribeWorkspaceNotification(id);
+      if (this.readinessNotifications && this.readinessPid && this.client) {
+        const cleanupStarted = performance.now();
+        await cleanupDeadline(() => this.callUntyped('list_windows', { pid: this.readinessPid, readiness_end: true }).then(result => {
+          if (typeof result.data.readiness_cleanup_complete === 'boolean') this.preparationTiming!.observerCleanupComplete = result.data.readiness_cleanup_complete;
+        }), 128).catch(() => {});
+        this.preparationTiming!.observerCleanupMs = performance.now() - cleanupStarted;
+      }
+      this.preparationPulse = undefined;
+      this.preparationIdentity = undefined;
+      this.readinessNewProcess = false;
+      this.readinessPid = undefined; this.readinessWindowKey = undefined; this.unavailableReadinessKey = undefined;
+      this.preparingSince = undefined; const timing = this.preparationTiming;
+      timing.wallMs = performance.now() - preparationStarted;
+      timing.otherMs = Math.max(0, timing.wallMs - timing.hostFocusMs - timing.systemOpenMs - timing.observerCleanupMs
+        - Object.values(timing.stagesMs).reduce((sum, value) => sum + value, 0));
+    }
   }
   private async resolveWindow(appId: string, signal: AbortSignal, options: { prepare: boolean; windowRef?: string },
-    poll?: <T>(sample: () => Promise<T | undefined>) => Promise<T>): Promise<ComputerTarget> {
+    poll?: <T>(sample: () => Promise<T | undefined>, options?: { intervalMs?: number }) => Promise<T>): Promise<ComputerTarget> {
     let prepared = false;
     let activated = false;
-    let rows = await this.listApps(signal);
-    if (!rows.some(app => app.bundleId === appId)) throw new Error('COMPUTER_APP_NOT_FOUND');
+    let rows = await this.listApps(signal, undefined, true);
+    const hostPreparation = options.prepare && this.foregroundAppPreparation;
+    if (!rows.some(app => app.bundleId === appId) && this.runningAppsOnly && !hostPreparation) rows = await this.listApps(signal);
+    if (!rows.some(app => app.bundleId === appId) && !hostPreparation) throw new Error('COMPUTER_APP_NOT_FOUND');
     if (options.prepare && !rows.some(app => app.bundleId === appId && app.pid > 0)) {
+      this.readinessNewProcess = true;
       // Never accept URLs, argv, debug ports or a model-supplied launch path.
       const launch = this.platform === 'win32' ? windowsAppIdentity(this.windowsApps.get(appId)!)!.launch : { bundle_id: appId };
-      await this.callUntyped('launch_app', launch, signal);
+      if (hostPreparation) await this.prepareApplication(appId, signal);
+      else await this.callUntyped('launch_app', launch, signal);
       prepared = true;
+      activated = hostPreparation;
       rows = await poll!(async () => {
-        const next = await this.listApps(signal);
-        return next.some(app => app.bundleId === appId && app.pid > 0) ? next : undefined;
-      });
+        const next = await this.listApps(signal, undefined, true);
+        const found = next.some(app => app.bundleId === appId && app.pid > 0);
+        this.preparationSample(found ? 'process_ready' : 'waiting_process');
+        return found ? next : undefined;
+      }, { intervalMs: 32 });
     }
     let matches = rows.filter(app => app.bundleId === appId && app.pid > 0);
     if (!matches.length) throw new Error('COMPUTER_APP_NOT_RUNNING');
     if (matches.length !== 1) throw new Error('COMPUTER_APP_INSTANCE_AMBIGUOUS');
     const pid = matches[0].pid;
+    this.readinessPid = pid;
     const processIdentity = await this.processIdentity(pid);
+    if (this.preparingSince !== undefined) this.preparationIdentity = processIdentity;
     let windows = await this.appWindows(pid, appId, signal);
     const checkProcess = async () => {
       signal.throwIfAborted();
       if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     };
+    const checkedWindows = async (windowId?: bigint) => {
+      if (!this.windowProcessIdentity || this.preparingSince === undefined) await checkProcess();
+      return this.appWindows(pid, appId, signal, windowId);
+    };
     if (options.prepare && !options.windowRef && !windows.length) {
       if (!prepared) {
         await checkProcess();
-        await this.callUntyped('bring_to_front', { pid }, signal);
+        if (hostPreparation) await this.prepareApplication(appId, signal);
+        else await this.callUntyped('bring_to_front', { pid }, signal);
         activated = true;
         prepared = true;
       }
       windows = await poll!(async () => {
-        await checkProcess();
-        const next = await this.appWindows(pid, appId, signal);
-        return next.length ? next : undefined;
-      });
+        const next = await checkedWindows();
+        const found = next.some(window => Bounds.safeParse(window.bounds).success);
+        this.preparationSample(found ? 'window_published' : 'waiting_window');
+        return found ? next : undefined;
+      }, { intervalMs: 32 });
+    }
+    if (hostPreparation && prepared && !windows.some(window => Bounds.safeParse(window.bounds).success)) {
+      windows = await poll!(async () => {
+        const next = await checkedWindows();
+        return next.some(window => Bounds.safeParse(window.bounds).success) ? next : undefined;
+      }, { intervalMs: 32 });
     }
     // A hidden app can publish many proxy surfaces before its main window is restored.
     // Preparation authorizes app activation, but not a guessed window or screenshot.
-    if (options.prepare && !options.windowRef && windows.length > 1 && windows.every(window => !window.isOnScreen)) {
+    if (options.prepare && !hostPreparation && !options.windowRef && windows.length > 1 && windows.every(window => !window.isOnScreen)) {
       if (windows.every(window => window.onCurrentSpace === false)) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
       if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
       if (!activated) {
@@ -372,12 +556,11 @@ export class CuaComputerDriver implements ComputerDriver {
         activated = true;
       }
       prepared = true;
-      matches = (await this.listApps(signal)).filter(app => app.bundleId === appId && app.pid > 0);
+      matches = (await this.listApps(signal, undefined, true)).filter(app => app.bundleId === appId && app.pid > 0);
       if (matches.length !== 1 || matches[0].pid !== pid || await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
       const originalIds = new Set(windows.map(window => window.windowId));
       windows = await poll!(async () => {
-        await checkProcess();
-        const next = (await this.appWindows(pid, appId, signal)).filter(window => originalIds.has(window.windowId));
+        const next = (await checkedWindows()).filter(window => originalIds.has(window.windowId));
         if (!next.length) throw new Error('COMPUTER_WINDOW_CHANGED');
         if (next.every(window => window.onCurrentSpace === false)) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
         return next.some(window => window.isOnScreen) ? next : undefined;
@@ -418,7 +601,18 @@ export class CuaComputerDriver implements ComputerDriver {
       // order cannot establish which document the user's task authorized.
     }
     if (!window && windows.length > 1) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
-    if (window?.onCurrentSpace === false) throw new ComputerTargetError('COMPUTER_WINDOW_OTHER_SPACE', candidates);
+    if (hostPreparation && window && (!window.isOnScreen || window.onCurrentSpace === false)) {
+      // The application may have published an accessory before its document.
+      // Select the exact window first; preparation never follows a replacement.
+      if (!activated) {
+        await checkProcess();
+        await this.prepareApplication(appId, signal);
+        await checkProcess();
+      }
+      activated = true;
+      prepared = true;
+    }
+    if (window?.onCurrentSpace === false && !hostPreparation) throw new ComputerTargetError('COMPUTER_WINDOW_OTHER_SPACE', candidates);
     // Background delivery needs a visible window, not foreground focus. Avoid
     // unnecessary activation, which can steal focus or be refused by the OS.
     if (window && options.prepare && !window.isOnScreen && !activated) {
@@ -430,35 +624,94 @@ export class CuaComputerDriver implements ComputerDriver {
     }
     if (window && prepared) {
       const windowId = window.windowId;
-      let previousBounds: string | undefined;
+      // Window publication/selection already sampled this exact surface once.
+      // Count that sample instead of discarding it and waiting another interval.
+      let previousBounds = window.isOnScreen && window.onCurrentSpace !== false && Bounds.safeParse(window.bounds).success
+        ? JSON.stringify(window.bounds) : undefined;
+      let pendingCapture: { state: WindowStateOutput; capturedAt: number } | undefined;
       window = await poll!(async () => {
-        await checkProcess();
-        const current = (await this.appWindows(pid, appId, signal)).find(item => item.windowId === windowId);
+        const current = (await checkedWindows(windowId)).find(item => item.windowId === windowId);
         if (!current) throw new Error('COMPUTER_WINDOW_CHANGED');
-        if (current.onCurrentSpace === false) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
+        if (current.onCurrentSpace === false) {
+          if (hostPreparation) { previousBounds = undefined; this.preparationSample('other_space'); return; }
+          throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
+        }
         const bounds = Bounds.safeParse(current.bounds);
-        if (!current.isOnScreen || !bounds.success) { previousBounds = undefined; return; }
+        if (!current.isOnScreen || !bounds.success) { previousBounds = undefined; this.preparationSample('not_visible'); return; }
         const fingerprint = JSON.stringify(bounds.data);
+        // Logical layout and composited geometry diverge during launch/restore
+        // animation, even when consecutive compositor samples briefly match.
+        if (current.layoutBounds && JSON.stringify(current.layoutBounds) !== fingerprint) {
+          previousBounds = undefined; this.preparationSample('layout_pending'); return;
+        }
         const stable = fingerprint === previousBounds;
         previousBounds = fingerprint;
-        if (!stable) return;
-        const state = await this.getWindowState(pid, windowId, { includeScreenshot: true, maxElements: 2, maxDepth: 2, maxDimension: 1600 }, signal);
+        if (!stable) { this.preparationSample('geometry_changed'); return; }
+        this.preparationSample('geometry_stable');
+        const reusable = pendingCapture && performance.now() - pendingCapture.capturedAt < 250
+          && JSON.stringify(pendingCapture.state.windowBounds) === fingerprint;
+        const captureStarted = performance.now();
+        let state: WindowStateOutput;
+        let capturedAt: number;
+        if (reusable) {
+          state = pendingCapture!.state; capturedAt = pendingCapture!.capturedAt;
+          this.preparationTiming!.reusedPendingCapture = true;
+          this.preparationSample('capture_reused_after_bounds');
+          this.captureStats.recovered++;
+        } else {
+          if (pendingCapture) pendingCapture.state.images.length = 0;
+          pendingCapture = undefined;
+          this.captureStats.attempts++;
+          state = await this.getWindowState(pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+          capturedAt = performance.now();
+        }
         if (state.pid !== pid || state.windowId !== windowId) throw new Error('COMPUTER_CAPTURE_TARGET_MISMATCH');
         if (state.elements?.some(element => element.role === 'AXButton' && element.label === 'WindowSharingSessionButton')) throw new Error('COMPUTER_WINDOW_CHANGED');
         const capturedBounds = Bounds.safeParse(state.windowBounds);
         const valid = hasWindowFrame(state) && capturedBounds.success && JSON.stringify(capturedBounds.data) === fingerprint;
-        state.images.length = 0;
+        if (!reusable && this.preparationTiming && this.preparationTiming.captureAttempts.length < 32) this.preparationTiming.captureAttempts.push({
+          atMs: performance.now() - this.preparationClock, durationMs: performance.now() - captureStarted,
+          reason: !hasWindowFrame(state) ? 'frame_unavailable' : !capturedBounds.success ? 'bounds_unavailable' : !valid ? 'bounds_changed' : 'ready',
+          expectedBounds: bounds.data, capturedBounds: capturedBounds.success ? capturedBounds.data : undefined,
+          width: state.screenshotWidth, height: state.screenshotHeight, frameValid: state.screenshotFrameValid, imageCount: state.images.length,
+        });
+        this.preparationSample(valid ? 'ready' : 'capture_invalid');
+        if (valid) this.preparedFrame = { appId, pid, windowId, processIdentity, capturedAt, state };
+        else {
+          this.captureStats.invalidFrames++;
+          // A native-valid frame with different geometry may become the next
+          // stable sample. Recheck metadata without repeating AX/pixel capture.
+          if (hasWindowFrame(state)) pendingCapture = { state, capturedAt };
+          else state.images.length = 0;
+        }
         return valid ? current : undefined;
-      });
+      }, { intervalMs: 16 });
     }
     if (!window?.isOnScreen) throw new ComputerTargetError(window ? 'COMPUTER_WINDOW_HIDDEN' : 'COMPUTER_WINDOW_REQUIRED', candidates);
     if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     return { appId, pid, processIdentity, windowId: window.windowId.toString(), width: Math.round(window.bounds.width), height: Math.round(window.bounds.height), geometryRevision: hash(JSON.stringify(window.bounds)) };
   }
+  private async prepareApplication(appId: string, signal: AbortSignal): Promise<void> {
+    if (!/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+$/.test(appId)) throw new Error('COMPUTER_APP_ID_INVALID');
+    signal.throwIfAborted();
+    // LaunchServices attributes activation to the visible host, not its
+    // background actuator. Closed argv; no shell, path, URL or app arguments.
+    try {
+      const focusStarted = performance.now();
+      const { app } = await import('electron');
+      app.focus({ steal: true });
+      if (this.preparationTiming) this.preparationTiming.hostFocusMs += performance.now() - focusStarted;
+      const openStarted = performance.now();
+      await exec('/usr/bin/open', ['-b', appId], { signal, timeout: 5000 });
+      if (this.preparationTiming) this.preparationTiming.systemOpenMs += performance.now() - openStarted;
+    }
+    catch { signal.throwIfAborted(); throw new Error('COMPUTER_APP_PREPARATION_REFUSED'); }
+    signal.throwIfAborted();
+  }
   async observe(target: ComputerTarget, signal: AbortSignal): Promise<DriverObservation> {
+    const prepared = this.preparedFrame; this.preparedFrame = undefined;
     this.elements = []; this.frame = undefined; this.observedTarget = undefined; this.windowsInput = undefined;
     if (this.platform === 'win32') await this.assertWindowApp(target, signal);
-    else if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     const windowId = BigInt(target.windowId);
     let state: WindowStateOutput;
     const recoveryDelays = [100, 300, 900];
@@ -468,8 +721,21 @@ export class CuaComputerDriver implements ComputerDriver {
       if (this.platform === 'win32') {
         if (attempt > 0) await this.assertWindowApp(target, signal);
       } else if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
-      this.captureStats.attempts++;
-      state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+      let reusable = attempt === 0 && prepared?.appId === target.appId && prepared.pid === target.pid && prepared.windowId === windowId
+        && prepared.processIdentity === target.processIdentity && performance.now() - prepared.capturedAt < 250;
+      if (reusable) {
+        const current = (await this.appWindows(target.pid, target.appId, signal, windowId)).find(window => window.windowId === windowId);
+        reusable = !!current?.isOnScreen && current.onCurrentSpace !== false
+          && JSON.stringify(current.bounds) === JSON.stringify(prepared!.state.windowBounds)
+          && performance.now() - prepared!.capturedAt < 250;
+      }
+      if (reusable) {
+        state = prepared!.state;
+        if (this.preparationTiming) this.preparationTiming.reusedPreparedFrame = true;
+      } else {
+        this.captureStats.attempts++;
+        state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+      }
       signal.throwIfAborted();
       // A resize/render transition can invalidate the optional pixel frame while
       // retaining the exact AX window. Re-capture only that window; never accept
@@ -650,6 +916,7 @@ export class CuaComputerDriver implements ComputerDriver {
   }
   async perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal,
     onProgress?: (index: number, dispatch: 'notStarted' | 'started' | 'completed' | 'unknown') => void): Promise<void> {
+    this.preparedFrame = undefined;
     const timer = new ComputerInputTimer(this.platform === 'win32');
     this.lastInputTiming = undefined;
     this.inputTimer = timer;
@@ -828,6 +1095,7 @@ export class CuaComputerDriver implements ComputerDriver {
     }
   }
   stop(): Promise<void> {
+    clearTimeout(this.idleTimer);
     this.generation++;
     if (!this.stopping) {
       const starting = this.starting;
@@ -842,10 +1110,17 @@ export class CuaComputerDriver implements ComputerDriver {
     return this.stopping;
   }
   private async cleanup(): Promise<void> {
+    this.preparedFrame = undefined;
     this.elements = []; this.frame = undefined; this.observedTarget = undefined; this.windowsInput = undefined;
     const client = this.client; this.client = undefined;
     this.sdk = undefined;
     this.exactNativeBatch = false;
+    this.runningAppsOnly = false;
+    this.foregroundAppPreparation = false;
+    this.inputWindowCandidates = false;
+    this.windowLayoutBounds = false;
+    this.exactWindowMetadata = false;
+    this.kernelProcessIdentity = false; this.readinessNotifications = false; this.windowProcessIdentity = false; this.preparationIdentity = undefined; this.readinessPid = undefined;
     const host = this.host;
     // A broken RPC connection must not prevent the owned daemon from being stopped.
     if (client) await cleanupDeadline(() => client.shutdown(), 750).catch(() => {});

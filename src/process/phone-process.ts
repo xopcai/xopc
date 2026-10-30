@@ -20,6 +20,6 @@ export function spawnPhoneCommand(program: string, args: string[]): ChildProcess
   return spawn(program, args, { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
 }
 
-export function spawnPhoneInteractiveCommand(program: string, args: string[]) {
-  return spawn(program, args, { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+export function spawnPhoneInteractiveCommand(program: string, args: string[], captureStderr = false) {
+  return spawn(program, args, { stdio: ['pipe', 'pipe', captureStderr ? 'pipe' : 'ignore'], windowsHide: true });
 }

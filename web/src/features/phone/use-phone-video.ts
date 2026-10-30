@@ -5,11 +5,12 @@ import { phoneClientId } from './phone-live-api';
 
 type Geometry = { width: number; height: number; version: number; codec: string };
 type VideoState = { status: 'connecting' | 'playing' | 'blocked' | 'fallback'; geometry?: Geometry; error?: string; fps: number; ackMs?: number; frames: number };
-export function usePhoneVideo(conversationId: string, sessionId: string, enabled: boolean, canvas: RefObject<HTMLCanvasElement | null>, epoch: number | undefined, ownControl = false) {
+export function usePhoneVideo(conversationId: string, sessionId: string, enabled: boolean, canvas: RefObject<HTMLCanvasElement | null>, epoch: number | undefined, ownControl = false, startupTimeoutMs = 8000) {
   const [state, setState] = useState<VideoState>({ status: 'connecting', fps: 0, frames: 0 });
   const [attempt, setAttempt] = useState(0);
   const current = useRef({ epoch, geometry: undefined as Geometry | undefined }); current.current.epoch = epoch;
   const socket = useRef<WebSocket | null>(null); const seq = useRef(0); const down = useRef(false);
+  const gestureAt = useRef(0);
   const move = useRef<number[] | undefined>(undefined); const moveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const sendTimes = useRef(new Map<number, number>()); const ackMs = useRef<number | undefined>(undefined);
   const sendPointer = useCallback((phase: 'down' | 'move' | 'up' | 'cancel', point: number[]) => {
@@ -18,7 +19,7 @@ export function usePhoneVideo(conversationId: string, sessionId: string, enabled
     if (ws.bufferedAmount > 16 * 1024) { ws.close(); return false; }
     const id = ++seq.current; sendTimes.current.set(id, performance.now());
     if (sendTimes.current.size > 120) { ws.close(); return false; }
-    ws.send(JSON.stringify({ type: 'pointer', phase, seq: id, epoch: current.current.epoch, geometry: g.version, x: point[0], y: point[1] })); return true;
+    ws.send(JSON.stringify({ type: 'pointer', phase, ...(phase === 'up' ? { durationMs: Math.min(60000, Math.max(0, Math.round(performance.now() - gestureAt.current))) } : {}), seq: id, epoch: current.current.epoch, geometry: g.version, x: point[0], y: point[1] })); return true;
   }, []);
   const cancel = useCallback(() => {
     clearTimeout(moveTimer.current); moveTimer.current = undefined; move.current = undefined;
@@ -33,7 +34,7 @@ export function usePhoneVideo(conversationId: string, sessionId: string, enabled
   }, [sendPointer]);
   const pointer = useCallback((phase: 'down' | 'move' | 'up' | 'cancel', point: number[]) => {
     if (phase === 'cancel') { cancel(); return; }
-    if (phase === 'down') { cancel(); down.current = sendPointer('down', point); return; }
+    if (phase === 'down') { cancel(); gestureAt.current = performance.now(); down.current = sendPointer('down', point); return; }
     if (!down.current) return;
     if (phase === 'move') {
       move.current = point;
@@ -54,7 +55,7 @@ export function usePhoneVideo(conversationId: string, sessionId: string, enabled
     setState({ status: 'connecting', fps: 0, frames: 0 });
     const clear = () => { const element = canvas.current; if (element) element.getContext('2d')?.clearRect(0, 0, element.width, element.height); };
     const fallback = (error: string) => { if (disposed) return; clearTimeout(firstTimer); renderAllowed = false; clear(); setState(s => ({ ...s, status: 'fallback', error })); socket.current?.close(); };
-    const firstTimer = setTimeout(() => { if (!frames) fallback('Phone video first frame timed out'); }, 8000);
+    const firstTimer = setTimeout(() => { if (!frames) fallback('Phone video first frame timed out'); }, startupTimeoutMs);
     const statsTimer = setInterval(() => {
       const at = performance.now(); const fps = (frames - previousFrames) * 1000 / (at - lastAt); previousFrames = frames; lastAt = at;
       if (!disposed) setState(s => ({ ...s, fps, frames, ackMs: ackMs.current }));
@@ -117,6 +118,6 @@ export function usePhoneVideo(conversationId: string, sessionId: string, enabled
     void connect(); window.addEventListener('blur', cancel);
     return () => { disposed = true; cancel(); clearTimeout(firstTimer); clearInterval(statsTimer); window.removeEventListener('blur', cancel);
       socket.current?.close(); socket.current = null; current.current.geometry = undefined; sendTimes.current.clear(); if (decoder && decoder.state !== 'closed') decoder.close(); clear(); };
-  }, [conversationId, sessionId, enabled, canvas, cancel, flushMove, attempt, ownControl, ownControl ? epoch : 0]);
+  }, [conversationId, sessionId, enabled, canvas, cancel, flushMove, attempt, ownControl, ownControl ? epoch : 0, startupTimeoutMs]);
   return { ...state, pointer, cancel, retry: () => setAttempt(value => value + 1) };
 }

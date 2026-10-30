@@ -13,7 +13,7 @@ export type PhoneLiveState = {
     feedback?: { outcome: string; nextAction: string };
     controlOwner?: 'agent' | 'human' | 'none'; controlEpoch?: number; handoff?: string; message?: string; stopReason?: string;
     currentAction?: string; goalPreview?: string; sourceConversationId?: string; actions: number; modelRequests: number; updatedAt: number };
-  ownControl: boolean; appAccess?: 'all' | 'selected'; textInput?: 'auto' | 'manual'; allowedApps?: string[]; frame: { seq: number; capturedAt: number } | null;
+  media?: 'snapshot' | 'hdc-h264'; ownControl: boolean; appAccess?: 'all' | 'selected'; textInput?: 'auto' | 'manual'; allowedApps?: string[]; frame: { seq: number; capturedAt: number } | null;
 };
 export const phoneClientId = crypto.randomUUID();
 export const phoneEnded = (status: string) => status === 'closed';
@@ -21,6 +21,10 @@ export function phoneErrorMessage(error: unknown, zh: boolean): string {
   const value = error as { code?: string; body?: { error?: { code?: string } }; message?: string };
   const code = value?.code ?? value?.body?.error?.code;
   const messages: Record<string, string> = {
+    PHONE_HDC_VIDEO_DEPENDENCY: '鸿蒙投屏库或 JDK 不兼容，请在添加手机的投屏工具路径中检查 HOScrcpy JAR 和 JDK。',
+    PHONE_HDC_VIDEO_TIMEOUT: '鸿蒙投屏启动超时，已回退截图。请检查 USB 连接和投屏工具。',
+    PHONE_HDC_VIDEO_FAILED: '鸿蒙投屏暂不可用，已回退截图。请检查 USB 连接和投屏库兼容性。',
+    PHONE_VIDEO_BUSY: '手机已有原生调试或投屏连接，请关闭该连接后重试视频。',
     PHONE_CONTROL_BUSY: '另一设备正在操作手机，请等待其结束控制。',
     PHONE_DEVICE_BUSY: '手机正被其他聊天或人工操作占用，本次操作尚未开始。请查看当前任务，等待或明确停止后再试。',
     PHONE_OBSERVE_ONLY: '此入口仅支持查看手机画面，请在来源聊天中操作或接管手机。',

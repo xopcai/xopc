@@ -229,7 +229,9 @@ export class AgentToolsFactory {
     const registered = tools.some(tool => tool.name === name);
     const taskActivatable = TASK_EXECUTION_TOOL_IDS.includes(name) && !denied.has(name)
       && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name));
-    const activatable = (this.getLazyCapabilityToolNames().includes(name) || taskActivatable) && !denied.has(name) && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name));
+    const discoveryActivatable = name === 'tool_search' && !denied.has('xopc_tool_search')
+      && (!candidate.toolAllowlist || candidate.toolAllowlist.includes('tool_search') || candidate.toolAllowlist.includes('xopc_tool_search'));
+    const activatable = (this.getLazyCapabilityToolNames().includes(name) || taskActivatable || discoveryActivatable) && !denied.has(name) && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name) || discoveryActivatable);
     return { condition: `tool:${name}`, state: registered || activatable ? 'verified' as const : 'blocked' as const,
       reasonCode: registered ? 'tool_registered' : activatable ? 'tool_activatable' : 'tool_not_registered',
       detail: candidate.tools[name]?.mode === 'ask' ? 'Runtime approval is still required' : 'Registration checked; execution environment is checked by the tool' };
@@ -443,6 +445,7 @@ export class AgentToolsFactory {
       agentId,
       extensionRegistry: this.deps.extensionRegistry,
       disabledTools: disabled,
+      toolAllowlist: options?.toolAllowlist,
       hookRunner: this.deps.hookRunner,
       toolExecutorConfig: this.deps.toolExecutorConfig,
       getMemoryManager: getMemMgr,
@@ -848,6 +851,7 @@ export class AgentToolsFactory {
       }));
     }
     const selected = filterToolsByDisabledSet(core.map(markCodemodeCoreRead), disabled)
+      .filter(tool => tool.name !== 'xopc_tool_search')
       .filter(tool => (!allowed || allowed.has(tool.name)) && !(personalToolsConfigured && tool.name === 'clarify'))
       .map(tool => personalToolsConfigured && !tool.name.startsWith('personal_') && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
         ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);

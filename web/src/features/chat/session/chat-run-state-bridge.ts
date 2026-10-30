@@ -60,6 +60,8 @@ export function startChatRunStateBridge(): () => void {
   let disposed = false;
   let timer: number | undefined;
   let reconcilePromise: Promise<void> | undefined;
+  let eventRevision = 0;
+  let reconcileAgain = false;
   const terminalRuns = new Map<string, number>();
 
   const runKey = ({ conversationId, runId }: SessionRun) => `${conversationId}\u0000${runId}`;
@@ -67,6 +69,7 @@ export function startChatRunStateBridge(): () => void {
   const recordStarted = ({ conversationId, runId }: SessionRun, dispatch = false) => {
     if (terminalRuns.has(runKey({ conversationId, runId }))) return;
     if (readPendingAgentRunId(conversationId) !== runId) setPendingAgentRun(conversationId, runId);
+    chatRunManager.retireOtherRun(conversationId, runId);
     chatRunManager.setResumeRunId(conversationId, runId);
     markChatRunRunning(conversationId);
     if (dispatch) {
@@ -74,7 +77,15 @@ export function startChatRunStateBridge(): () => void {
     }
   };
 
+  const preserveSuccessor = (conversationId: string, runId: string): boolean => {
+    const observed = readPendingAgentRunId(conversationId) ?? chatRunManager.getResumeRunId(conversationId);
+    if (!observed || observed === runId) return false;
+    chatRunManager.retireOtherRun(conversationId, observed);
+    return true;
+  };
+
   const recordInactive = ({ conversationId, runId }: SessionRun) => {
+    if (preserveSuccessor(conversationId, runId)) return;
     const handled = chatRunManager.reconcileInactive(conversationId, runId);
     const cleared = clearPendingAgentRunIfMatches(conversationId, runId);
     if (!handled && cleared) useChatSessionStore.getState().clearStreamingState(conversationId);
@@ -86,6 +97,7 @@ export function startChatRunStateBridge(): () => void {
 
   const recordCompleted = ({ conversationId, runId, status }: CompletedSessionRun) => {
     terminalRuns.set(runKey({ conversationId, runId }), Date.now());
+    if (preserveSuccessor(conversationId, runId)) return;
     const handled = chatRunManager.reconcileTerminal(conversationId, runId, status);
     const cleared = clearPendingAgentRunIfMatches(conversationId, runId);
     if (!handled && cleared) {
@@ -109,10 +121,12 @@ export function startChatRunStateBridge(): () => void {
 
   const reconcile = (): Promise<void> => {
     if (reconcilePromise) return reconcilePromise;
+    const revisionAtStart = eventRevision;
     const pendingAtStart = listPendingAgentRuns();
     reconcilePromise = fetchActiveSessionRuns()
       .then((activeRuns) => {
         if (disposed) return;
+        if (eventRevision !== revisionAtStart) { reconcileAgain = true; return; }
         const terminalCutoff = Date.now() - 10 * 60_000;
         for (const [key, completedAt] of terminalRuns) {
           if (completedAt < terminalCutoff) terminalRuns.delete(key);
@@ -136,7 +150,8 @@ export function startChatRunStateBridge(): () => void {
       })
       .finally(() => {
         reconcilePromise = undefined;
-        schedule();
+        if (!disposed && reconcileAgain) { reconcileAgain = false; void reconcile(); }
+        else schedule();
       });
     return reconcilePromise;
   };
@@ -144,16 +159,26 @@ export function startChatRunStateBridge(): () => void {
   const onStarted = (event: Event) => {
     const run = parseSessionRun((event as CustomEvent<unknown>).detail);
     if (!run) return;
+    eventRevision++;
+    const known = readPendingAgentRunId(run.conversationId);
+    if (known && known !== run.runId) {
+      // A reconnect replay may contain an old run.started after a newer REST
+      // discovery. Resolve conflicting identities against a fresh snapshot.
+      if (reconcilePromise) reconcileAgain = true;
+      void reconcile();
+      return;
+    }
     recordStarted(run);
     schedule();
   };
   const onCompleted = (event: Event) => {
     const run = parseCompletedSessionRun((event as CustomEvent<unknown>).detail);
-    if (run) recordCompleted(run);
+    if (run) { eventRevision++; recordCompleted(run); }
   };
   const onInterrupted = (event: Event) => {
     const run = parseSessionRun((event as CustomEvent<unknown>).detail);
     if (!run) return;
+    eventRevision++;
     // Detach presentation immediately; the server cooperatively cancels execution separately.
     terminalRuns.set(runKey(run), Date.now());
     recordInactive(run);

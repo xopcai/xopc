@@ -59,6 +59,7 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     endpointTools: { registry, contexts },
     sessions: { getSession: async (id: string) => getSessionMetadata(id), getAgentConfig: async () => ({ model: 'test/model', thinkingLevel: 'off', fixedModel: true }) },
     getSessionInputState,
+    controlSessionInputs: coordinator.control.bind(coordinator),
     emit: vi.fn(),
     withSessionInputSubmission: coordinator.withSubmission.bind(coordinator),
     prepareSessionCommandInput: coordinator.prepareInput.bind(coordinator),
@@ -131,6 +132,36 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     finish({ status: 'ok', summary: '' });
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(3));
     expect(execute.mock.calls[2]![0]).toMatchObject({ content: 'Later' });
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(coordinator.snapshot(id).activeRunId).toBeUndefined());
+    // Exercise the lazy authenticated control route through the listening server.
+    const active = { ...deferred, clientMessageId: randomUUID(), input: { content: 'Active before stop' } };
+    expect((await post(active)).status).toBe(202);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(4));
+    expect((await post({ ...deferred, clientMessageId: randomUUID(), input: { content: 'Keep paused' } })).status).toBe(202);
+    const stop = { operationId: randomUUID(), action: 'stop', expectedTranscriptId: append.expectedTranscriptId,
+      expectedVersion: coordinator.snapshot(id).control.version };
+    const controlPath = `${base}/api/sessions/${id}/input-control`;
+    expect((await fetch(controlPath, { method: 'POST', body: JSON.stringify(stop) })).status).toBe(401);
+    const controlPost = (body: object) => fetch(controlPath, { method: 'POST', headers, body: JSON.stringify(body) });
+    const stopped = await controlPost(stop);
+    expect(stopped.status, await stopped.clone().text()).toBe(200);
+    expect((await stopped.json()).payload.control).toMatchObject({ paused: true, phase: 'idle' });
+    expect(execute).toHaveBeenCalledTimes(4);
+    expect(coordinator.snapshot(id).inputs).toMatchObject([{ content: 'Keep paused', status: 'queued' }]);
+    expect((await controlPost(stop)).status).toBe(200);
+    expect((await controlPost({ ...stop, operationId: randomUUID(), action: 'resume' })).status).toBe(409);
+    const single = { ...deferred, clientMessageId: randomUUID(), input: { content: 'Only this input' },
+      execution: 'single', controlVersion: coordinator.snapshot(id).control.version };
+    expect((await post(single)).status).toBe(202);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(5));
+    expect(execute.mock.calls[4]![0]).toMatchObject({ content: 'Only this input' });
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(coordinator.snapshot(id).activeRunId).toBeUndefined());
+    expect(execute).toHaveBeenCalledTimes(5);
+    expect((await controlPost({ ...stop, operationId: randomUUID(), action: 'resume',
+      expectedVersion: coordinator.snapshot(id).control.version })).status).toBe(200);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(6));
     finish({ status: 'ok', summary: '' });
     await vi.waitFor(() => expect(coordinator.snapshot(id).activeRunId).toBeUndefined());
     deleteSessionRecord(id);

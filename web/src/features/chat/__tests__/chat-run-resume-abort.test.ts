@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import batchFixture from '../../../../../packages/gateway-contract/fixtures/clarification-v2.json';
 import {
   hasPendingAgentRunForChat,
+  readPendingAgentRunCursor,
+  advancePendingAgentRunCursor,
   MessageSender,
   pendingAgentRunStorageKey,
   setPendingAgentRun,
@@ -120,6 +122,20 @@ describe('resolveResumeRunId', () => {
     expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
   });
 
+  it.each([true, false])('keeps a newer announced run while an older lookup resolves (remote active=%s)', active => {
+    return (async () => {
+      let reply!: (value: Response) => void;
+      vi.mocked(apiFetch).mockImplementationOnce(() => new Promise(resolve => { reply = resolve; }));
+      setPendingAgentRun(conversationId, 'old');
+      const lookup = resolveResumeRunId(conversationId);
+      await Promise.resolve();
+      setPendingAgentRun(conversationId, 'new');
+      reply(Response.json({ payload: active ? { active: true, runId: 'old' } : { active: false } }));
+      await expect(lookup).resolves.toBe('new');
+      expect(sessionStorage.getItem(pendingAgentRunStorageKey(conversationId))).toContain('new');
+    })();
+  });
+
   it('falls back to sessionStorage only when the gateway lookup is unavailable', async () => {
     vi.mocked(apiFetch).mockRejectedValue(new Error('gateway starting'));
     setPendingAgentRun(conversationId, 'run-local');
@@ -211,6 +227,52 @@ describe('MessageSender terminal state', () => {
       clear: () => storage.clear(),
     });
     publishEndpointTurnClaim('web-test', 'test-turn-token');
+  });
+
+  it('rewinds a persisted cursor when the corresponding rendered buffer was lost on reload', async () => {
+    const { subscribeRealtimeTopic } = await import('@/features/gateway/gateway-realtime');
+    setPendingAgentRun(conversationId, 'reload-run');
+    advancePendingAgentRunCursor(conversationId, 'reload-run', 42);
+    const sender = new MessageSender();
+    const pending = sender.resume('reload-run', conversationId, undefined, { replayFromStart: true });
+    expect(vi.mocked(subscribeRealtimeTopic).mock.calls.at(-1)?.[2]).toBe(0);
+    expect(readPendingAgentRunCursor(conversationId, 'reload-run')).toBe(0);
+    advancePendingAgentRunCursor(conversationId, 'reload-run', 7);
+    expect(readPendingAgentRunCursor(conversationId, 'reload-run')).toBe(7);
+    sender.abort(false); await pending;
+  });
+
+  it('keeps a successor subscription intact when the predecessor promise finishes', async () => {
+    const sender = new MessageSender();
+    const oldResult = vi.fn(); const newResult = vi.fn();
+    const oldCallbacks = { onResult: oldResult, onError: vi.fn() } as unknown as MessagingCallbacks;
+    const newCallbacks = { onResult: newResult, onError: vi.fn() } as unknown as MessagingCallbacks;
+    const old = sender.resume('old', conversationId, oldCallbacks);
+    const oldListener = realtimeState.listener!;
+    const next = sender.resume('new', conversationId, newCallbacks);
+    const newListener = realtimeState.listener!;
+    await expect(old).resolves.toBe(false);
+    expect(sender.isTrackingRun(conversationId, 'new')).toBe(true);
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(true);
+    const ended = (runId: string) => ({ topic: `run:${runId}`, seq: 1, event: 'run_end',
+      data: { type: 'run_end', runId, conversationId, timestamp: Date.now(), payload: { status: 'success' } } });
+    oldListener.onEvent(ended('old'));
+    expect(oldResult).not.toHaveBeenCalled();
+    expect(sender.isTrackingRun(conversationId, 'new')).toBe(true);
+    newListener.onEvent(ended('new'));
+    await expect(next).resolves.toBe(true);
+    expect(newResult).toHaveBeenCalledOnce();
+  });
+
+  it('sends a fallback abort only for its own tracked execution', async () => {
+    const sender = new MessageSender();
+    const pending = sender.resume('old', conversationId);
+    setPendingAgentRun(conversationId, 'new');
+    vi.mocked(apiFetch).mockResolvedValue(Response.json({ ok: true }));
+    sender.abort();
+    await pending;
+    expect(JSON.parse(String(vi.mocked(apiFetch).mock.calls.at(-1)?.[1]?.body))).toEqual({ runId: 'old' });
+    expect(sessionStorage.getItem(pendingAgentRunStorageKey(conversationId))).toContain('new');
   });
 
   it.each(['ready', 'preparing', 'preparation_failed', 'not_received', 'already_confirmed'])('recovers %s materialization before the first input', async lifecycle => {

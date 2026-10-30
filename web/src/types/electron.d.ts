@@ -608,6 +608,15 @@ export interface ElectronAPI {
   };
   browser?: import('../../../electron/browser/types').EmbeddedBrowserAPI;
   computer?: {
+    preview?: {
+      current(conversationId: string): Promise<import('@xopcai/computer-control-contract').ComputerPreviewState | undefined>;
+      onState(callback: (state: import('@xopcai/computer-control-contract').ComputerPreviewState) => void): () => void;
+      subscribe(input: { conversationId: string; runId?: string; preset: 'compact' | 'expanded' },
+        receive: (message: import('@xopcai/computer-control-contract').ComputerPreviewState | import('@xopcai/computer-control-contract').ComputerPreviewFrame) => void | Promise<void>): Promise<{ subscriptionId: string }>;
+      setPreset(id: string, preset: import('@xopcai/computer-control-contract').ComputerPreviewPreset): Promise<void>;
+      unsubscribe(id: string): Promise<void>;
+      stopControl(id: string): Promise<void>;
+    };
     status(): Promise<{ connected: boolean; platform?: string; capabilities?: { supported: boolean; delivery: string; textInput: boolean }; claim?: { type: 'endpoint'; endpointId: string; token: string }; error?: string; reenrollmentRequired?: boolean; session?: { status: string; errorCode?: string; appId?: string; preparation?: { startedAt: number }; dispatch?: 'notStarted' | 'started' | 'completed' | 'unknown' }; permissions: { accessibility: boolean; screenRecording: string } }>;
     access(): Promise<{ authorizedAppIds: string[]; allowAllApps: boolean; appsBusy: boolean; appsUnavailable: boolean; apps: Array<{ appId: string; name: string; running: boolean }> }>;
     setAllAppAccess(allowed: boolean): Promise<{ authorizedAppIds: string[]; allowAllApps: boolean; appsBusy: boolean; appsUnavailable: boolean; apps: Array<{ appId: string; name: string; running: boolean }> }>;

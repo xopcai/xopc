@@ -10,8 +10,10 @@ the original process and selected window must remain unchanged, two consecutive
 window bounds must agree, and the selected window must provide a valid frame.
 Pixels need not be identical during this readiness check; normal pre-input state
 checks still apply. Cancellation stops the wait. A visible background window
-does not require activation. A window explicitly reported on another macOS Space
-is refused before activation.
+does not require activation. In the current development build, authorized
+`prepare:true` uses the macOS desktop host to start or restore an off-Space app,
+then verifies the exact window. `prepare:false` leaves the desktop unchanged and
+continues to refuse off-Space targets.
 
 Failures distinguish hidden windows (`COMPUTER_WINDOW_HIDDEN`), readiness timeouts
 (`COMPUTER_WINDOW_READY_TIMEOUT`), other Spaces (`COMPUTER_WINDOW_OTHER_SPACE`),
@@ -27,8 +29,8 @@ The target application does not need foreground keyboard focus. An already-visib
 window uses background delivery, including when `prepare: true`; preparation only
 launches or restores the app when needed. Keep the xopc desktop window shown and
 not minimized. A target on another macOS Space, a hidden window, and an unfocused
-window are different states: changing focus alone does not resolve another-Space
-capture failures. Keep xopc and the target on the same desktop for those tasks.
+window are different states. Authorized preparation can switch desktops automatically;
+the input batch still requires a verified visible window with stable geometry.
 
 The Agent can open `computer_use` with `planner: "agent"` and execute UI-only JavaScript through `op: "exec"`. This uses the current visual main model without a separate GUI model binding. The default GUI planner keeps `step` and `run`. Every exec that acts must first observe and use that snapshot within the same exec; snapshot IDs cannot be copied between model calls.
 
@@ -124,7 +126,7 @@ The opt-in [Windows reliability matrix](https://github.com/xopcai/xopc/blob/main
 
 Verify that the answer matches the intended application and window before authorizing changes. If several windows or processes match, select the intended one rather than guessing.
 
-If the desktop returns `COMPUTER_WINDOW_OTHER_SPACE`, the target is on a different macOS desktop/Space. Leave full screen or place the chat and target window on the same desktop with both visible. Clicking the target and then returning to a full-screen chat on another Space makes it unavailable again; repeated foreground requests do not fix that layout.
+If the desktop returns `COMPUTER_WINDOW_OTHER_SPACE`, the target is on a different macOS desktop/Space and the operation has not been authorized to prepare it, or the host lacks preparation support. When the task authorizes opening/restoring the app, the current macOS development build can use `prepare:true` to recover it automatically. A five-second preparation timeout is a distinct failure: inspect its diagnostics before another attempt, and never replay input whose outcome is uncertain.
 
 ## Small goals in one call
 
@@ -212,6 +214,16 @@ The pinned macOS driver cannot certify complete accessibility coverage. Such sna
 The opt-in [real hosted GUI-Plus validation](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-verified-flows-hosted-validation.md) additionally exercises capture, reuse in independent processes, ordinary local access checks and no replay after a lost reply using actual provider responses.
 
 Newly captured flows bind the authenticated desktop device identity, so a new network connection after restart can reuse them with fresh authorization. Re-enrolling as a different device does not transfer those hints. Older flows without device identity retain their original endpoint restriction. See [real Gateway/desktop network validation](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-verified-flows-network-validation.md).
+
+## Window preview in desktop chat
+
+An authorized Computer Use session can show its current window in a local chat
+preview card. Expand the card for a larger view, hide it to pause capture, or use
+**Stop and take over** to wait for confirmed control release. Window previews
+use a separate native capture pipeline and do not add model observations or
+intermediate screenshots to input batches. Frames remain ephemeral and local;
+browser-only and remote viewing are not included. See the
+[technical design and validation](design/technical/computer-use-window-preview.md).
 
 ## Native text editing
 

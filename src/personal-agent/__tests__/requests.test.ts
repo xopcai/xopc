@@ -38,6 +38,7 @@ import { createPersonalRequestResultTool } from '../../agent/tools/personal-requ
 import { resolveExecutionToolPolicy } from '../../agent/embedded/execution-tool-policy.js';
 import { ComposioToolProvider } from '../../agent/external-tools/composio-provider.js';
 import { assertPersonalRequestAccountAccess } from '../request-access.js';
+import { getExternalToolRegistry } from '../../agent/external-tools/tool-registry.js';
 import { createExternalToolGatewayTools } from '../../agent/external-tools/gateway-tools.js';
 import type { ExternalToolProvider } from '../../agent/external-tools/types.js';
 import { loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
@@ -918,6 +919,47 @@ describe('Personal connected-app requests', () => {
     expect(JSON.stringify(loadTranscriptRowsForSession(conversationId))).toContain('Urgent deadline');
   });
 
+  it('limits worker discovery and describe to its connector, selected account and curated reads', async () => {
+    const { request, account, worker: chat } = worker();
+    const readRef = 'composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS';
+    const writeRef = 'composio:composio-gmail-local-owner:GMAIL_SEND_EMAIL';
+    const foreignRef = 'composio:composio-slack-local-owner:SLACK_SEARCH';
+    upsertConnectorInstallation({ id: 'composio-slack-local-owner', connectorId: 'composio-slack', principalId: 'local-owner',
+      enabled: true, allowedAgentIds: [], maxScope: 'write', confirmationPolicy: 'writes', selectedAccountIds: null });
+    for (const [actionId, scope] of [['GMAIL_FETCH_EMAILS', 'read'], ['GMAIL_SEND_EMAIL', 'write']] as const) {
+      upsertConnectorActionMetadata({ connectorId: 'composio-gmail', actionId, scope, curated: true, cachedAt: new Date().toISOString() });
+    }
+    const descriptors = [readRef, writeRef, foreignRef].map(toolRef => ({ toolRef, source: 'composio' as const,
+      namespace: 'mail', title: toolRef.split(':').at(-1)!, summary: 'Search mail', description: 'Accounts: other-secret-account',
+      readOnly: true, inputSchema: { type: 'object', properties: { xopcAccountId: { type: 'string' } } } }));
+    const describe = vi.fn(async ref => descriptors.find(descriptor => descriptor.toolRef === ref));
+    const execute = vi.fn(async () => ({ content: [], details: {} }));
+    const provider: ExternalToolProvider = { source: 'composio', search: async () => descriptors, describe, execute,
+      connectionCandidates: async () => [{ candidateRef: 'composio-slack', source: 'composio', label: 'Slack', summary: 'Other service', capabilities: [], reason: 'not_connected' }] };
+    const nativeSearch = vi.fn(async () => []);
+    const tools = createExternalToolGatewayTools([provider, { source: 'endpoint', search: nativeSearch, describe: vi.fn(), execute }],
+      () => ({ conversationId: chat.key, channel: 'webchat', chatId: chat.key, origin: { type: 'system', source: 'internal' } }),
+      undefined, undefined, ['endpoint', 'memory', 'extension']);
+    const registry = getExternalToolRegistry(tools)!;
+    const found = await registry.search({ query: 'mail' });
+    expect(found.tools.map(tool => tool.toolRef)).toEqual([readRef]);
+    expect(found.connectionCandidates).toEqual([]);
+    expect(found.installCandidates).toEqual([]);
+    expect(found.selectedAccountId).toBe(account.accountId);
+    expect(nativeSearch).not.toHaveBeenCalled();
+    expect(describe.mock.calls.every(([ref]) => ref === readRef)).toBe(true);
+    const described = await tools.find(tool => tool.name === 'xopc_tool_describe')!.execute('describe', { toolRefs: [readRef, writeRef, foreignRef] });
+    const payload = JSON.parse((described.content[0] as { text: string }).text);
+    expect(payload.notFound).toEqual([writeRef, foreignRef]);
+    expect(payload.tools).toHaveLength(1);
+    expect(payload.tools[0].inputSchema.properties.xopcAccountId.const).toBe(account.accountId);
+    expect(JSON.stringify(payload)).not.toContain('other-secret-account');
+    cancelPersonalRequest(request);
+    await expect(registry.search({ query: 'mail' })).rejects.toThrow('no longer active');
+    await expect(tools.find(tool => tool.name === 'xopc_tool_describe')!.execute('late', { toolRefs: [readRef] })).rejects.toThrow('no longer active');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('permits curated mail reads without broadening the separate batch-read allowlist', async () => {
     const { account, worker: chat } = worker();
     const ref = 'composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS';
@@ -932,6 +974,72 @@ describe('Personal connected-app requests', () => {
     await tools.find(tool => tool.name === 'xopc_tool_execute')!.execute('read', { toolRef: ref, revision, readOnly: true, arguments: { xopcAccountId: account.accountId } });
     expect(execute).toHaveBeenCalledOnce();
   });
+
+  it.each(['replacement', 'same_conversation_new_epoch', 'run_finished', 'run_rebound', 'worker_reset', 'unchanged'] as const)(
+    'revalidates the worker assignment at the SDK effect boundary (%s)', async mutation => {
+      const { request, account, worker: chat } = worker();
+      const ref = 'composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS';
+      const runs = new TaskRunRepository();
+      const runId = runs.getActiveRoot(request.taskId!)!.id;
+      const conversations = new TaskConversationRepository();
+      const epoch = conversations.requireState(request.taskId!).assignmentEpoch;
+      upsertConnectorActionMetadata({ connectorId: 'composio-gmail', toolkit: 'gmail', actionId: 'GMAIL_FETCH_EMAILS', scope: 'read', curated: true,
+        inputSchema: { type: 'object', properties: { query: { type: 'string' } } }, cachedAt: new Date().toISOString() });
+      let entered!: () => void;
+      let release!: () => void;
+      const atDispatch = new Promise<void>(resolve => { entered = resolve; });
+      const dispatchGate = new Promise<void>(resolve => { release = resolve; });
+      const effect = vi.fn();
+      const adapter = { syncConnections: async () => [account],
+        executeWithPolicy: async (input: { beforeExecute?: () => void }) => {
+          entered();
+          await dispatchGate;
+          input.beforeExecute?.();
+          effect();
+          return { decision: 'allowed', result: { items: [] } };
+        },
+      } as unknown as ComposioSessionsAdapter;
+      const config = ConfigSchema.parse({ connectors: { instances: { 'composio-gmail': {
+        xopcConnector: { managed: true, connectorId: 'composio-gmail', enabled: true }, runtime: { type: 'composio', role: 'toolkit', toolkit: 'gmail' },
+      } } } });
+      const context = () => ({ conversationId: chat.key, channel: 'webchat', chatId: chat.key, origin: { type: 'system' as const, source: 'internal' } });
+      const provider = new ComposioToolProvider({ getConfig: () => config, agentId: 'mail-worker', adapter, getCurrentContext: context });
+      const tools = createExternalToolGatewayTools([provider], context, () => config);
+      const described = await tools.find(tool => tool.name === 'xopc_tool_describe')!.execute('describe', { toolRefs: [ref] });
+      const revision = JSON.parse((described.content[0] as { text: string }).text).tools[0].revision;
+      const pending = tools.find(tool => tool.name === 'xopc_tool_execute')!.execute('dispatch', {
+        toolRef: ref, revision, arguments: { query: 'urgent', xopcAccountId: account.accountId },
+      });
+      await Promise.race([atDispatch, pending.then(() => { throw new Error('Operation completed before the dispatch gate'); })]);
+      if (mutation === 'replacement' || mutation === 'same_conversation_new_epoch') {
+        const replacement = createConversation({ agentId: 'mail-worker', sourceChannel: 'webchat' });
+        conversations.activateExecutionSession({ taskId: request.taskId!, conversationId: replacement.key, agentId: 'mail-worker', runId });
+        if (mutation === 'same_conversation_new_epoch') {
+          conversations.activateExecutionSession({ taskId: request.taskId!, conversationId: chat.key, agentId: 'mail-worker', runId });
+          expect(conversations.requireState(request.taskId!).assignmentEpoch).toBeGreaterThan(epoch);
+        }
+      } else if (mutation === 'run_finished' || mutation === 'run_rebound') {
+        getSqliteDatabase().prepare("UPDATE task_runs SET status = 'cancelled' WHERE run_id = ?").run(runId);
+        if (mutation === 'run_rebound') {
+          const previous = runs.require(runId);
+          const replacement = runs.create({ taskId: request.taskId!, executorKind: 'agent', executorRef: { agentId: 'mail-worker' },
+            trigger: { kind: 'test-retry' }, correlationId: 'replacement', idempotencyKey: 'replacement-run',
+            contractVersion: previous.contractVersion, conversationId: chat.key });
+          conversations.activateExecutionSession({ taskId: request.taskId!, conversationId: chat.key, agentId: 'mail-worker', runId: replacement.id });
+        }
+      } else if (mutation === 'worker_reset') {
+        resetSessionRecord(chat.key, directory);
+      }
+      release();
+      if (mutation === 'unchanged') {
+        await expect(pending).resolves.toBeDefined();
+        expect(effect).toHaveBeenCalledOnce();
+      } else {
+        await expect(pending).rejects.toThrow('Personal request execution identity changed');
+        expect(effect).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it('rechecks Personal owner access at the Composio SDK effect boundary', async () => {
     const { request, account, worker: chat } = worker();
@@ -966,7 +1074,7 @@ describe('Personal connected-app requests', () => {
       describe: async () => {
         if (revoke) getSqliteDatabase().prepare('UPDATE connector_accounts SET allowed_agent_ids_json = ? WHERE id = ?')
           .run(JSON.stringify(['mail-worker']), account.accountId);
-        return { toolRef: ref, source: 'composio', namespace: 'gmail', title: 'Read', summary: 'Read', description: 'Read', batchRead: true,
+        return { toolRef: ref, source: 'composio', namespace: 'gmail', title: 'Read', summary: 'Read', description: 'Read', readOnly: true, batchRead: true,
           inputSchema: { type: 'object', properties: { xopcAccountId: { type: 'string' } }, required: ['xopcAccountId'] } };
       } };
     const tools = createExternalToolGatewayTools([provider], () => ({ conversationId: chat.key, channel: 'webchat', chatId: chat.key, origin: { type: 'system', source: 'internal' } }));

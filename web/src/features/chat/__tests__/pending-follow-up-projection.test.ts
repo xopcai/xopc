@@ -12,6 +12,9 @@ const row = (status: string) => ({
 });
 
 describe('projectVisiblePendingFollowUps', () => {
+  it('keeps the first queued input visible while paused', () => {
+    expect(projectVisiblePendingFollowUps({ inputs: [row('queued')], control: { paused: true } })).toHaveLength(1);
+  });
   it('hides the first unclaimed turn while preparation is in progress', () => {
     const inputs = [{ ...row('queued'), id: 'first' }, { ...row('queued'), id: 'second' }];
     expect(projectVisiblePendingFollowUps({ inputs, preparation: { state: 'preparing' } }).map((input) => input.id)).toEqual(['second']);

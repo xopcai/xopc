@@ -1,3 +1,5 @@
+import { rememberInputControl } from '../session/session-input-control';
+import { setPendingAgentRun } from '../messages/message-sender';
 // @vitest-environment jsdom
 
 import { act } from 'react';
@@ -24,6 +26,8 @@ describe('useChatSessionStreaming run lookup', () => {
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    chatRunManager.abort(conversationId, false);
+    sessionStorage.clear();
     useChatSessionStore.setState({ sessions: {} });
     container = document.createElement('div');
     document.body.append(container);
@@ -194,6 +198,65 @@ describe('useChatSessionStreaming run lookup', () => {
     expect(slice.messages.at(-1)?.clientSubmissionId).toBe('new-input');
     expect(slice.streamingMsg?.pendingResponseStatus).toBe('waiting');
     expect(slice.streaming).toBe(false);
+  });
+
+  it('does not clear a successor announced before the stopped predecessor cleanup runs', () => {
+    rememberInputControl(conversationId, { paused: true, phase: 'idle', version: 1, reviewRequired: false });
+    const generation = chatRunManager.getGeneration(conversationId);
+    chatRunManager.setResumeRunId(conversationId, 'new-run');
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...defaultSessionMeta(), historyStatus: 'ready', hasMore: false, messages: [],
+      streamingMsg: { role: 'assistant', content: [{ type: 'text', text: 'New reply' }], turnId: 'new-run' },
+      progress: null, taskPlan: null, sending: true, streaming: true,
+    });
+    act(() => streaming.settleStoppedRun(generation, 'old-run'));
+    expect(getChatSessionSnapshot(conversationId)).toMatchObject({ streaming: true, sending: true, streamingMsg: { turnId: 'new-run' } });
+    expect(chatRunManager.getResumeRunId(conversationId)).toBe('new-run');
+  });
+
+  it('replaces the predecessor bubble when reconnecting to the queued successor', async () => {
+    const sender = chatRunManager.senderFor(conversationId);
+    const resume = vi.spyOn(sender, 'resume').mockImplementation(async (runId, _id, callbacks) => {
+      callbacks?.onStreamStart(runId);
+      callbacks?.onToken('New reply');
+      return true;
+    });
+    setPendingAgentRun(conversationId, 'new-run');
+    vi.mocked(resolveResumeRunId).mockResolvedValue('new-run');
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...defaultSessionMeta(), historyStatus: 'ready', hasMore: false,
+      messages: [{ role: 'user', turnId: 'old-run', content: [{ type: 'text', text: 'First question' }] }],
+      streamingMsg: { role: 'assistant', turnId: 'old-run', content: [{ type: 'text', text: 'Old partial' }] },
+      progress: null, taskPlan: null, sending: true, streaming: true,
+    });
+    vi.mocked(sessionManager.loadSession).mockResolvedValue({ hasMore: false, messages: [
+      { role: 'user', turnId: 'old-run', content: [{ type: 'text', text: 'First question' }] },
+      { role: 'assistant', turnId: 'old-run', content: [{ type: 'text', text: 'Old final' }] },
+      { role: 'user', turnId: 'new-run', content: [{ type: 'text', text: 'Follow-up' }] },
+    ] });
+    await act(async () => streaming.tryResumeAgentRun(conversationId));
+    expect(resume).toHaveBeenCalledWith('new-run', conversationId, expect.any(Object), { replayFromStart: true });
+    const snapshot = getChatSessionSnapshot(conversationId)!;
+    expect(snapshot.streamingMsg).toMatchObject({ turnId: 'new-run' });
+    expect(JSON.stringify(snapshot.streamingMsg?.content)).not.toContain('Old partial');
+    expect(JSON.stringify(snapshot.streamingMsg?.content)).toContain('New reply');
+    expect(snapshot.messages.filter(message => message.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('keeps the cursor when reconnecting with the matching live buffer still in memory', async () => {
+    const sender = chatRunManager.senderFor(conversationId);
+    const resume = vi.spyOn(sender, 'resume').mockResolvedValue(true);
+    setPendingAgentRun(conversationId, 'same-run');
+    vi.mocked(resolveResumeRunId).mockResolvedValue('same-run');
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...defaultSessionMeta(), historyStatus: 'ready', hasMore: false,
+      messages: [{ role: 'user', turnId: 'same-run', content: [{ type: 'text', text: 'Question' }] }],
+      streamingMsg: { role: 'assistant', turnId: 'same-run', content: [{ type: 'text', text: 'Already rendered prefix' }] },
+      progress: null, taskPlan: null, sending: true, streaming: true,
+    });
+    vi.mocked(sessionManager.loadSession).mockResolvedValue({ hasMore: false, messages: [] });
+    await act(async () => streaming.tryResumeAgentRun(conversationId));
+    expect(resume).toHaveBeenCalledWith('same-run', conversationId, expect.any(Object), { replayFromStart: false });
   });
 
 });

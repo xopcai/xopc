@@ -17,6 +17,9 @@ import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js'
 import { CloudPhones } from './cloud-phones.js';
 import { PhoneLocationEnvironment } from './location-environment.js';
 import { WirelessPhones } from './wireless.js';
+import { HdcVideoProvider } from './hdc-video.js';
+import { resolveHdcVideoTools } from './hdc-video-tools.js';
+import { HdcPhoneDriver, resolveHdcPath } from './hdc-driver.js';
 import { AdbPhoneDriver, resolveAdbPath, type PhoneDriver } from './adb-driver.js';
 import { createPhoneModel, isAboutScreen, type PhoneModelAdapter, type PhoneModelDecision, type PhoneTrajectoryEntry } from './model-adapter.js';
 import { PhoneRepository } from './repository.js';
@@ -48,6 +51,8 @@ type Session = {
   stream?: PhoneInteractiveSession;
   streamOpening?: Promise<PhoneInteractiveSession>;
   videoGeneration?: symbol;
+  videoIdleTimer?: ReturnType<typeof setTimeout>;
+  streamClosing?: Promise<void>;
   taskPending?: boolean;
   segmentUsage?: { actions: number; modelRequests: number; activeDurationMs: number };
   taskActiveMs?: number;
@@ -111,14 +116,19 @@ export class PhoneRuntime {
     private modelFactory = createPhoneModel,
     private interactiveFactory: (adb: string, serial: string, failed: () => void) => PhoneInteractiveProvider = (adb, serial, failed) => new LocalScrcpyProvider(adb, serial, failed),
     readonly wireless = new WirelessPhones(),
+    private harmonyDriverFactory: (path: string) => PhoneDriver = path => new HdcPhoneDriver(path),
+    private harmonyVideoFactory: (serial: string, config: Config['phone'], failed: () => void, validateScreen: (app: string) => void) => PhoneInteractiveProvider = (serial, config, failed, validateScreen) => new HdcVideoProvider(serial, config, failed, { validateScreen }),
   ) {}
 
   async driverFor(device: PhoneDevice, config: Config): Promise<PhoneDriver> {
-    return device.connection ? this.cloud.driver(device) : this.driverFactory(resolveAdbPath(config.phone.adbPath));
+    return device.platform === 'harmonyos' ? this.harmonyDriverFactory(resolveHdcPath(config.phone.hdcPath)) : device.connection ? this.cloud.driver(device) : this.driverFactory(resolveAdbPath(config.phone.adbPath));
   }
-  async discover(config: Config, signal?: AbortSignal) {
+  async discover(config: Config, signal?: AbortSignal, platform?: 'android' | 'harmonyos') {
+    if (platform === 'harmonyos') return this.harmonyDriverFactory(resolveHdcPath(config.phone.hdcPath)).discover(signal);
     const driver = this.driverFactory(resolveAdbPath(config.phone.adbPath));
-    let devices = await driver.discover(signal);
+    let devices: Awaited<ReturnType<PhoneDriver['discover']>> = [];
+    let adbError: unknown;
+    try { devices = await driver.discover(signal); } catch (error) { signal?.throwIfAborted(); adbError = error; }
     const missing = this.repository.list().filter(device => device.enabled && device.wireless
       && !devices.some(item => item.serial === device.serial && item.state === 'device') && (this.reconnectAfter.get(device.id) ?? 0) < Date.now()).slice(0, 2);
     const reconnectSignal = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
@@ -127,6 +137,15 @@ export class PhoneRuntime {
       await this.reconnectWireless(device.id, config, reconnectSignal).catch(() => { signal?.throwIfAborted(); });
     }));
     if (missing.length) devices = await driver.discover(signal);
+    let hdcAvailable = false;
+    if (platform !== 'android' && (config.phone.hdcPath || this.repository.list().some(device => device.platform === 'harmonyos'))) {
+      try { devices = [...devices, ...await this.harmonyDriverFactory(resolveHdcPath(config.phone.hdcPath)).discover(signal)]; hdcAvailable = true; }
+      catch (error) {
+        signal?.throwIfAborted();
+        if (!devices.length && this.repository.list().some(device => device.platform === 'harmonyos')) throw error;
+      }
+    }
+    if (adbError && !devices.length && !hdcAvailable) throw adbError;
     return devices;
   }
   reconnectWireless(id: string, config: Config, signal?: AbortSignal, endpoint?: { host: string; port: number }): Promise<PhoneDevice> {
@@ -144,16 +163,16 @@ export class PhoneRuntime {
     })().finally(() => this.reconnecting.delete(id));
     this.reconnecting.set(id, task); return task;
   }
-  async applications(input: { deviceId?: string; serial?: string }, config: Config, signal: AbortSignal): Promise<PhoneApplication[]> {
+  async applications(input: { deviceId?: string; serial?: string; platform?: 'android' | 'harmonyos' }, config: Config, signal: AbortSignal): Promise<PhoneApplication[]> {
     let driver: PhoneDriver; let serial: string;
     if (input.deviceId) {
       const device = this.repository.get(input.deviceId);
       if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'Phone access is disabled', 403);
       driver = await this.driverFor(device, config); serial = device.serial;
     } else {
-      const found = (await this.discover(config, signal)).find(device => device.serial === input.serial && device.state === 'device');
+      const found = (await this.discover(config, signal, input.platform)).find(device => (device.platform ?? 'android') === (input.platform ?? 'android') && device.serial === input.serial && device.state === 'device');
       if (!found) throw new PhoneError('PHONE_DEVICE_OFFLINE', 'Choose a connected and authorized phone');
-      driver = this.driverFactory(resolveAdbPath(config.phone.adbPath)); serial = found.serial;
+      driver = found.platform === 'harmonyos' ? this.harmonyDriverFactory(resolveHdcPath(config.phone.hdcPath)) : this.driverFactory(resolveAdbPath(config.phone.adbPath)); serial = found.serial;
     }
     if (!driver.applications) throw new PhoneError('PHONE_APPS_UNAVAILABLE', 'The phone provider cannot list applications');
     return driver.applications(serial, signal);
@@ -422,7 +441,7 @@ export class PhoneRuntime {
           device = await this.reconnectWireless(device.id, context.config, signal);
           found = (await driver.discover(signal)).find(item => item.serial === device.serial);
         }
-        if (found?.state !== 'device') throw new PhoneError('PHONE_DEVICE_OFFLINE', 'Phone is offline or has not authorized ADB');
+        if (found?.state !== 'device') throw new PhoneError('PHONE_DEVICE_OFFLINE', 'Phone is offline or has not authorized USB debugging');
         if (modelRef === MOCK_PHONE_MODEL && !found.emulator) throw new PhoneError('PHONE_MOCK_EMULATOR_ONLY', 'The deterministic mock model is only enabled for local Android emulators');
         const lease = this.repository.acquire(device.serial);
         try {
@@ -1047,7 +1066,7 @@ export class PhoneRuntime {
       if (session.human && (session.report.humanActions ?? 0) >= 1200) throw new PhoneError('PHONE_ACTION_LIMIT', 'Manual input limit reached; reopen the session');
       if (action.type === 'launch' && !phoneAllowsApp(session.device, action.package)) throw new PhoneError('PHONE_APP_DENIED', 'Application is not authorized');
       if (action.type === 'home' && phoneAppAccess(session.device) !== 'all') throw new PhoneError('PHONE_APP_DENIED', 'Home leaves the app allowlist');
-      if (action.type === 'typeText' && session.device.textInput === 'manual')
+      if (action.type === 'typeText' && (session.device.platform === 'harmonyos' || session.device.textInput === 'manual'))
         throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'Automatic text input is disabled for this phone. Ask the user to take over and type with the phone keyboard.', 409);
       if (action.type === 'typeText' && !observation.elements.some(node => node.focused && node.editable && !node.password))
         throw new PhoneError('PHONE_INPUT_NOT_FOCUSED', 'Focus a non-password editable field before typing', 409);
@@ -1088,7 +1107,7 @@ export class PhoneRuntime {
     session.adapter.reset?.();
     session.controller.abort(); session.prediction?.abort(); session.human = undefined; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
     if (op === 'pause') await session.stream?.revoke();
-    else { session.videoGeneration = undefined; await session.stream?.close(); session.stream = undefined; }
+    else { clearTimeout(session.videoIdleTimer); session.videoGeneration = undefined; await session.stream?.close(); await session.streamClosing; session.stream = undefined; }
     for (const wake of session.wake) wake();
     session.report.status = op === 'pause' ? 'paused' : op === 'cancel' ? 'cancelled' : 'closed';
     session.report.stopReason = op; if (op !== 'close') session.report.verified = false;
@@ -1164,7 +1183,7 @@ export class PhoneRuntime {
     if (this.maintenance) return;
     this.maintenance = setInterval(() => {
       for (const session of this.sessions.values()) {
-        if (terminal.has(session.report.status)) { session.frames.clear(); const stream = session.stream; session.stream = undefined; void stream?.close(); continue; }
+        if (terminal.has(session.report.status)) { clearTimeout(session.videoIdleTimer); session.frames.clear(); const stream = session.stream; session.stream = undefined; void stream?.close(); continue; }
         try {
           this.guard(session, session.context, false);
           const idleLimit = session.context.config.phone.idleDisconnectMs;
@@ -1193,11 +1212,13 @@ export class PhoneRuntime {
   }
   liveStatus(owner: string, id: string, context: ExecutionContext, client: string) {
     const session = this.liveSession(owner, id, context);
-    return { report: { ...structuredClone(session.report), nextExecutionMode: this.repository.executionMode(owner) ?? context.config.phone.executionMode }, ownControl: Boolean(session.human === client), allowedApps: [...session.device.allowedApps], appAccess: phoneAppAccess(session.device), textInput: session.device.textInput ?? 'auto',
+    return { report: { ...structuredClone(session.report), nextExecutionMode: this.repository.executionMode(owner) ?? context.config.phone.executionMode }, ownControl: Boolean(session.human === client), allowedApps: [...session.device.allowedApps], appAccess: phoneAppAccess(session.device), textInput: session.device.platform === 'harmonyos' ? 'manual' as const : session.device.textInput ?? 'auto', media: session.device.platform === 'harmonyos' ? resolveHdcVideoTools(context.config.phone) ? 'hdc-h264' as const : 'snapshot' as const : undefined,
       frame: session.frames.get() ? { seq: session.frames.get()!.seq, capturedAt: session.frames.get()!.capturedAt } : null };
   }
   async liveVideo(owner: string, id: string, context: ExecutionContext) {
     const session = this.liveSession(owner, id, context);
+    clearTimeout(session.videoIdleTimer);
+    await session.streamClosing;
     if (terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Phone session ended', 409);
     if (session.streamOpening) return session.streamOpening;
     const opening = this.openLiveVideo(session);
@@ -1216,7 +1237,12 @@ export class PhoneRuntime {
         session.videoGeneration = undefined;
         void this.stop(session.report.owner, 'pause');
       };
-      const provider = session.device.connection
+      const provider = session.device.platform === 'harmonyos'
+        ? this.harmonyVideoFactory(session.device.serial, session.context.config.phone, failed, app => {
+          this.guard(session, session.context, false);
+          if (!phoneAllowsApp(session.device, app)) throw new PhoneError('PHONE_APP_DENIED', 'Current page is outside the authorized applications', 403);
+        })
+        : session.device.connection
         ? await this.cloud.interactive(session.device, failed)
         : this.interactiveFactory(session.adbPath, session.device.serial, failed);
       if (terminal.has(session.report.status)) {
@@ -1251,7 +1277,21 @@ export class PhoneRuntime {
     if (!session || session.report.sessionId !== id) return;
     // Media loss is independent of the control lease. Explicit release or lease
     // expiry handles control; a late socket close must never revoke a new owner.
-    if (session.stream?.viewerCount === 0) { const stream = session.stream; session.stream = undefined; await stream.close(); }
+    if (session.stream?.viewerCount === 0) {
+      const stream = session.stream;
+      if (session.device.platform === 'harmonyos') {
+        // View/control sockets reconnect during takeover. Keep the native encoder briefly.
+        clearTimeout(session.videoIdleTimer);
+        session.videoIdleTimer = setTimeout(() => {
+          if (session.stream !== stream || stream.viewerCount) return;
+          session.stream = undefined; const closing = stream.close(); session.streamClosing = closing;
+          void closing.catch(err => log.warn({ err, conversationId: owner, phase: 'video_cleanup' }, 'HarmonyOS video cleanup failed')).finally(() => {
+            if (session.streamClosing === closing) session.streamClosing = undefined;
+          });
+        }, 1500);
+        session.videoIdleTimer.unref();
+      } else { session.stream = undefined; await stream.close(); }
+    }
   }
   private async clearExpiredHuman(session: Session): Promise<void> {
     if (!session.human || Date.now() <= (session.humanExpiresAt ?? 0)) return;

@@ -1,3 +1,6 @@
+import { useGatewayStore } from '@/stores/gateway-store';
+import { readPendingAgentRunId } from '../messages/message-sender';
+import { readInputControl } from './session-input-control';
 import { useCallback, type RefObject } from 'react';
 import {
   parseUserTurnDocument,
@@ -168,9 +171,13 @@ export function useChatSessionStreaming(deps: {
     async (chatId: string, loadedMessages?: Message[]) => {
       if (!shouldApplyStreamUpdate(chatId)) return;
 
+      const browserScope = useGatewayStore.getState().conversationId;
+      const sameBrowserScope = () => useGatewayStore.getState().conversationId === browserScope;
+      let resumeGeneration = chatRunManager.getGeneration(chatId);
       const responseAtLookup = store().sessions[chatId]?.streamingMsg;
       const inputAtLookup = store().sessions[chatId]?.messages.findLast(message => message.role === 'user')?.clientSubmissionId;
       const runId = await resolveResumeRunId(chatId);
+      if (!sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration) return;
       if (!runId) {
         const currentResponse = store().sessions[chatId]?.streamingMsg;
         if (
@@ -187,17 +194,26 @@ export function useChatSessionStreaming(deps: {
       const resumeSuperseded = () => {
         const currentResponse = store().sessions[chatId]?.streamingMsg;
         const currentInput = store().sessions[chatId]?.messages.findLast(message => message.role === 'user')?.clientSubmissionId;
-        return Boolean(currentInput && currentInput !== inputAtLookup)
-          || Boolean(currentResponse?.turnId && currentResponse.turnId !== runId)
+        return !sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration
+          || Boolean(currentInput && currentInput !== inputAtLookup)
+          || Boolean(readPendingAgentRunId(chatId) && readPendingAgentRunId(chatId) !== runId)
+          || Boolean(currentResponse?.turnId && currentResponse.turnId !== runId && currentResponse.turnId !== responseAtLookup?.turnId)
           || Boolean(currentResponse?.pendingResponseStatus && currentResponse !== responseAtLookup);
       };
       if (resumeSuperseded() || chatRunManager.isTrackingRun(chatId, runId)) return;
 
+      const retirePredecessorBubble = () => {
+        const previous = store().sessions[chatId]?.streamingMsg;
+        if (!previous?.turnId || previous.turnId === runId || previous.turnId !== responseAtLookup?.turnId) return;
+        if (hasRenderableAssistantContent(previous)) store().finalizeStreamingTurn(chatId, cloneMessageForRender(previous));
+        else store().clearStreamingState(chatId);
+      };
       let seedMessages = loadedMessages ?? getSessionMessages(chatId);
       let seedHasMore = getChatSessionSnapshot(chatId)?.hasMore ?? false;
       try {
         const fresh = await sessionMgrRef.current.loadSession(chatId, 0, undefined, taskId, store().sessions[chatId]?.messages);
         if (resumeSuperseded() || chatRunManager.isTrackingRun(chatId, runId)) return;
+        retirePredecessorBubble();
         store().mergeCommittedFromServer(chatId, fresh.messages, fresh.hasMore);
         seedMessages = fresh.messages;
         seedHasMore = fresh.hasMore;
@@ -206,6 +222,8 @@ export function useChatSessionStreaming(deps: {
       }
       if (resumeSuperseded() || chatRunManager.isTrackingRun(chatId, runId)) return;
 
+      retirePredecessorBubble();
+      resumeGeneration = chatRunManager.advanceGeneration(chatId);
       chatRunManager.setUserAborted(chatId, false);
       chatRunManager.setResumeRunId(chatId, runId);
       sendingRef.current = true;
@@ -246,6 +264,7 @@ export function useChatSessionStreaming(deps: {
         const resumeStreamCallbacks = createAgentStreamMessagingCallbacks({
           chatId,
           shouldApplyStreamUpdate,
+          isCurrentRun: () => sameBrowserScope() && chatRunManager.getGeneration(chatId) === resumeGeneration,
           beforeAssistantDelta: hydrateResumeTailAssistant,
           reconcileHydratedAssistantText: true,
           setStreamingOnStreamStart: false,
@@ -258,13 +277,19 @@ export function useChatSessionStreaming(deps: {
           fq,
         });
 
-        const resumed = await chatRunManager.senderFor(chatId).resume(runId, chatId, resumeStreamCallbacks);
+        const resumed = await chatRunManager.senderFor(chatId).resume(runId, chatId, resumeStreamCallbacks, {
+          // A persisted cursor is useful only with the corresponding in-memory
+          // bubble. After a page reload, replay the missing presentation too.
+          replayFromStart: responseAtLookup?.turnId !== runId || !hasRenderableAssistantContent(responseAtLookup),
+        });
+        if (!sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration) return;
         if (!resumed) {
           clearChatRunPresence(chatId);
           clearFailedResumeState();
           await loadSessionById(chatId, 0).catch(() => undefined);
         }
       } catch (err) {
+        if (!sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration) return;
         if ((err as Error).name !== 'AbortError') {
           console.error('[chat] resume failed:', err);
         }
@@ -287,7 +312,7 @@ export function useChatSessionStreaming(deps: {
   );
 
   const interruptAndSend = useCallback(
-    async (content: string, attachments?: WireAttachment[], levelOverride?: string, contextRefs?: ComposerContextRef[]) => {
+    async (content: string, attachments?: WireAttachment[], _levelOverride?: string, contextRefs?: ComposerContextRef[]) => {
       if (!content.trim() && !attachments?.length && !contextRefs?.length) return;
       const key = conversationIdRef.current;
       if (!key) return;
@@ -301,26 +326,13 @@ export function useChatSessionStreaming(deps: {
         await resetCurrentSession();
         return;
       }
-      fq.dismissClarifyAndClearPending();
-      const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
-      chatRunManager.setUserAborted(key, true);
-      chatRunManager.abort(key);
-      sendingRef.current = false;
-      streamingRef.current = false;
-      finalizeMessage(key);
-      queueMicrotask(() => {
-        void sendMessageRef.current(content, attachments, effectiveThinking, contextRefs);
-      });
+      await fq.addPendingFollowUp(content, attachments, contextRefs, undefined, true);
     },
     [
       sendingRef,
       streamingRef,
       conversationIdRef,
-      fq.dismissClarifyAndClearPending,
-      modelSupportsThinking,
-      thinkingLevel,
-      finalizeMessage,
-      sendMessageRef,
+      fq.addPendingFollowUp,
       resetCurrentSession,
       taskId,
     ],
@@ -358,6 +370,10 @@ export function useChatSessionStreaming(deps: {
 
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
       const chatId = conversationId;
+      const generation = chatRunManager.advanceGeneration(chatId);
+      const browserScope = useGatewayStore.getState().conversationId;
+      const isCurrentSubmission = () => useGatewayStore.getState().conversationId === browserScope
+        && chatRunManager.getGeneration(chatId) === generation;
       const clientSubmissionId = crypto.randomUUID();
       const pendingRenderKey = `assistant-stream:${chatId}:${clientSubmissionId}`;
       const storedMessages = getSessionMessages(chatId);
@@ -456,6 +472,7 @@ export function useChatSessionStreaming(deps: {
           const sendStreamCallbacks = createAgentStreamMessagingCallbacks({
             chatId,
             shouldApplyStreamUpdate,
+            isCurrentRun: isCurrentSubmission,
             beforeAssistantDelta: () => {},
             reconcileHydratedAssistantText: false,
             setStreamingOnStreamStart: true,
@@ -470,7 +487,7 @@ export function useChatSessionStreaming(deps: {
           sendStreamCallbacks.onInputAccepted = () => {
             inputAccepted = true;
             updateDeliveryStatus('accepted');
-            store().setPendingResponseStatus(chatId, 'waiting');
+            if (isCurrentSubmission()) store().setPendingResponseStatus(chatId, 'waiting');
             onInputAccepted();
           };
 
@@ -486,6 +503,7 @@ export function useChatSessionStreaming(deps: {
             appContext,
           );
         } catch (err) {
+          if (!isCurrentSubmission()) return;
           if ((err as Error).name !== 'AbortError') {
             store().clearStreamingState(chatId);
             clearChatRunPresence(chatId);
@@ -501,13 +519,15 @@ export function useChatSessionStreaming(deps: {
             }
           }
         } finally {
-          if (!inputAccepted) updateDeliveryStatus('failed');
-          if (shouldApplyStreamUpdate(chatId)) {
-            sendingRef.current = false;
-            streamingRef.current = false;
+          if (isCurrentSubmission()) {
+            if (!inputAccepted) updateDeliveryStatus('failed');
+            if (shouldApplyStreamUpdate(chatId)) {
+              sendingRef.current = false;
+              streamingRef.current = false;
+            }
+            store().setSessionFlags(chatId, { sending: false });
+            chatRunManager.releaseIdleSender(chatId);
           }
-          store().setSessionFlags(chatId, { sending: false });
-          chatRunManager.releaseIdleSender(chatId);
         }
       });
     },
@@ -539,29 +559,29 @@ export function useChatSessionStreaming(deps: {
     [sendMessage],
   );
 
-  const abort = useCallback(() => {
+  const settleStoppedRun = useCallback((expectedGeneration: number, expectedRunId: string | null) => {
     const key = conversationIdRef.current;
-    if (!key) return;
-    chatRunManager.setUserAborted(key, true);
-    fq.dismissClarifyAndClearPending();
-    chatRunManager.abort(key);
-    if (key) clearChatRunPresence(key);
+    if (!key || readInputControl(key).phase !== 'idle' || chatRunManager.getGeneration(key) !== expectedGeneration) return;
+    const currentRunId = chatRunManager.getResumeRunId(key);
+    const bubbleRunId = store().sessions[key]?.streamingMsg?.turnId;
+    if (currentRunId && currentRunId !== expectedRunId || bubbleRunId && bubbleRunId !== expectedRunId) return;
+    fq.dismissClarify();
+    chatRunManager.abort(key, false);
+    clearChatRunPresence(key);
     sendingRef.current = false;
     streamingRef.current = false;
-    finalizeMessage(key);
-    if (key) {
-      window.setTimeout(() => {
-        void loadSessionById(key, 0);
-      }, 300);
-    }
-  }, [
-    fq.dismissClarifyAndClearPending,
-    sendingRef,
-    streamingRef,
-    finalizeMessage,
-    conversationIdRef,
-    loadSessionById,
-  ]);
+    finalizeMessage(key, 'cancelled');
+    void loadSessionById(key, 0);
+  }, [fq.dismissClarify, sendingRef, streamingRef, finalizeMessage, conversationIdRef, loadSessionById]);
+
+  const abort = useCallback(async () => {
+    const key = conversationIdRef.current;
+    if (!key) return;
+    const generation = chatRunManager.getGeneration(key);
+    const runId = chatRunManager.getResumeRunId(key) ?? store().sessions[key]?.streamingMsg?.turnId ?? null;
+    await fq.stopSession();
+    if (conversationIdRef.current === key) settleStoppedRun(generation, runId);
+  }, [fq.stopSession, conversationIdRef, settleStoppedRun]);
 
   const deleteMessageRound = useCallback(
     (messageIndex: number) => {
@@ -651,6 +671,7 @@ export function useChatSessionStreaming(deps: {
     replaceLatestUserTurn,
     interruptAndSend,
     abort,
+    settleStoppedRun,
     deleteMessageRound,
     retryUserMessageRound,
   };

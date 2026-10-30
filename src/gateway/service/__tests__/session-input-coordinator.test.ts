@@ -249,7 +249,7 @@ describe('SessionInputCoordinator', () => {
     });
 
     expect(steered.ok && steered.effectiveDelivery).toBe('steer');
-    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust');
+    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust', coordinator.snapshot(conversationId).activeRunId);
     complete({ status: 'ok', summary: 'done' });
     await coordinator.waitForCompletion(conversationId, 'endpoint-steer');
   });
@@ -283,7 +283,7 @@ describe('SessionInputCoordinator', () => {
 
     await coordinator.dispatchAcceptedInput(conversationId, row.id);
 
-    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust accepted command');
+    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust accepted command', coordinator.snapshot(conversationId).activeRunId);
     expect(getSessionInputById(conversationId, row.id)?.effectiveDelivery).toBe('steer');
     expect(getSessionInputById(conversationId, row.id)?.status).toBe('injecting');
     complete({ status: 'ok', summary: 'done' });

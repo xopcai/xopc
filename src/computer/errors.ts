@@ -46,6 +46,7 @@ export function computerRecoveryDirective(code: string, dispatch: 'notStarted' |
     COMPUTER_WINDOW_HIDDEN: 'show_target_window', COMPUTER_WINDOW_READY_TIMEOUT: 'show_target_window',
     COMPUTER_WINDOW_REQUIRED: 'show_target_window', COMPUTER_WINDOW_OTHER_SPACE: 'move_to_same_desktop',
     COMPUTER_DRIVER_BRING_TO_FRONT_REFUSED: 'show_target_window',
+    COMPUTER_APP_PREPARATION_REFUSED: 'show_target_window', COMPUTER_APP_ID_INVALID: 'inspect_result',
     COMPUTER_LOCAL_UI_REQUIRED: 'show_xopc_window', COMPUTER_CAPTURE_UNAVAILABLE: 'wait_and_observe',
     COMPUTER_CAPTURE_REQUIRED: 'wait_and_observe', COMPUTER_OS_PERMISSION_REQUIRED: 'check_capture_permission',
     COMPUTER_BACKGROUND_INPUT_UNSUPPORTED: 'manual_input', COMPUTER_INPUT_REFUSED: 'manual_input',
@@ -74,7 +75,9 @@ export function computerRecovery(code: string): string {
       return 'The native driver rejected the batch before any input. Inspect the exact target, native capability and batch arguments; do not bypass this refusal through scalar calls.';
 
     case 'COMPUTER_WINDOW_HIDDEN': return 'The selected window is hidden or minimized. If restoration is already authorized, open with prepare=true after release; otherwise ask the user to show it. Keyboard focus is not required. Never replay prior inputs.';
-    case 'COMPUTER_WINDOW_READY_TIMEOUT': return 'Window preparation did not become ready within five seconds. No task input was sent during preparation. Ask the user to show the intended window and let it finish opening, then discover/open again; do not repeat activation unchanged.';
+    case 'COMPUTER_WINDOW_READY_TIMEOUT': return 'Automatic application preparation did not produce a verified ready window within five seconds. No task input was sent during preparation. Report the preparation failure and inspect local diagnostics. Resume only after a relevant application or desktop state change; do not repeat activation unchanged or bypass the window checks.';
+    case 'COMPUTER_APP_PREPARATION_REFUSED': return 'The desktop host could not complete the authorized system application-open request. No task input was sent. Inspect application availability and local host state before retrying; do not replace the request with paths, URLs or arbitrary command arguments.';
+    case 'COMPUTER_APP_ID_INVALID': return 'The application identity is not a valid native bundle identifier. Discover the intended application again and use its issued appRef; do not ask the user to supply a bundle id or substitute a path or URL.';
     case 'COMPUTER_CAPTURE_UNAVAILABLE': case 'COMPUTER_CAPTURE_REQUIRED': return 'The selected window could not provide a usable screenshot after bounded capture attempts. This does not establish missing permissions or another desktop. Inspect its visibility and the action receipt; a completed input must not be replayed. Reopen and observe after a local state change.';
     case 'COMPUTER_CAPTURE_TARGET_MISMATCH': return 'The captured native window does not match the selected target. Control is stopped. Select the intended window again; do not reuse refs, coordinates or replay prior inputs.';
     case 'COMPUTER_BACKGROUND_INPUT_UNSUPPORTED': return 'The native driver explicitly reports that this input cannot be delivered in the background. Complete this step manually; do not switch to foreground/global injection or replay it.';

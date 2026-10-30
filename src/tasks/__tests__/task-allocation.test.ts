@@ -43,7 +43,8 @@ import { TaskCollaborationRepository } from '../task-collaboration-repository.js
 
 import { PersonalReplyComposer, buildPersonalReplyPrompt } from '../../personal-agent/reply-composer.js';
 
-vi.mock('../../personal-agent/specialist-capabilities.js', () => ({
+vi.mock('../../personal-agent/specialist-capabilities.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../personal-agent/specialist-capabilities.js')>(),
   getAvailablePersonalAgentTools: () => ['read_file'], personalAgentModelAvailability: () => ({ available: true }),
 }));
 
@@ -84,6 +85,25 @@ const decide = vi.fn(async () => ({ kind: 'select' as const, agentId: 'analyst',
 const dispatcher = () => new TaskAllocationDispatcher({ context, decide, wake: vi.fn() });
 
 describe('background task allocation', () => {
+  it('allocates persisted tasks with old discovery requirements using the current tool entry', async () => {
+    const task = submit('legacy-discovery-requirement');
+    const analyst = catalog.get('analyst')!;
+    catalog.update(analyst.id, analyst.revision, { id: analyst.id,
+      toolAllowlist: ['read_file', 'tool_search', 'xopc_tool_describe', 'xopc_tool_execute', 'task_collaboration'] });
+    getSqliteDatabase().prepare('UPDATE task_allocations SET requirements_json = ? WHERE task_id = ?')
+      .run(JSON.stringify({ version: 1, summary: 'Read connected records', requestedAgentId: analyst.id,
+        requiredTools: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'] }), task.id);
+    const probe = vi.fn((_id: string, tool: string) => ({ condition: `tool:${tool}`,
+      state: tool === 'xopc_tool_search' ? 'blocked' as const : 'verified' as const, reasonCode: 'registered' }));
+    await new TaskAllocationDispatcher({ context: () => ({ ...context(), getAgentToolAvailability: probe }),
+      planner: { plan: async () => defineTaskContract('Analyze sales') }, wake: vi.fn() }).drain();
+    expect(new TaskRunRepository().getActiveRoot(task.id)).toBeDefined();
+    expect(savedExecutionRequirements(task.id)?.requirements.requiredTools).toContain('tool_search');
+    expect(savedExecutionRequirements(task.id)?.requirements.requiredTools).not.toContain('xopc_tool_search');
+    expect(probe.mock.calls.some(([, tool]) => tool === 'tool_search')).toBe(true);
+    expect(probe.mock.calls.some(([, tool]) => tool === 'xopc_tool_search')).toBe(false);
+  });
+
   it('plans the default acceptance contract before queuing execution', async () => {
     const task = submit('planned-contract');
     const planner = { plan: vi.fn(async () => ({ ...defineTaskContract('Analyze sales'),

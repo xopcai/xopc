@@ -1,4 +1,49 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type { ComputerPreviewFrame, ComputerPreviewState, ComputerPreviewPreset } from '@xopcai/computer-control-contract';
+
+const computerPreviewPorts = new Map<string, { port?: MessagePort; subscriptionId?: string;
+  receive(message: ComputerPreviewState | ComputerPreviewFrame): Promise<void> | void }>();
+ipcRenderer.on('computer-preview:port', (event, data: { requestId: string }) => {
+  const entry = computerPreviewPorts.get(data?.requestId);
+  const port = event.ports[0];
+  if (!entry || !port) { port?.close(); return; }
+  entry.port = port;
+  port.addEventListener('close', () => { computerPreviewPorts.delete(data.requestId); entry.port = undefined; });
+  port.onmessage = async event => {
+    const message = event.data as ComputerPreviewFrame | ComputerPreviewState;
+    try { await entry.receive(message); } catch { /* A presentation error must not stall the capture acknowledgement. */ }
+    finally { if ('sequence' in message) port.postMessage({ kind: 'ack', streamEpoch: message.streamEpoch, sequence: message.sequence }); }
+  };
+  port.start();
+});
+
+const computerPreview = {
+  current: (conversationId: string) => ipcRenderer.invoke('computer-preview:current', conversationId),
+  onState: (callback: (state: ComputerPreviewState) => void) => {
+    const listener = (_event: unknown, state: ComputerPreviewState) => callback(state);
+    ipcRenderer.on('computer-preview:state', listener);
+    return () => ipcRenderer.removeListener('computer-preview:state', listener);
+  },
+  subscribe: async (input: { conversationId: string; runId?: string; preset: 'compact' | 'expanded' },
+    receive: (message: ComputerPreviewState | ComputerPreviewFrame) => Promise<void> | void) => {
+    const requestId = crypto.randomUUID();
+    const entry = { receive } as { port?: MessagePort; subscriptionId?: string; receive: typeof receive };
+    computerPreviewPorts.set(requestId, entry);
+    try {
+      const result = await ipcRenderer.invoke('computer-preview:subscribe', input, requestId);
+      entry.subscriptionId = result.subscriptionId;
+      return result as { subscriptionId: string };
+    } catch (error) { entry.port?.close(); computerPreviewPorts.delete(requestId); throw error; }
+  },
+  setPreset: (id: string, preset: ComputerPreviewPreset) => ipcRenderer.invoke('computer-preview:preset', id, preset),
+  unsubscribe: async (id: string) => {
+    for (const [key, entry] of computerPreviewPorts) if (entry.subscriptionId === id) {
+      computerPreviewPorts.delete(key); entry.port?.close();
+    }
+    await ipcRenderer.invoke('computer-preview:unsubscribe', id);
+  },
+  stopControl: (id: string) => ipcRenderer.invoke('computer-preview:stop-control', id),
+};
 
 import type { StartupProgressDetail } from './startup-progress.js';
 
@@ -50,6 +95,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   computer: {
+    preview: computerPreview,
     status: () => ipcRenderer.invoke('computer:status'),
     access: () => ipcRenderer.invoke('computer:access'),
     setAllAppAccess: (allowed: boolean) => ipcRenderer.invoke('computer:set-all-app-access', allowed),

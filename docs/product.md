@@ -1,18 +1,22 @@
 # Product philosophy
 
-> **A better life, with AI.**
+> **Your AI assistant for work and everyday life.**
+>
+> Think things through, get help with tasks, and make time for what matters to you.
 
-xopc is an open-source, local-first personal AI assistant. It learns your habits and goals over time, remembers relevant context, and works with the tools you authorize to help across work and everyday life. Start with a conversation or hand over something to do, then pick up where you left off when you return.
+xopc is an AI assistant for work and everyday life. It is open-source and local-first. It learns your habits and goals over time, remembers relevant context, and works with the tools you authorize to help across work and everyday life. Start with a conversation or hand over something to do, then pick up where you left off when you return.
 
 ## Our vision
 
-A future where everyone has their own AI assistant—helping across work and everyday life, making more time to create, be with the people who matter, and enjoy the world around them.
+A future where everyone has their own AI assistant, with ongoing help across work and everyday life and more time and energy for what matters to them.
 
 ## Our mission
 
 To build AI that learns each person’s habits, goals, and circumstances, takes on tedious and time-consuming tasks, and helps turn ideas into action—leaving more time and energy for what matters to them.
 
 ## One assistant across work and life
+
+Start with a conversation or bring files straight to the workspace. These are two ways to begin, and both can help with work and everyday life.
 
 Work and life are connected parts of being human. A personal assistant should understand you across both, combining the ability to get things done with an awareness of your habits, preferences, and what you need at the moment. The value of greater efficiency should be felt in everyday life: fewer repetitive steps, more opportunities to bring ideas to life, and more time of your own. How you spend that time is up to you.
 

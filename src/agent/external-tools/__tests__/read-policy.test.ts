@@ -35,3 +35,14 @@ it('preserves provider connection recovery candidates through the policy adapter
   await expect(wrapped.connectionCandidates?.('app')).resolves.toMatchObject([{ candidateRef: 'app' }]);
   expect(candidates).toHaveBeenCalledWith('app');
 });
+
+
+it('forwards the host-selected discovery account through policy wrappers', async () => {
+  const provider: ExternalToolProvider = { source: 'cli', search: vi.fn(async () => []), describe: vi.fn(async () => undefined), execute: vi.fn() };
+  const wrapped = withExternalReadPolicy(provider, () => undefined);
+  const scope = { connectorId: 'cli-workspace', accountId: 'selected-account' };
+  await wrapped.search('records', scope);
+  await wrapped.describe('cli:workspace:read', scope);
+  expect(provider.search).toHaveBeenCalledWith('records', scope);
+  expect(provider.describe).toHaveBeenCalledWith('cli:workspace:read', scope);
+});

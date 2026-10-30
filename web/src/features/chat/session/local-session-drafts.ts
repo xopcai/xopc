@@ -137,10 +137,24 @@ export async function savePendingSessionCommand(id: string, command: PendingSess
   });
 }
 
-export async function clearPendingSessionCommand(id: string): Promise<void> {
+export async function clearPendingSessionCommand(id: string, expectedClientMessageId?: string): Promise<void> {
   const storageKey = key(id);
-  if (temporarySessions.has(storageKey)) { memoryCommands.delete(storageKey); return; }
-  await transaction('readwrite', store => store.delete(storageKey), 'commands');
+  if (temporarySessions.has(storageKey)) {
+    if (!expectedClientMessageId || memoryCommands.get(storageKey)?.clientMessageId === expectedClientMessageId) memoryCommands.delete(storageKey);
+    return;
+  }
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('commands', 'readwrite');
+    const store = tx.objectStore('commands');
+    const read = store.get(storageKey);
+    read.onsuccess = () => {
+      if (!expectedClientMessageId || read.result?.clientMessageId === expectedClientMessageId) store.delete(storageKey);
+    };
+    tx.oncomplete = () => resolve();
+    tx.onabort = () => reject(tx.error ?? new Error('Receipt persistence failed'));
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 export async function confirmSessionCommand(id: string, transcriptId: string): Promise<void> {

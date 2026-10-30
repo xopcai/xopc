@@ -27,7 +27,8 @@ import { TaskRepository } from '../task-repository.js';
 import { TaskResultDeliveryService } from '../task-result-delivery-service.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
 
-vi.mock('../../personal-agent/specialist-capabilities.js', () => ({
+vi.mock('../../personal-agent/specialist-capabilities.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../personal-agent/specialist-capabilities.js')>(),
   getAvailablePersonalAgentTools: () => ['read_file'], personalAgentModelAvailability: () => ({ available: true }),
 }));
 

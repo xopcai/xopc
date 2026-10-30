@@ -36,6 +36,7 @@ import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams } from '../types.js
 import { setXopcToolMetadata } from '../tool-metadata.js';
 import { getXopcToolMetadata } from '../tool-metadata.js';
 import { materializeNativeExternalTools } from '../external-tool-discovery.js';
+import { createExternalToolGatewayTools } from '../../external-tools/gateway-tools.js';
 import { createDefaultExternalToolGatewayTools } from '../../external-tools/index.js';
 import { EndpointRegistry } from '../../../endpoint-tools/registry.js';
 import { EndpointBindingService } from '../../../endpoint-tools/binding-service.js';
@@ -578,3 +579,33 @@ it.each([true, false])('bounds a promise-only Skill installation continuation (r
   expect(round).toBe(recovers ? 3 : 2);
   expect(execute).toHaveBeenCalledTimes(recovers ? 1 : 0);
 });
+
+
+it('discovers connector-only tools through tool_search and preserves describe/execute revision checks', async () => {
+  const { params } = await fixture();
+  const contract = { toolRef: 'cli:wecom:doc.search', source: 'cli' as const, namespace: 'wecom', title: 'doc.search',
+    summary: 'Search WeCom documents', description: 'Search WeCom documents', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } };
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'WeCom document evidence' }], details: {} }));
+  params.tools = createExternalToolGatewayTools([{ source: 'cli', search: async () => [contract],
+    describe: async ref => ref === contract.toolRef ? contract : undefined, execute }]);
+  params.codemode = undefined;
+  const found = await runScript(params, '', 'tool_search', { query: 'WeCom documents' });
+  expect(JSON.stringify(found.calls[0])).toContain('tool_search');
+  expect(JSON.stringify(found.calls[0])).not.toContain('xopc_tool_search');
+  const payload = JSON.parse((found.result!.content[0] as { text: string }).text);
+  expect(payload.externalTools).toEqual([expect.objectContaining({ toolRef: contract.toolRef, nextAction: 'describe' })]);
+  expect(payload.loadedTools).toEqual([]);
+  const described = await runScript({ ...params, runId: crypto.randomUUID() }, '', 'xopc_tool_describe', { toolRefs: [contract.toolRef] });
+  const revision = JSON.parse((described.result!.content[0] as { text: string }).text).tools[0].revision;
+  const executed = await runScript({ ...params, runId: crypto.randomUUID() }, '', 'xopc_tool_execute', {
+    toolRef: contract.toolRef, revision, arguments: { query: 'report' },
+  });
+  expect(JSON.stringify(executed.result)).toContain('WeCom document evidence');
+  expect(execute).toHaveBeenCalledOnce();
+  contract.description = 'Changed WeCom contract';
+  const stale = await runScript({ ...params, runId: crypto.randomUUID() }, '', 'xopc_tool_execute', {
+    toolRef: contract.toolRef, revision, arguments: { query: 'report' },
+  });
+  expect(JSON.stringify(stale.result)).toContain('contract changed');
+  expect(execute).toHaveBeenCalledOnce();
+}, 15000);

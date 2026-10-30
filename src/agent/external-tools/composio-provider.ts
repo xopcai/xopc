@@ -39,6 +39,7 @@ import { ExternalToolSearchError } from './search-error.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
   ExternalToolDescriptor,
+  ExternalToolDiscoveryContext,
   ExternalToolExecutionContext,
   ExternalToolProvider,
   ExternalToolSearchHit,
@@ -207,8 +208,9 @@ export class ComposioToolProvider implements ExternalToolProvider {
     this.adapter = deps.adapter ?? new ComposioSessionsAdapter();
   }
 
-  async search(query: string): Promise<ExternalToolSearchHit[]> {
+  async search(query: string, context?: ExternalToolDiscoveryContext): Promise<ExternalToolSearchHit[]> {
     const available = this.availableInstallations();
+    if (context) available.installations = available.installations.filter(installation => installation.connectorId === context.connectorId);
     if (available.installations.length === 0) return [];
     const settled = await Promise.allSettled(available.installations.map(async (installation) => {
       const toolkit = toolkitFromInstallation(installation);
@@ -286,9 +288,10 @@ export class ComposioToolProvider implements ExternalToolProvider {
     return hits;
   }
 
-  async describe(toolRef: string): Promise<ExternalToolDescriptor | undefined> {
+  async describe(toolRef: string, context?: ExternalToolDiscoveryContext): Promise<ExternalToolDescriptor | undefined> {
     const resolved = this.resolve(toolRef);
     if (!resolved) return undefined;
+    if (context && resolved.installation.connectorId !== context.connectorId) return undefined;
     const toolkit = toolkitFromInstallation(resolved.installation);
     const action = listConnectorActionMetadata(resolved.installation.connectorId)
       .find((candidate) => candidate.actionId === resolved.actionId);
@@ -296,9 +299,11 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const summary = `Run ${action.actionId} in ${toolkit}.`;
     const available = this.availableInstallations();
     const accounts = currentAccountConnections(listConnectorConnections({ principalId: available.principalId,
-      connectorId: resolved.installation.connectorId }).filter(connection => canAccessConnectorAccount(connection, resolved.installation, available.agentId)))
+      connectorId: resolved.installation.connectorId }).filter(connection => canAccessConnectorAccount(connection, resolved.installation, available.agentId)
+        && (!context || connection.accountId === context.accountId)))
       .map(connection => ({ accountId: connection.accountId, label: getConnectorAccount(connection.accountId!)?.label,
         identity: connectorIdentitySummary(connection.identity) }));
+    if (context && !accounts.length) return undefined;
     return {
       toolRef,
       source: this.source,

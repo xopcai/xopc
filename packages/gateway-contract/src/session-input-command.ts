@@ -64,6 +64,8 @@ export const sessionInputCommandSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('append'), clientMessageId: z.string().min(1).max(128),
     expectedTranscriptId: z.string().min(1).max(128), configVersion: z.number().int().nonnegative(),
+    controlVersion: z.number().int().nonnegative().optional(),
+    execution: z.literal('single').optional(),
     delivery: z.enum(['next', 'steer']), interrupt: z.boolean().optional(), input: sessionInputContentSchema, origin: originSchema,
   }),
 ]);
@@ -100,4 +102,21 @@ export function sessionCommandIdentity(command: SessionInputCommand | SessionMat
     return canonicalSessionCommand({ ...command, origin });
   }
   return canonicalSessionCommand(command);
+}
+
+export const sessionInputControlCommandSchema = z.strictObject({
+  operationId: z.string().min(1).max(128),
+  expectedTranscriptId: z.string().min(1).max(128),
+  action: z.enum(['stop', 'pause', 'resume', 'send', 'steer']),
+  expectedVersion: z.number().int().nonnegative(),
+  inputId: z.string().min(1).optional(),
+  inputVersion: z.number().int().positive().optional(),
+  turnId: z.string().min(1).optional(),
+});
+export type SessionInputControlCommand = z.infer<typeof sessionInputControlCommandSchema>;
+export interface SessionInputControlView {
+  paused: boolean;
+  version: number;
+  phase: 'idle' | 'running' | 'stopping';
+  reviewRequired: boolean;
 }

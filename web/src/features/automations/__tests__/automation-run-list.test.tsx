@@ -54,3 +54,13 @@ it('keeps a deep-linked old run visible outside the recent preview', async () =>
   await act(async () => (container.querySelector('[aria-current="true"]') as HTMLButtonElement).click());
   expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'old-deep-link' }));
 });
+
+it('resolves a selected older execution when the sidebar only has its run ID', async () => {
+  vi.spyOn(automationApi, 'runs').mockResolvedValue({ runs: ['newest', 'second', 'third'].map(run), hasMore: false });
+  const selected = vi.spyOn(automationApi, 'getRun').mockResolvedValue({ run: run('old-execution') });
+  await act(async () => root.render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+    <AutomationRunList automationId="task" language="en" selectedRunId="old-execution" onSelectRun={select} />
+  </SWRConfig>));
+  expect(selected).toHaveBeenCalledWith('old-execution');
+  expect(container.querySelector('[aria-current="true"]')?.textContent).toContain('Currently viewing');
+});

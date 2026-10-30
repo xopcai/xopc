@@ -27,14 +27,16 @@ const fieldClass = 'w-full rounded-lg border border-edge bg-surface-base px-3 py
 const deviceMenuItemClass = 'min-h-11 w-full cursor-default rounded-lg px-3 py-2 text-left text-sm outline-none data-[highlighted]:bg-surface-hover data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
 const panelClass = 'space-y-4 rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5';
 
-function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
-  device?: PhoneDevice; serial: string; name: string; zh: boolean;
+function DeviceForm({ device, serial, name, platform: discoveredPlatform, onSave, onClose, zh }: {
+  device?: PhoneDevice; platform?: 'android' | 'harmonyos'; serial: string; name: string; zh: boolean;
   onSave(): Promise<void>; onClose(): void;
 }) {
+  const platform = device?.platform ?? discoveredPlatform;
+  const harmony = platform === 'harmonyos';
   const [displayName, setDisplayName] = useState(device?.name ?? name);
   const [appAccess, setAppAccess] = useState<'all' | 'selected'>(device?.appAccess ?? (device?.allowedApps.length ? 'selected' : 'all'));
   const [apps, setApps] = useState<string[]>(device?.allowedApps ?? []);
-  const [textInput, setTextInput] = useState<'auto' | 'manual'>(device?.textInput ?? 'auto');
+  const [textInput, setTextInput] = useState<'auto' | 'manual'>(device?.textInput ?? (harmony ? 'manual' : 'auto'));
   const [enabled, setEnabled] = useState(device?.enabled ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -42,7 +44,7 @@ function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
     setBusy(true); setError('');
     try {
       const input = { name: displayName, appAccess, allowedApps: appAccess === 'all' ? [] : apps, textInput, enabled };
-      await phoneRequest(device ? `/devices/${device.id}` : '/devices', device ? input : { ...input, serial }, device ? 'PATCH' : 'POST');
+      await phoneRequest(device ? `/devices/${device.id}` : '/devices', device ? input : { ...input, serial, platform }, device ? 'PATCH' : 'POST');
       await onSave(); onClose();
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
@@ -57,9 +59,9 @@ function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
       <form className="mt-5 flex min-h-0 flex-1 flex-col" onSubmit={event => { event.preventDefault(); void submit(); }}>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           <label className="block space-y-1.5 text-sm">{zh ? '名称' : 'Name'}<input className={fieldClass} value={displayName} maxLength={100} required onChange={event => setDisplayName(event.target.value)} /></label>
-          <p className="break-all text-xs text-fg-muted">ADB: {serial}</p><p className="text-xs text-fg-muted">{zh ? '已启用 phone_use 工具的 Agent 可使用这台手机。' : 'Agents with the phone_use tool can use this phone.'}</p>
-          <PhoneAppPicker deviceId={device?.id} serial={serial} mode={appAccess} selected={apps} onModeChange={setAppAccess} onSelectedChange={setApps} zh={zh} disabled={busy} />
-          <PhoneTextInput deviceId={device?.id} value={textInput} onChange={setTextInput} disabled={busy} zh={zh} />
+          <p className="break-all text-xs text-fg-muted">{harmony ? 'HDC' : 'ADB'}: {serial}</p><p className="text-xs text-fg-muted">{zh ? '已启用 phone_use 工具的 Agent 可使用这台手机。' : 'Agents with the phone_use tool can use this phone.'}</p>
+          <PhoneAppPicker deviceId={device?.id} serial={serial} platform={platform} mode={appAccess} selected={apps} onModeChange={setAppAccess} onSelectedChange={setApps} zh={zh} disabled={busy} />
+          {harmony ? <p className="text-xs text-fg-muted">{zh ? '鸿蒙支持实时投屏和截图回退。手势释放后执行；文字请在手机上输入，完成后交还 Agent。应用列表暂以应用标识显示。' : 'HarmonyOS supports live video with snapshot fallback. Gestures execute on release. Type on the phone, then hand back. Apps display bundle identifiers.'}</p> : <PhoneTextInput deviceId={device?.id} value={textInput} onChange={setTextInput} disabled={busy} zh={zh} />}
           <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} />{zh ? '允许访问这台手机' : 'Enable access to this phone'}</label>
           {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         </div>
@@ -88,7 +90,7 @@ export function PhoneSettingsPage() {
   const [notice, setNotice] = useState('');
   const [adding, setAdding] = useState(false);
   const [reconnecting, setReconnecting] = useState<PhoneDevice>();
-  const [editing, setEditing] = useState<{ device?: PhoneDevice; serial: string; name: string }>();
+  const [editing, setEditing] = useState<{ device?: PhoneDevice; platform?: 'android' | 'harmonyos'; serial: string; name: string }>();
   const [selected, setSelected] = useState('');
   const [goal, setGoal] = useState('');
   const [expectText, setExpectText] = useState('');
@@ -134,7 +136,7 @@ export function PhoneSettingsPage() {
   const cloudOnly = Boolean(devices.data?.devices.length && devices.data.devices.every(device => device.connection));
 
   return <SettingsPageFrame gap="gap-6" className="max-w-[48rem]">
-    <SettingsPageHeader aiSetup="phone" title={<span className="inline-flex items-center gap-2">{zh ? '手机控制' : 'Phone Use'}<BetaBadge /></span>} subtitle={zh ? '让 AI 帮你操作 Android 手机。' : 'Let AI work with your Android phone.'} />
+    <SettingsPageHeader aiSetup="phone" title={<span className="inline-flex items-center gap-2">{zh ? '手机控制' : 'Phone Use'}<BetaBadge /></span>} subtitle={zh ? '让 AI 帮你操作 Android 和鸿蒙手机。' : 'Let AI work with your Android or HarmonyOS phone.'} />
 
 
     {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{error}</p>}
@@ -186,10 +188,10 @@ export function PhoneSettingsPage() {
     <section className="space-y-3" aria-label={zh ? '手机管理' : 'Phone management'}>
       <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-semibold">{zh ? '手机管理' : 'Phones'}</h2><div className="flex items-center gap-2"><Button variant="ghost" disabled={busy} onClick={() => setAdding(true)}><Plus className="size-4" aria-hidden />{zh ? '添加手机' : 'Add phone'}</Button><Button variant="ghost" disabled={busy || devices.isValidating} onClick={() => { void perform(() => devices.mutate()); }}><RefreshCw className="size-4" aria-hidden />{zh ? '刷新' : 'Refresh'}</Button></div></div>
       {!devices.data && !devices.error ? <Skeleton className="h-32 w-full rounded-xl" /> : <div className={panelClass}>
-        {(devices.error || !cloudOnly && devices.data?.diagnostic) && <p role="alert" className="text-sm text-danger">{devices.data?.diagnostic ?? String(devices.error)} · {zh ? '检查 Gateway 电脑的 Android SDK 与 ADB。' : 'Check Android SDK and ADB on the Gateway host.'}</p>}
+        {(devices.error || !cloudOnly && devices.data?.diagnostic) && <p role="alert" className="text-sm text-danger">{devices.data?.diagnostic ?? String(devices.error)} · {zh ? '检查 Gateway 电脑的调试工具与 USB 连接。' : 'Check debugging tools and USB on the Gateway host.'}</p>}
         {devices.data?.devices.map(device => <div key={device.id} className="border-b border-edge-subtle pb-4 last:border-b-0 last:pb-0">
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:gap-4">
-          <div className="flex min-w-0 flex-1 items-start gap-3"><Smartphone className="mt-0.5 size-5 shrink-0 text-fg-muted" /><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{device.name}{device.id === devices.data?.defaultDeviceId && <span className="ml-2 inline-block rounded-md bg-surface-inset px-2 py-0.5 text-xs font-normal text-fg-muted">{zh ? '默认' : 'Default'}</span>}</p><p className="mt-1 break-all text-xs text-fg-muted">{device.connection ? `${zh ? '阿里云' : 'Alibaba Cloud'} · ADB · ` : ''}{device.serial} · {device.enabled ? (device.connection ? (zh ? '已配置 · 按需连接' : 'Configured · Connects on demand') : ({ device: zh ? '已连接' : 'Connected', offline: zh ? '离线' : 'Offline', unauthorized: zh ? '待授权' : 'Unauthorized' }[devices.data?.discovery.find(item => item.serial === device.serial)?.state ?? ''] ?? (zh ? '未连接' : 'Disconnected'))) : (zh ? '已禁用' : 'Disabled')}</p></div></div>
+          <div className="flex min-w-0 flex-1 items-start gap-3"><Smartphone className="mt-0.5 size-5 shrink-0 text-fg-muted" /><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{device.name}{device.id === devices.data?.defaultDeviceId && <span className="ml-2 inline-block rounded-md bg-surface-inset px-2 py-0.5 text-xs font-normal text-fg-muted">{zh ? '默认' : 'Default'}</span>}</p><p className="mt-1 break-all text-xs text-fg-muted">{device.platform === 'harmonyos' ? 'HarmonyOS · HDC · USB · ' : device.connection ? `${zh ? '阿里云' : 'Alibaba Cloud'} · ADB · ` : ''}{device.serial} · {device.enabled ? (device.connection ? (zh ? '已配置 · 按需连接' : 'Configured · Connects on demand') : ({ device: zh ? '已连接' : 'Connected', offline: zh ? '离线' : 'Offline', unauthorized: zh ? '待授权' : 'Unauthorized' }[devices.data?.discovery.find(item => item.serial === device.serial && (item.platform ?? 'android') === (device.platform ?? 'android'))?.state ?? ''] ?? (zh ? '未连接' : 'Disconnected'))) : (zh ? '已禁用' : 'Disabled')}</p></div></div>
           <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1 self-end sm:self-start">
             <Button variant="ghost" disabled={busy} onClick={() => setEditing({ device, serial: device.serial, name: device.name })}>{zh ? '管理' : 'Manage'}</Button>
             <Button variant="ghost" disabled={busy || !device.enabled} onClick={() => { void perform(async () => {
@@ -219,7 +221,7 @@ export function PhoneSettingsPage() {
           </div>
           <p role="status" aria-live="polite" title={diagnostics[device.id]?.text} className={`h-5 truncate text-xs leading-5 ${diagnostics[device.id]?.error ? 'text-danger' : 'text-fg-muted'}`}>{diagnostics[device.id]?.text}</p>
         </div>)}
-        {devices.data?.discovery.filter(found => !devices.data?.devices.some(device => device.serial === found.serial)).map(found => <div key={found.serial} className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm">{found.name}</p><p className="text-xs text-fg-muted">{found.emulator ? (zh ? 'Android 模拟器' : 'Android emulator') : 'Android'} · {found.state}</p></div><Button disabled={busy || found.state !== 'device'} onClick={() => setEditing({ serial: found.serial, name: found.name })}>{zh ? '添加手机' : 'Add phone'}</Button></div>)}
+        {devices.data?.discovery.filter(found => !devices.data?.devices.some(device => device.serial === found.serial && (device.platform ?? 'android') === (found.platform ?? 'android'))).map(found => <div key={`${found.platform ?? 'android'}:${found.serial}`} className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm">{found.name}</p><p className="text-xs text-fg-muted">{found.platform === 'harmonyos' ? 'HarmonyOS · USB' : found.emulator ? (zh ? 'Android 模拟器' : 'Android emulator') : 'Android'} · {found.state}</p></div><Button disabled={busy || found.state !== 'device'} onClick={() => setEditing({ serial: found.serial, name: found.name, platform: found.platform })}>{zh ? '添加手机' : 'Add phone'}</Button></div>)}
         {!devices.data?.devices.length && !devices.data?.discovery.length && <p className="py-3 text-sm text-fg-muted">{zh ? '尚未发现设备。先启动 Android 模拟器，或通过 USB 连接手机并允许调试。' : 'No devices found. Start an Android emulator, or connect a phone over USB and authorize debugging.'}</p>}
       </div>}
     </section>
@@ -244,7 +246,7 @@ export function PhoneSettingsPage() {
       </div>
     </details>
 
-    {adding && <AddPhoneDialog onAdded={() => { void devices.mutate(); }} zh={zh} onClose={() => setAdding(false)} onSelect={device => { setAdding(false); setEditing({ serial: device.serial, name: device.name }); }} />}
+    {adding && <AddPhoneDialog onAdded={() => { void devices.mutate(); }} zh={zh} onClose={() => setAdding(false)} onSelect={device => { setAdding(false); setEditing({ serial: device.serial, name: device.name, platform: device.platform }); }} />}
     {reconnecting && <WirelessReconnectDialog device={reconnecting} zh={zh} onClose={() => setReconnecting(undefined)} onConnected={async () => { await devices.mutate(); }} />}
     {editing && settings.data && <DeviceForm {...editing} zh={zh} onSave={async () => { await devices.mutate(); }} onClose={() => setEditing(undefined)} />}
   </SettingsPageFrame>;

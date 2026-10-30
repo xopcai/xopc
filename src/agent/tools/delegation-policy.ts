@@ -13,7 +13,7 @@ export const DELEGATION_TOOL_CAPABILITIES: Readonly<Record<string, DelegationCap
   knowledge_search: 'knowledge_read', knowledge_get: 'knowledge_read', session_search: 'knowledge_read',
   session_recall: 'knowledge_read', user_context_search: 'knowledge_read', user_context_get: 'knowledge_read',
   skills_list: 'skills_read', skill_view: 'skills_read', skills_marketplace_search: 'skills_read',
-  xopc_tool_search: 'external_read', xopc_tool_describe: 'external_read', xopc_tool_execute: 'external_read',
+  tool_search: 'external_read', xopc_tool_search: 'external_read', xopc_tool_describe: 'external_read', xopc_tool_execute: 'external_read',
   write_file: 'local_write', apply_patch: 'local_write', exec_command: 'command', language_diagnostics: 'command',
   browser_use: 'browser',
 };

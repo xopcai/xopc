@@ -10,7 +10,7 @@ import { TaskConversationRepository } from '../../tasks/task-conversation-reposi
 export const TASK_EXECUTION_TOOL_IDS: readonly string[] = ['task_collaboration', 'publish_task_result'];
 
 export const PERSONAL_REQUEST_TOOL_IDS = [
-  'xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute',
+  'tool_search', 'xopc_tool_describe', 'xopc_tool_execute',
   'personal_request_result', 'personal_request_connection', 'task_collaboration',
 ] as const;
 
@@ -36,7 +36,7 @@ export function resolveExecutionToolPolicy(conversationId: string): ExecutionToo
   const taskExecution = Boolean(isXopcDatabaseOpen()
     && new TaskConversationRepository().resolveActiveExecutionSession(conversationId));
   return { surface, taskExecution, nativeMcp: configured, externalMaterialization: configured,
-    discovery: configured, codemode: configured, revision: 'personal-tool-boundaries-v3' };
+    discovery: configured, codemode: configured, revision: 'unified-tool-discovery-v1' };
 }
 
 export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): boolean {

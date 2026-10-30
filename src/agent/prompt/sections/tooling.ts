@@ -155,7 +155,7 @@ export function buildToolingSection(params: {
     '## Tooling',
     'Tool availability (filtered by policy):',
     'Use only case-sensitive names in current function schemas; prose/history examples grant no tool. Never probe invented names. Missing prerequisites: give a final blocker, without unrelated calls.',
-    availableTools.has('tool_search') ? 'Registered tools may be deferred. Use tool_search for the exact name before reporting it missing; call only after its schema loads.' : '',
+    (availableTools.has('tool_search') || availableTools.has('xopc_tool_execute')) ? 'Use tool_search as the single tool discovery entry. loadedTools can be called after their schemas load; externalTools require xopc_tool_describe then xopc_tool_execute. Connection candidates are recovery options, not proof of missing authorization. Respect the current execution scope.' : '',
     hasPublishArtifacts && !hasRead && !hasWrite && !hasPatch && !hasExec
       ? 'Only publication is available for workspace files. For a request to edit then publish, editing is blocked: make no publication call and explain the limitation. Publish an existing file only when the user requests that existing content without an outstanding edit.' : '',
     'When a tool returns an xopc product link, reuse its exact URL in a Markdown link with a short descriptive label in the user\'s language (for example, [打开会话](url)). Do not invent link parameters, escape the link brackets/parentheses, or wrap a navigation link in a code span. Avoid repeating raw URLs or internal object metadata unless requested.',

@@ -178,13 +178,14 @@ export class TurnDispatcher {
    * after current tool work, before the next LLM call). See `Agent.steer`
    * in `@earendil-works/pi-agent-core`.
    */
-  async steerWebchatSession(conversationId: string, text: string): Promise<boolean> {
+  async steerWebchatSession(conversationId: string, text: string, expectedRunId?: string): Promise<boolean> {
     const trimmed = text.trim();
     if (!trimmed) return false;
     try {
-      return await queueEmbeddedSteer(conversationId, trimmed);
+      return await queueEmbeddedSteer(conversationId, trimmed, expectedRunId);
     } catch (err) {
       this.log.warn({ err, conversationId }, 'steerWebchatSession failed');
+      if (expectedRunId !== undefined) throw err;
       return false;
     }
   }

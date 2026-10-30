@@ -1,8 +1,9 @@
-import { resolveSessionIdentity, type SessionIdentityInput } from '@xopcai/gateway-contract';
+import { isAutomationConfigurationSession, resolveSessionIdentity, type SessionIdentityInput } from '@xopcai/gateway-contract';
 
 import type { MessageBundle } from '@/i18n/messages';
 
 export function sessionIdentityLabel(session: SessionIdentityInput, labels: MessageBundle['sidebar']['sessionFilters']): string {
+  if (isAutomationConfigurationSession(session)) return labels.automationConfiguration;
   const { source, purpose } = resolveSessionIdentity(session);
   const parts = purpose === 'chat' ? [labels.sources[source]] : [labels.purposes[purpose]];
   const sourceAddsContext = purpose !== 'chat' && source !== 'other'

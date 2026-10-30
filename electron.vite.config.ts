@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -73,6 +74,9 @@ export default defineConfig({
     },
   },
   preload: {
+    plugins: [{ name: 'computer-preview-document', generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'computer-preview.html', source: readFileSync(resolve(__dirname, 'electron/computer/preview-worker.html'), 'utf8') });
+    } }],
     build: {
       minify: 'esbuild',
       rollupOptions: {
@@ -80,6 +84,7 @@ export default defineConfig({
         external: ['electron'],
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
+          'computer-preview': resolve(__dirname, 'electron/computer/preview-worker.ts'),
         },
         // Root package.json is `"type": "module"`, so electron-vite would default preload to ESM
         // (`index.mjs`). Electron does not execute that preload as an ES module. Force CJS (`index.cjs`).

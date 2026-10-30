@@ -58,7 +58,7 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
       }
     },
     registerLocal: async (serial, name, mutation) => {
-      const discovered = (await runtime.discover(service.currentConfig)).find(phone => phone.serial === serial && phone.state === 'device');
+      const discovered = (await runtime.discover(service.currentConfig, undefined, 'android')).find(phone => phone.serial === serial && phone.state === 'device');
       mutation?.check();
       if (!discovered) throw new Error('PHONE_SETUP_DEVICE_OFFLINE: Select an online discovered local phone.');
       if (!runtime.repository.list().some(phone => phone.serial === serial)) runtime.repository.save({ serial, name: name?.trim() || discovered.name, enabled: true, appAccess: 'selected', allowedApps: ['com.android.settings'] });
@@ -83,14 +83,14 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
       const dependencies = await new PhoneDependencyManager({ stateDir: resolveStateDir(), config: config.runtimeTools, adbPath: config.phone.adbPath }).status();
       let localDiscovery: Array<{ serial?: string; name: string; state: string; emulator: boolean }> = []; let diagnostic: string | undefined;
       if (source === 'local' && dependencies.some(item => item.kind === 'adb' && item.state === 'ready')) {
-        try { localDiscovery = (await runtime.discover(config)).map(({ serial, name, state, emulator }) => ({ serial, name, state, emulator })); }
+        try { localDiscovery = (await runtime.discover(config, undefined, 'android')).map(({ serial, name, state, emulator }) => ({ serial, name, state, emulator })); }
         catch { diagnostic = 'PHONE_SETUP_DISCOVERY_FAILED'; }
       }
       return { enabled: config.phone.enabled,
         toolAllowed: agent.tools.phone_use?.mode !== 'deny' && (!agent.toolAllowlist || agent.toolAllowlist.includes('phone_use')),
         model: { ref, source: resolved.sources['models.phoneUse.primary'], chatRef: agent.models.chat?.primary, supported: Boolean(model && phoneModelProfile(model)), configured: Boolean(model && isProviderConfiguredSync(model.provider)) },
         dependencies: dependencies.map(({ kind, state, version, canInstall }) => ({ kind, state, version, canInstall })),
-        devices: runtime.repository.list().map(device => ({ id: device.id, name: device.name, source: device.connection ? 'aliyun' as const : 'local' as const,
+        devices: runtime.repository.list().filter(device => device.platform !== 'harmonyos').map(device => ({ id: device.id, name: device.name, source: device.connection ? 'aliyun' as const : 'local' as const,
           enabled: device.enabled, settingsAllowed: phoneAllowsApp(device, 'com.android.settings') })), localDiscovery, diagnostic };
     },
   });

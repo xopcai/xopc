@@ -30,7 +30,7 @@ export function personalCapabilities(conversationId: string, query: string, acco
       && agent.id !== principal.agentId && !agent.id.startsWith('personal-')
       && repository.get(agent.id)?.provisioningState === 'ready').filter(agent => {
       const assessment = assessSpecialist(agent.id, { version: 1, summary: 'Connected app discovery',
-        requiredTools: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'] }, {
+        requiredTools: ['tool_search', 'xopc_tool_describe', 'xopc_tool_execute'] }, {
         ownAgentId: principal.agentId ?? '',
         // These three gateways are host-owned registrations; account access is checked below.
         getAgentToolAvailability: (_id, tool) => ({ condition: `tool:${tool}`, state: 'verified', reasonCode: 'external_gateway_registered' }),

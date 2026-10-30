@@ -45,6 +45,30 @@ describe('session discovery across stored history', () => {
     expect(listSessionMetadata({ sources: ['workbench'], status: SessionStatus.ARCHIVED }).items.map((r) => r.name)).toEqual(['archived']);
   });
 
+  it('keeps configuration chats while excluding executions before counting and pagination', () => {
+    seed('normal-chat', {});
+    seed('draft', { customData: { automationSetup: {} } });
+    seed('saved', { customData: { automationSetup: { automationId: 'daily-news' } } });
+    seed('pinned-configuration', { status: SessionStatus.PINNED, projectId: 'project-a', customData: { automationSetup: { automationId: 'project-news' } } });
+    seed('archived-configuration', { status: SessionStatus.ARCHIVED, customData: { automationSetup: {} } });
+    seed('invalid-marker', { customData: { automationSetup: null } });
+    for (let i = 0; i < 30; i++) seed(`execution-${i}`, { sourceChannel: 'automation' });
+    seed('legacy-execution', { sourceChannel: 'webchat', customData: { origin: 'automation' } });
+    seed('trigger-execution', { sourceChannel: 'webchat', customData: { triggerSource: 'automation' } });
+    seed('cron-execution', { sourceChannel: 'cron', sessionType: 'cron' });
+
+    const query = { excludeAutomationRuns: true, excludeArchived: true };
+    const conversations = listSessionMetadata({ ...query, limit: 2 });
+    expect(conversations.total).toBe(5);
+    expect(conversations.hasMore).toBe(true);
+    const next = listSessionMetadata({ ...query, limit: 10, offset: 2 });
+    expect([...conversations.items, ...next.items].map((row) => row.name).sort())
+      .toEqual(['draft', 'invalid-marker', 'normal-chat', 'pinned-configuration', 'saved']);
+    expect(listSessionMetadata({ ...query, projectId: 'project-a' }).total).toBe(1);
+    // Execution transcripts remain discoverable for the automation history UI.
+    expect(listSessionMetadata({ purposes: ['automation'] }).total).toBe(33);
+  });
+
   it('searches message content beyond 500 sessions and still applies source filters', () => {
     const db = getSqliteDatabase();
     for (let i = 0; i < 510; i++) {

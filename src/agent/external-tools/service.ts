@@ -46,6 +46,7 @@ function descriptorRevision(descriptor: Omit<VersionedExternalToolDescriptor, 'r
       outputSchema: descriptor.outputSchema,
       annotations: descriptor.annotations,
       batchRead: descriptor.batchRead === true,
+      readOnly: descriptor.readOnly,
       contractRevision: descriptor.contractRevision,
       exposure: descriptor.exposure,
     }))
@@ -88,6 +89,8 @@ export class ExternalToolService {
     query: string;
     sources?: ExternalToolSource[];
     limit?: number;
+    signal?: AbortSignal;
+    timeoutMs?: number;
   }): Promise<{ tools: ExternalToolSearchHit[]; connectionCandidates: ExternalConnectionCandidate[]; unavailableSources: ExternalToolSource[]; sourceErrors?: Array<ReturnType<typeof searchFailureDetails> & { source: ExternalToolSource }> }> {
     const selected: ExternalToolProvider[] = params.sources?.length
       ? params.sources
@@ -95,12 +98,13 @@ export class ExternalToolService {
           .filter((provider): provider is ExternalToolProvider => provider !== undefined)
       : [...this.providerBySource.values()];
     const settled = await Promise.allSettled(
-      selected.map(async (provider) => ({
+      selected.map(provider => searchWithDeadline(async () => ({
         provider,
-        hits: await provider!.search(params.query),
-        candidates: await provider!.connectionCandidates?.(params.query) ?? [],
-      })),
+        hits: await provider.search(params.query),
+        candidates: await provider.connectionCandidates?.(params.query) ?? [],
+      }), params.timeoutMs, params.signal)),
     );
+    params.signal?.throwIfAborted();
     const unavailableSources: ExternalToolSource[] = [];
     const sourceErrors: Array<ReturnType<typeof searchFailureDetails> & { source: ExternalToolSource }> = [];
     const hits: ExternalToolSearchHit[] = [];
@@ -183,7 +187,7 @@ export class ExternalToolService {
     const descriptor = await provider.describe(params.toolRef);
     if (!descriptor) throw new Error(`External tool is unavailable: ${params.toolRef}`);
     const current = versionDescriptor(descriptor);
-    if (params.personalReadOnly && current.readOnly !== true && current.batchRead !== true) throw new Error('This external operation has no host-curated read-only contract');
+    if (params.personalReadOnly && current.readOnly !== true) throw new Error('This external operation has no host-curated read-only contract');
     if (params.readOnly && current.batchRead !== true) throw new Error('This external operation is not approved for batch reads');
     if (current.revision !== params.revision) {
       throw new Error(`Tool contract changed. Describe ${params.toolRef} again before executing it.`);
@@ -214,5 +218,23 @@ export class ExternalToolService {
     const separator = toolRef.indexOf(':');
     if (separator <= 0) return undefined;
     return this.providerBySource.get(toolRef.slice(0, separator) as ExternalToolSource);
+  }
+}
+
+/** A stalled directory must not hide successful results from another provider. */
+async function searchWithDeadline<T>(search: () => Promise<T>, timeoutMs?: number, signal?: AbortSignal): Promise<T> {
+  signal?.throwIfAborted();
+  if (!timeoutMs && !signal) return search();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  try {
+    return await Promise.race([search(), new Promise<never>((_resolve, reject) => {
+      if (timeoutMs) timer = setTimeout(() => reject(Object.assign(new Error('Tool source discovery timed out'), { code: 'discovery_timeout' })), timeoutMs);
+      onAbort = () => reject(signal?.reason ?? new Error('Tool search aborted'));
+      signal?.addEventListener('abort', onAbort, { once: true });
+    })]);
+  } finally {
+    clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
   }
 }

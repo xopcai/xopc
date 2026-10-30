@@ -239,3 +239,21 @@ AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重�
 `modelResponseMode: "stream"` 请求 SSE 并测量首 token；未完整结束的流不会派发动作。开启 `modelRepetitionGuard` 可在流读取期间中止大段精确重复。流式和重复检测保持默认关闭，需对照真实完成率、错误率、费用和总耗时后决定是否采用。
 
 云端 UI helper 按内容哈希校验复用；操作结束、接管、取消或临时预览完成后，发送显式退出指令并等待进程退出，再交接 UI 自动化连接，避免只关闭 ADB 通道后仍有观察器占用。Unicode 输入在一次操作内复用专用通道，在结束、接管或取消时释放。实验项 `batchReadings` 可将多个视觉输出合并为一次只读请求，默认关闭；缺失字段保持 unavailable，截图读数保持 unverified。
+
+### 鸿蒙 USB 真机
+
+在「设置 → 手机控制 → 添加手机」选择「USB 连接鸿蒙手机」。在 **Gateway 所在电脑**安装 DevEco Studio / HarmonyOS SDK，手机开启开发者模式和 USB 调试，用数据线连接并授权电脑。第一版只接入 `hdc list targets -v` 中的 USB 设备，暂不支持无线 HDC 和鸿蒙云手机。
+
+默认自动查找常见 SDK 目录，也可在连接窗口填写 HDC 可执行文件路径，保存到 `phone.hdcPath`。环境变量 `HARMONYOS_SDK_HOME`、`DEVECO_SDK_HOME` 可指向包含 `openharmony/toolchains/hdc` 或 `toolchains/hdc` 的 SDK 根目录；最后回退到 PATH 中的 HDC。鸿蒙连接不依赖 ADB 和 scrcpy。
+
+鸿蒙设备沿用 `phone_use` 工具、应用权限、任务预算和人工交还机制。支持启动应用、点击、双击、长按、滑动、返回、主页和等待。长按时间由设备 UiTest 决定；滑动时长转换为速度，可能受设备上下限约束。「主页」只在允许所有应用时可用。启动应用会解析已安装 bundle 的入口模块和 Ability；应用列表暂以 bundle 标识显示。
+
+手机面板优先使用经过 Gateway 转发的原生 H.264 视频，失败时回退到截图。Gateway 电脑需安装完整 DevEco Studio 和 JDK 17+；xopc 使用本机库编译私有 Java 桥，不重新分发或自动下载厂商二进制。可用 `phone.hdcVideo.devecoPath`、`javaHome`、`sdkJar` 分别指定安装目录、JDK 根目录和完整独立的 HOScrcpy JAR。有些 DevEco 安装包中的库存在类名大小写与归档路径不一致的问题，会在启动采集前被拒绝；这种情况需指定兼容的完整库才能投屏。浏览器 WebCodecs 需 HTTPS 或 localhost 安全上下文。观察时读取焦点窗口的 UiTest 控件树并截图，检查前台窗口和旋转状态，完成后清理临时文件。优先获取 UiTest PNG；旧系统回退到 `snapshot_display` JPEG，再转换为 PNG。设备必须开放 UiTest、窗口和显示诊断能力；失败时会报告诊断，不会自动修改持久化系统测试模式。
+
+文字输入仍需在手机上完成。商业鸿蒙的 UiTest 控件树可能不提供密码框标识，因此将类型不明的输入框视为敏感字段。Agent 遇到输入需求会请求协助；在手机上输入后，明确交还控制权即可继续。Agent 操作需配置真实视觉模型，不支持 Android 模拟器 mock。对话式引导配置目前覆盖 Android / 阿里云；鸿蒙请通过上述添加手机窗口配置。
+
+可运行 `pnpm exec tsx scripts/verify-phone-hdc.mts`，在隔离的内存数据库和临时状态中，通过带鉴权的真实 HTTP 路径验证 USB 发现、注册、应用列表、截图与面板能力。不调用模型、不保留截图。显式加 `--actions` 会打开设置、滑动、点击标题区域、返回、回到桌面，最后恢复原应用，不修改系统设置。可用 `XOPC_PHONE_HDC_PATH`、`XOPC_PHONE_HDC_SERIAL` 指定测试工具和手机。
+
+原生视频沿用一次性票据、应用权限检查、最多四个查看者、控制权版本和显式接管/交还机制。HDC 手势在释放后执行，不会实时移动一个持续按住的原生触点。取消或撤销会丢弃未执行手势；交还会等待已派发的原生输入结束。执行前再次核对前台应用和显示几何信息；旋转或编码配置变化会使待执行手势失效。视频和输入均经过 Gateway，Java 桥不向浏览器开放端口或任意 shell 接口，不同步音频或剪贴板。切换查看/控制连接时会短暂保留编码器，无查看者后关闭。
+
+原生视频验收：`XOPC_PHONE_HDC_SDK_JAR=/path/to/compatible.jar pnpm exec tsx scripts/verify-phone-hdc-video.mts --input --browser`。不设置该环境变量则测试 DevEco 自带库。脚本使用隔离临时状态，验证真实 HTTP/WebSocket 鉴权、取消手势、交还后拒绝旧控制权，以及浏览器 WebCodecs 解码。`--input` 会打开设置、点击标题区域并返回；`--browser` 需要本机 Google Chrome。不调用 LLM，不保留屏幕像素。

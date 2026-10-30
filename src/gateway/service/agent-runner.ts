@@ -111,7 +111,7 @@ export class GatewayAgentRunner {
       prioritizeInput: input => (input.origin.type !== 'system' || input.origin.source === 'cli') && isPersonalConversation(input.conversationId),
       interrupt: async (conversationId, runId, reason) => {
         const execution = this.activeExecutionBySession.get(conversationId);
-        if (reason !== 'connection_cancel' && execution && execution.kind !== 'chat') return;
+        if (reason !== 'connection_cancel' && reason !== 'user_stop' && execution && execution.kind !== 'chat') return;
         await this.abortAgentRun(runId);
       },
       sessionExists: async (conversationId) => Boolean(await opts.sessionIndex.getSessionMetadata(conversationId)),
@@ -177,7 +177,7 @@ export class GatewayAgentRunner {
           contexts.filter((context): context is AgentSourceContext => context !== null),
         );
       },
-      steer: (conversationId, content) => opts.getAgentService().turnDispatcher.steerWebchatSession(conversationId, content),
+      steer: (conversationId, content, runId) => opts.getAgentService().turnDispatcher.steerWebchatSession(conversationId, content, runId),
       emit: (type, payload) => {
         opts.emit(type, payload);
         if (type === 'session.input-interrupt') opts.publishRealtime('sessions', type, payload);
@@ -326,12 +326,13 @@ export class GatewayAgentRunner {
   }
 
   replaceLatestSessionTurn(input: ReplaceLatestTurnInput) {
-    return this.inputs.replaceLatestTurn(input, async () => {
+    return this.inputs.replaceLatestTurn(input, async allowAbort => {
       const activeRunId = this.activeWebchatRunBySession.get(input.conversationId)
         ?? this.inputs.snapshot(input.conversationId).activeRunId;
-      if (activeRunId) await this.abortAgentRun(activeRunId);
+      if (activeRunId && allowAbort) await this.abortAgentRun(activeRunId);
 
       const { evictEmbeddedSessionRunner } = await import('../../agent/embedded/session-runner.js');
+      if (!allowAbort && (this.activeWebchatRunBySession.has(input.conversationId) || this.inputs.snapshot(input.conversationId).activeRunId)) return;
       evictEmbeddedSessionRunner(input.conversationId, 'gateway_user_turn_replaced');
       this.opts.getAgentService().evictSessionAgent(input.conversationId);
     });

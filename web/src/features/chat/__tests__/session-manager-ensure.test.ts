@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { confirmSessionCommand, type LocalSessionDraft } from '@/features/chat/session/local-session-drafts';
+import { readPendingSessionCommand, confirmSessionCommand, type LocalSessionDraft } from '@/features/chat/session/local-session-drafts';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
@@ -307,6 +307,17 @@ describe('SessionManager materialization confirmation', () => {
     drafts.save.mockReset();
     vi.mocked(confirmSessionCommand).mockReset();
     vi.restoreAllMocks();
+  });
+
+  it('keeps an ambiguous append available for explicit composer retry during hydration', async () => {
+    draft = undefined;
+    vi.mocked(readPendingSessionCommand).mockResolvedValueOnce({
+      kind: 'append', clientMessageId: 'queued', expectedTranscriptId: 'transcript', configVersion: 1,
+      delivery: 'next', input: { content: 'follow-up' },
+    });
+    await new SessionManager().reconcileDraft(conversationId);
+    expect(mockedApiFetch).not.toHaveBeenCalled();
+    expect(confirmSessionCommand).not.toHaveBeenCalled();
   });
 
   it('shares creation between concurrent file and terminal consumers with separate draft snapshots', async () => {

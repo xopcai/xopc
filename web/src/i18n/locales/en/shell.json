@@ -153,6 +153,8 @@
     "taskSessionAgentRunning": "Assistant is still responding",
     "taskSessionAgentCompleted": "New response ready",
     "taskSessionAgentFailed": "Response needs attention",
+    "automationRunsExpand": "Expand execution history",
+    "automationRunsCollapse": "Collapse execution history",
     "delegatedTasksExpand": "Expand delegated tasks",
     "delegatedTasksCollapse": "Collapse delegated tasks",
     "delegatedTaskRunning": "Running",
@@ -229,6 +231,7 @@
         "system": "System",
         "other": "Other source"
       },
+      "automationConfiguration": "Automation setup",
       "purposes": {
         "chat": "Conversation",
         "automation": "Automation",

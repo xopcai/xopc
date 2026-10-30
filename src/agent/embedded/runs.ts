@@ -90,9 +90,10 @@ export class EmbeddedRunRegistry {
     return true;
   }
 
-  async steerByConversationId(conversationId: string, text: string): Promise<boolean> {
+  async steerByConversationId(conversationId: string, text: string, expectedRunId?: string): Promise<boolean> {
     const handle = this.getByConversationId(conversationId);
-    if (!handle) {
+    if (!handle || (expectedRunId !== undefined && handle.runId !== expectedRunId)
+      || this.byConversationId.get(conversationId)?.abortController.signal.aborted) {
       return false;
     }
     await handle.session.steer(text);
@@ -122,6 +123,6 @@ export function abortEmbeddedRun(conversationId: string, reason: 'user_cancelled
   return embeddedRunRegistry.abortByConversationId(conversationId, reason, expectedRunId);
 }
 
-export function queueEmbeddedSteer(conversationId: string, text: string): Promise<boolean> {
-  return embeddedRunRegistry.steerByConversationId(conversationId, text);
+export function queueEmbeddedSteer(conversationId: string, text: string, expectedRunId?: string): Promise<boolean> {
+  return embeddedRunRegistry.steerByConversationId(conversationId, text, expectedRunId);
 }

@@ -31,6 +31,17 @@ describe('follow-up actions', () => {
   };
   const menuItem = (label: string) => Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(el => el.textContent === label)!;
 
+  it('sends an existing paused row with attachments without steering or removing it', () => {
+    const handlers = callbacks();
+    const onSendSingle = vi.fn();
+    act(() => root.render(<ChatPendingFollowUpStack items={[{ ...item, attachments: [{ type: 'file', name: 'report.pdf' }] }]}
+      {...handlers} queuePaused queueIdle onSendSingle={onSendSingle} />));
+    act(() => container.querySelector<HTMLButtonElement>(`[aria-label="${chat.sendThisMessage}"]`)!.click());
+    expect(onSendSingle).toHaveBeenCalledWith(item.id);
+    expect(handlers.onSteer).not.toHaveBeenCalled();
+    expect(handlers.onRemove).not.toHaveBeenCalled();
+  });
+
   it('opens side chat with the selected message through a keyboard-accessible menu', async () => {
     const handlers = callbacks();
     act(() => root.render(<ChatPendingFollowUpStack items={[item]} {...handlers} />));

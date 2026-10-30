@@ -7,11 +7,22 @@ class ChatRunManager {
   private static instance: ChatRunManager | undefined;
   private readonly senders = new Map<string, MessageSender>();
   private readonly resumeRunIds = new Map<string, string>();
+  private readonly generations = new Map<string, number>();
   private readonly userAbortedSessions = new Set<string>();
 
   static get(): ChatRunManager {
     if (!ChatRunManager.instance) ChatRunManager.instance = new ChatRunManager();
     return ChatRunManager.instance;
+  }
+
+  getGeneration(conversationId: string): number {
+    return this.generations.get(conversationId) ?? 0;
+  }
+
+  advanceGeneration(conversationId: string): number {
+    const generation = this.getGeneration(conversationId) + 1;
+    this.generations.set(conversationId, generation);
+    return generation;
   }
 
   senderFor(conversationId: string): MessageSender {
@@ -29,6 +40,14 @@ class ChatRunManager {
 
   isTrackingRun(conversationId: string, runId: string): boolean {
     return this.senders.get(conversationId)?.isTrackingRun(conversationId, runId) ?? false;
+  }
+
+  retireOtherRun(conversationId: string, activeRunId: string): void {
+    const sender = this.senders.get(conversationId);
+    if (!sender?.trackedRunId || sender.trackedRunId === activeRunId) return;
+    this.advanceGeneration(conversationId);
+    sender.abort(false);
+    if (this.senders.get(conversationId) === sender) this.senders.delete(conversationId);
   }
 
   getResumeRunId(conversationId: string): string | null {
@@ -54,8 +73,9 @@ class ChatRunManager {
     this.userAbortedSessions.delete(conversationId);
   }
 
-  abort(conversationId: string): void {
-    this.senders.get(conversationId)?.abort();
+  abort(conversationId: string, notifyServer = true): void {
+    this.advanceGeneration(conversationId);
+    this.senders.get(conversationId)?.abort(notifyServer);
     this.senders.delete(conversationId);
     this.resetRunTracking(conversationId);
   }

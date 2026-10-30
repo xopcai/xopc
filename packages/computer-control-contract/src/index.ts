@@ -1,5 +1,34 @@
 import { z } from 'zod';
 
+export const ComputerPreviewRequestSchema = z.object({
+  conversationId: z.string().min(1).max(200),
+  runId: z.string().min(1).max(200).optional(),
+  preset: z.enum(['compact', 'expanded']).default('compact'),
+}).strict();
+export type ComputerPreviewPreset = 'compact' | 'expanded' | 'paused';
+export interface ComputerPreviewState {
+  previewId: string;
+  conversationId: string;
+  runId?: string;
+  computerSessionId: string;
+  brokerEpoch: string;
+  appName: string;
+  targetEpoch: number;
+  status: 'preparing' | 'available' | 'live' | 'paused' | 'unavailable' | 'ended';
+  errorCode?: string;
+}
+export interface ComputerPreviewFrame {
+  version: 1;
+  previewId: string;
+  targetEpoch: number;
+  streamEpoch: number;
+  sequence: number;
+  width: number;
+  height: number;
+  mimeType: 'image/jpeg';
+  bytes: Uint8Array;
+}
+
 export const COMPUTER_CONTROL_TOOL = 'desktop.computer.control';
 export const COMPUTER_FRAME_MAX_BYTES = 5 * 1024 * 1024;
 export const COMPUTER_FRAME_MAX_PIXELS = 16_000_000;

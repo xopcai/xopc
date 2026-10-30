@@ -1,3 +1,7 @@
+import { useGatewayStore } from '@/stores/gateway-store';
+import type { SessionInputControlView, SessionInputControlCommand } from '@xopcai/gateway-contract';
+import type { ComposerDraft, ComposerMode } from '@/features/chat/composer/composer.types';
+import { readInputControl, rememberInputControl, requestInputControl } from './session-input-control';
 import { submitQuestionBatch } from '../clarification/clarification-submission';
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { readClarificationPresentation } from '@xopcai/gateway-contract';
@@ -5,16 +9,17 @@ import type { AppContextEnvelope } from '@xopcai/gateway-contract';
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type MutableRefObject,
 } from 'react';
 
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import type { ClarifyPromptState } from '@/features/chat/composer/clarify-prompt';
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import {
-  MAX_PENDING_FOLLOW_UPS,
   projectVisiblePendingFollowUps,
   type PendingFollowUp,
 } from '@/features/chat/follow-up/pending-follow-up.types';
@@ -22,9 +27,19 @@ import { apiFetch } from '@/lib/fetch';
 import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { apiUrl } from '@/lib/url';
 
+import { submitQueuedInput } from './submit-queued-input';
 import { readLocalSessionDraft, readSessionTranscript } from './local-session-drafts';
 
 export type ChatFollowUpClarifyApi = {
+  composerMode: ComposerMode;
+  control: SessionInputControlView;
+  controlPending: boolean;
+  stopSession: () => Promise<void>;
+  resumeQueue: () => Promise<void>;
+  sendQueuedInput: (id: string) => Promise<void>;
+  beginEditTurn: (turnId: string, draft?: ComposerDraft) => Promise<boolean>;
+  cancelEditor: () => void;
+  restoreEditor: (mode: ComposerMode) => void;
   clarifyPrompt: ClarifyPromptState | null;
   clarifySubmitting: boolean;
   clarifySubmitError: string | null;
@@ -41,7 +56,7 @@ export type ChatFollowUpClarifyApi = {
     appContext?: AppContextEnvelope,
     interrupt?: boolean,
   ) => Promise<void>;
-  beginEditFollowUp: (id: string) => void;
+  beginEditFollowUp: (id: string) => Promise<boolean>;
   cancelEditFollowUp: () => void;
   commitEditFollowUp: (
     id: string,
@@ -49,7 +64,7 @@ export type ChatFollowUpClarifyApi = {
     attachments?: PendingFollowUp['attachments'],
     levelOverride?: string,
     contextRefs?: ComposerContextRef[],
-  ) => void;
+  ) => Promise<boolean>;
   removePendingFollowUp: (id: string) => void;
   movePendingFollowUp: (id: string, dir: 'up' | 'down') => void;
   reorderPendingFollowUp: (fromIndex: number, toIndex: number) => void;
@@ -114,6 +129,17 @@ export function useChatFollowUpClarify(options: {
     shouldApplyStreamUpdate,
   } = options;
 
+  const gatewayIdentity = useGatewayStore(state => state.conversationId);
+  const scopeRef = useRef({ gateway: gatewayIdentity, conversationId });
+  if (scopeRef.current.gateway !== gatewayIdentity || scopeRef.current.conversationId !== conversationId) {
+    scopeRef.current = { gateway: gatewayIdentity, conversationId };
+  }
+  const captureScope = useCallback(() => {
+    const scope = scopeRef.current;
+    return () => scopeRef.current === scope && conversationIdRef.current === scope.conversationId
+      && useGatewayStore.getState().conversationId === scope.gateway;
+  }, [conversationIdRef]);
+
   const [clarifyPrompt, setClarifyPrompt] = useState<ClarifyPromptState | null>(null);
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
   const [clarifySubmitError, setClarifySubmitError] = useState<string | null>(null);
@@ -124,7 +150,18 @@ export function useChatFollowUpClarify(options: {
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
   const pendingFollowUpsRef = useRef<PendingFollowUp[]>([]);
   const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
-  const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
+  const [editorState, setEditorState] = useState<{ scope: typeof scopeRef.current; mode: ComposerMode }>(() => ({ scope: scopeRef.current, mode: { kind: 'compose' } }));
+  const composerMode: ComposerMode = editorState.scope === scopeRef.current ? editorState.mode : { kind: 'compose' };
+  const setComposerMode = useCallback((mode: ComposerMode) => setEditorState({ scope: scopeRef.current, mode }), []);
+  const composerModeRef = useRef(composerMode);
+  composerModeRef.current = composerMode;
+  const editingFollowUpId = composerMode.kind === 'editFollowUp' ? composerMode.inputId : null;
+  const setEditingFollowUpId = (id: string | null) => setComposerMode(id
+    ? { kind: 'editFollowUp', inputId: id, version: pendingFollowUpsRef.current.find(row => row.id === id)?.version ?? 0 }
+    : { kind: 'compose' });
+  const [control, setControl] = useState<SessionInputControlView>(() => readInputControl(conversationId ?? ''));
+  const [controlPending, setControlPending] = useState(false);
+  const controlPendingRef = useRef(false);
   const editingFollowUpIdRef = useRef<string | null>(null);
   const revisionRef = useRef(-1);
 
@@ -134,10 +171,15 @@ export function useChatFollowUpClarify(options: {
 
   const applyState = useCallback((raw: unknown) => {
     if (!raw || typeof raw !== 'object') return;
-    const state = raw as { conversationId?: unknown; revision?: unknown; activeRunId?: unknown; preparation?: { state?: unknown }; inputs?: unknown };
+    const state = raw as { conversationId?: unknown; revision?: unknown; activeRunId?: unknown; preparation?: { state?: unknown }; control?: SessionInputControlView; inputs?: unknown };
     if (state.conversationId !== conversationIdRef.current || typeof state.revision !== 'number' || !Array.isArray(state.inputs)) return;
     if (state.revision < revisionRef.current) return;
+    if (state.control) {
+      if (!rememberInputControl(state.conversationId as string, state.control, state.revision)) return;
+      setControl(state.control);
+    }
     const rows = projectVisiblePendingFollowUps({
+      control: state.control,
       inputs: state.inputs as unknown[],
       activeRunId: state.activeRunId,
       preparation: state.preparation,
@@ -145,39 +187,52 @@ export function useChatFollowUpClarify(options: {
     revisionRef.current = state.revision;
     pendingFollowUpsRef.current = rows;
     setPendingFollowUps(rows);
-    if (editingFollowUpIdRef.current && !rows.some((row) => row.id === editingFollowUpIdRef.current)) setEditingFollowUpId(null);
+
   }, [conversationIdRef]);
 
   const refreshState = useCallback(async (key: string) => {
-    if (await readLocalSessionDraft(key)) return;
+    if (key !== conversationIdRef.current) return;
+    const isCurrentScope = captureScope();
+    if (await readLocalSessionDraft(key) || !isCurrentScope()) return;
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/input-state`)).catch(() => null);
     if (!res?.ok || conversationIdRef.current !== key) return;
     const json = await res.json().catch(() => null) as { payload?: unknown } | null;
-    applyState(json?.payload);
-  }, [applyState, conversationIdRef]);
+    if (isCurrentScope()) applyState(json?.payload);
+  }, [applyState, captureScope, conversationIdRef]);
 
   const refreshClarification = useCallback(async (key: string) => {
+    if (key !== conversationIdRef.current) return;
+    const isCurrentScope = captureScope();
     const generation = ++clarificationRefreshRef.current;
-    if (await readLocalSessionDraft(key)) return;
+    if (await readLocalSessionDraft(key) || !isCurrentScope()) return;
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/clarification`)).catch(() => null);
     if (!res?.ok || conversationIdRef.current !== key) return;
     const json = await res.json().catch(() => null) as { payload?: unknown } | null;
-    if (generation !== clarificationRefreshRef.current || conversationIdRef.current !== key) return;
+    if (!isCurrentScope() || generation !== clarificationRefreshRef.current || conversationIdRef.current !== key) return;
     setClarifySubmitError(null);
     setClarifyPrompt(parseClarification(json?.payload, key));
     clarificationAttemptRef.current = null;
-  }, [conversationIdRef]);
+  }, [captureScope, conversationIdRef]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     revisionRef.current = -1;
+    controlPendingRef.current = false;
+    setControlPending(false);
+    setSteeringFollowUpId(null);
+    clarificationRefreshRef.current++;
+    setControl(readInputControl(conversationId ?? ''));
+    setComposerMode({ kind: 'compose' });
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
     setEditingFollowUpId(null);
     setClarifyPrompt(null);
+  }, [conversationId, gatewayIdentity]);
+
+  useEffect(() => {
     if (!conversationId || conversationId !== decodedKey) return;
     void refreshState(conversationId);
     void refreshClarification(conversationId);
-  }, [decodedKey, refreshClarification, refreshState, conversationId]);
+  }, [decodedKey, refreshClarification, refreshState, conversationId, gatewayIdentity]);
 
   useEffect(() => {
     const onState = (event: Event) => {
@@ -285,87 +340,126 @@ export function useChatFollowUpClarify(options: {
     ) => {
       const trimmed = content.trim();
       if (!trimmed && !attachments?.length && !contextRefs?.length) return;
-      if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
-        throw new Error(`At most ${MAX_PENDING_FOLLOW_UPS} pending messages are allowed`);
-      }
       const key = conversationIdRef.current;
       if (!key) throw new Error('No active session');
+      const isCurrentScope = captureScope();
+      const controlAtSubmit = readInputControl(key);
+      const expectedTranscriptId = await readSessionTranscript(key);
+      if (!isCurrentScope()) throw new DOMException('Conversation changed', 'AbortError');
       const origin = await waitForEndpointTurnClaim();
-      const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kind: 'append', expectedTranscriptId: await readSessionTranscript(key),
-          configVersion: useChatSessionStore.getState().sessions[key]?.configVersion,
-          clientMessageId: crypto.randomUUID(), delivery: 'next', interrupt,
-          input: { content: trimmed || content, attachments: attachments?.length ? attachments : undefined,
-            contextRefs: contextRefs?.map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
-            appContext },
-          origin,
-        }),
-      });
-      const json = await res.json().catch(() => null) as {
-        payload?: { inputState?: unknown };
-        error?: string | { message?: string };
-      } | null;
-      if (!res.ok) {
-        const message = typeof json?.error === 'string' ? json.error : json?.error?.message;
-        throw new Error(message ?? 'Message was not accepted');
-      }
-      if (!json?.payload?.inputState) throw new Error('Gateway returned an invalid input state');
-      applyState(json.payload.inputState);
+      if (!isCurrentScope()) throw new DOMException('Conversation changed', 'AbortError');
+      if (!expectedTranscriptId) throw new Error('Reload the conversation before sending');
+      const configVersion = useChatSessionStore.getState().sessions[key]?.configVersion;
+      if (configVersion === undefined) throw new Error('Reload the conversation before sending');
+      const state = await submitQueuedInput(key, {
+        kind: 'append', expectedTranscriptId, configVersion,
+        clientMessageId: crypto.randomUUID(), delivery: 'next', interrupt,
+        controlVersion: controlAtSubmit.version,
+        input: { content: trimmed || content, attachments: attachments?.length ? attachments : undefined,
+          contextRefs: contextRefs?.map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
+          appContext },
+        origin,
+      }, isCurrentScope);
+      if (isCurrentScope()) applyState(state);
     },
-    [applyState, conversationIdRef],
+    [applyState, captureScope, conversationIdRef],
   );
 
-  const beginEditFollowUp = useCallback((id: string) => {
-    setEditingFollowUpId(id);
-  }, []);
-
-  const cancelEditFollowUp = useCallback(() => {
-    setEditingFollowUpId(null);
-  }, []);
-
-  const commitEditFollowUp = useCallback(
-    (
-      id: string,
-      content: string,
-      attachments?: PendingFollowUp['attachments'],
-      levelOverride?: string,
-      contextRefs?: ComposerContextRef[],
-    ) => {
-      const trimmed = content.trim();
-      const prev = pendingFollowUpsRef.current;
-      const i = prev.findIndex((r) => r.id === id);
-      if (i < 0) {
-        setEditingFollowUpId(null);
-        return;
+  const changeControl = useCallback(async (action: SessionInputControlCommand['action'], target?: { inputId?: string; inputVersion?: number; turnId?: string }) => {
+    const key = conversationIdRef.current;
+    if (!key || controlPendingRef.current) throw new Error('Wait for the current operation');
+    const isCurrentScope = captureScope();
+    const assertScope = () => { if (!isCurrentScope()) throw new DOMException('Conversation changed', 'AbortError'); };
+    controlPendingRef.current = true;
+    setControlPending(true);
+    try {
+      let transcriptId = await readSessionTranscript(key);
+      assertScope();
+      const confirmationDeadline = Date.now() + 15_000;
+      while (!transcriptId && action === 'stop' && Date.now() < confirmationDeadline) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        transcriptId = await readSessionTranscript(key);
+        assertScope();
       }
-      if (!trimmed && !attachments?.length && !contextRefs?.length) {
-        const key = conversationIdRef.current;
-        if (key) void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${prev[i].version}`), { method: 'DELETE' })
-          .then(async (res) => applyState((await res.json().catch(() => null) as { payload?: unknown } | null)?.payload))
-          .catch(() => { void refreshState(key); });
-        setEditingFollowUpId(null);
-        return;
+      if (!transcriptId) throw new Error('Input acceptance is awaiting confirmation');
+      const command = { action, operationId: crypto.randomUUID(), expectedTranscriptId: transcriptId,
+        expectedVersion: readInputControl(key).version, ...target };
+      const result = await requestInputControl(key, command);
+      assertScope();
+      applyState(result);
+      if (action === 'stop') {
+        const deadline = Date.now() + 15_000;
+        while (readInputControl(key).phase === 'stopping') {
+          assertScope();
+          if (Date.now() >= deadline) throw new Error('Stop is awaiting confirmation');
+          await new Promise(resolve => setTimeout(resolve, 100));
+          await refreshState(key);
+        }
       }
-      const effThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
-      setEditingFollowUpId(null);
-      const key = conversationIdRef.current;
-      if (!key) return;
-      void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}`), {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: prev[i].version, content: trimmed || content,
-          attachments: attachments?.length ? attachments : undefined, thinking: effThinking,
-          contextRefs: (contextRefs ?? []).map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
-        }),
-      }).then(async (res) => {
-        const json = await res.json().catch(() => null) as { payload?: unknown } | null;
-        applyState(json?.payload);
-      }).catch(() => { void refreshState(key); });
-    },
-    [applyState, modelSupportsThinking, refreshState, conversationIdRef, thinkingLevel],
-  );
+      assertScope();
+      if (action === 'stop' || action === 'pause') {
+        const current = readInputControl(key);
+        if (!current.paused || current.version !== command.expectedVersion + 1) throw new Error('Queue control changed on another device');
+        if (action === 'stop' && current.phase !== 'idle') throw new Error('Another input has started');
+      }
+    } catch (error) {
+      if (!isCurrentScope()) throw error;
+      await refreshState(key);
+      if (!isCurrentScope()) throw error;
+      showComposerNotification('error', error instanceof Error ? error.message : String(error));
+      throw error;
+    } finally {
+      if (isCurrentScope()) { controlPendingRef.current = false; setControlPending(false); }
+    }
+  }, [applyState, captureScope, conversationIdRef, refreshState]);
+
+  const stopSession = useCallback(() => changeControl('stop'), [changeControl]);
+  const resumeQueue = useCallback(() => changeControl('resume'), [changeControl]);
+  const beginEditTurn = useCallback(async (turnId: string, draft?: ComposerDraft) => {
+    const isCurrentScope = captureScope();
+    try {
+      await changeControl('stop', { turnId });
+      if (!isCurrentScope()) return false;
+      setComposerMode({ kind: 'editTurn', turnId, draft });
+      return true;
+    } catch { return false; }
+  }, [captureScope, changeControl]);
+  const beginEditFollowUp = useCallback(async (id: string) => {
+    const row = pendingFollowUpsRef.current.find(item => item.id === id);
+    if (!row) return false;
+    const isCurrentScope = captureScope();
+    try {
+      await changeControl('pause', { inputId: id, inputVersion: row.version });
+      if (!isCurrentScope()) return false;
+      setComposerMode({ kind: 'editFollowUp', inputId: id, version: row.version });
+      return true;
+    } catch { return false; }
+  }, [captureScope, changeControl]);
+  const cancelEditFollowUp = useCallback(() => setComposerMode({ kind: 'compose' }), []);
+  const commitEditFollowUp = useCallback(async (id: string, content: string,
+    attachments?: PendingFollowUp['attachments'], levelOverride?: string, contextRefs?: ComposerContextRef[]) => {
+    const key = conversationIdRef.current;
+    if (!key || composerMode.kind !== 'editFollowUp' || composerMode.inputId !== id) return false;
+    if (!content.trim() && !attachments?.length && !contextRefs?.length) return false;
+    const isCurrentScope = captureScope();
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}`), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: composerMode.version, content,
+        attachments: attachments ?? [], thinking: modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off',
+        contextRefs: (contextRefs ?? []).map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
+      }),
+    });
+    const json = await res.json() as { payload?: unknown; error?: { message?: string } };
+    if (!isCurrentScope()) return false;
+    applyState(json.payload);
+    if (!res.ok) throw new Error(json.error?.message ?? 'This input changed; your draft has been preserved');
+    if (composerModeRef.current === composerMode) {
+      const savedState = json.payload as { inputs?: Array<{ id: string; version: number }> } | undefined;
+      const savedRow = savedState?.inputs?.find(row => row.id === id);
+      if (savedRow) setComposerMode({ ...composerMode, version: savedRow.version });
+    }
+    return true;
+  }, [applyState, captureScope, composerMode, conversationIdRef, modelSupportsThinking, thinkingLevel]);
 
   const removePendingFollowUp = useCallback((id: string) => {
     if (editingFollowUpIdRef.current === id) {
@@ -374,13 +468,14 @@ export function useChatFollowUpClarify(options: {
     const key = conversationIdRef.current;
     const row = pendingFollowUpsRef.current.find((item) => item.id === id);
     if (!key || !row) return;
+    const isCurrentScope = captureScope();
     void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${row.version}`), {
       method: 'DELETE',
     }).then(async (res) => {
       const json = await res.json().catch(() => null) as { payload?: unknown } | null;
-      applyState(json?.payload);
+      if (isCurrentScope()) applyState(json?.payload);
     }).catch(() => { void refreshState(key); });
-  }, [applyState, refreshState, conversationIdRef]);
+  }, [applyState, captureScope, refreshState, conversationIdRef]);
 
   const movePendingFollowUp = useCallback((id: string, dir: 'up' | 'down') => {
     const queued = pendingFollowUpsRef.current.filter((row) => row.status === 'queued');
@@ -390,12 +485,16 @@ export function useChatFollowUpClarify(options: {
     const key = conversationIdRef.current;
     const row = queued[i];
     if (!key || !row || target < 0 || target >= queued.length) return;
+    const isCurrentScope = captureScope();
     void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(row.id)}`), {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ version: row.version, position: target }),
-    }).then(async (res) => applyState((await res.json().catch(() => null) as { payload?: unknown } | null)?.payload))
+    }).then(async res => {
+      const json = await res.json().catch(() => null) as { payload?: unknown } | null;
+      if (isCurrentScope()) applyState(json?.payload);
+    })
       .catch(() => { void refreshState(key); });
-  }, [applyState, refreshState, conversationIdRef]);
+  }, [applyState, captureScope, refreshState, conversationIdRef]);
 
   const reorderPendingFollowUp = useCallback((fromIndex: number, toIndex: number) => {
     const key = conversationIdRef.current;
@@ -404,42 +503,26 @@ export function useChatFollowUpClarify(options: {
     const queued = pendingFollowUpsRef.current.filter((item) => item.status === 'queued');
     const position = targetRow ? queued.findIndex((item) => item.id === targetRow.id) : -1;
     if (!key || row?.status !== 'queued' || targetRow?.status !== 'queued' || position < 0) return;
+    const isCurrentScope = captureScope();
     void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(row.id)}`), {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ version: row.version, position }),
     }).then(async (res) => {
       const json = await res.json().catch(() => null) as { payload?: unknown } | null;
-      applyState(json?.payload);
+      if (isCurrentScope()) applyState(json?.payload);
     }).catch(() => { void refreshState(key); });
-  }, [applyState, refreshState, conversationIdRef]);
+  }, [applyState, captureScope, refreshState, conversationIdRef]);
 
-  const steerPendingFollowUp = useCallback(async (id: string) => {
-    const key = conversationIdRef.current;
-    if (!key) return;
-    const row = pendingFollowUpsRef.current.find((r) => r.id === id);
-    if (!row?.text.trim() || row.attachments?.length || row.contextRefs?.length) return;
+  const controlQueuedInput = useCallback(async (id: string, action: 'send' | 'steer') => {
+    const row = pendingFollowUpsRef.current.find(item => item.id === id);
+    if (!row) return;
+    const isCurrentScope = captureScope();
     setSteeringFollowUpId(id);
-    try {
-      const origin = await waitForEndpointTurnClaim();
-      const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'append', clientMessageId: crypto.randomUUID(),
-          expectedTranscriptId: await readSessionTranscript(key),
-          configVersion: useChatSessionStore.getState().sessions[key]?.configVersion,
-          delivery: 'steer', interrupt: false, input: { content: row.text.trim() }, origin }),
-      });
-      if (res.ok) {
-        const json = await res.json().catch(() => null) as { payload?: { inputState?: unknown } } | null;
-        applyState(json?.payload?.inputState);
-        removePendingFollowUp(id);
-      }
-    } catch {
-      /* ignore */
-    } finally {
-      setSteeringFollowUpId(null);
-    }
-  }, [applyState, removePendingFollowUp, conversationIdRef]);
+    try { await changeControl(action, { inputId: id, inputVersion: row.version }); }
+    finally { if (isCurrentScope()) setSteeringFollowUpId(null); }
+  }, [captureScope, changeControl]);
+  const steerPendingFollowUp = useCallback((id: string) => controlQueuedInput(id, 'steer'), [controlQueuedInput]);
+  const sendQueuedInput = useCallback((id: string) => controlQueuedInput(id, 'send'), [controlQueuedInput]);
 
   const respondToClarification = useCallback(async (action: 'answer' | 'agent_decide' | 'cancel', submission?: ClarificationSubmission) => {
     const p = clarifyPromptRef.current;
@@ -492,6 +575,7 @@ export function useChatFollowUpClarify(options: {
     pendingFollowUps,
     pendingFollowUpsRef,
     steeringFollowUpId,
+    composerMode, control, controlPending, stopSession, resumeQueue, sendQueuedInput, beginEditTurn, cancelEditor: cancelEditFollowUp, restoreEditor: setComposerMode,
     editingFollowUpId,
     addPendingFollowUp,
     beginEditFollowUp,

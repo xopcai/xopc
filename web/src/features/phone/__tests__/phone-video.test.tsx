@@ -37,7 +37,7 @@ it('writes DOWN immediately, coalesces cloud MOVEs behind ACKs, and releases wit
   expect(socket.sent.map(s => s.phase)).toEqual(['down', 'move']);
   await act(async () => socket.onmessage?.({ data: JSON.stringify({ type: 'ack', seq: socket.sent[1].seq }) }));
   expect(socket.sent.at(-1).y).toBe(610);
-  act(() => { hook.pointer('up', [500, 600]); }); expect(socket.sent.at(-1).phase).toBe('up');
+  act(() => { hook.pointer('up', [500, 600]); }); expect(socket.sent.at(-1).phase).toBe('up'); expect(socket.sent.at(-1).durationMs).toBe(275);
   act(() => { hook.pointer('down', [100, 100]); window.dispatchEvent(new Event('blur')); });
   expect(socket.sent.at(-1)).toEqual({ type: 'cancelPointers', epoch: 2 });
   await act(async () => {

@@ -5,7 +5,7 @@ const base = '/xopc/'
 
 export default defineConfig({
   title: 'xopc',
-  description: 'Open-source, local-first personal AI for work and everyday life, with more time to create and enjoy life.',
+  description: 'An open-source, local-first AI assistant for work and everyday life. Think things through, get help with tasks, and make time for what matters to you.',
   base,
   // Product documentation is published here. Engineering plans and ADRs stay
   // in the repository, but are deliberately excluded from the user site.
@@ -32,13 +32,13 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
-    ['meta', { property: 'og:title', content: 'xopc — A better life, with AI.' }],
-    ['meta', { property: 'og:description', content: 'Open-source, local-first personal AI for work and everyday life, with more time to create and enjoy life.' }],
+    ['meta', { property: 'og:title', content: 'xopc · Your AI assistant for work and everyday life' }],
+    ['meta', { property: 'og:description', content: 'An open-source, local-first AI assistant for work and everyday life. Think things through, get help with tasks, and make time for what matters to you.' }],
     ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.png` }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'xopc — A better life, with AI.' }],
-    ['meta', { name: 'twitter:description', content: 'Open-source, local-first personal AI for work and everyday life, with more time to create and enjoy life.' }],
+    ['meta', { name: 'twitter:title', content: 'xopc · Your AI assistant for work and everyday life' }],
+    ['meta', { name: 'twitter:description', content: 'An open-source, local-first AI assistant for work and everyday life. Think things through, get help with tasks, and make time for what matters to you.' }],
     ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.png` }],
   ],
   locales: {
@@ -165,7 +165,7 @@ export default defineConfig({
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
-      description: '开源、本地优先的个人 AI 助理，帮你处理工作与生活中的事务，把更多时间留给创造和享受生活。',
+      description: '工作与生活中的 AI 助理，帮你理清想法，处理事务，留出时间做自己在意的事。开源、本地优先。',
       link: '/zh/',
       themeConfig: {
         siteTitle: 'xopc',

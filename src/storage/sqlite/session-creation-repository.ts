@@ -6,6 +6,7 @@ import type { SessionAgentConfig } from '../../session/config-types.js';
 import { createConversation } from './conversation-repository.js';
 import { setSessionConfig } from './config-repository.js';
 import { getSessionMetadata } from './session-repository.js';
+import { authorizeSessionInput } from './session-input-control-repository.js';
 import { insertSessionInput } from './session-input-repository.js';
 import { cancelConnectionObjective } from './connection-wait-repository.js';
 import { supersedeActiveClarification } from './clarification-wait-repository.js';
@@ -108,6 +109,7 @@ export function acceptSessionCommand(input: {
     }
     const transcriptId = session.transcriptId!;
     const inputId = input.preparedInput ? randomUUID() : null;
+    if ('kind' in command && command.kind === 'append' && inputId) authorizeSessionInput(conversationId, inputId, command.controlVersion, command.execution === 'single');
     if (input.preparedInput && inputId) insertSessionInput({ ...input.preparedInput, conversationId, id: inputId, clientMessageId, expectedTranscriptId: transcriptId });
     if (inputId) {
       const control = input.preparedInput?.payload;

@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { deliverExternalIntake } from '../external-intake-receiver';
-import { usePersistedComposer } from '../use-persisted-composer';
+import { usePersistedComposer, type SavedEditSession } from '../use-persisted-composer';
 import type { UseComposerEditorReturn } from '../use-composer-editor';
 import type { UseComposerAttachmentsReturn } from '../use-composer-attachments';
 import type { Attachment } from '../../attachments/attachment-utils';
@@ -15,6 +15,8 @@ vi.mock('../../session/local-session-drafts', () => ({ composerDraftStorage: (id
   read: () => new Promise(resolve => storage.reads.set(id, resolve)),
   write: (value: unknown) => storage.write(id, value),
 }) }));
+let savedEdit: SavedEditSession | undefined;
+const restoreEditor = vi.fn();
 let edit: (value: string) => void;
 let text: string;
 let root: ReturnType<typeof createRoot>;
@@ -29,11 +31,12 @@ function Harness({ id }: { id: string }) {
   usePersistedComposer(id, { value, valueRef, resetEditor: options => {
     valueRef.current = options?.nextText ?? ''; setValue(valueRef.current);
   } } as UseComposerEditorReturn, { attachments, attachmentsRef, setAttachments: (next: Attachment[]) => { attachmentsRef.current = next; setAttachments(next); },
-    clearAttachments: () => setAttachments([]) } as unknown as UseComposerAttachmentsReturn, refs, setRefs);
+    clearAttachments: () => setAttachments([]) } as unknown as UseComposerAttachmentsReturn, refs, setRefs, savedEdit ? { snapshot: () => savedEdit!, restore: restoreEditor } : undefined);
   return null;
 }
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  savedEdit = undefined; restoreEditor.mockReset();
   storage.reads.clear(); storage.write.mockReset().mockResolvedValue(undefined);
   useGatewayStore.setState({ conversationId: 'gateway:principal' });
   container = document.createElement('div'); root = createRoot(container);
@@ -98,4 +101,26 @@ it('does not acknowledge an import when draft persistence fails and permits a sa
   });
   await act(async () => { await deliverExternalIntake(JSON.stringify(['gateway:principal', 'one']), 'batch-1', [file]); });
   expect(storage.write).toHaveBeenLastCalledWith('one', expect.objectContaining({ attachments: [file], intakeReceipts: ['batch-1'] }));
+});
+
+it('restores the editing identity and pre-edit drafts with the active draft', async () => {
+  savedEdit = { mode: { kind: 'editFollowUp', inputId: 'pending', version: 2 },
+    drafts: { compose: { text: 'Original unsent draft', attachments: [], contextRefs: [] } } };
+  await render('one');
+  await act(async () => storage.reads.get('one')!({ text: 'Edited follow-up', attachments: [], refs: [], editSession: savedEdit }));
+  expect(text).toBe('Edited follow-up');
+  expect(restoreEditor).toHaveBeenCalledWith(savedEdit);
+  await act(async () => edit('New edit'));
+  expect(storage.write).toHaveBeenLastCalledWith('one', expect.objectContaining({ text: 'New edit', editSession: savedEdit }));
+});
+
+it('does not resurrect an old editor when its identity changes during hydration', async () => {
+  const oldEdit: SavedEditSession = { mode: { kind: 'editFollowUp', inputId: 'old', version: 1 }, drafts: {} };
+  savedEdit = oldEdit;
+  await render('one');
+  savedEdit = { mode: { kind: 'compose' }, drafts: {} };
+  await render('one');
+  await act(async () => storage.reads.get('one')!({ text: 'Old edited text', attachments: [], refs: [], editSession: oldEdit }));
+  expect(text).toBe('');
+  expect(restoreEditor).not.toHaveBeenCalled();
 });

@@ -26,8 +26,9 @@ export class PhoneRepository {
     return parseDevice(value);
   }
   save(input: Omit<PhoneDevice, 'id' | 'createdAt' | 'revision'>, id?: string): PhoneDevice {
+    if (input.platform === 'harmonyos' && (input.connection || input.wireless)) throw new PhoneError('PHONE_INVALID_INPUT', 'HarmonyOS supports local USB connections only');
     const previous = id ? this.get(id) : undefined;
-    if (this.list().some(device => device.serial === input.serial && device.id !== id)) throw new PhoneError('PHONE_DEVICE_DUPLICATE', 'This ADB device is already registered');
+    if (this.list().some(device => device.serial === input.serial && (device.platform ?? 'android') === (input.platform ?? 'android') && device.id !== id)) throw new PhoneError('PHONE_DEVICE_DUPLICATE', 'This phone is already registered');
     if (input.wireless && this.list().some(device => device.id !== id && device.wireless?.hardwareSerial === input.wireless.hardwareSerial))
       throw new PhoneError('PHONE_DEVICE_DUPLICATE', 'This wireless phone is already registered; reconnect it from the device menu');
     const next = normalizePhoneAppAccess(PhoneDeviceSchema.parse({ ...input, id: id ?? randomUUID(), createdAt: previous?.createdAt ?? Date.now(), revision: (previous?.revision ?? 0) + 1 }));
