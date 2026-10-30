@@ -14,15 +14,15 @@ type Setup = Omit<PhoneSetupView, 'readiness' | 'stale' | 'settingsPath' | 'guid
 export interface PhoneSetupMutation { signal: AbortSignal; check: () => void }
 export interface PhoneSetupDeps {
   runtime: PhoneRuntime;
-  inspect(context: Context, source?: 'local' | 'aliyun'): Promise<PhoneSetupView['readiness']>;
+  inspect(context: Context, source?: 'local' | 'aliyun' | 'harmonyos'): Promise<PhoneSetupView['readiness']>;
   revision(context: Context, deviceId: string): string;
   connected(deviceId: string, signal?: AbortSignal): Promise<boolean>;
   leaseActive(deviceId: string): boolean;
   setModel?: (agentId: string, ref: string, mutation?: PhoneSetupMutation) => Promise<void>;
   models?: () => Array<{ ref: string; name: string; configured: boolean }>;
   configure?: (enabled: boolean, mutation?: PhoneSetupMutation) => Promise<void>;
-  install?: (kind: 'adb' | 'scrcpy', repair: boolean, mutation?: PhoneSetupMutation) => Promise<void>;
-  registerLocal?: (serial: string, name?: string, mutation?: PhoneSetupMutation) => Promise<void>;
+  install?: (kind: 'adb' | 'scrcpy' | 'hdc' | 'hoscrcpy' | 'java', repair: boolean, mutation?: PhoneSetupMutation) => Promise<void>;
+  registerLocal?: (serial: string, name?: string, mutation?: PhoneSetupMutation, platform?: 'android' | 'harmonyos') => Promise<void>;
 }
 
 /** Bounded product actions automate setup; credentials remain in secure product forms. */
@@ -73,7 +73,7 @@ export class PhoneSetupService {
       readiness,
       interactionPath: `/configuration/phone/${setup.id}?conversationId=${encodeURIComponent(context.conversationId)}&step=${step}`,
       settingsPath: `/settings/phone-use?phoneSetup=${setup.id}&conversationId=${context.conversationId}`,
-      guidanceRefs: [{ sceneId: 'phone', path: `references/phone/${setup.state === 'verifying' ? 'acceptance' : setup.error || interrupted || stale ? 'troubleshooting' : setup.source === 'aliyun' ? 'aliyun' : setup.source === 'local' ? 'local' : 'overview'}.md`, resourceVersion: '1' }],
+      guidanceRefs: [{ sceneId: 'phone', path: `references/phone/${setup.state === 'verifying' ? 'acceptance' : setup.error || interrupted || stale ? 'troubleshooting' : setup.source === 'aliyun' ? 'aliyun' : setup.source === 'harmonyos' ? 'harmonyos' : setup.source === 'local' ? 'local' : 'overview'}.md`, resourceVersion: '1' }],
     };
   }
   async command(command: string, args: Record<string, unknown>, context: Context, dryRun = false) {
@@ -102,7 +102,7 @@ export class PhoneSetupService {
       if (!context.canConfigure) throw new Error('PHONE_SETUP_INTERACTIVE_REQUIRED: Continue in an authorized interactive conversation.');
       if (!Number.isInteger(args.expectedRevision) || args.expectedRevision !== setup.revision) throw new Error('PHONE_SETUP_CONFLICT: Re-read current progress.');
       if (command === 'source') {
-        if (args.source !== 'local' && args.source !== 'aliyun') throw new Error('Choose local or aliyun');
+        if (args.source !== 'local' && args.source !== 'aliyun' && args.source !== 'harmonyos') throw new Error('Choose local, harmonyos or aliyun');
         return this.source(context, setup.id, args.source, setup.revision);
       }
       if (command === 'begin_verification') {
@@ -134,19 +134,24 @@ export class PhoneSetupService {
             await this.deps.setModel(context.agentId, args.modelRef, mutation);
           }
         } else if (command === 'install_dependency') {
-          if (!this.deps.install || args.kind !== 'adb' && args.kind !== 'scrcpy' || args.repair !== undefined && typeof args.repair !== 'boolean') throw new Error('Choose a managed Phone dependency');
+          if (!this.deps.install || !['adb', 'scrcpy', 'hdc', 'hoscrcpy', 'java', 'harmonyos'].includes(String(args.kind)) || args.repair !== undefined && typeof args.repair !== 'boolean') throw new Error('Choose a managed Phone dependency');
           if (args.kind === 'adb' && setup.source === 'aliyun') throw new Error('Cloud direct connections do not need local ADB');
-          const readiness = await this.deps.inspect(context, setup.source);
-          const dependency = readiness.dependencies.find(item => item.kind === args.kind);
-          if (dependency?.state !== 'ready' || args.repair === true) {
-            if (!dependency?.canInstall) throw new Error('PHONE_SETUP_INSTALL_UNAVAILABLE: Use an existing verified dependency or review runtime download settings.');
-            mutation.check(); operation.committing = true;
-            await this.deps.install(args.kind, args.repair === true, mutation);
+          const kinds = args.kind === 'harmonyos' ? ['hdc', 'java', 'hoscrcpy'] as const : [args.kind as 'adb' | 'scrcpy' | 'hdc' | 'java' | 'hoscrcpy'];
+          for (const kind of kinds) {
+            const readiness = await this.deps.inspect(context, setup.source);
+            const dependency = readiness.dependencies.find(item => item.kind === kind);
+            if (dependency?.state !== 'ready' || args.repair === true) {
+              if (!dependency?.canInstall) throw new Error(`PHONE_SETUP_INSTALL_UNAVAILABLE: ${kind} cannot be installed. Review runtime download settings or use an existing verified dependency.`);
+              mutation.check(); operation.committing = true;
+              await this.deps.install(kind, args.repair === true, mutation);
+              mutation.check();
+              if (!(await this.deps.inspect(context, setup.source)).dependencies.some(item => item.kind === kind && item.state === 'ready')) throw new Error(`PHONE_SETUP_INSTALL_UNVERIFIED: ${kind} is not ready after installation.`);
+            }
           }
         } else {
-          if (!this.deps.registerLocal || setup.source !== 'local' || typeof args.serial !== 'string' || args.name !== undefined && (typeof args.name !== 'string' || args.name.length > 100)) throw new Error('Select a discovered local phone');
+          if (!this.deps.registerLocal || !['local', 'harmonyos'].includes(setup.source ?? '') || typeof args.serial !== 'string' || args.name !== undefined && (typeof args.name !== 'string' || args.name.length > 100)) throw new Error('Select a discovered local phone');
           mutation.check(); operation.committing = true;
-          await this.deps.registerLocal(args.serial, args.name as string | undefined, mutation);
+          await this.deps.registerLocal(args.serial, args.name as string | undefined, mutation, setup.source === 'harmonyos' ? 'harmonyos' : 'android');
         }
         mutation.check();
         return this.view(context, this.save(context, this.owned(context, setup.id)));
@@ -160,7 +165,7 @@ export class PhoneSetupService {
     }
     throw new Error('Unsupported phone_setup command');
   }
-  async source(context: Context, id: string, source: 'local' | 'aliyun', revision: number) {
+  async source(context: Context, id: string, source: 'local' | 'aliyun' | 'harmonyos', revision: number) {
     const setup = this.owned(context, id);
     if (!this.scopeCurrent(setup)) throw new Error('PHONE_SETUP_SCOPE_CHANGED: Start a new setup in the current conversation.');
     if (setup.revision !== revision || setup.attempt && !setup.attempt.released) throw new Error('PHONE_SETUP_CONFLICT: Release the active test before changing connection.');
@@ -179,12 +184,13 @@ export class PhoneSetupService {
     if (!device?.enabled || !device.settingsAllowed) throw new Error('PHONE_SETUP_DEVICE_REQUIRED: Choose an enabled phone allowing Settings.');
     if (setup.source && setup.source !== device.source) throw new Error('PHONE_SETUP_SOURCE_MISMATCH');
     if (device.source === 'local' && !readiness.dependencies.some(item => item.kind === 'adb' && item.state === 'ready')) throw new Error('PHONE_SETUP_ADB_REQUIRED');
+    if (device.source === 'harmonyos' && !readiness.dependencies.some(item => item.kind === 'hdc' && item.state === 'ready')) throw new Error('PHONE_SETUP_HDC_REQUIRED');
     if (!await this.deps.connected(deviceId, signal)) throw new Error('PHONE_SETUP_DEVICE_OFFLINE: Authorize USB debugging or check cloud connection.');
     const latest = this.owned(context, id);
     if (!this.scopeCurrent(latest) || latest.revision !== revision || environmentRevision !== this.deps.revision(context, deviceId)) throw new Error('PHONE_SETUP_CONFLICT');
     const attempt = { id: randomUUID(), deviceId, modelRef: readiness.model.ref,
-      goal: 'From the Android Settings About phone page, open Android version details and read the version. Do not change any setting.',
-      completion: { appPackage: 'com.android.settings', textAny: ['Android version', 'Android 版本', 'Android版本'], requireChange: true },
+      goal: device.source === 'harmonyos' ? 'In HarmonyOS Settings, open About phone and read the HarmonyOS version. Do not change any setting.' : 'From the Android Settings About phone page, open Android version details and read the version. Do not change any setting.',
+      completion: { appPackage: device.source === 'harmonyos' ? 'com.huawei.hmos.settings' : 'com.android.settings', textAny: device.source === 'harmonyos' ? ['HarmonyOS', '鸿蒙'] : ['Android version', 'Android 版本', 'Android版本'], requireChange: true },
       maxActions: 6, expiresAt: Date.now() + 300_000, released: false };
     setup = this.save(context, { ...latest, state: 'verifying', source: device.source, error: undefined, attempt,
       owner: `phone-setup:${latest.id}:${attempt.id}`, environmentRevision, calls: 0,
@@ -199,7 +205,7 @@ export class PhoneSetupService {
     if (!cleanup && (!this.scopeCurrent(setup) || setup.state !== 'verifying' || Date.now() > setup.attempt.expiresAt || setup.calls >= 12
       || setup.environmentRevision !== this.deps.revision(context, setup.attempt.deviceId))) throw new Error('PHONE_SETUP_STOPPED: Release the setup test and review the current state.');
     const allowed = cleanup || input.op === 'status' || input.op === 'observe' || input.op === 'pause'
-      || input.op === 'open' && input.deviceId === setup.attempt.deviceId && input.mode === 'control' && input.appPackage === 'com.android.settings'
+      || input.op === 'open' && input.deviceId === setup.attempt.deviceId && input.mode === 'control' && input.appPackage === setup.attempt.completion.appPackage
       || (input.op === 'run' || input.op === 'step') && input.goal === setup.attempt.goal && !input.scenario
         && input.completion?.appPackage === setup.attempt.completion.appPackage && input.completion.requireChange === true
         && JSON.stringify(input.completion.textAny) === JSON.stringify(setup.attempt.completion.textAny) && !input.completion.textAll && !input.completion.field && (input.maxActions ?? 6) <= 6;
@@ -213,7 +219,7 @@ export class PhoneSetupService {
       if (remaining <= 0) throw new Error('PHONE_SETUP_BUDGET_EXHAUSTED: Close the test and review its evidence.');
       return { owner: setup.owner!, input: { ...input, maxActions: Math.min(input.maxActions ?? 6, remaining) } };
     }
-    return { owner: setup.owner!, input: input.op === 'open' ? { ...input, settingsPage: 'about-phone' } : input };
+    return { owner: setup.owner!, input: input.op === 'open' && setup.source !== 'harmonyos' ? { ...input, settingsPage: 'about-phone' } : input };
   }
   afterInput(context: Context, owner: string, op: PhoneInput['op']) {
     const setup = this.current(context);

@@ -154,7 +154,7 @@ it('automates configuration, dependency repair, registration and verification th
   setup = await f.service.command('install_dependency', { setupId: setup.id, kind: 'adb', repair: true, expectedRevision: setup.revision }, context) as PhoneSetupView;
   expect(f.deps.install).toHaveBeenCalledWith('adb', true, expect.any(Object));
   setup = await f.service.command('register_local', { setupId: setup.id, serial: 'discovered-serial', expectedRevision: setup.revision }, context) as PhoneSetupView;
-  expect(f.deps.registerLocal).toHaveBeenCalledWith('discovered-serial', undefined, expect.any(Object));
+  expect(f.deps.registerLocal).toHaveBeenCalledWith('discovered-serial', undefined, expect.any(Object), 'android');
   expect(await f.service.command('models', {}, context)).toMatchObject({ models: [{ ref: 'real/phone' }] });
   const attempt = await f.service.command('begin_verification', { setupId: setup.id, deviceId: 'device-one', expectedRevision: setup.revision }, context) as PhoneSetupView;
   expect(attempt.state).toBe('verifying');
@@ -251,4 +251,44 @@ it('invalidates a real conversation transcript grant after reset without revivin
   expect(await f.service.command('get', { setupId: setup.id }, f.context)).toMatchObject({ stale: true });
   await expect(f.service.source(f.context, setup.id, 'local', setup.revision)).rejects.toThrow('SCOPE_CHANGED');
   expect(() => f.service.beforeInput(f.context, { op: 'open', deviceId: 'device-one', mode: 'control', appPackage: 'com.android.settings' })).toThrow('STOPPED');
+});
+
+it('installs only missing HarmonyOS components in one conversational action and verifies each result', async () => {
+  const f = fixture(); const context = { ...f.context, canConfigure: true };
+  f.ready.dependencies = [
+    { kind: 'hdc', state: 'ready', canInstall: true },
+    { kind: 'java', state: 'absent', canInstall: true },
+    { kind: 'hoscrcpy', state: 'corrupted', canInstall: true },
+  ];
+  f.deps.install = vi.fn(async kind => { f.ready.dependencies.find(item => item.kind === kind)!.state = 'ready'; });
+  let setup = await f.service.command('start', {}, context) as PhoneSetupView;
+  setup = await f.service.command('source', { setupId: setup.id, source: 'harmonyos', expectedRevision: setup.revision }, context) as PhoneSetupView;
+  setup = await f.service.command('install_dependency', { setupId: setup.id, kind: 'harmonyos', expectedRevision: setup.revision }, context) as PhoneSetupView;
+  expect(f.deps.install.mock.calls.map(call => call[0])).toEqual(['java', 'hoscrcpy']);
+  expect(setup.readiness.dependencies.every(item => item.state === 'ready')).toBe(true);
+  expect(setup.checks.verified).toBe(false);
+});
+
+it('stops a bundled install at an unverified dependency and permits retry without reinstalling ready components', async () => {
+  const f = fixture(); const context = { ...f.context, canConfigure: true };
+  f.ready.dependencies = ['hdc', 'java', 'hoscrcpy'].map(kind => ({ kind: kind as 'hdc' | 'java' | 'hoscrcpy', state: 'absent', canInstall: true }));
+  f.deps.install = vi.fn(async kind => { if (kind !== 'java') f.ready.dependencies.find(item => item.kind === kind)!.state = 'ready'; });
+  let setup = await f.service.command('start', {}, context) as PhoneSetupView;
+  await expect(f.service.command('install_dependency', { setupId: setup.id, kind: 'harmonyos', expectedRevision: setup.revision }, context)).rejects.toThrow('INSTALL_UNVERIFIED');
+  expect(f.deps.install.mock.calls.map(call => call[0])).toEqual(['hdc', 'java']);
+  setup = await f.service.command('get', { setupId: setup.id }, context) as PhoneSetupView;
+  f.deps.install.mockClear();
+  f.deps.install.mockImplementation(async kind => { f.ready.dependencies.find(item => item.kind === kind)!.state = 'ready'; });
+  await f.service.command('install_dependency', { setupId: setup.id, kind: 'harmonyos', expectedRevision: setup.revision }, context);
+  expect(f.deps.install.mock.calls.map(call => call[0])).toEqual(['java', 'hoscrcpy']);
+});
+
+it('uses HDC and HarmonyOS Settings for basic acceptance without requiring Android ADB or video', async () => {
+  const f = fixture(); f.ready.devices[0].source = 'harmonyos';
+  f.ready.dependencies = [{ kind: 'hdc', state: 'ready', canInstall: true }];
+  const setup = await f.begin();
+  expect(setup.attempt).toMatchObject({ goal: expect.stringContaining('HarmonyOS'), completion: { appPackage: 'com.huawei.hmos.settings' } });
+  const input = f.service.beforeInput(f.context, { op: 'open', deviceId: 'device-one', mode: 'control', appPackage: 'com.huawei.hmos.settings' })!;
+  expect(input.input).not.toHaveProperty('settingsPage');
+  expect(() => f.service.beforeInput(f.context, { op: 'open', deviceId: 'device-one', mode: 'control', appPackage: 'com.android.settings' })).toThrow('ACTION_DENIED');
 });

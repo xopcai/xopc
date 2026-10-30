@@ -7,11 +7,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import sharp from 'sharp';
 
+import { managedHdcPath } from '../runtime-tools/harmony-paths.js';
+
 import { runPhoneCommandBuffer } from '../process/phone-process.js';
 import type { PhoneDriver } from './adb-driver.js';
 import { PhoneError, type DiscoveredPhone, type PhoneAction, type PhoneApplication, type PhoneElement, type PhoneObservation, type PhoneTextInputStatus } from './contracts.js';
 
-export function resolveHdcPath(configured?: string): string {
+export function resolveHdcPath(configured?: string, stateDir?: string): string {
   if (configured) return configured;
   const roots = [process.env.HARMONYOS_SDK_HOME, process.env.DEVECO_SDK_HOME,
     '/Applications/DevEco-Studio.app/Contents/sdk/default', join(homedir(), 'Library/Huawei/Sdk')];
@@ -19,7 +21,8 @@ export function resolveHdcPath(configured?: string): string {
     const candidate = join(root, suffix, process.platform === 'win32' ? 'hdc.exe' : 'hdc');
     if (existsSync(candidate)) return candidate;
   }
-  return 'hdc';
+  const managed = managedHdcPath(stateDir);
+  return existsSync(managed) ? managed : 'hdc';
 }
 
 export function parseHdcDevices(raw: string): DiscoveredPhone[] {

@@ -2,8 +2,8 @@
 
 - Browser / Chrome / browser extension / 浏览器 / 浏览器控制: read browser/overview.md.
   The complete guided path currently supports the local Chrome extension.
-- Phone / Android / USB / ADB / 云手机 / 手机控制: read phone/overview.md.
-  Supports local Android and Alibaba Cloud ADB; purchase stays in the official console.
+- Phone / Android / HarmonyOS / 鸿蒙 / USB / ADB / 云手机 / 手机控制: read phone/overview.md.
+  Supports local Android, USB HarmonyOS and Alibaba Cloud ADB; purchase stays in the official console.
 - Computer, models, voice, channels and other settings: explain that their unified
   setup scene is not available yet. Use the existing product settings/manuals and their real
   diagnostics. Never claim these areas are supported by browser_setup.

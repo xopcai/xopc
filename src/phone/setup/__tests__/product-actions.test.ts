@@ -71,3 +71,17 @@ it('does not register a discovered phone after the original setup was cancelled'
   await rejected; await cancelled;
   expect(runtime.repository.list()).toHaveLength(0);
 });
+
+it('registers a HarmonyOS USB phone with its own Settings policy without adopting an Android registration', async () => {
+  const runtime = getPhoneRuntime();
+  runtime.repository.save({ serial: 'same-serial', name: 'Android', enabled: true, allowedApps: ['com.android.settings'] });
+  const discover = vi.spyOn(runtime, 'discover').mockResolvedValue([{ serial: 'same-serial', name: 'Huawei', state: 'device', emulator: false, platform: 'harmonyos' }]);
+  const service = createPhoneSetupService({ currentConfig: ConfigSchema.parse({}) } as unknown as GatewayService);
+  const context = { conversationId: 'harmony-conversation', agentId: 'main', canConfigure: true };
+  let setup = await service.command('start', {}, context) as PhoneSetupView;
+  setup = await service.command('source', { setupId: setup.id, source: 'harmonyos', expectedRevision: setup.revision }, context) as PhoneSetupView;
+  await service.command('register_local', { setupId: setup.id, expectedRevision: setup.revision, serial: 'same-serial' }, context);
+  expect(discover).toHaveBeenCalledWith(expect.anything(), expect.any(AbortSignal), 'harmonyos');
+  expect(runtime.repository.list()).toHaveLength(2);
+  expect(runtime.repository.list().find(phone => phone.platform === 'harmonyos')).toMatchObject({ appAccess: 'selected', allowedApps: ['com.huawei.hmos.settings'] });
+});

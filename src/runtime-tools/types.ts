@@ -1,7 +1,7 @@
 import type { RuntimeToolsConfig } from '../config/schema.js';
 
 export type RuntimeKind = 'node' | 'uv' | 'python';
-export type RuntimeArtifactKind = RuntimeKind | 'adb' | 'scrcpy';
+export type RuntimeArtifactKind = RuntimeKind | 'adb' | 'scrcpy' | 'hdc' | 'hoscrcpy' | 'java';
 export type RuntimeSource = 'managed' | 'system';
 export type RuntimeState =
   | 'disabled'
