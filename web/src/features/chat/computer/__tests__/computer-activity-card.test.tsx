@@ -57,6 +57,6 @@ it('does not paint a decoded frame after the conversation has changed', async ()
     width: 10, height: 10, mimeType: 'image/jpeg', bytes: new Uint8Array([1]) });
   await act(async () => root.render(<ComputerActivityCard conversationId="two" />));
   const bitmap = { width: 10, height: 10, close: vi.fn() };
-  await act(async () => { finish(bitmap as any); await pending; });
+  await act(async () => { finish(bitmap); await pending; });
   expect(draw).not.toHaveBeenCalled(); expect(bitmap.close).toHaveBeenCalledOnce();
 });

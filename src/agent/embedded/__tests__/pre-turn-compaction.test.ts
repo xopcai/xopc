@@ -643,12 +643,12 @@ describe('pre-turn auto-compaction', () => {
       abortSignal: controller.signal,
     });
 
-    expect(result).toEqual({ ok: false, errorMessage: 'aborted' });
+    expect(result).toEqual({ ok: false, retryable: false, terminationReason: 'parent_cancelled', errorMessage: 'aborted' });
     expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledTimes(1);
     expect(sessionStore.prepareModelFallback).not.toHaveBeenCalled();
   });
 
-  it('persists a partial outcome when the provider aborts by throwing', async () => {
+  it('persists a failed outcome when the provider aborts by throwing without a cancelled run', async () => {
     mockRunXopcEmbeddedTurn.mockRejectedValueOnce(new DOMException('aborted', 'AbortError'));
     const sessionStore = createMockSessionStore({ needsCompaction: false });
     sessionStore.loadTranscriptRows.mockResolvedValue([{
@@ -670,7 +670,7 @@ describe('pre-turn auto-compaction', () => {
       'agent:main:test-session',
       expect.objectContaining({
         customType: 'turn_outcome',
-        data: expect.objectContaining({ turnId: 'run-aborted', status: 'partial' }),
+        data: expect.objectContaining({ turnId: 'run-aborted', status: 'failed' }),
       }),
     );
   });
