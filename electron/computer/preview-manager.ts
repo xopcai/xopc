@@ -48,7 +48,14 @@ export class ComputerPreviewManager {
     }
     const key = JSON.stringify([authority.conversationId, authority.runId, authority.brokerEpoch, authority.computerSessionId,
       authority.target?.appId, authority.target?.pid, authority.target?.processIdentity, authority.target?.windowId]);
-    if (key === this.key) return;
+    if (key === this.key) {
+      if (this.state && JSON.stringify(this.state.activity) !== JSON.stringify(authority.activity)) {
+        this.state = { ...this.state, activity: authority.activity ? { ...authority.activity } : undefined };
+        this.notify();
+        try { this.subscription?.sink.send({ ...this.state }); } catch { this.stopCapture(); this.closeSubscription(); }
+      }
+      return;
+    }
     this.stopCapture(); this.closeSubscription(); this.releaseAuthority?.();
     this.key = key; this.authority = authority;
     const abort = () => this.sync();
@@ -56,6 +63,7 @@ export class ComputerPreviewManager {
     this.releaseAuthority = () => authority.signal.removeEventListener('abort', abort);
     this.state = { previewId: randomUUID(), conversationId: authority.conversationId, runId: authority.runId,
       computerSessionId: authority.computerSessionId, brokerEpoch: authority.brokerEpoch, appName: authority.appName,
+      activity: authority.activity ? { ...authority.activity } : undefined,
       targetEpoch: (this.state?.targetEpoch ?? 0) + 1, status: authority.target ? 'available' : 'preparing' };
     this.notify();
   }

@@ -40,6 +40,8 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
       return { title: m.agentRunErrorRateLimitTitle, body: m.agentRunErrorRateLimitBody };
     case 'timeout':
       return { title: m.agentRunErrorTimeoutTitle, body: m.agentRunErrorTimeoutBody };
+    case 'provider_connection_error':
+      return { title: m.agentRunErrorConnectionTitle, body: m.agentRunErrorConnectionBody };
     case 'billing':
       return { title: m.agentRunErrorBillingTitle, body: m.agentRunErrorBillingBody };
     case 'credit_budget_exhausted':

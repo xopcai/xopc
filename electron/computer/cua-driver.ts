@@ -193,6 +193,7 @@ export class CuaComputerDriver implements ComputerDriver {
     private readonly bundleId: string,
     private readonly loadSdk: CuaSdkLoader = () => import('@trycua/cua-driver'),
     private readonly platform: NodeJS.Platform = process.platform,
+    private readonly followsActiveSpace: () => boolean = () => false,
   ) {}
 
   /** Start only the private transport; does not select or authorize a target. */
@@ -555,7 +556,7 @@ export class CuaComputerDriver implements ComputerDriver {
     }
     // A hidden app can publish many proxy surfaces before its main window is restored.
     // Preparation authorizes app activation, but not a guessed window or screenshot.
-    if (options.prepare && !hostPreparation && !options.windowRef && windows.length > 1 && windows.every(window => !window.isOnScreen)) {
+    if (options.prepare && !hostPreparation && !this.canFollowWorkspace() && !options.windowRef && windows.length > 1 && windows.every(window => !window.isOnScreen)) {
       if (windows.every(window => window.onCurrentSpace === false)) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
       if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
       if (!activated) {
@@ -608,6 +609,10 @@ export class CuaComputerDriver implements ComputerDriver {
       // order cannot establish which document the user's task authorized.
     }
     if (!window && windows.length > 1) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
+    if (window?.onCurrentSpace === false && this.canFollowWorkspace()) {
+      window = await this.revealWorkspaceWindow({ appId, pid, processIdentity, windowId: window.windowId.toString(),
+        width: Math.round(window.bounds.width), height: Math.round(window.bounds.height), geometryRevision: hash(JSON.stringify(window.bounds)) }, signal);
+    }
     if (hostPreparation && window && (!window.isOnScreen || window.onCurrentSpace === false)) {
       // The application may have published an accessory before its document.
       // Select the exact window first; preparation never follows a replacement.
@@ -698,6 +703,27 @@ export class CuaComputerDriver implements ComputerDriver {
     if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     return { appId, pid, processIdentity, windowId: window.windowId.toString(), width: Math.round(window.bounds.width), height: Math.round(window.bounds.height), geometryRevision: hash(JSON.stringify(window.bounds)) };
   }
+  private canFollowWorkspace(): boolean { return this.platform === 'darwin' && this.followsActiveSpace(); }
+  private async revealWorkspaceWindow(target: ComputerTarget, signal: AbortSignal) {
+    signal.throwIfAborted();
+    if (!this.canFollowWorkspace()) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
+    await this.validatePreviewTarget(target, signal);
+    // Space switching must be attributed to the visible Electron host. The
+    // background actuator's strict foreground-focus request can be refused even
+    // though host activation succeeds. Capture needs this exact window visible,
+    // not foreground keyboard focus. Reject any process/window replacement.
+    await this.prepareApplication(target.appId, signal);
+    await this.validatePreviewTarget(target, signal);
+    return withWindowReadiness(signal, (readySignal, poll) => poll(async () => {
+      readySignal.throwIfAborted();
+      if (!this.canFollowWorkspace()) throw new Error('COMPUTER_LOCAL_UI_REQUIRED');
+      if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+      const windows = await this.appWindows(target.pid, target.appId, readySignal, BigInt(target.windowId));
+      const current = windows.find(window => window.windowId.toString() === target.windowId);
+      if (!current || current.pid !== target.pid) throw new Error('COMPUTER_WINDOW_CHANGED');
+      return current.onCurrentSpace !== false && current.isOnScreen ? current : undefined;
+    }, { intervalMs: 100 }));
+  }
   private async prepareApplication(appId: string, signal: AbortSignal): Promise<void> {
     if (!/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+$/.test(appId)) throw new Error('COMPUTER_APP_ID_INVALID');
     signal.throwIfAborted();
@@ -723,6 +749,7 @@ export class CuaComputerDriver implements ComputerDriver {
     let state: WindowStateOutput;
     const recoveryDelays = [100, 300, 900];
     let recoveryBounds: string | undefined;
+    let workspaceRecovered = false;
     for (let attempt = 0; ; attempt++) {
       signal.throwIfAborted();
       if (this.platform === 'win32') {
@@ -764,7 +791,14 @@ export class CuaComputerDriver implements ComputerDriver {
       const windows = await this.listWindows(target.pid, signal);
       const current = windows.find(window => window.windowId === windowId);
       if (!current) throw new Error('COMPUTER_WINDOW_CHANGED');
-      if (current.onCurrentSpace === false) throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
+      if (current.onCurrentSpace === false) {
+        if (!workspaceRecovered && this.canFollowWorkspace()) {
+          await this.revealWorkspaceWindow(target, signal);
+          workspaceRecovered = true; recoveryBounds = undefined;
+          continue;
+        }
+        throw new Error('COMPUTER_WINDOW_OTHER_SPACE');
+      }
       if (!current.isOnScreen) throw new Error('COMPUTER_WINDOW_HIDDEN');
       const nativeBounds = JSON.stringify(Bounds.parse(current.bounds));
       if ((captureBounds && nativeBounds !== JSON.stringify(captureBounds))

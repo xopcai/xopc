@@ -708,6 +708,8 @@
     "agentRunErrorRateLimitTitle": "请求过于频繁",
     "agentRunErrorRateLimitBody": "模型服务商触发了限流，请稍后再试。",
     "agentRunErrorTimeoutTitle": "请求超时",
+    "agentRunErrorConnectionTitle": "模型连接中断",
+    "agentRunErrorConnectionBody": "连接模型服务商失败，请检查网络及服务商状态。如果已执行过工具操作，请先确认执行结果，再让助手继续。",
     "agentRunErrorTimeoutBody": "模型服务商响应超时，请检查网络后重试。",
     "agentRunErrorBillingTitle": "余额或配额不足",
     "agentRunErrorBillingBody": "服务商报告余额或配额不足，请检查账户后重试。",

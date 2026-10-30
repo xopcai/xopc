@@ -6,6 +6,10 @@ export const ComputerPreviewRequestSchema = z.object({
   preset: z.enum(['compact', 'expanded']).default('compact'),
 }).strict();
 export type ComputerPreviewPreset = 'compact' | 'expanded' | 'paused';
+export interface ComputerPreviewActivity {
+  phase: 'observing' | 'acting' | 'ready';
+  action?: ComputerAction['kind'];
+}
 export interface ComputerPreviewState {
   previewId: string;
   conversationId: string;
@@ -16,6 +20,7 @@ export interface ComputerPreviewState {
   targetEpoch: number;
   status: 'preparing' | 'available' | 'live' | 'paused' | 'unavailable' | 'ended';
   errorCode?: string;
+  activity?: ComputerPreviewActivity;
 }
 export interface ComputerPreviewFrame {
   version: 1;

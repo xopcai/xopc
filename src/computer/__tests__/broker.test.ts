@@ -406,3 +406,17 @@ it('switches applications only for the bound active conversation', async () => {
   await f.broker.stop();
   await expect(f.broker.focusConversation('o')).rejects.toThrow('COMPUTER_PREVIEW_REVOKED');
 });
+it('exposes only action kind and phase while input is in flight, then observes the result', async () => {
+  const f = fixture(true, false); await f.open();
+  const observed = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+  let finish!: () => void;
+  vi.mocked(f.driver.perform).mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+  const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: {
+    ...envelope(observed), action: { kind: 'typeText' as const, point: { x: 20, y: 20 }, text: 'private typed content' },
+  } };
+  const pending = f.broker.command(command);
+  await vi.waitFor(() => expect(f.broker.previewAuthority()?.activity).toEqual({ phase: 'acting', action: 'typeText' }));
+  expect(JSON.stringify(f.broker.previewAuthority()?.activity)).not.toContain('private');
+  finish(); await pending;
+  expect(f.broker.previewAuthority()?.activity).toEqual({ phase: 'ready', action: 'typeText' });
+});

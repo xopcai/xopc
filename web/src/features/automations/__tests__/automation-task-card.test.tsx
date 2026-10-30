@@ -37,7 +37,7 @@ describe('scheduled task card and shared editor', () => {
   it('keeps a run card attached to its execution even when task state points to a newer run', async () => {
     vi.mocked(automationApi.get).mockResolvedValue({ automation: { ...task, state: { ...task.state, lastRunId: 'newer-run' } } as Automation });
     await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><AutomationTaskCard automationId="weekly" runId="original-run" language="zh" /></MemoryRouter></SWRConfig>));
-    const link = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent === '查看运行情况');
+    const link = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent?.includes('查看运行情况'));
     expect(link?.getAttribute('href')).toBe('/automations?automation=weekly&view=run&run=original-run');
   });
   it('saves a completed task without rescheduling or losing its original seconds', async () => {

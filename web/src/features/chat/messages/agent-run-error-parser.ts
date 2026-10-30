@@ -5,6 +5,7 @@ export type AgentRunErrorKind =
   | 'provider_auth_invalid'
   | 'rate_limit'
   | 'timeout'
+  | 'provider_connection_error'
   | 'billing'
   | 'xopc_quota_exhausted'
   | 'xopc_platform_limit'

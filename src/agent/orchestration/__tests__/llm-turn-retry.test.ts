@@ -25,6 +25,7 @@ describe('llm-turn-retry', () => {
     await rejected;expect(agent.continue).not.toHaveBeenCalled();
   });
   it('detects transient provider errors', () => {
+    expect(classifyLlmFailure('Connection error.')).toBe('transient_network');
     expect(isTransientLlmErrorMessage('TypeError: fetch failed')).toBe(true);
     expect(isTransientLlmErrorMessage('ECONNRESET')).toBe(true);
     expect(isTransientLlmErrorMessage('502: {"code":"provider_error"}')).toBe(true);
@@ -54,6 +55,50 @@ describe('llm-turn-retry', () => {
     } as AgentMessage;
     const out = stripTrailingErrorAssistantMessages([user, errAssistant]);
     expect(out).toEqual([user]);
+  });
+
+  it.each([false, true])('recovers a connection error only with confirmed tool results (failed=%s)', async (failed) => {
+    const controller = new AbortController();
+    const toolCall = { role: 'assistant', stopReason: 'toolUse', content: [
+      { type: 'toolCall', id: 'input', name: 'computer_use', arguments: { keys: '123+945' } },
+    ] };
+    const toolResult = { role: 'toolResult', toolCallId: 'input', toolName: 'computer_use',
+      isError: failed, content: [{ type: 'text', text: failed ? 'Outcome unknown' : 'Completed' }] };
+    const failedMessage = { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'Connection error.' };
+    const history = [{ role: 'user', content: 'Calculate', timestamp: 1 }, toolCall, toolResult];
+    const success = { role: 'assistant', content: [{ type: 'text', text: '1068' }], stopReason: 'stop' };
+    const agent = { state: { messages: [...history, failedMessage] },
+      continue: vi.fn(async () => { agent.state.messages.push(success); }), waitForIdle: vi.fn() } as any;
+    const log = { warn: vi.fn() };
+    await maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test', log,
+      signal: controller.signal, baseDelayMs: 0 });
+    expect(agent.continue).toHaveBeenCalledTimes(failed ? 0 : 1);
+    expect(agent.state.messages).toEqual([...history, failed ? failedMessage : success]);
+    if (failed) expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({
+      errorMessage: 'Connection error.', failureKind: 'transient_network',
+      recoveryBlockedReason: 'unconfirmed_tool_outcome',
+    }), expect.any(String));
+  });
+
+  it('bounds persistent connection failures with exponential backoff', async () => {
+    vi.useFakeTimers();
+    const failure = { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'Connection error.' };
+    const user = { role: 'user', content: 'Hello', timestamp: 1 };
+    const agent = { state: { messages: [user, failure] },
+      continue: vi.fn(async () => { agent.state.messages.push(failure); }), waitForIdle: vi.fn() } as any;
+    const budget = { continues: 0 };
+    const pending = maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test', log: { warn: vi.fn() }, budget });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(agent.continue).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(agent.continue).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(agent.continue).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(agent.continue).toHaveBeenCalledTimes(2);
+    expect(budget.continues).toBe(2);
+    expect(agent.state.messages).toEqual([user, failure]);
   });
 
   it('retries via continue when last turn is transient error', async () => {

@@ -12,8 +12,11 @@ Pixels need not be identical during this readiness check; normal pre-input state
 checks still apply. Cancellation stops the wait. A visible background window
 does not require activation. In the current development build, authorized
 `prepare:true` uses the macOS desktop host to start or restore an off-Space app,
-then verifies the exact window. `prepare:false` leaves the desktop unchanged and
-continues to refuse off-Space targets.
+then verifies the exact window. `prepare:false` does not launch or restore an app. An authorized macOS session
+can reveal its exact existing window on another Space, including when verifying
+a previous input. Chat temporarily follows Spaces and fullscreen apps; if chat
+is itself fullscreen, it leaves that Space during the session. Its original
+workspace and fullscreen policy is restored on release. Recovery never replays input.
 
 Failures distinguish hidden windows (`COMPUTER_WINDOW_HIDDEN`), readiness timeouts
 (`COMPUTER_WINDOW_READY_TIMEOUT`), other Spaces (`COMPUTER_WINDOW_OTHER_SPACE`),
@@ -126,7 +129,7 @@ The opt-in [Windows reliability matrix](https://github.com/xopcai/xopc/blob/main
 
 Verify that the answer matches the intended application and window before authorizing changes. If several windows or processes match, select the intended one rather than guessing.
 
-If the desktop returns `COMPUTER_WINDOW_OTHER_SPACE`, the target is on a different macOS desktop/Space and the operation has not been authorized to prepare it, or the host lacks preparation support. When the task authorizes opening/restoring the app, the current macOS development build can use `prepare:true` to recover it automatically. A five-second preparation timeout is a distinct failure: inspect its diagnostics before another attempt, and never replay input whose outcome is uncertain.
+The desktop automatically handles another macOS Space for an exact existing authorized window, with one activation and a bounded visibility wait. It does not select another document or relaunch a process. If `COMPUTER_WINDOW_OTHER_SPACE` remains, automatic recovery is unavailable; check desktop-host support before manually changing Spaces. A five-second readiness timeout is distinct. Inspect dispatch receipts before continuing and never replay a completed or uncertain input.
 
 ## Small goals in one call
 

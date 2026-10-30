@@ -51,7 +51,7 @@ describe('AssistantResultTail product deliveries', () => {
   it('keeps the execution card visible inside configuration chat and opens that execution', async () => {
     const delivery: ProductDeliveryEnvelope = { version: 2, operation: 'started', primary: { kind: 'automation', id: 'automation-1', runId: 'original-run', title: 'Progress', capabilities: ['open'] } };
     await act(async () => root.render(<MemoryRouter initialEntries={['/chat/config']}><AutomationConfigurationContext.Provider value={true}>{renderDelivery(delivery)}</AutomationConfigurationContext.Provider><LocationProbe /></MemoryRouter>));
-    const link = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent === '查看运行情况');
+    const link = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent?.includes('查看运行情况'));
     expect(link).toBeDefined();
     await act(async () => link!.click());
     expect(container.querySelector('[data-testid="location"]')?.textContent).toContain('run%3Doriginal-run');

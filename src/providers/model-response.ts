@@ -1,4 +1,5 @@
 const TRANSIENT_PROVIDER_ERROR_SUBSTRINGS = [
+  'connection error',
   'fetch failed',
   'econnreset',
   'econnrefused',

@@ -165,7 +165,7 @@ function DeliveryRow({
     }, language)
     : [deliveryMeta(delivery, reference, language), reference.summary?.trim()].filter(Boolean).join(' · ');
 
-  if (reference.kind === 'automation' && delivery.operation !== 'failed') return <li className="min-w-0"><AutomationTaskCard automationId={reference.id} runId={reference.runId} language={language} /></li>;
+  if (reference.kind === 'automation' && delivery.operation !== 'failed') return <li className="min-w-0"><AutomationTaskCard automationId={reference.id} runId={reference.runId} language={language} embedded /></li>;
 
   const open = () => {
     if (filePath && canPreviewFile) {

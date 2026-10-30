@@ -23,6 +23,7 @@ import { createLogger } from '../../src/utils/logger.js';
 import { uploadDesktopFrame } from './frame-upload.js';
 import { executeComputerCommand } from './execute-command.js';
 import { resolveLocalComputerDriver } from './local-driver.js';
+import { ComputerWorkspaceVisibility } from './workspace-visibility.js';
 import { ComputerAccessPolicy } from './access-policy.js';
 import { ComputerPreviewManager } from './preview-manager.js';
 import { startPreviewCapture } from './preview-capture.js';
@@ -62,6 +63,7 @@ export class DesktopEndpointHost {
   private reenrolling = false;
   private readonly lifetime = new AbortController();
   private readonly accessPolicy = new ComputerAccessPolicy();
+  private readonly workspaceVisibility = new ComputerWorkspaceVisibility();
   private stopBrokerInBackground(errorCode?: 'COMPUTER_LOCAL_UI_REQUIRED'): void {
     void this.broker.stop(errorCode).catch(() => {
       if (!this.reenrollmentRequired) this.error = 'COMPUTER_DRIVER_CLEANUP_UNCONFIRMED';
@@ -73,7 +75,8 @@ export class DesktopEndpointHost {
     const binary = resolveComputerDriverPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, mainDir: import.meta.dirname });
     const sdkUrl = resolveComputerDriverSdkUrl({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
     const loadSdk = sdkUrl ? () => import(/* @vite-ignore */ sdkUrl) : undefined;
-    this.broker = new ComputerBroker(new CuaComputerDriver(binary, app.isPackaged ? 'ai.xopc.xopc' : 'com.github.Electron', loadSdk), {
+    this.broker = new ComputerBroker(new CuaComputerDriver(binary, app.isPackaged ? 'ai.xopc.xopc' : 'com.github.Electron', loadSdk, process.platform,
+      () => this.workspaceVisibility.active), {
       isVisible: () => this.visible(),
       requestApproval: (request, signal) => this.approve(request, signal),
       onStateChange: () => this.preview?.sync(),
@@ -88,7 +91,14 @@ export class DesktopEndpointHost {
       },
     });
   }
-  private visible(): boolean { const w = this.options.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); }
+  private visible(): boolean {
+    const w = this.options.window();
+    // Electron can briefly hide the host while changing its macOS workspace
+    // policy. Only session preparation is allowed through that transition;
+    // approval checks actual visibility again before any desktop work begins.
+    const preparing = this.workspaceVisibility.transitioning && this.broker.snapshot().status === 'pending_authorization';
+    return !!w && !w.isDestroyed() && !w.isMinimized() && (w.isVisible() || preparing);
+  }
   snapshot() { return { connected: !!this.claim, claim: this.claim, error: this.error, reenrollmentRequired: this.reenrollmentRequired,
     session: this.broker.snapshot(),
     platform: process.platform,
@@ -113,6 +123,10 @@ export class DesktopEndpointHost {
     if (!this.visible() || signal.aborted) return false;
     const appId = request.kind === 'session' ? request.appId : request.target.appId;
     if (!await this.accessPolicy.allows(appId)) throw new Error('COMPUTER_APP_NOT_AUTHORIZED');
+    if (request.kind === 'session' && !signal.aborted) {
+      const window = this.options.window();
+      if (window && !window.isDestroyed()) await this.workspaceVisibility.begin(window, signal);
+    }
     return !signal.aborted && this.visible();
   }
   async computerAccess() {
@@ -305,5 +319,5 @@ export class DesktopEndpointHost {
     this.client = realtime; this.controller = controller; realtime.connect();
   }
   visibilityChanged(): void { this.controller?.publishAvailability(); if (!this.visible()) this.stopBrokerInBackground('COMPUTER_LOCAL_UI_REQUIRED'); }
-  async close(): Promise<void> { this.stopped = true; this.lifetime.abort(); clearTimeout(this.retry); this.client?.disconnect(); this.controller?.disconnect(); this.preview.dispose(); await this.broker.dispose(); }
+  async close(): Promise<void> { this.stopped = true; this.lifetime.abort(); clearTimeout(this.retry); this.client?.disconnect(); this.controller?.disconnect(); this.preview.dispose(); try { await this.broker.dispose(); } finally { this.workspaceVisibility.close(); } }
 }

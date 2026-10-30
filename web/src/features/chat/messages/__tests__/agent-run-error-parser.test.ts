@@ -3,6 +3,12 @@ import { describe, it, expect } from 'vitest';
 import { parseAgentRunError, toProviderSetupPayload } from '../agent-run-error-parser';
 
 describe('parseAgentRunError', () => {
+  it('preserves model connection failures without showing provider setup', () => {
+    const parsed = parseAgentRunError(JSON.stringify({ kind: 'provider_connection_error',
+      code: 'provider_connection_error', provider: 'xopc-cloud', message: 'Connection error.' }));
+    expect(parsed?.code).toBe('provider_connection_error');
+    expect(parsed && toProviderSetupPayload(parsed)).toBeNull();
+  });
   it('parses provider_auth_invalid structured payload', () => {
     const text = JSON.stringify({
       kind: 'provider_auth_invalid',

@@ -80,6 +80,7 @@ const hosts: DesktopEndpointHost[] = [];
 function host() {
   const value = new DesktopEndpointHost({ connection: () => ({ port: 1, token: 'fixture' }), window: () => ({
     isDestroyed: () => false, isVisible: () => state.visible, isMinimized: () => false, isFocused: () => true,
+    isVisibleOnAllWorkspaces: () => false, setVisibleOnAllWorkspaces: vi.fn(), isFullScreen: () => false, setFullScreen: vi.fn(),
   }) as any });
   hosts.push(value); return value;
 }
