@@ -1,31 +1,35 @@
 // @vitest-environment jsdom
+import { MemoryRouter } from 'react-router-dom';
 import { act, type ComponentProps } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
 import { CustomMcpServerDialog } from '../../custom-mcp-server-dialog';
 import { emptyMcpServerRow, normalizeMcpSettingsFromConfig } from '../mcp-config-api';
 
 const api = vi.hoisted(() => ({ patchMcpSettings: vi.fn(), createMcpConnectionDraft: vi.fn(), commitMcpDraft: vi.fn(), deleteMcpDraft: vi.fn(), probeMcpDraft: vi.fn(), startMcpDraftSignIn: vi.fn(),
-  readMcpDraftSignIn: vi.fn(), cancelMcpDraftSignIn: vi.fn(), submitMcpDraftRedirect: vi.fn() }));
+  fetchMcpDraftTools: vi.fn(), fetchMcpTools: vi.fn(), readMcpDraftSignIn: vi.fn(), cancelMcpDraftSignIn: vi.fn(), submitMcpDraftRedirect: vi.fn() }));
 vi.mock('../mcp-config-api', async original => ({ ...await original<typeof import('../mcp-config-api')>(), ...api }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: ReturnType<typeof createRoot>;
 let container: HTMLDivElement;
 const m = messages('zh'); const t = m.mcpSettings;
 beforeEach(() => {
+  useLocaleStore.setState({ language: 'zh' });
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   Object.values(api).forEach(mock => mock.mockReset()); api.createMcpConnectionDraft.mockResolvedValue({ id: 'draft-1', serverId: 'docs', expiresAt: Date.now() + 600_000 });
   api.commitMcpDraft.mockResolvedValue(undefined); api.deleteMcpDraft.mockResolvedValue(undefined); api.cancelMcpDraftSignIn.mockResolvedValue(undefined);
+  api.fetchMcpDraftTools.mockResolvedValue([{ name: 'search_docs', description: '搜索文档', inputSchema: {} }]); api.fetchMcpTools.mockResolvedValue([{ name: 'search_docs', description: '搜索文档', inputSchema: {} }]);
   api.probeMcpDraft.mockResolvedValue({ state: 'connected', toolCount: 8 });
   vi.spyOn(window, 'open').mockReturnValue(null);
 });
 afterEach(async () => { await act(async () => root.unmount()); document.body.innerHTML = ''; vi.restoreAllMocks(); });
 async function render(overrides: Partial<ComponentProps<typeof CustomMcpServerDialog>> = {}) {
   const onSaved = vi.fn(async () => {}); const onClose = vi.fn();
-  await act(async () => root.render(<CustomMcpServerDialog open mode="add" initialRow={emptyMcpServerRow()} existingCustomServers={[]}
-    config={{}} managedServerIds={new Set()} t={t} cs={m.connectorsSettings} onClose={onClose} onSaved={onSaved} {...overrides} />));
+  await act(async () => root.render(<MemoryRouter><CustomMcpServerDialog open mode="add" initialRow={emptyMcpServerRow()} existingCustomServers={[]}
+    config={{}} managedServerIds={new Set()} t={t} cs={m.connectorsSettings} onClose={onClose} onSaved={onSaved} {...overrides} /></MemoryRouter>));
   return { onSaved, onClose };
 }
 async function type(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
@@ -56,7 +60,10 @@ it('saves an address with a generated ID, keeps advanced fields collapsed and cl
   expect(api.patchMcpSettings).not.toHaveBeenCalled(); expect(api.commitMcpDraft).not.toHaveBeenCalled();
   expect(api.probeMcpDraft).toHaveBeenCalledWith('draft-1', expect.any(AbortSignal));
   expect(document.body.textContent).toContain('连接检查成功 · 发现 8 个工具'); expect(onSaved).not.toHaveBeenCalled();
-  await click(t.setupAddConnection); expect(api.commitMcpDraft).toHaveBeenCalledWith('draft-1', false); expect(onSaved).toHaveBeenCalled(); expect(onClose).toHaveBeenCalled();
+  await click(t.setupAddConnection); expect(api.commitMcpDraft).toHaveBeenCalledWith('draft-1', false); expect(onSaved).toHaveBeenCalled(); expect(onClose).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain('连接已保存，可以开始使用');
+  expect(document.querySelector('a[href*="chat/new"]')).toBeTruthy();
+  await click(t.setupClose); expect(onClose).toHaveBeenCalled();
 });
 
 it('allows Bearer entry before connecting, keeps prefix singular and invalidates old success when editing', async () => {
@@ -124,6 +131,8 @@ it('tests disabled servers without enabling them and saves only after explicit c
   expect(api.createMcpConnectionDraft.mock.calls[0][0]).toMatchObject({ id: 'docs', displayName: '团队知识库', extra: { enabled: false, toolExposure: { write: 'hidden' } } });
   expect(api.commitMcpDraft).not.toHaveBeenCalled();
   await click(t.setupSaveOnly); expect(api.commitMcpDraft).toHaveBeenCalledWith('draft-1', false);
+  expect(document.querySelector('a[href*="chat/new"]')).toBeNull();
+  expect(document.body.textContent).not.toContain('连接已保存，可以开始使用');
 });
 
 it('shows the saved last check when reopening an unchanged connection', async () => {
@@ -140,6 +149,7 @@ it('requires a successful test before an explicit enable-and-save action', async
   await render({ mode: 'edit', initialRow: server, existingCustomServers: [server] });
   expect(button(t.setupEnableSave)).toBeUndefined(); await click(t.setupTestConnection); await click(t.setupEnableSave);
   expect(api.commitMcpDraft).toHaveBeenCalledWith('draft-1', true);
+  expect(document.querySelector('a[href*="chat/new"]')).toBeTruthy();
 });
 
 it('preserves provider auth and reference credentials when editing unrelated fields', async () => {

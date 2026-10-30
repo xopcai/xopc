@@ -5,6 +5,7 @@ import AdmZip from 'adm-zip';
 import { afterEach, expect, it, vi } from 'vitest';
 import { inspectAgentPlugin, pluginServerId } from '../validation.js';
 import { AgentPluginStore } from '../store.js';
+import { agentPluginInventoryRow } from '../inventory.js';
 import { withAgentPluginSource, isAgentPluginArchive } from '../sources.js';
 import { PluginSelectionRequired, pluginSourceKey } from '../source-catalog.js';
 import { resolveSkillSources } from '../../../agent/skills/skill-sources.js';
@@ -106,6 +107,27 @@ it('imports a marketplace-only Claude manifest without altering the package snap
   expect(store.get(installed.id)?.skills).toHaveLength(1);
   expect(store.get(installed.id)?.manifest.name).toBe('catalog-only');
   expect(() => readFileSync(join(installed.rootDir, 'plugin.json'))).toThrow();
+});
+
+it('loads only the skills selected by a marketplace entry in a shared repository', async () => {
+  const root = temp(), store = new AgentPluginStore(temp());
+  file(root, '.claude-plugin/marketplace.json', { name: 'shared', plugins: [
+    { name: 'documents', source: './', strict: false, skills: ['./skills/docx', './skills/pdf'] },
+  ] });
+  file(root, 'skills/docx/SKILL.md', '---\nname: docx\ndescription: Create a Word document\n---\nBody');
+  file(root, 'skills/pdf/SKILL.md', '---\nname: pdf\ndescription: Read PDF documents\n---\nBody');
+  file(root, 'skills/unrelated/SKILL.md', 'Not a valid skill');
+  const source = `${root}#plugin=documents`;
+  const plan = await withAgentPluginSource(source, undefined, (local, _p, _commit, manifest) => store.inspect(local, source, manifest));
+  expect(plan.skills.map(skill => skill.name).sort()).toEqual(['docx', 'pdf']);
+  expect(plan.diagnostics).toEqual([]);
+  const installed = await withAgentPluginSource(source, undefined, (local, _p, _commit, importManifest) => store.install(local, { sourceLabel: source, reviewHash: plan.reviewHash, importManifest }));
+  store.setEnabled(installed.id, true);
+  expect(store.get(installed.id)?.skills.map(skill => skill.name).sort()).toEqual(['docx', 'pdf']);
+  expect(agentPluginInventoryRow(store.get(installed.id)!, store).components.skills).toEqual([
+    { name: 'docx', description: 'Create a Word document' },
+    { name: 'pdf', description: 'Read PDF documents' },
+  ]);
 });
 
 it('maps supported OpenAI auth hints and rejects OAuth options pi cannot preserve', () => {

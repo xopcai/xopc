@@ -209,7 +209,7 @@ export function ExtensionMarketplacePanel({
                         <>
                           {e.packageType === 'plugin' ? <button
                             type="button"
-                            onClick={() => installed?.pluginId && pluginCanStart(installed) ? navigate(pluginStartPath(displayName, language.startsWith('zh'))) : installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', pluginNeedsAuthorization(installed), location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
+                            onClick={() => installed?.pluginId && pluginCanStart(installed) ? navigate(pluginStartPath(displayName, language.startsWith('zh'), installed.pluginId)) : installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', pluginNeedsAuthorization(installed), location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
                             className={cn(
                               'inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
                               'transition-colors active:scale-[0.98] active:bg-surface-hover/80',

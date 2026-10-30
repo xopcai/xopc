@@ -64,7 +64,7 @@ export function CustomMcpServerCard({ row, lastCheck, t, cs, onEdit, onRemove }:
         <div className="mt-2 flex shrink-0 items-center gap-1">
           <span className="mr-auto text-[11px] text-fg-subtle">{t.transportLabels[row.transport]}</span>
           <Button variant="ghost" className="h-8 px-2 py-1 text-xs" onClick={onEdit}>{t.setupConfigure}</Button>
-          <Button ref={toolsTrigger} variant="secondary" className="h-8 px-2 py-1 text-xs shadow-none sm:shadow-none" disabled={disabled} onClick={() => setShowTools(true)}>{t.viewTools}</Button>
+          <Button ref={toolsTrigger} variant="secondary" className="h-8 px-2 py-1 text-xs shadow-none sm:shadow-none" disabled={disabled} onClick={() => setShowTools(true)}>{language === 'zh' ? '用法与工具' : 'Usage & tools'}</Button>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <Button variant="ghost" className="size-8 p-0" aria-label={cs.customManage.replace('{{name}}', name)} title={cs.customManage.replace('{{name}}', name)}>

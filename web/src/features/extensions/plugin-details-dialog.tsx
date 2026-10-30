@@ -11,6 +11,7 @@ import { CapabilityIcon } from '@/features/capabilities/capability-icon';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
+import { ConnectionUsageGuide } from '@/features/connectors/components/connection-usage-guide';
 import { AgentPluginDialog } from './agent-plugin-dialog';
 import { pluginCanStart, pluginDisplayName } from './plugin-presentation';
 import { PluginSetupPanel } from './plugin-setup-panel';
@@ -51,12 +52,13 @@ export function PluginDetailsDialog({ pluginId, initialConnect = false, onClose 
         {error ? <p role="alert" className="text-sm text-fg-muted">{String(error)}</p> : !data ? <div className="space-y-4" aria-busy="true"><Skeleton className="h-14 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-40 w-full" /></div> : <>
           {description ? <p className="text-sm leading-relaxed text-fg-muted">{description}</p> : null}
           <PluginSetupPanel key={pluginId} initialConnect={initialConnect} extension={data} zh={zh} onChanged={async () => { await refresh(); await mutate('gateway-extensions-list'); }} />
+          {pluginCanStart(data) ? <ConnectionUsageGuide target={{ kind: 'plugin', id: pluginId, name }} skills={data.components?.skills} serverId={data.components?.mcp.length === 1 ? data.components.mcp[0].id : undefined} onStart={onClose} /> : null}
           {data.components?.skills.length ? <section className="space-y-3 border-t border-edge pt-5"><h3 className="text-sm font-medium">{zh ? `技能（${data.components.skills.length}）` : `Skills (${data.components.skills.length})`}</h3><div className="flex flex-wrap gap-2">{data.components.skills.map(skill => <Link key={skill.name} onClick={onClose} to={`/capabilities/skills?${new URLSearchParams({ tab: 'installed', source: 'plugin', q: data.dialect === 'portable' ? skill.name : `${pluginId}.${skill.name}` })}`} className="max-w-full break-words rounded-lg border border-edge px-3 py-2 text-sm text-accent hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{skill.name}</Link>)}</div></section> : null}
         </>}
       </div>
       <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-edge px-5 py-4">
         {data ? <Button variant="ghost" onClick={() => setManage(true)}>{zh ? '管理插件' : 'Manage plugin'}</Button> : <span />}
-        {data && pluginCanStart(data) ? <Button asChild><Link to={pluginStartPath(name, zh)}>{zh ? '开始使用' : 'Start using'}</Link></Button> : <Dialog.Close asChild><Button variant="secondary">{zh ? '完成' : 'Done'}</Button></Dialog.Close>}
+        {data && pluginCanStart(data) ? <Button asChild><Link to={pluginStartPath(name, zh, pluginId)}>{zh ? '开始使用' : 'Start using'}</Link></Button> : <Dialog.Close asChild><Button variant="secondary">{zh ? '完成' : 'Done'}</Button></Dialog.Close>}
       </footer>
     </Dialog.Content>
   </Dialog.Portal></Dialog.Root>;

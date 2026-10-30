@@ -38,7 +38,7 @@ export interface PluginInspection {
   layout?: PluginLayout;
   manifest: PluginManifest;
   rootDir: string;
-  skills: Array<{ name: string; filePath: string }>;
+  skills: Array<{ name: string; filePath: string; description?: string }>;
   servers: Record<string, PluginServer>;
   capabilities: string[];
   diagnostics: PluginDiagnostic[];
@@ -141,7 +141,7 @@ export function inspectAgentPlugin(rootDir: string, dataDir = join(rootDir, '.in
       if (layout.dialect === 'portable' && metadata.name !== dirname(filePath).split(/[\\/]/).pop()) throw new Error('Skill name must match its directory');
       if (!metadata.description.trim() || seenSkills.has(name)) throw new Error('Blank description or duplicate skill name');
       seenSkills.add(name);
-      result.skills.push({ name, filePath });
+      result.skills.push({ name, filePath, description: metadata.description });
       const references = [...new Set(content.match(/\bmcp__[A-Za-z0-9_-]+__[A-Za-z0-9_-]+|\bfunctions\.(?:exec_command|apply_patch|spawn_agent|send_input|wait_agent)|\$\{(?:CLAUDE_)?PLUGIN_(?:ROOT|DATA|RESOURCES)\}/g) ?? [])].slice(0, 20);
       const message = references.length ? `Host-specific references need execution verification: ${references.join(', ')}` : 'Skill format accepted; business execution is not verified.';
       report({ component: `skill:${name}`, support: references.length ? 'needs_adapter' : 'supported', message });

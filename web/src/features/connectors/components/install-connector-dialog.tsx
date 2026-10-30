@@ -32,6 +32,7 @@ import {
   type ComposioSetupStatus,
   waitForActiveComposioConnection,
 } from '../connectors-api';
+import { ConnectionUsageGuide } from './connection-usage-guide';
 import { ConnectorLogo } from './connector-logo';
 import type { InstallDraft } from './install-connector-draft';
 
@@ -464,6 +465,7 @@ function StandardInstallConnectorDialog({
 
           {draft.error ? <p className="min-w-0 max-w-full break-words rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600 [overflow-wrap:anywhere]">{draft.error}</p> : null}
           {composioSetupError ? <p className="min-w-0 max-w-full break-words rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600 [overflow-wrap:anywhere]">{composioSetupError}</p> : null}
+          {draft.result && draft.health?.ok ? <ConnectionUsageGuide target={{ kind: 'connector', id: connector.id, name: connector.displayName }} serverId={draft.result.materialized.type === 'mcp' ? draft.result.materialized.serverId : undefined} onStart={onClose} /> : null}
           {draft.result ? (
             <div className="rounded-2xl border border-edge bg-surface-base p-4 text-sm text-fg-muted">
               <div className="flex flex-wrap items-start justify-between gap-3">
