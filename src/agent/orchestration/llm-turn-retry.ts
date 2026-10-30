@@ -152,7 +152,9 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
     const hasUnconfirmedCalls = failedMessages.some(message => message.role === 'assistant'
       && Array.isArray(message.content) && message.content.some(block => block.type === 'toolCall'));
     if (hasUnconfirmedCalls || !canResumeAfterModelFailure(trimmed)) {
-      options.log.warn({ conversationId: options.conversationId }, 'Model recovery stopped because a tool outcome is unconfirmed');
+      options.log.warn({ conversationId: options.conversationId, errorMessage: errMsg, failureKind,
+        phase: 'model_request_recovery', recoveryBlockedReason: 'unconfirmed_tool_outcome',
+        continueAttempts: budget.continues }, 'Model recovery stopped because a tool outcome is unconfirmed');
       return;
     }
 

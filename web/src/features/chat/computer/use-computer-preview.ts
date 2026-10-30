@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComputerPreviewFrame, ComputerPreviewState } from '@xopcai/computer-control-contract';
 
+import type { ComputerPreviewSize } from './computer-preview-layout';
+
 /** Pixels stay outside React state; each subscription has its own presentation epoch. */
 export function useComputerPreview(conversationId: string | null | undefined, stream = true) {
   const [state, setState] = useState<ComputerPreviewState>();
   const [subscriptionId, setSubscriptionId] = useState<string>();
   const [hasFrame, setHasFrame] = useState(false);
+  const [frameSize, setFrameSize] = useState<ComputerPreviewSize>();
   const [framePreviewId, setFramePreviewId] = useState<string>();
   const [stale, setStale] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -33,7 +36,7 @@ export function useComputerPreview(conversationId: string | null | undefined, st
   const preparingTarget = state?.status === 'preparing' && !subscriptionId;
   const ended = state?.status === 'ended';
   useEffect(() => {
-    setHasFrame(false); setStale(false); lastFrameAt.current = 0;
+    setHasFrame(false); setFrameSize(undefined); setStale(false); lastFrameAt.current = 0;
     if (!stream || !api || !conversationId || !previewId || targetEpoch === undefined || ended) return;
     // A pre-authorization card has no target yet; the host issues a new ID once bound.
     if (preparingTarget && retry === 0) return;
@@ -55,6 +58,8 @@ export function useComputerPreview(conversationId: string | null | undefined, st
           canvas.width = bitmap.width; canvas.height = bitmap.height;
           canvas.getContext('2d')?.drawImage(bitmap, 0, 0);
         }
+        const width = bitmap.width, height = bitmap.height;
+        setFrameSize(current => current?.width === width && current.height === height ? current : { width, height });
         lastFrameAt.current = performance.now(); setFramePreviewId(previewId); setHasFrame(true); setStale(false);
       } finally { bitmap?.close(); }
     };
@@ -75,5 +80,5 @@ export function useComputerPreview(conversationId: string | null | undefined, st
     const timer = setInterval(() => { if (lastFrameAt.current) setStale(performance.now() - lastFrameAt.current > 1500); }, 500);
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', changed); };
   }, []);
-  return { state, subscriptionId, hasFrame: hasFrame && framePreviewId === state?.previewId, stale, visible, registerCanvas, retry: () => setRetry(value => value + 1), api };
+  return { state, subscriptionId, frameSize, hasFrame: hasFrame && framePreviewId === state?.previewId, stale, visible, registerCanvas, retry: () => setRetry(value => value + 1), api };
 }

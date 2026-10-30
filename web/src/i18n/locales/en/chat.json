@@ -708,6 +708,8 @@
     "agentRunErrorRateLimitTitle": "Rate limit exceeded",
     "agentRunErrorRateLimitBody": "Too many requests to the model provider. Wait a moment and try again.",
     "agentRunErrorTimeoutTitle": "Request timed out",
+    "agentRunErrorConnectionTitle": "Model connection interrupted",
+    "agentRunErrorConnectionBody": "The connection to the model provider failed. Check your network and provider availability. Review any completed tool actions before asking the assistant to continue.",
     "agentRunErrorTimeoutBody": "The model provider did not respond in time. Check your network and try again.",
     "agentRunErrorBillingTitle": "Billing or quota issue",
     "agentRunErrorBillingBody": "The provider reported insufficient balance or quota. Check your account and try again.",

@@ -3,7 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { z } from 'zod';
 import {
   ActionEnvelopeSchema, computerActionInputCount, computerActionInputs, ComputerCommandSchema, COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS,
-  type ComputerAction, type ComputerCommand, type ComputerModelBinding,
+  type ComputerPreviewActivity, type ComputerAction, type ComputerCommand, type ComputerModelBinding,
   type ComputerObservation, type ComputerReceipt, type ComputerTarget, type ComputerApp, type ComputerWindow, type ComputerInputTiming,
 } from '@xopcai/computer-control-contract';
 import { ComputerConfigSchema, type ComputerConfig } from './config.js';
@@ -61,6 +61,7 @@ interface Session {
   pending?: { envelope: import('@xopcai/computer-control-contract').ActionEnvelope; digest: string; approved?: boolean; decision?: Promise<void> };
   actions: number;
   errorCode?: string;
+  activity?: ComputerPreviewActivity;
   windows?: ComputerWindow[];
 }
 export interface BrokerResult {
@@ -82,7 +83,7 @@ export interface BrokerResult {
 /** Host-only authority; never serialize target identities or the session signal. */
 export interface ComputerPreviewAuthority {
   conversationId: string; runId?: string; computerSessionId: string; brokerEpoch: string;
-  appName: string; status: string; target?: ComputerTarget; signal: AbortSignal;
+  appName: string; status: string; activity?: ComputerPreviewActivity; target?: ComputerTarget; signal: AbortSignal;
 }
 
 /** Main-process-only authority. Never expose this object or its approval hook to a renderer. */
@@ -215,6 +216,8 @@ export class ComputerBroker {
     finally { s.controller.signal.removeEventListener('abort', abort); }
   }
   private async observe(s: Session, afterAction?: ComputerAction['kind']): Promise<BrokerResult> {
+    s.activity = { phase: 'observing', ...(afterAction ? { action: afterAction } : {}) };
+    this.host.onStateChange?.();
     let frame: DriverObservation | undefined;
     try {
     frame = await this.driver.observe(s.target!, s.controller.signal);
@@ -259,6 +262,7 @@ export class ComputerBroker {
       target: frame.target, capturedAt: this.now(), imageWidth: frame.imageWidth, imageHeight: frame.imageHeight,
       summary: frame.summary.slice(0, 12_000), focusedEditableRef: frame.focusedEditableRef, stateDigest: frame.stateDigest };
     s.touchedAt = this.now();
+    s.activity = { phase: 'ready', ...(afterAction ? { action: afterAction } : {}) };
     return { ...this.result(s), observation: s.observation, frame: { bytes: frame.image, mimeType: frame.mimeType } };
     } catch (error) {
       frame?.image.fill(0);
@@ -348,6 +352,8 @@ export class ComputerBroker {
       ...(grouped ? { inputCount: inputs.length, steps: inputs.map((_, index) => ({ index, dispatch: 'notStarted' as const })) } : {}),
       dispatch: 'started', outcome: 'unknown', verification: 'none' };
     s.receipts.set(e.actionId, { digest, receipt }); s.actions += computerActionInputCount(e.action); s.pending = undefined; s.status = 'running';
+    s.activity = { phase: 'acting', action: e.action.kind };
+    this.host.onStateChange?.();
     try {
       const inputStarted = this.durationNow();
       try {
@@ -414,7 +420,7 @@ export class ComputerBroker {
     if (!s || s.status === 'stopped' || s.controller.signal.aborted || this.expired(s) || !this.host.isVisible()) return;
     return { conversationId: s.owner, ...('runId' in s.model ? { runId: s.model.runId } : {}),
       computerSessionId: s.id, brokerEpoch: this.epoch, appName: this.apps.get(s.appRef)?.name ?? s.appId,
-      status: s.status, target: s.target ? { ...s.target } : undefined, signal: s.controller.signal };
+      status: s.status, activity: s.activity ? { ...s.activity } : undefined, target: s.target ? { ...s.target } : undefined, signal: s.controller.signal };
   }
   async validatePreview(authority: ComputerPreviewAuthority): Promise<void> {
     const current = this.previewAuthority();

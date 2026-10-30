@@ -26,13 +26,13 @@ ipcRenderer.once('computer-preview:worker', (event, input: { sourceId: string; p
     if (stopped || waiting || encoding) return;
     if (!video.videoWidth || !video.videoHeight || video.readyState < 2 || !context) { schedule(); return; }
     encoding = true;
-    const dimension = preset === 'expanded' ? 1280 : 640;
+    const dimension = preset === 'expanded' ? 1600 : 1280;
     const scale = Math.min(1, dimension / Math.max(video.videoWidth, video.videoHeight));
     canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
     canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     try {
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: .72 });
+      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: .92 });
       if (stopped) return;
       const bytes = await blob.arrayBuffer();
       if (stopped) return;
@@ -50,8 +50,8 @@ ipcRenderer.once('computer-preview:worker', (event, input: { sourceId: string; p
     if (event.data?.kind === 'preset') {
       preset = event.data.preset === 'expanded' ? 'expanded' : 'compact';
       quietFrames = 0;
-      void stream?.getVideoTracks()[0]?.applyConstraints({ width: { max: preset === 'expanded' ? 1280 : 640 },
-        height: { max: preset === 'expanded' ? 1280 : 640 }, frameRate: { max: preset === 'expanded' ? 15 : 8 } }).catch(() => {});
+      void stream?.getVideoTracks()[0]?.applyConstraints({ width: { max: preset === 'expanded' ? 1600 : 1280 },
+        height: { max: preset === 'expanded' ? 1600 : 1280 }, frameRate: { max: preset === 'expanded' ? 15 : 8 } }).catch(() => {});
     }
   };
   port.onmessageerror = stop;
@@ -60,7 +60,7 @@ ipcRenderer.once('computer-preview:worker', (event, input: { sourceId: string; p
   port.start();
   void navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: {
     chromeMediaSource: 'desktop', chromeMediaSourceId: input.sourceId,
-    maxWidth: preset === 'expanded' ? 1280 : 640, maxHeight: preset === 'expanded' ? 1280 : 640,
+    maxWidth: preset === 'expanded' ? 1600 : 1280, maxHeight: preset === 'expanded' ? 1600 : 1280,
     maxFrameRate: preset === 'expanded' ? 15 : 8,
   } } as MediaTrackConstraints }).then(async value => {
     if (stopped) { value.getTracks().forEach(track => track.stop()); return; }

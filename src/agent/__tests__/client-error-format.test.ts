@@ -6,6 +6,12 @@ import {
 } from '../client-error-format.js';
 
 describe('formatAgentRunErrorForClient', () => {
+  it('identifies model connection failures and preserves diagnostic context', () => {
+    expect(JSON.parse(formatAgentRunErrorForClient('Connection error.', {
+      provider: 'xopc-cloud', modelRef: 'xopc-cloud/openai-codex/gpt-6.1-sol',
+    }))).toEqual({ kind: 'provider_connection_error', code: 'provider_connection_error',
+      provider: 'xopc-cloud', modelRef: 'xopc-cloud/openai-codex/gpt-6.1-sol', message: 'Connection error.' });
+  });
   it('keeps Credit run budget errors separate from wallet exhaustion', () => {
     const payload = JSON.parse(formatAgentRunErrorForClient('402 Task Credit budget exhausted; increase its limit to continue', { provider: 'xopc-cloud' }));
     expect(payload).toMatchObject({ kind: 'xopc_credit_budget_exhausted', code: 'credit_budget_exhausted', deepLink: '/settings/agent-defaults?panel=runtime' });

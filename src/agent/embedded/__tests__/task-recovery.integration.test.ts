@@ -60,7 +60,7 @@ describe('task model recovery over the real execution chain', () => {
   let server: Server;
   let unsubscribe: () => void;
   let store: SessionStore;
-  let mode: 'transient' | 'fallback' | 'broken_stream' | 'permanent' | 'cancel' | 'replay' | 'task_retry' | 'uncertain' | 'exhausted' | 'rate_limit' | 'deadline';
+  let mode: 'transient' | 'connection' | 'uncertain_connection' | 'fallback' | 'broken_stream' | 'permanent' | 'cancel' | 'replay' | 'task_retry' | 'uncertain' | 'exhausted' | 'rate_limit' | 'deadline';
   let requests: Array<{ model: string; messages: Array<{ role: string; content: string }> }>;
   let effects: number;
   let controller: AbortController;
@@ -86,6 +86,9 @@ describe('task model recovery over the real execution chain', () => {
       const completed = payload.messages.some((message: { role: string; content: string }) => message.role === 'tool'
         && (message.content.includes('effect-confirmed') || message.content.includes('Remote response lost')));
       const first = !completed;
+      if (!first && (mode === 'uncertain_connection' || mode === 'connection' && requests.length === 2)) {
+        res.destroy(); return;
+      }
       if (!first && mode === 'deadline') return;
       if (!first && mode === 'rate_limit' && requests.length === 2) {
         res.writeHead(429, { 'content-type': 'application/json' });
@@ -122,7 +125,7 @@ describe('task model recovery over the real execution chain', () => {
       parameters: Type.Object({ value: Type.String() }), execute: async () => {
         effects += 1;
         await appendFile(join(root, 'effects.log'), 'commit\n');
-        if (mode === 'uncertain') throw new Error('Remote response lost after effect');
+        if (mode === 'uncertain' || mode === 'uncertain_connection') throw new Error('Remote response lost after effect');
         return { content: [{ type: 'text', text: 'effect-confirmed' }], details: {} };
       } };
     const agentManager = {
@@ -171,7 +174,7 @@ describe('task model recovery over the real execution chain', () => {
     for (;;) { const next = await iter.next();if (next.done) return { events, result: next.value };events.push(next.value); }
   }
 
-  it.each(['transient', 'broken_stream', 'fallback', 'replay', 'rate_limit'] as const)('resumes after %s without repeating a confirmed external effect', async scenario => {
+  it.each(['transient', 'connection', 'broken_stream', 'fallback', 'replay', 'rate_limit'] as const)('resumes after %s without repeating a confirmed external effect', async scenario => {
     mode = scenario;transport.fallback = scenario === 'fallback' || scenario === 'replay';
     const { events, result } = await run();
     expect(result.status, result.summary).toBe('ok');expect(effects).toBe(1);
@@ -197,8 +200,8 @@ describe('task model recovery over the real execution chain', () => {
     expect(events.at(-1)).toMatchObject({ type: 'run_end', payload: { status: 'cancelled' } });
   }, 15_000);
 
-  it('does not replay an external effect when its result cannot be confirmed', async () => {
-    mode = 'uncertain';transport.fallback = true;
+  it.each(['uncertain', 'uncertain_connection'] as const)('does not replay an external effect when its result cannot be confirmed: %s', async scenario => {
+    mode = scenario;transport.fallback = true;
     const { result } = await run();
     expect(result.status).toBe('error');expect(effects).toBe(1);expect(requests).toHaveLength(2);
   }, 15_000);

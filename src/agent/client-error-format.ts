@@ -1,3 +1,5 @@
+import { isTransientProviderErrorMessage } from '../providers/model-response.js';
+
 import {
   classifyFailoverReason,
   isAuthErrorMessage,
@@ -9,6 +11,7 @@ export type AgentRunErrorKind =
   | 'provider_auth_invalid'
   | 'rate_limit'
   | 'timeout'
+  | 'provider_connection_error'
   | 'billing'
   | 'xopc_quota_exhausted'
   | 'xopc_platform_limit'
@@ -131,12 +134,15 @@ export function formatAgentRunErrorForClient(
     && (XOPC_QUOTA_RE.test(trimmed) || reason === 'billing');
   const kind = xopcPlatformLimit
     ? 'xopc_platform_limit'
-    : xopcQuotaExhausted ? 'xopc_quota_exhausted' : reasonToKind(reason);
+    : xopcQuotaExhausted ? 'xopc_quota_exhausted'
+      : reason === 'unknown' && isTransientProviderErrorMessage(trimmed)
+        ? 'provider_connection_error' : reasonToKind(reason);
   const payload: AgentRunErrorPayload = {
     kind,
     code: xopcPlatformLimit
       ? 'platform_token_limit_exceeded'
-      : xopcQuotaExhausted ? 'model_quota_exhausted' : reasonToCode(reason),
+      : xopcQuotaExhausted ? 'model_quota_exhausted'
+        : kind === 'provider_connection_error' ? kind : reasonToCode(reason),
     message: trimmed,
     ...(context?.provider ? { provider: context.provider } : {}),
     ...(context?.modelRef ? { modelRef: context.modelRef } : {}),

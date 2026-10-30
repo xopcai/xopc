@@ -84,3 +84,15 @@ describe('scoped Computer preview', () => {
     await expect(f.frame()).resolves.toBeUndefined(); f.manager.dispose();
   });
 });
+it('updates the current action without restarting capture or replacing the preview subscription', async () => {
+  const f = fixture(), id = await f.start();
+  const previewId = f.manager.current('conversation')!.previewId;
+  f.replace({ ...f.authority()!, activity: { phase: 'acting', action: 'typeText' } });
+  f.manager.sync();
+  expect(f.manager.current('conversation')).toMatchObject({ previewId, activity: { phase: 'acting', action: 'typeText' } });
+  expect(f.sink.send).toHaveBeenLastCalledWith(expect.objectContaining({ previewId, activity: { phase: 'acting', action: 'typeText' } }));
+  expect(f.manager.controlSession(id)).toBe('session');
+  expect(f.deps.capture).toHaveBeenCalledOnce();
+  expect(f.capture.close).not.toHaveBeenCalled();
+  f.manager.dispose();
+});
