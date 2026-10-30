@@ -96,6 +96,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   computer: {
     preview: computerPreview,
+    focusTarget: (conversationId: string, previewId: string) => ipcRenderer.invoke('computer:focus-target', conversationId, previewId),
     status: () => ipcRenderer.invoke('computer:status'),
     access: () => ipcRenderer.invoke('computer:access'),
     setAllAppAccess: (allowed: boolean) => ipcRenderer.invoke('computer:set-all-app-access', allowed),

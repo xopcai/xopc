@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ComputerPreviewFrame, ComputerPreviewState } from '@xopcai/computer-control-contract';
 import { useLocaleStore } from '@/stores/locale-store';
 import { ComputerActivityCard } from '../computer-activity-card';
+import { ComputerChatButton } from '../computer-chat-button';
 
 const state: ComputerPreviewState = { previewId: 'preview', conversationId: 'one', runId: 'run', computerSessionId: 'session',
   brokerEpoch: 'broker', targetEpoch: 1, appName: 'Fixture', status: 'available' };
@@ -59,4 +60,18 @@ it('does not paint a decoded frame after the conversation has changed', async ()
   const bitmap = { width: 10, height: 10, close: vi.fn() };
   await act(async () => { finish(bitmap); await pending; });
   expect(draw).not.toHaveBeenCalled(); expect(bitmap.close).toHaveBeenCalledOnce();
+});
+
+it('switches directly to the bound app without subscribing to preview pixels', async () => {
+  const focusTarget = vi.fn().mockResolvedValue(undefined);
+  Object.assign(window.electronAPI!.computer!, { focusTarget });
+  await act(async () => root.render(<ComputerChatButton conversationId="one" />));
+  expect(api.subscribe).not.toHaveBeenCalled();
+  const button = container.querySelector('[aria-label="Switch to the active app"]') as HTMLButtonElement;
+  expect(button).not.toBeNull();
+  await act(async () => button.click());
+  expect(focusTarget).toHaveBeenCalledExactlyOnceWith('one', 'preview');
+  expect(document.querySelector('[role="tabpanel"]')).toBeNull();
+  await act(async () => changed({ ...state, status: 'ended' }));
+  expect(container.querySelector('button')).toBeNull();
 });

@@ -378,3 +378,14 @@ it('terminates the driver instead of retaining it when release races an input', 
   expect(f.driver.idle).not.toHaveBeenCalled(); expect(f.driver.stop).toHaveBeenCalled();
   finish(); await action;
 });
+
+it('switches applications only for the bound active conversation', async () => {
+  const f = fixture(true, false); f.driver.focusTarget = vi.fn(async () => {});
+  await f.open();
+  await expect(f.broker.focusConversation('another')).rejects.toThrow('COMPUTER_PREVIEW_REVOKED');
+  expect(f.driver.focusTarget).not.toHaveBeenCalled();
+  await f.broker.focusConversation('o');
+  expect(f.driver.focusTarget).toHaveBeenCalledExactlyOnceWith(target, expect.any(AbortSignal));
+  await f.broker.stop();
+  await expect(f.broker.focusConversation('o')).rejects.toThrow('COMPUTER_PREVIEW_REVOKED');
+});

@@ -608,6 +608,7 @@ export interface ElectronAPI {
   };
   browser?: import('../../../electron/browser/types').EmbeddedBrowserAPI;
   computer?: {
+    focusTarget(conversationId: string, previewId: string): Promise<void>;
     preview?: {
       current(conversationId: string): Promise<import('@xopcai/computer-control-contract').ComputerPreviewState | undefined>;
       onState(callback: (state: import('@xopcai/computer-control-contract').ComputerPreviewState) => void): () => void;

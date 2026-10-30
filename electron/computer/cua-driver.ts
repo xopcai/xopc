@@ -181,6 +181,13 @@ export class CuaComputerDriver implements ComputerDriver {
     if (!window || window.pid !== target.pid) throw new Error('COMPUTER_WINDOW_CHANGED');
     signal.throwIfAborted();
   }
+  async focusTarget(target: ComputerTarget, signal: AbortSignal): Promise<void> {
+    await this.validatePreviewTarget(target, signal);
+    if (this.platform === 'darwin') await this.prepareApplication(target.appId, signal);
+    signal.throwIfAborted();
+    await this.validatePreviewTarget(target, signal);
+    await this.callUntyped('bring_to_front', { pid: target.pid, window_id: this.jsonWindowId(BigInt(target.windowId)) }, signal);
+  }
   constructor(
     private readonly binary: string,
     private readonly bundleId: string,
@@ -700,10 +707,10 @@ export class CuaComputerDriver implements ComputerDriver {
       const focusStarted = performance.now();
       const { app } = await import('electron');
       app.focus({ steal: true });
-      if (this.preparationTiming) this.preparationTiming.hostFocusMs += performance.now() - focusStarted;
+      if (this.preparingSince !== undefined && this.preparationTiming) this.preparationTiming.hostFocusMs += performance.now() - focusStarted;
       const openStarted = performance.now();
       await exec('/usr/bin/open', ['-b', appId], { signal, timeout: 5000 });
-      if (this.preparationTiming) this.preparationTiming.systemOpenMs += performance.now() - openStarted;
+      if (this.preparingSince !== undefined && this.preparationTiming) this.preparationTiming.systemOpenMs += performance.now() - openStarted;
     }
     catch { signal.throwIfAborted(); throw new Error('COMPUTER_APP_PREPARATION_REFUSED'); }
     signal.throwIfAborted();

@@ -96,6 +96,10 @@ export class DesktopEndpointHost {
       textInput: process.platform === 'darwin' || (process.platform === 'win32' && process.arch === 'x64') },
     permissions: { accessibility: process.platform === 'darwin' && systemPreferences.isTrustedAccessibilityClient(false),
       screenRecording: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'unknown' } }; }
+  async focusComputer(conversationId: string, previewId: string): Promise<void> {
+    if (this.preview.current(conversationId)?.previewId !== previewId) throw new Error('COMPUTER_PREVIEW_REVOKED');
+    await this.broker.focusConversation(conversationId);
+  }
   async stopControl(): Promise<void> {
     await this.broker.stop();
   }
