@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Patch release: sync → build → test → lint → bump patch versions → commit → tag → atomic push.
+# Patch release: build → parallel checks → bump patch versions → commit → tag → atomic push.
 # Requires a clean git working tree on a branch. Uses remote GIT_REMOTE (default: origin).
 set -euo pipefail
 
@@ -68,10 +68,27 @@ fi
 
 run_release_step "pnpm run build" pnpm run build
 run_release_step "pnpm run release:check-package" pnpm run release:check-package
-run_release_step "pnpm run release:smoke-package" pnpm run release:smoke-package
-run_release_step "pnpm run test:all" pnpm run test:all
-run_release_step "pnpm run lint" pnpm run lint
-run_release_step "pnpm -C web run react-doctor" pnpm -C web run react-doctor
+
+CHECK_LOG_DIR="$(mktemp -d)"
+trap 'rm -rf "$CHECK_LOG_DIR"' EXIT
+echo "==> Running smoke, tests, lint, and React Doctor in parallel"
+pnpm run release:smoke-package >"$CHECK_LOG_DIR/smoke.log" 2>&1 & smoke_pid=$!
+pnpm run test:all >"$CHECK_LOG_DIR/tests.log" 2>&1 & tests_pid=$!
+pnpm run lint >"$CHECK_LOG_DIR/lint.log" 2>&1 & lint_pid=$!
+pnpm -C web run react-doctor >"$CHECK_LOG_DIR/react-doctor.log" 2>&1 & doctor_pid=$!
+checks_failed=0
+for check in "smoke:$smoke_pid" "tests:$tests_pid" "lint:$lint_pid" "react-doctor:$doctor_pid"; do
+  label="${check%%:*}"
+  pid="${check#*:}"
+  if wait "$pid"; then
+    echo "==> ${label} passed"
+  else
+    echo "error: ${label} failed; release aborted (no version bump, commit, tag, or push)." >&2
+    tail -n 80 "$CHECK_LOG_DIR/$label.log" >&2
+    checks_failed=1
+  fi
+done
+if [[ "$checks_failed" -ne 0 ]]; then exit 1; fi
 
 NEXT_VER="$(node "$ROOT/scripts/bump-patch-version.mjs")"
 TAG="v${NEXT_VER}"
