@@ -68,6 +68,7 @@ export const MAX_COMPOSER_CONTEXT_REFS = 5;
 // ── Draft harvest result (shared by send / flush / interrupt) ───────
 
 export interface ComposerDraft {
+  thinkingLevel?: string;
   text: string;
   attachments: WireAttachment[];
   contextRefs: ComposerContextRef[];
@@ -99,3 +100,8 @@ export interface ComposerSharedRefs {
 export function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
+
+export type ComposerMode =
+  | { kind: 'compose'; draft?: ComposerDraft }
+  | { kind: 'editTurn'; turnId: string; draft?: ComposerDraft }
+  | { kind: 'editFollowUp'; inputId: string; version: number };

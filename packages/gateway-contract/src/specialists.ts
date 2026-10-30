@@ -44,6 +44,8 @@ export type SpecialistTaskRequirements = z.infer<typeof SpecialistTaskRequiremen
 
 export function normalizeSpecialistRequirements(input: unknown): SpecialistTaskRequirements {
   const parsed = SpecialistTaskRequirementsSchema.parse(input);
+  // Installed tasks may still require the former discovery entry. Preserve policy checks under its current name.
+  if (parsed.requiredTools) parsed.requiredTools = parsed.requiredTools.map(name => name === 'xopc_tool_search' ? 'tool_search' : name);
   for (const field of ['inputKinds', 'outputKinds', 'requiredTools', 'requiredSkills'] as const) {
     if (parsed[field]) parsed[field] = [...new Set(parsed[field])].sort();
   }

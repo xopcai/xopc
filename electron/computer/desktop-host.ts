@@ -24,6 +24,8 @@ import { uploadDesktopFrame } from './frame-upload.js';
 import { executeComputerCommand } from './execute-command.js';
 import { resolveLocalComputerDriver } from './local-driver.js';
 import { ComputerAccessPolicy } from './access-policy.js';
+import { ComputerPreviewManager } from './preview-manager.js';
+import { startPreviewCapture } from './preview-capture.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
 const log = createLogger('DesktopEndpointHost');
@@ -48,6 +50,7 @@ export function resolveComputerDriverSdkUrl(options: { packaged: boolean; resour
 
 export class DesktopEndpointHost {
   readonly broker: ComputerBroker;
+  readonly preview: ComputerPreviewManager;
   private client?: RealtimeClient;
   private controller?: EndpointToolHostController;
   private claim?: EndpointTurnClaim;
@@ -73,7 +76,17 @@ export class DesktopEndpointHost {
     this.broker = new ComputerBroker(new CuaComputerDriver(binary, app.isPackaged ? 'ai.xopc.xopc' : 'com.github.Electron', loadSdk), {
       isVisible: () => this.visible(),
       requestApproval: (request, signal) => this.approve(request, signal),
+      onStateChange: () => this.preview?.sync(),
     }, { enabled: true });
+    this.preview = new ComputerPreviewManager({
+      authority: () => this.broker.previewAuthority(),
+      validate: authority => this.broker.validatePreview(authority),
+      capture: (authority, preset, frame, failed) => startPreviewCapture(authority, preset, frame, failed, () => this.broker.validatePreview(authority)),
+      changed: state => {
+        const window = this.options.window();
+        if (window && !window.isDestroyed()) window.webContents?.send('computer-preview:state', state);
+      },
+    });
   }
   private visible(): boolean { const w = this.options.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); }
   snapshot() { return { connected: !!this.claim, claim: this.claim, error: this.error, reenrollmentRequired: this.reenrollmentRequired,
@@ -85,6 +98,12 @@ export class DesktopEndpointHost {
       screenRecording: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'unknown' } }; }
   async stopControl(): Promise<void> {
     await this.broker.stop();
+  }
+  async stopPreviewControl(subscriptionId: string): Promise<void> {
+    const sessionId = this.preview.controlSession(subscriptionId);
+    if (this.broker.previewAuthority()?.computerSessionId !== sessionId) throw new Error('COMPUTER_PREVIEW_REVOKED');
+    await this.broker.stop();
+    this.preview.sync();
   }
   private async approve(request: ComputerApproval, signal: AbortSignal): Promise<boolean> {
     if (!this.visible() || signal.aborted) return false;
@@ -282,5 +301,5 @@ export class DesktopEndpointHost {
     this.client = realtime; this.controller = controller; realtime.connect();
   }
   visibilityChanged(): void { this.controller?.publishAvailability(); if (!this.visible()) this.stopBrokerInBackground('COMPUTER_LOCAL_UI_REQUIRED'); }
-  async close(): Promise<void> { this.stopped = true; this.lifetime.abort(); clearTimeout(this.retry); this.client?.disconnect(); this.controller?.disconnect(); await this.broker.dispose(); }
+  async close(): Promise<void> { this.stopped = true; this.lifetime.abort(); clearTimeout(this.retry); this.client?.disconnect(); this.controller?.disconnect(); this.preview.dispose(); await this.broker.dispose(); }
 }

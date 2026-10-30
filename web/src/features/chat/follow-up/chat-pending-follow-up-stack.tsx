@@ -19,7 +19,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
   onRemove,
   onMove,
   onReorder,
-  onSteer,
+  onSteer, onSendSingle, queuePaused = false, queueIdle = false,
   steeringBusyId,
   onOpenSideChat,
 }: {
@@ -31,6 +31,9 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
   onMove: (id: string, dir: 'up' | 'down') => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onSteer: (id: string) => void;
+  onSendSingle?: (id: string) => void;
+  queuePaused?: boolean;
+  queueIdle?: boolean;
   steeringBusyId?: string | null;
   onOpenSideChat?: (item: PendingFollowUp, preview: string) => void;
 }) {
@@ -66,6 +69,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
         const mutable = item.status === 'queued';
         const removable = mutable || item.status === 'interrupted';
         const queuedIndex = queuedItems.findIndex((row) => row.id === item.id);
+        const sendSingle = queueIdle && (queuePaused || item.status === 'interrupted');
         const canSteer = removable && !item.attachments?.length && !item.contextRefs?.length && item.text.trim().length > 0;
         const isSteering = steeringBusyId === item.id;
         const statusText = item.status === 'interrupted' ? m.chat.followUpStatusInterrupted : null;
@@ -146,11 +150,11 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
               </span>
             ) : null}
             <div className="flex shrink-0 items-center gap-0.5">
-              <button type="button" className={actionClass} disabled={busy || !canSteer}
-                title={m.chat.followUpQueueSteerHint} aria-label={m.chat.followUpQueueSteerNow}
-                aria-busy={isSteering} onClick={() => onSteer(item.id)}>
+              <button type="button" className={actionClass} disabled={busy || (sendSingle ? !removable : !canSteer)}
+                title={sendSingle ? m.chat.sendThisMessage : m.chat.followUpQueueSteerHint} aria-label={sendSingle ? m.chat.sendThisMessage : m.chat.followUpQueueSteerNow}
+                aria-busy={isSteering} onClick={() => sendSingle ? onSendSingle?.(item.id) : onSteer(item.id)}>
                 <CornerDownRight className={cn('size-4', isSteering && 'motion-safe:animate-pulse')} aria-hidden />
-                <span className="hidden text-xs sm:inline">{m.chat.followUpQueueSteerNow}</span>
+                <span className="hidden text-xs sm:inline">{sendSingle ? m.chat.sendThisMessage : m.chat.followUpQueueSteerNow}</span>
               </button>
               <button type="button" className={cn(actionClass, 'px-1.5 hover:text-danger')}
                 disabled={busy || !removable} title={m.chat.followUpQueueRemove}

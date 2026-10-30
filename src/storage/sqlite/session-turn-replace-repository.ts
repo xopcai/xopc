@@ -14,12 +14,15 @@ import {
   transcriptEntryRowToStoredRow,
   type TranscriptEntryRow,
 } from './row-mappers.js';
+import { authorizeSessionInput, readSessionInputControl } from './session-input-control-repository.js';
 import { getXopcDatabase } from './connection.js';
 import { runSqliteWriteTransaction } from './transaction.js';
 
 export type ReplaceLatestSessionTurnInput = {
   conversationId: string;
   targetTurnId: string;
+  expectedTranscriptId?: string;
+  controlVersion?: number;
   clientMessageId: string;
   content: string;
   attachments?: unknown[];
@@ -118,14 +121,17 @@ export function replaceLatestSessionTurnAndQueueInput(
     const runtime = db
       .prepare(`SELECT active_run_id FROM session_input_runtime WHERE conversation_id = ?`)
       .get(input.conversationId) as { active_run_id: string | null } | undefined;
+    const control = readSessionInputControl(input.conversationId);
+    if (input.expectedTranscriptId && session.transcript_id !== input.expectedTranscriptId) return { ok: false, code: 'TARGET_NOT_FOUND' };
     const pending = db
       .prepare(
         `SELECT 1 AS found FROM session_inputs
-         WHERE conversation_id = ? AND status IN ('queued', 'running', 'injecting', 'interrupted')
+         WHERE conversation_id = ? AND status IN ('running', 'injecting', 'interrupted')
          LIMIT 1`,
       )
       .get(input.conversationId) as { found: number } | undefined;
-    if (runtime?.active_run_id || pending) return { ok: false, code: 'SESSION_BUSY' };
+    const queued = !control.paused && db.prepare("SELECT 1 FROM session_inputs WHERE conversation_id = ? AND status = 'queued' LIMIT 1").get(input.conversationId);
+    if (runtime?.active_run_id || pending || queued || control.phase === 'stopping') return { ok: false, code: 'SESSION_BUSY' };
 
     const entries = db
       .prepare(
@@ -178,6 +184,10 @@ export function replaceLatestSessionTurnAndQueueInput(
       )
       .get(input.conversationId) as { value: number };
     const inputId = randomUUID();
+    if (control.paused) {
+      authorizeSessionInput(input.conversationId, inputId, input.controlVersion, true);
+      db.prepare('UPDATE session_input_control SET review_required = 1 WHERE conversation_id = ?').run(input.conversationId);
+    }
     db.prepare(
       `INSERT INTO session_inputs(id, conversation_id, client_message_id,
        requested_delivery, effective_delivery, status, content, attachments_json,

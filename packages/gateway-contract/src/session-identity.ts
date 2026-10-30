@@ -30,6 +30,7 @@ export interface SessionDiscoveryQuery {
   activity?: 'manual' | 'automatic';
   agentId?: string;
   excludeArchived?: boolean;
+  excludeAutomationRuns?: boolean;
 }
 
 export const SessionDiscoveryQuerySchema = z.object({
@@ -38,7 +39,14 @@ export const SessionDiscoveryQuerySchema = z.object({
   activity: z.enum(['manual', 'automatic']).optional(),
   agentId: z.string().trim().min(1).max(128).optional(),
   excludeArchived: z.boolean().optional(),
+  excludeAutomationRuns: z.boolean().optional(),
 });
+
+/** Includes unsaved automation setup drafts, without treating them as automatic executions. */
+export function isAutomationConfigurationSession(session: SessionIdentityInput): boolean {
+  const setup = session.customData?.automationSetup;
+  return setup !== null && typeof setup === 'object' && !Array.isArray(setup);
+}
 
 export function resolveSessionIdentity(session: SessionIdentityInput): {
   source: SessionSource;

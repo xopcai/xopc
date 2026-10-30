@@ -1,3 +1,4 @@
+import { SessionInputControlConflict } from '../../../storage/sqlite/session-input-control-repository.js';
 import type { Context } from 'hono';
 import { conversationIdSchema, sessionInputCommandSchema, sessionMaterializeCommandSchema, parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
@@ -17,6 +18,7 @@ import { createLogger } from '../../../utils/logger.js';
 const log = createLogger('Gateway:SessionCommand');
 
 function commandError(c: Context, error: unknown): Response {
+  if (error instanceof SessionInputControlConflict) return c.json({ ok: false, error: { code: 'CONTROL_CHANGED', message: error.message } }, 409);
   if (error instanceof SessionCommandError) {
     const status = error.code === 'BAD_REQUEST' ? 400 : error.code === 'SESSION_DELETED' ? 410 : error.code === 'FORBIDDEN' ? 403 : error.code === 'NOT_FOUND' ? 404 : 409;
     return c.json({ ok: false, error: { code: error.code, message: error.message } }, status);

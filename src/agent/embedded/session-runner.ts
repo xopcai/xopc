@@ -25,6 +25,7 @@ import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 import { createXopcCodemodeExtension, type CodemodePolicy } from './codemode-extension.js';
 import { isCodemodeCoreRead } from '../tools/codemode-permissions.js';
 import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
+import { getExternalToolRegistry } from '../external-tools/tool-registry.js';
 import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-search-extension.js';
 import { type NativeMcpConfig, getNativePiAgentDir } from '../mcp/native-mcp.js';
 import { createXopcMcpTransport } from '../mcp/transport.js';
@@ -34,8 +35,11 @@ import { filterExecutionTools, resolveExecutionToolPolicy, type ExecutionToolPol
 import { createAutomationMcpSourceGuard } from '../../automations/mcp-source.js';
 import { AGENT_PROFILE_CONTEXT_STATE, createAgentProfileContextExtension } from './agent-profile-context.js';
 
-const toolContract = (tool: AgentTool) => JSON.stringify([tool.name, tool.parameters, tool.description,
-  isCodemodeCoreRead(tool), getXopcToolMetadata(tool)]);
+const toolContract = (tool: AgentTool) => {
+  const registry = getExternalToolRegistry([tool]);
+  return JSON.stringify([tool.name, tool.parameters, tool.description, isCodemodeCoreRead(tool), getXopcToolMetadata(tool),
+    registry ? { discovery: registry.discovery, nativeSources: registry.nativeSources } : undefined]);
+};
 
 const log = createLogger('EmbeddedSessionRunner');
 
@@ -329,8 +333,8 @@ export class EmbeddedSessionRunnerPool {
       },
     );
 
-    const toolDefs = xopcToolsToDefinitions(tools);
-    const toolNames = tools.filter(tool => getXopcToolMetadata(tool)?.exposure !== 'deferred').map(tool => tool.name);
+    const toolDefs = xopcToolsToDefinitions(tools.filter(tool => tool.name !== 'tool_search'));
+    const toolNames = tools.filter(tool => !['deferred', 'hidden'].includes(getXopcToolMetadata(tool)?.exposure ?? '') && tool.name !== 'tool_search').map(tool => tool.name);
     const discoveryState = piSm.getBranch().findLast(entry => entry.type === 'custom' && entry.customType === TOOL_DISCOVERY_STATE);
     const saved = discoveryState?.type === 'custom' ? discoveryState.data as { loaded?: { name: string; contract: string }[] } : undefined;
     const restored = new Map((saved?.loaded ?? []).map(tool => [tool.name, tool.contract]));
@@ -346,8 +350,11 @@ export class EmbeddedSessionRunnerPool {
       : params.codemode?.enabled ? params.codemode : usesMcpCodemode
       ? { enabled: true, timeoutMs: 60_000, maxConcurrentCalls: 4, maxCalls: 32, maxOutputTokens: 4000 } : undefined;
     if (codemode) toolNames.push('codemode');
-    const discovery = params.executionToolPolicy?.discovery !== false
-      && (hasMcp || tools.some(tool => getXopcToolMetadata(tool)?.exposure === 'deferred'));
+    const registry = getExternalToolRegistry(tools);
+    const nativeDiscovery = params.executionToolPolicy?.discovery !== false && registry?.discovery?.native !== false;
+    const externalDiscovery = registry?.discovery?.connectors !== false;
+    const discovery = (nativeDiscovery && (hasMcp || (externalDiscovery && Boolean(registry)) || tools.some(tool => getXopcToolMetadata(tool)?.exposure === 'deferred')))
+      || (externalDiscovery && params.executionToolPolicy?.surface === 'personal_request_worker');
     if (discovery) toolNames.push('tool_search');
 
     const modelRuntime = await createEmbeddedModelRuntime(model.provider);
@@ -363,7 +370,7 @@ export class EmbeddedSessionRunnerPool {
         createMcpSetupContinuationGuard(runtimeId, tools.some(tool => tool.name === 'mcp_setup')),
         ...(mcp?.automationSourceRunId ? [createAutomationMcpSourceGuard(mcp.automationSourceRunId)] : []),
         ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
-        ...(discovery ? [createXopcToolSearchExtension(tools)] : []),
+        ...(discovery ? [createXopcToolSearchExtension(tools, { nativeDiscovery, externalDiscovery, registry })] : []),
         ...(mcp ? [createMcpExtension({ createTransport: createXopcMcpTransport(), loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
         createAgentProfileContextExtension(runtimeId),
       ],

@@ -4,10 +4,14 @@ export const EXACT_NATIVE_BATCH_CAPABILITY = 'input.batch.exact.v1';
 export type NativeBatchProgress = 'notStarted' | 'started' | 'completed' | 'unknown';
 
 export function supportsExactNativeBatch(inventory: string): boolean {
+  return supportsNativeCapability(inventory, 'run_steps', EXACT_NATIVE_BATCH_CAPABILITY);
+}
+
+export function supportsNativeCapability(inventory: string, name: string, capability: string): boolean {
   try {
     const tools = JSON.parse(inventory).tools;
-    return Array.isArray(tools) && tools.some(tool => tool.name === 'run_steps'
-      && Array.isArray(tool.capabilities) && tool.capabilities.includes(EXACT_NATIVE_BATCH_CAPABILITY));
+    return Array.isArray(tools) && tools.some(tool => tool.name === name
+      && Array.isArray(tool.capabilities) && tool.capabilities.includes(capability));
   } catch { return false; }
 }
 

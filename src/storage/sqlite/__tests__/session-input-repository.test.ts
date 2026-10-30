@@ -119,7 +119,8 @@ describe('session input repository', () => {
       id: 'endpoint', conversationId, clientMessageId: 'client-endpoint',
       requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Endpoint', origin,
     });
-    // Recreate the schema immediately before the data migration without changing tables.
+    // v260 predates the session control tables; keep the fixture faithful to that schema.
+    db.exec('DROP TABLE session_input_control_operations; DROP TABLE session_input_control');
     setSchemaVersion(db, 260);
     ensureXopcDatabaseSchema(db);
 

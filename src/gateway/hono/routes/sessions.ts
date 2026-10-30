@@ -152,6 +152,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
           includePinned: true,
           includeConversationId,
           rootConversationsOnly: true,
+          excludeAutomationRuns: true,
           sortBy: 'updatedAt',
           sortOrder: 'desc',
         });
@@ -174,6 +175,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       includePinned: true,
       includeConversationId,
       rootConversationsOnly: true,
+      excludeAutomationRuns: true,
       sortBy: 'updatedAt',
       sortOrder: 'desc',
     });
@@ -194,6 +196,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       includePinned: true,
       includeConversationId,
       rootConversationsOnly: true,
+      excludeAutomationRuns: true,
       sortBy: 'updatedAt',
       sortOrder: 'desc',
     });
@@ -306,6 +309,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       sources: query.sources?.split(','),
       purposes: query.purposes?.split(','),
       activity: query.activity,
+      excludeAutomationRuns: query.excludeAutomationRuns === 'true',
       agentId: query.agentId,
       excludeArchived: query.excludeArchived === 'true',
     });

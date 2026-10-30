@@ -6,16 +6,18 @@ export function withExternalReadPolicy(provider: ExternalToolProvider,
 ): ExternalToolProvider {
   return {
     source: provider.source,
-    search: query => provider.search(query),
+    search: (query, context) => context ? provider.search(query, context) : provider.search(query),
     ...(provider.connectionCandidates ? { connectionCandidates: provider.connectionCandidates.bind(provider) } : {}),
-    describe: async ref => {
-      const descriptor = await provider.describe(ref);
+    describe: async (ref, context) => {
+      const descriptor = await (context ? provider.describe(ref, context) : provider.describe(ref));
       if (!descriptor) return undefined;
       const policy = getPolicy(ref);
       if (policy?.mode === 'deny') return undefined;
-      return { ...descriptor, batchRead: provider.source === 'endpoint'
+      // Batch eligibility cannot promote an operation the provider classifies as a write.
+      const batchRead = descriptor.readOnly === false ? false : provider.source === 'endpoint'
         ? descriptor.batchRead === true && policy?.readOnly !== false
-        : policy?.readOnly ?? descriptor.batchRead };
+        : policy?.readOnly ?? descriptor.batchRead;
+      return { ...descriptor, batchRead };
     },
     execute: (ref, args, approval, context) => provider.execute(ref, args, approval, context),
   };

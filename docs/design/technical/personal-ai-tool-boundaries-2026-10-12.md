@@ -105,7 +105,7 @@ type ExecutionToolPolicy = {
 | Personal 主会话 | 关闭 | 关闭 | 关闭 | 关闭 |
 | Personal Request worker | 关闭 | 仅请求范围；若现有网关工具足够则无需物化 | 不额外注入原生入口 | 关闭 |
 
-Request worker 保留现有 `xopc_tool_search/describe/execute` 与结果发布、连接恢复工具。原生 `tool_search` 和业务 `xopc_tool_search` 是不同入口，不要同时禁用。
+Request worker 使用统一 `tool_search` 入口，只搜索指定连接器、选定账号与主机确认的只读契约；保留 `xopc_tool_describe`、`xopc_tool_execute` 与结果发布、连接恢复工具。原生目录发现、MCP、Codemode 继续关闭。具体契约见 [工具发现](../../tool-discovery.md)。
 
 ### 4.2 策略应用顺序
 

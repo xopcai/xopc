@@ -4,23 +4,28 @@ import { MAX_CHAT_ATTACHMENTS } from '../constants';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { composerDraftStorage } from '../session/local-session-drafts';
 import type { Attachment } from '../attachments/attachment-utils';
-import type { ComposerContextRef } from './composer.types';
+import type { ComposerContextRef, ComposerMode, ComposerDraft } from './composer.types';
 import type { UseComposerEditorReturn } from './use-composer-editor';
 import type { UseComposerAttachmentsReturn } from './use-composer-attachments';
 
-type SavedComposer = { text: string; attachments: Attachment[]; refs: ComposerContextRef[]; intakeReceipts?: string[] };
+export type SavedEditSession = { mode: ComposerMode; drafts: Record<string, ComposerDraft> };
+type SavedComposer = { editSession?: SavedEditSession; text: string; attachments: Attachment[]; refs: ComposerContextRef[]; intakeReceipts?: string[] };
 type ActiveDraft = {
   receipts: string[]; scope: string; ready: boolean; dirty: boolean; observe: boolean; snapshot: SavedComposer;
   storage: ReturnType<typeof composerDraftStorage<SavedComposer>>;
 };
+const editModeIdentity = (mode?: ComposerMode) => mode?.kind === 'editTurn' ? `turn:${mode.turnId}`
+  : mode?.kind === 'editFollowUp' ? `input:${mode.inputId}:${mode.version}` : 'compose';
 const sameItems = <T,>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 
 export function usePersistedComposer(id: string | null | undefined, editor: UseComposerEditorReturn,
-  attachments: UseComposerAttachmentsReturn, refs: ComposerContextRef[], setRefs: (refs: ComposerContextRef[]) => void): void {
+  attachments: UseComposerAttachmentsReturn, refs: ComposerContextRef[], setRefs: (refs: ComposerContextRef[]) => void,
+  editSession?: { snapshot: () => SavedEditSession; restore: (saved: SavedEditSession) => void }): void {
+  const editorIdentity = editModeIdentity(editSession?.snapshot().mode);
   const identity = useGatewayStore(state => state.conversationId);
   const scope = identity && id ? JSON.stringify([identity, id]) : '';
-  const current = useRef({ editor, attachments, refs, setRefs });
-  current.current = { editor, attachments, refs, setRefs };
+  const current = useRef({ editor, attachments, refs, setRefs, editSession });
+  current.current = { editor, attachments, refs, setRefs, editSession };
   const active = useRef<ActiveDraft | undefined>(undefined);
   const previousScope = useRef('');
   const [hydration, setHydration] = useState(0);
@@ -29,14 +34,14 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
   useLayoutEffect(() => {
     if (!scope || !id) { active.current = undefined; return; }
     const entry: ActiveDraft = { receipts: [], scope, ready: false, dirty: false, observe: false,
-      snapshot: { text: current.current.editor.valueRef.current, attachments: current.current.attachments.attachmentsRef.current, refs: current.current.refs },
+      snapshot: { text: current.current.editor.valueRef.current, attachments: current.current.attachments.attachmentsRef.current, refs: current.current.refs, editSession: current.current.editSession?.snapshot() },
       storage: composerDraftStorage<SavedComposer>(id) };
     active.current = entry;
     if (previousScope.current && previousScope.current !== scope) {
       current.current.editor.resetEditor();
       current.current.attachments.clearAttachments();
       current.current.setRefs([]);
-      entry.snapshot = { text: '', attachments: [], refs: [] };
+      entry.snapshot = { text: '', attachments: [], refs: [], editSession: current.current.editSession?.snapshot() };
     }
     previousScope.current = scope;
     let loaded = false;
@@ -50,6 +55,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
         live.editor.resetEditor({ nextText: saved.text });
         live.attachments.setAttachments(saved.attachments);
         live.setRefs(saved.refs);
+        if (saved.editSession) live.editSession?.restore(saved.editSession);
       }
     }).catch(error => { console.warn('Composer draft restoration failed', error); })
       .finally(() => {
@@ -64,20 +70,21 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
     const entry = active.current;
     if (!entry || entry.scope !== scope) return;
     if (!entry.observe) { entry.observe = true; return; }
-    const snapshot = { text: editor.value, attachments: attachments.attachments, refs };
+    const snapshot = { text: editor.value, attachments: attachments.attachments, refs, editSession: current.current.editSession?.snapshot() };
     if (snapshot.text !== entry.snapshot.text || !sameItems(snapshot.attachments, entry.snapshot.attachments)
-      || !sameItems(snapshot.refs, entry.snapshot.refs)) entry.dirty = true;
+      || !sameItems(snapshot.refs, entry.snapshot.refs)
+      || editModeIdentity(snapshot.editSession?.mode) !== editModeIdentity(entry.snapshot.editSession?.mode)) entry.dirty = true;
     entry.snapshot = snapshot;
-  }, [scope, editor.value, attachments.attachments, refs]);
+  }, [scope, editor.value, attachments.attachments, refs, editorIdentity]);
 
   useEffect(() => {
     const entry = active.current;
     if (!entry || entry.scope !== scope || (!entry.ready && !entry.dirty)) return;
-    const snapshot: SavedComposer = { text: editor.value, attachments: attachments.attachments, refs };
-    const payload = snapshot.text || snapshot.attachments.length || refs.length ? snapshot : undefined;
+    const snapshot: SavedComposer = { text: editor.value, attachments: attachments.attachments, refs, editSession: current.current.editSession?.snapshot() };
+    const payload = snapshot.text || snapshot.attachments.length || refs.length || snapshot.editSession?.mode.kind !== undefined && snapshot.editSession.mode.kind !== 'compose' ? snapshot : undefined;
     writes.current = writes.current.catch(() => {}).then(() => entry.storage.write(payload ? { ...payload, intakeReceipts: entry.receipts } : entry.receipts.length ? { text: '', attachments: [], refs: [], intakeReceipts: entry.receipts } : undefined))
       .catch(error => { console.warn('Composer draft persistence failed', error); });
-  }, [scope, hydration, editor.value, attachments.attachments, refs]);
+  }, [scope, hydration, editor.value, attachments.attachments, refs, editorIdentity]);
 
   useEffect(() => {
     const entry = active.current;
@@ -93,7 +100,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
       live.attachments.setAttachments([...existing, ...additions]);
       entry.receipts.push(intakeId);
       try {
-        const snapshot: SavedComposer = { text: live.editor.valueRef.current, attachments: live.attachments.attachmentsRef.current, refs: live.refs, intakeReceipts: entry.receipts.slice() };
+        const snapshot: SavedComposer = { text: live.editor.valueRef.current, attachments: live.attachments.attachmentsRef.current, refs: live.refs, intakeReceipts: entry.receipts.slice(), editSession: live.editSession?.snapshot() };
         const pending = writes.current.catch(() => {}).then(() => entry.storage.write(snapshot));
         writes.current = pending;
         await pending;

@@ -7,13 +7,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { fetchPhoneApplications } from './phone-api';
 
-export function PhoneAppPicker({ deviceId, serial, mode, selected, onModeChange, onSelectedChange, disabled, zh }: {
-  deviceId?: string; serial: string; mode: 'all' | 'selected'; selected: string[]; disabled?: boolean; zh: boolean;
+export function PhoneAppPicker({ deviceId, serial, platform, mode, selected, onModeChange, onSelectedChange, disabled, zh }: {
+  deviceId?: string; serial: string; platform?: 'android' | 'harmonyos'; mode: 'all' | 'selected'; selected: string[]; disabled?: boolean; zh: boolean;
   onModeChange(mode: 'all' | 'selected'): void; onSelectedChange(apps: string[]): void;
 }) {
   const group = useId(); const [query, setQuery] = useState('');
-  const apps = useSWR(mode === 'selected' ? ['phone-applications', deviceId ?? serial] : null,
-    () => fetchPhoneApplications(deviceId, serial), { revalidateOnFocus: false, shouldRetryOnError: false });
+  const apps = useSWR(mode === 'selected' ? ['phone-applications', deviceId ?? serial, platform ?? 'android'] : null,
+    () => fetchPhoneApplications(deviceId, serial, platform), { revalidateOnFocus: false, shouldRetryOnError: false });
   const search = query.trim().toLocaleLowerCase();
   const choices = apps.data?.filter(app => `${app.label} ${app.packageName}`.toLocaleLowerCase().includes(search)) ?? [];
   const catalog = apps.data;

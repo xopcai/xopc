@@ -153,6 +153,8 @@
     "taskSessionAgentRunning": "助手仍在回复中",
     "taskSessionAgentCompleted": "有新的回复结果",
     "taskSessionAgentFailed": "回复需要处理",
+    "automationRunsExpand": "展开执行记录",
+    "automationRunsCollapse": "收起执行记录",
     "delegatedTasksExpand": "展开派发任务",
     "delegatedTasksCollapse": "折叠派发任务",
     "delegatedTaskRunning": "进行中",
@@ -229,6 +231,7 @@
         "system": "系统内部",
         "other": "其他来源"
       },
+      "automationConfiguration": "自动化配置",
       "purposes": {
         "chat": "普通对话",
         "automation": "自动化执行",

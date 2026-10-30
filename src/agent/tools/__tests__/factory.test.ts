@@ -21,6 +21,7 @@ import { PERSONAL_MAIN_TOOL_IDS } from '../../../personal-agent/policy.js';
 import { STARTER_AGENTS } from '../../starter-agents.js';
 import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 import { AgentToolsFactory } from '../factory.js';
+import { getExternalToolRegistry } from '../../external-tools/tool-registry.js';
 import { getXopcToolMetadata } from '../../embedded/tool-metadata.js';
 
 describe('AgentToolsFactory', () => {
@@ -90,6 +91,25 @@ describe('AgentToolsFactory', () => {
     }
     expect(factory.getAgentToolAvailability('task-tools-denied', 'task_collaboration').state).toBe('blocked');
   });
+  it('recognizes unified discovery capability and legacy allowlists without overriding denies', () => {
+    const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });
+    const catalog = new AgentCatalogRepository();
+    for (const name of ['tool_search', 'xopc_tool_search']) {
+      const id = name === 'tool_search' ? 'discovery-current' : 'discovery-legacy';
+      catalog.create({ id, toolAllowlist: [name, 'xopc_tool_describe', 'xopc_tool_execute'] }, { ready: true });
+      expect(factory.getAgentToolAvailability(id, 'tool_search').state).toBe('verified');
+      catalog.create({ id: `${id}-denied`, toolAllowlist: [name], tools: { [name]: { mode: 'deny' } } }, { ready: true });
+      expect(factory.getAgentToolAvailability(`${id}-denied`, 'tool_search').state).toBe('blocked');
+    }
+    expect(factory.createAllTools().some(tool => tool.name === 'xopc_tool_search')).toBe(false);
+    const legacyDenied = factory.createAllTools({ disabledTools: new Set(['xopc_tool_search']) });
+    expect(getExternalToolRegistry(legacyDenied)?.discovery).toEqual({ native: true, connectors: false });
+    const unifiedDenied = factory.createAllTools({ disabledTools: new Set(['tool_search']) });
+    expect(getExternalToolRegistry(unifiedDenied)?.discovery).toEqual({ native: false, connectors: false });
+    const noDiscoveryGrant = factory.createAllTools({ toolAllowlist: ['xopc_tool_describe', 'xopc_tool_execute'] });
+    expect(getExternalToolRegistry(noDiscoveryGrant)?.discovery?.connectors).toBe(false);
+  });
+
   it('exposes Task tools only while the conversation is an active execution', () => {
     const conversationId = createConversation({ agentId: 'main' }).key;
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });
@@ -231,7 +251,6 @@ describe('AgentToolsFactory', () => {
 
     const names = factory.createAllTools().map((tool) => tool.name);
     expect(names.filter((name) => name.startsWith('xopc_tool_'))).toEqual([
-      'xopc_tool_search',
       'xopc_tool_describe',
       'xopc_tool_execute',
     ]);

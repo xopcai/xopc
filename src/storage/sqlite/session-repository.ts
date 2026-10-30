@@ -126,6 +126,9 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
 
   }
 
+  // Filter before LIMIT/count so automatic runs cannot crowd out conversations.
+  if (query.excludeAutomationRuns) conditions.push(`${SESSION_SOURCE_SQL} != 'automation'`);
+
   if (query.rootConversationsOnly && !query.search?.trim()) {
     // A worker conversation belongs under its originating chat only while that
     // parent can still be reached from the normal conversation list.

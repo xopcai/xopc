@@ -26,6 +26,8 @@ export interface ComposerKbdContext {
   flushSteeringDraft?: () => void | Promise<void>;
   interruptDraft?: () => void;
   editingFollowUpId: string | null;
+  editingUserTurnId?: string | null;
+  onCancelUserMessageEdit?: () => void;
   onCancelEditFollowUp: () => void;
   attachmentsLen: number;
   contextRefsLen: number;
@@ -182,6 +184,10 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           }
         }
 
+        if (e.key === 'Escape' && !k.isComposing && k.editingUserTurnId) {
+          e.preventDefault(); k.onCancelUserMessageEdit?.(); return;
+        }
+
         // 5. Cancel editing of a queued follow-up.
         if (e.key === 'Escape' && !k.isComposing && k.editingFollowUpId) {
           e.preventDefault();
@@ -209,18 +215,11 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           const hasDraft = Boolean(
             k.valueRef.current.trim() || k.attachmentsLen > 0 || k.contextRefsLen > 0,
           );
-          const steerKbdBusy = k.runBusy || k.pendingFollowUpsCount > 0;
-          if (steerKbdBusy) {
-            if ((e.metaKey || e.ctrlKey) && hasDraft) {
-              k.interruptDraft?.();
-              return;
-            }
-            if (!e.metaKey && !e.ctrlKey && !e.altKey && hasDraft) {
-              void k.flushSteeringDraft?.();
-              return;
-            }
+          if ((e.metaKey || e.ctrlKey) && hasDraft && !k.editingUserTurnId && !k.editingFollowUpId) {
+            k.interruptDraft?.();
             return;
           }
+          if (e.metaKey || e.ctrlKey || e.altKey) return;
           if (hasDraft) k.send();
         }
       }}

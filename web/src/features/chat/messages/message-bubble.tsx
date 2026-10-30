@@ -884,7 +884,7 @@ export const MessageBubble = memo(function MessageBubble({
               disabled={(
                 !userCopyText && !message.attachments?.length && !message.contextRefs?.length
               ) || !userMessageCanEdit}
-              title={userMessageCanEdit ? m.chat.userMessageEdit : m.chat.userMessageEditDisabledHint}
+              title={userMessageCanEdit ? deleteRoundDisabled ? m.chat.userMessageStopAndEdit : m.chat.userMessageEdit : m.chat.userMessageEditDisabledHint}
               aria-label={m.chat.userMessageEdit}
             >
               <Pencil className="size-3.5" strokeWidth={1.75} aria-hidden />

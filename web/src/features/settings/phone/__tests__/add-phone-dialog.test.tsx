@@ -4,12 +4,12 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SWRConfig } from 'swr';
 
-vi.mock('../phone-api', () => ({ fetchPhoneDevices: vi.fn(async () => ({ devices: [], discovery: [
+vi.mock('../phone-api', () => ({ phoneRequest: vi.fn(async () => ({ devices: [], discovery: [{ serial: 'huawei-usb', name: 'Huawei', state: 'device', emulator: false, platform: 'harmonyos' }] })), fetchPhoneSettings: vi.fn(async () => ({ config: { enabled: true } })), fetchPhoneDevices: vi.fn(async () => ({ devices: [], discovery: [
   { serial: 'usb-one', name: 'My phone', state: 'unauthorized', emulator: false },
   { serial: 'emulator-5554', name: 'Test emulator', state: 'device', emulator: true },
 ] })) }));
 import { AddPhoneDialog } from '../add-phone-dialog';
-import { fetchPhoneDevices } from '../phone-api';
+import { phoneRequest, fetchPhoneDevices } from '../phone-api';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let container: HTMLDivElement;
@@ -36,4 +36,14 @@ it('explains the Gateway location and only selects authorized connected devices'
   expect(choices).toHaveLength(2); expect(choices[0].disabled).toBe(true); expect(choices[1].disabled).toBe(false);
   await act(async () => choices[1].click());
   expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ serial: 'emulator-5554', state: 'device' }));
+});
+
+it('discovers HarmonyOS over HDC and preserves the platform when selecting a phone', async () => {
+  await render(); await click('USB 连接鸿蒙手机');
+  expect(phoneRequest).toHaveBeenCalledWith('/devices?platform=harmonyos');
+  expect(fetchPhoneDevices).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain('文字请在手机上输入');
+  const choice = [...document.body.querySelectorAll('button')].find(button => button.textContent === '选择设备')!;
+  await act(async () => choice.click());
+  expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ serial: 'huawei-usb', platform: 'harmonyos' }));
 });

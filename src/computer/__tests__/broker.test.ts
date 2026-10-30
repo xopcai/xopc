@@ -4,6 +4,18 @@ import { ComputerBroker, type ComputerApproval, type ComputerDriver } from '../b
 const target = { appId: 'fixture', pid: 1, processIdentity: '1:100', windowId: '10', width: 800, height: 600, geometryRevision: '1' };
 const opening = { op: 'open' as const, sessionId: 's', owner: 'o', appRef: 'fixture', mode: 'control' as const, prepare: false, model: { modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26' as const, origin: 'https://example.com', runtimeLocation: 'local' as const } };
 const brokers: ComputerBroker[] = [];
+it('binds preview authority to the active session without taking a model observation', async () => {
+  const f = fixture(true, false); await f.open();
+  const authority = f.broker.previewAuthority()!;
+  expect(authority).toMatchObject({ conversationId: 'o', computerSessionId: 's', target });
+  f.driver.validatePreviewTarget = vi.fn(async () => {});
+  await f.broker.validatePreview(authority);
+  expect(f.driver.observe).not.toHaveBeenCalled();
+  await f.broker.stop();
+  expect(authority.signal.aborted).toBe(true);
+  expect(f.broker.previewAuthority()).toBeUndefined();
+  await expect(f.broker.validatePreview(authority)).rejects.toThrow('COMPUTER_PREVIEW_REVOKED');
+});
 function fixture(autoApprove = false, deferApproval = true) {
   let settle: (approved: boolean) => void;
   let clock = 1000;
@@ -341,4 +353,28 @@ describe('desktop computer authority', () => {
       receipt: { dispatch: 'completed', outcome: 'unknown', verification: 'none' } });
     expect(f.driver.perform).toHaveBeenCalledTimes(1);
   });
+});
+
+it('retains only a quiescent transport on normal release; explicit stop still terminates it', async () => {
+  const f = fixture(true, false); f.driver.idle = vi.fn(async () => {});
+  await f.open();
+  vi.mocked(f.driver.idle).mockClear();
+  await f.broker.command({ op: 'release', sessionId: 's', owner: 'o' });
+  expect(f.driver.idle).toHaveBeenCalledOnce();
+  expect(f.broker.previewAuthority()).toBeUndefined();
+  await f.broker.stop(); expect(f.driver.stop).toHaveBeenCalled();
+});
+
+it('terminates the driver instead of retaining it when release races an input', async () => {
+  const f = fixture(true, false); f.driver.idle = vi.fn(async () => {});
+  await f.open(); vi.mocked(f.driver.idle).mockClear();
+  const observed = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+  let entered!: () => void; let finish!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  vi.mocked(f.driver.perform).mockImplementation(() => new Promise<void>(resolve => { finish = resolve; entered(); }));
+  const action = f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(observed) }).catch(() => undefined);
+  await started;
+  await f.broker.command({ op: 'release', sessionId: 's', owner: 'o' });
+  expect(f.driver.idle).not.toHaveBeenCalled(); expect(f.driver.stop).toHaveBeenCalled();
+  finish(); await action;
 });

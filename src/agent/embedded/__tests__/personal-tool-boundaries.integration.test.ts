@@ -31,6 +31,8 @@ import { PERSONAL_REQUEST_TOOL_IDS, resolveExecutionToolPolicy } from '../execut
 import { EmbeddedSessionRunnerPool } from '../session-runner.js';
 import { InMemoryTranscriptRuntime } from '../transcript-runtime.js';
 import { deferredToolContract, setXopcToolMetadata } from '../tool-metadata.js';
+import { createExternalToolGatewayTools } from '../../external-tools/gateway-tools.js';
+import { getExternalToolRegistry } from '../../external-tools/tool-registry.js';
 import { TOOL_DISCOVERY_STATE } from '../tool-search-extension.js';
 
 const model = { id: 'fixture', name: 'Fixture', provider: 'openai', api: 'openai-completions' as const,
@@ -184,4 +186,21 @@ it('refreshes Browser tool discovery in the same chat after shared configuration
     manager.updateRuntimeConfiguration(config);
     expect(manager.getOrCreateAgent(conversationId).state.tools.some(tool => tool.name === 'browser_use')).toBe(false);
   } finally { manager.dispose(); }
+}, 15000);
+
+
+it('rebuilds the runner when discovery permissions change without changing execution tool schemas', async () => {
+  const f = await fixture();
+  const tools = createExternalToolGatewayTools([]);
+  const registry = getExternalToolRegistry(tools)!;
+  const params = { ...f.params, tools, codemode: undefined };
+  const first = await f.pool.acquire(params);
+  expect(first.session.agent.state.tools.map(tool => tool.name)).toContain('tool_search');
+  expect(first.session.agent.state.tools.map(tool => tool.name)).not.toContain('xopc_tool_search');
+  first.release();
+  registry.discovery = { native: false, connectors: false };
+  const denied = await f.pool.acquire(params);
+  expect(denied.reused).toBe(false);
+  expect(denied.session.getAllTools().map(tool => tool.name)).not.toContain('tool_search');
+  denied.release();
 }, 15000);

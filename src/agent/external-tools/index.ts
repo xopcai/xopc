@@ -25,6 +25,7 @@ export interface DefaultExternalToolGatewayDeps {
   agentId?: string;
   extensionRegistry?: ExtensionRegistry;
   disabledTools?: Set<string>;
+  toolAllowlist?: readonly string[];
   hookRunner?: ExtensionHookRunner;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
   getMemoryManager?: () => MemoryManager;
@@ -80,6 +81,11 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
     return profile.config.tools[toolRef];
   })), deps.getCurrentContext, deps.getConfig, getConversationId, ['endpoint', 'extension', 'memory'], deps.toolExecutorConfig);
   const registry = getExternalToolRegistry(tools);
+  if (registry) {
+    const native = !deps.disabledTools?.has('tool_search');
+    registry.discovery = { native, connectors: native && !deps.disabledTools?.has('xopc_tool_search')
+      && (!deps.toolAllowlist || deps.toolAllowlist.includes('tool_search') || deps.toolAllowlist.includes('xopc_tool_search')) };
+  }
   if (registry && deps.endpointTools) {
     const endpoints = deps.endpointTools;
     registry.subscribeInvalidation = (conversationId, ref, listener) => {

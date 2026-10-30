@@ -10,7 +10,8 @@ import { AgentToolsFactory } from '../factory.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
 import { createPersonalTaskTool } from '../personal-task-tool.js';
 
-vi.mock('../../../personal-agent/specialist-capabilities.js', () => ({
+vi.mock('../../../personal-agent/specialist-capabilities.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../../personal-agent/specialist-capabilities.js')>(),
   getAvailablePersonalAgentTools: () => ['read_file'], personalAgentModelAvailability: () => ({ available: true }),
 }));
 const ownAgentId = personalAgentId('local-owner');

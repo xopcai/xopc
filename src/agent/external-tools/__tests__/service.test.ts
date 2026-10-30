@@ -51,6 +51,17 @@ describe('ExternalToolService', () => {
     const described = (await service.describe([contract.toolRef])).tools[0]!;
     await expect(service.execute({ toolRef: contract.toolRef, revision: described!.revision, arguments: {}, readOnly: true, context: { toolCallId: 'batch' } })).rejects.toThrow('explicit xopcAccountId');
   });
+  it.each([false, undefined])('requires an actual read classification for Personal execution (readOnly=%s)', async readOnly => {
+    const contract = { ...descriptor, source: 'cli' as const, toolRef: 'cli:workspace:operation', readOnly, batchRead: true,
+      inputSchema: { type: 'object', properties: { xopcAccountId: { type: 'string' } } } };
+    const execute = vi.fn(async () => ({ content: [], details: {} }));
+    const service = new ExternalToolService([provider({ source: 'cli', descriptor: contract, execute })]);
+    const versioned = (await service.describe([contract.toolRef])).tools[0]!;
+    await expect(service.execute({ toolRef: contract.toolRef, revision: versioned.revision,
+      arguments: { xopcAccountId: 'selected' }, personalReadOnly: true, context: { toolCallId: 'personal' } })).rejects.toThrow('no host-curated read-only contract');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('federates, ranks, limits, and isolates unavailable providers', async () => {
     const service = new ExternalToolService([
       provider({ source: 'extension', hits: [descriptor] }),
@@ -204,4 +215,17 @@ describe('ExternalToolService', () => {
     await service.execute({ toolRef: contract.toolRef, revision: second.revision, arguments: { value: 1 }, readOnly: true, context: { toolCallId: 'batch' } });
     expect(execute).toHaveBeenCalledOnce();
   });
+});
+
+
+it('keeps successful provider results when another discovery source times out', async () => {
+  const contract = { toolRef: 'cli:wecom:search', source: 'cli' as const, namespace: 'wecom', title: 'search', summary: 'Search documents' };
+  const service = new ExternalToolService([
+    { source: 'cli', search: async () => [contract], describe: async () => undefined, execute: vi.fn() },
+    { source: 'composio', search: () => new Promise(() => {}), describe: async () => undefined, execute: vi.fn() },
+  ]);
+  const result = await service.search({ query: 'search', timeoutMs: 5 });
+  expect(result.tools.map(tool => tool.toolRef)).toEqual([contract.toolRef]);
+  expect(result.unavailableSources).toEqual(['composio']);
+  expect(result.sourceErrors).toEqual([expect.objectContaining({ source: 'composio', phase: 'search', code: 'discovery_timeout' })]);
 });

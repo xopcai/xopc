@@ -39,7 +39,7 @@ function requestAssessment(request: Pick<PersonalRequest, 'objective' | 'connect
   const capability = personalCapabilities(request.conversationId, request.connectorId, accountId)
     .find(item => item.connectorId === request.connectorId);
   const requirements = { version: 1 as const, summary: request.objective.slice(0, 300),
-    requiredTools: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'],
+    requiredTools: ['tool_search', 'xopc_tool_describe', 'xopc_tool_execute'],
     connector: { connectorId: request.connectorId, ...(accountId ? { accountId } : {}) } };
   const assessment = assessSpecialist(request.executorAgentId, requirements, {
     ownAgentId: principal.agentId ?? '',
@@ -159,7 +159,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
       locale,
       contract: { ...contract, acceptancePolicy: 'manual', outputDestinations: [] },
       activation: { mode: 'allocate', requirements: { version: 1, summary: request.objective.slice(0, 300),
-        requiredTools: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'],
+        requiredTools: ['tool_search', 'xopc_tool_describe', 'xopc_tool_execute'],
         connector: { connectorId: request.connectorId, accountId } } },
     }), { kind: 'system' });
     if (!result.ok) throw new Error('Task could not be persisted');

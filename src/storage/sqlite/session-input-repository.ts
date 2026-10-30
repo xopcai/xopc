@@ -1,3 +1,4 @@
+import { readSessionInputControl } from './session-input-control-repository.js';
 import { readCurrentTranscriptId } from './session-instance-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { turnOriginSchema, type TurnOrigin } from '@xopcai/endpoint-tools-protocol';
@@ -44,6 +45,7 @@ export type SessionInput = {
 };
 
 export type SessionInputState = {
+  control: ReturnType<typeof readSessionInputControl>;
   preparation?: SessionPreparationView;
   conversationId: string;
   revision: number;
@@ -115,6 +117,7 @@ export function getSessionInputState(conversationId: string): SessionInputState 
     .all(conversationId) as InputRow[];
   return {
     conversationId,
+    control: readSessionInputControl(conversationId),
     ...(preparation ? { preparation } : {}),
     revision: runtime?.revision ?? 0,
     activeRunId: runtime?.active_run_id ?? undefined,
@@ -271,21 +274,27 @@ export function claimNextSessionInput(conversationId: string, runId: string, exp
     const runtime = db.prepare(`SELECT active_run_id FROM session_input_runtime WHERE conversation_id = ?`)
       .get(conversationId) as { active_run_id: string | null };
     if (runtime.active_run_id) return undefined;
+    const control = db.prepare('SELECT paused, stop_run_id, permitted_input_id FROM session_input_control WHERE conversation_id = ?')
+      .get(conversationId) as { paused: number; stop_run_id: string | null; permitted_input_id: string | null } | undefined;
+    if (control?.stop_run_id || (control?.paused && !control.permitted_input_id)) return undefined;
     const changed = db.prepare(`UPDATE session_inputs SET status = 'interrupted', error = 'Session changed before delivery',
       version = version + 1, updated_at_ms = ? WHERE conversation_id = ? AND status = 'queued'
       AND expected_transcript_id IS NOT NULL AND expected_transcript_id IS NOT ?`)
       .run(Date.now(), conversationId, readCurrentTranscriptId(db, conversationId)).changes;
     if (changed) bumpSessionInputRevision(db, conversationId);
     const row = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND effective_delivery = 'next'
-      AND status = 'queued' AND (kind != 'connection_resume' OR NOT EXISTS (
+      AND status = 'queued' AND (? IS NULL OR id = ?) AND (kind != 'connection_resume' OR NOT EXISTS (
         SELECT 1 FROM session_inputs barrier WHERE barrier.conversation_id = session_inputs.conversation_id
         AND barrier.status = 'interrupted' AND barrier.kind = 'message'
         AND json_extract(barrier.payload_json, '$.connectionBarrier') = 1
         AND json_extract(barrier.payload_json, '$.waitId') = json_extract(session_inputs.payload_json, '$.waitId')
         AND json_extract(barrier.payload_json, '$.objectiveRevision') = json_extract(session_inputs.payload_json, '$.objectiveRevision')
       )) ORDER BY CASE WHEN kind = 'connection_resume' THEN 1 ELSE 0 END,
-      interrupt_requested DESC, position, created_at_ms, id LIMIT 1`).get(conversationId) as InputRow | undefined;
-    if (!row) return undefined;
+      interrupt_requested DESC, position, created_at_ms, id LIMIT 1`).get(conversationId, control?.paused ? control.permitted_input_id : null, control?.paused ? control.permitted_input_id : null) as InputRow | undefined;
+    if (!row) {
+      if (control?.permitted_input_id) db.prepare('UPDATE session_input_control SET permitted_input_id = NULL WHERE conversation_id = ?').run(conversationId);
+      return undefined;
+    }
     if (expectedInputId && row.id !== expectedInputId) return undefined;
     const now = Date.now();
     if (row.kind === 'message' && !JSON.parse(row.payload_json ?? '{}').connectionAction) {
@@ -303,11 +312,12 @@ export function claimNextSessionInput(conversationId: string, runId: string, exp
     db.prepare(`UPDATE session_input_runtime SET active_run_id = ?, active_input_id = ?,
       revision = revision + 1, updated_at_ms = ? WHERE conversation_id = ?`)
       .run(runId, row.id, now, conversationId);
+    db.prepare('UPDATE session_input_control SET permitted_input_id = NULL WHERE conversation_id = ?').run(conversationId);
     const claimed = mapInput(db.prepare(`${SELECT_INPUTS} WHERE id = ?`).get(row.id) as InputRow);
     // Coalesce only contiguous, compatible conversational text. Original inputs remain durable.
     const hasMaterial = (value: InputRow) => Boolean((value.attachments_json && JSON.parse(value.attachments_json).length)
       || (value.context_snapshots_json && JSON.parse(value.context_snapshots_json).length));
-    if (row.interrupt_requested && !claimed.payload?.connectionAction && !hasMaterial(row)) {
+    if (!control?.paused && row.interrupt_requested && !claimed.payload?.connectionAction && !hasMaterial(row)) {
       const pending = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND status = 'queued'
         ORDER BY interrupt_requested DESC, position, created_at_ms, id LIMIT 10`).all(conversationId) as InputRow[];
       for (const next of pending) {
@@ -344,6 +354,7 @@ export function finishSessionInputRun(conversationId: string, runId: string, sta
     db.prepare(`UPDATE session_input_runtime SET active_run_id = NULL, active_input_id = NULL,
       revision = revision + 1, updated_at_ms = ?
       WHERE conversation_id = ?`).run(now, conversationId);
+    db.prepare('UPDATE session_input_control SET stop_run_id = NULL WHERE conversation_id = ? AND stop_run_id = ?').run(conversationId, runId);
     return true;
   });
 }
@@ -375,7 +386,8 @@ export function mutateQueuedSessionInput(input: {
 }): boolean {
   return runSqliteWriteTransaction((db) => {
     const row = db.prepare(`${SELECT_INPUTS} WHERE id = ? AND conversation_id = ?`).get(input.id, input.conversationId) as InputRow | undefined;
-    if (!row || row.kind !== 'message' || row.status !== 'queued' || row.version !== input.version) return false;
+    if (!row || row.kind !== 'message' || row.status !== 'queued' || row.version !== input.version
+      || row.expected_transcript_id && row.expected_transcript_id !== readCurrentTranscriptId(db, input.conversationId)) return false;
     const now = Date.now();
     if (input.position !== undefined) {
       const rows = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND status = 'queued' ORDER BY position, created_at_ms, id`)
@@ -407,6 +419,7 @@ export function cancelQueuedSessionInput(conversationId: string, id: string, ver
       updated_at_ms = ? WHERE id = ? AND conversation_id = ? AND version = ? AND kind = 'message' AND status IN ('queued','interrupted')`)
       .run(Date.now(), id, conversationId, version);
     if (Number(result.changes) === 0) return false;
+    db.prepare('UPDATE session_input_control SET permitted_input_id = NULL, version = version + 1 WHERE conversation_id = ? AND permitted_input_id = ?').run(conversationId, id);
     bumpSessionInputRevision(db, conversationId);
     return true;
   });
@@ -438,6 +451,7 @@ export function recoverSessionInputState(): string[] {
       AND json_extract(payload_json, '$.connectionAction') IN ('continue','cancel')`).run(now);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = NULL, active_input_id = NULL,
       revision = revision + 1, updated_at_ms = ?`).run(now);
+    db.prepare('UPDATE session_input_control SET stop_run_id = NULL').run();
     return keys.map((row) => row.conversation_id);
   });
 }

@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps session input control without capturing input and transcript routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/input-control')?.id).toBe('session-input-control');
+    for (const path of ['/api/sessions/id/inputs', '/api/sessions/id/input-control/extra', '/api/sessions/id/input-state']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('session-input-control');
+    }
+  });
   it('routes secure conversational MCP setup without capturing nearby paths', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/setup/goal-id')?.id).toBe('mcp');
     expect(findAuthenticatedLazyRouteBundle('/mcp-setup/callback/goal-id')).toBeUndefined();

@@ -7,6 +7,8 @@ describe('desktop recovery classification', () => {
   it.each([
     ['COMPUTER_WINDOW_HIDDEN', 'target', 'show_target_window'],
     ['COMPUTER_WINDOW_READY_TIMEOUT', 'target', 'show_target_window'],
+    ['COMPUTER_APP_PREPARATION_REFUSED', 'target', 'show_target_window'],
+    ['COMPUTER_APP_ID_INVALID', 'target', 'inspect_result'],
     ['COMPUTER_WINDOW_OTHER_SPACE', 'target', 'move_to_same_desktop'],
     ['COMPUTER_CAPTURE_UNAVAILABLE', 'observation', 'wait_and_observe'],
     ['COMPUTER_CAPTURE_TARGET_MISMATCH', 'observation', 'reselect_window'],

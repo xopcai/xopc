@@ -570,6 +570,7 @@ export function buildSessionListQueryString(query?: SessionListQuery): string {
   if (query.sources?.length) params.set('sources', query.sources.join(','));
   if (query.purposes?.length) params.set('purposes', query.purposes.join(','));
   if (query.activity) params.set('activity', query.activity);
+  if (query.excludeAutomationRuns) params.set('excludeAutomationRuns', 'true');
   if (query.agentId) params.set('agentId', query.agentId);
   if (query.excludeArchived) params.set('excludeArchived', 'true');
   if (query.projectId) params.set('projectId', query.projectId);
@@ -684,6 +685,7 @@ export function sessionListDedupeKey(query?: SessionListQuery): string {
     sources: query.sources,
     purposes: query.purposes,
     activity: query.activity,
+    excludeAutomationRuns: query.excludeAutomationRuns,
     agentId: query.agentId,
     excludeArchived: query.excludeArchived,
     projectId: query.projectId,

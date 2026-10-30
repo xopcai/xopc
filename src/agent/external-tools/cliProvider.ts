@@ -7,6 +7,8 @@ import { executeExternalOperation, ExternalEffectNotAppliedError } from '../../c
 import { CapabilityError } from '../../capabilities/runtime/dispatcher.js';
 import { connectorArgumentsHash, connectorArgumentsPreview } from '../../connectors/approval.js';
 import { selectConnectorAccount } from '../../connectors/account-selection.js';
+import type { ConnectorConnection } from '../../connectors/types.js';
+import type { CliAction, CliAdapter } from '../../connectors/cli/types.js';
 import { cliContextPath } from '../../connectors/cli/process.js';
 import { getCliAdapter } from '../../connectors/cli/adapterRegistry.js';
 import { describeCliAction, executeCliAction } from '../../connectors/cli/runtime.js';
@@ -22,9 +24,14 @@ import { connectorObjectiveScope, requireSessionConnection, publishConnectionWai
 import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
-import type { ExternalToolProvider, ExternalToolExecutionContext, ExternalToolTurnContext } from './types.js';
+import type { ExternalToolProvider, ExternalToolDiscoveryContext, ExternalToolExecutionContext, ExternalToolTurnContext } from './types.js';
 
 const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: {} });
+
+function cliContractRevision(connection: ConnectorConnection, action: CliAction, adapter: CliAdapter): string {
+  return connectorArgumentsHash({ accountId: connection.accountId, connectionId: connection.id,
+    connectionUpdatedAt: connection.updatedAt, action, adapterVersion: adapter.version, binaryVersion: adapter.binaryVersion });
+}
 
 export class CliToolProvider implements ExternalToolProvider {
   readonly source = 'cli' as const;
@@ -44,10 +51,13 @@ export class CliToolProvider implements ExternalToolProvider {
     });
   }
 
-  async search(query: string) {
+  async search(query: string, context?: ExternalToolDiscoveryContext) {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     return this.available().flatMap(item => {
-      const accounts = selectConnectorAccount({ installation: item.policy, agentId: item.agentId, accept: c => c.provider === 'cli' && c.metadata.runtimeInstanceId === item.instance.instanceId }).candidates;
+      if (context && item.instance.connectorId !== context.connectorId) return [];
+      const accounts = selectConnectorAccount({ installation: item.policy, agentId: item.agentId,
+        accept: c => c.provider === 'cli' && c.metadata.runtimeInstanceId === item.instance.instanceId
+          && (!context || c.accountId === context.accountId) }).candidates;
       if (!accounts.length) return [];
       return Object.entries(item.adapter.curatedActions).filter(([id, scope]) => {
         const text = `${item.instance.displayName} ${item.instance.connectorId} ${item.adapter.id} ${id}`.toLowerCase();
@@ -56,16 +66,20 @@ export class CliToolProvider implements ExternalToolProvider {
     });
   }
 
-  async describe(toolRef: string) {
+  async describe(toolRef: string, context?: ExternalToolDiscoveryContext) {
     const parsed = parseExternalToolRef(toolRef, this.source);
     const item = this.available().find(value => value.instance.instanceId === parsed?.namespace);
     if (!item || !parsed) return undefined;
-    const selected = selectConnectorAccount({ installation: item.policy, agentId: item.agentId, accept: c => c.provider === 'cli' && c.metadata.runtimeInstanceId === item.instance.instanceId });
-    const connection = selected.connection ?? selected.candidates[0];
+    if (context && item.instance.connectorId !== context.connectorId) return undefined;
+    const selected = selectConnectorAccount({ installation: item.policy, agentId: item.agentId,
+      requestedAccountId: context?.accountId,
+      accept: c => c.provider === 'cli' && c.metadata.runtimeInstanceId === item.instance.instanceId });
+    const connection = selected.connection ?? (context ? undefined : selected.candidates[0]);
     if (!connection) return undefined;
     const action = await describeCliAction(item.config, item.instance.instanceId, connection, parsed.toolName);
     if (evaluateConnectorExecutionPolicy({ installation: item.policy, action: { scope: action.scope, curated: true }, agentId: item.agentId, accountId: connection.accountId, confirmed: true }).decision !== 'allowed') return undefined;
     return { toolRef, source: this.source, namespace: item.instance.connectorId, title: action.id, summary: action.description, description: action.description,
+      ...(context ? { contractRevision: cliContractRevision(connection, action, item.adapter) } : {}),
       readOnly: action.scope === 'read', batchRead: action.scope === 'read', inputSchema: { ...action.inputSchema, properties: { ...(action.inputSchema.properties as Record<string, unknown>),
         xopcAccountId: { type: 'string', description: 'Stable account ID; required when multiple accounts are available.' },
         xopcExportResult: { type: 'boolean', description: 'Save the successful result as a JSON artifact in this account context.' } } } };
@@ -82,6 +96,11 @@ export class CliToolProvider implements ExternalToolProvider {
     const connection = selected.connection;
     if (!connection) return result({ status: 'account_selection_required', accounts: selected.candidates.map(c => ({ id: c.accountId, identity: c.identity })), instruction: 'Select a connected account using xopcAccountId. Never substitute another account.' });
     const action = await describeCliAction(item.config, item.instance.instanceId, connection, parsed.toolName);
+    context.authorize?.();
+    context.signal?.throwIfAborted();
+    if (context.contractRevision && context.contractRevision !== cliContractRevision(connection, action, item.adapter)) {
+      throw new CapabilityError('REVISION_CONFLICT', 'Selected account or CLI action contract changed. Describe the tool again.');
+    }
     if (args.xopcExportResult !== undefined && typeof args.xopcExportResult !== 'boolean') throw new Error('Invalid export option.');
     const exportResult = args.xopcExportResult === true;
     const input = { ...args }; delete input.xopcAccountId; delete input.xopcExportResult;
@@ -112,6 +131,8 @@ export class CliToolProvider implements ExternalToolProvider {
     }
     const acceptedArgumentsHash = argumentsHash();
     const authorizeCurrent = () => {
+      context.authorize?.();
+      context.signal?.throwIfAborted();
       const freshPolicy = getConnectorInstallation(item.policy.id);
       const freshConnection = getConnectorConnection(connection.id);
       const currentConfig = this.deps.getConfig();
@@ -125,6 +146,9 @@ export class CliToolProvider implements ExternalToolProvider {
         throw new CapabilityError('FORBIDDEN', 'Connector permission changed.');
       }
       if (argumentsHash() !== acceptedArgumentsHash) throw new CapabilityError('REVISION_CONFLICT', 'Connector objective changed.');
+      if (context.contractRevision && context.contractRevision !== cliContractRevision(freshConnection, action, item.adapter)) {
+        throw new CapabilityError('REVISION_CONFLICT', 'Selected account or CLI action contract changed.');
+      }
     };
     const execute = async (executionId: string) => {
       let authorized = false;

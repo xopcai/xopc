@@ -15,7 +15,8 @@ import { AgentSelectionRepository } from '../selection-repository.js';
 import { createSelectedTask } from '../delegation-service.js';
 import { assessSpecialist, matchSpecialists, type MatchingContext } from '../service.js';
 
-vi.mock('../../personal-agent/specialist-capabilities.js', () => ({
+vi.mock('../../personal-agent/specialist-capabilities.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../personal-agent/specialist-capabilities.js')>(),
   getAvailablePersonalAgentTools: (config: { toolAllowlist?: string[]; tools: Record<string, { mode: string }> }) =>
     (config.toolAllowlist ?? ['read_file', 'exec_command']).filter(tool => config.tools[tool]?.mode !== 'deny'),
   personalAgentModelAvailability: () => ({ available: true }),
@@ -49,6 +50,27 @@ describe('specialist matching', () => {
     expect(resolveEffectiveAgentConfig({ agent: entry, defaults: catalog.getSettings().defaults }).config.specialistProfile).toEqual(profile);
     expect(catalog.get('coder')?.specialistProfile).toBeUndefined();
     expect(() => z.toJSONSchema(SpecialistProfileSchema)).not.toThrow();
+  });
+
+  it.each(['tool_search', 'xopc_tool_search'])('checks historical discovery requirements against the current tool with allowlist=%s', name => {
+    const agent = catalog.get('data-analyst')!;
+    catalog.update(agent.id, agent.revision, { id: agent.id, toolAllowlist: [name, 'xopc_tool_describe', 'xopc_tool_execute'] });
+    const getAgentToolAvailability = vi.fn((_id: string, tool: string) => ({ condition: `tool:${tool}`,
+      state: tool === 'xopc_tool_search' ? 'blocked' as const : 'verified' as const, reasonCode: 'registered' }));
+    const result = assessSpecialist(agent.id, { ...requirements,
+      requiredTools: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'] }, { ...context, getAgentToolAvailability });
+    expect(result.eligibility).toBe('eligible');
+    expect(getAgentToolAvailability.mock.calls.map(([, tool]) => tool)).toEqual(['tool_search', 'xopc_tool_describe', 'xopc_tool_execute']);
+  });
+
+  it.each(['tool_search', 'xopc_tool_search'])('does not bypass %s denial while normalizing historical requirements', deniedTool => {
+    const agent = catalog.get('data-analyst')!;
+    catalog.update(agent.id, agent.revision, { id: agent.id, toolAllowlist: ['tool_search'], tools: { [deniedTool]: { mode: 'deny' } } });
+    const probe = vi.fn(() => ({ condition: 'tool:tool_search', state: 'verified' as const, reasonCode: 'registered' }));
+    const result = assessSpecialist(agent.id, { ...requirements, requiredTools: ['xopc_tool_search'] }, { ...context, getAgentToolAvailability: probe });
+    expect(result.eligibility).toBe('blocked');
+    expect(result.checks).toContainEqual(expect.objectContaining({ condition: 'tool:tool_search', state: 'blocked' }));
+    expect(probe).not.toHaveBeenCalled();
   });
 
   it('orders by declared task fit while keeping absent-profile and blocked candidates explicit', () => {

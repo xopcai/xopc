@@ -1,3 +1,4 @@
+import { composerSubmitIntent } from './composer-submit-intent';
 import { useCallback, useRef } from 'react';
 
 import type {
@@ -49,6 +50,12 @@ export interface UseComposerActionsOptions {
   voiceActive: boolean;
   cancelVoiceInput: () => void;
   editingFollowUpId: string | null;
+  editingUserTurnId?: string | null;
+  blocked?: boolean;
+  queuePaused?: boolean;
+  draftScope?: string;
+  onFinishUserEdit?: () => void;
+  onFinishFollowUpEdit?: () => void;
 
   getTextValue: () => string;
   getAttachmentCount: () => number;
@@ -66,7 +73,7 @@ export interface UseComposerActionsOptions {
     attachments?: PendingFollowUp['attachments'],
     thinkingLevel?: string,
     contextRefs?: ComposerContextRef[],
-  ) => void;
+  ) => void | boolean | Promise<boolean>;
   onPendingFollowUpRemove: (id: string) => void;
   pendingFollowUpsCount: number;
 
@@ -120,8 +127,12 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   };
   const followUpSubmissionRef = useRef(false);
 
+  const flushRef = useRef<() => void>(() => {});
+  const editCommitPending = useRef(false);
   const send = useCallback(() => {
-    if (runBusy) return;
+    const intent = composerSubmitIntent(latestOptions.current);
+    if (intent === 'blocked') return;
+    if (intent === 'queue') { flushRef.current(); return; }
     const draft = harvestDraft({
       voiceActive,
       cancelVoiceInput,
@@ -129,6 +140,23 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     });
     if (!draft) return;
 
+    if (intent === 'saveFollowUp') {
+      if (editCommitPending.current || !editingFollowUpId) return;
+      editCommitPending.current = true;
+      void Promise.resolve().then(() => onCommitEditFollowUp(editingFollowUpId, draft.text,
+        draft.attachments, getThinkingLevel(), draft.contextRefs)).then(accepted => {
+        if (accepted === false) return;
+        onUserTextCommitted?.(draft.text);
+        const latest = latestOptions.current;
+        if (latest.draftScope !== options.draftScope || latest.editingFollowUpId !== editingFollowUpId || latest.getTextValue() !== draft.text
+          || JSON.stringify(latest.wireAttachmentsPayload()) !== JSON.stringify(draft.attachments)
+          || JSON.stringify(latest.getContextRefs()) !== JSON.stringify(draft.contextRefs)) return;
+        latest.onFinishFollowUpEdit?.();
+        clearEditFollowUpRef();
+      }).catch(error => showComposerNotification('error', error instanceof Error ? error.message : String(error)))
+        .finally(() => { editCommitPending.current = false; });
+      return;
+    }
     const sendArgs: Parameters<ComposerSendHandler> = [
       draft.text,
       draft.attachments.length > 0 ? draft.attachments : undefined,
@@ -140,19 +168,23 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     commitAcceptedSend(result, (conversationId) => {
       onUserTextCommitted?.(draft.text, conversationId);
       const latest = latestOptions.current;
-      if (latest.getTextValue() !== draft.text
+      if (latest.draftScope !== options.draftScope || latest.getTextValue() !== draft.text
         || JSON.stringify(latest.wireAttachmentsPayload()) !== JSON.stringify(draft.attachments)
         || JSON.stringify(latest.getContextRefs()) !== JSON.stringify(draft.contextRefs)) return;
+      if (intent === 'replaceTurn') {
+        if (latest.editingUserTurnId === options.editingUserTurnId) latest.onFinishUserEdit?.();
+        return;
+      }
       resetEditor();
       clearAttachments();
       clearContextRefs();
     });
   }, [
-    runBusy,
+    runBusy, editingFollowUpId, onCommitEditFollowUp, clearEditFollowUpRef,
     voiceActive,
     cancelVoiceInput,
     onSend,
-    onDispatched,
+    onDispatched, options.editingUserTurnId, options.draftScope,
     getThinkingLevel,
     onUserTextCommitted,
     resetEditor,
@@ -165,6 +197,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   ]);
 
   const flushSteeringDraft = useCallback(async (interrupt = options.personal ? true : undefined) => {
+    if (latestOptions.current.editingFollowUpId || latestOptions.current.editingUserTurnId) { send(); return; }
     if (!runBusy && pendingFollowUpsCount === 0) return;
     const draft = harvestDraft({
       voiceActive,
@@ -173,21 +206,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     });
     if (!draft) return;
 
-    if (editingFollowUpId) {
-      onCommitEditFollowUp(
-        editingFollowUpId,
-        draft.text,
-        draft.attachments.length > 0 ? draft.attachments : undefined,
-        getThinkingLevel(),
-        draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
-      );
-      onUserTextCommitted?.(draft.text);
-      clearEditFollowUpRef();
-      resetEditor();
-      clearAttachments();
-      clearContextRefs();
-      return;
-    }
+    if (latestOptions.current.blocked) return;
 
     if (!onAddPendingFollowUp) return;
     if (followUpSubmissionRef.current) return;
@@ -204,6 +223,11 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       if (interrupt !== undefined) args.push(interrupt);
       await onAddPendingFollowUp(...args);
       onUserTextCommitted?.(draft.text);
+      const latest = latestOptions.current;
+      if (latest.draftScope !== options.draftScope || latest.editingFollowUpId || latest.editingUserTurnId
+        || latest.getTextValue() !== draft.text
+        || JSON.stringify(latest.wireAttachmentsPayload()) !== JSON.stringify(draft.attachments)
+        || JSON.stringify(latest.getContextRefs()) !== JSON.stringify(draft.contextRefs)) return;
       resetEditor();
       clearAttachments();
       clearContextRefs();
@@ -215,7 +239,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       followUpSubmissionRef.current = false;
     }
   }, [
-    runBusy,
+    send, runBusy,
     voiceActive,
     cancelVoiceInput,
     editingFollowUpId,
@@ -223,7 +247,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     onAddPendingFollowUp,
     onCommitEditFollowUp,
     getThinkingLevel,
-    options.personal,
+    options.personal, options.draftScope,
     m.followUpQueueMaxReached,
     m.followUpQueueSubmitFailed,
     clearEditFollowUpRef,
@@ -237,7 +261,10 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getContextRefs,
   ]);
 
+  flushRef.current = () => { void flushSteeringDraft(); };
+
   const interruptDraft = useCallback(() => {
+    if (latestOptions.current.blocked || latestOptions.current.editingFollowUpId || latestOptions.current.editingUserTurnId) return;
     if (!runBusy || !onSteeringInterrupt) return;
     const draft = harvestDraft({
       voiceActive,

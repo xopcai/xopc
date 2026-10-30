@@ -67,6 +67,7 @@ import {
 } from './desktop-pet/window.js';
 import { assertTrustedRenderer } from './ipc/trusted-renderer.js';
 import { DesktopEndpointHost } from './computer/desktop-host.js';
+import { registerComputerPreviewIpc } from './computer/preview-ipc.js';
 import { getGatewayConnection } from './gateway-process.js';
 import {
   getLoadingPageDataUrl,
@@ -1104,6 +1105,7 @@ function createWindow(): void {
   win.on('closed', () => {
     mainWindow = null;
     mainWindowNavigationReady = false;
+    desktopEndpointHost?.visibilityChanged();
   });
 
   let externalUrlHandlersAttached = false;
@@ -1229,6 +1231,7 @@ app.whenReady().then(async () => {
     }
   };
   ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
+  registerComputerPreviewIpc(() => desktopEndpointHost, assertMainComputerRenderer);
   ipcMain.handle('computer:access', async (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.computerAccess(); });
   ipcMain.handle('computer:set-all-app-access', async (event, allowed: boolean) => {
     assertMainComputerRenderer(event);
@@ -1490,7 +1493,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  // Auxiliary capture windows do not replace the main user window.
+  if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
   }
 });

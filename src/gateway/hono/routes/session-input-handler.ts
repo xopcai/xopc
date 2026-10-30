@@ -1,3 +1,4 @@
+import { SessionInputControlConflict } from '../../../storage/sqlite/session-input-control-repository.js';
 import {
   browserPageContextsInputSchema,
   endpointContextSchema,
@@ -161,6 +162,9 @@ export async function submitSessionInput(
       );
     }
     return c.json({ ok: true, payload: { ...result, conversationId } }, 202);
+  }).catch(error => {
+    if (!(error instanceof SessionInputControlConflict)) throw error;
+    return c.json({ ok: false, error: { code: 'CONTROL_CHANGED', message: error.message } }, 409);
   });
 }
 
@@ -221,6 +225,8 @@ export async function replaceLatestSessionTurn(
     const result = await deps.service.replaceLatestSessionTurn({
       conversationId,
       targetTurnId,
+      expectedTranscriptId: typeof body.expectedTranscriptId === 'string' ? body.expectedTranscriptId : undefined,
+      controlVersion: typeof body.controlVersion === 'number' ? body.controlVersion : undefined,
       clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
       delivery: 'next',
       content,
@@ -243,5 +249,8 @@ export async function replaceLatestSessionTurn(
       return c.json({ ok: false, error: { code: result.code, message } }, status);
     }
     return c.json({ ok: true, payload: { ...result, conversationId } }, 202);
+  }).catch(error => {
+    if (!(error instanceof SessionInputControlConflict)) throw error;
+    return c.json({ ok: false, error: { code: 'CONTROL_CHANGED', message: error.message } }, 409);
   });
 }

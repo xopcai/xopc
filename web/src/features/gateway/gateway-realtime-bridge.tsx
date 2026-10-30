@@ -19,7 +19,7 @@ export function GatewayRealtimeBridge() {
   const { mutate } = useSWRConfig();
   const identity = useGatewayStore(state => state.conversationId);
   useEffect(() => startAgentRunStreamEventBridge(), []);
-  useEffect(() => startChatRunStateBridge(), []);
+  useEffect(() => startChatRunStateBridge(), [identity]);
   useEffect(() => {
     const refresh = (kind: 'note' | 'task' | 'project', id?: string) => {
       void mutate(key => isResourceCacheKey(key, kind));

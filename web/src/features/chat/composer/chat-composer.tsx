@@ -1,3 +1,6 @@
+import { useGatewayStore } from '@/stores/gateway-store';
+import type { SessionInputControlView } from '@xopcai/gateway-contract';
+import type { ComposerMode } from './composer.types';
 import { parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -128,7 +131,7 @@ export const ChatComposer = memo(function ChatComposer({
   onPendingFollowUpRemove,
   onPendingFollowUpMove,
   onPendingFollowUpReorder,
-  onPendingFollowUpSteer,
+  onPendingFollowUpSteer, onPendingFollowUpSend,
   steeringFollowUpId,
   welcomeDraftSeed,
   welcomeSuggestion,
@@ -145,6 +148,7 @@ export const ChatComposer = memo(function ChatComposer({
   prepareVoiceSession,
   prepareContextSession,
   editingUserTurnId,
+  composerMode, inputControl, onResumeQueue, onRestoreEditor, onReacquireEdit,
   onCancelUserMessageEdit,
 }: {
   personal?: boolean;
@@ -185,11 +189,12 @@ export const ChatComposer = memo(function ChatComposer({
     attachments?: PendingFollowUp['attachments'],
     thinkingLevel?: string,
     contextRefs?: ComposerContextRef[],
-  ) => void;
+  ) => void | boolean | Promise<boolean>;
   onPendingFollowUpRemove: (id: string) => void;
   onPendingFollowUpMove: (id: string, dir: 'up' | 'down') => void;
   onPendingFollowUpReorder: (fromIndex: number, toIndex: number) => void;
   onPendingFollowUpSteer: (id: string) => void;
+  onPendingFollowUpSend?: (id: string) => void;
   steeringFollowUpId: string | null;
   /** Optional: when provided, `/` palette lists agents and selecting one switches the active agent. */
   onChatAgentChange?: (agentId: string) => void;
@@ -201,6 +206,11 @@ export const ChatComposer = memo(function ChatComposer({
   prepareVoiceSession?: () => Promise<string>;
   prepareContextSession?: () => Promise<string | null>;
   editingUserTurnId?: string | null;
+  composerMode?: ComposerMode;
+  onRestoreEditor?: (mode: ComposerMode) => void;
+  onReacquireEdit?: (draft: ComposerDraft) => void;
+  inputControl?: SessionInputControlView;
+  onResumeQueue?: () => void;
   onCancelUserMessageEdit?: () => void;
 }) {
   const call = useVoiceCall();
@@ -366,7 +376,7 @@ export const ChatComposer = memo(function ChatComposer({
   });
 
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
-  usePersistedComposer(conversationId, editor, att, contextRefs, setContextRefs);
+
   useEffect(() => {
     if (!attachmentHandoffId) return;
     const file = takeComposerAttachmentHandoff(attachmentHandoffId);
@@ -403,7 +413,7 @@ export const ChatComposer = memo(function ChatComposer({
   }, [onWireInputClearWalk, setContextRefs]);
 
   const agentRunActive = useSidebarSessionAgentRun(conversationId ?? '');
-  const runBusy = sending || streaming || agentRunActive;
+  const runBusy = sending || streaming || agentRunActive || inputControl?.phase === 'running' || inputControl?.phase === 'stopping';
   busyRef.current = runBusy;
 
   const openReviewLauncher = useCallback(() => {
@@ -568,10 +578,32 @@ export const ChatComposer = memo(function ChatComposer({
     if (suggestionEligible && nextTurn.suggestion && !pickers.palette.open) nextTurn.shown();
   }, [suggestionEligible, nextTurn.suggestion, nextTurn.shown, pickers.palette.open]);
 
+  const draftGateway = useGatewayStore(state => state.conversationId);
+  const draftScope = JSON.stringify([draftGateway, conversationId]);
+  const editDrafts = useRef(new Map<string, ComposerDraft>());
+  const previousEditorKey = useRef('compose');
+  const currentMode = composerMode ?? (editingFollowUpId
+    ? { kind: 'editFollowUp' as const, inputId: editingFollowUpId, version: 0 } : { kind: 'compose' as const });
+  const editorKey = currentMode.kind === 'editTurn' ? `turn:${currentMode.turnId}`
+    : currentMode.kind === 'editFollowUp' ? `input:${currentMode.inputId}` : 'compose';
+  useLayoutEffect(() => { editDrafts.current.clear(); previousEditorKey.current = 'compose'; }, [draftScope]);
+  usePersistedComposer(conversationId, editor, att, contextRefs, setContextRefs, {
+    snapshot: () => ({ mode: currentMode, drafts: Object.fromEntries(editDrafts.current) }),
+    restore: saved => {
+      editDrafts.current = new Map(Object.entries(saved.drafts));
+      previousEditorKey.current = saved.mode.kind === 'editTurn' ? `turn:${saved.mode.turnId}`
+        : saved.mode.kind === 'editFollowUp' ? `input:${saved.mode.inputId}` : 'compose';
+      onRestoreEditor?.(saved.mode);
+    },
+  });
+
+  const editNeedsPause = currentMode.kind !== 'compose' && Boolean(inputControl && !inputControl.paused);
   const actions = useComposerActions({
     personal,
     chat: m.chat,
-    runBusy,
+    runBusy, draftScope, queuePaused: inputControl?.paused,
+    editingUserTurnId, blocked: disabled || sendDisabled || editNeedsPause || inputControl?.phase === 'stopping',
+    onFinishUserEdit: onCancelUserMessageEdit, onFinishFollowUpEdit: onCancelEditFollowUp,
     voiceActive: voice.voiceActive,
     cancelVoiceInput: voice.cancelVoiceInput,
     editingFollowUpId,
@@ -612,41 +644,20 @@ export const ChatComposer = memo(function ChatComposer({
   }, [conversationId, m.chat.followUpQueueHeading]);
 
   useLayoutEffect(() => {
-    if (!editingFollowUpId) {
-      if (lastLoadedEditFollowUpIdRef.current) {
-        att.clearAttachments();
-        setContextRefs([]);
-        editor.resetEditor();
-        lastLoadedEditFollowUpIdRef.current = null;
-      }
-      return;
-    }
-    if (editingFollowUpId === lastLoadedEditFollowUpIdRef.current) {
-      return;
-    }
-    const row = pendingFollowUps.find((r) => r.id === editingFollowUpId);
-    if (!row) {
-      onCancelEditFollowUp();
-      return;
-    }
-    lastLoadedEditFollowUpIdRef.current = editingFollowUpId;
-    if (row.thinkingLevel != null && modelSupportsThinking) {
-      onThinkingChange(row.thinkingLevel);
-    }
-    att.setAttachments(wireFollowUpAttachmentsToComposer(row.attachments ?? []));
-    setContextRefs(row.contextRefs ?? []);
-    editor.resetEditor({ nextText: row.text, focus: true });
-  }, [
-    att.clearAttachments,
-    att.setAttachments,
-    editor.resetEditor,
-    editingFollowUpId,
-    onCancelEditFollowUp,
-    onThinkingChange,
-    pendingFollowUps,
-    modelSupportsThinking,
-    setContextRefs,
-  ]);
+    if (previousEditorKey.current === editorKey) return;
+    editDrafts.current.set(previousEditorKey.current, { text: editor.valueRef.current,
+      attachments: att.wireAttachmentsPayload(), contextRefs: contextRefsRef.current, thinkingLevel: thinkingLevelRef.current });
+    previousEditorKey.current = editorKey;
+    const row = currentMode.kind === 'editFollowUp' ? pendingFollowUps.find(item => item.id === currentMode.inputId) : undefined;
+    if (row?.thinkingLevel && modelSupportsThinking) onThinkingChange(row.thinkingLevel);
+    const draft: ComposerDraft | undefined = (currentMode.kind === 'compose' ? currentMode.draft : undefined) ?? editDrafts.current.get(editorKey) ?? (currentMode.kind === 'editTurn' ? currentMode.draft : row
+      ? { text: row.text, attachments: row.attachments ?? [], contextRefs: row.contextRefs ?? [] } : undefined);
+    if (draft?.thinkingLevel && modelSupportsThinking) onThinkingChange(draft.thinkingLevel);
+    att.setAttachments(wireFollowUpAttachmentsToComposer(draft?.attachments ?? []));
+    setContextRefs(draft?.contextRefs ?? []);
+    editor.resetEditor({ nextText: draft?.text ?? '', focus: true });
+  }, [editorKey, currentMode, pendingFollowUps, att, editor, setContextRefs]);
+
 
   const openFollowUpInComposer = useCallback(
     (id: string) => {
@@ -665,6 +676,7 @@ export const ChatComposer = memo(function ChatComposer({
     flushSteeringDraft: submitFollowUp,
     interruptDraft: actions.interruptDraft,
     editingFollowUpId,
+    editingUserTurnId, onCancelUserMessageEdit,
     onCancelEditFollowUp,
     attachmentsLen: att.attachments.length,
     contextRefsLen: contextRefs.length,
@@ -684,7 +696,9 @@ export const ChatComposer = memo(function ChatComposer({
     dismissEmptySuggestion: nextTurn.suggestion ? nextTurn.dismiss : undefined,
   };
 
-  const runBusyState = runBusy;
+  const runBusyState = runBusy && !editingFollowUpId && !editingUserTurnId;
+  const actionChat = { ...m.chat, sendMessage: editingFollowUpId ? m.chat.followUpSaveEdit
+    : editingUserTurnId ? m.chat.userMessageReplaceSend : inputControl?.paused ? m.chat.sendThisMessage : m.chat.sendMessage };
   const hasDraft =
     Boolean(editor.value.trim()) || att.attachments.length > 0 || contextRefs.length > 0;
   const showSteeringInterrupt = hasDraft && Boolean(onSteeringInterrupt);
@@ -758,24 +772,51 @@ export const ChatComposer = memo(function ChatComposer({
         </div>
       ) : null}
 
+      {editNeedsPause && <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-2 text-xs text-fg-muted">
+        <span>{m.chat.editQueueResumed}</span>
+        <button type="button" disabled={disabled || sendDisabled} className="text-accent-fg disabled:opacity-40"
+          onClick={() => onReacquireEdit?.({ text: editor.valueRef.current, attachments: att.wireAttachmentsPayload(), contextRefs: contextRefsRef.current })}>{m.chat.editPauseAgain}</button>
+      </div>}
+      {inputControl?.paused && <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-2 text-xs text-fg-muted">
+        <span>{inputControl.phase === 'stopping' ? m.chat.inputStopping
+          : inputControl.reviewRequired ? m.chat.queueReviewRequired
+          : m.chat.queuePaused}</span>
+        <button type="button" disabled={disabled || sendDisabled || Boolean(editingFollowUpId || editingUserTurnId) || inputControl.phase !== 'idle'}
+          className="text-accent-fg disabled:opacity-40" onClick={onResumeQueue}>{m.chat.queueResume}</button>
+      </div>}
       <SessionPreparationStatus conversationId={conversationId} />
       {pendingFollowUps.length > 0 ? (
         <div className="max-h-[min(30vh,11rem)] shrink-0 overflow-y-auto overflow-x-hidden border-b border-edge-subtle/80 [scrollbar-gutter:stable] dark:border-edge-subtle/70">
           <ChatPendingFollowUpStack
             items={pendingFollowUps}
-            disabled={disabled}
+            disabled={disabled || sendDisabled || Boolean(editingUserTurnId || editingFollowUpId)}
             editingFollowUpId={editingFollowUpId}
             onEditInComposer={openFollowUpInComposer}
             onRemove={onPendingFollowUpRemove}
             onMove={onPendingFollowUpMove}
             onReorder={onPendingFollowUpReorder}
             onSteer={onPendingFollowUpSteer}
+            onSendSingle={onPendingFollowUpSend}
+            queuePaused={inputControl?.paused}
+            queueIdle={inputControl?.phase === 'idle'}
             steeringBusyId={steeringFollowUpId}
             onOpenSideChat={conversationId && conversationId !== 'new' ? openFollowUpInSideChat : undefined}
           />
         </div>
       ) : null}
 
+      {(editingFollowUpId || editingUserTurnId) && <div className="flex items-center justify-end px-4 py-1 text-xs">
+        <button type="button" disabled={sendDisabled} className="text-accent-fg disabled:opacity-40"
+          onClick={() => onRestoreEditor?.({ kind: 'compose', draft: { text: editor.valueRef.current,
+            attachments: att.wireAttachmentsPayload(), contextRefs: contextRefsRef.current } })}>{m.chat.editAsNewMessage}</button>
+      </div>}
+      {currentMode.kind === 'editFollowUp' && pendingFollowUps.some(row => row.id === currentMode.inputId && row.version !== currentMode.version) && (
+        <div className="border-b border-edge-subtle px-4 py-2 text-xs text-fg-muted">
+          <p>{m.chat.followUpEditConflict}</p>
+          <p className="my-1 max-h-20 overflow-auto whitespace-pre-wrap">{pendingFollowUps.find(row => row.id === currentMode.inputId)?.text}</p>
+          <button type="button" disabled={sendDisabled} className="text-accent-fg" onClick={() => onBeginEditFollowUp(currentMode.inputId)}>{m.chat.followUpKeepMyEdit}</button>
+        </div>
+      )}
       {editingFollowUpId ? (
         <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs text-fg-muted">
           <span>{m.chat.inputPlaceholderSteeringEdit}</span>
@@ -922,24 +963,24 @@ export const ChatComposer = memo(function ChatComposer({
         </div>
 
         {personal ? <PersonalComposerActions
-          disabled={disabled || sendDisabled}
+          disabled={disabled || sendDisabled || editNeedsPause}
           voiceActive={voice.voiceActive}
           runBusy={runBusyState}
           hasDraft={hasDraft}
-          chat={m.chat}
+          chat={actionChat}
           onStartVoiceInput={voice.startVoiceInput}
           onSend={actions.send}
-          onQueue={onAddPendingFollowUp ? submitFollowUp : undefined}
+          onQueue={onAddPendingFollowUp ? actions.send : undefined}
           onDefer={onAddPendingFollowUp ? () => actions.flushSteeringDraft(false) : undefined}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
         /> : <ComposerToolbar
           disabled={disabled}
-          sendDisabled={sendDisabled}
+          sendDisabled={sendDisabled || editNeedsPause}
           sending={sending}
           streaming={streaming}
           runBusy={runBusyState}
-          chat={m.chat}
+          chat={actionChat}
           hasDraft={hasDraft}
           showSteeringInterrupt={showSteeringInterrupt}
           attachmentCount={att.attachments.length}
@@ -960,7 +1001,7 @@ export const ChatComposer = memo(function ChatComposer({
               .finally(() => { preparingCallRef.current = false; });
           }}
           onSend={actions.send}
-          onQueue={onAddPendingFollowUp ? submitFollowUp : undefined}
+          onQueue={onAddPendingFollowUp ? actions.send : undefined}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
           sessionModel={sessionModel}

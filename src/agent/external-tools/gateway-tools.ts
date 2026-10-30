@@ -5,21 +5,22 @@ import type { Config } from '../../config/schema.js';
 import {
   getStoreConnectorInstallPlan,
   parseStoreConnectorCandidateRef,
-  searchStoreConnectorInstallCandidates,
 } from '../../capabilities/store-connector.js';
 import { getConnectorConnection, getConnectorInstallation, listConnectorActionMetadata, listConnectorConnections } from '../../storage/sqlite/connector-repository.js';
 import { getConnectorAccount } from '../../storage/sqlite/connector-account-repository.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
-import { assertPersonalRequestAccountAccess } from '../../personal-agent/request-access.js';
+import { createPersonalRequestExecutionAuthorizer } from '../../personal-agent/request-access.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
 import { parseExternalToolRef } from './refs.js';
 import { listConnectorInstances } from '../../connectors/instances.js';
-import { connectionCandidates, resolveConnectionCandidate } from '../../connectors/connection-candidates.js';
+import { resolveConnectionCandidate } from '../../connectors/connection-candidates.js';
 import { connectorPrincipalForSession } from '../../connectors/principal.js';
-import { connectionBindings, getActiveConnectionWait, requireSessionConnection, publishConnectionWait, reviseCurrentConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
+import { connectionBindings, requireSessionConnection, publishConnectionWait, reviseCurrentConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
 import type { ExternalToolTurnContext } from './types.js';
 import { ExternalToolService } from './service.js';
+import { discoverExternalTools } from './discovery.js';
+import { personalRequestToolScope, scopePersonalRequestProvider } from './personal-request-scope.js';
 import { EXTERNAL_TOOL_SOURCES, type ExternalToolProvider } from './types.js';
 import { bindExternalToolRegistry } from './tool-registry.js';
 import { setXopcToolMetadata } from '../embedded/tool-metadata.js';
@@ -45,12 +46,12 @@ const ToolDescribeSchema = Type.Object({
   toolRefs: Type.Array(Type.String(), {
     minItems: 1,
     maxItems: 3,
-    description: 'Exact tool references returned by xopc_tool_search.',
+    description: 'Exact tool references returned by tool_search.',
   }),
 });
 
 const ToolExecuteSchema = Type.Object({
-  toolRef: Type.String({ description: 'Exact tool reference returned by xopc_tool_search.' }),
+  toolRef: Type.String({ description: 'Exact tool reference returned by tool_search.' }),
   revision: Type.String({ description: 'Exact contract revision returned by xopc_tool_describe.' }),
   arguments: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   approvalId: Type.Optional(Type.String({ description: 'One-time approval id when execution requested confirmation.' })),
@@ -72,7 +73,9 @@ export function createExternalToolGatewayTools(
   nativeSources: readonly import('./types.js').ExternalToolSource[] = [],
   executorConfig?: Partial<import('../tools/executor.js').ToolExecutorConfig>,
 ): AgentTool[] {
-  const service = new ExternalToolService(providers);
+  const getRequest = () => personalRequestToolScope(getExecutionConversationId?.() ?? getContext?.()?.conversationId);
+  const service = new ExternalToolService(providers.map(provider => scopePersonalRequestProvider(provider, getRequest, getConfig)));
+  const discoveryDeps = { service, nativeSources, getContext, getConfig, getRequest };
   const gatewaySources = EXTERNAL_TOOL_SOURCES.filter(source => !nativeSources.includes(source));
   const assertGatewayRef = (ref: string) => {
     if (nativeSources.some(source => ref.startsWith(`${source}:`))) throw new Error('Use tool_search to load this native tool, then call it directly.');
@@ -83,44 +86,13 @@ export function createExternalToolGatewayTools(
     description: `Search external tools from these sources: ${gatewaySources.join(', ')}.${nativeSources.length ? ` Use tool_search for native ${nativeSources.join(', ')} tools.` : ''} CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. When no executable tool exists but a connection or install candidate is returned, use xopc_require_connection instead of falling back to browser automation. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
     parameters: ToolSearchSchema,
     async execute(_toolCallId, params) {
-      const selectedSources = new Set<string>(params.sources ?? []);
-      const excludedSources = selectedSources.size ? EXTERNAL_TOOL_SOURCES.filter(source => !selectedSources.has(source)) : [];
-      if (params.sources?.length && params.sources.every(source => nativeSources.includes(source))) {
-        return textResult({ tools: [], instruction: 'Use tool_search for native tools.' });
-      }
-      const result = await service.search({ ...params, sources: (params.sources?.length ? params.sources : gatewaySources)
-        .filter(source => !nativeSources.includes(source)) });
-      const candidates = [...result.connectionCandidates, ...connectionCandidates(params.query)]
-        .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index);
-      let installCandidates: Awaited<ReturnType<typeof searchStoreConnectorInstallCandidates>> = [];
-      let installCatalogError: string | undefined;
-      const config = getConfig?.();
-      if (!params.sources?.length && result.tools.length === 0 && candidates.length === 0 && config) {
-        try {
-          installCandidates = await searchStoreConnectorInstallCandidates(config, params.query, params.limit ?? 5);
-        } catch (error) {
-          installCatalogError = error instanceof Error ? error.message : String(error);
-        }
-      }
-      return textResult({ ...result, connectionCandidates: candidates, installCandidates,
-        ...(result.tools.length === 0 && (candidates.length > 0 || installCandidates.length > 0) ? {
-          instruction: 'No executable tool matched this search. This alone does not prove the account is disconnected. Retry without restrictive sources and inspect the returned account state. If authorization or account selection is actually required, call xopc_require_connection with an exact candidateRef from this result; the host owns selection, authorization and automatic continuation. Do not ask the user whether to perform an already requested read, or to reply continue after authorization. Do not fall back to browser automation unless the user explicitly asked for browser use or skips the connection.',
-        } : {}),
-        ...(result.tools.length > 0 ? {
-          instruction: 'Describe the relevant tool contracts and execute the requested read using the available authorized account. The user request already authorizes these reads; do not ask for another confirmation. Respect the exact contracts and host permission checks. Hand off to the user only when a required authorization, ambiguous account choice or essential missing decision cannot be resolved from existing context.',
-        } : {}),
-        ...(installCatalogError ? { installCatalogError } : {}),
-        ...(excludedSources.length ? { searchScope: {
-          excludedSources,
-          instruction: 'This search excluded these sources. Results from other apps do not establish that the requested app is unavailable. Retry without sources before declaring a capability unavailable or requesting authorization. Feishu/Lark, WeCom and WPS 365 connectors use cli.',
-        } } : {}),
-        selectedConnections: getContext?.()?.conversationId ? connectionBindings(getContext()!.conversationId) : [], waitingObjective: getContext?.()?.conversationId ? getActiveConnectionWait(getContext()!.conversationId)?.summary : undefined });
+      return textResult(await discoverExternalTools(discoveryDeps, params));
     },
   };
   const describeTool: AgentTool<typeof ToolDescribeSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.describe,
     label: '📋 External Tool Contract',
-    description: 'Load exact contracts for up to three external tools returned by xopc_tool_search.',
+    description: 'Load exact contracts for up to three external tools returned by tool_search.',
     parameters: ToolDescribeSchema,
     async execute(_toolCallId, params) {
       params.toolRefs.forEach(assertGatewayRef);
@@ -136,6 +108,7 @@ export function createExternalToolGatewayTools(
     async execute(toolCallId, params, signal, onUpdate) {
       const conversationId = getExecutionConversationId?.() ?? getContext?.()?.conversationId;
       const request = conversationId ? personalRequestForExecution(conversationId) : undefined;
+      let authorize: (() => void) | undefined;
       if (!request && conversationId && isXopcDatabaseOpen() && getSessionMetadata(conversationId)?.customData?.personalReadRequestId) {
         throw new Error('Personal request is no longer active');
       }
@@ -150,7 +123,7 @@ export function createExternalToolGatewayTools(
         if (connectorId !== request.connectorId) throw new Error('Use only the selected Personal request connector');
         if (composio && !listConnectorActionMetadata(connectorId).some(action => action.actionId === composio.toolName
           && action.scope === 'read' && action.curated)) throw new Error('Personal requests permit only curated read operations');
-        assertPersonalRequestAccountAccess(request);
+        authorize = createPersonalRequestExecutionAuthorizer(conversationId!, request);
         const account = getConnectorAccount(request.accountId);
         const connection = account?.currentConnectionId ? getConnectorConnection(account.currentConnectionId) : undefined;
         if (!connection || connection.status !== 'active' || (connection.expiresAt && Date.parse(connection.expiresAt) <= Date.now())) {
@@ -164,7 +137,7 @@ export function createExternalToolGatewayTools(
       const result = await service.execute({
         ...params,
         ...(request ? { readOnly: undefined, personalReadOnly: true } : {}),
-        context: { toolCallId, signal, onUpdate, ...(request ? { authorize: () => assertPersonalRequestAccountAccess(request) } : {}) },
+        context: { toolCallId, signal, onUpdate, ...(authorize ? { authorize } : {}) },
       });
       return {
         ...result,
@@ -181,7 +154,8 @@ export function createExternalToolGatewayTools(
     assertGatewayRef(params.toolRef);
     return nativeExecute(id, params, signal, update);
   };
-  bindExternalToolRegistry(executeTool, { service, nativeSources, execute: nativeExecute, executorConfig });
+  bindExternalToolRegistry(executeTool, { service, nativeSources, execute: nativeExecute, executorConfig,
+    search: params => discoverExternalTools(discoveryDeps, params) });
   const requireSchema = Type.Object({
     requirements: Type.Array(Type.Object({
       candidateRef: Type.String(),
@@ -197,7 +171,7 @@ export function createExternalToolGatewayTools(
   });
   const requireTool: AgentTool<typeof requireSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.requireConnection, label: 'Connect app', parameters: requireSchema,
-    description: 'Use only when a requested read cannot proceed because authorization, installation or account selection is required. Available authorized tools should be executed directly without asking the user to confirm the read. Request an exact connectionCandidates or installCandidates entry returned by xopc_tool_search. Explain the verified need once before calling. This saves and pauses the objective, displays one action area above the input, and lets the host resume automatically after the required user action. Stop this turn after connection_required; never ask the user to reply continue after authorization. Never invent a candidate reference, return OAuth URLs, or repeat a skipped request. If another objective is waiting, do not create a duplicate objective.',
+    description: 'Use only when a requested read cannot proceed because authorization, installation or account selection is required. Available authorized tools should be executed directly without asking the user to confirm the read. Request an exact connectionCandidates or installCandidates entry returned by tool_search. Explain the verified need once before calling. This saves and pauses the objective, displays one action area above the input, and lets the host resume automatically after the required user action. Stop this turn after connection_required; never ask the user to reply continue after authorization. Never invent a candidate reference, return OAuth URLs, or repeat a skipped request. If another objective is waiting, do not create a duplicate objective.',
     async execute(_id, params) {
       const context = getContext?.();
       if (!context) throw new Error('No active conversation.');
@@ -279,7 +253,7 @@ export function createExternalToolGatewayTools(
       return textResult({ status: params.action === 'update' ? 'updated' : 'cancelled' });
     },
   };
-  return [searchTool, describeTool, executeTool,
+  return [setXopcToolMetadata(searchTool, { exposure: 'hidden' }), describeTool, executeTool,
     setXopcToolMetadata(requireTool, { exposure: 'model-only' }),
     setXopcToolMetadata(reviseTool, { exposure: 'model-only' })];
 }

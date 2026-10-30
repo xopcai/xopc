@@ -60,11 +60,17 @@ export interface ExternalToolTurnContext {
   origin: TurnOrigin;
 }
 
+/** Host-selected discovery scope; never supplied by the model. */
+export interface ExternalToolDiscoveryContext {
+  connectorId: string;
+  accountId: string;
+}
+
 export interface ExternalToolProvider {
   readonly source: ExternalToolSource;
-  search(query: string): Promise<ExternalToolSearchHit[]>;
+  search(query: string, context?: ExternalToolDiscoveryContext): Promise<ExternalToolSearchHit[]>;
   connectionCandidates?(query: string): Promise<ExternalConnectionCandidate[]>;
-  describe(toolRef: string): Promise<ExternalToolDescriptor | undefined>;
+  describe(toolRef: string, context?: ExternalToolDiscoveryContext): Promise<ExternalToolDescriptor | undefined>;
   execute(
     toolRef: string,
     args: Record<string, unknown>,

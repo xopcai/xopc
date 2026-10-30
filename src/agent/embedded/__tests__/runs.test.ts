@@ -71,6 +71,19 @@ describe('EmbeddedRunRegistry', () => {
     expect(abort).toHaveBeenCalledOnce();
   });
 
+  it('rejects steering for an earlier or cancelled execution', async () => {
+    const registry = new EmbeddedRunRegistry();
+    const lease = registry.acquire({ ...identity, runId: 'new-run' });
+    const steer = vi.fn(async () => {});
+    await lease.attach({ steer } as never, async () => {});
+    expect(await registry.steerByConversationId(identity.conversationId, 'old steer', identity.runId)).toBe(false);
+    expect(steer).not.toHaveBeenCalled();
+    await registry.abortByConversationId(identity.conversationId);
+    expect(await registry.steerByConversationId(identity.conversationId, 'late steer', 'new-run')).toBe(false);
+    expect(steer).not.toHaveBeenCalled();
+    lease.release();
+  });
+
   it('keeps steering available without changing run ownership', async () => {
     const registry = new EmbeddedRunRegistry();
     const lease = registry.acquire(identity);

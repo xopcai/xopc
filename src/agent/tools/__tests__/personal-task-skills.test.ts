@@ -7,7 +7,8 @@ import { createPersonalTaskTool, type PersonalTaskToolDeps } from '../personal-t
 const { execute } = vi.hoisted(() => ({ execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Task created' }], details: {} })) }));
 vi.mock('../xopc-use-tool.js', () => ({ createXopcUseTool: () => ({ execute }) }));
 vi.mock('../../../personal-agent/repository.js', () => ({ isPersonalConversation: () => true }));
-vi.mock('../../../personal-agent/specialist-capabilities.js', () => ({
+vi.mock('../../../personal-agent/specialist-capabilities.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../../personal-agent/specialist-capabilities.js')>(),
   getAvailablePersonalAgentTools: () => ['read_file', 'exec_command'],
   personalAgentModelAvailability: () => ({ available: true }),
 }));

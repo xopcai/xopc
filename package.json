@@ -1,7 +1,7 @@
 {
   "name": "@xopcai/xopc",
   "version": "0.0.433",
-  "description": "Local-first personal AI with Ada, task delegation, files, projects and automations. Use cloud or local models.",
+  "description": "An open-source AI assistant for work and everyday life. Remembers context and helps you get things done. Local-first, on a computer you choose.",
   "packageManager": "pnpm@11.9.0",
   "type": "module",
   "main": "dist/src/index.js",

@@ -1,7 +1,7 @@
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { resolveEffectiveAgentConfig, type EffectiveAgentConfig } from '../agent-config/index.js';
 import type { Config } from '../config/schema.js';
-import { getAvailablePersonalAgentTools, personalAgentModelAvailability } from '../personal-agent/specialist-capabilities.js';
+import { allowsPersonalAgentTool, getAvailablePersonalAgentTools, personalAgentModelAvailability } from '../personal-agent/specialist-capabilities.js';
 import { normalizeSpecialistRequirements, type SpecialistTaskRequirements } from './schema.js';
 
 export const MATCHER_VERSION = 1;
@@ -59,8 +59,7 @@ export function assessSpecialist(agentId: string, input: SpecialistTaskRequireme
   const availableTools = config ? getAvailablePersonalAgentTools(config, context) : [];
   for (const tool of requirements.requiredTools ?? []) {
     if (!identityValid) { add(`tool:${tool}`, 'blocked', 'agent_unavailable'); continue; }
-    const policyAllows = config && config.tools[tool]?.mode !== 'deny'
-      && (!config.toolAllowlist || config.toolAllowlist.includes(tool));
+    const policyAllows = config && allowsPersonalAgentTool(config, tool);
     if (!policyAllows) add(`tool:${tool}`, 'blocked', 'tool_unavailable');
     else {
       let check: AvailabilityCheck | undefined;

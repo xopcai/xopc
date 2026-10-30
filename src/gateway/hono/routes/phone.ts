@@ -21,6 +21,7 @@ import { createLogger } from '../../../utils/logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { registerPhoneSetupRoutes } from './phone-setup.js';
 import { registerPhoneWirelessRoutes } from './phone-wireless.js';
+import { resolveHdcVideoTools } from '../../../phone/hdc-video-tools.js';
 import { resolveAdbPath } from '../../../phone/adb-driver.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 
@@ -47,12 +48,12 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     }
     await next();
     if (principal.kind === 'device' && c.res.status === 200 && c.res.headers.get('Content-Type')?.includes('application/json')) {
-      const body = await c.res.clone().json() as { payload?: { report?: Partial<PhoneReport>; ownControl?: boolean; textInput?: string } };
+      const body = await c.res.clone().json() as { payload?: { report?: Partial<PhoneReport>; ownControl?: boolean; textInput?: string; media?: 'snapshot' | 'hdc-h264' } };
       const report = body.payload?.report;
       if (report && body.payload) {
         const { sessionId, deviceId, deviceName, status, mode, controlOwner, controlEpoch, handoff, assistanceId,
           reconnectRequired, stopReason, currentAction, updatedAt, revision, hasPendingTask, assistanceVersion, transcriptId } = report;
-        body.payload = { ownControl: body.payload.ownControl, textInput: body.payload.textInput,
+        body.payload = { ownControl: body.payload.ownControl, textInput: body.payload.textInput, media: body.payload.media,
           report: { sessionId, deviceId, deviceName, status, mode, controlOwner, controlEpoch, handoff, assistanceId,
             reconnectRequired, stopReason, currentAction, updatedAt, revision, hasPendingTask, assistanceVersion, transcriptId } };
         c.res = c.json(body);
@@ -146,10 +147,11 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     runtime.cloud.cancel(getGatewayPrincipal(c).principalId, z.string().uuid().parse(c.req.param('token')));
     return c.json({ ok: true });
   });
-  app.get('/api/phone/settings', c => c.json({ ok: true, payload: { config: service.currentConfig.phone, defaultDeviceId: runtime.repository.defaultDevice(), runner: 'gateway-local', agentId: getDefaultAgentId() } }));
+  app.get('/api/phone/settings', c => c.json({ ok: true, payload: { config: service.currentConfig.phone, defaultDeviceId: runtime.repository.defaultDevice(), runner: 'gateway-local', agentId: getDefaultAgentId(), hdcVideo: { available: Boolean(resolveHdcVideoTools(service.currentConfig.phone)) } } }));
   app.patch('/api/phone/settings', strictRateLimitMiddleware, async c => {
     const config = PhoneConfigSchema.parse(await c.req.json());
-    if (!config.enabled || config.adbPath !== service.currentConfig.phone.adbPath) await runtime.shutdown();
+    const videoChanged = (['devecoPath', 'javaHome', 'sdkJar'] as const).some(key => config.hdcVideo?.[key] !== service.currentConfig.phone.hdcVideo?.[key]);
+    if (!config.enabled || config.adbPath !== service.currentConfig.phone.adbPath || config.hdcPath !== service.currentConfig.phone.hdcPath || videoChanged) await runtime.shutdown();
     const next = structuredClone(service.currentConfig); next.phone = config;
     const result = await service.saveConfig(next);
     if (!result.saved) throw new PhoneError('PHONE_CONFIG_SAVE_FAILED', 'Unable to save Phone Use settings');
@@ -157,13 +159,14 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     return c.json({ ok: true, payload: { config } });
   });
   app.get('/api/phone/devices', async c => {
+    const platform = z.enum(['android', 'harmonyos']).optional().parse(c.req.query('platform'));
     let discovery: Awaited<ReturnType<PhoneRuntime['discover']>> = []; let diagnostic: string | undefined;
-    try { discovery = await runtime.discover(service.currentConfig, c.req.raw.signal); }
+    try { discovery = await runtime.discover(service.currentConfig, c.req.raw.signal, platform); }
     catch (error) { diagnostic = error instanceof PhoneError ? error.code : 'PHONE_ADB_UNAVAILABLE'; }
     return c.json({ ok: true, payload: { devices: runtime.repository.list(), discovery, diagnostic, defaultDeviceId: runtime.repository.defaultDevice() } });
   });
   app.get('/api/phone/apps', async c => {
-    const input = z.object({ serial: z.string().min(1).max(200) }).strict().parse(c.req.query());
+    const input = z.object({ serial: z.string().min(1).max(200), platform: z.enum(['android', 'harmonyos']).optional() }).strict().parse(c.req.query());
     const applications = await runtime.applications(input, service.currentConfig, c.req.raw.signal);
     c.header('Cache-Control', 'no-store'); return c.json({ ok: true, payload: { applications } });
   });
@@ -177,9 +180,9 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   });
   app.post('/api/phone/devices', strictRateLimitMiddleware, async c => {
     const input = deviceInput.parse(await c.req.json());
-    const discovered = await runtime.discover(service.currentConfig, c.req.raw.signal);
-    if (!discovered.some(device => device.serial === input.serial && device.state === 'device')) throw new PhoneError('PHONE_DEVICE_OFFLINE', 'Choose a connected and authorized ADB device');
-    const wireless = runtime.wireless.known(input.serial);
+    const discovered = await runtime.discover(service.currentConfig, c.req.raw.signal, input.platform ?? 'android');
+    if (!discovered.some(device => device.serial === input.serial && (device.platform ?? 'android') === (input.platform ?? 'android') && device.state === 'device')) throw new PhoneError('PHONE_DEVICE_OFFLINE', 'Choose a connected and authorized USB device');
+    const wireless = input.platform === 'harmonyos' ? undefined : runtime.wireless.known(input.serial);
     if (wireless) {
       const verified = await runtime.wireless.connect(resolveAdbPath(service.currentConfig.phone.adbPath), wireless, c.req.raw.signal, wireless);
       input.serial = verified.device.serial;
@@ -190,7 +193,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   });
   app.patch('/api/phone/devices/:id', strictRateLimitMiddleware, async c => {
     const id = c.req.param('id'); const previous = runtime.repository.get(id);
-    const patch = deviceInput.omit({ serial: true }).partial().parse(await c.req.json());
+    const patch = deviceInput.omit({ serial: true, platform: true }).partial().parse(await c.req.json());
     const next = normalizePhoneAppAccess({ ...previous, ...patch,
       ...(patch.allowedApps && patch.appAccess === undefined ? { appAccess: 'selected' as const } : {}) });
     await runtime.stopDevice(id);

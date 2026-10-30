@@ -449,6 +449,8 @@ export class SessionManager {
     assertScope();
     const pending = await readPendingSessionCommand(conversationId);
     assertScope();
+    // Hydration must not forget an append while its composer still awaits acceptance.
+    if (pending?.kind === 'append' && !draft) return;
     const clientMessageId = pending?.clientMessageId ?? draft?.submission?.clientMessageId ?? draft?.materialization?.commandId;
     if (!clientMessageId) return;
     const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/input-receipts/${encodeURIComponent(clientMessageId)}`));

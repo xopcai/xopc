@@ -1,3 +1,4 @@
+import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { useInitialTurnNavigation } from '@/features/chat/session/use-initial-turn-navigation';
 import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
 import { AutomationConfigurationPanel } from '@/features/automations/automation-task-card';
@@ -95,10 +96,6 @@ type SourceNoteSaveDraft = {
   content: string;
 };
 
-type EditingUserTurn = {
-  turnId: string;
-};
-
 export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome, automationWorkspace = false, automationTimelineEntries, readOnly = false, onHistoryReady, automationExecution = false, initialTurnId, onInitialTurnLocated }: {
   embedded?: boolean;
   automationWorkspace?: boolean;
@@ -133,7 +130,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
   const [sourceNoteSaveError, setSourceNoteSaveError] = useState<string | null>(null);
-  const [editingUserTurn, setEditingUserTurn] = useState<EditingUserTurn | null>(null);
+
 
   const taskId = boundTaskId?.trim() || null;
   const { data: taskDetail } = useTaskDetail(taskId ?? '');
@@ -142,6 +139,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     taskId: taskId ?? undefined,
     personal,
   });
+  const editingUserTurn = followUp.composerMode.kind === 'editTurn' ? followUp.composerMode : null;
 
   const readableHistoryReady = useChatSessionStore(state => Boolean(session.conversationId && !state.shellError
     && state.sessions[session.conversationId]?.historyStatus === 'ready'));
@@ -651,7 +649,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         return false;
       }
       if (editingUserTurn) {
-        setEditingUserTurn(null);
         return stream.replaceLatestUserTurn(
           editingUserTurn.turnId,
           text,
@@ -689,32 +686,30 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   });
 
   const handleEditUserMessage = useCallback((message: Message) => {
-    if (!message.turnId) return;
-    setEditingUserTurn({ turnId: message.turnId });
-    dispatchFillChatComposer(
-      message.userTurnDocument
-        ? serializeUserTurnDocument(message.userTurnDocument)
-        : extractUserMessagePlainText(message.content),
-      messageAttachmentsToWire(message.attachments),
-      message.contextRefs?.flatMap((ref) => ref.kind === 'mcp_resource' ? [] : [{
-        refId: ref.refId,
-        kind: ref.kind,
-        sourceId: ref.sourceId,
-        expectedVersion: ref.version,
-        title: ref.title,
-        fileKind: ref.fileKind,
-      }]),
-    );
-  }, []);
+    if (!message.turnId || !session.conversationId) return;
+    const generation = chatRunManager.getGeneration(session.conversationId);
+    const runId = chatRunManager.getResumeRunId(session.conversationId);
+    void followUp.beginEditTurn(message.turnId, {
+      text: message.userTurnDocument ? serializeUserTurnDocument(message.userTurnDocument) : extractUserMessagePlainText(message.content),
+      attachments: messageAttachmentsToWire(message.attachments) ?? [],
+      contextRefs: message.contextRefs?.flatMap(ref => ref.kind === 'mcp_resource' ? [] : [{
+        refId: ref.refId, kind: ref.kind, sourceId: ref.sourceId, expectedVersion: ref.version, title: ref.title, fileKind: ref.fileKind,
+      }]) ?? [],
+    }).then(accepted => { if (accepted) stream.settleStoppedRun(generation, runId); });
+  }, [followUp.beginEditTurn, stream.settleStoppedRun, session.conversationId]);
 
-  const handleCancelUserMessageEdit = useCallback(() => {
-    setEditingUserTurn(null);
-    dispatchFillChatComposer('');
-  }, []);
+  const handleReacquireEdit = useCallback((draft: import('@/features/chat/composer/composer.types').ComposerDraft) => {
+    if (followUp.composerMode.kind === 'editFollowUp') {
+      void followUp.beginEditFollowUp(followUp.composerMode.inputId);
+    } else if (followUp.composerMode.kind === 'editTurn' && session.conversationId) {
+      const generation = chatRunManager.getGeneration(session.conversationId);
+      const runId = chatRunManager.getResumeRunId(session.conversationId);
+      void followUp.beginEditTurn(followUp.composerMode.turnId, draft)
+        .then(accepted => { if (accepted) stream.settleStoppedRun(generation, runId); });
+    }
+  }, [followUp.composerMode, followUp.beginEditFollowUp, followUp.beginEditTurn, session.conversationId, stream.settleStoppedRun]);
 
-  useEffect(() => {
-    setEditingUserTurn(null);
-  }, [session.conversationId]);
+  const handleCancelUserMessageEdit = followUp.cancelEditor;
 
   useEffect(() => {
     if (!autoSendQuery || (!draftQuery.trim() && !attachmentsHandoffId)) return;
@@ -1364,7 +1359,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 onDraftAttachmentsChange={setComposerAttachmentSummaries}
                 disabled={readOnly || isLoadingHistory || projectComposer.busy || updatingContext}
                 sendDisabled={
-                  readOnly || !session.modelConfigReady || (!session.projectPreparation && isSessionTransitioning) ||
+                  followUp.controlPending || followUp.control.phase === 'stopping' || readOnly || !session.modelConfigReady || (!session.projectPreparation && isSessionTransitioning) ||
                   Boolean(session.projectPreparation && !projectComposer.allowed) ||
                   session.modelConfigSaving || projectComposer.busy || updatingContext
                 }
@@ -1379,9 +1374,14 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 modelSupportsThinking={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
                 onSend={projectComposer.send}
+                composerMode={followUp.composerMode}
+                onRestoreEditor={followUp.restoreEditor}
+                onReacquireEdit={handleReacquireEdit}
+                inputControl={followUp.control}
+                onResumeQueue={() => void followUp.resumeQueue().catch(() => {})}
                 editingUserTurnId={editingUserTurn?.turnId}
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
-                onAbort={stream.abort}
+                onAbort={() => void stream.abort().catch(() => {})}
                 onAddPendingFollowUp={async (text, atts, contextRefs, interrupt) => {
                   await followUp.addPendingFollowUp(text, atts, contextRefs, pageContextDraft?.envelope, interrupt);
                   if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
@@ -1392,12 +1392,13 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 onBeginEditFollowUp={followUp.beginEditFollowUp}
                 onCancelEditFollowUp={followUp.cancelEditFollowUp}
                 onCommitEditFollowUp={(id, text, atts, level, contextRefs) =>
-                  void followUp.commitEditFollowUp(id, text, atts, level, contextRefs)
+                  followUp.commitEditFollowUp(id, text, atts, level, contextRefs)
                 }
                 onPendingFollowUpRemove={followUp.removePendingFollowUp}
                 onPendingFollowUpMove={followUp.movePendingFollowUp}
                 onPendingFollowUpReorder={followUp.reorderPendingFollowUp}
-                onPendingFollowUpSteer={(id) => void followUp.steerPendingFollowUp(id)}
+                onPendingFollowUpSteer={(id) => void followUp.steerPendingFollowUp(id).catch(() => {})}
+                onPendingFollowUpSend={(id) => void followUp.sendQueuedInput(id).catch(() => {})}
                 steeringFollowUpId={followUp.steeringFollowUpId}
                 sessionModel={session.sessionModel}
                 showModelSelector={!personal}

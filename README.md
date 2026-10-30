@@ -5,9 +5,9 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>A better life, with AI.</strong><br />
-  Your personal AI assistant for work and everyday life,<br />
-  with more time to create and enjoy life.<br />
+  <strong>Your AI assistant for work and everyday life.</strong><br />
+  Think things through, get help with tasks,<br />
+  and make time for what matters to you.<br />
   Open-source. Local-first. Runs on a computer you choose.
 </p>
 
@@ -31,7 +31,7 @@
 
 ## Our vision
 
-A future where everyone has their own AI assistant—helping across work and everyday life, making more time to create, be with the people who matter, and enjoy the world around them.
+A future where everyone has their own AI assistant, with ongoing help across work and everyday life and more time and energy for what matters to them.
 
 We want AI to take on more tedious, repetitive, and time-consuming tasks. How you spend the time is up to you. [Read our philosophy](https://xopcai.github.io/xopc/product).
 
@@ -41,7 +41,7 @@ We want AI to take on more tedious, repetitive, and time-consuming tasks. How yo
 
 **Open your workspace.** Bring files and a goal to organize material, analyze data, change code, or prepare a report. Keep conversations, deliverables, and project context together so you can continue later. [Workspace guide](https://xopcai.github.io/xopc/workspace-guide).
 
-From organizing work material to planning a weekend outing, start in the same xopc. Available capabilities depend on the connected models, tools, and permissions.
+Conversation and the workspace are two ways to begin; both can help with work and everyday life. From organizing work material to planning a weekend outing, start in the same xopc. Available capabilities depend on the connected models, tools, and permissions.
 
 ## Finish something real
 

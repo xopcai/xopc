@@ -126,4 +126,82 @@ describe('composer acceptance preserves drafts', () => {
     expect(options.clearAttachments).not.toHaveBeenCalled();
     expect(options.clearContextRefs).not.toHaveBeenCalled();
   });
+  it('replaces the original user turn even when follow-ups are waiting', async () => {
+    const onSend = vi.fn(async () => true);
+    const onAddPendingFollowUp = vi.fn();
+    const onFinishUserEdit = vi.fn();
+    options = { ...options, editingUserTurnId: 'original-turn', pendingFollowUpsCount: 2,
+      onSend, onAddPendingFollowUp, onFinishUserEdit };
+    await render();
+    await act(async () => actions.send());
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(onAddPendingFollowUp).not.toHaveBeenCalled();
+    expect(onFinishUserEdit).toHaveBeenCalledOnce();
+    expect(options.resetEditor).not.toHaveBeenCalled();
+  });
+
+  it('saves a follow-up while AI is running without submitting a new input', async () => {
+    const onSend = vi.fn();
+    const onAddPendingFollowUp = vi.fn();
+    const onFinishFollowUpEdit = vi.fn();
+    options = { ...options, runBusy: true, editingFollowUpId: 'follow-up',
+      onSend, onAddPendingFollowUp, onCommitEditFollowUp: vi.fn(async () => true), onFinishFollowUpEdit };
+    await render();
+    await act(async () => actions.send());
+    expect(options.onCommitEditFollowUp).toHaveBeenCalledWith('follow-up', 'Original', [], 'off', []);
+    expect(onFinishFollowUpEdit).toHaveBeenCalledOnce();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onAddPendingFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('retains follow-up editing after rejection and ignores interrupt shortcuts in edit mode', async () => {
+    const onSteeringInterrupt = vi.fn();
+    const onFinishFollowUpEdit = vi.fn();
+    options = { ...options, runBusy: true, editingFollowUpId: 'follow-up', onSteeringInterrupt,
+      onCommitEditFollowUp: vi.fn(async () => { throw new Error('Input changed'); }), onFinishFollowUpEdit };
+    await render();
+    await act(async () => actions.send());
+    actions.interruptDraft();
+    expect(options.resetEditor).not.toHaveBeenCalled();
+    expect(onFinishFollowUpEdit).not.toHaveBeenCalled();
+    expect(onSteeringInterrupt).not.toHaveBeenCalled();
+  });
+
+  it('does not close an editor or clear a newer draft after late save acceptance', async () => {
+    const onFinishFollowUpEdit = vi.fn();
+    let saved!: (accepted: boolean) => void;
+    options = { ...options, editingFollowUpId: 'follow-up', onFinishFollowUpEdit,
+      onCommitEditFollowUp: () => new Promise(resolve => { saved = resolve; }) };
+    await render();
+    actions.send();
+    options = { ...options, getTextValue: () => 'Newer edit' };
+    await render();
+    await act(async () => saved(true));
+    expect(onFinishFollowUpEdit).not.toHaveBeenCalled();
+    expect(options.resetEditor).not.toHaveBeenCalled();
+  });
+
+  it('preserves all drafts while stopping is unconfirmed', async () => {
+    const onSend = vi.fn();
+    const onAddPendingFollowUp = vi.fn();
+    options = { ...options, blocked: true, onSend, onAddPendingFollowUp };
+    await render();
+    actions.send(); await actions.flushSteeringDraft(); actions.interruptDraft();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onAddPendingFollowUp).not.toHaveBeenCalled();
+    expect(options.resetEditor).not.toHaveBeenCalled();
+  });
+
+  it.each(['turn', 'followUp'])('blocks restored %s edits after another device resumes the queue', async target => {
+    const onSend = vi.fn(); const onCommitEditFollowUp = vi.fn(); const onAddPendingFollowUp = vi.fn();
+    options = { ...options, queuePaused: false, editingUserTurnId: target === 'turn' ? 'turn' : undefined,
+      editingFollowUpId: target === 'followUp' ? 'follow-up' : null, onSend, onCommitEditFollowUp, onAddPendingFollowUp };
+    await render();
+    await act(async () => { actions.send(); await actions.flushSteeringDraft(); });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onCommitEditFollowUp).not.toHaveBeenCalled();
+    expect(onAddPendingFollowUp).not.toHaveBeenCalled();
+    expect(options.resetEditor).not.toHaveBeenCalled();
+  });
+
 });

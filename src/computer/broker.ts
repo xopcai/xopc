@@ -31,8 +31,11 @@ export interface ComputerDriver {
   perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal,
     onProgress?: (index: number, dispatch: 'notStarted' | 'started' | 'completed' | 'unknown') => void): Promise<void>;
   getLastInputTiming?(): ComputerInputTiming | undefined;
+  validatePreviewTarget?(target: ComputerTarget, signal: AbortSignal): Promise<void>;
   /** Must finish only after no further input can be dispatched. */
   stop(): Promise<void>;
+  /** Quiescent broker-only release: discard target state, retain private transport briefly. */
+  idle?(): Promise<void>;
 }
 export type ComputerApproval =
   | { kind: 'session'; id: string; appId: string; appName: string; mode: 'observe' | 'control'; prepare: boolean; model: ComputerModelBinding }
@@ -70,6 +73,12 @@ export interface BrokerResult {
   apps?: ComputerApp[];
   windows?: ComputerWindow[];
   frame?: { bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' };
+}
+
+/** Host-only authority; never serialize target identities or the session signal. */
+export interface ComputerPreviewAuthority {
+  conversationId: string; runId?: string; computerSessionId: string; brokerEpoch: string;
+  appName: string; status: string; target?: ComputerTarget; signal: AbortSignal;
 }
 
 /** Main-process-only authority. Never expose this object or its approval hook to a renderer. */
@@ -116,7 +125,7 @@ export class ComputerBroker {
     if (command.op === 'open') return this.open(command);
     const s = this.session;
     if (!s || s.id !== command.sessionId || s.owner !== command.owner) throw new Error('COMPUTER_SESSION_NOT_FOUND');
-    if (command.op === 'release') { await this.stop(); return this.result(s); }
+    if (command.op === 'release') { await this.stop(undefined, !this.busy && s.status === 'ready'); return this.result(s); }
     if (command.op === 'status') return this.result(s);
     if (command.op === 'settle') {
       const decision = s.status === 'pending_authorization' ? s.preparation : s.pending?.decision;
@@ -152,7 +161,7 @@ export class ComputerBroker {
       while (this.apps.size > 500) this.apps.delete(this.apps.keys().next().value!);
       return { status: 'ready', sessionId: command.sessionId, brokerEpoch: this.epoch, generation: 0, apps };
     } finally {
-      try { if (!this.session || this.session.status === 'stopped') await this.driver.stop(); }
+      try { if (!this.session || this.session.status === 'stopped') { if (!controller.signal.aborted && this.driver.idle) await this.driver.idle(); else await this.driver.stop(); } }
       finally { this.discovery = undefined; this.busy = false; }
     }
   }
@@ -367,7 +376,7 @@ export class ComputerBroker {
       return { ...this.result(s), receipt, nativeMs };
     }
   }
-  stop(errorCode?: 'COMPUTER_LOCAL_UI_REQUIRED'): Promise<void> {
+  stop(errorCode?: 'COMPUTER_LOCAL_UI_REQUIRED', retainDriver = false): Promise<void> {
     this.discovery?.controller.abort();
     const s = this.session;
     if (s && s.status !== 'stopped') {
@@ -375,7 +384,7 @@ export class ComputerBroker {
       s.generation++; s.status = 'stopped'; s.pending = undefined; s.observation = undefined;
       s.controller.abort();
     }
-    if (!this.stopping) this.stopping = this.driver.stop().finally(() => { this.stopping = undefined; this.host.onStateChange?.(); });
+    if (!this.stopping) this.stopping = (retainDriver && this.driver.idle ? this.driver.idle() : this.driver.stop()).finally(() => { this.stopping = undefined; this.host.onStateChange?.(); });
     return this.stopping;
   }
   async cancel(command: ComputerCommand): Promise<void> {
@@ -387,6 +396,25 @@ export class ComputerBroker {
     return this.session ? { status: this.session.status, errorCode: this.session.errorCode, appId: this.session.appId,
       dispatch: [...this.session.receipts.values()].at(-1)?.receipt.dispatch ?? 'notStarted',
       ...(preparation ? { preparation } : {}) } : { status: 'idle' };
+  }
+  previewAuthority(): ComputerPreviewAuthority | undefined {
+    const s = this.session;
+    if (!s || s.status === 'stopped' || s.controller.signal.aborted || this.expired(s) || !this.host.isVisible()) return;
+    return { conversationId: s.owner, ...('runId' in s.model ? { runId: s.model.runId } : {}),
+      computerSessionId: s.id, brokerEpoch: this.epoch, appName: this.apps.get(s.appRef)?.name ?? s.appId,
+      status: s.status, target: s.target ? { ...s.target } : undefined, signal: s.controller.signal };
+  }
+  async validatePreview(authority: ComputerPreviewAuthority): Promise<void> {
+    const current = this.previewAuthority();
+    if (!current?.target || !authority.target || current.computerSessionId !== authority.computerSessionId
+      || current.brokerEpoch !== authority.brokerEpoch || current.target.windowId !== authority.target.windowId
+      || current.target.processIdentity !== authority.target.processIdentity || current.target.appId !== authority.target.appId) {
+      throw new Error('COMPUTER_PREVIEW_REVOKED');
+    }
+    if (!this.driver.validatePreviewTarget) throw new Error('COMPUTER_PREVIEW_UNSUPPORTED');
+    await this.driver.validatePreviewTarget(current.target, current.signal);
+    current.signal.throwIfAborted();
+    if (this.previewAuthority()?.computerSessionId !== current.computerSessionId) throw new Error('COMPUTER_PREVIEW_REVOKED');
   }
   async dispose(): Promise<void> { clearInterval(this.timer); await this.stop(); }
 }

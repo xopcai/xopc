@@ -1,5 +1,6 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
+import type { ExternalDiscoveryParams, ExternalDiscoveryResult } from './discovery.js';
 import type { ExternalToolService } from './service.js';
 import type { ExternalToolSource } from './types.js';
 import type { ToolInvalidationReason } from '../embedded/tool-metadata.js';
@@ -7,7 +8,9 @@ import type { ToolExecutorConfig } from '../tools/executor.js';
 
 export interface ExternalToolRegistry {
   service: ExternalToolService;
+  search: (params: ExternalDiscoveryParams) => Promise<ExternalDiscoveryResult>;
   nativeSources: readonly ExternalToolSource[];
+  discovery?: { native: boolean; connectors: boolean };
   execute: AgentTool['execute'];
   executorConfig?: Partial<ToolExecutorConfig>;
   subscribeInvalidation?: (conversationId: string, toolRef: string, listener: (reason?: ToolInvalidationReason) => void) => () => void;

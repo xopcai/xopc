@@ -1,3 +1,4 @@
+import { readInputControl } from '@/features/chat/session/session-input-control';
 import { readClarificationCapabilities } from '@/features/chat/clarification/clarification-capabilities';
 import { readClarificationPresentation } from '@xopcai/gateway-contract';
 import { captureTurnEnvironment } from '@/features/endpoint-tools/turn-environment';
@@ -124,13 +125,13 @@ export function readPendingAgentRunId(chatId: string): string | null {
 }
 
 /** Persist a run id for sidebar recovery and `tryResumeAgentRun`. */
-export function setPendingAgentRun(chatId: string, runId: string): void {
+export function setPendingAgentRun(chatId: string, runId: string, resetCursor = false): void {
   const id = runId.trim();
   if (!id) return;
   try {
     const key = pendingAgentRunStorageKey(chatId);
     const previous = JSON.parse(sessionStorage.getItem(key) ?? '{}') as PendingAgentRun;
-    const lastSeq = previous.runId === id && typeof previous.lastSeq === 'number'
+    const lastSeq = !resetCursor && previous.runId === id && typeof previous.lastSeq === 'number'
       ? previous.lastSeq
       : 0;
     sessionStorage.setItem(key, JSON.stringify({ runId: id, lastSeq }));
@@ -338,6 +339,10 @@ export class MessageSender {
   }
 
   /** Chat id for the in-flight session input or run-topic subscription, if any. */
+  get trackedRunId(): string | undefined {
+    return this._trackedRunId;
+  }
+
   get activeChatId(): string {
     return this._chatId;
   }
@@ -402,6 +407,7 @@ export class MessageSender {
       const assertScope = () => { if (scope !== useGatewayStore.getState().conversationId) throw new Error('Active Gateway changed'); };
       if (selection?.modelConfigSaving) throw new Error('Wait for model configuration to finish saving');
       let configVersion = selection?.configVersion;
+      const inputControl = readInputControl(chatId);
       const origin = await waitForEndpointTurnClaim(controller.signal);
       const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs, appContext: capturedContext })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
       let clientMessageId = claimSubmissionId(chatId, fingerprint);
@@ -409,7 +415,8 @@ export class MessageSender {
       let body: object;
       if (taskId || replaceTurnId) {
         if (!replaceTurnId) input.endpointContext = await captureTurnEnvironment();
-        body = { clientMessageId, configVersion, delivery: 'next', ...input, thinking: thinkingLevel, origin };
+        body = { clientMessageId, configVersion, delivery: 'next', ...input, thinking: thinkingLevel, origin,
+          expectedTranscriptId: replaceTurnId ? await readSessionTranscript(chatId) : undefined, controlVersion: inputControl.version };
       } else {
         assertScope();
         let draft = await readLocalSessionDraft(chatId);
@@ -452,7 +459,8 @@ export class MessageSender {
         } else {
           input.endpointContext = await captureTurnEnvironment();
           body = sessionInputCommandSchema.parse({ kind: 'append', clientMessageId,
-            expectedTranscriptId: await readSessionTranscript(chatId), configVersion, delivery: 'next', input, origin });
+            expectedTranscriptId: await readSessionTranscript(chatId), configVersion, delivery: 'next', input, origin,
+            controlVersion: inputControl.version, ...(inputControl.paused ? { execution: 'single' } : {}) });
         }
         assertScope();
         const { origin: _origin, ...durable } = sessionInputCommandSchema.parse(body);
@@ -510,10 +518,11 @@ export class MessageSender {
       completeSubmission(chatId, clientMessageId);
       callbacks?.onInputAccepted?.();
       const state = taskId || replaceTurnId ? json.payload?.state : json.payload?.inputState;
+      if (replaceTurnId && state) window.dispatchEvent(new CustomEvent('session-input-state', { detail: { ...state, conversationId: chatId } }));
       const resolvedChatId = json.payload?.conversationId?.trim() || chatId;
       const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
       if (state?.activeRunId && ownInput?.id === state.activeInputId) {
-        await this.resume(state.activeRunId, resolvedChatId, callbacks);
+        await this.resume(state.activeRunId, resolvedChatId, callbacks, { replayFromStart: true });
         return;
       }
       if (!taskId && !replaceTurnId) {
@@ -535,7 +544,7 @@ export class MessageSender {
           assertScope();
           const current = snapshot.payload;
           if (current?.activeRunId && current.activeInputId === ownInput.id) {
-            await this.resume(current.activeRunId, resolvedChatId, callbacks);
+            await this.resume(current.activeRunId, resolvedChatId, callbacks, { replayFromStart: true });
             return;
           }
           if (current?.inputs && !current.inputs.some((input) => input.id === ownInput.id)) {
@@ -568,9 +577,9 @@ export class MessageSender {
     }
   }
 
-  abort(): void {
+  abort(notifyServer = true): void {
     if (this._trackedRunId) finishResponseLatency(this._trackedRunId, 'cancelled');
-    this._notifyServerAbort();
+    if (notifyServer) this._notifyServerAbort();
     this._abort?.abort();
     this._streamCleanup?.();
     this._streamCleanup = undefined;
@@ -580,51 +589,44 @@ export class MessageSender {
 
   /** Best-effort server-side abort (runId) so the agent stops even if the HTTP signal is flaky. */
   private _notifyServerAbort(): void {
-    if (!this._chatId) {
-      return;
-    }
+    // sessionStorage may already point at a successor announced on the sessions
+    // topic. A sender may only cancel the execution it actually subscribed to.
+    const runId = this._trackedRunId;
+    if (!this._chatId || !runId) return;
     try {
-      const raw = sessionStorage.getItem(pendingAgentRunStorageKey(this._chatId));
-      if (!raw) {
-        return;
-      }
-      const parsed = JSON.parse(raw) as { runId?: string };
-      if (typeof parsed.runId !== 'string' || !parsed.runId) {
-        return;
-      }
-      void apiFetch(apiUrl('/api/agent/abort'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: parsed.runId }),
-      }).catch(() => {});
-    } catch {
-      /* ignore */
-    }
+      void Promise.resolve(apiFetch(apiUrl('/api/agent/abort'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId }),
+      })).catch(() => {});
+    } catch { /* Cancellation remains best effort when the transport is unavailable. */ }
   }
 
-  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks): Promise<boolean> {
+  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks, options?: { replayFromStart: boolean }): Promise<boolean> {
+    // A resumed successor owns its own controller and subscription. A predecessor's
+    // completion must never dispose or clear the successor's recovery cursor.
+    this._abort?.abort();
     bindResponseLatency(chatId, runId);
-    this._trackedRunId = undefined;
-    this._abort = new AbortController();
+    const controller = new AbortController();
+    this._abort = controller;
     this._chatId = chatId;
-
     this._trackedRunId = runId;
-    setPendingAgentRun(chatId, runId);
+    setPendingAgentRun(chatId, runId, options?.replayFromStart);
     const terminal = this._wrapTerminalCallbacks(callbacks);
     this._terminalCallbacks = terminal.wrapped;
-    const resumed = await new Promise<boolean>((resolve) => {
+    const resumed = await new Promise<boolean>(resolve => {
       let settled = false;
+      let cleanup: (() => void) | undefined;
       const finish = (value: boolean) => {
         if (settled) return;
         settled = true;
-        this._streamCleanup?.();
-        this._streamCleanup = undefined;
+        cleanup?.();
+        if (this._abort === controller) this._streamCleanup = undefined;
         resolve(value);
       };
       this._streamFinish = finish;
       const afterSeq = readPendingAgentRunCursor(chatId, runId);
-      this._streamCleanup = subscribeRealtimeTopic(`run:${runId}`, {
-        onEvent: (message) => {
+      cleanup = subscribeRealtimeTopic(`run:${runId}`, {
+        onEvent: message => {
+          if (this._abort !== controller) return;
           const event = message.data && typeof message.data === 'object'
             ? { ...(message.data as Record<string, unknown>), seq: message.seq }
             : { type: message.event, seq: message.seq, payload: message.data };
@@ -632,17 +634,24 @@ export class MessageSender {
           advancePendingAgentRunCursor(chatId, runId, message.seq);
           if (message.event === 'run_end' || message.event === 'error') finish(true);
         },
-        onGap: (gap) => {
+        onGap: gap => {
+          if (this._abort !== controller) return;
           if (gap.recoverable) return terminal.wrapped?.onReplayGap?.();
           finish(false);
         },
       }, afterSeq);
-      this._abort?.signal.addEventListener('abort', () => finish(false), { once: true });
+      if (settled) cleanup();
+      else if (this._abort === controller) this._streamCleanup = cleanup;
+      else finish(false);
+      controller.signal.addEventListener('abort', () => finish(false), { once: true });
+      if (controller.signal.aborted) finish(false);
     });
-    this._abort = undefined;
-    this._streamFinish = undefined;
-    this._terminalCallbacks = undefined;
-    this._clearPendingRun();
+    if (this._abort === controller) {
+      this._abort = undefined;
+      this._streamFinish = undefined;
+      this._terminalCallbacks = undefined;
+      this._clearPendingRun();
+    }
     return resumed;
   }
 

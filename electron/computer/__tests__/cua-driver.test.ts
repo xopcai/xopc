@@ -6,6 +6,77 @@ import { CuaComputerDriver, scopeWindowAccessibility, summarizeWindowAccessibili
 
 const priorType = Object.getOwnPropertyDescriptor(process, 'type');
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); if (priorType) Object.defineProperty(process, 'type', priorType); else delete (process as any).type; });
+describe('live app catalog capability', () => {
+  it('resolves a running app without rescanning installed applications', async () => {
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
+    const full = vi.fn();
+    Object.assign(driver as any, { client: { listApps: full }, runningAppsOnly: true });
+    vi.spyOn(driver as any, 'start').mockResolvedValue(undefined);
+    vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:start');
+    const call = vi.spyOn(driver as any, 'callUntyped').mockResolvedValue({ data: { apps: [
+      { pid: 42, name: 'Fixture', bundle_id: 'fixture', running: true, active: false },
+    ] }, content: [] });
+    vi.spyOn(driver as any, 'listWindows').mockResolvedValue([{ pid: 42, windowId: 9n, isOnScreen: true,
+      bounds: { x: 0, y: 0, width: 800, height: 600 } }]);
+    expect(await driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).toMatchObject({ pid: 42, windowId: '9' });
+    expect(call).toHaveBeenCalledExactlyOnceWith('list_apps', { running_only: true }, expect.any(AbortSignal));
+    expect(full).not.toHaveBeenCalled();
+  });
+  it('retains the installed catalog fallback when the app is not running', async () => {
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
+    const full = vi.fn().mockResolvedValue({ apps: [{ pid: 0, name: 'Fixture', bundleId: 'fixture', running: false, active: false }] });
+    Object.assign(driver as any, { client: { listApps: full }, runningAppsOnly: true });
+    vi.spyOn(driver as any, 'start').mockResolvedValue(undefined);
+    vi.spyOn(driver as any, 'callUntyped').mockResolvedValue({ data: { apps: [] }, content: [] });
+    await expect(driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).rejects.toThrow('COMPUTER_APP_NOT_RUNNING');
+    expect(full).toHaveBeenCalledOnce();
+  });
+});
+describe('native process identity capability', () => {
+  it('uses fresh native samples and notices executable/incarnation changes', async () => {
+    const driver = new CuaComputerDriver('/fixture', 'host', undefined, 'darwin');
+    Object.assign(driver as any, { client: {}, kernelProcessIdentity: true });
+    const query = vi.spyOn(driver as any, 'callUntyped').mockResolvedValueOnce({ data: {
+      process_identity: { pid: 42, start_time: '123', executable: '/A' },
+    } }).mockResolvedValueOnce({ data: { process_identity: { pid: 42, start_time: '124', executable: '/A' } } });
+    const first = await (driver as any).processIdentity(42);
+    const next = await (driver as any).processIdentity(42);
+    expect(first).not.toBe(next);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith('list_apps', { process_identity_pid: 42 });
+  });
+  it('fails closed without subprocess fallback when native identity is unavailable', async () => {
+    const driver = new CuaComputerDriver('/fixture', 'host', undefined, 'darwin');
+    Object.assign(driver as any, { client: {}, kernelProcessIdentity: true });
+    vi.spyOn(driver as any, 'callUntyped').mockRejectedValue(new Error('unavailable'));
+    await expect((driver as any).processIdentity(42)).rejects.toThrow('COMPUTER_PROCESS_CHANGED');
+  });
+});
+describe('exact native window metadata capability', () => {
+  it('queries only the selected ID without assuming unrelated optional capabilities', async () => {
+    const driver = new CuaComputerDriver('/fixture', 'host', undefined, 'darwin');
+    const full = vi.fn();
+    Object.assign(driver as any, { client: { listWindows: full }, exactWindowMetadata: true });
+    const query = vi.spyOn(driver as any, 'callUntyped').mockResolvedValue({ data: { windows: [{
+      pid: 42, window_id: 9, app_name: 'Fixture', title: 'Document',
+      bounds: { x: 0, y: 0, width: 800, height: 600 }, is_on_screen: true,
+    }] } });
+    const signal = new AbortController().signal;
+    expect(await (driver as any).listWindows(42, signal, 9n)).toMatchObject([{ pid: 42, windowId: 9n }]);
+    expect(query).toHaveBeenCalledExactlyOnceWith('list_windows', { pid: 42, window_id: 9 }, signal);
+    expect(full).not.toHaveBeenCalled();
+  });
+  it('keeps the SDK query on native versions without exact metadata support', async () => {
+    const driver = new CuaComputerDriver('/fixture', 'host', undefined, 'darwin');
+    const full = vi.fn().mockResolvedValue({ windows: [] });
+    Object.assign(driver as any, { client: { listWindows: full } });
+    const query = vi.spyOn(driver as any, 'callUntyped');
+    const signal = new AbortController().signal;
+    await (driver as any).listWindows(42, signal, 9n);
+    expect(full).toHaveBeenCalledExactlyOnceWith({ pid: 42 }, { signal });
+    expect(query).not.toHaveBeenCalled();
+  });
+});
 describe('private native driver admission', () => {
   function native(windows: Array<Record<string, unknown>>, apps = [{ bundle_id: 'fixture', name: '飞书', pid: 42, running: true }]) {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', undefined, 'darwin');
@@ -657,5 +728,37 @@ describe('private native driver admission', () => {
     expect((f.client as any)[method]).toHaveBeenCalledOnce();
     expect(f.client.click).not.toHaveBeenCalled();
     expect(f.call).not.toHaveBeenCalled();
+  });
+});
+
+describe('quiescent transport reuse', () => {
+  it('discards target state, reuses the connection and still stops on expiry', async () => {
+    vi.useFakeTimers();
+    const driver = new CuaComputerDriver('/fixture', 'host');
+    const client = {}; Object.assign(driver as any, { client, elements: [{}], frame: {}, observedTarget: {}, preparedFrame: {} });
+    const stop = vi.spyOn(driver, 'stop').mockResolvedValue(undefined);
+    await driver.idle();
+    expect((driver as any).client).toBe(client); expect((driver as any).elements).toEqual([]);
+    expect((driver as any).observedTarget).toBeUndefined(); expect((driver as any).preparedFrame).toBeUndefined();
+    await driver.warmup(); await vi.advanceTimersByTimeAsync(30_000); expect(stop).not.toHaveBeenCalled();
+    await driver.idle(); await vi.advanceTimersByTimeAsync(30_000); expect(stop).toHaveBeenCalledOnce();
+  });
+});
+
+describe('identity-bound preparation metadata', () => {
+  it.each(['same', 'changed', 'missing'])('validates %s process proof before exposing windows', async kind => {
+    const { decodeNativeProcessIdentity } = await import('../native-process-identity.js');
+    const proof = { pid: 42, start_time: '100', executable: '/fixture/App' };
+    const driver = new CuaComputerDriver('/fixture', 'host');
+    Object.assign(driver as any, { client: {}, windowProcessIdentity: true, preparingSince: 1,
+      preparationIdentity: decodeNativeProcessIdentity(proof, 42) });
+    const call = vi.spyOn(driver as any, 'callUntyped').mockResolvedValue({ data: {
+      ...(kind === 'missing' ? {} : { process_identity: { ...proof, start_time: kind === 'changed' ? '101' : '100' } }),
+      windows: [{ window_id: 9, pid: 42, app_name: 'Fixture', title: '', bounds: { x: 0, y: 0, width: 800, height: 600 }, is_on_screen: true }],
+    } });
+    const pending = (driver as any).listWindows(42);
+    if (kind === 'same') await expect(pending).resolves.toMatchObject([{ pid: 42, windowId: 9n }]);
+    else await expect(pending).rejects.toThrow(kind === 'changed' ? 'COMPUTER_PROCESS_CHANGED' : 'COMPUTER_DRIVER_INVALID_RESULT');
+    expect(call).toHaveBeenCalledOnce(); expect(call.mock.calls[0][1]).toMatchObject({ include_process_identity: true });
   });
 });

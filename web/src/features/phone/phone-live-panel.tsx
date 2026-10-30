@@ -43,12 +43,13 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
   const activeRef = useRef(interactive); activeRef.current = interactive;
   const human = !readOnly && state.ownControl && state.report.controlOwner === 'human';
   const canvas = useRef<HTMLCanvasElement>(null);
-  const video = usePhoneVideo(conversationId, state.report.sessionId, !ended && !state.report.reconnectRequired && interactive, canvas, state.report.controlEpoch, human);
+  const video = usePhoneVideo(conversationId, state.report.sessionId, !ended && !state.report.reconnectRequired && interactive && state.media !== 'snapshot', canvas, state.report.controlEpoch, human, state.media === 'hdc-h264' ? 35000 : 8000);
   const floating = Boolean(onHeaderPointerDown);
   useEffect(() => { video.cancel(); gesture.current = null; }, [floating, video.cancel]);
   useEffect(() => { if (!interactive) { lifecycle.current++; video.cancel(); gesture.current = null; setShowText(false); setText(''); } }, [interactive, video.cancel]);
+  const videoError = video.error ? phoneErrorMessage({ code: video.error, message: video.error }, zh) : '';
   const videoPlaying = video.status === 'playing';
-  const snapshot = video.status === 'fallback';
+  const snapshot = state.media === 'snapshot' || video.status === 'fallback';
   const inspection = ['paused', 'needs_user', 'failed', 'outcome_unknown'].includes(state.report.status);
   const idle = state.report.controlOwner === 'none' && !inspection;
   const paused = state.report.controlOwner === 'none' || inspection;
@@ -269,7 +270,7 @@ export function PhoneLivePanel({ conversationId, state, onChange, readOnly = fal
                     <dt>{zh ? '操作次数' : 'Actions'}</dt><dd>{state.report.actions}</dd>
                   </dl>
                   {snapshot && video.error && !ended ? <div className="mt-3 flex items-center gap-2"><span>{zh ? '实时视频不可用，正在使用定时截图。' : 'Video unavailable. Using snapshots.'}</span><Button variant="ghost" className="shrink-0 px-2 py-1 text-xs text-accent" onClick={video.retry}><RefreshCw className="size-3" aria-hidden />{zh ? '重试视频' : 'Retry video'}</Button></div> : null}
-                  {error || frameError || video.error || state.report.message ? <p className="mt-2 whitespace-pre-wrap break-words">{[error, frameError, video.error, state.report.message].filter(Boolean).join(' · ')}</p> : null}
+                  {error || frameError || video.error || state.report.message ? <p className="mt-2 whitespace-pre-wrap break-words">{[error, frameError, videoError, state.report.message].filter(Boolean).join(' · ')}</p> : null}
                   {ended ? <p className="mt-2 flex items-center gap-1"><CircleCheck className="size-3.5" aria-hidden />{zh ? '画面采集与手机控制已结束' : 'Screen capture and control have ended'}</p> : null}
                 </div>
               </div>}

@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { resolveSessionIdentity } from '@xopcai/gateway-contract';
+import { isAutomationConfigurationSession, resolveSessionIdentity } from '@xopcai/gateway-contract';
 import {
   Archive,
   ChevronDown,
@@ -20,6 +20,8 @@ import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffec
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
+
+import { AutomationRunList } from '@/features/automations/automation-run-list';
 
 import { SessionFilterToolbar } from '@/features/sessions/session-filter-toolbar';
 import { useSessionDiscovery } from '@/features/sessions/use-session-discovery';
@@ -96,6 +98,10 @@ const SidebarTaskChildRow = memo(function SidebarTaskChildRow({
     <span className="shrink-0 text-xs text-fg-subtle">{sidebarTaskStatus(child.runStatus ?? child.phase, sb)}</span>
   </Link>;
 });
+
+function isSidebarConversation(session: SessionMetadata): boolean {
+  return resolveSessionIdentity(session).source !== 'automation';
+}
 
 const PAGE_SIZE = 20;
 const PROJECT_LIMIT = 12;
@@ -314,14 +320,22 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
 }) {
   const taskGroup = useContext(TaskGroupsContext)[session.key];
   const location = useLocation();
+  const language = useLocaleStore((state) => state.language);
+  const setup = isAutomationConfigurationSession(session)
+    ? session.customData?.automationSetup as { automationId?: unknown } : undefined;
+  const automationId = typeof setup?.automationId === 'string' && setup.automationId.trim()
+    ? setup.automationId : undefined;
+  const searchParams = new URLSearchParams(location.search);
+  const selectedRunId = location.pathname === '/automations' && searchParams.get('automation') === automationId
+    ? searchParams.get('run') ?? undefined : undefined;
   const activeTaskId = /^\/chat\/task\/([^/]+)$/.exec(location.pathname)?.[1];
-  const activeChild = taskGroup?.items.some((child) => child.taskId === activeTaskId
-    || child.activeConversationId === chatConversationIdFromPath(location.pathname)) ?? false;
+  const activeChild = Boolean(selectedRunId) || (taskGroup?.items.some((child) => child.taskId === activeTaskId
+    || child.activeConversationId === chatConversationIdFromPath(location.pathname)) ?? false);
   const [tasksExpanded, setTasksExpanded] = useState(activeChild);
   useEffect(() => { if (activeChild) setTasksExpanded(true); }, [activeChild]);
   const showDescription = useContext(SessionDescriptionContext);
   const identity = resolveSessionIdentity(session);
-  const showIdentityIcon = identity.source !== 'workbench' || identity.purpose !== 'chat';
+  const showIdentityIcon = isAutomationConfigurationSession(session) || identity.source !== 'workbench' || identity.purpose !== 'chat';
   const identityLabel = sessionIdentityLabel(session, sb.sessionFilters);
   const description = [identityLabel, contextLabel].filter(Boolean).join(' · ');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -364,9 +378,11 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
     <SidebarSortableItem spec={sort}>
     <div>
     <div className={rowShellClass(isActive)}>
-      {showTaskChildren && taskGroup?.total ? (
+      {showTaskChildren && (taskGroup?.total || automationId) ? (
         <button type="button" className="absolute left-0 flex size-6 items-center justify-center text-fg-subtle hover:text-fg"
-          aria-label={tasksExpanded ? sb.delegatedTasksCollapse : sb.delegatedTasksExpand}
+          aria-label={automationId
+            ? tasksExpanded ? sb.automationRunsCollapse : sb.automationRunsExpand
+            : tasksExpanded ? sb.delegatedTasksCollapse : sb.delegatedTasksExpand}
           aria-expanded={tasksExpanded}
           onClick={() => setTasksExpanded((value) => !value)}>
           <ChevronDown className={cn('size-3.5 transition-transform', !tasksExpanded && '-rotate-90')} aria-hidden />
@@ -516,6 +532,20 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
     {showTaskChildren && tasksExpanded && taskGroup?.items.map((child) => (
       <SidebarTaskChildRow key={child.taskId} child={child} activeTaskId={activeTaskId} onNavigate={onNavigate} sb={sb} />
     ))}
+    {showTaskChildren && tasksExpanded && automationId ? (
+      <AutomationRunList
+        automationId={automationId}
+        projectId={session.projectId}
+        language={language}
+        selectedRunId={selectedRunId}
+        runHref={(run) => {
+          const params = new URLSearchParams({ automation: automationId, view: 'execution', run: run.id });
+          if (session.projectId) params.set('projectId', session.projectId);
+          return `/automations?${params}`;
+        }}
+        onSelectRun={() => onNavigate?.()}
+      />
+    ) : null}
     </div>
     </SidebarSortableItem>
   );
@@ -1130,7 +1160,7 @@ function SidebarTaskListContent({
         if (seenProjects.has(entry.project.id)) continue;
         seenProjects.add(entry.project.id);
         const override = projectSessionOverrides[entry.project.id];
-        const sessions = override?.sessions ?? entry.sessions;
+        const sessions = (override?.sessions ?? entry.sessions).filter(isSidebarConversation);
         groups.push({
           project: entry.project,
           sessions,
@@ -1161,7 +1191,7 @@ function SidebarTaskListContent({
     const out: SessionMetadata[] = [];
     const seen = new Set<string>();
     for (const session of [...(firstInbox?.items ?? []), ...inboxExtraItems]) {
-      if (seen.has(session.key)) continue;
+      if (seen.has(session.key) || !isSidebarConversation(session)) continue;
       seen.add(session.key);
       out.push(session);
     }
@@ -1196,10 +1226,10 @@ function SidebarTaskListContent({
     [items],
   );
 
-  const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0;
+  const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0 || inboxHasMore;
 
   const pinnedSessions = useMemo(
-    () => orderSidebarItems(data?.[0]?.pinned ?? [], pendingOrders.pinned, (session) => session.key),
+    () => orderSidebarItems((data?.[0]?.pinned ?? []).filter(isSidebarConversation), pendingOrders.pinned, (session) => session.key),
     [data, pendingOrders.pinned],
   );
   const pinnedConversationIds = useMemo(
@@ -1423,6 +1453,7 @@ function SidebarTaskListContent({
           includePinned: true,
           includeConversationId: activeConversationId,
           rootConversationsOnly: true,
+          excludeAutomationRuns: true,
         });
         setExtraTaskGroups((prev) => ({ ...prev, ...result.childrenByConversationId }));
         setProjectSessionOverrides((prev) => {
@@ -1483,6 +1514,7 @@ function SidebarTaskListContent({
           includePinned: true,
           includeConversationId: activeConversationId,
           rootConversationsOnly: true,
+          excludeAutomationRuns: true,
         });
         setExtraTaskGroups((prev) => ({ ...prev, ...result.childrenByConversationId }));
         setInboxExtraItems((prev) => {
