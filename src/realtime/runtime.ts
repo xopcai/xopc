@@ -221,15 +221,20 @@ export class RealtimeRuntime {
           const output = item.view === 'compact' ? compactRunEvent(event) : event;
           if (output) writer.enqueue(output);
         });
-        subscriptions.set(item.topic, handle);
         writer.enqueue(serverMessage('realtime.subscribed', {
           topic: item.topic,
           cursor: handle.cursor,
         }), 'critical');
-        for (const message of handle.initial) {
-          const output = item.view === 'compact' ? compactRunEvent(message) : message;
-          if (output) writer.enqueue(output);
-        }
+        const cancelReplay = writer.enqueueReplay((function* () {
+          for (const message of handle.initial) {
+            const output = item.view === 'compact' ? compactRunEvent(message) : message;
+            if (output) yield output;
+          }
+        })());
+        subscriptions.set(item.topic, {
+          ...handle,
+          unsubscribe: () => { cancelReplay(); handle.unsubscribe(); },
+        });
       }
       return true;
     };

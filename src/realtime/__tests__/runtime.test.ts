@@ -193,6 +193,36 @@ describe('RealtimeRuntime', () => {
     });
   });
 
+  it('delivers a large desktop replay and concurrent live event over loopback without disconnecting', async () => {
+    runtime = new RealtimeRuntime();
+    server = createServer();
+    server.on('upgrade', (request, connection, head) => runtime!.handleUpgrade(request, connection, head));
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    for (let i = 0; i < 100; i++) {
+      runtime.broker.publish('run:burst', 'assistant_delta', { delta: 'x'.repeat(64 * 1024) });
+    }
+    const issued = runtime.tickets.issue('desktop-burst', 'desktop', { principalId: 'owner', scopes: ['gateway.admin'] });
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+    await waitForOpen(socket);
+    const messages = collectMessages(socket);
+    const onClose = vi.fn();
+    socket.on('close', onClose);
+    socket.send(JSON.stringify({
+      protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), kind: 'realtime.hello', sentAt: Date.now(),
+      payload: { ticket: issued.ticket, clientId: 'desktop-burst', clientKind: 'desktop',
+        subscriptions: [{ topic: 'run:burst', afterSeq: 0 }] },
+    }));
+    expect(await messages.next()).toMatchObject({ kind: 'realtime.ready' });
+    expect(await messages.next()).toMatchObject({ kind: 'realtime.subscribed' });
+    runtime.broker.publish('run:burst', 'run_end', { status: 'completed' });
+    for (let seq = 1; seq <= 101; seq++) {
+      expect(await messages.next()).toMatchObject({ kind: 'realtime.event', payload: { topic: 'run:burst', seq } });
+    }
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('applies compact filtering to replay and live events on the existing socket topic', async () => {
     runtime = new RealtimeRuntime();
     server = createServer();
