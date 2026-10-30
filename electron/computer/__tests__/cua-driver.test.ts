@@ -762,3 +762,24 @@ describe('identity-bound preparation metadata', () => {
     expect(call).toHaveBeenCalledOnce(); expect(call.mock.calls[0][1]).toMatchObject({ include_process_identity: true });
   });
 });
+
+describe('explicit app switching', () => {
+  it.each([false, true])('requires a current target before activating (stale=%s)', async stale => {
+    const driver = new CuaComputerDriver('/fixture', 'host', undefined, 'darwin');
+    const target = { appId: 'org.example.App', pid: 42, windowId: '9', processIdentity: 'identity', width: 800, height: 600, geometryRevision: 'geometry' };
+    const validate = vi.spyOn(driver, 'validatePreviewTarget').mockResolvedValue(undefined);
+    if (stale) validate.mockRejectedValueOnce(new Error('COMPUTER_PROCESS_CHANGED'));
+    const prepare = vi.spyOn(driver as any, 'prepareApplication').mockResolvedValue(undefined);
+    const native = vi.spyOn(driver as any, 'callUntyped').mockResolvedValue({ data: {} });
+    const signal = new AbortController().signal;
+    if (stale) {
+      await expect(driver.focusTarget(target, signal)).rejects.toThrow('COMPUTER_PROCESS_CHANGED');
+      expect(prepare).not.toHaveBeenCalled(); expect(native).not.toHaveBeenCalled();
+    } else {
+      await driver.focusTarget(target, signal);
+      expect(validate).toHaveBeenCalledTimes(2);
+      expect(prepare).toHaveBeenCalledExactlyOnceWith('org.example.App', signal);
+      expect(native).toHaveBeenCalledExactlyOnceWith('bring_to_front', { pid: 42, window_id: 9 }, signal);
+    }
+  });
+});

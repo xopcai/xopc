@@ -9,6 +9,7 @@ import { ChatAgentSelector } from '@/features/chat/agent-selection/chat-agent-se
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { SessionContextPanel, type SessionContextPanelProps } from '@/features/chat/context/session-context-panel';
 import { useSessionContext } from '@/features/chat/context/use-session-context';
+import { ComputerChatButton } from '@/features/chat/computer/computer-chat-button';
 import { PhoneChatButton } from '@/features/phone/phone-chat-button';
 import { ChatWorkspaceControl } from '@/features/chat/workspace/chat-workspace-control';
 import { matchesTerminalShortcut } from '@/features/chat/terminal/terminal-shortcut';
@@ -240,6 +241,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             conversationId={activeConversationId ?? null}
           /> : null}
           {showContextControls && !workspaceOpen ? <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-edge-subtle" /> : null}
+          {activeConversationId ? <ComputerChatButton key={activeConversationId} conversationId={activeConversationId} /> : null}
           {activeConversationId ? <PhoneChatButton conversationId={activeConversationId} /> : null}
           {showContextControls && !workspaceOpen ? (
             <ChatWorkspaceControl

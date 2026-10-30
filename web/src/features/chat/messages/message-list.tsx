@@ -20,7 +20,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { VirtualMessageRows, type MessageRowDescriptor } from './virtual-message-rows';
 import { hasVisibleMessageRow } from './message-row-visibility';
-import { ComputerActivityCard } from '@/features/chat/computer/computer-activity-card';
 
 export interface ChatTimelineEntry { id: string; timestamp: number; content: ReactNode }
 
@@ -238,7 +237,6 @@ export const MessageList = memo(function MessageList({
   const footer = (
     <div className={cn(virtualized ? 'pt-8' : 'contents')}>
       {trailingContent}
-      <ComputerActivityCard conversationId={conversationId} />
       {/* Reduced-motion duration overrides must not animate the spacer's height. */}
       {replySpaceRef && <div ref={replySpaceRef} className={cn(!virtualized && '-mt-8', 'shrink-0 transition-none')}
         aria-hidden data-chat-reply-space />}

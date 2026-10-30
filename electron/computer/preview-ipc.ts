@@ -5,6 +5,14 @@ import type { DesktopEndpointHost } from './desktop-host.js';
 /** Host validation is shared with the existing Computer IPC surface. */
 export function registerComputerPreviewIpc(host: () => DesktopEndpointHost | undefined,
   assertRenderer: (event: IpcMainInvokeEvent) => void): void {
+  ipcMain.handle('computer:focus-target', async (event, conversationId: string, previewId: string) => {
+    assertRenderer(event);
+    ComputerPreviewRequestSchema.parse({ conversationId });
+    if (typeof previewId !== 'string' || !previewId || previewId.length > 200) throw new Error('COMPUTER_PREVIEW_INVALID_REQUEST');
+    const desktop = host();
+    if (!desktop) throw new Error('COMPUTER_PREVIEW_UNAVAILABLE');
+    await desktop.focusComputer(conversationId, previewId);
+  });
   ipcMain.handle('computer-preview:current', (event, conversationId: string) => {
     assertRenderer(event);
     const request = ComputerPreviewRequestSchema.parse({ conversationId });

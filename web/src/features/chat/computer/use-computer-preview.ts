@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComputerPreviewFrame, ComputerPreviewState } from '@xopcai/computer-control-contract';
 
 /** Pixels stay outside React state; each subscription has its own presentation epoch. */
-export function useComputerPreview(conversationId: string | null | undefined) {
+export function useComputerPreview(conversationId: string | null | undefined, stream = true) {
   const [state, setState] = useState<ComputerPreviewState>();
   const [subscriptionId, setSubscriptionId] = useState<string>();
   const [hasFrame, setHasFrame] = useState(false);
@@ -34,7 +34,7 @@ export function useComputerPreview(conversationId: string | null | undefined) {
   const ended = state?.status === 'ended';
   useEffect(() => {
     setHasFrame(false); setStale(false); lastFrameAt.current = 0;
-    if (!api || !conversationId || !previewId || targetEpoch === undefined || ended) return;
+    if (!stream || !api || !conversationId || !previewId || targetEpoch === undefined || ended) return;
     // A pre-authorization card has no target yet; the host issues a new ID once bound.
     if (preparingTarget && retry === 0) return;
     let disposed = false;
@@ -68,7 +68,7 @@ export function useComputerPreview(conversationId: string | null | undefined) {
     });
     return () => { disposed = true; setSubscriptionId(undefined); if (id) void api.unsubscribe(id).catch(() => {}); };
     // Host state changes must not recreate the media subscription on every status update.
-  }, [api, conversationId, previewId, targetEpoch, runId, retry, ended]);
+  }, [api, conversationId, previewId, targetEpoch, runId, retry, ended, stream]);
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== 'hidden');
     changed(); document.addEventListener('visibilitychange', changed);

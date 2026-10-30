@@ -31,6 +31,7 @@ export interface ComputerDriver {
   perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal,
     onProgress?: (index: number, dispatch: 'notStarted' | 'started' | 'completed' | 'unknown') => void): Promise<void>;
   getLastInputTiming?(): ComputerInputTiming | undefined;
+  focusTarget?(target: ComputerTarget, signal: AbortSignal): Promise<void>;
   validatePreviewTarget?(target: ComputerTarget, signal: AbortSignal): Promise<void>;
   /** Must finish only after no further input can be dispatched. */
   stop(): Promise<void>;
@@ -415,6 +416,16 @@ export class ComputerBroker {
     await this.driver.validatePreviewTarget(current.target, current.signal);
     current.signal.throwIfAborted();
     if (this.previewAuthority()?.computerSessionId !== current.computerSessionId) throw new Error('COMPUTER_PREVIEW_REVOKED');
+  }
+  async focusConversation(conversationId: string): Promise<void> {
+    if (this.busy || this.discovery || this.stopping) throw new Error('COMPUTER_BUSY');
+    const s = this.session;
+    if (!s || s.owner !== conversationId || s.status !== 'ready' || !s.target) throw new Error('COMPUTER_PREVIEW_REVOKED');
+    this.active(s);
+    if (!this.driver.focusTarget) throw new Error('COMPUTER_PREVIEW_UNSUPPORTED');
+    this.busy = true;
+    try { await this.driver.focusTarget(s.target, s.controller.signal); this.active(s); }
+    finally { this.busy = false; }
   }
   async dispose(): Promise<void> { clearInterval(this.timer); await this.stop(); }
 }
