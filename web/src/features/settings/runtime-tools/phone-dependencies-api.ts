@@ -2,10 +2,10 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { streamManagedToolOperation } from './runtime-tools-api';
 
-export type PhoneDependencyKind = 'adb' | 'scrcpy';
+export type PhoneDependencyKind = 'adb' | 'scrcpy' | 'hdc' | 'hoscrcpy' | 'java';
 export type PhoneDependencyStatus = {
   kind: PhoneDependencyKind; state: 'ready' | 'absent' | 'corrupted' | 'unsupported' | 'installing';
-  version?: string; requestedVersion: string; path?: string; source?: 'managed' | 'system' | 'custom'; canInstall: boolean; error?: string;
+  version?: string; requestedVersion: string; path?: string; source?: 'managed' | 'system' | 'custom'; canInstall: boolean; error?: string; distribution?: string; downloadUrl?: string;
 };
 export type PhoneDependencyProgress = { kind: PhoneDependencyKind; phase: string; downloadedBytes?: number; totalBytes?: number };
 export const phoneDependenciesKey = () => apiUrl('/api/runtime-tools/phone-dependencies');

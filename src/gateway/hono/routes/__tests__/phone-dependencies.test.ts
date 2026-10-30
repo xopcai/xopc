@@ -48,3 +48,11 @@ it('rejects unknown dependencies and does not turn failed installs into success 
   const response = await ready.request('/api/runtime-tools/phone-dependencies/scrcpy/install/stream', { method: 'POST', body: '{}' });
   expect(await response.text()).toContain('"ok":false');
 });
+
+it.each(['hdc', 'java', 'hoscrcpy'])('keeps %s installation behind admin and active-session checks', async kind => {
+  const denied = app(false).app;
+  expect((await denied.request(`/api/runtime-tools/phone-dependencies/${kind}/install/stream`, { method: 'POST', body: '{}' })).status).toBe(403);
+  const { app: ready, saveConfig } = app(); fixture.busy = true;
+  expect((await ready.request(`/api/runtime-tools/phone-dependencies/${kind}/install/stream`, { method: 'POST', body: '{}' })).status).toBe(409);
+  expect(fixture.install).not.toHaveBeenCalled(); expect(saveConfig).not.toHaveBeenCalled();
+});

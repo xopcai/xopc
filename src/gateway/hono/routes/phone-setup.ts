@@ -13,6 +13,7 @@ import { getPhoneRuntime } from '../../../phone/runtime.js';
 import { PhoneSetupService } from '../../../phone/setup/service.js';
 import { getAllModels, resolveModel, isProviderConfiguredSync } from '../../../providers/index.js';
 import { PhoneDependencyManager, probePhoneAdb } from '../../../runtime-tools/phone-dependencies.js';
+import { managedHdcPath, managedHosJar, managedJavaHome } from '../../../runtime-tools/harmony-paths.js';
 import { managedPhoneAdbPath } from '../../../runtime-tools/phone-dependency-catalog.js';
 import { getSessionMetadata } from '../../../storage/sqlite/session-read-repository.js';
 import type { GatewayService } from '../../service.js';
@@ -24,7 +25,7 @@ function resolvePhoneSetupModel(ref: string) {
 
 export function createPhoneSetupService(service: GatewayService): PhoneSetupService {
   const runtime = getPhoneRuntime();
-  const manager = () => new PhoneDependencyManager({ stateDir: resolveStateDir(), config: service.currentConfig.runtimeTools, adbPath: service.currentConfig.phone.adbPath });
+  const manager = () => new PhoneDependencyManager({ stateDir: resolveStateDir(), config: service.currentConfig.runtimeTools, adbPath: service.currentConfig.phone.adbPath, phone: service.currentConfig.phone });
   const requireIdle = () => {
     if (runtime.reports().some(report => !['closed', 'cancelled', 'failed', 'outcome_unknown'].includes(report.status))) throw new Error('PHONE_SETUP_BUSY: Close active phone sessions before changing shared configuration.');
   };
@@ -47,21 +48,27 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
     },
     install: async (kind, repair, mutation) => {
       mutation?.check();
-      if (kind === 'adb') requireIdle();
+      if (kind !== 'scrcpy') requireIdle();
       const config = service.currentConfig;
-      await manager().install(kind, { repair, signal: mutation?.signal, beforeCommit: mutation?.check });
+      await manager().install(kind, { repair, signal: mutation?.signal, beforeCommit: () => { mutation?.check(); if (kind !== 'scrcpy') requireIdle(); } });
       mutation?.check();
+      if (kind === 'hdc' || kind === 'hoscrcpy' || kind === 'java') {
+        const next = structuredClone(config);
+        if (kind === 'hdc') next.phone.hdcPath = managedHdcPath();
+        else next.phone.hdcVideo = { ...next.phone.hdcVideo, ...(kind === 'java' ? { javaHome: managedJavaHome() } : { sdkJar: managedHosJar() }) };
+        if (!(await service.saveConfig(next, config, mutation?.check)).saved) throw new Error('PHONE_SETUP_CONFIG_CONFLICT');
+      }
       if (kind === 'adb' && config.phone.adbPath) {
         const path = managedPhoneAdbPath(resolveStateDir()); await probePhoneAdb(path); mutation?.check();
         const next = structuredClone(config); next.phone.adbPath = path;
         if (!(await service.saveConfig(next, config, mutation?.check)).saved) throw new Error('PHONE_SETUP_CONFIG_CONFLICT');
       }
     },
-    registerLocal: async (serial, name, mutation) => {
-      const discovered = (await runtime.discover(service.currentConfig, undefined, 'android')).find(phone => phone.serial === serial && phone.state === 'device');
+    registerLocal: async (serial, name, mutation, platform = 'android') => {
+      const discovered = (await runtime.discover(service.currentConfig, mutation?.signal, platform)).find(phone => phone.serial === serial && phone.state === 'device' && (phone.platform ?? 'android') === platform);
       mutation?.check();
       if (!discovered) throw new Error('PHONE_SETUP_DEVICE_OFFLINE: Select an online discovered local phone.');
-      if (!runtime.repository.list().some(phone => phone.serial === serial)) runtime.repository.save({ serial, name: name?.trim() || discovered.name, enabled: true, appAccess: 'selected', allowedApps: ['com.android.settings'] });
+      if (!runtime.repository.list().some(phone => phone.serial === serial && (phone.platform ?? 'android') === platform)) runtime.repository.save({ serial, platform, name: name?.trim() || discovered.name, enabled: true, appAccess: 'selected', allowedApps: [platform === 'harmonyos' ? 'com.huawei.hmos.settings' : 'com.android.settings'] });
     },
     revision: (context, deviceId) => {
       const agent = resolveEffectiveAgentConfigForAgent(context.agentId).config;
@@ -80,18 +87,18 @@ export function createPhoneSetupService(service: GatewayService): PhoneSetupServ
       const agent = resolved.config;
       const ref = agent.models.phoneUse?.primary;
       const model = ref ? resolvePhoneSetupModel(ref) : undefined;
-      const dependencies = await new PhoneDependencyManager({ stateDir: resolveStateDir(), config: config.runtimeTools, adbPath: config.phone.adbPath }).status();
+      const dependencies = await new PhoneDependencyManager({ stateDir: resolveStateDir(), config: config.runtimeTools, adbPath: config.phone.adbPath, phone: config.phone }).status(source === 'harmonyos' ? ['hdc', 'java', 'hoscrcpy'] : source ? ['adb', 'scrcpy'] : undefined);
       let localDiscovery: Array<{ serial?: string; name: string; state: string; emulator: boolean }> = []; let diagnostic: string | undefined;
-      if (source === 'local' && dependencies.some(item => item.kind === 'adb' && item.state === 'ready')) {
-        try { localDiscovery = (await runtime.discover(config, undefined, 'android')).map(({ serial, name, state, emulator }) => ({ serial, name, state, emulator })); }
+      if ((source === 'local' || source === 'harmonyos') && dependencies.some(item => item.kind === (source === 'harmonyos' ? 'hdc' : 'adb') && item.state === 'ready')) {
+        try { localDiscovery = (await runtime.discover(config, undefined, source === 'harmonyos' ? 'harmonyos' : 'android')).map(({ serial, name, state, emulator }) => ({ serial, name, state, emulator })); }
         catch { diagnostic = 'PHONE_SETUP_DISCOVERY_FAILED'; }
       }
       return { enabled: config.phone.enabled,
         toolAllowed: agent.tools.phone_use?.mode !== 'deny' && (!agent.toolAllowlist || agent.toolAllowlist.includes('phone_use')),
         model: { ref, source: resolved.sources['models.phoneUse.primary'], chatRef: agent.models.chat?.primary, supported: Boolean(model && phoneModelProfile(model)), configured: Boolean(model && isProviderConfiguredSync(model.provider)) },
-        dependencies: dependencies.map(({ kind, state, version, canInstall }) => ({ kind, state, version, canInstall })),
-        devices: runtime.repository.list().filter(device => device.platform !== 'harmonyos').map(device => ({ id: device.id, name: device.name, source: device.connection ? 'aliyun' as const : 'local' as const,
-          enabled: device.enabled, settingsAllowed: phoneAllowsApp(device, 'com.android.settings') })), localDiscovery, diagnostic };
+        dependencies: dependencies.map(({ kind, state, version, canInstall, distribution, downloadUrl }) => ({ kind, state, version, canInstall, distribution, downloadUrl })),
+        devices: runtime.repository.list().map(device => ({ id: device.id, name: device.name, source: device.platform === 'harmonyos' ? 'harmonyos' as const : device.connection ? 'aliyun' as const : 'local' as const,
+          enabled: device.enabled, settingsAllowed: phoneAllowsApp(device, device.platform === 'harmonyos' ? 'com.huawei.hmos.settings' : 'com.android.settings') })), localDiscovery, diagnostic };
     },
   });
 }
@@ -101,7 +108,7 @@ export function registerPhoneSetupRoutes(app: Hono, deps: AuthenticatedRouteDeps
   const schema = z.strictObject({ conversationId: z.string().uuid(), setupId: z.string().uuid().optional(),
     action: z.enum(['inspect', 'start', 'get', 'recheck', 'source', 'set_model', 'begin_verification', 'release', 'cancel']),
     modelRef: z.string().min(1).max(500).optional(), replaceExisting: z.boolean().optional(),
-    source: z.enum(['local', 'aliyun']).optional(), deviceId: z.string().uuid().optional(), expectedRevision: z.number().int().positive().optional() });
+    source: z.enum(['local', 'aliyun', 'harmonyos']).optional(), deviceId: z.string().uuid().optional(), expectedRevision: z.number().int().positive().optional() });
   app.post('/api/phone/setup', deps.strictRateLimitMiddleware, async c => {
     const parsed = schema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid phone setup request' }, 400);

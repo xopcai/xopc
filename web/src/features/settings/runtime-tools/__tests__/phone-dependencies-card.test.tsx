@@ -40,3 +40,22 @@ it('keeps installation failures visible and allows retry', async () => {
   expect(node.querySelector('[role="alert"]')?.textContent).toBe('checksum mismatch');
   expect([...node.querySelectorAll('button')].find(button => button.textContent === '安装')?.disabled).toBe(false);
 });
+
+it('installs missing HarmonyOS components together and keeps Android dependencies separate', async () => {
+  const { loadPhoneDependencies } = await import('../phone-dependencies-api');
+  const statuses = [
+    { kind: 'hdc' as const, state: 'ready' as const, requestedVersion: '6.0.0.47', canInstall: true },
+    { kind: 'java' as const, state: 'absent' as 'absent' | 'ready', requestedVersion: '17', canInstall: true },
+    { kind: 'hoscrcpy' as const, state: 'absent' as 'absent' | 'ready', requestedVersion: '1.0.18-beta', canInstall: true, distribution: 'third-party distribution' },
+  ];
+  vi.mocked(loadPhoneDependencies).mockResolvedValue({ location: 'gateway', installationEnabled: true, statuses });
+  vi.mocked(installPhoneDependency).mockImplementation(async kind => { const item = statuses.find(item => item.kind === kind); if (item) item.state = 'ready'; });
+  await act(async () => root.render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><PhoneDependenciesCard initialPlatform="harmonyos" /></SWRConfig>));
+  expect(node.textContent).toContain('无需安装 DevEco Studio');
+  expect(node.textContent).toContain('third-party distribution');
+  expect(node.textContent).not.toContain('Android Platform Tools');
+  expect(installPhoneDependency).not.toHaveBeenCalled();
+  await act(async () => [...node.querySelectorAll('button')].find(button => button.textContent === '一键安装缺失组件')!.click());
+  expect(vi.mocked(installPhoneDependency).mock.calls.map(call => call[0])).toEqual(['java', 'hoscrcpy']);
+  expect(node.textContent).toContain('鸿蒙连接组件已就绪');
+});

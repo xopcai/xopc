@@ -5,10 +5,10 @@ inspect and start. Carry out missing configuration through tools; use ordinary c
 for guidance, choices, progress and results. For human-only work link the exact host interactionPath to the bounded secure product modal.
 Reuse healthy registrations, model configuration and the user's prior device/source choices.
 
-Use source {setupId,source:"local"|"aliyun",expectedRevision} after identifying the desired
+Use source {setupId,source:"local"|"aliyun"|"harmonyos",expectedRevision} after identifying the desired
 route. Ask only if it is unclear. Use configure {setupId,enabled:true,expectedRevision} when
 Phone Use is disabled. This does not enable a denied Agent tool or widen device app access.
-Read models.md for a missing model, dependencies.md for missing software, then local.md or
+Read models.md for a missing model, dependencies.md for missing software, then local.md, harmonyos.md or
 aliyun.md for the selected route. scrcpy is optional for basic screenshot/navigation testing.
 
 The Phone action model is separate from chat. A registered/enabled device is not yet a proven

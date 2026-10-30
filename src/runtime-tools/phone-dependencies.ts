@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { chmod, copyFile, mkdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 
+import type { PhoneConfig } from '../phone/contracts.js';
+import { HarmonyDependencyManager } from './harmony-dependencies.js';
+
 import type { RuntimeToolsConfig } from '../config/schema.js';
 import { resolveAdbPath } from '../phone/adb-driver.js';
 import { extractRuntimeArchive } from './archive.js';
@@ -16,7 +19,7 @@ import { runtimeDownloadPath } from './paths.js';
 export type PhoneDependencyStatus = {
   kind: PhoneDependencyKind; state: 'ready' | 'absent' | 'corrupted' | 'unsupported' | 'installing';
   version?: string; requestedVersion: string; path?: string; source?: 'managed' | 'system' | 'custom';
-  canInstall: boolean; error?: string;
+  canInstall: boolean; error?: string; distribution?: string; downloadUrl?: string;
 };
 export type PhoneDependencyProgress = { kind: PhoneDependencyKind; phase: 'download' | 'verify' | 'extract' | 'install' | 'probe' | 'complete'; downloadedBytes?: number; totalBytes?: number };
 const operations = new Set<string>();
@@ -30,10 +33,12 @@ export async function probePhoneAdb(path: string): Promise<{ path: string; versi
 }
 
 export class PhoneDependencyManager extends EventEmitter {
-  constructor(private options: { stateDir: string; config: RuntimeToolsConfig; adbPath?: string }) { super(); }
+  constructor(private options: { stateDir: string; config: RuntimeToolsConfig; adbPath?: string; phone?: PhoneConfig }) { super(); }
+  private harmony() { return new HarmonyDependencyManager({ ...this.options, phone: this.options.phone ?? { hdcPath: undefined } as PhoneConfig }, event => this.emit('progress', event)); }
   private operationKey(kind: PhoneDependencyKind) { return `${this.options.stateDir}:${kind}`; }
-  async status(): Promise<PhoneDependencyStatus[]> {
-    return Promise.all((['adb', 'scrcpy'] as const).map(async (kind): Promise<PhoneDependencyStatus> => {
+  async status(kinds: readonly PhoneDependencyKind[] = ['adb', 'scrcpy', 'hdc', 'hoscrcpy', 'java']): Promise<PhoneDependencyStatus[]> {
+    return Promise.all(kinds.map(async (kind): Promise<PhoneDependencyStatus> => {
+      if (kind === 'hdc' || kind === 'hoscrcpy' || kind === 'java') return this.harmony().status(kind);
       const canInstall = this.options.config.enabled && Boolean(phoneDependencyAsset(kind));
       const requestedVersion = kind === 'adb' ? ADB_VERSION : SCRCPY_VERSION;
       if (operations.has(this.operationKey(kind))) return { kind, state: 'installing', requestedVersion, canInstall };
@@ -60,6 +65,10 @@ export class PhoneDependencyManager extends EventEmitter {
   }
   /** Installation is explicit; readiness checks and phone viewing never provision tools. */
   async install(kind: PhoneDependencyKind, options: { repair?: boolean; sourcePath?: string; signal?: AbortSignal; beforeCommit?: () => void } = {}): Promise<void> {
+    if (kind === 'hdc' || kind === 'hoscrcpy' || kind === 'java') {
+      if (options.sourcePath) throw new Error('Use verified offline bundles for HarmonyOS dependencies');
+      return this.harmony().install(kind, options);
+    }
     const check = () => { options.signal?.throwIfAborted(); options.beforeCommit?.(); };
     check();
     const asset = phoneDependencyAsset(kind);

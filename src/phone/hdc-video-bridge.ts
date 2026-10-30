@@ -62,6 +62,7 @@ public final class XopcHdcVideo {
     System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.err), true, "UTF-8"));
     Runtime.getRuntime().addShutdownHook(new Thread(XopcHdcVideo::stop));
     if (!validLibrary(args[2])) { emit(4, new byte[0]); stop(); System.exit(2); }
+    if (args[0].equals("--probe")) { HosRemoteConfig.class.getDeclaredMethods(); HosRemoteDevice.class.getDeclaredMethods(); ScreenCapCallback.class.getDeclaredMethods(); stop(); System.exit(0); }
     HosRemoteConfig config = new HosRemoteConfig(args[0]);
     config.setHdcPath(args[1]); config.setIp("127.0.0.1");
     config.setScale(2); config.setFrameRate(24); config.setBitRate(2); config.setIFrameInterval(1);

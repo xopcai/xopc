@@ -242,15 +242,15 @@ AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重�
 
 ### 鸿蒙 USB 真机
 
-在「设置 → 手机控制 → 添加手机」选择「USB 连接鸿蒙手机」。在 **Gateway 所在电脑**安装 DevEco Studio / HarmonyOS SDK，手机开启开发者模式和 USB 调试，用数据线连接并授权电脑。第一版只接入 `hdc list targets -v` 中的 USB 设备，暂不支持无线 HDC 和鸿蒙云手机。
+在「设置 → 手机控制 → 添加手机」选择「USB 连接鸿蒙手机」。点击「一键安装缺失组件」，或在对话中请配置助手安装鸿蒙连接组件，**无需安装 DevEco Studio**。之后手机开启开发者模式和 USB 调试，用数据线连接并授权电脑。第一版只接入 `hdc list targets -v` 中的 USB 设备，暂不支持无线 HDC 和鸿蒙云手机。
 
-默认自动查找常见 SDK 目录，也可在连接窗口填写 HDC 可执行文件路径，保存到 `phone.hdcPath`。环境变量 `HARMONYOS_SDK_HOME`、`DEVECO_SDK_HOME` 可指向包含 `openharmony/toolchains/hdc` 或 `toolchains/hdc` 的 SDK 根目录；最后回退到 PATH 中的 HDC。鸿蒙连接不依赖 ADB 和 scrcpy。
+默认自动查找常见 SDK 目录，也可在连接窗口填写 HDC 可执行文件路径，保存到 `phone.hdcPath`。环境变量 `HARMONYOS_SDK_HOME`、`DEVECO_SDK_HOME` 可指向包含 `openharmony/toolchains/hdc` 或 `toolchains/hdc` 的 SDK 根目录；同时支持自动发现 xopc 托管的 HDC，最后回退到 PATH 中的 HDC。鸿蒙连接不依赖 ADB 和 scrcpy。
 
 鸿蒙设备沿用 `phone_use` 工具、应用权限、任务预算和人工交还机制。支持启动应用、点击、双击、长按、滑动、返回、主页和等待。长按时间由设备 UiTest 决定；滑动时长转换为速度，可能受设备上下限约束。「主页」只在允许所有应用时可用。启动应用会解析已安装 bundle 的入口模块和 Ability；应用列表暂以 bundle 标识显示。
 
-手机面板优先使用经过 Gateway 转发的原生 H.264 视频，失败时回退到截图。Gateway 电脑需安装完整 DevEco Studio 和 JDK 17+；xopc 使用本机库编译私有 Java 桥，不重新分发或自动下载厂商二进制。可用 `phone.hdcVideo.devecoPath`、`javaHome`、`sdkJar` 分别指定安装目录、JDK 根目录和完整独立的 HOScrcpy JAR。有些 DevEco 安装包中的库存在类名大小写与归档路径不一致的问题，会在启动采集前被拒绝；这种情况需指定兼容的完整库才能投屏。浏览器 WebCodecs 需 HTTPS 或 localhost 安全上下文。观察时读取焦点窗口的 UiTest 控件树并截图，检查前台窗口和旋转状态，完成后清理临时文件。优先获取 UiTest PNG；旧系统回退到 `snapshot_display` JPEG，再转换为 PNG。设备必须开放 UiTest、窗口和显示诊断能力；失败时会报告诊断，不会自动修改持久化系统测试模式。
+手机面板优先使用经过 Gateway 转发的原生 H.264 视频，失败时回退到截图。xopc 可在 Gateway 电脑独立安装 HDC、完整 Amazon Corretto JDK 和兼容的 HOScrcpy，健康的已有依赖直接复用。组件保存在 xopc 用户目录，不修改系统 PATH 或 JAVA_HOME。HDC 3.2.0c 和 USB 配套库来自固定的第三方 `hdw2@2.3.10` 分发，通过 jsDelivr 下载，unpkg 作为相同文件的备用源。按电脑平台只下载这两个文件，合计约 6 MB，逐个固定 SHA-256 和字节上限校验，不下载 SDK、npm 整包或其他平台文件，不执行 npm 安装脚本；小文件下载失败也不会自动回退完整 SDK。HOScrcpy 1.0.18-beta 来自固定的第三方 npm 分发包 `@nszzj/dsh-hos-scrcpy@3.0.2`，保留来源和许可声明，不称作华为官方下载。依赖文件和下载包均校验固定 SHA-256，支持下载代理、断点续传和验证过的离线包。检测与安装不会连接或操作手机。可用 `phone.hdcVideo.devecoPath`、`javaHome`、`sdkJar` 分别指定安装目录、JDK 根目录和完整独立的 HOScrcpy JAR。有些 DevEco 安装包中的库存在类名大小写与归档路径不一致的问题，会在启动采集前被拒绝；这种情况需指定兼容的完整库才能投屏。浏览器 WebCodecs 需 HTTPS 或 localhost 安全上下文。观察时读取焦点窗口的 UiTest 控件树并截图，检查前台窗口和旋转状态，完成后清理临时文件。优先获取 UiTest PNG；旧系统回退到 `snapshot_display` JPEG，再转换为 PNG。设备必须开放 UiTest、窗口和显示诊断能力；失败时会报告诊断，不会自动修改持久化系统测试模式。
 
-文字输入仍需在手机上完成。商业鸿蒙的 UiTest 控件树可能不提供密码框标识，因此将类型不明的输入框视为敏感字段。Agent 遇到输入需求会请求协助；在手机上输入后，明确交还控制权即可继续。Agent 操作需配置真实视觉模型，不支持 Android 模拟器 mock。对话式引导配置目前覆盖 Android / 阿里云；鸿蒙请通过上述添加手机窗口配置。
+文字输入仍需在手机上完成。商业鸿蒙的 UiTest 控件树可能不提供密码框标识，因此将类型不明的输入框视为敏感字段。Agent 遇到输入需求会请求协助；在手机上输入后，明确交还控制权即可继续。Agent 操作需配置真实视觉模型，不支持 Android 模拟器 mock。对话式配置已支持鸿蒙：选择 `source:harmonyos`，调用 `install_dependency` 的 `kind:harmonyos` 一次安装缺失的 HDC、Java 和 HOScrcpy，逐项复验；部分失败会保留已完成组件，重试时复用。USB 调试授权仍需在手机完成，电脑依赖就绪不代表真机或投屏兼容性已通过验收。
 
 可运行 `pnpm exec tsx scripts/verify-phone-hdc.mts`，在隔离的内存数据库和临时状态中，通过带鉴权的真实 HTTP 路径验证 USB 发现、注册、应用列表、截图与面板能力。不调用模型、不保留截图。显式加 `--actions` 会打开设置、滑动、点击标题区域、返回、回到桌面，最后恢复原应用，不修改系统设置。可用 `XOPC_PHONE_HDC_PATH`、`XOPC_PHONE_HDC_SERIAL` 指定测试工具和手机。
 

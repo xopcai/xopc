@@ -53,7 +53,7 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser/status')?.id).toBe('browser');
   });
   it('maps phone dependency management through runtime tools without capturing neighboring prefixes', () => {
-    for (const path of ['/api/runtime-tools/phone-dependencies', '/api/runtime-tools/phone-dependencies/adb/path', '/api/runtime-tools/phone-dependencies/adb/install/stream', '/api/runtime-tools/phone-dependencies/scrcpy/repair/stream', '/api/runtime-tools/phone-dependencies/scrcpy/import/stream'])
+    for (const path of ['/api/runtime-tools/phone-dependencies', '/api/runtime-tools/phone-dependencies/adb/path', '/api/runtime-tools/phone-dependencies/adb/install/stream', '/api/runtime-tools/phone-dependencies/scrcpy/repair/stream', '/api/runtime-tools/phone-dependencies/scrcpy/import/stream', '/api/runtime-tools/phone-dependencies/hdc/install/stream', '/api/runtime-tools/phone-dependencies/java/install/stream', '/api/runtime-tools/phone-dependencies/hoscrcpy/repair/stream'])
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('runtime-tools');
     expect(findAuthenticatedLazyRouteBundle('/api/runtime-tools-other/phone-dependencies')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/phone/devices')?.id).not.toBe('runtime-tools');

@@ -84,8 +84,10 @@ export async function downloadVerifiedArchive(params: {
   timeoutMs: number;
   proxy?: string;
   signal?: AbortSignal;
+  expectedBytes?: number;
   onProgress?: (downloadedBytes: number, totalBytes?: number) => void;
 }): Promise<string> {
+  const maxBytes = Math.min(MAX_ARCHIVE_BYTES, params.expectedBytes ?? MAX_ARCHIVE_BYTES);
   await mkdir(dirname(params.targetPath), { recursive: true });
   const completedPath = params.targetPath.replace(/\.partial$/, '');
   try {
@@ -101,7 +103,7 @@ export async function downloadVerifiedArchive(params: {
     let resumeOffset = await stat(params.targetPath)
       .then((info) => info.isFile() ? info.size : 0)
       .catch(() => 0);
-    if (resumeOffset > MAX_ARCHIVE_BYTES) {
+    if (resumeOffset > maxBytes) {
       await rm(params.targetPath, { force: true });
       resumeOffset = 0;
     }
@@ -116,7 +118,7 @@ export async function downloadVerifiedArchive(params: {
           signal: params.signal,
           init: {
             redirect: 'follow',
-            headers: offset > 0 ? { Range: `bytes=${offset}-` } : undefined,
+            headers: { ...(params.expectedBytes === undefined ? {} : { 'Accept-Encoding': 'identity' }), ...(offset > 0 ? { Range: `bytes=${offset}-` } : {}) },
           },
         });
       } catch (error) {
@@ -156,7 +158,7 @@ export async function downloadVerifiedArchive(params: {
       }
       total = Number(response.headers.get('content-length')) || undefined;
     }
-    if (total && total > MAX_ARCHIVE_BYTES) {
+    if (total && total > maxBytes) {
       await response.body.cancel().catch(() => {});
       throw new Error('Archive exceeds size limit');
     }
@@ -165,7 +167,7 @@ export async function downloadVerifiedArchive(params: {
     const transform = new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
         downloaded += chunk.byteLength;
-        if (downloaded > MAX_ARCHIVE_BYTES) throw new Error('Archive exceeds size limit');
+        if (downloaded > maxBytes) throw new Error('Archive exceeds size limit');
         params.onProgress?.(downloaded, total);
         controller.enqueue(chunk);
       },

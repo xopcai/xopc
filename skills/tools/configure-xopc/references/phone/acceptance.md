@@ -6,8 +6,9 @@ non-stale attempt is approved. Otherwise
 explain the remaining owner action. Read tool_manual phone_use; discover that exact tool only
 if not already declared. Use only the attempt's selected device, goal, completion and budget.
 
-1. phone_use open {deviceId:<attempt.deviceId>,mode:"control",appPackage:"com.android.settings"}.
-   The host opens About phone using Android’s standard Settings intent, avoiding stale subpages.
+1. phone_use open {deviceId:<attempt.deviceId>,mode:"control",appPackage:<attempt.completion.appPackage>}.
+   HarmonyOS uses com.huawei.hmos.settings and the real model opens About phone to read HarmonyOS version.
+   For Android, the host opens About phone using Android’s standard Settings intent, avoiding stale subpages.
    The real model must still navigate to Android version details and produce changed native UI evidence.
 2. observe. If login, password, verification code or sensitive business screen appears, stop
    and ask the user to prepare an appropriate screen; do not type into it.

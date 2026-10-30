@@ -7,11 +7,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
 import { installPhoneDependency, loadPhoneDependencies, phoneDependenciesKey, selectExistingPhoneAdb, type PhoneDependencyKind, type PhoneDependencyProgress } from './phone-dependencies-api';
 
-export function PhoneDependenciesCard({ cloudOnly = false, onChanged, expanded = true, onExpandedChange }: { cloudOnly?: boolean; onChanged?(): void; expanded?: boolean; onExpandedChange?(expanded: boolean): void }) {
+export function PhoneDependenciesCard({ cloudOnly = false, onChanged, expanded = true, onExpandedChange, initialPlatform = 'android' }: { cloudOnly?: boolean; onChanged?(): void; expanded?: boolean; onExpandedChange?(expanded: boolean): void; initialPlatform?: 'android' | 'harmonyos' }) {
   const zh = useLocaleStore(s => s.language) === 'zh';
+  const [platform, setPlatform] = useState(initialPlatform);
+  const [installingAll, setInstallingAll] = useState(false);
   const [busy, setBusy] = useState<PhoneDependencyKind>();
   const [showLocal, setShowLocal] = useState(false);
-  const [paths, setPaths] = useState({ adb: '', scrcpy: '' });
+  const [paths, setPaths] = useState({ adb: '', scrcpy: '', hdc: '', hoscrcpy: '', java: '' });
   const [progress, setProgress] = useState<PhoneDependencyProgress>();
   const [feedback, setFeedback] = useState('');
   const [failed, setFailed] = useState(false);
@@ -31,7 +33,23 @@ export function PhoneDependenciesCard({ cloudOnly = false, onChanged, expanded =
     } catch (cause) { setFailed(true); setFeedback(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(undefined); setProgress(undefined); }
   }
-  const relevant = data?.statuses.filter(item => !cloudOnly || item.kind !== 'adb');
+  const isRelevant = (kind: PhoneDependencyKind) => platform === 'harmonyos' ? ['hdc', 'hoscrcpy', 'java'].includes(kind) : kind === 'scrcpy' || kind === 'adb' && (!cloudOnly || showLocal);
+  const relevant = data?.statuses.filter(item => isRelevant(item.kind));
+  async function installHarmony() {
+    setInstallingAll(true); setFailed(false); setFeedback('');
+    try {
+      for (const kind of ['hdc', 'java', 'hoscrcpy'] as const) {
+        const current = await loadPhoneDependencies();
+        if (current.statuses.find(item => item.kind === kind)?.state === 'ready') continue;
+        setBusy(kind);
+        await installPhoneDependency(kind, 'install', setProgress);
+        const fresh = await loadPhoneDependencies();
+        if (!fresh.statuses.some(item => item.kind === kind && item.state === 'ready')) throw new Error(zh ? `${kind} 安装后验证未通过。` : `${kind} failed validation after installation.`);
+      }
+      setFeedback(zh ? '鸿蒙连接组件已就绪，可以连接手机。' : 'HarmonyOS components are ready. Connect your phone.');
+    } catch (cause) { setFailed(true); setFeedback(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setBusy(undefined); setProgress(undefined); setInstallingAll(false); await mutate(); onChanged?.(); }
+  }
   const ready = Boolean(relevant?.length && relevant.every(item => item.state === 'ready'));
   const summary = error ? (zh ? '检测失败' : 'Check failed') : !data ? (zh ? '检测中' : 'Checking') : ready ? (zh ? '已就绪' : 'Ready') : (zh ? '需要配置' : 'Setup needed');
   return <details open={expanded} onToggle={event => { if (event.currentTarget.open !== expanded) onExpandedChange?.(event.currentTarget.open); }} className="group rounded-2xl border border-edge bg-surface-panel" aria-label={zh ? '手机依赖状态' : 'Phone dependencies'}>
@@ -42,21 +60,24 @@ export function PhoneDependenciesCard({ cloudOnly = false, onChanged, expanded =
     <div className="space-y-4 border-t border-edge-subtle p-4 sm:p-5">
     <div className="flex items-center justify-between gap-3"><p className="text-xs text-fg-muted">{zh ? '安装在 Gateway 电脑上，无需全局安装。' : 'Installed on your Gateway computer. No global installation needed.'}</p><Button variant="ghost" aria-label={zh ? '刷新手机依赖状态' : 'Refresh phone dependencies'} disabled={Boolean(busy)} onClick={() => void mutate()}><RefreshCw className="size-4" aria-hidden /></Button></div>
     {data?.installationEnabled === false ? <p className="text-xs text-fg-muted">{zh ? '托管安装已禁用，可在运行环境中启用；已有 ADB 仍可使用。' : 'Managed installation is disabled. Enable it in Runtime Tools, or use an existing ADB installation.'}</p> : null}
-    {cloudOnly ? <div className="space-y-2 text-xs text-fg-muted"><p>{zh ? '阿里云连接无需本机 ADB；实时视频、持续触控和中文输入需要 scrcpy server。' : 'Alibaba Cloud connections need no local ADB. Live video, continuous touch and Unicode input require scrcpy server.'}</p><button className="text-accent-fg hover:underline" aria-expanded={showLocal} onClick={() => setShowLocal(value => !value)}>{showLocal ? (zh ? '收起本机连接依赖' : 'Hide local connection dependencies') : (zh ? '连接本机手机？查看 ADB 依赖' : 'Connecting a local phone? Show ADB dependencies')}</button></div> : null}
-    {error ? <p role="alert" className="text-sm text-danger">{zh ? '无法读取依赖状态，请刷新重试。' : 'Could not load dependency status. Refresh to retry.'}</p> : !data ? <Skeleton className="h-28 rounded-xl" /> : data.statuses.filter(item => !cloudOnly || showLocal || item.kind !== 'adb').map(item => {
-      const name = item.kind === 'adb' ? 'ADB · Android Platform Tools' : 'scrcpy server';
+    <div className="flex gap-2" role="group" aria-label={zh ? '手机系统' : 'Phone platform'}>{(['android', 'harmonyos'] as const).map(value => <Button key={value} variant={platform === value ? 'secondary' : 'ghost'} disabled={Boolean(busy) || installingAll} aria-pressed={platform === value} onClick={() => setPlatform(value)}>{value === 'android' ? 'Android' : (zh ? '鸿蒙' : 'HarmonyOS')}</Button>)}</div>
+    {platform === 'harmonyos' ? <div className="space-y-3"><p className="text-xs text-fg-muted">{zh ? '无需安装 DevEco Studio。HDC 只下载当前电脑的可执行文件和 USB 库，约 6 MB；Java 和投屏库独立安装。' : 'No DevEco Studio required. HDC downloads only the executable and USB library for this computer, about 6 MB. Java and the video library are installed separately.'}</p><Button disabled={Boolean(busy) || installingAll || !relevant?.some(item => item.state !== 'ready' && item.canInstall)} onClick={() => void installHarmony()}><Download className="size-4" aria-hidden />{installingAll ? (zh ? '正在安装鸿蒙组件…' : 'Installing HarmonyOS components…') : (zh ? '一键安装缺失组件' : 'Install missing components')}</Button></div> : null}
+    {cloudOnly && platform === 'android' ? <div className="space-y-2 text-xs text-fg-muted"><p>{zh ? '阿里云连接无需本机 ADB；实时视频、持续触控和中文输入需要 scrcpy server。' : 'Alibaba Cloud connections need no local ADB. Live video, continuous touch and Unicode input require scrcpy server.'}</p><button className="text-accent-fg hover:underline" aria-expanded={showLocal} onClick={() => setShowLocal(value => !value)}>{showLocal ? (zh ? '收起本机连接依赖' : 'Hide local connection dependencies') : (zh ? '连接本机手机？查看 ADB 依赖' : 'Connecting a local phone? Show ADB dependencies')}</button></div> : null}
+    {error ? <p role="alert" className="text-sm text-danger">{zh ? '无法读取依赖状态，请刷新重试。' : 'Could not load dependency status. Refresh to retry.'}</p> : !data ? <Skeleton className="h-28 rounded-xl" /> : data.statuses.filter(item => isRelevant(item.kind)).map(item => {
+      const name = { adb: 'ADB · Android Platform Tools', scrcpy: 'scrcpy server', hdc: 'HDC · OpenHarmony', hoscrcpy: 'HOScrcpy · 1.0.18-beta', java: 'Java · Amazon Corretto JDK' }[item.kind];
       return <div key={item.kind} className="space-y-2 border-t border-edge-subtle pt-3">
         <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-medium">{name}</p><p className="mt-1 text-xs text-fg-muted">{labels[item.state]}{item.version ? ` · ${item.version}` : ` · ${zh ? '托管版本' : 'Managed version'} ${item.requestedVersion}`}{item.source === 'system' ? (zh ? ' · 使用已有安装' : ' · Existing installation') : item.source === 'custom' ? (zh ? ' · 自定义路径' : ' · Custom path') : ''}</p></div>
-          <Button disabled={Boolean(busy) || item.state === 'installing' || !item.canInstall} variant={item.state === 'ready' ? 'secondary' : 'primary'} onClick={() => void perform(item.kind, item.state === 'corrupted' || item.state === 'ready' && item.source === 'managed' ? 'repair' : 'install')}><Download className="size-4" aria-hidden />{busy === item.kind || item.state === 'installing' ? (zh ? '处理中…' : 'Working…') : item.state === 'ready' && item.source !== 'managed' ? (zh ? '安装托管副本' : 'Install managed copy') : item.state === 'ready' || item.state === 'corrupted' ? (zh ? '修复托管安装' : 'Repair managed copy') : (zh ? '安装' : 'Install')}</Button>
+          <Button disabled={Boolean(busy) || installingAll || item.state === 'installing' || !item.canInstall} variant={item.state === 'ready' ? 'secondary' : 'primary'} onClick={() => void perform(item.kind, item.state === 'corrupted' || item.state === 'ready' && item.source === 'managed' ? 'repair' : 'install')}><Download className="size-4" aria-hidden />{busy === item.kind || item.state === 'installing' ? (zh ? '处理中…' : 'Working…') : item.state === 'ready' && item.source !== 'managed' ? (zh ? '安装托管副本' : 'Install managed copy') : item.state === 'ready' || item.state === 'corrupted' ? (zh ? '修复托管安装' : 'Repair managed copy') : (zh ? '安装' : 'Install')}</Button>
         </div>
-        <p className="text-xs text-fg-muted">{item.kind === 'adb' ? (zh ? '仅连接本机 USB 手机或模拟器时需要；云手机无需安装。' : 'Required for local USB phones and emulators. Cloud phones do not need it.') : (zh ? '用于实时画面、跟手操作和中文输入；缺失时仍可查看截图并手动输入。' : 'Required for live video, continuous touch and Unicode input. Snapshots and manual typing remain available without it.')}</p>
-        <details className="text-xs text-fg-muted"><summary className="cursor-pointer py-1">{item.kind === 'adb' ? (zh ? '使用已有 ADB' : 'Use existing ADB') : (zh ? '导入已有 scrcpy server' : 'Import existing scrcpy server')}</summary>
+        {item.distribution ? <p className="break-words text-xs text-fg-muted">{item.distribution}</p> : null}
+        <p className="text-xs text-fg-muted">{platform === 'harmonyos' ? (item.kind === 'hdc' ? (zh ? '用于 USB 连接、截图和基础操作。' : 'USB connection, screenshots and basic actions.') : (zh ? '用于实时投屏；缺失时仍可使用截图。' : 'Required for live video; snapshots remain available without it.')) : item.kind === 'adb' ? (zh ? '仅连接本机 USB 手机或模拟器时需要；云手机无需安装。' : 'Required for local USB phones and emulators. Cloud phones do not need it.') : (zh ? '用于实时画面、跟手操作和中文输入；缺失时仍可查看截图并手动输入。' : 'Required for live video, continuous touch and Unicode input. Snapshots and manual typing remain available without it.')}</p>
+        {platform === 'android' ? <details className="text-xs text-fg-muted"><summary className="cursor-pointer py-1">{item.kind === 'adb' ? (zh ? '使用已有 ADB' : 'Use existing ADB') : (zh ? '导入已有 scrcpy server' : 'Import existing scrcpy server')}</summary>
           {item.path ? <p className="mt-2 break-all">{zh ? '当前文件：' : 'Current file: '}{item.path}</p> : null}
           <label className="mt-3 block space-y-2"><span>{item.kind === 'adb' ? (zh ? 'Gateway 上的 ADB 可执行文件绝对路径' : 'Absolute ADB executable path on Gateway') : (zh ? 'Gateway 上的 scrcpy server 文件绝对路径' : 'Absolute scrcpy server file path on Gateway')}</span><input aria-label={item.kind === 'adb' ? (zh ? '已有 ADB 路径' : 'Existing ADB path') : (zh ? '已有 scrcpy server 路径' : 'Existing scrcpy server path')} value={paths[item.kind]} disabled={Boolean(busy)} onChange={event => setPaths(current => ({ ...current, [item.kind]: event.target.value }))} className="w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg focus-visible:outline-2 focus-visible:outline-accent" /></label>
           <p className="mt-2">{item.kind === 'scrcpy' ? (zh ? `只接受固定版本 ${item.requestedVersion}，校验通过后复制到托管目录。` : `Only pinned version ${item.requestedVersion} is accepted and copied into managed storage after verification.`) : (zh ? '验证版本后保存路径；不会替换此文件或重启 ADB 服务。' : 'Checks the version and saves the path without replacing files or restarting ADB.')}</p>
           <Button className="mt-3" disabled={Boolean(busy) || !paths[item.kind].trim()} onClick={() => void perform(item.kind, 'existing')}>{zh ? '验证并使用' : 'Verify and use'}</Button>
           {item.kind === 'adb' ? <Button variant="ghost" className="ml-2 mt-3" disabled={Boolean(busy)} onClick={() => void perform('adb', 'detect')}>{zh ? '恢复自动检测' : 'Use automatic detection'}</Button> : null}
-        </details>
+        </details> : null}
       </div>;
     })}
     <div className="min-h-5 text-xs" aria-live="polite">{progress ? <p role="status" className="text-fg-muted">{phases[progress.phase] ?? progress.phase}{progress.downloadedBytes && progress.totalBytes ? ` · ${Math.min(100, Math.round(progress.downloadedBytes / progress.totalBytes * 100))}%` : ''}</p> : feedback ? <p role={failed ? 'alert' : 'status'} className={failed ? 'text-danger' : 'text-fg-muted'}>{feedback}</p> : null}</div>

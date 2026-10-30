@@ -98,8 +98,8 @@ fields before reporting success. A saved model reference does not prove it can b
 Use configure-xopc and references/phone/overview.md. Use plain conversation, no full settings page embedded in chat. Human-only steps use the returned interactionPath
 for a small secure product modal; saving rechecks scope and returns to the original conversation. mode phone_setup inspect/preview/start inspect or resume; models lists
 compatible models. get/recheck/verification_report/cancel/release take {setupId}.
-Automate source {setupId,source:local|aliyun,expectedRevision}, configure {setupId,enabled:true,
-expectedRevision}, install_dependency {setupId,kind:adb|scrcpy,repair?:true,expectedRevision},
+Automate source {setupId,source:local|aliyun|harmonyos,expectedRevision}, configure {setupId,enabled:true,
+expectedRevision}, install_dependency {setupId,kind:adb|scrcpy|hdc|java|hoscrcpy|harmonyos,repair?:true,expectedRevision},
 set_model {setupId,modelRef:<listed compatible ref>,expectedRevision,replaceExisting?:true},
 register_local {setupId,serial:<discovered online serial>,name?,expectedRevision}, and
 begin_verification {setupId,deviceId,expectedRevision}. Writes require a host-authorized
@@ -108,6 +108,8 @@ phone, change the chat model, widen app access, use shell installs or submit key
 Use set_model for the dedicated Phone model only; it cannot change the chat model; credentials use the host interactionPath.
 Explain the Settings-only goal, screenshot sharing and model costs before testing. Get provides
 attempt.goal/completion/maxActions. Use phone_use open, observe, run, close, then verification_report.
+For HarmonyOS, kind:harmonyos installs missing HDC, JDK and compatible HOScrcpy together; reuse ready dependencies.
+Explain distribution and download size from readiness before installation. No DevEco Studio is needed.
 User-only work is physical USB/RSA, login/OAuth, private-key entry/upload and cloud purchase.
 After interruption recheck, release the old test, resolve the cause and continue here.`,
   browser_setup: `# Browser setup

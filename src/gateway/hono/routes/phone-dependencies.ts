@@ -7,6 +7,7 @@ import { resolveStateDir } from '../../../config/paths-state.js';
 import { resolveAdbPath } from '../../../phone/adb-driver.js';
 import { getPhoneRuntime } from '../../../phone/runtime.js';
 import { PhoneDependencyManager, probePhoneAdb, type PhoneDependencyProgress } from '../../../runtime-tools/phone-dependencies.js';
+import { managedHdcPath, managedHosJar, managedJavaHome } from '../../../runtime-tools/harmony-paths.js';
 import { RuntimeError } from '../../../runtime-tools/errors.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -14,7 +15,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 export function registerPhoneDependencyRoutes(parent: Hono, deps: AuthenticatedRouteDeps): void {
   const app = new Hono();
   const base = '/api/runtime-tools/phone-dependencies';
-  const manager = () => new PhoneDependencyManager({ stateDir: resolveStateDir(), config: deps.service.currentConfig.runtimeTools, adbPath: deps.service.currentConfig.phone.adbPath });
+  const manager = () => new PhoneDependencyManager({ stateDir: resolveStateDir(), config: deps.service.currentConfig.runtimeTools, adbPath: deps.service.currentConfig.phone.adbPath, phone: deps.service.currentConfig.phone });
   const adbBusy = () => getPhoneRuntime().reports().some(report => report.status !== 'closed');
   app.use(`${base}/*`, bodyLimit({ maxSize: 8192 }));
   const admin: MiddlewareHandler = async (c, next) => {
@@ -43,11 +44,11 @@ export function registerPhoneDependencyRoutes(parent: Hono, deps: AuthenticatedR
     return c.json({ ok: true });
   });
   app.post(`${base}/:kind/:action/stream`, deps.strictRateLimitMiddleware, async c => {
-    const kind = z.enum(['adb', 'scrcpy']).parse(c.req.param('kind'));
+    const kind = z.enum(['adb', 'scrcpy', 'hdc', 'hoscrcpy', 'java']).parse(c.req.param('kind'));
     const action = z.enum(['install', 'repair', 'import']).parse(c.req.param('action'));
     const input = z.object({ path: z.string().trim().min(1).max(4096).optional() }).strict().parse(await c.req.json());
     if (action === 'import' && (kind !== 'scrcpy' || !input.path) || action !== 'import' && input.path) return c.json({ ok: false, message: 'Only scrcpy server imports accept a file path' }, 400);
-    if (kind === 'adb' && adbBusy()) return c.json({ ok: false, message: 'Close the current phone session before installing or repairing ADB', error: 'PHONE_DEPENDENCY_BUSY' }, 409);
+    if (kind !== 'scrcpy' && adbBusy()) return c.json({ ok: false, message: 'Close the current phone session before installing or repairing shared phone dependencies', error: 'PHONE_DEPENDENCY_BUSY' }, 409);
     const runtime = manager();
     return streamSSE(c, async stream => {
       let writes = Promise.resolve();
@@ -56,7 +57,16 @@ export function registerPhoneDependencyRoutes(parent: Hono, deps: AuthenticatedR
       };
       runtime.on('progress', progress);
       try {
-        await runtime.install(kind, { repair: action === 'repair', sourcePath: input.path });
+        const config = deps.service.currentConfig;
+        await runtime.install(kind, { repair: action === 'repair', sourcePath: input.path, beforeCommit: () => {
+          if (kind !== 'scrcpy' && adbBusy()) throw new Error('Close active phone sessions before changing shared phone dependencies');
+        } });
+        if (kind === 'hdc' || kind === 'hoscrcpy' || kind === 'java') {
+          const next = structuredClone(config);
+          if (kind === 'hdc') next.phone.hdcPath = managedHdcPath();
+          else next.phone.hdcVideo = { ...next.phone.hdcVideo, ...(kind === 'java' ? { javaHome: managedJavaHome() } : { sdkJar: managedHosJar() }) };
+          if (!(await deps.service.saveConfig(next, config)).saved) throw new Error('Phone configuration changed; refresh before using the installed dependency');
+        }
         await writes;
         deps.service.emit('runtime-tools.updated', { dependency: kind });
         await stream.writeSSE({ event: 'result', data: JSON.stringify({ ok: true }) });

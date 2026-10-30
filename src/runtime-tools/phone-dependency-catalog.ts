@@ -1,12 +1,15 @@
 import { join } from 'node:path';
 
+import { harmonyDependencyAsset } from './harmony-dependency-catalog.js';
+
 import { resolveStateDir } from '../config/paths-state.js';
 
 export const ADB_VERSION = '37.0.1';
 export const SCRCPY_VERSION = '3.3.3';
 export const SCRCPY_SHA256 = '7e70323ba7f259649dd4acce97ac4fefbae8102b2c6d91e2e7be613fd5354be0';
-export type PhoneDependencyKind = 'adb' | 'scrcpy';
-export type PhoneDependencyAsset = { kind: PhoneDependencyKind; version: string; filename: string; url: string; sha256: string; archive: boolean };
+export type PhoneDependencyKind = 'adb' | 'scrcpy' | 'hdc' | 'hoscrcpy' | 'java';
+export type PhoneDependencyFile = { targetName: string; filename: string; url: string; fallbackUrls?: readonly string[]; sha256: string; sizeBytes: number };
+export type PhoneDependencyAsset = { kind: PhoneDependencyKind; version: string; filename: string; url: string; sha256: string; archive: boolean; files?: readonly PhoneDependencyFile[] };
 
 /** Pinned official distributions, hashed from dl.google.com over HTTPS. */
 const ADB_ASSETS = {
@@ -16,6 +19,7 @@ const ADB_ASSETS = {
 } as const;
 
 export function phoneDependencyAsset(kind: PhoneDependencyKind, platform: NodeJS.Platform = process.platform, arch = process.arch): PhoneDependencyAsset | undefined {
+  if (kind === 'hdc' || kind === 'hoscrcpy' || kind === 'java') return harmonyDependencyAsset(kind, platform, arch);
   if (kind === 'scrcpy') {
     const filename = `scrcpy-server-v${SCRCPY_VERSION}`;
     return { kind, version: SCRCPY_VERSION, filename, sha256: SCRCPY_SHA256, archive: false,
