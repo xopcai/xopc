@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
+import type { z } from 'zod';
 import {
   ActionEnvelopeSchema, computerActionInputCount, computerActionInputs, ComputerCommandSchema, COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS,
   type ComputerAction, type ComputerCommand, type ComputerModelBinding,
@@ -7,7 +8,8 @@ import {
 } from '@xopcai/computer-control-contract';
 import { ComputerConfigSchema, type ComputerConfig } from './config.js';
 import type { ComputerNativeTiming } from './diagnostics.js';
-import { ComputerTargetError } from './errors.js';
+import { ComputerTargetError, ComputerOperationError, computerDiagnostic, type ComputerDiagnosticSchema } from './errors.js';
+import { ComputerStabilityTracker } from './stability-diagnostics.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ComputerBroker');
@@ -70,6 +72,7 @@ export interface BrokerResult {
   observation?: ComputerObservation;
   receipt?: ComputerReceipt;
   nativeMs?: ComputerNativeTiming;
+  diagnostic?: z.infer<typeof ComputerDiagnosticSchema>;
   errorCode?: string;
   apps?: ComputerApp[];
   windows?: ComputerWindow[];
@@ -211,7 +214,7 @@ export class ComputerBroker {
     try { return await Promise.race([decision, cancelled]); }
     finally { s.controller.signal.removeEventListener('abort', abort); }
   }
-  private async observe(s: Session): Promise<BrokerResult> {
+  private async observe(s: Session, afterAction?: ComputerAction['kind']): Promise<BrokerResult> {
     let frame: DriverObservation | undefined;
     try {
     frame = await this.driver.observe(s.target!, s.controller.signal);
@@ -232,11 +235,14 @@ export class ComputerBroker {
     } catch { /* Missing structured context keeps the ordinary capture path. */ }
     if (editable) {
       let stable = false;
+      const stability = new ComputerStabilityTracker(afterAction ? 'post_action' : 'initial_capture', afterAction);
       const fingerprint = () => JSON.stringify([frame.stateDigest, frame.target]);
       const seen = new Set([fingerprint()]);
       for (let sample = 0; sample < 5; sample++) {
         this.active(s);
+        await delay(100, undefined, { signal: s.controller.signal });
         const next = await this.driver.observe(s.target!, s.controller.signal);
+        stability.compare(frame, next);
         const previous = frame; frame = next;
         previous.image.fill(0);
         validateFrame();
@@ -245,7 +251,7 @@ export class ComputerBroker {
         if (stable) break;
         seen.add(current);
       }
-      if (!stable) throw new Error('COMPUTER_UI_UNSTABLE');
+      if (!stable) throw new ComputerOperationError(stability.diagnostic('COMPUTER_UI_UNSTABLE', 6));
     }
     validateFrame();
     s.target = frame.target;
@@ -256,7 +262,7 @@ export class ComputerBroker {
     return { ...this.result(s), observation: s.observation, frame: { bytes: frame.image, mimeType: frame.mimeType } };
     } catch (error) {
       frame?.image.fill(0);
-      s.errorCode ??= error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OBSERVE_FAILED';
+      s.errorCode ??= computerDiagnostic(error)?.errorCode ?? (error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OBSERVE_FAILED');
       await this.stop().catch(() => {
         log.warn({ sessionId: s.id, phase: 'cleanup' }, 'Computer driver cleanup failed after observation failure');
       });
@@ -305,6 +311,7 @@ export class ComputerBroker {
     const precheckStarted = this.durationNow();
     let matched = false;
     let precheckSamples = 0;
+    const stability = new ComputerStabilityTracker('pre_dispatch', e.action.kind);
     // A blinking insertion caret can change pixels while the application is
     // otherwise unchanged. Resample before any dispatch, without masking pixels
     // or weakening the original full target/digest comparison. A persistent
@@ -315,11 +322,13 @@ export class ComputerBroker {
       let current: DriverObservation;
       try { current = await this.driver.observe(s.target!, s.controller.signal); }
       catch (error) {
-        s.errorCode ??= error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OBSERVE_FAILED';
+        s.errorCode ??= computerDiagnostic(error)?.errorCode ?? (error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OBSERVE_FAILED');
         await this.stop().catch(() => {}); throw error;
       }
       try {
         this.active(s);
+        stability.compare(observed, current);
+        if (e.deadlineAt <= this.now()) stability.deadline();
         const sameTarget = JSON.stringify(current.target) === JSON.stringify(observed.target);
         if (!sameTarget || e.deadlineAt <= this.now()) break;
         if (current.stateDigest !== observed.stateDigest) continue;
@@ -330,7 +339,8 @@ export class ComputerBroker {
     }
     if (!matched) {
       s.pending = undefined; s.observation = undefined; s.status = 'ready';
-      return { ...this.result(s), errorCode: 'COMPUTER_OBSERVATION_CHANGED' };
+      return { ...this.result(s), errorCode: 'COMPUTER_OBSERVATION_CHANGED',
+        diagnostic: stability.diagnostic('COMPUTER_OBSERVATION_CHANGED', precheckSamples) };
     }
     const nativeMs: ComputerNativeTiming = { precheckMs: Math.max(0, Math.round(this.durationNow() - precheckStarted)), inputMs: 0, postObserveMs: 0, precheckSamples };
     const grouped = e.action.kind === 'activateSequence' || e.action.kind === 'batch';
@@ -361,20 +371,21 @@ export class ComputerBroker {
       s.status = 'ready';
       const observationStarted = this.durationNow();
       let after: BrokerResult;
-      try { after = await this.observe(s); }
+      try { after = await this.observe(s, e.action.kind); }
       finally { nativeMs.postObserveMs = Math.max(0, Math.round(this.durationNow() - observationStarted)); }
       // A changed screenshot is observation evidence, not proof of business success.
       receipt.verification = after.observation ? 'visual' : 'none';
       return { ...after, receipt, nativeMs };
     } catch (error) {
       if (receipt.dispatch === 'started') receipt.dispatch = 'unknown';
-      receipt.errorCode = error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message)
-        ? error.message : receipt.dispatch === 'completed' ? 'COMPUTER_POST_ACTION_OBSERVATION_FAILED' : 'COMPUTER_NATIVE_ACTION_FAILED';
+      const diagnostic = computerDiagnostic(error);
+      receipt.errorCode = diagnostic?.errorCode ?? (error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message)
+        ? error.message : receipt.dispatch === 'completed' ? 'COMPUTER_POST_ACTION_OBSERVATION_FAILED' : 'COMPUTER_NATIVE_ACTION_FAILED');
       s.errorCode = receipt.errorCode;
       await this.stop().catch(() => {
         log.warn({ sessionId: s.id, actionId: e.actionId, phase: 'cleanup' }, 'Computer driver cleanup failed after session revocation');
       });
-      return { ...this.result(s), receipt, nativeMs };
+      return { ...this.result(s), receipt, nativeMs, ...(diagnostic ? { diagnostic } : {}) };
     }
   }
   stop(errorCode?: 'COMPUTER_LOCAL_UI_REQUIRED', retainDriver = false): Promise<void> {

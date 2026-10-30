@@ -20,6 +20,7 @@ import { computerAgentTurn, clearComputerFrames, retainComputerFrame } from './a
 import { executeComputerProgram, type ComputerProgramHost } from './program-runtime.js';
 import { executeComputerBatch } from './batch.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
+import { ComputerStabilityTracker } from './stability-diagnostics.js';
 import { createLogger } from '../utils/logger.js';
 import { ComputerExpectationSchema, ComputerTaskState, verifyComputerExpectation,
   type ComputerExpectation, type ComputerVerification } from './task-state.js';
@@ -425,7 +426,7 @@ export class ComputerRuntime {
         if (!this.isUndispatchedChange(result) || !context) return result;
         // Approval resumes the original goal, never a replacement supplied while waiting.
         input = { op: 'step', goal: context.goal, expect: context.expectation, flowId: context.flowId };
-        this.reserveRescue(s, signal);
+        this.reserveRescue(s, signal, result.diagnostic);
       } else if (status.value.status !== 'ready') return this.present(status.value);
       // Explicit reuse starts a fresh model decision, never a queued action from a previous call.
       if (input.op === 'step') {
@@ -446,6 +447,7 @@ export class ComputerRuntime {
         if (reuse) goalContext!.observationsReused++;
         const observed = reuse ? cached : await this.send(s, { op: 'observe', sessionId: s.id, owner }, signal);
         try {
+          if (observed.value.diagnostic && observed.value.errorCode) throw new ComputerOperationError(observed.value.diagnostic);
           const verification = verifyComputerExpectation(input.expect, observed.value.observation);
           if (input.op === 'observe') s.diagnostics.verify(verification);
           if (input.op === 'observe' && !input.question) return { ...this.present(observed.value), verification, verified: verification?.status === 'satisfied', budget: this.budget(s) };
@@ -497,7 +499,7 @@ export class ComputerRuntime {
           phase = 'dispatch';
           const result = await this.dispatchAction(s, e, signal, goalContext);
           if (!this.isUndispatchedChange(result)) return result;
-          this.reserveRescue(s, signal);
+          this.reserveRescue(s, signal, result.diagnostic);
         } finally { observed.frame?.fill(0); }
       }
     } catch (error) {
@@ -513,12 +515,12 @@ export class ComputerRuntime {
   private isUndispatchedChange(result: ComputerPublicResult): boolean {
     return result.status === 'ready' && result.errorCode === 'COMPUTER_OBSERVATION_CHANGED' && !result.receipt;
   }
-  private reserveRescue(s: Session, signal: AbortSignal): void {
+  private reserveRescue(s: Session, signal: AbortSignal, diagnostic?: z.infer<typeof ComputerDiagnosticSchema>): void {
     signal.throwIfAborted();
     const limit = Math.min(s.rescueLimit, this.getConfig().computer.maxRescuesPerSession);
     if (s.rescues >= limit) {
       s.diagnostics.count('rescueExhaustions');
-      throw new Error('COMPUTER_UI_UNSTABLE');
+      throw diagnostic ? new ComputerOperationError({ ...diagnostic, errorCode: 'COMPUTER_UI_UNSTABLE' }) : new Error('COMPUTER_UI_UNSTABLE');
     }
     s.rescues++;
     s.diagnostics.count('rescueAttempts');
@@ -553,28 +555,44 @@ export class ComputerRuntime {
       const receipt = reply.value.receipt;
       const nativeMs = reply.value.nativeMs;
       let stable = false;
+      const stability = new ComputerStabilityTracker('post_action', envelope.action.kind);
       try {
         for (let sample = 0; sample < 3; sample++) {
+          await delay(100, undefined, { signal });
           const next = await this.send(s, { op: 'observe', sessionId: s.id, owner: s.owner }, signal);
           goalContext.stabilityObservations++;
           const previous = reply;
           reply = { ...next, value: { ...next.value, receipt, nativeMs } };
+          if (reply.value.diagnostic?.stability) {
+            reply.value.diagnostic = { ...reply.value.diagnostic, stability: { ...reply.value.diagnostic.stability,
+              stage: 'post_action', action: envelope.action.kind } };
+          }
           previous.frame?.fill(0);
           if (previous.value.brokerEpoch !== next.value.brokerEpoch || previous.value.generation !== next.value.generation
             || previous.value.grantId !== next.value.grantId) { reply.value.errorCode = 'COMPUTER_GRANT_REVOKED'; break; }
           const a = previous.value.observation, b = next.value.observation;
+          if (a && b) stability.compare(a, b);
           stable = next.value.status === 'ready' && !next.value.errorCode && !!a && !!b
             && previous.value.brokerEpoch === next.value.brokerEpoch && previous.value.generation === next.value.generation
             && previous.value.grantId === next.value.grantId && a.stateDigest === b.stateDigest
             && JSON.stringify(a.target) === JSON.stringify(b.target);
           if (stable || next.value.status !== 'ready' || next.value.errorCode) break;
         }
-        if (!stable && !reply.value.errorCode) reply.value.errorCode = 'COMPUTER_UI_UNSTABLE';
-      } catch {
+        if (!stable && !reply.value.errorCode) {
+          reply.value.errorCode = 'COMPUTER_UI_UNSTABLE';
+          reply.value.diagnostic = stability.diagnostic('COMPUTER_UI_UNSTABLE', 4);
+        }
+      } catch (error) {
         // The input is known completed even if subsequent observation fails.
         // Keep its receipt; never turn a failed capture into a replay request.
         reply.frame?.fill(0);
-        reply = { value: { ...reply.value, receipt, errorCode: signal?.aborted ? 'COMPUTER_OPERATION_ABORTED' : 'COMPUTER_POST_ACTION_OBSERVATION_FAILED' } };
+        const diagnostic = computerDiagnostic(error);
+        reply = { value: { ...reply.value, receipt,
+          errorCode: signal?.aborted ? 'COMPUTER_OPERATION_ABORTED' : diagnostic?.errorCode ?? 'COMPUTER_POST_ACTION_OBSERVATION_FAILED',
+          ...(diagnostic ? { diagnostic: { ...diagnostic, ...(diagnostic.stability ? { stability: {
+            ...diagnostic.stability, stage: 'post_action' as const, action: envelope.action.kind,
+          } } : {}) } } : {}),
+        } };
       }
     }
     if (goalContext && reply.value.receipt?.dispatch === 'completed' && reply.value.nativeMs) {
@@ -596,7 +614,7 @@ export class ComputerRuntime {
     if (reply.value.receipt) s.diagnostics.record(reply.value.receipt, context?.before, reply.value.observation, verification);
     const failureCode = reply.value.errorCode ?? (reply.value.receipt?.dispatch === 'unknown' || reply.value.receipt?.dispatch === 'started'
       ? reply.value.receipt.errorCode ?? 'COMPUTER_NATIVE_ACTION_FAILED' : undefined);
-    if (failureCode) s.diagnostics.fail(new Error(failureCode), 'dispatch', reply.value.receipt?.dispatch ?? 'notStarted');
+    if (failureCode) s.diagnostics.fail(reply.value.diagnostic ? new ComputerOperationError(reply.value.diagnostic) : new Error(failureCode), 'dispatch', reply.value.receipt?.dispatch ?? 'notStarted');
     if (context && reply.value.receipt) {
       s.task.record(context.goal, envelope.action, context.before, reply.value.receipt, reply.value.observation, verification);
       s.flowCapture.record(envelope.action, context.before, reply.value.receipt, reply.value.observation, context.expectation, verification);

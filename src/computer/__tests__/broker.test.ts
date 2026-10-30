@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { computerDiagnostic } from '../errors.js';
 import { ComputerBroker, type ComputerApproval, type ComputerDriver } from '../broker.js';
 
 const target = { appId: 'fixture', pid: 1, processIdentity: '1:100', windowId: '10', width: 800, height: 600, geometryRevision: '1' };
@@ -202,10 +203,26 @@ describe('desktop computer authority', () => {
       expect(await capture).toMatchObject({ observation: { stateDigest: 'steady' } });
       expect(images.slice(0, -1).every(image => image.every(byte => byte === 0))).toBe(true);
     } else {
-      await expect(capture).rejects.toThrow('COMPUTER_UI_UNSTABLE');
+      const error = await capture.catch(error => error);
+      expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_UI_UNSTABLE', stability: {
+        stage: 'initial_capture', samples: 6, changes: ['visual_or_unexposed_state'], changedElementIndices: [],
+      } });
       expect(f.driver.observe).toHaveBeenCalledTimes(6);
       expect(images.every(image => image.every(byte => byte === 0))).toBe(true);
     }
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('allows a time-based editor transition to settle between bounded samples', async () => {
+    const f = fixture(true); await f.open();
+    const original = vi.mocked(f.driver.observe).getMockImplementation()!;
+    const startedAt = Date.now(); let reads = 0;
+    vi.mocked(f.driver.observe).mockImplementation(async (...args) => ({ ...await original(...args),
+      summary: JSON.stringify({ elements: [{ role: 'AXTextArea' }] }),
+      stateDigest: Date.now() - startedAt >= 150 ? 'settled' : `transition-${++reads}`,
+    }));
+    const result = await f.broker.command({ op: 'observe', owner: 'o', sessionId: 's' });
+    expect(result.observation?.stateDigest).toBe('settled');
+    expect(f.driver.observe.mock.calls.length).toBeLessThanOrEqual(6);
     expect(f.driver.perform).not.toHaveBeenCalled();
   });
   it('refuses a target change during native-editor stable capture and clears both frames', async () => {
