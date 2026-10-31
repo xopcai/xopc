@@ -1,0 +1,15 @@
+{
+  "preview": true,
+  "mergedToMain": false,
+  "platform": "macOS arm64",
+  "buildBaseCommit": "a68d3308a",
+  "runtimeScope": "Remote chat, independently enrolled desktop identity and read-only observation. J1/J2a executor modules have no live tool or startup integration.",
+  "app": "/tmp/xopc-electron-preview-20261101/installed/xopc.app",
+  "dmg": "/tmp/xopc-electron-preview-20261101/xopc-preview-arm64.dmg",
+  "dmgSha256": "3fa5dcc22cb19f28818dc3995f6b2b66773ee1b86ebf17511786e962658730b4",
+  "fingerprint": {
+    "files": 1426,
+    "sha256": "effe3a59fa2cbed8035a9f3d6b590677ce7d69827c227053dde18304c28a8c0b"
+  },
+  "signing": "Developer ID; notarization not configured"
+}

@@ -42,3 +42,7 @@ D3a已完成独立签名的设备状态只读Host与逐项原生同意，实际A
 2026-11-01：D3b截图已实现独立权限、原生来源选择与单次确认、绑定设备签名的专属上传、短期内存帧和Agent图像投影；HTTP/WS集成E2E、schema265完整升级链、正式DMG包内验证、本地新启动/复用及旧schema262/264 Gateway回归通过。原生验收因Mac锁屏及安全存储原预算超时未完成，已保留失败并请求解锁；不将D3b或完整P2a-2标为通过。详见[截图证据](./evidence/electron-gateway-p2a2/observation-screen-20261101/README.md)。
 
 未等待24小时或原生交互，独立推进[P2b J1](./electron-gateway-p2b-contract.md)：持久操作元数据、去重/未知状态和跨进程执行锁已实现，103项相关Electron测试及真实子进程崩溃E2E通过。此模块尚未接入工具或现有本地Host；J2调用监督与协议协商、J3安装包故障验收、P3授权工作区和P4后台任务继续待实施。
+
+用户要求全部开发完成后线性合入main并构建Electron。已确认当前分支在origin/main之上，最终采用rebase/fast-forward，不强推main或创建merge commit；原main工作区有未跟踪方案文档，保持原样，最终合并前须备份避免覆盖。
+
+已继续完成J2a执行监督核心及隔离启动/测试说明：114项相关Electron测试、5项集成E2E、类型检查和新内部预览DMG实际本地回归通过，见[证据](./evidence/electron-gateway-p2b/supervisor-20261101/README.md)。原生截图仍待手动解锁验收，J2b/J3/P3/P4未完成，因此没有提前合入main，也没有将预览包当作最终交付。最终合并后须从实际main提交重新构建并更新[测试说明](./electron-gateway-testing.md)。

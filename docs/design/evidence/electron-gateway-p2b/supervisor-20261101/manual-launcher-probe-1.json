@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "state": "/tmp/xopc-manual-launcher-20261101-1",
+  "port": 53822,
+  "authenticatedConfigStatus": 200,
+  "scope": "isolated installed app launch and authenticated Gateway readiness only, no native interaction claim"
+}
