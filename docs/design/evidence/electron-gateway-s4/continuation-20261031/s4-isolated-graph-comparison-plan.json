@@ -1,0 +1,16 @@
+{
+  "purpose": "Sequential complete candidate and original-main control; retain both regardless of outcome",
+  "order": [
+    "candidate",
+    "original-main control"
+  ],
+  "runsPerMode": 30,
+  "operationsFirstLaunch": 100,
+  "baseline": "docs/design/evidence/electron-gateway-p2a1-s0-s1/s0-local-baseline.json",
+  "budgetsChanged": false,
+  "parallelBuildOrFunctionalTests": false,
+  "uiAutomationDuringSampling": false,
+  "controlRoot": "/tmp/xopc-s4-source-control",
+  "candidateMainSha256": "b5d9fa570e7cd51048de289559d1d95090e7a292e604c7a33cbc4e61cde59da0",
+  "controlMainSha256": "b5d9fa570e7cd51048de289559d1d95090e7a292e604c7a33cbc4e61cde59da0"
+}

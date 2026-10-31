@@ -1,0 +1,24 @@
+{
+  "passed": false,
+  "source": "cua_repl tool results in this conversation; not an application assertion",
+  "attempts": [
+    {
+      "target": "ai.xopc.xopc.s4fault",
+      "observation": "Native dialog visible with 使用本地模式 and 退出",
+      "action": "pressKey Return",
+      "error": "NSCocoaErrorDomain Code=256; NSOSStatusErrorDomain Code=-600 procNotFound"
+    },
+    {
+      "target": "separate canonical worktree reports path; ai.xopc.xopc.s4canonical",
+      "observation": "Native dialog visible with 使用本地模式 and 退出",
+      "action": "click element 4",
+      "error": "Computer Use server error -10005: timeoutReached"
+    },
+    {
+      "target": "ai.xopc.xopc.s4canonical",
+      "action": "getAXStateAndScreenshot",
+      "error": "Computer Use server error -10005: timeoutReached"
+    }
+  ],
+  "acceptance": "No native button action or local recovery was accepted as passed; no alternative UI input technology used"
+}

@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { createAcceptanceOutput, localConnectionEnvironment } from './electron-local-connection-support.mjs';
-import { killAcceptanceApplication, macPackagedTarget, packagedAcceptanceEnvironment } from './electron-packaged-acceptance.mjs';
+import { installedApplicationPids, killAcceptanceApplication, macPackagedTarget, packagedAcceptanceEnvironment } from './electron-packaged-acceptance.mjs';
 
 const root = resolve(import.meta.dirname, '..'), index = process.argv.indexOf('--app'); assert(index >= 0);
 const target = await macPackagedTarget(process.argv[index + 1]);
@@ -18,7 +18,8 @@ assert(!existsSync(join(target.resources, 'app.asar.unpacked/out/preload/gateway
 const output = await createAcceptanceOutput(join(root, 'reports/s4-native-startup-recovery.json'));
 const state = mkdtempSync(join(tmpdir(), 'xopc-s4-recovery-')), config = join(state, 'xopc.json'), token = randomUUID();
 const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening'); const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
-const pids = () => execFileSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' }).split('\n').filter(row => row.includes(target.executablePath.replace(/^\/tmp\//, '/private/tmp/')) || row.includes(target.executablePath)).filter(row => !row.includes('out/server/index.js') && row.trim().match(/^\d+\s+\/(?:private\/)?tmp\//)).map(row => Number(row.trim().split(/\s+/)[0]));
+const executablePaths = [...new Set([target.executablePath, realpathSync(target.executablePath)])];
+const pids = () => installedApplicationPids(execFileSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' }), executablePaths);
 const before = new Set(pids());
 const report = { passed: false, fault: 'missing remote connection HTML; deliberately modified resource seal, not a release artifact', startedAt: new Date().toISOString(), checks: {} };
 let app;

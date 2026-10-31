@@ -20,6 +20,17 @@ export function packagedAcceptanceEnvironment(env) {
   ].includes(key)));
 }
 
+/** Match only application roots, including paths containing spaces, never their Gateway subprocesses. */
+export function installedApplicationPids(rows, executablePaths) {
+  return rows.split('\n').flatMap(row => {
+    const match = row.trim().match(/^(\d+)\s+(.+)$/);
+    if (!match) return [];
+    const command = match[2];
+    return executablePaths.some(path => command === path || command.startsWith(`${path} `))
+      && !command.includes('out/server/index.js') ? [Number(match[1])] : [];
+  });
+}
+
 /** Fingerprint the entire installed application, including unpacked and native resources. */
 export async function installedAppFingerprint(directory) {
   const files = {};

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "s4-isolated-pair-candidate-1",
+    "exitCode": 1,
+    "report": "reports/s4-isolated-pair-candidate-1.json"
+  },
+  {
+    "name": "s4-isolated-pair-control-1",
+    "exitCode": 0,
+    "report": "reports/s4-isolated-pair-control-1.json"
+  }
+]

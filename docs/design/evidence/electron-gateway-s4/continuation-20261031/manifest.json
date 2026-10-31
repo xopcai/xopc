@@ -1,0 +1,18 @@
+{
+  "candidateMainSha256": "b5d9fa570e7cd51048de289559d1d95090e7a292e604c7a33cbc4e61cde59da0",
+  "controlMainSha256": "b5d9fa570e7cd51048de289559d1d95090e7a292e604c7a33cbc4e61cde59da0",
+  "candidatePreloadSha256": "c43168a38aeae9d37aa48a31b4f868e5b3db71e60857ef0c2e99da0652d1c282",
+  "controlPreloadSha256": "c43168a38aeae9d37aa48a31b4f868e5b3db71e60857ef0c2e99da0652d1c282",
+  "baselineSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "changedBudgets": false,
+  "candidateApp": {
+    "files": 1422,
+    "sha256": "fb6211d562e459c90a6fb09ecb9cf3874e56b93e09045fe3374d932c850025ae"
+  },
+  "newPackagePublicTlsAndPhysicalModelRetested": false,
+  "notarization": "skipped; not release channel acceptance",
+  "distribution": {
+    "xopc-0.0.437-arm64.dmg": "6d19ca530f9b1b7a4d26b4162d4860105003f91b62b53e5a788d802bdb5e722a",
+    "xopc-0.0.437-arm64.zip": "c1eb7045d6309018dc05d2e0f25a5930bf5c27d663a9a70093d00687d79a3ac5"
+  }
+}
