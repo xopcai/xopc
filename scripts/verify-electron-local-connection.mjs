@@ -204,8 +204,17 @@ async function run(mode, index) {
         return { status: response.status, empty: Array.isArray(body.items) && body.items.length === 0, invalidStatus: invalid.status };
       });
       assert.deepEqual(automationRoute, { status: 200, empty: true, invalidStatus: 400 });
+      assert.equal((await fetch(`${base}/api/providers/meta`, { signal: AbortSignal.timeout(2000) })).status, 401);
+      const providerRoute = await page.evaluate(async () => {
+        const response = await fetch('/api/providers/meta', { signal: AbortSignal.timeout(2000) });
+        const body = await response.json();
+        return { status: response.status, valid: Array.isArray(body.payload?.providers)
+          && body.payload.providers.every(p => Number.isInteger(p.modelCount) && p.modelCount >= 0 && typeof p.configured === 'boolean') };
+      });
+      assert.deepEqual(providerRoute, { status: 200, valid: true });
       sample.functional = await withTimeout(fixtureModule.verifyLocalConnectionFunctions(page, fixture, until), 90_000, 'Functional acceptance exceeded 90 seconds');
       sample.functional.authenticatedAutomationLazyRoute = true;
+      sample.functional.authenticatedProviderMetaRoute = true;
       assert.equal(await readFile(remoteProfilePath, 'utf8'), '{deliberately-corrupt-remote-profile', 'Local mode must not read or migrate remote profiles');
       sample.functional.corruptRemoteProfileIgnored = true;
       await until(() => page.evaluate(async () => {
