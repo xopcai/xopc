@@ -54,6 +54,7 @@ async function setup() {
       if (req.headers.range) { res.writeHead(206, { 'Content-Range': 'bytes 0-2/6' }); res.end('png'); return; }
       res.end('png'); return;
     }
+    if (mode === 'jsonOversize') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': 4 * 1024 * 1024 + 1 }); res.end('{}'); return; }
     if (mode === 'blocked') { held.push(res); return; }
     res.setHeader('Content-Type', mode === 'html' ? 'text/html' : 'application/json');
     res.setHeader('Set-Cookie', 'upstream=secret'); res.setHeader('Content-Security-Policy', "script-src https://bad.invalid");
@@ -140,6 +141,12 @@ it('streams allowed media/Range, rejects HTML and oversized resources, cancels u
   for (let i = 0; i < 50 && !streamClosed; i++) await new Promise(r => setTimeout(r, 10));
   expect(streamClosed).toBe(true);
 });
+it('rejects oversized JSON requests and responses before forwarding data', async () => {
+  mode = 'jsonOversize'; expect((await get('/api/models')).status).toBe(502);
+  const before = upstreamCalls.length;
+  const response = await fetch(fixture.shell.origin + '/api/realtime/tickets', { method: 'POST', headers: { ...fixture.headers, 'Content-Type': 'application/json' }, body: 'x'.repeat(1025) });
+  expect(response.status).toBe(413); expect(upstreamCalls).toHaveLength(before);
+});
 it('bounds HTTP concurrency and queues without changing the request budget', async () => {
   mode = 'blocked';
   const calls = Array.from({ length: 33 }, () => get('/api/models').then(async response => { await response.arrayBuffer(); return response.status; }, () => -1));
@@ -178,6 +185,24 @@ it('reuses realtime envelopes but rejects ticket replay and Endpoint/control mes
   expect(fixture.remoteMessages).toHaveLength(2);
   const replay = await socket(); const rejected = once(replay, 'close'); replay.send(JSON.stringify(envelope('realtime.hello', hello))); await rejected;
   expect(fixture.remoteMessages).toHaveLength(2);
+});
+it('rejects large client frames and server JSON expansion beyond the send budget', async () => {
+  const hello = await ticket(); const client = await socket();
+  const ready = once(client, 'message'); client.send(JSON.stringify(envelope('realtime.hello', hello))); await ready;
+  const closed = new Promise(resolve => client.once('close', resolve));
+  client.send(JSON.stringify(envelope('realtime.ping', { padding: 'x'.repeat(256 * 1024) })));
+  await closed; expect(fixture.remoteMessages).toHaveLength(1);
+  const next = await ticket(); const socket2 = await socket(); const ready2 = once(socket2, 'message'); socket2.send(JSON.stringify(envelope('realtime.hello', next))); await ready2;
+  let delivered = false; socket2.on('message', () => { delivered = true; });
+  const closed2 = new Promise(resolve => socket2.once('close', resolve));
+  const prefix = JSON.stringify(envelope('realtime.event', { topic: 'run:fixture', seq: 1, event: 'agent.test', data: null })).replace('null', '[');
+  const raw = prefix.slice(0, -2) + '1e-6,'.repeat(500000) + '1e-6]}}';
+  expect(Buffer.byteLength(raw)).toBeLessThan(4 * 1024 * 1024);
+  const decoded = JSON.parse(raw);
+  expect(decoded.payload.data).toHaveLength(500001);
+  expect(Buffer.byteLength(JSON.stringify(decoded))).toBeGreaterThan(4 * 1024 * 1024);
+  [...fixture.wss.clients][0].send(raw);
+  await closed2; expect(delivered).toBe(false);
 });
 it('bounds websocket connections including pending hellos', async () => {
   const first = await socket(); const second = await socket();
