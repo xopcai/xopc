@@ -9,6 +9,7 @@ import type { IPty } from 'node-pty';
 import * as nodePty from 'node-pty';
 
 import { getGatewayConnection } from '../gateway-process.js';
+import { localGatewayOrigin } from '../gateway/local-connection.js';
 import { assertTrustedRenderer } from './trusted-renderer.js';
 
 const MAX_TERMINALS = 8;
@@ -122,7 +123,7 @@ export async function resolveTerminalWorkspace(conversationId: string, transcrip
   if (!connection) {
     throw new Error('Integrated terminal requires a local desktop gateway connection');
   }
-  const baseUrl = `http://127.0.0.1:${connection.port}`;
+  const baseUrl = localGatewayOrigin(connection);
   const resolved = await fetchGatewayJson(
     `${baseUrl}/api/sessions/resolve?conversationId=${encodeURIComponent(conversationId)}`,
     connection.token,

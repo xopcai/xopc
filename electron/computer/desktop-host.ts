@@ -27,6 +27,7 @@ import { ComputerWorkspaceVisibility } from './workspace-visibility.js';
 import { ComputerAccessPolicy } from './access-policy.js';
 import { ComputerPreviewManager } from './preview-manager.js';
 import { startPreviewCapture } from './preview-capture.js';
+import { localGatewayOrigin } from '../gateway/local-connection.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
 const log = createLogger('DesktopEndpointHost');
@@ -222,7 +223,7 @@ export class DesktopEndpointHost {
   }
   private async connect(): Promise<void> {
     const connection = this.options.connection(); if (!connection) throw new Error('Gateway unavailable');
-    const base = `http://127.0.0.1:${connection.port}`;
+    const base = localGatewayOrigin(connection);
     const headers = { Authorization: `Bearer ${connection.token}`, 'Content-Type': 'application/json' };
     const request = async (path: string, body: unknown, signal?: AbortSignal) => {
       const result = await fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body), redirect: 'error',

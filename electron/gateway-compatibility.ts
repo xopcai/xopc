@@ -2,6 +2,7 @@ import { COMPUTER_DESCRIPTOR, COMPUTER_FRAME_MAX_BYTES } from '@xopcai/computer-
 import { canonicalJson, ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { RealtimeConnectionError } from '@xopcai/realtime-client';
+import { localGatewayOrigin } from './gateway/local-connection.js';
 
 export const GATEWAY_PROTOCOL_INCOMPATIBLE = 'GATEWAY_PROTOCOL_INCOMPATIBLE';
 
@@ -15,7 +16,7 @@ export async function assertGatewayCompatibility(
   connection: { port: number; token: string },
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`http://127.0.0.1:${connection.port}/api/endpoint-tools/compatibility`, {
+  const response = await fetch(`${localGatewayOrigin(connection)}/api/endpoint-tools/compatibility`, {
     headers: { Authorization: `Bearer ${connection.token}` },
     redirect: 'error',
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),

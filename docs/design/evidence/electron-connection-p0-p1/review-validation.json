@@ -1,0 +1,47 @@
+{
+  "reviewDate": "2026-10-31",
+  "tests": {
+    "computer-desktop": 325,
+    "scripts-support": 7,
+    "gateway-http": 67,
+    "startup-bridge-exposure": 25,
+    "endpoint-realtime": 2
+  },
+  "totalTestsPassed": 426,
+  "typecheck": "passed",
+  "electronBuild": "passed",
+  "lint": {
+    "status": "passed",
+    "existingWarnings": 5
+  },
+  "dependencyCruiser": {
+    "status": "passed",
+    "modules": 1995,
+    "dependencies": 7790,
+    "violations": 0
+  },
+  "functionalE2E": {
+    "status": "passed",
+    "modes": [
+      "spawn",
+      "reuse"
+    ],
+    "evidence": "review-functional.json"
+  },
+  "pairedPerformance": {
+    "status": "passed",
+    "checks": 8,
+    "baseline": "review-paired-p0.json",
+    "candidate": "review-paired-p1.json"
+  },
+  "performanceCounterEvidence": [
+    "review-performance-legacy-1.json",
+    "review-performance-legacy-2.json"
+  ],
+  "limits": [
+    "macOS development Electron runtime",
+    "No signed installer or Windows acceptance",
+    "No remote Electron feature implemented",
+    "No real remote server or soak acceptance"
+  ]
+}
