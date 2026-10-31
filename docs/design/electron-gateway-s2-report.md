@@ -1,6 +1,6 @@
 # P2a-1 S2 实施与验收记录
 
-基线 main `ab82be00f`（PR #39），新 worktree `gateway-p2a1-s2/xopc`，分支 `codex/gateway-p2a1-s2`。先提交[范围与接口冻结](./electron-gateway-s2-contract.md)，再提交认证/传输、受监督窗口和限额/故障回归。没有推进 S3、远端 Host 或本机能力，没有 push、创建 PR 或合并。
+基线 main `ab82be00f`（PR #39），新 worktree `gateway-p2a1-s2/xopc`，分支 `codex/gateway-p2a1-s2`。先提交[范围与接口冻结](./electron-gateway-s2-contract.md)，再提交认证/传输、受监督窗口和限额/故障回归。初次实施没有推进 S3、远端 Host 或本机能力，也未 push、创建 PR 或合并；后续按 review 授权验证后提交 PR，见文末补充。
 
 ## 已实施边界
 
@@ -57,3 +57,13 @@ S2 页面只显示已核验传输与恢复入口，没有聊天输入/历史、A
 额外故障产物移除了 S2 worker、Shell/配置 UI、受限 preload 和连接入口 chunk，本地两种模式的完整功能 E2E 仍通过。故障副本共享已构建 Gateway/Web 与开发 SQL 映射，明确不作为安装包验收。原始移除清单与报告单独保存。
 
 结论：当前 macOS 开发产物范围内，S2 已实现范围的功能、隔离、故障恢复和原预算本地回归通过；不宣称完整 A01–A10、P2a-1 发布或本地/远端所有环境的同等稳定性。S3 的聊天写入/业务隔离/恢复与 S4 安装包/物理服务器、跨平台和长期故障矩阵继续待实施。
+
+## S2 review 补充（2026-10-31）
+
+审查后修复 ticket 未完成请求体在超时/会话取消时仍占用读取循环的问题：取消信号现在关闭请求并释放槽位，原 15 秒超时与并发预算不变。新增原始 HTTP 回归先失败、修复后通过；证据独立保留。
+
+本地功能复测还暴露测试脚本漏处理已进入“选择来源”页的首次引导，聊天回复已在失败快照中出现。只修正测试的引导处理，保留主内容可见性断言及超时；本地新启动/复用完整功能随后均通过。未修改默认本地 main、Gateway 进程监督、原性能采样或冻结预算。
+
+扩展相关回归 886 项 / 110 文件通过，类型检查、lint（0 errors / 5 个既有 warnings）、依赖检查（0 violations）、CLI 启动导入检查、Node/Web/Electron 构建通过；SSH loopback、HTTPS/WSS、证书/主机名拒绝、清理失败隔离、配置预览、原生安全存储与本地功能 E2E 通过。本轮 review 与复测见[独立证据目录](./evidence/electron-gateway-s2-review/README.md)，旧证据保持不变；安装包、独立物理服务器、跨平台和长期运行等限制继续有效。
+
+本轮 review 后两轮完整性能对照各 60 次均 **8/8 通过**：spawn ready P95 为 1965.29 / 2005.58ms、config 为 24.10 / 34.90ms；reuse ready 为 978.46 / 974.59ms、config 为 38.80 / 40.80ms。其余指标、原门槛、原始样本及一致产物指纹见 review 的 validation/预算 JSON；未放宽原预算或改变采样。
