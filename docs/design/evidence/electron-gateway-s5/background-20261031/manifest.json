@@ -1,0 +1,66 @@
+{
+  "archivedAt": "2026-10-31T13:22:56.990Z",
+  "scope": "S5 tool failures, immutable installed candidate regressions; full endurance not accepted",
+  "files": [
+    {
+      "file": "s5-endurance-smoke-1.json",
+      "sha256": "1e4bdcc39a7f533d66f92121454b8b28fe6cb2302d6833ae6ffaa7d01e23b617",
+      "passed": false
+    },
+    {
+      "file": "s5-background-dev-smoke-1.json",
+      "sha256": "1f67856bd6f4969155bbfd0b8e65ae84ccd811b7d000b5e6f352bf8fb8d1f794",
+      "passed": false
+    },
+    {
+      "file": "s5-background-dev-smoke-2.json",
+      "sha256": "bc936220357979713c6c97e149efdc7e4688ce0f00f777b224d013e5ac16fada",
+      "passed": false
+    },
+    {
+      "file": "s5-background-dev-smoke-3.json",
+      "sha256": "08f25c96e6613f62da33ebba8ab3f5fb17c494456735c552a22d831dde784ae5",
+      "passed": false
+    },
+    {
+      "file": "s5-background-dev-smoke-4.json",
+      "sha256": "4474fd25844f2a2e84b73e8e3f93bade83f1c0e495672e1a89872fecd00cbd8e",
+      "passed": true
+    },
+    {
+      "file": "s5-background-installed-smoke-1.json",
+      "sha256": "5c15c91f41a3fca6ffec3ba2ca3adb0795bee080344c3c287058e4d7f1bec49c",
+      "passed": false
+    },
+    {
+      "file": "s5-background-installed-smoke-2.json",
+      "sha256": "1b32d86aeaaf46d39c317479e35eded27dd6fad69036317fcfa4adb376db66b0",
+      "passed": true
+    },
+    {
+      "file": "s5-default-local-regression.json",
+      "sha256": "fa978e6801912f78e724956b69a314ad2dfd2d5fe10d604c7b6366f1e60a9951",
+      "passed": true
+    },
+    {
+      "file": "s5-network-matrix-1.json",
+      "sha256": "4b1fa281329cfbdf2c81a90e3a9fbc8954cac9e5b30cfe19b89f659d63ffa2e7",
+      "passed": false
+    },
+    {
+      "file": "s5-network-matrix-2.json",
+      "sha256": "da6435e7b7ccf651eb1035351abe42de198eb414b1e76fa95d5e9741a81d678e",
+      "passed": true
+    },
+    {
+      "file": "s5-compatibility-matrix-1.json",
+      "sha256": "90388c709fd97a533eb535b5e03a2e71abcd2014b701e3710f21f860c6a66325",
+      "passed": false
+    },
+    {
+      "file": "s5-compatibility-matrix-2.json",
+      "sha256": "f97a66c2ad617e02d01443149bc29589275adcc88abcffb7bb475100c47b81b7",
+      "passed": true
+    }
+  ]
+}

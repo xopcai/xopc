@@ -1,0 +1,22 @@
+{
+  "passed": false,
+  "tls": false,
+  "startedAt": "2026-10-31T12:47:18.321Z",
+  "checks": {},
+  "scope": "S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server",
+  "background": true,
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'visible'\n- 'hidden'\n\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:164:26",
+  "serverLogs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 51964\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=30332, lockPath=/Users/micjoyce/.xopc/locks/gateway.bbdf3e14.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:51964...\n✅ Gateway started\n   URL: http://127.0.0.1:51964\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:51964\n🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 51991\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=30403, lockPath=/Users/micjoyce/.xopc/locks/gateway.b16ff619.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:51991...\n✅ Gateway started\n   URL: http://127.0.0.1:51991\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:51991\n",
+  "windows": [
+    {
+      "url": "file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/out/preload/gateway-connections.html",
+      "text": "Gateway 连接预览\n\n选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力保持禁用，不启动本地 Gateway。\n\n请选择或保存连接配置。本机能力保持禁用。\n\n连接名称\nGateway origin\n传输方式\nHTTPS已有 SSH loopback 转发\n管理凭据（可留空；仅加密保存）\n保存连接配置\n\nSSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。\n\n使用原本地模式（重启应用）退出预览"
+    }
+  ],
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-4zv2lG",
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-10-31T12:47:21.387Z"
+}

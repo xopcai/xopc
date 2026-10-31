@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import https from 'node:https';
 import { createServer } from 'node:net';
@@ -13,17 +13,25 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { WebSocket, WebSocketServer } from 'ws';
 import { _electron } from 'playwright-core';
 import { createAcceptanceOutput, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
-import { installedAppFingerprint, killAcceptanceApplication, killInstalledShellWorker, launchInstalledApplication, macPackagedTarget, packagedAcceptanceEnvironment } from './electron-packaged-acceptance.mjs';
+import { installedApplicationPids, installedAppFingerprint, killAcceptanceApplication, killInstalledShellWorker, launchInstalledApplication, macPackagedTarget, packagedAcceptanceEnvironment } from './electron-packaged-acceptance.mjs';
+import { ContainerNetworkFixture, exerciseNetworkMatrix } from './electron-network-fixture.mjs';
+import { exerciseRemoteEndurance, fixtureLifetimeSeconds, observeApplicationResources, remoteEnduranceOptions } from './electron-remote-endurance.mjs';
 
 const root = resolve(import.meta.dirname, '..');
+const endurance = remoteEnduranceOptions(process.argv.slice(2));
+const background = process.argv.includes('--background');
+const networkMatrix = process.argv.includes('--network-matrix');
+const compatibilityMatrix = process.argv.includes('--compatibility-matrix');
 const output = await createAcceptanceOutput(join(root, 'reports/s3-remote-chat-e2e.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-s3-chat-'));
 const appIndex = process.argv.indexOf('--app');
 assert(appIndex < 0 || process.argv[appIndex + 1]?.endsWith('.app'), 'Missing --app path');
 const packaged = appIndex < 0 ? undefined : await macPackagedTarget(process.argv[appIndex + 1]);
+assert(packaged || endurance.connectionCycles < 100 && endurance.soakSeconds < 86400, 'Complete endurance acceptance requires an installed application');
 const containerIndex = process.argv.indexOf('--gateway-container');
 const containerImage = containerIndex < 0 ? undefined : process.argv[containerIndex + 1];
 assert(!containerImage || packaged, 'Container acceptance requires an installed --app');
+assert(!networkMatrix || containerImage && packaged, 'Network matrix requires an installed app and network-capable container image');
 const cleanupLayout = packaged ? async () => {} : await prepareLocalConnectionLayout(root);
 const tls = process.argv.includes('--tls');
 const normalIndex = process.argv.indexOf('--normal-inputs');
@@ -33,14 +41,16 @@ const intervalIndex = process.argv.indexOf('--input-interval-ms');
 const inputIntervalMs = intervalIndex < 0 ? 0 : Number(process.argv[intervalIndex + 1]);
 assert(Number.isInteger(inputIntervalMs) && inputIntervalMs >= 0 && inputIntervalMs <= 5000);
 const report = { passed: false, tls, startedAt: new Date().toISOString(), checks: {}, scope: 'S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server' };
+report.background = background;
+report.fixtureLifetimeSeconds = fixtureLifetimeSeconds(endurance);
 if (packaged) {
   report.scope = 'Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance';
   report.application = packaged.application;
   report.packageBefore = await installedAppFingerprint(packaged.application);
 }
 const environment = (...args) => { const env = localConnectionEnvironment(...args); return packaged ? packagedAcceptanceEnvironment(env) : env; };
-const launch = (args, env) => packaged ? launchInstalledApplication(packaged, args, env, state) : _electron.launch({ args, cwd: root, env, timeout: 30_000 });
-const launchArgs = packaged ? ['--gateway-connections'] : [join(root, 'out/main/index.js'), '--gateway-connections'];
+const launch = (args, env) => packaged ? launchInstalledApplication(packaged, args, env, state, 30_000, { preserveBrowserDefaults: background }) : _electron.launch({ args, cwd: root, env, timeout: 30_000 });
+const launchArgs = [...(packaged ? [] : [join(root, 'out/main/index.js')]), '--gateway-connections', ...(background ? ['--gateway-connections-background'] : [])];
 const gateways = [], proxies = [], sockets = new Set();
 const containers = [];
 if (containerImage) {
@@ -52,6 +62,28 @@ let app, inference, serverLogs = '', tokenA;
 const redact = text => String(text).replaceAll(tokenA ?? 'never-a-real-token', '[redacted]').replace(/Token: [^\n]+/g, 'Token: [redacted]');
 const freePort = async () => { const server = createServer(); server.listen(0, '127.0.0.1'); await once(server, 'listening'); const port = server.address().port; await new Promise(resolve => server.close(resolve)); return port; };
 async function until(work, budget = 30_000) { const deadline = Date.now() + budget; while (Date.now() < deadline) { if (await work().catch(() => false)) return; await delay(100); } throw new Error('Condition deadline exceeded'); }
+async function activate(page, id) {
+  if (!background) return page.locator(`#${id}`).click();
+  await until(() => page.locator(`#${id}`).isEnabled());
+  try { await page.locator(`#${id}`).evaluate(node => { if (node.disabled) throw new Error('Acceptance action is disabled'); node.click(); }); }
+  catch (error) { if (id !== 'recover' || !page.isClosed()) throw error; }
+}
+async function fillDraft(page, text) {
+  if (!background) return page.locator('#input').fill(text);
+  await page.locator('#input').evaluate((node, value) => {
+    if (node.disabled) throw new Error('Acceptance input is disabled');
+    node.value = value; node.dispatchEvent(new Event('input', { bubbles: true }));
+  }, text);
+}
+async function assertBackgroundWindows(page) {
+  if (!background) return;
+  if (packaged) {
+    const snapshot = await app.windows()[0].evaluate(() => window.gatewayConnections.snapshot());
+    assert.equal(snapshot.presentation.connectionVisible, false); assert.equal(snapshot.presentation.connectionFocused, false);
+    assert.equal(snapshot.presentation.chat.visible, false); assert.equal(snapshot.presentation.chat.focused, false);
+  }
+  else assert(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().every(window => !window.isVisible())));
+}
 async function gateway(name, faulted) {
   const directory = join(state, name); await mkdir(directory);
   const port = await freePort(), token = randomUUID(); if (faulted) tokenA = token;
@@ -59,8 +91,17 @@ async function gateway(name, faulted) {
     if (faulted && faults.offline) { res.writeHead(503, { 'Content-Type': 'application/json' }).end('{}'); return; }
     if (faulted && faults.hideReceipt && req.url.includes('/input-receipts/')) { res.writeHead(404, { 'Content-Type': 'application/json' }).end('{"ok":false,"error":{"code":"NOT_RECEIVED"}}'); return; }
     const input = req.method === 'POST' && /\/inputs$/.test(req.url);
-    if (faulted && input) faults.posts++;
-    const upstream = http.request({ host: '127.0.0.1', port, path: req.url, method: req.method, headers: req.headers }, response => {
+    if (faulted && input) {
+      faults.posts++;
+      const hook = faults.onNextInput; faults.onNextInput = undefined;
+      try { hook?.(); } catch (error) { req.destroy(error); res.destroy(error); return; }
+    }
+    if (faulted && faults.identityPort && req.headers.authorization) { faults.identityCredentialLeaks++; res.writeHead(403).end(); return; }
+    const upstream = http.request({ host: '127.0.0.1', port: faulted && faults.identityPort ? faults.identityPort : port, path: req.url, method: req.method, headers: { ...req.headers, ...(faulted && faults.identityPort ? { origin: faults.identityOrigin } : {}) } }, response => {
+      if (faulted && faults.incompatible && req.url.startsWith('/api/desktop-chat/bootstrap')) {
+        const chunks = []; response.on('data', chunk => chunks.push(chunk));
+        response.on('end', () => { const data = JSON.parse(Buffer.concat(chunks).toString()); data.payload.manifest.realtimeProtocolVersion = 999; res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(data)); }); return;
+      }
       if (faulted && input && faults.dropInput) { faults.dropInput = false; response.resume(); response.once('end', () => res.destroy()); return; }
       res.writeHead(response.statusCode, response.headers); response.pipe(res);
     }); upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
@@ -104,11 +145,12 @@ async function gateway(name, faulted) {
     XOPC_BUNDLED_EXTENSIONS_ROOT: join(packaged.resources, 'app.asar.unpacked/dist/electron/extensions'),
     XOPC_BUNDLED_SKILLS_ROOT: join(packaged.resources, 'app.asar.unpacked/skills'),
   });
-  let processHandle;
+  let processHandle, networkFixture;
   if (containerImage) {
-    const id = execFileSync('docker', ['create', '--entrypoint', 'sh', '-p', `127.0.0.1:${port}:18790`, containerImage, '-c', 'sleep 86400'], { encoding: 'utf8' }).trim(); containers.push(id);
+    const id = execFileSync('docker', ['create', ...(networkMatrix && faulted ? ['--cap-add', 'NET_ADMIN'] : []), '--entrypoint', 'sh', '-p', `127.0.0.1:${port}:18790`, containerImage, '-c', `sleep ${report.fixtureLifetimeSeconds}`], { encoding: 'utf8' }).trim(); containers.push(id);
     execFileSync('docker', ['cp', `${directory}/.`, `${id}:/home/node/.xopc`]);
     execFileSync('docker', ['start', id]);
+    if (networkMatrix && faulted) { networkFixture = new ContainerNetworkFixture(id, containers); networkFixture.initialize(); }
     execFileSync('docker', ['exec', '--user', 'root', id, 'chown', '-R', 'node:node', '/home/node/.xopc']);
     assert.deepEqual(JSON.parse(execFileSync('docker', ['inspect', id, '--format', '{{json .Mounts}}'], { encoding: 'utf8' })), [], 'Container server must not share host state or workspace mounts');
     processHandle = spawn('docker', ['exec', id, 'node', 'out/server/index.js', 'gateway', '--foreground', '--bind', 'lan', '--port', '18790', '--no-hot-reload'], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -124,7 +166,10 @@ async function gateway(name, faulted) {
   const catalog = await api('/api/agents'); const agent = catalog.agents.find(agent => agent.id === catalog.defaultId) ?? catalog.agents[0];
   await api(`/api/agents/${agent.id}`, { models: { chat: { primary: 's3-fixture/chat', fallbacks: [] } } }, 'PATCH');
   const devicesBefore = await api('/api/endpoint-tools/devices');
-  return { origin, token, devicesBefore, devices: () => api('/api/endpoint-tools/devices'), certificate: tls && faulted ? join(directory, 'cert.pem') : undefined };
+  return { origin, port, token, api, networkFixture, health: async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(15000) });
+    await response.arrayBuffer(); return { status: response.status };
+  }, devicesBefore, devices: () => api('/api/endpoint-tools/devices'), certificate: tls && faulted ? join(directory, 'cert.pem') : undefined };
 }
 try {
   inference = http.createServer(async (req, res) => {
@@ -146,20 +191,23 @@ try {
     report.runtime = app.metadata; assert.equal(report.runtime.cwd, state);
   }
   let setup = await app.firstWindow(); setup.setDefaultTimeout(30_000); await setup.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+  await assertBackgroundWindows(setup);
   async function save(target, name) {
     return setup.evaluate(async ({ target, name }) => { const snapshot = await window.gatewayConnections.snapshot(); const result = await window.gatewayConnections.save(snapshot.epoch, { name, origin: target.origin, transport: target.origin.startsWith('https:') ? 'direct' : 'ssh', credential: target.token }); if (!result.ok) throw new Error(result.error); return result.snapshot.profiles.find(profile => profile.name === name).id; }, { target: { origin: target.origin, token: target.token }, name });
   }
   const idA = await save(a, 'A'), idB = await save(b, 'B');
+  const errors = [];
   async function open(id) {
     const result = await setup.evaluate(async id => { const snapshot = await window.gatewayConnections.snapshot(); return window.gatewayConnections.connect(snapshot.epoch, id); }, id);
     assert(result.ok, JSON.stringify(result)); const page = app.windows().find(page => page !== setup && page.url().startsWith('http:')); assert(page);
+    page.on('pageerror', error => errors.push(String(error)));
+    await assertBackgroundWindows(page);
     page.setDefaultTimeout(30_000); await until(() => page.locator('#status').textContent().then(value => ['就绪', '输入待核实'].includes(value)));
     return page;
   }
   console.log('Connecting remote chat');
   let page = await open(idA);
-  const errors = []; page.on('pageerror', error => errors.push(String(error)));
-  async function send(text) { await page.locator('#input').fill(text); await page.locator('#send').click(); }
+  async function send(text) { await fillDraft(page, text); await activate(page, 'send'); }
   console.log('Verifying initial text input');
   const firstStarted = Date.now();
   await send('first remote message');
@@ -187,16 +235,16 @@ try {
   report.normalInputs = normalInputs; report.normalSamples = normalSamples; report.inputIntervalMs = inputIntervalMs;
   if (normalInputs === 100) {
     assert(await page.locator('#older').isEnabled());
-    await page.locator('#older').click(); await until(() => page.locator('#latest').isVisible());
+    await activate(page, 'older'); await until(() => page.locator('#latest').isVisible());
     assert(await page.locator('#send').isDisabled(), 'Historical page must not accept new inputs');
-    await page.locator('#latest').click(); await until(async () => !await page.locator('#input').isDisabled());
+    await activate(page, 'latest'); await until(async () => !await page.locator('#input').isDisabled());
     report.checks.hundredNormalInputsAndHistoryPaging = true;
   }
-  await page.screenshot({ path: output.replace(/\.json$/, '.png') });
+  if (!background) await page.screenshot({ path: output.replace(/\.json$/, '.png') });
   report.checks.actualRemoteStartAppendHistory = true;
   console.log('Verifying server stop');
   await send('SLOW_REMOTE'); await page.locator('#stop').waitFor(); await until(() => page.locator('#stop').isEnabled());
-  await page.locator('#stop').click(); await until(() => page.locator('#stop-state').textContent().then(value => value.includes('已确认')));
+  await activate(page, 'stop'); await until(() => page.locator('#stop-state').textContent().then(value => value.includes('已确认')));
   report.checks.serverStopVerified = true;
   console.log('Verifying network recovery');
   faults.offline = true; faults.injectGap = true; for (const socket of sockets) socket.destroy();
@@ -230,17 +278,17 @@ try {
   assert.equal((await page.evaluate(async () => (await window.desktopShell.readState()).pending)).clientMessageId, pending.clientMessageId);
   assert.equal(faults.posts, before + 1);
   report.checks.processRestartAndWorkerCrashPreserveUnknownInput = true;
-  const oldOrigin = new URL(page.url()).origin; await page.locator('#recover').click(); await until(() => Promise.resolve(page.isClosed()));
+  const oldOrigin = new URL(page.url()).origin; await activate(page, 'recover'); await until(() => Promise.resolve(page.isClosed()));
   await until(() => fetch(oldOrigin + '/').then(() => false, () => true), 15_000);
   page = await open(idB); assert.equal(await page.locator('#input').inputValue(), ''); assert.equal(await page.locator('article').count(), 0);
-  await page.locator('#input').fill('private-B-draft'); await page.locator('#recover').click(); await until(() => Promise.resolve(page.isClosed()));
+  await fillDraft(page, 'private-B-draft'); await activate(page, 'recover'); await until(() => Promise.resolve(page.isClosed()));
   faults.hideReceipt = false; page = await open(idA);
   await until(() => page.locator('#status').textContent().then(value => value === '就绪'));
   assert.equal(faults.posts, before + 1); assert.equal(await page.evaluate(async () => (await window.desktopShell.readState()).pending), undefined);
   assert.equal(await page.locator('article[data-role="user"]').filter({ hasText: 'uncertain-once' }).count(), 1);
-  await page.locator('#input').fill('private-A-draft'); await page.locator('#recover').click(); await until(() => Promise.resolve(page.isClosed()));
+  await fillDraft(page, 'private-A-draft'); await activate(page, 'recover'); await until(() => Promise.resolve(page.isClosed()));
   page = await open(idB); assert.equal(await page.locator('#input').inputValue(), 'private-B-draft'); assert.equal(await page.locator('article').count(), 0);
-  await page.locator('#recover').click(); await until(() => Promise.resolve(page.isClosed()));
+  await activate(page, 'recover'); await until(() => Promise.resolve(page.isClosed()));
   page = await open(idA); assert.equal(await page.locator('#input').inputValue(), 'private-A-draft');
   assert.equal(await page.evaluate(async () => (await window.desktopShell.readState()).selected), conversationA);
   report.checks.lostReplyReceiptRecoveryAndGatewayDraftIsolation = true;
@@ -250,9 +298,104 @@ try {
   const localFiles = await readdir(client); assert(!localFiles.includes('xopc.db')); assert(!localFiles.includes('workspace'));
   assert.deepEqual(await a.devices(), a.devicesBefore); assert.deepEqual(await b.devices(), b.devicesBefore);
   report.checks.encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace = true;
+  page = await exerciseRemoteEndurance({ options: endurance, report, page,
+    open: target => open(target === 'A' ? idA : idB), posts: () => faults.posts,
+    checkpoint: () => writeFile(output, JSON.stringify(report, null, 2) + '\n'),
+    resources: () => observeApplicationResources(app.process().pid), until,
+    close: async current => {
+      const origin = new URL(current.url()).origin;
+      await activate(current, 'recover'); await until(() => Promise.resolve(current.isClosed()), 15_000);
+      await until(() => fetch(origin, { signal: AbortSignal.timeout(1000) }).then(() => false, () => true), 15_000);
+    },
+    checkBoundary: async (current, target, checkDraft) => {
+      assert.equal(await current.locator('#status').textContent(), '就绪');
+      assert.equal(await current.evaluate(() => window.electronAPI), undefined);
+      assert.equal(await current.evaluate(() => fetch('/api/endpoint-tools/devices').then(response => response.status)), 403);
+      const stored = await current.evaluate(() => window.desktopShell.readState()); assert.equal(stored.pending, undefined);
+      if (target === 'A') assert.equal(stored.selected, conversationA);
+      else assert.equal(await current.locator('article').count(), 0);
+      if (checkDraft) assert.equal(await current.locator('#input').inputValue(), target === 'A' ? 'private-A-draft' : 'private-B-draft');
+      const files = await readdir(client); assert(!files.includes('xopc.db') && !files.includes('workspace'));
+      assert.deepEqual(await a.devices(), a.devicesBefore); assert.deepEqual(await b.devices(), b.devicesBefore);
+    },
+    send: async (current, text) => { await fillDraft(current, text); await activate(current, 'send'); },
+    networkFault: async (current, kind) => {
+      const before = faults.posts;
+      if (kind === 'offline') {
+        faults.offline = true; faults.injectGap = true; for (const socket of sockets) socket.destroy();
+      } else faults.suppressFrames = true;
+      try {
+        await until(() => current.locator('#status').textContent().then(value => value.includes('重连') || value === '连接中'), 45_000);
+        assert(await current.locator('#send').isDisabled());
+        if (kind === 'offline') await delay(10_000);
+      } finally { faults.offline = false; faults.suppressFrames = false; }
+      await until(() => current.locator('#status').textContent().then(value => value === '就绪'), 30_000);
+      assert.equal(faults.posts, before, 'Fault recovery resubmitted input');
+    },
+    restart: async () => {
+      await app.close(); app = await launch(launchArgs, env); setup = await app.firstWindow();
+      setup.setDefaultTimeout(30_000); await setup.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+      return open(idA);
+    },
+  });
+  if (networkMatrix) {
+    const close = async current => {
+      const origin = new URL(current.url()).origin;
+      await activate(current, 'recover'); await until(() => Promise.resolve(current.isClosed()), 15_000);
+      await until(() => fetch(origin, { signal: AbortSignal.timeout(1000) }).then(() => false, () => true), 15_000);
+    };
+    await close(page);
+    await exerciseNetworkMatrix({ fixture: a.networkFixture, report, posts: () => faults.posts,
+      checkpoint: () => writeFile(output, JSON.stringify(report, null, 2) + '\n'),
+      newPage: async name => open(await save(a, `network-${name}`)), close,
+      send: async (current, text) => { await fillDraft(current, text); await activate(current, 'send'); },
+      settle: async current => {
+        await until(() => current.locator('#status').textContent().then(value => ['就绪', '输入待核实'].includes(value)), 30_000);
+        assert.equal(await current.evaluate(() => window.electronAPI), undefined);
+        const files = await readdir(client); assert(!files.includes('xopc.db') && !files.includes('workspace'));
+        assert.deepEqual(await a.devices(), a.devicesBefore);
+        return { state: await current.locator('#status').textContent(), pending: Boolean((await current.evaluate(() => window.desktopShell.readState())).pending) };
+      },
+      health: a.health, onNextInput: hook => { faults.onNextInput = hook; },
+      serverInputCount: async (current, text) => {
+        const id = (await current.evaluate(() => window.desktopShell.readState())).selected;
+        const data = await a.api(`/api/sessions/${id}/messages?limit=100`);
+        const messages = data.messages ?? data;
+        assert(Array.isArray(messages), 'Authoritative messages must be an array');
+        return messages.filter(message => message.role === 'user' && JSON.stringify(message.content).includes(text)).length;
+      },
+    });
+    page = await open(idA);
+  }
+  if (compatibilityMatrix) {
+    await activate(page, 'recover'); await until(() => Promise.resolve(page.isClosed()));
+    report.compatibilityMatrix = { cases: [], passed: false };
+    const reject = async (id, expected) => {
+      const started = performance.now(), before = faults.posts;
+      const result = await setup.evaluate(async id => { const snapshot = await window.gatewayConnections.snapshot(); return window.gatewayConnections.connect(snapshot.epoch, id); }, id);
+      assert.equal(result.ok, false); assert.equal(result.error, expected);
+      assert(performance.now() - started < 15_000, 'Connection error exceeded original attempt budget');
+      assert.equal(faults.posts, before, 'Rejected connection created an input');
+      assert.equal(app.windows().length, 1, 'Rejected connection left a Shell window');
+      report.compatibilityMatrix.cases.push({ expected, observed: result.error, durationMs: performance.now() - started });
+    };
+    await reject(await save({ ...a, token: randomUUID() }, 'invalid-credential'), 'GATEWAY_AUTH_FAILED');
+    faults.incompatible = true;
+    try { await reject(idA, 'GATEWAY_CHAT_INCOMPATIBLE'); } finally { faults.incompatible = false; }
+    faults.identityCredentialLeaks = 0; faults.identityPort = b.port; faults.identityOrigin = b.origin;
+    try { await reject(idA, 'GATEWAY_IDENTITY_PROOF_FAILED'); } finally { faults.identityPort = undefined; }
+    assert.equal(faults.identityCredentialLeaks, 0, 'Pinned identity replacement received an owner credential');
+    report.compatibilityMatrix.identityCredentialLeaks = 0;
+    page = await open(idA);
+    assert.equal((await page.evaluate(() => window.desktopShell.readState())).selected, conversationA);
+    assert.equal(await page.locator('#input').inputValue(), 'private-A-draft');
+    assert.deepEqual(await a.devices(), a.devicesBefore); assert.deepEqual(await b.devices(), b.devicesBefore);
+    report.compatibilityMatrix.passed = true;
+    await writeFile(output, JSON.stringify(report, null, 2) + '\n');
+  }
   assert.deepEqual(errors, []);
   // Observe the requested clean relaunch and run precisely those arguments under the test supervisor.
-  await page.locator('#recover').click(); await until(() => Promise.resolve(page.isClosed())); page = await open(idB);
+  await activate(page, 'recover'); await until(() => Promise.resolve(page.isClosed())); page = await open(idB);
   console.log('Verifying explicit return to local');
   if (!packaged) {
   const relaunch = join(state, 'relaunch.json');
@@ -268,7 +411,8 @@ try {
   } else {
     const port = await freePort(), localToken = randomUUID();
     await writeFile(config, JSON.stringify({ gateway: { mode: 'local', bind: 'loopback', port, auth: { mode: 'token', token: localToken } }, browser: { enabled: false } }));
-    const pids = () => execFileSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' }).split('\n').filter(row => row.includes(packaged.executablePath.replace(/^\/tmp\//, '/private/tmp/')) || row.includes(packaged.executablePath)).filter(row => !row.includes('out/server/index.js') && row.trim().match(/^\d+\s+\/(?:private\/)?tmp\//)).map(row => Number(row.trim().split(/\s+/)[0]));
+    const executablePaths = [...new Set([packaged.executablePath, await realpath(packaged.executablePath)])];
+    const pids = () => installedApplicationPids(execFileSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' }), executablePaths);
     const beforePids = new Set(pids());
     await setup.evaluate(() => window.gatewayConnections.useLocal()).catch(() => {});
     try {
@@ -288,16 +432,39 @@ try {
   if (app) report.windows = await Promise.all(app.windows().map(async page => ({ url: page.url(), text: await page.locator('body').innerText().catch(() => '') })));
   process.exitCode = 1;
 } finally {
-  report.finishedAt = new Date().toISOString(); await writeFile(output, JSON.stringify(report, null, 2) + '\n');
-  if (app) await withTimeout(app.close(), 10_000, 'Electron stop').catch(() => killAcceptanceApplication(app));
-  if (packaged) {
+  const failures = [];
+  const cleanup = async (phase, work) => { try { await work(); } catch (error) { failures.push({ phase, error: redact(error?.stack ?? error) }); report.passed = false; process.exitCode = 1; } };
+  await cleanup('application', async () => {
+    if (!app) return;
+    try { await withTimeout(app.close(), 15_000, 'Electron stop'); }
+    catch (error) { killAcceptanceApplication(app); throw error; }
+  });
+  await cleanup('package-integrity', async () => {
+    if (!packaged) return;
     report.packageAfter = await installedAppFingerprint(packaged.application);
-    if (report.packageAfter.sha256 !== report.packageBefore.sha256) { report.passed = false; report.packageMutated = true; process.exitCode = 1; }
-    await writeFile(output, JSON.stringify(report, null, 2) + '\n');
+    assert.equal(report.packageAfter.sha256, report.packageBefore.sha256, 'Installed package mutated during acceptance');
+  });
+  for (const handle of gateways) await cleanup('gateway', async () => {
+    if (handle.exitCode !== null || handle.signalCode !== null) return;
+    const exit = once(handle, 'exit'); handle.kill('SIGTERM');
+    try { await withTimeout(exit, 10_000, 'Gateway stop'); }
+    catch (error) { handle.kill('SIGKILL'); throw error; }
+  });
+  if (!report.passed && containers.length) {
+    const retained = join(state, 'failed-container-state'); await mkdir(retained, { recursive: true });
+    report.retainedContainerState = { path: retained, scope: 'Raw state from stopped test containers; not a verified recovery backup', errors: [] };
+    for (const id of containers) {
+      try { execFileSync('docker', ['stop', '--time', '5', id], { stdio: 'ignore', timeout: 15_000 });
+        execFileSync('docker', ['cp', `${id}:/home/node/.xopc`, join(retained, id)], { stdio: 'ignore', timeout: 15_000 });
+      } catch (error) { report.retainedContainerState.errors.push(redact(error)); }
+    }
   }
-  for (const handle of gateways) if (handle.exitCode === null) { const exit = once(handle, 'exit'); handle.kill('SIGTERM'); await withTimeout(exit, 10_000, 'Gateway stop').catch(() => handle.kill('SIGKILL')); }
-  for (const id of containers) execFileSync('docker', ['rm', '-f', id], { stdio: 'ignore' });
-  for (const socket of sockets) socket.destroy(); for (const proxy of proxies) await new Promise(resolve => proxy.close(resolve));
-  inference?.closeAllConnections(); if (inference) await new Promise(resolve => inference.close(resolve));
-  await cleanupLayout(); await rm(state, { recursive: true, force: true }); console.log(JSON.stringify(report));
+  for (const id of containers) await cleanup('container', () => execFileSync('docker', ['rm', '-f', id], { stdio: 'ignore', timeout: 15_000 }));
+  await cleanup('proxies', async () => { for (const socket of sockets) socket.destroy(); for (const proxy of proxies) await new Promise(resolve => proxy.close(resolve)); });
+  await cleanup('inference', async () => { inference?.closeAllConnections(); if (inference) await new Promise(resolve => inference.close(resolve)); });
+  await cleanup('layout', cleanupLayout);
+  if (report.passed) await cleanup('state', () => rm(state, { recursive: true, force: true }));
+  if (!report.passed) report.failureStateDirectory = state;
+  report.cleanup = { confirmed: !failures.length, failures };
+  report.finishedAt = new Date().toISOString(); await writeFile(output, JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify(report));
 }
