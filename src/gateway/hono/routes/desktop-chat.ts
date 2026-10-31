@@ -14,6 +14,6 @@ export function registerDesktopChatRoutes(authenticated: Hono, { service }: Auth
       return c.json({ ok: false, error: { code: 'OWNER_TOKEN_REQUIRED' } }, 403);
     }
     const { id, publicKey } = getOrCreateGatewayIdentity();
-    return c.json({ ok: true, payload: { gatewayId: id, publicKey, manifest: DESKTOP_CHAT_MANIFEST } });
+    return c.json({ ok: true, payload: { gatewayId: id, publicKey, manifest: c.req.query('chat') === '1' ? { ...DESKTOP_CHAT_MANIFEST, chat: 'text-receipt.v1' } : DESKTOP_CHAT_MANIFEST } });
   });
 }

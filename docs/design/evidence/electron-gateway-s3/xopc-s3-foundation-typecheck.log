@@ -1,0 +1,3 @@
+$ tsc -p tsconfig.electron.json
+electron/gateway/connection-entry.ts(65,102): error TS2554: Expected 2 arguments, but got 3.
+[ELIFECYCLE] Command failed with exit code 2.

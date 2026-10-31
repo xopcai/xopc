@@ -1,0 +1,2 @@
+$ tsc --noEmit -p tsconfig.json && pnpm run typecheck:electron
+$ tsc -p tsconfig.electron.json

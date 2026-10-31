@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { BrowserWindow, session, type IpcMainInvokeEvent, type Session } from 'electron';
 
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
+import { RemoteChatStateStore, type ChatNamespace } from '../chat/state.js';
 import { ShellController } from './controller.js';
 
 export class RemoteShellWindow {
@@ -15,11 +16,12 @@ export class RemoteShellWindow {
   private bootstrapped = false;
   private activeEpoch?: number;
   private closing?: Promise<void>;
+  private namespace?: ChatNamespace;
   constructor(private readonly mainDirectory: string, private readonly assets: string,
-    private readonly manager: GatewayConnectionPreview, private readonly recover: () => void) {}
+    private readonly manager: GatewayConnectionPreview, private readonly recover: () => void, private readonly state: RemoteChatStateStore) {}
 
   authorize(event: IpcMainInvokeEvent, channel: string) {
-    if (!['shell:bootstrap', 'shell:recover'].includes(channel)) throw new Error('REMOTE_CAPABILITY_DISABLED');
+    if (!['shell:bootstrap', 'shell:recover', 'shell:state-read', 'shell:state-write'].includes(channel)) throw new Error('REMOTE_CAPABILITY_DISABLED');
     if (!this.window || this.window.isDestroyed() || event.sender !== this.window.webContents
       || event.senderFrame !== this.window.webContents.mainFrame || event.senderFrame?.url !== `${this.origin}/`
       || event.sender.getURL() !== `${this.origin}/` || this.activeEpoch !== this.manager.snapshot().epoch) throw new Error('UNTRUSTED_SHELL_WINDOW');
@@ -28,12 +30,15 @@ export class RemoteShellWindow {
     if (epoch !== this.manager.snapshot().epoch) throw new Error('STALE_CONNECTION_EPOCH');
     await this.close();
     if (this.failedCleanup) throw new Error('SHELL_CLEANUP_RESTART_REQUIRED');
-    const target = await this.manager.privateConnection(epoch, id);
+    const started = await this.manager.beginConnection(epoch, id);
+    const target = await this.manager.privateConnection(started.epoch, id);
     const worker = new ShellController(this.mainDirectory, () => { void this.close().catch(() => {}); this.recover(); });
     this.worker = worker;
     try {
       const identity = await worker.request<{ gatewayId: string; publicKey: string }>('authenticate', { target });
-      const snapshot = await this.manager.pinIdentity(epoch, id, identity);
+      const snapshot = await this.manager.pinIdentity(started.epoch, id, identity);
+      this.namespace = { profileId: String(id), ...identity };
+      await this.state.read(this.namespace);
       const connection = await worker.request<{ origin: string; proof: string; epoch: number }>('activate', { assets: this.assets, epoch: snapshot.epoch });
       this.origin = connection.origin; this.activeEpoch = snapshot.epoch; this.bootstrapped = false;
       const partition = session.fromPartition(`remote-shell-${randomUUID()}`); this.partition = partition;
@@ -64,6 +69,8 @@ export class RemoteShellWindow {
       return { ok: true, snapshot: this.manager.snapshot(), shell: { status: 'authenticated-transport', gatewayId: identity.gatewayId, localCapabilities: false } };
     } catch (error) { await this.close(); throw error; }
   }
+  readState() { if (!this.namespace) throw new Error('SHELL_CLOSED'); return this.state.read(this.namespace); }
+  writeState(value: unknown) { if (!this.namespace) throw new Error('SHELL_CLOSED'); return this.state.write(this.namespace, value); }
   async bootstrap() {
     if (this.bootstrapped || !this.partition || !this.worker || !this.origin) throw new Error('SHELL_BOOTSTRAP_CONSUMED');
     this.bootstrapped = true;
@@ -79,7 +86,7 @@ export class RemoteShellWindow {
   close(): Promise<void> {
     if (this.closing) return this.closing;
     const worker = this.worker, partition = this.partition, window = this.window;
-    this.worker = undefined; this.partition = undefined; this.window = undefined; this.origin = undefined; this.activeEpoch = undefined;
+    this.worker = undefined; this.partition = undefined; this.window = undefined; this.origin = undefined; this.activeEpoch = undefined; this.namespace = undefined;
     if (window && !window.isDestroyed()) window.destroy();
     this.closing = (async () => {
       let timer: ReturnType<typeof setTimeout> | undefined;

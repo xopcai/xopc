@@ -1,0 +1,16 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc
+
+{"level":"info","time":"2026-10-31T07:46:15.285Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-aGTEc2/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-10-31T07:46:15.293Z","module":"Gateway:Auth","path":"/api/desktop-chat/bootstrap","method":"GET","clientIp":"unknown","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"warn","time":"2026-10-31T07:46:15.295Z","module":"Gateway:Auth","path":"/api/desktop-chat/bootstrap","method":"GET","clientIp":"unknown","reason":"invalid_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: credential mismatch"}
+{"level":"info","time":"2026-10-31T07:46:15.325Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-BZZv6N/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T07:46:15.353Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-4MIgLI/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T07:46:15.380Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-kqzBIw/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T07:46:15.409Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-sQnkR6/xopc.db","msg":"Opened xopc SQLite database"}
+
+ Test Files  3 passed (3)
+      Tests  40 passed (40)
+   Start at  15:46:14
+   Duration  1.37s (transform 534ms, setup 20ms, import 842ms, tests 785ms, environment 0ms)
+

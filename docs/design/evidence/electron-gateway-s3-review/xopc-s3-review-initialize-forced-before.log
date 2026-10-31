@@ -1,0 +1,33 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts (19 tests | 1 failed | 18 skipped) 57ms
+     × does not start a competing connection while initialization is pending 56ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts > receipt recovery and window state > does not start a competing connection while initialization is pending
+AssertionError: expected [ RealtimeClient{ …(5) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ electron/__tests__/gateway-connections-chat.test.ts:142:27
+    140|     const initializing = model.initialize(); await vi.waitFor(() => ex…
+    141|     await model.select(otherId);
+    142|     try { expect(clients).toHaveLength(0); } finally { release({ model…
+       |                           ^
+    143|   });
+    144|   it('persists an update queued at the writer completion boundary', as…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  17:15:06
+   Duration  305ms (transform 128ms, setup 9ms, import 185ms, tests 57ms, environment 0ms)
+

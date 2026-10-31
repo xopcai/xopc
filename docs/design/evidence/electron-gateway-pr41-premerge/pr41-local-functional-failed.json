@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "samplingPlan": "first-launch-heavy-v1",
+  "startedAt": "2026-10-31T09:41:35.909Z",
+  "commit": "228a316d053077e0752b54d3d8db51a5ec044d26",
+  "worktreeDirty": false,
+  "artifactSha256": "360f6533eee53d9b92730a3e8295e045acd85df0f6e0fd8ef27969b3664330ed",
+  "developmentLayoutLink": true,
+  "node": "v26.12.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "osRelease": "25.6.0",
+  "artifactSourceRef": "913729032",
+  "scope": "Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server",
+  "runs": 1,
+  "operations": 2,
+  "functional": true,
+  "diagnostics": false,
+  "serverDiagnostics": false,
+  "modes": [
+    "spawn",
+    "reuse"
+  ],
+  "samples": [
+    {
+      "mode": "spawn",
+      "index": 0,
+      "passed": true,
+      "readyMs": 2106.165958,
+      "configMs": [
+        6.300000011920929,
+        6.4000000059604645
+      ],
+      "sessionsMs": [
+        1.699999988079071,
+        3
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "functional": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "01765896-ac50-4509-b914-39879a3d046a",
+        "authenticatedAutomationLazyRoute": true,
+        "authenticatedProviderMetaRoute": true,
+        "corruptRemoteProfileIgnored": true,
+        "ownedRestartPreservesChat": true
+      },
+      "resources": {
+        "pids": [
+          44953,
+          44956,
+          44957,
+          45029,
+          45090
+        ],
+        "processes": 5,
+        "rssMiB": 983.34375,
+        "cpuPercentSnapshot": 236.9
+      },
+      "shutdownMs": 230.06508399999984,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "reuse",
+      "index": 0,
+      "passed": false,
+      "readyMs": 1030.764541999999,
+      "configMs": [
+        10.200000017881393,
+        4.700000017881393
+      ],
+      "sessionsMs": [
+        1.2999999821186066,
+        5.4000000059604645
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Maybe later, keep using my current model', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"touch-target inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium duration-150 ease-out transition-transform active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offs…>Maybe later, keep using my current model</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n\u001b[2m    - <html lang=\"en\" data-theme=\"light\" data-font-scale=\"default\" data-color-scheme=\"default\">…</html> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m  - element was detached from the DOM, retrying\u001b[22m\n",
+      "windows": [
+        {
+          "url": "http://127.0.0.1:57343/#/chat/dd90c725-8a49-4684-aa99-258e2e084023",
+          "text": "Skip to main content\nNew chat\nAda\nWork\nCapabilities\nAutomations\nMore\nRecent work\nChats\nXOPC_LOCAL_CHAT_OK\nXOPC\nLanguage, theme, and text size\nXOPC_LOCAL_CHAT_OK\nSmart Assistant\nToday 05:41 PM\nYou\n\nReply with the local connection acceptance marker.\n\nRetry\nAssistant\n\nXOPC_LOCAL_CHAT_OK\n\nConnection fixture\nWelcome to xopc\n\nA personal assistant that carries the busywork while keeping direction, judgment, and final decisions with you.\n\nSTEP 1 · CHOOSE SOURCES\n\nLet xopc understand your work\n\nChoose read-only sources so xopc can understand what matters in your work. Turn them off anytime.\n\nReference local apps\n\nOptional. Only sources you explicitly select are read.\n\nRecent files\nRecent bookmarks\nApple Notes\nApple Mail\nApple Calendar\nApple Reminders\nFind recent projects\nChoose another folder\nFolders are only read after you select them, and files are never modified.\nSkip for now",
+          "realtime": [
+            {
+              "kind": "realtime.event",
+              "event": "session.input-state"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.updated"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.input-state"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.updated"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.updated"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.next-turn-suggestion.changed"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.next-turn-suggestion.changed"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.next-turn-suggestion.changed"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "run.started"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.transcript_updated"
+            }
+          ]
+        }
+      ],
+      "gatewayLogTail": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 57343\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=45162, lockPath=/Users/micjoyce/.xopc/locks/gateway.dc4d531c.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:57343...\n✅ Gateway started\n   URL: http://127.0.0.1:57343\n   Token: add598be...3432b762\n\n[GatewayServer] Gateway server running at http://127.0.0.1:57343\n(electron) 'safeStorage.isEncryptionAvailable' is deprecated and will be removed. Please use 'safeStorage.isAsyncEncryptionAvailable' instead.\n[VoiceInputHotkey] Native helper is unavailable\n(electron) 'safeStorage.encryptString' is deprecated and will be removed. Please use 'safeStorage.encryptStringAsync' instead.\n[45220:1031/174143.648002:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[45220:1031/174143.648640:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[45220:1031/174143.648688:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\nError: Model not found: xopc-cloud/auto\n    at resolveModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/providers/index.js:108:9)\n    at AgentManager.resolveModelStringToModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/agent-manager.js:224:11)\n    at getPrimaryModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/agent-manager.js:281:32)\n    at AgentToolsFactory.createCoreTools (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/tools/factory.js:262:31)\n    at AgentToolsFactory.createAllTools (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/tools/factory.js:723:48)\n    at AgentManager.buildAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/agent-manager.js:558:58)\n    at AgentManager.getAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/agent-manager.js:610:15)\n    at AgentService.getAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/service.js:502:28)\n    at GatewayMarketplaceService.getAgentSkillsApi (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/gateway/service/marketplace-service.js:74:38)\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/gateway/hono/routes/commands-skills.js:97:120\nError: Model not found: xopc-cloud/auto\n    at resolveModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/providers/index.js:108:9)\n    at AgentManager.resolveModelStringToModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/agent-manager.js:224:11)\n    at getPrimaryModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/agent-manager.js:281:32)\n    at AgentToolsFactory.createCoreTools (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/tools/factory.js:262:31)\n    at AgentToolsFactory.createAllTools (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/tools/factory.js:723:48)\n    at AgentManager.buildAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/agent-manager.js:558:58)\n    at AgentManager.getAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/agent-manager.js:610:15)\n    at AgentService.getAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/agent/service.js:502:28)\n    at GatewayMarketplaceService.getAgentSkillsApi (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/gateway/service/marketplace-service.js:74:38)\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/gateway/hono/routes/commands-skills.js:97:120\n"
+    }
+  ],
+  "passed": false,
+  "electronBuildSha256": "7aac25be31d42e99c91c9ef893fdd6a1b4410c203032bd7fa2863c8130f0a815",
+  "artifactManifest": {
+    "out/main": {
+      "files": 42,
+      "sha256": "b339d7c916445e713cc977c9dd2911a1b49484153e52c3e99de129ce895e2735"
+    },
+    "out/preload": {
+      "files": 10,
+      "sha256": "aa655f913c2a41ea12d16518ddb9ea37e850aeb9ec87b1e05be78136be06b834"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3003,
+      "sha256": "8024bac2a427ad12d7b41e943ebc3647bbf30f921a6767365452025e8fd1894a"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "finishedAt": "2026-10-31T09:42:14.692Z"
+}

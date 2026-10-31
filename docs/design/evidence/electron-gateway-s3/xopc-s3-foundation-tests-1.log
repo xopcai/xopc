@@ -1,0 +1,39 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc
+
+{"level":"info","time":"2026-10-31T07:44:05.974Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-d9XInM/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-10-31T07:44:05.982Z","module":"Gateway:Auth","path":"/api/desktop-chat/bootstrap","method":"GET","clientIp":"unknown","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"warn","time":"2026-10-31T07:44:05.984Z","module":"Gateway:Auth","path":"/api/desktop-chat/bootstrap","method":"GET","clientIp":"unknown","reason":"invalid_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: credential mismatch"}
+{"level":"info","time":"2026-10-31T07:44:06.016Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-a5Gjfc/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T07:44:06.045Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-ZGsCtC/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T07:44:06.073Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-z42rah/xopc.db","msg":"Opened xopc SQLite database"}
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts (25 tests | 1 failed) 177ms
+   × refuses redirects/HTML and locks on upstream auth revocation 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts > refuses redirects/HTML and locks on upstream auth revocation
+AssertionError: expected 409 to be 502 // Object.is equality
+
+- Expected
++ Received
+
+- 502
++ 409
+
+ ❯ electron/__tests__/gateway-connections-shell.test.ts:126:64
+    124| });
+    125| it('refuses redirects/HTML and locks on upstream auth revocation', asy…
+    126|   mode = 'redirect'; expect((await get('/api/models')).status).toBe(50…
+       |                                                                ^
+    127|   mode = 'html'; expect((await get('/api/models')).status).toBe(502);
+    128|   mode = '401'; expect((await get('/api/models')).status).toBe(401);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 28 passed (29)
+   Start at  15:44:05
+   Duration  976ms (transform 363ms, setup 14ms, import 547ms, tests 308ms, environment 0ms)
+

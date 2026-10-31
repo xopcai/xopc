@@ -1,0 +1,14 @@
+{
+  "tls": true,
+  "untrusted": false,
+  "wrongHost": true,
+  "cleanupFailure": false,
+  "passed": true,
+  "startedAt": "2026-10-31T09:20:09.127Z",
+  "checks": {
+    "realAuthenticatedLazyRoute": true,
+    "certificateFailureHasNoShellOrFallback": true
+  },
+  "scope": "S2 production main/preloads/utility worker and independent real Gateway; development Electron, not installer or S3 chat",
+  "finishedAt": "2026-10-31T09:20:10.619Z"
+}

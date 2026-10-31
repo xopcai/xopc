@@ -1,0 +1,44 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts (13 tests | 1 failed) 554ms
+   × uses authoritative history when a replayed stream id has no unambiguous persisted mapping 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts > uses authoritative history when a replayed stream id has no unambiguous persisted mapping
+AssertionError: expected [ { role: 'user', …(1) }, …(2) ] to deeply equal [ { role: 'user', …(1) }, …(2) ]
+
+- Expected
++ Received
+
+@@ -2,11 +2,11 @@
+    {
+      "content": "question",
+      "role": "user",
+    },
+    {
+-     "content": "same prefix",
++     "content": "same prefix answer continued",
+      "role": "assistant",
+    },
+    {
+      "content": "same prefix answer",
+      "role": "assistant",
+
+ ❯ electron/__tests__/gateway-connections-chat.test.ts:159:104
+    157| it('uses authoritative history when a replayed stream id has no unambi…
+    158|   const history = [{ role: 'user', content: 'question' }, { role: 'ass…
+    159|   expect(mergeRemoteMessages(history, new Map([['later-stream-id', 'sa…
+       |                                                                                                        ^
+    160| });
+    161|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 passed (13)
+   Start at  16:10:55
+   Duration  820ms (transform 142ms, setup 12ms, import 195ms, tests 554ms, environment 0ms)
+
