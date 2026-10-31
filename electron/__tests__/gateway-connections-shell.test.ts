@@ -15,7 +15,7 @@ const keys = generateKeyPairSync('ed25519');
 const identity = { gatewayId: randomUUID(), publicKey: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString() };
 const token = randomUUID();
 let fixture: Awaited<ReturnType<typeof setup>>;
-let upstreamCalls: Array<{ path: string; headers: import('node:http').IncomingHttpHeaders }>;
+let upstreamCalls: Array<{ path: string; headers: import('node:http').IncomingHttpHeaders; body?: unknown }>;
 let mode: string;
 let streamClosed: boolean;
 let held: import('node:http').ServerResponse[];
@@ -28,12 +28,12 @@ async function setup() {
     if (req.url !== '/api/gateway-identity/challenge' && req.headers.authorization !== `Bearer ${token}`) { res.writeHead(401).end(); return; }
     if (mode === '401') { res.writeHead(401).end(); return; }
     if (mode === 'redirect') { res.writeHead(302, { Location: 'http://not-allowed.invalid', 'Set-Cookie': 'leak=1' }).end(); return; }
-    if (req.url === '/api/desktop-chat/bootstrap?chat=1') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ok: true, payload: { ...identity, manifest: DESKTOP_CHAT_MANIFEST } })); return; }
+    if (req.url === '/api/desktop-chat/bootstrap?chat=1') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ok: true, payload: { ...identity, manifest: mode === 's3' ? { ...DESKTOP_CHAT_MANIFEST, chat: 'text-receipt.v1' } : DESKTOP_CHAT_MANIFEST } })); return; }
     if (req.url === '/api/gateway-identity/challenge') {
       const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(chunk);
       const { nonce } = JSON.parse(Buffer.concat(chunks).toString());
       const now = Date.now();
-      const signedPayload = Buffer.from(JSON.stringify({ purpose: 'gateway-route-v1', ...identity, nonce: mode === 'nonce' ? 'wrong' : nonce,
+      const signedPayload = Buffer.from(JSON.stringify({ purpose: 'gateway-route-v1', ...identity, ...(mode === 'identity' ? { gatewayId: randomUUID() } : {}), nonce: mode === 'nonce' ? 'wrong' : nonce,
         serverTime: now, expiresAt: now + 30_000, requestProofVersion: 1 })).toString('base64url');
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ signedPayload, signature: sign(null, Buffer.from(signedPayload), keys.privateKey).toString('base64url') })); return;
@@ -56,6 +56,7 @@ async function setup() {
     }
     if (mode === 'jsonOversize') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': 4 * 1024 * 1024 + 1 }); res.end('{}'); return; }
     if (mode === 'blocked') { held.push(res); return; }
+    if (req.method === 'POST' && req.url?.endsWith('/inputs')) { const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(chunk); upstreamCalls.at(-1)!.body = JSON.parse(Buffer.concat(chunks).toString()); }
     res.setHeader('Content-Type', mode === 'html' ? 'text/html' : 'application/json');
     res.setHeader('Set-Cookie', 'upstream=secret'); res.setHeader('Content-Security-Policy', "script-src https://bad.invalid");
     res.end(JSON.stringify({ ok: true, payload: ['model'] }));
@@ -259,4 +260,22 @@ describe('pure route and frame policy', () => {
     await expect(slots.acquire(signal.signal)).rejects.toThrow('BUSY'); abort.abort(); await rejected; release();
     const next = await slots.acquire(signal.signal); next(); slots.close(); await expect(slots.acquire(signal.signal)).rejects.toThrow('CLOSED');
   });
+});
+
+it('forwards only negotiated text commands, blocks endpoint context and locks on identity replacement', async () => {
+  mode = 's3';
+  const id = randomUUID(); const body = { kind: 'start', clientMessageId: randomUUID(), origin: { type: 'system', source: 'cli' }, input: { content: 'remote text' }, creation: { agentId: 'main', projectId: null, execution: null, temporary: false, model: 'fixture/model', thinkingLevel: 'off' } };
+  const post = (value: unknown) => fetch(fixture.shell.origin + `/api/sessions/${id}/inputs`, { method: 'POST', headers: { ...fixture.headers, 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+  const before = upstreamCalls.length;
+  expect((await post({ ...body, input: { content: 'x', attachments: [] } })).status).toBe(400); expect(upstreamCalls).toHaveLength(before);
+  expect((await post(body)).status).toBe(200); expect(upstreamCalls.at(-1)!.body).toEqual(body);
+  mode = 'identity'; expect((await post({ ...body, clientMessageId: randomUUID() })).status).toBe(409);
+  expect(upstreamCalls.at(-1)!.path).toBe('/api/gateway-identity/challenge'); expect(upstreamCalls.at(-1)!.headers.authorization).toBeUndefined();
+  expect((await get('/api/models')).status).toBe(401);
+});
+it('keeps old Gateways readable without granting undeclared S3 text submission', async () => {
+  expect((await get('/api/models')).status).toBe(200);
+  const body = { kind: 'start', clientMessageId: randomUUID(), origin: { type: 'system', source: 'cli' }, input: { content: 'x' }, creation: { agentId: 'main', projectId: null, execution: null, temporary: false, model: 'fixture/model', thinkingLevel: 'off' } };
+  const response = await fetch(fixture.shell.origin + `/api/sessions/${randomUUID()}/inputs`, { method: 'POST', headers: { ...fixture.headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  expect(response.status).toBe(409); expect(upstreamCalls.some(call => call.path.endsWith('/inputs'))).toBe(false);
 });

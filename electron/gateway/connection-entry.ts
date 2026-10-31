@@ -74,7 +74,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     try { return { ok: true, snapshot: await work() }; }
     catch (error) {
       const code = error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'CONNECTION_STORAGE_FAILED';
-      return { ok: false, error: code };
+      return { ok: false, error: code, snapshot: manager.snapshot() };
     }
   };
   ipcMain.handle('connections:snapshot', () => manager.snapshot());

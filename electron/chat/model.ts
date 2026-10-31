@@ -4,30 +4,47 @@ import { dispatchAgentStreamEvent, type AgentStreamCallbacks } from '../../packa
 import type { ChatState } from './state.js';
 
 export class ChatApiError extends Error {
-  constructor(readonly status: number, readonly code: string) { super(code); }
+  constructor(readonly status: number, readonly code: string, message = code) { super(message); }
 }
 export interface ChatApi { <T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> }
 export type ChatMessage = { id?: string; role: string; content: string; media?: Array<{ uri?: string; name?: string; mimeType?: string }> };
-export type ChatCatalog = { id: string; name?: string; thinking?: { initialValue?: string } };
+/** History may omit stream ids; reconcile only ordered replies after the latest user row. */
+export function mergeRemoteMessages(history: ChatMessage[], stream: ReadonlyMap<string, string>): ChatMessage[] {
+  const messages = history.map(message => ({ ...message }));
+  const lastUser = messages.findLastIndex(message => message.role === 'user');
+  const matched = new Set<number>();
+  for (const [id, content] of stream) {
+    let index = messages.findIndex(message => message.role === 'assistant' && message.id === id);
+    if (index < 0) index = messages.findIndex((message, position) => position > lastUser && !matched.has(position)
+      && message.role === 'assistant' && Boolean(message.content) && (content.startsWith(message.content) || message.content.startsWith(content)));
+    if (index >= 0) { matched.add(index); if (content.length > messages[index]!.content.length) messages[index]!.content = content; }
+    else { matched.add(messages.length); messages.push({ id, role: 'assistant', content }); }
+  }
+  return messages;
+}
+export type ChatCatalog = { id: string; name?: string; thinking?: { initialValue?: string; options?: string[] } };
 type InputState = { activeRunId?: string; inputs?: Array<{ runId?: string; status?: string }>; control?: { phase: string } };
 type Receipt = { receipt: { clientMessageId: string; conversationId: string; inputId?: string }; inputState: InputState };
 export interface ChatView {
+  historical?: boolean; older?: string;
   phase: 'connecting' | 'syncing' | 'ready' | 'retrying' | 'recovery' | 'unknown';
   notice: string; sessions: Array<{ key: string; name?: string; label?: string }>;
   messages: ChatMessage[]; models: ChatCatalog[]; agents: ChatCatalog[];
-  model: string; agent: string; selected?: string; draft: string; activeRun?: string;
+  model: string; agent: string; thinking: string; drafts: Array<{ conversationId: string; preview: string }>; selected?: string; draft: string; activeRun?: string;
   stop: '' | 'requested' | 'acknowledged' | 'confirmed' | 'unknown'; pending: boolean;
 }
 export interface ChatPersistence { read(): Promise<ChatState>; write(state: ChatState): Promise<unknown> }
 
 /** One instance per Shell window. Persistent hints cannot replay an input. */
 export class RemoteChatModel {
-  readonly view: ChatView = { phase: 'connecting', notice: '', sessions: [], messages: [], models: [], agents: [], model: '', agent: '', draft: '', stop: '', pending: false };
+  readonly view: ChatView = { phase: 'connecting', notice: '', sessions: [], messages: [], models: [], agents: [], model: '', agent: '', thinking: 'off', drafts: [], draft: '', stop: '', pending: false };
   private state: ChatState = { version: 1, drafts: {} };
   private generation = 0;
   private disposed = false;
   private locked = false;
   private connected = false;
+  private recoveryAttempts = 0;
+  private lastRealtimeAt = 0;
   private writeQueue = Promise.resolve();
   private writing?: Promise<void>;
   private queuedState?: ChatState;
@@ -38,6 +55,7 @@ export class RemoteChatModel {
   private runTopic?: string;
   private timer?: ReturnType<typeof setInterval>;
   private abort = new AbortController();
+  private before?: string;
   private stream = new Map<string, string>();
   private history: ChatMessage[] = [];
   constructor(private readonly api: ChatApi, private readonly persistence: ChatPersistence,
@@ -47,9 +65,9 @@ export class RemoteChatModel {
     if (this.disposed) return;
     this.view.pending = Boolean(this.state.pending);
     this.view.selected = this.state.selected;
+    this.view.drafts = Object.entries(this.state.drafts).map(([conversationId, text]) => ({ conversationId, preview: text.slice(0, 40) }));
     this.view.draft = this.state.selected ? this.state.drafts[this.state.selected] ?? '' : '';
-    this.view.messages = this.history.map(message => ({ ...message, content: message.id && this.stream.has(message.id) ? this.stream.get(message.id)! : message.content }));
-    for (const [id, content] of this.stream) if (!this.history.some(message => message.id === id)) this.view.messages.push({ id, role: 'assistant', content });
+    this.view.messages = mergeRemoteMessages(this.history, this.stream);
     this.changed(this.view);
   }
   private fail(error: unknown) {
@@ -78,19 +96,24 @@ export class RemoteChatModel {
       ]);
       if (this.disposed) return;
       this.view.models = models.models ?? []; this.view.agents = agents.agents ?? [];
-      this.view.model = this.view.models[0]?.id ?? ''; this.view.agent = agents.defaultId ?? this.view.agents[0]?.id ?? '';
+      this.view.model = this.view.models[0]?.id ?? ''; this.view.thinking = this.view.models[0]?.thinking?.initialValue ?? 'off'; this.view.agent = agents.defaultId ?? this.view.agents[0]?.id ?? '';
       this.state.selected = this.state.pending?.conversationId ?? this.state.selected ?? crypto.randomUUID();
       this.emit(); this.startRealtime();
-      this.timer = setInterval(() => { if (this.connected && !this.locked) void this.refresh(); }, 3000);
+      this.timer = setInterval(() => {
+        if (this.connected && performance.now() - this.lastRealtimeAt >= 40_000) { this.connected = false; this.realtime?.reconnect(); }
+        else if (this.connected && !this.locked) void this.refresh();
+      }, 3000);
     } catch (error) { this.fail(error); }
   }
   private startRealtime() {
-    this.connected = false; this.realtime?.disconnect(); this.runTopic = undefined;
+    this.recoveryAttempts = 0; this.connected = false; this.realtime?.disconnect(); this.runTopic = undefined;
     const generation = ++this.generation;
     const current = () => !this.disposed && generation === this.generation && !this.locked;
     const clientId = crypto.randomUUID();
     this.realtime = new RealtimeClient({ clientId, clientKind: 'web', maxReconnectAttempts: 10, connectionTimeoutMs: 15_000,
-      getWebSocketUrl: () => this.socketUrl, createWebSocket: this.websocket,
+      getWebSocketUrl: () => this.socketUrl, createWebSocket: url => {
+        const socket = this.websocket(url); socket.addEventListener('message', () => { if (current()) this.lastRealtimeAt = performance.now(); }); return socket;
+      },
       issueTicket: async signal => {
         try { return await this.api('/api/realtime/tickets', { clientId, clientKind: 'web', protocolVersion: 2 }, signal); }
         catch (error) { if (error instanceof ChatApiError && [401, 403, 409].includes(error.status)) throw new RealtimeConnectionError(error.code, false); throw error; }
@@ -98,6 +121,7 @@ export class RemoteChatModel {
       onStateChange: state => {
         if (!current()) return;
         this.connected = state === 'connected';
+        if (this.connected) this.lastRealtimeAt = performance.now();
         this.connectionState(state);
         if (this.connected) { this.stream.clear(); void this.refresh(); }
       },
@@ -113,11 +137,13 @@ export class RemoteChatModel {
     this.realtime.connect();
   }
   private connectionState(state: RealtimeConnectionState) {
-    if (state === 'error') { this.locked = true; this.view.phase = 'recovery'; this.view.notice = '连接需恢复；请返回配置重新核验身份。'; }
+    if (state === 'reconnecting' && ++this.recoveryAttempts > 10) { this.fail(new Error('CHAT_RETRY_EXHAUSTED')); return; }
+    if (state === 'error') { this.locked = true; this.view.phase = 'recovery'; this.view.notice = '连接需恢复；请返回配置重新核验身份。'; this.realtime?.disconnect(); }
     else this.view.phase = state === 'connected' ? 'syncing' : state === 'reconnecting' ? 'retrying' : 'connecting';
     this.emit();
   }
   private dispatch(event: string, data: unknown) {
+    if (this.before) return;
     const callbacks: AgentStreamCallbacks = {
       onStreamStart: () => {}, onThinking: () => {}, onThinkingEnd: () => {}, onToolStart: () => {}, onToolEnd: () => {}, onProgress: () => {},
       onToken: (delta, messageId, offset) => {
@@ -125,7 +151,8 @@ export class RemoteChatModel {
         const previous = this.stream.get(messageId) ?? this.history.find(message => message.id === messageId)?.content ?? '';
         if (offset !== undefined && offset > previous.length) { void this.refresh(); return; }
         const text = offset === undefined ? previous + delta : previous.slice(0, offset) + delta + previous.slice(offset + delta.length);
-        if (text.length > 1024 * 1024 || this.stream.size >= 100 && !this.stream.has(messageId)) { this.fail(new Error('CHAT_STREAM_LIMIT')); return; }
+        const total = [...this.stream].reduce((bytes, [id, value]) => bytes + (id === messageId ? 0 : new TextEncoder().encode(value).byteLength), new TextEncoder().encode(text).byteLength);
+        if (total > 4 * 1024 * 1024 || text.length > 1024 * 1024 || this.stream.size >= 100 && !this.stream.has(messageId)) { this.fail(new Error('CHAT_STREAM_LIMIT')); return; }
         this.stream.set(messageId, text); this.emit();
       },
       onResult: () => { void this.refresh(); }, onError: () => { void this.refresh(); }, onReplayGap: () => { this.stream.clear(); return this.refresh(); },
@@ -136,8 +163,8 @@ export class RemoteChatModel {
     if (this.disposed || this.locked || !this.connected) return;
     if (this.syncing) { this.rerun = true; return; }
     this.syncing = true;
-    const generation = this.generation, selected = this.state.selected;
-    const current = () => !this.disposed && !this.locked && generation === this.generation;
+    const generation = this.generation, selected = this.state.selected, before = this.before;
+    const current = () => !this.disposed && !this.locked && this.connected && generation === this.generation && before === this.before;
     try {
       const sessions = await this.api<{ items: ChatView['sessions'] }>('/api/sessions?limit=100', undefined, this.abort.signal);
       if (!current()) return;
@@ -147,13 +174,14 @@ export class RemoteChatModel {
       if (selected) {
         try {
           const [history, input] = await Promise.all([
-            this.api<{ messages: ChatMessage[] }>(`/api/sessions/${selected}/messages?limit=100`, undefined, this.abort.signal),
+            this.api<{ messages: ChatMessage[]; pagination?: { nextBeforeCursor?: string } }>(`/api/sessions/${selected}/messages?limit=100${before ? `&before=${encodeURIComponent(before)}` : ''}`, undefined, this.abort.signal),
             this.api<InputState>(`/api/sessions/${selected}/input-state`, undefined, this.abort.signal),
           ]);
           if (!current()) return;
-          this.history = history.messages ?? [];
+          this.history = history.messages ?? []; this.view.older = history.pagination?.nextBeforeCursor; this.view.historical = Boolean(before);
           for (const message of this.history) if (message.id && this.stream.get(message.id) === message.content) this.stream.delete(message.id);
           const next = input.activeRunId;
+          if (next !== this.view.activeRun) this.stream.clear();
           if (this.runTopic && this.runTopic !== (next ? `run:${next}` : undefined)) this.realtime?.unsubscribe(this.runTopic);
           if (next && this.runTopic !== `run:${next}`) { this.runTopic = `run:${next}`; this.realtime?.subscribe(this.runTopic, 0); }
           if (!next) { this.runTopic = undefined; this.stream.clear(); }
@@ -162,6 +190,7 @@ export class RemoteChatModel {
         } catch (error) { if (!(error instanceof ChatApiError && error.status === 404)) throw error; this.history = []; this.view.activeRun = undefined; }
       }
       if (!current()) return;
+      this.recoveryAttempts = 0;
       this.view.phase = this.state.pending ? 'unknown' : this.chatEnabled ? 'ready' : 'recovery';
       if (!this.chatEnabled) this.view.notice = 'Gateway 未声明 S3 文本输入能力；当前仅可查看历史。';
       this.emit();
@@ -183,7 +212,7 @@ export class RemoteChatModel {
       if (this.disposed || this.state.pending !== pending) return;
       if (receipt.receipt.clientMessageId !== pending.clientMessageId || receipt.receipt.conversationId !== pending.conversationId) throw new Error('CHAT_RECEIPT_MISMATCH');
       this.state.pending = undefined; delete this.state.drafts[pending.conversationId];
-      await this.persist(); this.view.notice = '输入已由服务器接收；未重复提交。'; this.emit();
+      await this.persist(); this.view.notice = '服务器已接收输入。'; this.emit();
     } catch (error) {
       if (this.disposed || this.locked) return;
       if (error instanceof ChatApiError && [401, 403, 409].includes(error.status)) { this.fail(error); return; }
@@ -203,12 +232,19 @@ export class RemoteChatModel {
   async select(conversationId: string = crypto.randomUUID()) {
     if (this.disposed || this.submitting || this.locked) return;
     await this.writeQueue;
+    this.before = undefined; this.view.historical = false; this.view.older = undefined;
     this.state.selected = conversationId; this.history = []; this.stream.clear(); this.view.stop = ''; this.view.activeRun = undefined;
     await this.persist(); this.startRealtime(); this.emit();
   }
-  choose(model: string, agent: string) { this.view.model = model; this.view.agent = agent; this.emit(); }
+  choose(model: string, agent: string, thinking?: string) {
+    if (model !== this.view.model) this.view.thinking = this.view.models.find(item => item.id === model)?.thinking?.initialValue ?? 'off';
+    if (thinking && this.view.models.find(item => item.id === model)?.thinking?.options?.includes(thinking)) this.view.thinking = thinking;
+    this.view.model = model; this.view.agent = agent; this.emit();
+  }
+  async loadOlder() { if (!this.view.older || this.disposed) return; this.before = this.view.older; this.stream.clear(); await this.refresh(); }
+  async latest() { this.before = undefined; this.stream.clear(); await this.refresh(); }
   async send() {
-    if (this.disposed || this.locked || this.submitting || this.state.pending || !this.chatEnabled || this.view.phase !== 'ready' || !this.state.selected) return;
+    if (this.disposed || this.locked || this.submitting || this.state.pending || !this.chatEnabled || this.view.phase !== 'ready' || this.view.historical || !this.state.selected) return;
     const conversationId = this.state.selected, text = this.state.drafts[conversationId]?.trim();
     if (!text) return;
     this.submitting = true; this.view.phase = 'syncing'; this.emit();
@@ -228,7 +264,7 @@ export class RemoteChatModel {
         const model = this.view.models.find(model => model.id === this.view.model);
         if (!model || !this.view.agent) throw new Error('请选择已配置的服务器模型和 Agent。');
         command = { ...common, kind: 'start', creation: { agentId: this.view.agent, projectId: null, execution: null, temporary: false,
-          model: model.id, thinkingLevel: model.thinking?.initialValue ?? 'off' } };
+          model: model.id, thinkingLevel: this.view.thinking } };
       }
       if (this.disposed || this.locked || !this.connected) return;
       this.state.pending = { conversationId, clientMessageId: common.clientMessageId, createdAt: Date.now() };
@@ -241,7 +277,7 @@ export class RemoteChatModel {
       if (!this.disposed) {
         if (!posted) this.fail(error);
         else if (error instanceof ChatApiError && [400, 404, 409, 422, 429].includes(error.status) && !error.code.startsWith('GATEWAY_')) {
-          this.state.pending = undefined; await this.persist(); this.view.notice = `服务器未接受输入：${error.code}。请刷新后检查草稿。`;
+          this.state.pending = undefined; await this.persist(); this.view.notice = `服务器未接受输入：${error.message}。请刷新后检查草稿。`;
         } else { this.view.phase = 'unknown'; this.view.notice = '输入结果未知，正在等待核实；不会自动重发。'; this.emit(); }
       }
     } finally { this.submitting = false; if (!this.disposed && !this.locked) void this.refresh(); }

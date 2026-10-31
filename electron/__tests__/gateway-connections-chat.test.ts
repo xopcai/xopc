@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RemoteChatStateStore, type ChatState } from '../chat/state.js';
-import { ChatApiError, RemoteChatModel, type ChatApi } from '../chat/model.js';
+import { ChatApiError, RemoteChatModel, mergeRemoteMessages, type ChatApi } from '../chat/model.js';
 import { shellRoute, shellWrite } from '../shell/policy.js';
 
 const clients = vi.hoisted(() => [] as Array<{ options: Record<string, (...args: unknown[]) => unknown>; subscribe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>);
@@ -88,7 +88,7 @@ describe('receipt recovery and window state', () => {
         if (!accepted || !receiptVisible) throw new ChatApiError(404, 'NOT_RECEIVED');
         return { receipt: { conversationId: state.pending!.conversationId, clientMessageId: state.pending!.clientMessageId, inputId: 'input' }, inputState: {} };
       }
-      if (path.includes('/messages')) return { messages: accepted ? [{ id: 'message', role: 'assistant', content: 'answer' }] : [] };
+      if (path.includes('/messages')) return { messages: accepted ? [{ id: 'message', role: 'assistant', content: 'answer' }] : [], pagination: { nextBeforeCursor: path.includes('before=') ? undefined : '100' } };
       if (path.endsWith('/input-state')) return { activeRunId: active ? 'run' : undefined, control: { phase: active ? 'running' : 'idle' } };
       if (path === '/api/agent/abort') return { ok: true };
       throw new ChatApiError(404, 'NOT_FOUND');
@@ -119,6 +119,12 @@ describe('receipt recovery and window state', () => {
     failWrite = false; model.dispose(); model = make(); await ready(); await model.draft('new');
     clients.at(-1)!.options.onStateChange('reconnecting'); await model.send(); expect(posts()).toHaveLength(0);
   });
+  it('stops automatic recovery after ten unsuccessful attempts', async () => {
+    await ready(); const client = clients.at(-1)!;
+    for (let index = 0; index < 11; index++) client.options.onStateChange('reconnecting');
+    expect(model.view.phase).toBe('recovery'); expect(client.disconnect).toHaveBeenCalled();
+    await model.send(); expect(posts()).toHaveLength(0);
+  });
   it('isolates drafts by conversation and does not mutate stale/disposed UI', async () => {
     await ready(); await model.draft('A'); await model.select(otherId); await vi.waitFor(() => expect(model.view.phase).toBe('ready'));
     expect(model.view.draft).toBe(''); await model.draft('B'); await model.select(conversationId);
@@ -131,8 +137,19 @@ describe('receipt recovery and window state', () => {
     expect(model.view.messages.filter(message => message.id === 'stream')).toEqual([{ id: 'stream', role: 'assistant', content: 'hello' }]);
     await client.options.onGap({ topic: 'run:run' }); expect(model.view.messages.some(message => message.id === 'stream')).toBe(false);
   });
+  it('pages bounded history without allowing a stale-page send', async () => {
+    await ready(); await model.draft('draft'); await model.loadOlder(); expect(model.view.historical).toBe(true);
+    await model.send(); expect(posts()).toHaveLength(0); await model.latest(); expect(model.view.historical).toBe(false); expect(model.view.draft).toBe('draft');
+  });
   it('separates requested/acknowledged stop from server-confirmed idle', async () => {
     active = true; await ready(); await model.stop(); expect(model.view.stop).toBe('acknowledged');
     active = false; await model.refresh(); expect(model.view.stop).toBe('confirmed');
   });
+});
+
+it('reconciles id-less server replies without deduplicating equal replies from different turns', () => {
+  const history = [{ role: 'user', content: 'one' }, { role: 'assistant', content: 'same' }, { role: 'user', content: 'two' }, { role: 'assistant', content: 'same' }];
+  expect(mergeRemoteMessages([], new Map([['one', 'same'], ['two', 'same']]))).toHaveLength(2);
+  expect(mergeRemoteMessages(history, new Map([['stream-id', 'same']]))).toEqual(history);
+  expect(mergeRemoteMessages(history, new Map([['stream-id', 'same plus']])).map(message => message.content)).toEqual(['one', 'same', 'two', 'same plus']);
 });

@@ -30,12 +30,13 @@ export class RemoteShellWindow {
     if (epoch !== this.manager.snapshot().epoch) throw new Error('STALE_CONNECTION_EPOCH');
     await this.close();
     if (this.failedCleanup) throw new Error('SHELL_CLEANUP_RESTART_REQUIRED');
-    const target = await this.manager.privateConnection(epoch, id);
+    const started = await this.manager.beginConnection(epoch, id);
+    const target = await this.manager.privateConnection(started.epoch, id);
     const worker = new ShellController(this.mainDirectory, () => { void this.close().catch(() => {}); this.recover(); });
     this.worker = worker;
     try {
       const identity = await worker.request<{ gatewayId: string; publicKey: string }>('authenticate', { target });
-      const snapshot = await this.manager.pinIdentity(epoch, id, identity);
+      const snapshot = await this.manager.pinIdentity(started.epoch, id, identity);
       this.namespace = { profileId: String(id), ...identity };
       await this.state.read(this.namespace);
       const connection = await worker.request<{ origin: string; proof: string; epoch: number }>('activate', { assets: this.assets, epoch: snapshot.epoch });
