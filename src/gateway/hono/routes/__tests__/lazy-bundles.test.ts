@@ -138,7 +138,7 @@ describe('lazy route bundles', () => {
     }
   });
   it('keeps draft and preview adapters in their authenticated domain bundles', () => {
-    for (const path of ['/api/automation-runs', '/api/automation-runs/run-1', '/api/automation-runs/run-1/read', '/api/automations/draft', '/api/automations/simulate', '/api/automation-runs/run/repair-draft', '/api/automation-events', '/api/automation-events/event-1/replay', '/api/automation-deliveries', '/api/automation-deliveries/run-1/gateway_event/retry']) {
+    for (const path of ['/api/automation-runs', '/api/automation-runs/product-events', '/api/automation-runs/run-1', '/api/automation-runs/run-1/read', '/api/automations/draft', '/api/automations/simulate', '/api/automation-runs/run/repair-draft', '/api/automation-events', '/api/automation-events/event-1/replay', '/api/automation-deliveries', '/api/automation-deliveries/run-1/gateway_event/retry']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('automations');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/notes/note/ai/edit')?.id).toBe('notes');
