@@ -1,0 +1,57 @@
+{
+  "passed": true,
+  "tls": false,
+  "startedAt": "2026-10-31T11:26:41.265Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "halfOpenRealtimeDetectedWithinOriginalBudget": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "application": "/tmp/xopc-s4-delivery/installed-isolated-graph/xopc.app",
+  "packageBefore": {
+    "files": 1422,
+    "sha256": "fb6211d562e459c90a6fb09ecb9cf3874e56b93e09045fe3374d932c850025ae"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-s4-delivery/installed-isolated-graph/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-s4-delivery/installed-isolated-graph/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-QsSKO3",
+    "rendererCdpOnly": true,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 5767
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 302
+    },
+    {
+      "input": 2,
+      "durationMs": 130
+    }
+  ],
+  "inputIntervalMs": 0,
+  "finishedAt": "2026-10-31T11:27:46.411Z",
+  "packageAfter": {
+    "files": 1422,
+    "sha256": "fb6211d562e459c90a6fb09ecb9cf3874e56b93e09045fe3374d932c850025ae"
+  }
+}
