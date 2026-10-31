@@ -312,3 +312,4 @@ export { locationDescriptor, locationRequestSchema, locationSampleSchema, LOCATI
 export { personalDescriptor, PERSONAL_TOOL_NAMES, CONTACT_PICK_INPUT_SCHEMA, CALENDAR_INPUT_SCHEMA, CALENDAR_OUTPUT_SCHEMA, type PersonalToolName } from './personal.js';
 export * from './context.js';
 export * from './location-sharing.js';
+export * from './screen.js';

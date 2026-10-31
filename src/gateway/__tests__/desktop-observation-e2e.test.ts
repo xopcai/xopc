@@ -78,6 +78,11 @@ it('executes only explicitly approved state reads over authenticated HTTP and si
     consent = true; revokeDuringConsent = true;
     await expect(observer.start(manager.snapshot().epoch, id)).rejects.toThrow('DESKTOP_OBSERVATION_REVISION_CHANGED');
     expect(getDevice(deviceId)?.scopes).not.toContain('desktop.observe.state'); expect(reads).toBe(0);
+    const instances: string[] = [];
+    (realtime as unknown as { wss: WebSocketServer }).wss.on('connection', socket => socket.on('message', data => {
+      const message = JSON.parse(String(data));
+      if (message.kind === 'realtime.hello' && message.payload.endpoint) instances.push(message.payload.endpoint.connectionInstanceId);
+    }));
     revokeDuringConsent = false;
     await observer.start(manager.snapshot().epoch, id); await until(() => Boolean(observer?.origin()));
     const endpoint = endpoints.registry.list().find(endpoint => endpoint.principalId === deviceId)!;
@@ -85,6 +90,22 @@ it('executes only explicitly approved state reads over authenticated HTTP and si
     expect(realtime.canConfigureEndpoint(endpoint.endpointId)).toBe(false);
     const result = await endpoints.invocations.invoke({ endpointId: endpoint.endpointId, toolCallId: randomUUID(), toolName: 'desktop.device.get_state', arguments: {}, descriptorRevision: endpoint.tools[0].revision });
     expect(result.content).toMatchObject([{ type: 'json', value: { platform: 'fixture', timezone: 'Asia/Shanghai' } }]); expect(reads).toBe(1);
+    const previousClaim = observer.origin()!;
+    const previousConnection = endpoint.connectionId;
+    const previousInstance = instances.at(-1);
+    expect(previousInstance).toBeDefined();
+    realtime.disconnectPrincipal(deviceId);
+    await until(() => {
+      const current = endpoints.registry.get(endpoint.endpointId);
+      return Boolean(observer?.origin() && current && current.connectionId !== previousConnection);
+    });
+    const resumed = endpoints.registry.get(endpoint.endpointId)!;
+    expect(instances.at(-1)).not.toBe(previousInstance);
+    expect(endpoints.registry.verifyTurnClaim(endpoint.endpointId, previousClaim.token)).toBe(false);
+    expect(endpoints.registry.verifyTurnClaim(endpoint.endpointId, observer.origin()!.token)).toBe(true);
+    const resumedResult = await endpoints.invocations.invoke({ endpointId: resumed.endpointId, toolCallId: randomUUID(), toolName: 'desktop.device.get_state', arguments: {}, descriptorRevision: resumed.tools[0].revision });
+    expect(resumedResult.content).toMatchObject([{ type: 'json', value: { platform: 'fixture' } }]);
+    expect(reads).toBe(2);
     await expect(endpoints.invocations.invoke({ endpointId: endpoint.endpointId, toolCallId: randomUUID(), toolName: 'desktop.file.save', arguments: {}, descriptorRevision: endpoint.tools[0].revision })).rejects.toMatchObject({ code: 'TOOL_NOT_FOUND' });
     const wrongKey = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).publicKey.export({ type: 'spki', format: 'der' }).toString('base64url');
     await expect(client.endpointRequest('/api/endpoint-tools/principals', 'POST', { principalId: deviceId, displayName: 'State-only desktop', kind: 'desktop', platform: 'desktop', publicKey: wrongKey })).rejects.toThrow('DESKTOP_OBSERVATION_DENIED');
@@ -103,16 +124,16 @@ it('executes only explicitly approved state reads over authenticated HTTP and si
     await rejectedHello([{ ...deviceStateDescriptor('desktop', 'state'), name: 'desktop.file.save' }]);
     await rejectedHello([deviceStateDescriptor('desktop', 'state')], randomUUID());
     await rejectedHello([deviceStateDescriptor('desktop', 'state')], deviceId, true);
-    expect(reads).toBe(1);
+    expect(reads).toBe(2);
     // Deliberately bypass the fixture Gateway signer to model an untrusted relay injecting a tool frame.
     const sockets = (realtime as unknown as { wss: WebSocketServer }).wss.clients;
     expect(sockets.size).toBe(1);
     [...sockets][0].send(JSON.stringify({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), kind: 'endpoint.message', payload: { type: 'tool.invoke' } }));
-    await until(() => observer?.snapshot()?.state === 'error'); expect(observer.origin()).toBeUndefined(); expect(reads).toBe(1);
+    await until(() => observer?.snapshot()?.state === 'error'); expect(observer.origin()).toBeUndefined(); expect(reads).toBe(2);
     observer.stop(); await observer.start(manager.snapshot().epoch, id); await until(() => Boolean(observer?.origin()));
     const authorization = (await owner(`/api/desktop-host/devices/${deviceId}/observation`)).payload;
     await owner(`/api/desktop-host/devices/${deviceId}/observation`, 'POST', { state: false, expectedRevision: authorization.revision });
-    await until(() => observer?.origin() === undefined); expect(reads).toBe(1);
+    await until(() => observer?.origin() === undefined); expect(reads).toBe(2);
     await until(() => observer?.snapshot()?.state === 'error');
     expect(getDevice(deviceId)?.scopes).toEqual(['gateway.status', 'device.self']);
     observer.stop();

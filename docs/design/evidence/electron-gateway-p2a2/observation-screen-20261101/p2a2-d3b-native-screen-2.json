@@ -1,0 +1,37 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T16:21:35.918Z",
+  "checks": {},
+  "scope": "Installed macOS runtime, actual native source selection and per-capture consent, signed single-use image upload and actual Agent image projection; own chat window only, no display permission, input control or physical WAN claim",
+  "interactions": [],
+  "nativeCancelCovered": true,
+  "packageBefore": {
+    "files": 1426,
+    "sha256": "b40f14fb89199994915e6e0fe09f7ca4c3ff1b385983ab7fc5e056a07fe3d365"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p2a2-d3b-delivery/native-automation/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p2a2-d3b-delivery/native-automation/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-JOrI0Q",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 31369
+  },
+  "error": "AssertionError [ERR_ASSERTION]: CONNECTION_STORAGE_TIMEOUT_RESTART_REQUIRED\n    at save (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:125:33)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:129:14",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 64303\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=31347, lockPath=/Users/micjoyce/.xopc/locks/gateway.259cea0a.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:64303...\n✅ Gateway started\n   URL: http://127.0.0.1:64303\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:64303\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:64325/devtools/browser/28d8ab4e-6057-48d2-b9e2-631cbc1e0395\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-JOrI0Q",
+  "finishedAt": "2026-10-31T16:22:07.484Z"
+}

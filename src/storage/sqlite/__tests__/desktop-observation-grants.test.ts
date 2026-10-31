@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../connection.js';
-import { createDevice, getDevice, getDesktopStateObservation, setDesktopStateObservation } from '../device-access-repository.js';
+import { createDevice, getDevice, getDesktopStateObservation, setDesktopStateObservation, getDesktopScreenObservation, setDesktopScreenObservation } from '../device-access-repository.js';
 import { getSqliteDatabase } from '../transaction.js';
 
 let directory: string, path: string;
@@ -32,4 +32,13 @@ it('rolls back the scope when persisting its grant version fails', () => {
 it('cannot assign a desktop observation grant to a mobile device', () => {
   const device = createDevice({ displayName: 'Synthetic phone', platform: 'ios', publicKeyJwk, scopes: ['device.self', 'phone.view'] });
   expect(setDesktopStateObservation(device.id, true, 0)).toBeUndefined(); expect(getDevice(device.id)?.scopes).toEqual(['device.self', 'phone.view']);
+});
+it('keeps screen and state permissions separate while revocation invalidates an earlier confirmation for either', () => {
+  const device = createDevice({ displayName: 'Synthetic desktop', platform: 'desktop', publicKeyJwk, scopes: ['device.self'] });
+  expect(setDesktopStateObservation(device.id, true, 0)?.revision).toBe(1);
+  expect(getDesktopScreenObservation(device.id)).toMatchObject({ screenEnabled: false, revision: 1 });
+  expect(setDesktopScreenObservation(device.id, true, 1)).toMatchObject({ screenEnabled: true, revision: 2 });
+  expect(setDesktopStateObservation(device.id, false)?.revision).toBe(3);
+  expect(() => setDesktopScreenObservation(device.id, true, 2)).toThrow('DESKTOP_OBSERVATION_REVISION_CHANGED');
+  expect(getDevice(device.id)?.scopes).toEqual(['device.self', 'desktop.observe.screen']);
 });

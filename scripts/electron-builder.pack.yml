@@ -36,6 +36,7 @@ asarUnpack:
   - 'out/preload/shell.cjs'
   - 'out/preload/gateway-connections.*'
   - 'out/preload/remote-shell.*'
+  - 'out/preload/screen-capture.html'
   - 'out/server/**'
   - 'node_modules/**'
   - 'dist/electron/extensions/**'

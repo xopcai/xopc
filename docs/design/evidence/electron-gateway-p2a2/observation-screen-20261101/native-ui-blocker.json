@@ -1,0 +1,9 @@
+{
+  "observedAt": "2026-10-31T16:30:26.882Z",
+  "tool": "mcp__cua_repl.js",
+  "result": "The Mac is locked and automatic unlock could not unlock it. Ask the user to unlock the Mac manually before continuing.",
+  "action": "Manual unlock requested; no further native approval attempted",
+  "acceptance": "pending",
+  "timeoutBudgetChanged": false,
+  "causalAttribution": "Lock state observed; not proven to explain every prior safeStorage timeout"
+}

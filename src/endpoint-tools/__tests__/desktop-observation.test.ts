@@ -1,11 +1,13 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 
-import { deviceStateDescriptor, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import { deviceStateDescriptor, screenCaptureDescriptor, SCREEN_CAPTURE_MAX_BYTES, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import { COMPUTER_FRAME_MAX_BYTES } from '@xopcai/computer-control-contract';
 import { expect, it } from 'vitest';
 
 import { signDesktopGatewayFrame, verifyDesktopGatewayFrame } from '../desktop-frame.js';
 import { assertDesktopObservationHello, desktopDeviceEndpointKey } from '../desktop-observation.js';
 import type { DeviceRecord } from '../../storage/sqlite/device-access-repository.js';
+import { EndpointToolPolicy } from '../policy.js';
 
 const gateway = generateKeyPairSync('ed25519'), deviceKeys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
 const publicKey = gateway.publicKey.export({ type: 'spki', format: 'pem' }).toString();
@@ -27,9 +29,19 @@ it('requires the independently paired device key, explicit observation grant and
     displayName: device.displayName, appVersion: '1', availability: 'background', nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: [deviceStateDescriptor('desktop', 'state')] };
   const key = desktopDeviceEndpointKey(device);
   expect(() => assertDesktopObservationHello(device, hello, key)).not.toThrow();
+  expect(() => assertDesktopObservationHello(device, { ...hello, tools: [screenCaptureDescriptor()] }, key)).toThrow();
+  expect(() => assertDesktopObservationHello({ ...device, scopes: ['device.self', 'desktop.observe.screen'] }, { ...hello, tools: [screenCaptureDescriptor()] }, key)).not.toThrow();
   for (const changed of [{ ...device, scopes: ['device.self'] }, { ...device, revokedAt: Date.now() }, { ...device, id: randomUUID() }]) expect(() => assertDesktopObservationHello(changed as DeviceRecord, hello, key)).toThrow();
   expect(() => assertDesktopObservationHello(device, hello, 'another-key')).toThrow();
   for (const tools of [[], [deviceStateDescriptor('desktop', 'power')], [hello.tools[0], { ...hello.tools[0], name: 'desktop.file.save', effect: 'read' as const }]]) {
     expect(() => assertDesktopObservationHello(device, { ...hello, tools }, key)).toThrow();
   }
+});
+it('requires per-call foreground confirmation for screen capture within the unchanged frame budget', () => {
+  const policy = new EndpointToolPolicy(), descriptor = screenCaptureDescriptor();
+  expect(SCREEN_CAPTURE_MAX_BYTES).toBe(COMPUTER_FRAME_MAX_BYTES);
+  expect(() => policy.validateDescriptor('desktop', descriptor)).not.toThrow();
+  expect(() => policy.validateDescriptor('desktop', { ...descriptor, confirmation: 'never' })).toThrow();
+  expect(() => policy.evaluate(descriptor, 'background')).toThrow();
+  expect(policy.evaluate(descriptor, 'foreground')).toMatchObject({ confirmationRequired: true });
 });

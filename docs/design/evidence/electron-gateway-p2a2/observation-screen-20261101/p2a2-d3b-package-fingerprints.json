@@ -1,0 +1,10 @@
+{
+  "production": {
+    "files": 1426,
+    "sha256": "442291dc363298f9375127f9db31496f1a7d7d83e13f4120fff4fb386760ca51"
+  },
+  "native": {
+    "files": 1426,
+    "sha256": "b40f14fb89199994915e6e0fe09f7ca4c3ff1b385983ab7fc5e056a07fe3d365"
+  }
+}

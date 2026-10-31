@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('gatewayConnections', Object.freeze({
   disableDesktop: (epoch: number, id: string) => ipcRenderer.invoke('connections:desktop-disable', epoch, id),
   reenrollDesktop: (epoch: number, id: string) => ipcRenderer.invoke('connections:desktop-reenroll', epoch, id),
   startObservation: (epoch: number, id: string) => ipcRenderer.invoke('connections:observation-start', epoch, id),
+  startScreenObservation: (epoch: number, id: string) => ipcRenderer.invoke('connections:screen-start', epoch, id),
   stopObservation: () => ipcRenderer.invoke('connections:observation-stop'),
   useLocal: () => ipcRenderer.invoke('connections:local'),
   quit: () => ipcRenderer.invoke('connections:quit'),

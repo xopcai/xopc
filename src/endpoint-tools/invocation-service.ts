@@ -150,7 +150,7 @@ export class EndpointInvocationService {
     const invocationId = crypto.randomUUID();
     const startedAt = Date.now();
     const uploadGrant = tool.descriptor.resultKinds.includes('file')
-      ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, params.toolName === 'desktop.computer.control' ? 'computer-frame' : params.toolName.startsWith('mobile.') ? 'personal' : 'durable', endpoint.principalId)
+      ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, ['desktop.computer.control', 'desktop.screen.capture'].includes(params.toolName) ? 'computer-frame' : params.toolName.startsWith('mobile.') ? 'personal' : 'durable', endpoint.principalId)
       : undefined;
     try {
       this.options.audit?.started({
@@ -305,7 +305,7 @@ export class EndpointInvocationService {
     const pending = this.take(invocationId);
     if (!pending) return;
     this.finishAudit(pending, { id: invocationId, status: 'succeeded', completedAt: Date.now() });
-    pending.resolve(pending.toolName === 'desktop.computer.control' ? { ...result, invocationId } : result);
+    pending.resolve(['desktop.computer.control', 'desktop.screen.capture'].includes(pending.toolName) ? { ...result, invocationId } : result);
   }
 
   private fail(invocationId: string, error: Error): void {

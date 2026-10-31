@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { EndpointToolHostController, EndpointToolRegistry } from '@xopcai/endpoint-tools-client';
-import { deviceStateDescriptor, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
+import { EndpointToolHostController, EndpointToolRegistry, type EndpointToolDefinition } from '@xopcai/endpoint-tools-client';
+import { deviceStateDescriptor, screenCaptureDescriptor, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import WebSocket from 'ws';
@@ -9,6 +9,7 @@ import WebSocket from 'ws';
 import { verifyDesktopGatewayFrame, type DesktopFrameBinding } from '../../src/endpoint-tools/desktop-frame.js';
 import type { DesktopDeviceAuth } from './device-auth.js';
 import type { DesktopBinding } from './device-identity.js';
+import type { DesktopScreenSession } from './screen-session.js';
 
 export type DesktopObservationState = 'connecting' | 'online' | 'offline' | 'stopped' | 'error';
 
@@ -19,12 +20,28 @@ export class DesktopObservationHost {
   private controller?: EndpointToolHostController;
   private frameBinding?: DesktopFrameBinding;
   private claim?: EndpointTurnClaim;
+  private deviceId?: string;
   constructor(private readonly options: {
     binding: DesktopBinding; auth: DesktopDeviceAuth; appVersion: string;
     readState(): Promise<{ platform: string; systemVersion: string; locale: string; timezone: string }>;
     onState(state: DesktopObservationState, error?: string): void;
+    screen?: DesktopScreenSession;
   }) {}
   origin(): EndpointTurnClaim | undefined { return this.stopped || !this.claim ? undefined : { ...this.claim }; }
+  async readyOrigin(): Promise<EndpointTurnClaim | undefined> {
+    if (!this.options.screen) return this.origin();
+    if (!this.origin() || !this.options.screen.foreground()) return;
+    this.controller?.publishAvailability();
+    const signal = AbortSignal.timeout(2000);
+    try {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const claim = this.origin(); if (!claim || !this.options.screen.foreground()) return;
+        const status = await this.options.auth.endpointRequest('/api/desktop-host/status', 'GET', undefined, this.deviceId, signal);
+        if (status?.endpoints?.some((endpoint: any) => endpoint.endpointId === claim.endpointId && endpoint.availability === 'foreground')) return this.origin();
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+    } catch { return; }
+  }
   stop(): void {
     if (this.stopped) return;
     this.stopped = true; this.claim = undefined; this.controller?.disconnect(); this.realtime?.disconnect();
@@ -33,15 +50,40 @@ export class DesktopObservationHost {
   async start(): Promise<void> {
     if (this.realtime || this.stopped) throw new Error('DESKTOP_HOST_NOT_STARTABLE');
     const identity = await this.options.auth.endpointIdentity();
+    this.deviceId = identity.deviceId;
     const clientId = randomUUID(), endpointId = `${identity.deviceId}:${randomUUID()}`;
-    const registry = new EndpointToolRegistry([{ descriptor: deviceStateDescriptor('desktop', 'state'), execute: async (args, context) => {
+    const available = () => this.options.screen?.foreground() ? 'foreground' as const : 'background' as const;
+    const state: EndpointToolDefinition = { descriptor: deviceStateDescriptor('desktop', 'state'), execute: async (args, context) => {
       if (this.stopped || context.signal.aborted || Object.keys(args).length) throw new Error('DESKTOP_OBSERVATION_DENIED');
       const value = await this.options.readState();
       if (this.stopped || context.signal.aborted) throw new Error('DESKTOP_OBSERVATION_DENIED');
       return { content: [{ type: 'json', value: { ...value, capturedAt: Date.now() } }] };
-    } }]);
-    const controller = new EndpointToolHostController({ registry, getAvailability: () => 'background', createMessageId: randomUUID,
-      confirm: async () => false, uploadFile: async () => { throw new Error('DESKTOP_FILE_UPLOAD_DISABLED'); } });
+    } };
+    const capture: EndpointToolDefinition = { descriptor: screenCaptureDescriptor(), execute: async (args, context) => {
+      const screen = this.options.screen;
+      if (!screen || this.stopped || context.signal.aborted || !screen.foreground() || Object.keys(args).length) throw new Error('DESKTOP_OBSERVATION_DENIED');
+      const bytes = await screen.capture(context.signal);
+      try {
+        if (this.stopped || context.signal.aborted || !screen.foreground()) throw new Error('DESKTOP_SCREEN_CAPTURE_CANCELLED');
+        const file = await context.uploadFile({ name: 'screenshot.png', mimeType: 'image/png', bytes });
+        if (this.stopped || context.signal.aborted || !screen.foreground()) throw new Error('DESKTOP_SCREEN_CAPTURE_CANCELLED');
+        return { content: [file] };
+      } finally { bytes.fill(0); }
+    } };
+    const registry = new EndpointToolRegistry([this.options.screen ? capture : state]);
+    const controller = new EndpointToolHostController({ registry, getAvailability: available, createMessageId: randomUUID,
+      confirm: async request => request.descriptor.name === 'desktop.screen.capture' && !this.stopped && this.options.screen
+        ? this.options.screen.confirm(request.signal) : false,
+      uploadFile: async (grant, file, context) => {
+        if (!this.options.screen || this.stopped || !this.options.screen.foreground()) throw new Error('DESKTOP_FILE_UPLOAD_DISABLED');
+        try { return await this.options.auth.uploadScreenshot({ ...context, grant, file, endpointId, deviceId: identity.deviceId }); }
+        catch (error) {
+          if (error instanceof Error && ['DESKTOP_AUTH_REVOKED', 'DESKTOP_OBSERVATION_DENIED', 'DESKTOP_DEVICE_IDENTITY_MISMATCH'].includes(error.message)) {
+            this.stop(); this.options.onState('error', error.message);
+          }
+          throw error;
+        }
+      } });
     this.controller = controller;
     const request = async (path: string, method: 'GET' | 'POST', body?: unknown) => {
       if (this.stopped) throw new RealtimeConnectionError('DESKTOP_HOST_STOPPED', false);
@@ -72,7 +114,7 @@ export class DesktopObservationHost {
       const connectionInstanceId = randomUUID();
       const hello = await this.options.auth.signEndpointHello({ principalId: identity.deviceId, endpointId, connectionInstanceId,
         kind: 'desktop', platform: 'desktop', displayName: identity.displayName, appVersion: this.options.appVersion,
-        availability: 'background', nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: registry.descriptors() });
+        availability: available(), nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: registry.descriptors() });
       if (this.stopped) throw new RealtimeConnectionError('DESKTOP_HOST_STOPPED', false);
       this.frameBinding = { gatewayId: this.options.binding.gatewayId, deviceId: identity.deviceId, clientId, connectionInstanceId };
       return hello;

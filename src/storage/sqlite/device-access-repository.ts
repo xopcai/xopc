@@ -389,18 +389,31 @@ export function getDesktopStateObservation(deviceId: string): { deviceId: string
   return { deviceId, stateEnabled: device.scopes.includes('desktop.observe.state'), revision: row?.revision ?? 0 };
 }
 
-/** Revocation advances the version even before an earlier grant reaches the server. */
-export function setDesktopStateObservation(deviceId: string, enabled: boolean, expectedRevision?: number): ReturnType<typeof getDesktopStateObservation> {
+export function getDesktopScreenObservation(deviceId: string): { deviceId: string; screenEnabled: boolean; revision: number } | undefined {
+  const base = getDesktopStateObservation(deviceId), device = getDevice(deviceId);
+  return base && device ? { deviceId, screenEnabled: device.scopes.includes('desktop.observe.screen'), revision: base.revision } : undefined;
+}
+
+/** Revocation advances the shared version even before an earlier capability grant arrives. */
+function setDesktopObservationScope(deviceId: string, scope: 'desktop.observe.state' | 'desktop.observe.screen', enabled: boolean, expectedRevision?: number): number | undefined {
   return runSqliteWriteTransaction(db => {
     const device = getDevice(deviceId), current = getDesktopStateObservation(deviceId);
     if (!device || !current) return undefined;
     if (expectedRevision !== undefined && current.revision !== expectedRevision) throw new Error('DESKTOP_OBSERVATION_REVISION_CHANGED');
     if (!Number.isSafeInteger(current.revision + 1)) throw new Error('DESKTOP_OBSERVATION_REVISION_LIMIT');
-    const scopes: GatewayScope[] = device.scopes.filter(scope => scope !== 'desktop.observe.state');
-    if (enabled) scopes.push('desktop.observe.state');
+    const scopes: GatewayScope[] = device.scopes.filter(value => value !== scope);
+    if (enabled) scopes.push(scope);
     db.prepare('UPDATE devices SET scopes_json = ? WHERE device_id = ?').run(JSON.stringify(scopes), deviceId);
     db.prepare(`INSERT INTO desktop_observation_grants(device_id, revision, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(device_id) DO UPDATE SET revision = excluded.revision, updated_at = excluded.updated_at`).run(deviceId, current.revision + 1, Date.now());
-    return getDesktopStateObservation(deviceId);
+    return current.revision + 1;
   });
+}
+export function setDesktopStateObservation(deviceId: string, enabled: boolean, expectedRevision?: number): ReturnType<typeof getDesktopStateObservation> {
+  const revision = setDesktopObservationScope(deviceId, 'desktop.observe.state', enabled, expectedRevision);
+  return revision === undefined ? undefined : { deviceId, stateEnabled: enabled, revision };
+}
+export function setDesktopScreenObservation(deviceId: string, enabled: boolean, expectedRevision?: number): ReturnType<typeof getDesktopScreenObservation> {
+  const revision = setDesktopObservationScope(deviceId, 'desktop.observe.screen', enabled, expectedRevision);
+  return revision === undefined ? undefined : { deviceId, screenEnabled: enabled, revision };
 }

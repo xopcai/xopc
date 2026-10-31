@@ -21,7 +21,7 @@ const errors = {
   DESKTOP_REENROLLMENT_REQUIRED: '请先确认旧登记已撤销，再重新登记。', DESKTOP_OPERATION_BUSY: '另一项登记操作仍在结束，请稍后重试。',
   SECURE_STORAGE_UNAVAILABLE: '系统安全存储不可用，无法保存电脑身份。',
   DESKTOP_NOT_ENROLLED: '未找到本机登记。', DESKTOP_ENROLLMENT_PENDING: '登记尚未完成，请继续登记或停用。',
-  DESKTOP_OBSERVATION_UNSUPPORTED: '此Gateway暂不支持已签名的只读设备状态连接。',
+  DESKTOP_OBSERVATION_UNSUPPORTED: '此Gateway暂不支持所选的只读能力连接。',
   DESKTOP_OBSERVATION_DENIED: '设备状态读取未获授权，请检查登记和服务器权限。',
   DESKTOP_OBSERVATION_REVISION_CHANGED: '授权状态已变化，旧的确认已失效。请重新检查并授权。',
 };
@@ -31,7 +31,7 @@ function render(value) {
   snapshot = value;
   const observation = value.observation;
   const observing = observation && ['connecting', 'online', 'offline'].includes(observation.state);
-  const labels = { connecting: '只读设备状态正在连接。', online: '已授权读取设备状态；屏幕、文件、命令保持禁用。', offline: '只读设备状态连接已断开，正在恢复。', stopped: '本机只读能力已停止。', error: '本机只读能力连接失败，请重新授权。' };
+  const labels = { connecting: '本机只读能力正在连接。', online: observation?.capability === 'screen' ? '已选择截图来源；每次发送仍需确认。文件、命令和输入控制保持禁用。' : '已授权读取设备状态；屏幕、文件、命令保持禁用。', offline: '本机只读能力连接已断开，正在恢复。', stopped: '本机只读能力已停止。', error: '本机只读能力连接失败，请重新授权。' };
   element('observation-status').textContent = observation ? labels[observation.state] : '本机只读能力未授权。';
   element('observation-stop').disabled = !observation || observation.state === 'stopped';
   element('status').textContent = value.status === 'storage-error'
@@ -80,6 +80,7 @@ function render(value) {
     actionButton('检查登记', api.checkDesktop, selected, 'check');
     actionButton('停用登记', api.disableDesktop, Boolean(profile.identity), 'disable');
     actionButton('授权读取设备状态', api.startObservation, selected && state === 'registered' && !observing, 'observe-state');
+    actionButton('选择截图来源并授权', api.startScreenObservation, selected && state === 'registered' && !observing, 'observe-screen');
     row.append(group);
     element('profiles').append(row);
   }

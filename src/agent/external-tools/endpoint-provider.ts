@@ -144,6 +144,20 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const modelContent: AgentToolResult<Record<string, unknown>>['content'] = observation
       ? [{ type: 'text', text: JSON.stringify(observation) }] : result.content.map(item => ({ type: 'text', text: contentText(item) }));
     for (const file of files) {
+      if (resolved.tool.descriptor.name === 'desktop.screen.capture') {
+        const bytes = result.invocationId ? this.deps.runtime.uploads.takeComputerFrame(file.fileId, result.invocationId) : undefined;
+        if (!bytes || file.mimeType !== 'image/png') throw new Error('Screenshot is no longer available');
+        const currentSource = () => {
+          context.signal?.throwIfAborted();
+          const current = this.deps.runtime.registry.get(resolved.endpointId);
+          if (!current || current.connectionId !== resolved.connectionId || current.availability !== 'foreground') throw new Error('Screenshot source is no longer active');
+        };
+        try {
+          currentSource(); const image = await prepareImageForModel(Buffer.from(bytes), file.mimeType); currentSource();
+          modelContent.push({ type: 'image', data: image.buffer.toString('base64'), mimeType: image.mimeType });
+        } finally { bytes.fill(0); }
+        continue;
+      }
       const uploaded = this.deps.runtime.uploads.getFile(file.fileId);
       if (!uploaded || uploaded.endpointId !== resolved.endpointId) throw new Error('Selected file is unavailable for this device');
       const bytes = this.deps.runtime.uploads.readFile(file.fileId);
@@ -169,7 +183,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
         endpointToolName: resolved.tool.descriptor.name,
         endpointSensitivity: resolved.tool.descriptor.sensitivity,
         ...(result.details ?? {}),
-        ...(files.length === 0 ? {} : { endpointFiles: files }),
+        ...(files.length === 0 || resolved.tool.descriptor.name === 'desktop.screen.capture' ? {} : { endpointFiles: files }),
       },
     };
     } finally { grantLease?.complete(); }

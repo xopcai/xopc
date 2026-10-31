@@ -8,6 +8,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session } from 
 import { DesktopEnrollmentManager, type DesktopEnrollmentAction } from '../desktop/enrollment.js';
 import { DesktopIdentityStore } from '../desktop/device-identity.js';
 import { DesktopObservationManager } from '../desktop/observation-manager.js';
+import { selectDesktopScreenSession } from '../desktop/screen-session.js';
 import { RemoteChatStateStore } from '../chat/state.js';
 import { RemoteShellWindow } from '../shell/window.js';
 
@@ -63,6 +64,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   const visible = () => !window.isDestroyed() && window.isVisible() && !window.isMinimized()
     && window.webContents.getURL() === documentUrl && window.webContents.mainFrame.url === documentUrl;
   const observation = new DesktopObservationManager({ manager, store: desktopStore, visible, appVersion: app.getVersion(),
+    selectScreen: (binding, signal) => visible() ? selectDesktopScreenSession({ binding, signal, assets: assetRoot, parent: window, chat: shell?.captureWindow() }) : Promise.resolve(undefined),
     readState: async () => ({ platform: process.platform, systemVersion: release(), locale: app.getLocale(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     consent: async (binding, signal) => {
       if (!visible() || signal.aborted) return false;
@@ -133,7 +135,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   ipcMain.handle('shell:recover', event => serialize(async () => { shell!.authorize(event, 'shell:recover'); stopObservation(); await shell!.close(); presentation.reveal(window); return { ok: true }; }));
   ipcMain.handle('shell:host-settings', event => { shell!.authorize(event, 'shell:host-settings'); presentation.reveal(window); return { ok: true }; });
   ipcMain.handle('shell:host-origin', async event => {
-    shell!.authorize(event, 'shell:host-origin'); const origin = observation.origin();
+    shell!.authorize(event, 'shell:host-origin'); const origin = await observation.readyOrigin();
     await shell!.setHostOrigin(origin);
     if (JSON.stringify(origin) !== JSON.stringify(observation.origin())) { await shell!.setHostOrigin(); return; }
     return origin;
@@ -154,6 +156,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     }));
   }
   ipcMain.handle('connections:observation-start', (_event, epoch, id) => reply(async () => { await observation.start(epoch, id); return snapshot(); }));
+  ipcMain.handle('connections:screen-start', (_event, epoch, id) => reply(async () => { await observation.start(epoch, id, 'screen'); return snapshot(); }));
   ipcMain.handle('connections:observation-stop', () => { stopObservation(); return { ok: true, snapshot: snapshot() }; });
   ipcMain.handle('connections:quit', () => { cancelDesktop(); app.quit(); });
   ipcMain.handle('connections:local', () => { cancelDesktop(); return reply(() => serialize(async () => {

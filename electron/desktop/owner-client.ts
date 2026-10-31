@@ -6,7 +6,7 @@ export function desktopOwnerClient(target: RemoteTarget, lifetime: AbortSignal) 
   const upstream = new ShellUpstream(target);
   return { close: () => upstream.close(), request: async (path: string, method = 'GET', body?: unknown): Promise<any> => {
     if (!(path === '/api/desktop-host/compatibility' && method === 'GET'
-      || /^\/api\/desktop-host\/devices\/[0-9a-f-]{36}\/observation$/.test(path) && ['GET', 'POST'].includes(method))) throw new Error('DESKTOP_OWNER_ROUTE_DENIED');
+      || /^\/api\/desktop-host\/devices\/[0-9a-f-]{36}\/(?:observation|screen)$/.test(path) && ['GET', 'POST'].includes(method))) throw new Error('DESKTOP_OWNER_ROUTE_DENIED');
     const signal = AbortSignal.any([lifetime, AbortSignal.timeout(15000)]);
     await upstream.verifyPinnedIdentity(signal);
     return new Promise((resolve, reject) => {
