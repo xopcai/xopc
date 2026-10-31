@@ -43,3 +43,11 @@ S2、Shell、远端聊天、Host 和本机能力保持未实施。本地 E2E 范
 | reuse rssMiB | 719.53MiB | 705.39MiB |
 
 本文件为修复推送前的验证快照，尚不宣称新 head 的 CI 已通过或 PR 已合并。最终检查和合并状态以 PR #39 为准；合并只能在新 head 所有门槛通过、review 无阻塞后进行。
+
+## 新 CI 暴露的浏览器平台兼容缺口
+
+修复后 head `1a82f758f` 的 CI run `41167887273` 在四个分片的浏览器安装前置步骤失败，job `124439297650` 完整日志保留。明确报错：`Playwright does not support chromium on ubuntu26.04-x64`。`ubuntu-latest` 已转为 Ubuntu 26.04，前述补丁漏掉了浏览器与 runner 系统的兼容约束，因此单独固定浏览器尚不足以修复 CI。此次失败在任何测试执行前发生，不计作产品测试通过或原预算性能失败。
+
+追加将测试分片 runner 固定到 `ubuntu-24.04`，该平台存在于当前锁定 Playwright 的浏览器下载与 nativeDeps 映射中；保留固定 Chromium、8 秒 launch / 10 秒 hook 和全部测试，不修改其他不使用浏览器的 runner。最终仅接受追加修复后新 head 的所有 CI 结果。
+
+本机按原分片命令 `VITEST_MAX_WORKERS=2 pnpm run test:all --shard=4/4` 完整重跑：**467 文件 / 3177 测试全部通过，0 skipped**，原失败的三个录制/回放测试均实际执行。它补充了整组并发场景的本地验证，不能代替 Ubuntu CI。
