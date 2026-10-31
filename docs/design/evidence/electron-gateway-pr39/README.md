@@ -17,3 +17,5 @@
 未放宽 10 秒 beforeAll、测试断言或产品 P95 门槛；浏览器自身启动改为更早的 8 秒截止，CI 显式安装锁文件对应的完整 Chromium。没有重试、跳过或将三项未执行测试算作通过。所有 E2E 输出使用新路径。仅 macOS 开发 Electron 本地验收，不代表远端/安装包/跨平台通过。
 
 `xopc-pr39-ci-installer-failure.log` 保留中间 head 的浏览器安装失败：Ubuntu 26.04 不在锁定 Playwright Chromium 支持范围内，随后固定测试 runner 为 Ubuntu 24.04。`xopc-pr39-local-shard4.log` 为本机完整分片复测：467 文件、3177 测试通过、0 skipped。
+
+`xopc-pr39-ci-native-failure.log` 保留固定平台后 shard 3 原生 PTY 加载失败（run `41168065221` / job `124439847300`），后续 CI 显式源码重建并增加 5 秒真实 PTY 冒烟检查。

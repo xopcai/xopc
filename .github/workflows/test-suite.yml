@@ -27,6 +27,26 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Rebuild and verify native terminal runtime
+        run: |
+          npm_config_build_from_source=true pnpm rebuild node-pty
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const { spawn } = require('node-pty');
+          const child = spawn('/bin/sh', ['-c', 'printf XOPC_PTY_OK']);
+          let output = '';
+          const timer = setTimeout(() => {
+            child.kill();
+            throw new Error('Native terminal smoke exceeded 5 seconds');
+          }, 5000);
+          child.onData(data => { output += data; });
+          child.onExit(({ exitCode }) => {
+            clearTimeout(timer);
+            assert.equal(exitCode, 0);
+            assert.match(output, /XOPC_PTY_OK/);
+            console.log('Native terminal spawn/output/exit passed');
+          });
+          NODE
       - name: Install audio test dependencies
         run: |
           if ! command -v ffmpeg >/dev/null; then

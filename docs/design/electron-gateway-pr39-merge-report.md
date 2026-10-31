@@ -51,3 +51,9 @@ S2、Shell、远端聊天、Host 和本机能力保持未实施。本地 E2E 范
 追加将测试分片 runner 固定到 `ubuntu-24.04`，该平台存在于当前锁定 Playwright 的浏览器下载与 nativeDeps 映射中；保留固定 Chromium、8 秒 launch / 10 秒 hook 和全部测试，不修改其他不使用浏览器的 runner。最终仅接受追加修复后新 head 的所有 CI 结果。
 
 本机按原分片命令 `VITEST_MAX_WORKERS=2 pnpm run test:all --shard=4/4` 完整重跑：**467 文件 / 3177 测试全部通过，0 skipped**，原失败的三个录制/回放测试均实际执行。它补充了整组并发场景的本地验证，不能代替 Ubuntu CI。
+
+## 固定平台后发现的原生终端依赖问题
+
+head `4efe55f5d` 的 run `41168065221` 中，浏览器相关 shard 4 已通过；shard 3 在加载 `terminal-ipc.test.ts` 时失败：`Failed to load native module: pty.node`。3332 项测试通过，但该 suite 尚未执行，不将本批次标为全通过。完整 job `124439847300` 日志另存。
+
+安装日志显示恢复了与发行版无关的 `node-cache-Linux-x64-pnpm-*` 缓存，没有执行 node-pty 编译；模块加载器会吞掉前几个路径的底层错误，因此现有日志不足以区分产物缺失或缓存二进制与新 runner 的 ABI/系统库不兼容。追加 CI-only 修复：`npm_config_build_from_source=true pnpm rebuild node-pty`，不复用原生预构建产物；随后在 5 秒内实际 spawn `/bin/sh`、核对输出与退出码。没有改为 mock、跳过终端测试或修改产品的终端实现，Node/Electron 版本与性能预算保持不变。
