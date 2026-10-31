@@ -12,7 +12,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { _electron } from 'playwright-core';
 
-import { localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
+import { createAcceptanceOutput, localConnectionArtifactManifest, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
+import { assertComparableSampling, LEGACY_SAMPLE_PLAN, latencyPopulations, latencySummary as summary } from './electron-local-connection-metrics.mjs';
 
 assert.notEqual(platform(), 'win32', 'This acceptance runner requires POSIX process inspection; Windows acceptance is separate');
 
@@ -23,24 +24,32 @@ const flag = (name, fallback) => {
 const runs = Number(flag('--runs', '30'));
 const operations = Number(flag('--operations', '100'));
 const functional = process.argv.includes('--functional');
+const diagnostics = process.argv.includes('--diagnostics');
+const serverDiagnostics = process.argv.includes('--server-diagnostics');
+const modeFlag = flag('--mode', 'all');
+assert(['all', 'spawn', 'reuse'].includes(modeFlag), 'Invalid acceptance mode');
+const modes = modeFlag === 'all' ? ['spawn', 'reuse'] : [modeFlag];
+assert(!serverDiagnostics || (diagnostics && modeFlag === 'reuse'), 'Server probe requires --diagnostics --mode reuse (Node runtime)');
 const comparePath = flag('--compare', undefined);
+assert(!comparePath || (!diagnostics && !serverDiagnostics), 'Diagnostic runs cannot be compared for acceptance');
 assert(Number.isInteger(runs) && runs > 0);
 assert(Number.isInteger(operations) && operations > 0);
 const output = resolve(flag('--output', 'reports/electron-local-connection.json'));
 assert(!comparePath || resolve(comparePath) !== output, 'Do not overwrite the comparison baseline');
+await createAcceptanceOutput(output);
 const root = resolve(import.meta.dirname, '..');
 const artifactRoot = resolve(flag('--artifact-root', root));
 const entry = join(artifactRoot, 'out/main/index.js');
 const artifactSha256 = createHash('sha256').update(await readFile(entry)).digest('hex');
 let cleanupLayout;
 const result = {
-  schemaVersion: 1, startedAt: new Date().toISOString(),
+  schemaVersion: 2, samplingPlan: LEGACY_SAMPLE_PLAN, startedAt: new Date().toISOString(),
   commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   worktreeDirty: Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()),
   artifactSha256, developmentLayoutLink: true, node: process.version, platform: platform(), arch: arch(), osRelease: release(),
   artifactSourceRef: flag('--artifact-source-ref', 'working-tree'),
   scope: 'Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server',
-  runs, operations, functional, samples: [], passed: false,
+  runs, operations, functional, diagnostics, serverDiagnostics, modes, samples: [], passed: false,
 };
 await mkdir(dirname(output), { recursive: true });
 const save = () => writeFile(output, `${JSON.stringify(result, null, 2)}\n`);
@@ -91,13 +100,6 @@ function processTree(pid) {
     cpuPercentSnapshot: owned.reduce((sum, row) => sum + row[3], 0) };
 }
 
-function summary(values) {
-  if (!values.length) return null;
-  const sorted = values.toSorted((a, b) => a - b);
-  return { count: values.length, mean: values.reduce((sum, value) => sum + value, 0) / values.length,
-    p95: sorted[Math.ceil(sorted.length * 0.95) - 1], max: sorted.at(-1) };
-}
-
 async function run(mode, index) {
   const state = await mkdtemp(join(tmpdir(), 'xopc-local-connection-'));
   const port = await freePort();
@@ -110,12 +112,23 @@ async function run(mode, index) {
     auth: { mode: 'token', token } }, browser: { enabled: false } }));
   const fixtureModule = functional ? await import('./electron-local-connection-fixture.mjs') : undefined;
   const fixture = await fixtureModule?.createLocalConnectionFixture(state);
+  const remoteProfilePath = join(state, 'electron/gateway-connections-v1/profiles.json');
+  if (functional) {
+    await mkdir(dirname(remoteProfilePath), { recursive: true });
+    await writeFile(remoteProfilePath, '{deliberately-corrupt-remote-profile');
+  }
   const env = localConnectionEnvironment(process.env, artifactRoot, state, configPath, workspace);
+  if (serverDiagnostics) {
+    env.NODE_OPTIONS = `--require=${JSON.stringify(join(root, 'scripts/electron-connection-http-probe.cjs'))}`;
+    env.XOPC_ACCEPTANCE_HTTP_TRACE = join(state, 'http-trace.jsonl');
+  }
   const sample = { mode, index, passed: false, readyMs: null, configMs: [], sessionsMs: [] };
   result.samples.push(sample);
   let external;
   let application;
   let logs = '';
+  let stopStartupProbe = false;
+  let startupProbe;
   const authenticated = () => fetch(`${base}/api/config`, {
     headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(1500),
   }).then(response => response.ok).catch(() => false);
@@ -131,7 +144,33 @@ async function run(mode, index) {
       });
     }
     const start = performance.now();
+    if (diagnostics) startupProbe = (async () => {
+      while (!stopStartupProbe) {
+        if (await authenticated()) return { firstObservedAuthenticatedAt: performance.timeOrigin + performance.now() };
+        await delay(50);
+      }
+      return undefined;
+    })();
     application = await _electron.launch({ args: [entry], cwd: root, env, timeout: 60_000 });
+    if (diagnostics) await application.evaluate(() => {
+      globalThis.__acceptanceStartupTrace = [];
+      const original = globalThis.fetch;
+      globalThis.fetch = async (...args) => {
+        const start = performance.now();
+        let path = '[unparseable]';
+        try { path = new URL(args[0] instanceof Request ? args[0].url : String(args[0])).pathname; } catch { /* Diagnostics must not change fetch behavior. */ }
+        try {
+          const response = await original(...args);
+          globalThis.__acceptanceStartupTrace.push({ path, start: performance.timeOrigin + start,
+            elapsedMs: performance.now() - start, status: response.status });
+          return response;
+        } catch (error) {
+          globalThis.__acceptanceStartupTrace.push({ path, start: performance.timeOrigin + start,
+            elapsedMs: performance.now() - start, failed: true });
+          throw error;
+        }
+      };
+    });
     application.process().stdout?.on('data', chunk => { logs = (logs + chunk).slice(-8000); });
     application.process().stderr?.on('data', chunk => { logs = (logs + chunk).slice(-8000); });
     const page = await until(async () => {
@@ -147,27 +186,69 @@ async function run(mode, index) {
     sample.readyMs = performance.now() - start;
     assert.equal((await fetch(`${base}/api/config`, { signal: AbortSignal.timeout(2000) })).status, 401, 'Gateway still requires authentication');
     const count = index === 0 ? operations : 1;
-    const metrics = await page.evaluate(async count => {
+    const metrics = await page.evaluate(async ({ count, diagnostics }) => {
       const configMs = [], sessionsMs = [];
+      const timing = [];
       for (let index = 0; index < count; index++) {
         for (const [path, values] of [['/api/config', configMs], ['/api/sessions', sessionsMs]]) {
           const start = performance.now();
           const response = await fetch(path, { signal: AbortSignal.timeout(2000) });
+          const headersAt = diagnostics ? performance.now() : undefined;
           if (!response.ok) throw new Error(`${path}: ${response.status}`);
           await response.json();
-          values.push(performance.now() - start);
+          const completedAt = performance.now();
+          values.push(completedAt - start);
+          if (diagnostics) {
+            timing.push({ path, index, start, headersAt, completedAt, requestId: response.headers.get('x-request-id') });
+          }
         }
       }
       const session = await fetch('/api/browser-session', { signal: AbortSignal.timeout(2000) });
       if (!session.ok) throw new Error('Browser Cookie bootstrap failed');
-      return { configMs, sessionsMs, browserSession: true };
-    }, count);
+      return { configMs, sessionsMs, browserSession: true, ...(diagnostics ? { timing, timeOrigin: performance.timeOrigin } : {}) };
+    }, { count, diagnostics });
     Object.assign(sample, metrics);
+    if (diagnostics) {
+      sample.startupDiagnostics = {
+        independentProbe: await startupProbe,
+        mainRequests: await application.evaluate(() => globalThis.__acceptanceStartupTrace),
+        lifecycleLog: (await readFile(join(state, 'electron/electron-startup.log'), 'utf8')).slice(-20_000).replaceAll(token, '[redacted]'),
+      };
+      sample.browserDiagnostics = await page.evaluate(async () => {
+        const longTasks = [];
+        const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => ({ startTime: e.startTime, duration: e.duration }))));
+        observer.observe({ type: 'longtask', buffered: true });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        observer.disconnect();
+        return { longTasks, navigation: performance.getEntriesByType('navigation').map(e => e.toJSON()), resources: performance.getEntriesByType('resource').filter(e => ['/api/config', '/api/sessions'].includes(new URL(e.name).pathname)).map(e => e.toJSON()) };
+      });
+    }
+    if (serverDiagnostics) sample.httpTrace = (await readFile(env.XOPC_ACCEPTANCE_HTTP_TRACE, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
     await until(() => page.evaluate(async () => (await window.electronAPI.computer.status())?.connected));
     sample.endpointConnected = true;
     sample.runtime = await application.evaluate(() => ({ node: process.versions.node, electron: process.versions.electron }));
     if (fixture) {
+      assert.equal((await fetch(`${base}/api/automation-runs/product-events`, { signal: AbortSignal.timeout(2000) })).status, 401);
+      const automationRoute = await page.evaluate(async () => {
+        const response = await fetch('/api/automation-runs/product-events?eventType=acceptance.unused', { signal: AbortSignal.timeout(2000) });
+        const body = await response.json();
+        const invalid = await fetch('/api/automation-runs/product-events?limit=-1', { signal: AbortSignal.timeout(2000) });
+        return { status: response.status, empty: Array.isArray(body.items) && body.items.length === 0, invalidStatus: invalid.status };
+      });
+      assert.deepEqual(automationRoute, { status: 200, empty: true, invalidStatus: 400 });
+      assert.equal((await fetch(`${base}/api/providers/meta`, { signal: AbortSignal.timeout(2000) })).status, 401);
+      const providerRoute = await page.evaluate(async () => {
+        const response = await fetch('/api/providers/meta', { signal: AbortSignal.timeout(2000) });
+        const body = await response.json();
+        return { status: response.status, valid: Array.isArray(body.payload?.providers)
+          && body.payload.providers.every(p => Number.isInteger(p.modelCount) && p.modelCount >= 0 && typeof p.configured === 'boolean') };
+      });
+      assert.deepEqual(providerRoute, { status: 200, valid: true });
       sample.functional = await withTimeout(fixtureModule.verifyLocalConnectionFunctions(page, fixture, until), 90_000, 'Functional acceptance exceeded 90 seconds');
+      sample.functional.authenticatedAutomationLazyRoute = true;
+      sample.functional.authenticatedProviderMetaRoute = true;
+      assert.equal(await readFile(remoteProfilePath, 'utf8'), '{deliberately-corrupt-remote-profile', 'Local mode must not read or migrate remote profiles');
+      sample.functional.corruptRemoteProfileIgnored = true;
       await until(() => page.evaluate(async () => {
         const response = await fetch('/api/runtime/quit-impact', { signal: AbortSignal.timeout(2000) });
         if (!response.ok) return false;
@@ -220,6 +301,8 @@ async function run(mode, index) {
     if (logs) sample.gatewayLogTail = logs.replaceAll(token, '[redacted]');
     throw error;
   } finally {
+    stopStartupProbe = true;
+    await startupProbe;
     if (application && application.process().exitCode === null && application.process().signalCode === null) {
       // A failing fixture can leave a native quit-confirmation dialog open.
       // Only reap this test instance's descendants, never an external/reused Gateway.
@@ -244,11 +327,12 @@ async function run(mode, index) {
 try {
   cleanupLayout = await prepareLocalConnectionLayout(artifactRoot, root);
   result.electronBuildSha256 = await electronBuildHash();
-  for (const mode of ['spawn', 'reuse']) for (let index = 0; index < runs; index++) {
+  result.artifactManifest = await localConnectionArtifactManifest(artifactRoot);
+  for (const mode of modes) for (let index = 0; index < runs; index++) {
     await run(mode, index);
     console.log(`${mode} ${index + 1}/${runs} passed`);
   }
-  result.summary = Object.fromEntries(['spawn', 'reuse'].map(mode => {
+  result.summary = Object.fromEntries(modes.map(mode => {
     const samples = result.samples.filter(sample => sample.mode === mode);
     return [mode, { readyMs: summary(samples.map(sample => sample.readyMs)),
       configMs: summary(samples.flatMap(sample => sample.configMs)),
@@ -256,13 +340,14 @@ try {
       shutdownMs: summary(samples.map(sample => sample.shutdownMs)),
       rssMiB: summary(samples.map(sample => sample.resources.rssMiB)) }];
   }));
+  result.latencyPopulations = Object.fromEntries(modes.map(mode => [mode, Object.fromEntries(['configMs', 'sessionsMs']
+    .map(metric => [metric, latencyPopulations(result.samples.filter(sample => sample.mode === mode), metric)]))]));
   assert.equal(await electronBuildHash(), result.electronBuildSha256, 'Electron build changed during acceptance');
+  assert.deepEqual(await localConnectionArtifactManifest(artifactRoot), result.artifactManifest, 'Gateway/UI/SQL build changed during acceptance');
   result.passed = true;
   if (comparePath) {
     const baseline = JSON.parse(await readFile(resolve(comparePath), 'utf8'));
-    assert(baseline.passed && baseline.runs === runs && baseline.operations === operations,
-      'Comparison requires a passing baseline with the same sample plan');
-    assert.equal(Boolean(baseline.functional), functional, 'Do not compare different workloads');
+    assertComparableSampling(baseline, result);
     assert.equal(baseline.platform, result.platform);
     assert.equal(baseline.arch, result.arch);
     assert.equal(baseline.node, result.node);

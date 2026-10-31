@@ -1,0 +1,2528 @@
+{
+  "schemaVersion": 2,
+  "samplingPlan": "first-launch-heavy-v1",
+  "startedAt": "2026-10-31T03:20:18.250Z",
+  "commit": "12e094a3523511c334b61eb2ad904823a1e76023",
+  "worktreeDirty": true,
+  "artifactSha256": "9bd7ac0f178a311c6c057777eafe5008e4412ba86e377c1aaafdb8e7e4e284ea",
+  "developmentLayoutLink": true,
+  "node": "v26.12.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "osRelease": "25.6.0",
+  "artifactSourceRef": "provider-metadata-snapshot",
+  "scope": "Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server",
+  "runs": 30,
+  "operations": 100,
+  "functional": false,
+  "diagnostics": false,
+  "serverDiagnostics": false,
+  "modes": [
+    "spawn",
+    "reuse"
+  ],
+  "samples": [
+    {
+      "mode": "spawn",
+      "index": 0,
+      "passed": true,
+      "readyMs": 1960.9637919999998,
+      "configMs": [
+        9.799999982118607,
+        6,
+        3.4000000059604645,
+        4,
+        2.899999976158142,
+        3.2000000178813934,
+        2.7000000178813934,
+        3.7000000178813934,
+        2.5999999940395355,
+        2.5999999940395355,
+        2.699999988079071,
+        3.2999999821186066,
+        2.5,
+        3.199999988079071,
+        2.4000000059604645,
+        3.300000011920929,
+        2.7000000178813934,
+        3.600000023841858,
+        2.5,
+        3.2999999821186066,
+        3.800000011920929,
+        3.7999999821186066,
+        2.399999976158142,
+        3.5,
+        2.300000011920929,
+        2.7999999821186066,
+        3.2000000178813934,
+        3.0999999940395355,
+        2.300000011920929,
+        2.300000011920929,
+        3,
+        2.2999999821186066,
+        3.300000011920929,
+        2.199999988079071,
+        3,
+        2.2999999821186066,
+        3.0999999940395355,
+        2.600000023841858,
+        3.0999999940395355,
+        2.5999999940395355,
+        3.100000023841858,
+        2.5,
+        2.0999999940395355,
+        2.9000000059604645,
+        3.5999999940395355,
+        2.800000011920929,
+        3.699999988079071,
+        3.300000011920929,
+        4.0999999940395355,
+        3.800000011920929,
+        2.7999999821186066,
+        3.2000000178813934,
+        2.7000000178813934,
+        3.5,
+        2.5,
+        2.9000000059604645,
+        2.5,
+        2.4000000059604645,
+        3.899999976158142,
+        3.7999999821186066,
+        2.9000000059604645,
+        3.7999999821186066,
+        2.699999988079071,
+        3.699999988079071,
+        3,
+        3.300000011920929,
+        3.5,
+        2.699999988079071,
+        3.699999988079071,
+        3.2999999821186066,
+        4.699999988079071,
+        4.4000000059604645,
+        2.9000000059604645,
+        3.9000000059604645,
+        3,
+        2.9000000059604645,
+        3.0999999940395355,
+        3.0999999940395355,
+        3.600000023841858,
+        2.699999988079071,
+        3,
+        2.5,
+        3.0999999940395355,
+        2.5999999940395355,
+        4.0999999940395355,
+        2.5999999940395355,
+        3.300000011920929,
+        20.099999994039536,
+        3.0999999940395355,
+        2.4000000059604645,
+        3.399999976158142,
+        2.699999988079071,
+        3.100000023841858,
+        3.4000000059604645,
+        2.9000000059604645,
+        2.699999988079071,
+        2.2999999821186066,
+        2.699999988079071,
+        2.2000000178813934,
+        2.9000000059604645
+      ],
+      "sessionsMs": [
+        6.0999999940395355,
+        2.2000000178813934,
+        1.5,
+        1.5,
+        0.9000000059604645,
+        1.2999999821186066,
+        0.8999999761581421,
+        1.199999988079071,
+        0.800000011920929,
+        1.2000000178813934,
+        0.800000011920929,
+        1.5,
+        0.800000011920929,
+        1.4000000059604645,
+        0.7999999821186066,
+        1.0999999940395355,
+        1.399999976158142,
+        1.699999988079071,
+        0.800000011920929,
+        1.5,
+        1,
+        1.100000023841858,
+        0.800000011920929,
+        1.0999999940395355,
+        0.9000000059604645,
+        1,
+        1.0999999940395355,
+        1.5999999940395355,
+        0.699999988079071,
+        1.5,
+        0.9000000059604645,
+        1,
+        1,
+        0.800000011920929,
+        1,
+        0.800000011920929,
+        1.5999999940395355,
+        0.7999999821186066,
+        1.600000023841858,
+        0.7999999821186066,
+        1.5999999940395355,
+        0.699999988079071,
+        0.800000011920929,
+        2.4000000059604645,
+        1.699999988079071,
+        1,
+        1.9000000059604645,
+        2,
+        1.199999988079071,
+        1.5,
+        1,
+        1.699999988079071,
+        0.8999999761581421,
+        1.4000000059604645,
+        1,
+        1.5,
+        0.9000000059604645,
+        1.5,
+        1.2000000178813934,
+        1.4000000059604645,
+        1.300000011920929,
+        1.300000011920929,
+        1.2000000178813934,
+        1.5,
+        1.5,
+        1.2999999821186066,
+        1.9000000059604645,
+        1.100000023841858,
+        1.4000000059604645,
+        2.300000011920929,
+        1.9000000059604645,
+        1.5999999940395355,
+        1.5,
+        1.0999999940395355,
+        1.5999999940395355,
+        1.300000011920929,
+        1.4000000059604645,
+        1.2999999821186066,
+        1.0999999940395355,
+        1.0999999940395355,
+        1,
+        0.9000000059604645,
+        1.300000011920929,
+        0.9000000059604645,
+        0.9000000059604645,
+        1.0999999940395355,
+        1,
+        1.2000000178813934,
+        1.199999988079071,
+        0.800000011920929,
+        1.300000011920929,
+        1,
+        1.199999988079071,
+        0.7999999821186066,
+        1.300000011920929,
+        0.800000011920929,
+        1.300000011920929,
+        0.9000000059604645,
+        0.699999988079071,
+        1
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          15416,
+          15419,
+          15420,
+          15466,
+          15499
+        ],
+        "processes": 5,
+        "rssMiB": 1029.4375,
+        "cpuPercentSnapshot": 262.7
+      },
+      "shutdownMs": 207.6166250000001,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 1,
+      "passed": true,
+      "readyMs": 1959.9373329999999,
+      "configMs": [
+        6
+      ],
+      "sessionsMs": [
+        1.2000000178813934
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          15564,
+          15567,
+          15568,
+          15588,
+          15640
+        ],
+        "processes": 5,
+        "rssMiB": 1000.171875,
+        "cpuPercentSnapshot": 130.5
+      },
+      "shutdownMs": 199.94529200000034,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 2,
+      "passed": true,
+      "readyMs": 1937.171625,
+      "configMs": [
+        31
+      ],
+      "sessionsMs": [
+        5.299999982118607
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          15664,
+          15667,
+          15668,
+          15693,
+          15762
+        ],
+        "processes": 5,
+        "rssMiB": 1014.796875,
+        "cpuPercentSnapshot": 126.1
+      },
+      "shutdownMs": 204.83512500000143,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 3,
+      "passed": true,
+      "readyMs": 1980.8061660000003,
+      "configMs": [
+        28.400000005960464
+      ],
+      "sessionsMs": [
+        2.199999988079071
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          15785,
+          15814,
+          15815,
+          15835,
+          15866
+        ],
+        "processes": 5,
+        "rssMiB": 971.90625,
+        "cpuPercentSnapshot": 132
+      },
+      "shutdownMs": 221.10633400000006,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 4,
+      "passed": true,
+      "readyMs": 2000.4183749999993,
+      "configMs": [
+        4.600000023841858
+      ],
+      "sessionsMs": [
+        1.399999976158142
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          15916,
+          15921,
+          15922,
+          15943,
+          16013
+        ],
+        "processes": 5,
+        "rssMiB": 990.578125,
+        "cpuPercentSnapshot": 133.2
+      },
+      "shutdownMs": 213.1215830000001,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 5,
+      "passed": true,
+      "readyMs": 1982.5681670000013,
+      "configMs": [
+        5.4000000059604645
+      ],
+      "sessionsMs": [
+        20.19999998807907
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          16037,
+          16044,
+          16045,
+          16065,
+          16118
+        ],
+        "processes": 5,
+        "rssMiB": 1008.25,
+        "cpuPercentSnapshot": 124.9
+      },
+      "shutdownMs": 201.78120800000033,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 6,
+      "passed": true,
+      "readyMs": 1962.2446659999987,
+      "configMs": [
+        33
+      ],
+      "sessionsMs": [
+        4
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          16142,
+          16171,
+          16172,
+          16197,
+          16240
+        ],
+        "processes": 5,
+        "rssMiB": 1007.578125,
+        "cpuPercentSnapshot": 129.1
+      },
+      "shutdownMs": 201.64887499999895,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 7,
+      "passed": true,
+      "readyMs": 1962.7615000000005,
+      "configMs": [
+        21.900000005960464
+      ],
+      "sessionsMs": [
+        4.4000000059604645
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          16289,
+          16292,
+          16293,
+          16314,
+          16367
+        ],
+        "processes": 5,
+        "rssMiB": 1009.59375,
+        "cpuPercentSnapshot": 117.9
+      },
+      "shutdownMs": 196.3770000000004,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 8,
+      "passed": true,
+      "readyMs": 1950.090583000001,
+      "configMs": [
+        28.100000023841858
+      ],
+      "sessionsMs": [
+        20
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          16393,
+          16396,
+          16397,
+          16425,
+          16488
+        ],
+        "processes": 5,
+        "rssMiB": 1012.625,
+        "cpuPercentSnapshot": 125.4
+      },
+      "shutdownMs": 205.42020800000319,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 9,
+      "passed": true,
+      "readyMs": 1977.2959169999995,
+      "configMs": [
+        4.899999976158142
+      ],
+      "sessionsMs": [
+        19.700000017881393
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          16531,
+          16545,
+          16546,
+          16566,
+          16595
+        ],
+        "processes": 5,
+        "rssMiB": 1002.359375,
+        "cpuPercentSnapshot": 132.20000000000002
+      },
+      "shutdownMs": 215.6485840000023,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 10,
+      "passed": true,
+      "readyMs": 1998.802458000002,
+      "configMs": [
+        37
+      ],
+      "sessionsMs": [
+        11
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          16655,
+          16676,
+          16677,
+          16713,
+          16769
+        ],
+        "processes": 5,
+        "rssMiB": 1013.96875,
+        "cpuPercentSnapshot": 122.6
+      },
+      "shutdownMs": 208.12412499999846,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 11,
+      "passed": true,
+      "readyMs": 1989.2551660000026,
+      "configMs": [
+        4.799999982118607
+      ],
+      "sessionsMs": [
+        19.80000001192093
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          16793,
+          16803,
+          16804,
+          16824,
+          16877
+        ],
+        "processes": 5,
+        "rssMiB": 1012.125,
+        "cpuPercentSnapshot": 117.5
+      },
+      "shutdownMs": 199.70924999999988,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 12,
+      "passed": true,
+      "readyMs": 1984.3409589999937,
+      "configMs": [
+        4.9000000059604645
+      ],
+      "sessionsMs": [
+        19.900000005960464
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          16945,
+          16950,
+          16951,
+          16971,
+          16997
+        ],
+        "processes": 5,
+        "rssMiB": 1015.734375,
+        "cpuPercentSnapshot": 114.9
+      },
+      "shutdownMs": 197.97345900000073,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 13,
+      "passed": true,
+      "readyMs": 1952.3059169999979,
+      "configMs": [
+        4.9000000059604645
+      ],
+      "sessionsMs": [
+        1.2000000178813934
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          17051,
+          17058,
+          17059,
+          17079,
+          17131
+        ],
+        "processes": 5,
+        "rssMiB": 1001.640625,
+        "cpuPercentSnapshot": 123.80000000000001
+      },
+      "shutdownMs": 205.07145899999887,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 14,
+      "passed": true,
+      "readyMs": 1962.6522079999995,
+      "configMs": [
+        36.5
+      ],
+      "sessionsMs": [
+        4
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          17172,
+          17177,
+          17178,
+          17200,
+          17255
+        ],
+        "processes": 5,
+        "rssMiB": 1012.796875,
+        "cpuPercentSnapshot": 125.6
+      },
+      "shutdownMs": 199.0014999999985,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 15,
+      "passed": true,
+      "readyMs": 1969.4138329999987,
+      "configMs": [
+        6.5
+      ],
+      "sessionsMs": [
+        1.300000011920929
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          17304,
+          17307,
+          17308,
+          17328,
+          17355
+        ],
+        "processes": 5,
+        "rssMiB": 1013.265625,
+        "cpuPercentSnapshot": 121.9
+      },
+      "shutdownMs": 196.0881670000017,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 16,
+      "passed": true,
+      "readyMs": 1932.5232909999977,
+      "configMs": [
+        33.900000005960464
+      ],
+      "sessionsMs": [
+        4
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          17425,
+          17430,
+          17431,
+          17451,
+          17504
+        ],
+        "processes": 5,
+        "rssMiB": 1012.859375,
+        "cpuPercentSnapshot": 120.6
+      },
+      "shutdownMs": 198.0437499999971,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 17,
+      "passed": true,
+      "readyMs": 1992.6090829999957,
+      "configMs": [
+        34.70000001788139
+      ],
+      "sessionsMs": [
+        6.199999988079071
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          17528,
+          17531,
+          17532,
+          17557,
+          17609
+        ],
+        "processes": 5,
+        "rssMiB": 1007.46875,
+        "cpuPercentSnapshot": 134.60000000000002
+      },
+      "shutdownMs": 195.3318750000035,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 18,
+      "passed": true,
+      "readyMs": 1948.002207999998,
+      "configMs": [
+        24
+      ],
+      "sessionsMs": [
+        4.600000023841858
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          17675,
+          17678,
+          17679,
+          17699,
+          17729
+        ],
+        "processes": 5,
+        "rssMiB": 1012.34375,
+        "cpuPercentSnapshot": 119.39999999999999
+      },
+      "shutdownMs": 201.51941699999588,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 19,
+      "passed": true,
+      "readyMs": 1974.968249999998,
+      "configMs": [
+        9.399999976158142
+      ],
+      "sessionsMs": [
+        4.5
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          17778,
+          17782,
+          17783,
+          17803,
+          17869
+        ],
+        "processes": 5,
+        "rssMiB": 1011.984375,
+        "cpuPercentSnapshot": 116.6
+      },
+      "shutdownMs": 218.9128750000018,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 20,
+      "passed": true,
+      "readyMs": 1974.843875000006,
+      "configMs": [
+        36.19999998807907
+      ],
+      "sessionsMs": [
+        3.100000023841858
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          17895,
+          17903,
+          17904,
+          17924,
+          17977
+        ],
+        "processes": 5,
+        "rssMiB": 1015.296875,
+        "cpuPercentSnapshot": 124.1
+      },
+      "shutdownMs": 201.6929170000003,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 21,
+      "passed": true,
+      "readyMs": 1953.7123330000031,
+      "configMs": [
+        4.5
+      ],
+      "sessionsMs": [
+        20.30000001192093
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18026,
+          18029,
+          18030,
+          18054,
+          18097
+        ],
+        "processes": 5,
+        "rssMiB": 1001.359375,
+        "cpuPercentSnapshot": 122.8
+      },
+      "shutdownMs": 202.80904200000077,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 22,
+      "passed": true,
+      "readyMs": 1960.9184589999932,
+      "configMs": [
+        4.4000000059604645
+      ],
+      "sessionsMs": [
+        20
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18146,
+          18150,
+          18151,
+          18173,
+          18226
+        ],
+        "processes": 5,
+        "rssMiB": 1012.96875,
+        "cpuPercentSnapshot": 121.3
+      },
+      "shutdownMs": 198.8948750000054,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 23,
+      "passed": true,
+      "readyMs": 1976.5183749999997,
+      "configMs": [
+        8.800000011920929
+      ],
+      "sessionsMs": [
+        4.299999982118607
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18253,
+          18258,
+          18259,
+          18279,
+          18348
+        ],
+        "processes": 5,
+        "rssMiB": 1014.09375,
+        "cpuPercentSnapshot": 126.69999999999999
+      },
+      "shutdownMs": 206.72979199999827,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 24,
+      "passed": true,
+      "readyMs": 1968.1067089999997,
+      "configMs": [
+        5.299999982118607
+      ],
+      "sessionsMs": [
+        1.2000000178813934
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18397,
+          18401,
+          18402,
+          18426,
+          18452
+        ],
+        "processes": 5,
+        "rssMiB": 1005.90625,
+        "cpuPercentSnapshot": 119.60000000000001
+      },
+      "shutdownMs": 203.99975000000268,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 25,
+      "passed": true,
+      "readyMs": 1945.776291999995,
+      "configMs": [
+        31.80000001192093
+      ],
+      "sessionsMs": [
+        5.0999999940395355
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18501,
+          18504,
+          18505,
+          18525,
+          18598
+        ],
+        "processes": 5,
+        "rssMiB": 1013.46875,
+        "cpuPercentSnapshot": 128.9
+      },
+      "shutdownMs": 195.70808399999805,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 26,
+      "passed": true,
+      "readyMs": 1957.8323749999981,
+      "configMs": [
+        42.400000005960464
+      ],
+      "sessionsMs": [
+        4.799999982118607
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18622,
+          18625,
+          18626,
+          18646,
+          18698
+        ],
+        "processes": 5,
+        "rssMiB": 1009.59375,
+        "cpuPercentSnapshot": 126.30000000000001
+      },
+      "shutdownMs": 212.2300830000022,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 27,
+      "passed": true,
+      "readyMs": 1968.496250000011,
+      "configMs": [
+        30.700000017881393
+      ],
+      "sessionsMs": [
+        7.699999988079071
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18747,
+          18754,
+          18755,
+          18789,
+          18819
+        ],
+        "processes": 5,
+        "rssMiB": 1014.46875,
+        "cpuPercentSnapshot": 130.4
+      },
+      "shutdownMs": 210.3070000000007,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 28,
+      "passed": true,
+      "readyMs": 1966.8229580000043,
+      "configMs": [
+        24
+      ],
+      "sessionsMs": [
+        6.300000011920929
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18873,
+          18877,
+          18878,
+          18903,
+          18956
+        ],
+        "processes": 5,
+        "rssMiB": 1012.359375,
+        "cpuPercentSnapshot": 119.5
+      },
+      "shutdownMs": 207.43679199999315,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 29,
+      "passed": true,
+      "readyMs": 1949.8793330000044,
+      "configMs": [
+        29
+      ],
+      "sessionsMs": [
+        19.599999994039536
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          18985,
+          18997,
+          18998,
+          19047,
+          19078
+        ],
+        "processes": 5,
+        "rssMiB": 996.90625,
+        "cpuPercentSnapshot": 116.39999999999999
+      },
+      "shutdownMs": 207.44187500000407,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "reuse",
+      "index": 0,
+      "passed": true,
+      "readyMs": 949.2073339999915,
+      "configMs": [
+        9.599999994039536,
+        2.699999988079071,
+        10.800000011920929,
+        4.300000011920929,
+        3.9000000059604645,
+        9.599999994039536,
+        4.199999988079071,
+        4.4000000059604645,
+        5,
+        4,
+        2.899999976158142,
+        3.899999976158142,
+        2.7999999821186066,
+        3.199999988079071,
+        3.800000011920929,
+        2.9000000059604645,
+        3.5,
+        3.4000000059604645,
+        3.2999999821186066,
+        2.5999999940395355,
+        4.0999999940395355,
+        3.5,
+        2.7000000178813934,
+        4.0999999940395355,
+        2.800000011920929,
+        3.7999999821186066,
+        2.699999988079071,
+        2.9000000059604645,
+        2.5,
+        2.699999988079071,
+        2.5,
+        3.5,
+        3.5,
+        2.7000000178813934,
+        3.5999999940395355,
+        3.4000000059604645,
+        3.4000000059604645,
+        2.5999999940395355,
+        3.5999999940395355,
+        2.699999988079071,
+        4.0999999940395355,
+        2.9000000059604645,
+        3.2000000178813934,
+        3.699999988079071,
+        3,
+        3.199999988079071,
+        3,
+        3.5,
+        3.2000000178813934,
+        3.5999999940395355,
+        2.699999988079071,
+        4.100000023841858,
+        3.7000000178813934,
+        4,
+        4.0999999940395355,
+        3.300000011920929,
+        3.199999988079071,
+        4,
+        3.4000000059604645,
+        3.4000000059604645,
+        4.4000000059604645,
+        3.2000000178813934,
+        3.199999988079071,
+        4.0999999940395355,
+        3.399999976158142,
+        4.399999976158142,
+        3.9000000059604645,
+        4.0999999940395355,
+        4.0999999940395355,
+        2.9000000059604645,
+        4.199999988079071,
+        4.600000023841858,
+        4.0999999940395355,
+        3.4000000059604645,
+        3.5,
+        3.300000011920929,
+        2.9000000059604645,
+        3.5,
+        2.7000000178813934,
+        3,
+        2.5,
+        3.2000000178813934,
+        2.5,
+        3.9000000059604645,
+        2.300000011920929,
+        3.0999999940395355,
+        2.5,
+        3.2000000178813934,
+        2.5,
+        3.300000011920929,
+        2.7000000178813934,
+        3.300000011920929,
+        4.0999999940395355,
+        3.600000023841858,
+        2.4000000059604645,
+        2.7999999821186066,
+        2.5,
+        4.0999999940395355,
+        4.299999982118607,
+        3.9000000059604645
+      ],
+      "sessionsMs": [
+        1.300000011920929,
+        19.5,
+        1.2999999821186066,
+        1.5999999940395355,
+        2.800000011920929,
+        1.5,
+        2.7000000178813934,
+        2,
+        1.5,
+        1.4000000059604645,
+        1.100000023841858,
+        1.0999999940395355,
+        2.2000000178813934,
+        0.9000000059604645,
+        1.699999988079071,
+        1,
+        1.699999988079071,
+        2.4000000059604645,
+        1.100000023841858,
+        2.4000000059604645,
+        1.0999999940395355,
+        1.199999988079071,
+        1.0999999940395355,
+        1.4000000059604645,
+        1.0999999940395355,
+        1.100000023841858,
+        2,
+        1.0999999940395355,
+        1.800000011920929,
+        1.0999999940395355,
+        1.600000023841858,
+        1.0999999940395355,
+        1.7999999821186066,
+        1,
+        1.5,
+        1,
+        1,
+        1.0999999940395355,
+        1.2000000178813934,
+        1.0999999940395355,
+        1.300000011920929,
+        2.2999999821186066,
+        1.0999999940395355,
+        1.800000011920929,
+        1,
+        1.4000000059604645,
+        1.0999999940395355,
+        1.4000000059604645,
+        1.0999999940395355,
+        1.300000011920929,
+        1.0999999940395355,
+        1.2999999821186066,
+        1.7999999821186066,
+        1.2000000178813934,
+        1.5999999940395355,
+        2,
+        1.4000000059604645,
+        1.7999999821186066,
+        1.9000000059604645,
+        1.699999988079071,
+        1.5999999940395355,
+        2.0999999940395355,
+        1.4000000059604645,
+        1.7000000178813934,
+        1.100000023841858,
+        1.800000011920929,
+        1.699999988079071,
+        1.300000011920929,
+        1.4000000059604645,
+        1.5999999940395355,
+        2,
+        1.7999999821186066,
+        2.2000000178813934,
+        10.799999982118607,
+        1.0999999940395355,
+        1.5999999940395355,
+        1.0999999940395355,
+        1.5,
+        1,
+        1.5,
+        0.8999999761581421,
+        1.5999999940395355,
+        0.9000000059604645,
+        1.2999999821186066,
+        1.199999988079071,
+        1.5,
+        0.8999999761581421,
+        1.5999999940395355,
+        1,
+        1.2999999821186066,
+        0.8999999761581421,
+        1.5,
+        2.0999999940395355,
+        1,
+        2,
+        0.9000000059604645,
+        1.300000011920929,
+        1.4000000059604645,
+        1.2000000178813934,
+        1.800000011920929
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          19163,
+          19166,
+          19167,
+          19187
+        ],
+        "processes": 4,
+        "rssMiB": 694.484375,
+        "cpuPercentSnapshot": 157.8
+      },
+      "shutdownMs": 166.16987500000687,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 1,
+      "passed": true,
+      "readyMs": 983.4366249999875,
+      "configMs": [
+        5.4000000059604645
+      ],
+      "sessionsMs": [
+        1
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          19310,
+          19313,
+          19314,
+          19334
+        ],
+        "processes": 4,
+        "rssMiB": 677.96875,
+        "cpuPercentSnapshot": 208.2
+      },
+      "shutdownMs": 167.46149999999034,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 2,
+      "passed": true,
+      "readyMs": 973.140458000009,
+      "configMs": [
+        9.699999988079071
+      ],
+      "sessionsMs": [
+        1.100000023841858
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          19416,
+          19419,
+          19420,
+          19440
+        ],
+        "processes": 4,
+        "rssMiB": 676.3125,
+        "cpuPercentSnapshot": 227
+      },
+      "shutdownMs": 173.53516600000148,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 3,
+      "passed": true,
+      "readyMs": 955.0697090000031,
+      "configMs": [
+        10.100000023841858
+      ],
+      "sessionsMs": [
+        1.199999988079071
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          19547,
+          19554,
+          19555,
+          19576
+        ],
+        "processes": 4,
+        "rssMiB": 676.09375,
+        "cpuPercentSnapshot": 206
+      },
+      "shutdownMs": 175.14724999999453,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 4,
+      "passed": true,
+      "readyMs": 948.2235000000073,
+      "configMs": [
+        5.5
+      ],
+      "sessionsMs": [
+        1.0999999940395355
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          19648,
+          19652,
+          19653,
+          19673
+        ],
+        "processes": 4,
+        "rssMiB": 668.8125,
+        "cpuPercentSnapshot": 217.6
+      },
+      "shutdownMs": 174.4092079999973,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 5,
+      "passed": true,
+      "readyMs": 927.8426249999902,
+      "configMs": [
+        38.5
+      ],
+      "sessionsMs": [
+        6.4000000059604645
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          19765,
+          19769,
+          19770,
+          19790
+        ],
+        "processes": 4,
+        "rssMiB": 702.90625,
+        "cpuPercentSnapshot": 231.3
+      },
+      "shutdownMs": 189.8028340000019,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 6,
+      "passed": true,
+      "readyMs": 963.2509999999893,
+      "configMs": [
+        9.200000017881393
+      ],
+      "sessionsMs": [
+        20.599999994039536
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          19863,
+          19866,
+          19867,
+          19917
+        ],
+        "processes": 4,
+        "rssMiB": 701.046875,
+        "cpuPercentSnapshot": 201.4
+      },
+      "shutdownMs": 168.43683299999975,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 7,
+      "passed": true,
+      "readyMs": 928.2086249999993,
+      "configMs": [
+        8.599999994039536
+      ],
+      "sessionsMs": [
+        20.5
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          19962,
+          19975,
+          19976,
+          20033
+        ],
+        "processes": 4,
+        "rssMiB": 699.71875,
+        "cpuPercentSnapshot": 222.39999999999998
+      },
+      "shutdownMs": 185.33750000000873,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 8,
+      "passed": true,
+      "readyMs": 925.125749999992,
+      "configMs": [
+        37.20000001788139
+      ],
+      "sessionsMs": [
+        11.199999988079071
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20108,
+          20111,
+          20112,
+          20133
+        ],
+        "processes": 4,
+        "rssMiB": 679.90625,
+        "cpuPercentSnapshot": 196.2
+      },
+      "shutdownMs": 172.7013339999976,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 9,
+      "passed": true,
+      "readyMs": 949.0282920000027,
+      "configMs": [
+        49.29999998211861
+      ],
+      "sessionsMs": [
+        12.099999994039536
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20205,
+          20208,
+          20209,
+          20234
+        ],
+        "processes": 4,
+        "rssMiB": 681.21875,
+        "cpuPercentSnapshot": 207
+      },
+      "shutdownMs": 173.2171670000098,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 10,
+      "passed": true,
+      "readyMs": 919.1638330000133,
+      "configMs": [
+        37.900000005960464
+      ],
+      "sessionsMs": [
+        10.700000017881393
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20320,
+          20327,
+          20328,
+          20348
+        ],
+        "processes": 4,
+        "rssMiB": 680.546875,
+        "cpuPercentSnapshot": 198.10000000000002
+      },
+      "shutdownMs": 169.76379199999792,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 11,
+      "passed": true,
+      "readyMs": 935.773874999999,
+      "configMs": [
+        10.099999994039536
+      ],
+      "sessionsMs": [
+        20.100000023841858
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20421,
+          20424,
+          20425,
+          20445
+        ],
+        "processes": 4,
+        "rssMiB": 696.5,
+        "cpuPercentSnapshot": 219.2
+      },
+      "shutdownMs": 167.3310829999973,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 12,
+      "passed": true,
+      "readyMs": 931.9272920000076,
+      "configMs": [
+        7.5
+      ],
+      "sessionsMs": [
+        0.9000000059604645
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20535,
+          20538,
+          20539,
+          20563
+        ],
+        "processes": 4,
+        "rssMiB": 674.875,
+        "cpuPercentSnapshot": 216.2
+      },
+      "shutdownMs": 165.85670799999207,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 13,
+      "passed": true,
+      "readyMs": 961.8440830000036,
+      "configMs": [
+        5.899999976158142
+      ],
+      "sessionsMs": [
+        1.2000000178813934
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20634,
+          20637,
+          20638,
+          20663
+        ],
+        "processes": 4,
+        "rssMiB": 677.21875,
+        "cpuPercentSnapshot": 221.60000000000002
+      },
+      "shutdownMs": 175.63316699999268,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 14,
+      "passed": true,
+      "readyMs": 931.7983330000134,
+      "configMs": [
+        7.800000011920929
+      ],
+      "sessionsMs": [
+        1.0999999940395355
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20752,
+          20755,
+          20756,
+          20803
+        ],
+        "processes": 4,
+        "rssMiB": 679.203125,
+        "cpuPercentSnapshot": 216.4
+      },
+      "shutdownMs": 171.20858299999963,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 15,
+      "passed": true,
+      "readyMs": 939.2480840000062,
+      "configMs": [
+        9.100000023841858
+      ],
+      "sessionsMs": [
+        1.399999976158142
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20849,
+          20879,
+          20880,
+          20900
+        ],
+        "processes": 4,
+        "rssMiB": 675.109375,
+        "cpuPercentSnapshot": 197.7
+      },
+      "shutdownMs": 168.9453749999957,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 16,
+      "passed": true,
+      "readyMs": 968.6965420000051,
+      "configMs": [
+        43.900000005960464
+      ],
+      "sessionsMs": [
+        10.199999988079071
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          20979,
+          20990,
+          20991,
+          21019
+        ],
+        "processes": 4,
+        "rssMiB": 681.921875,
+        "cpuPercentSnapshot": 205.8
+      },
+      "shutdownMs": 181.12120799999684,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 17,
+      "passed": true,
+      "readyMs": 933.1066250000003,
+      "configMs": [
+        6.5999999940395355
+      ],
+      "sessionsMs": [
+        1.0999999940395355
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21092,
+          21096,
+          21097,
+          21117
+        ],
+        "processes": 4,
+        "rssMiB": 672.46875,
+        "cpuPercentSnapshot": 222.7
+      },
+      "shutdownMs": 180.56225000000268,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 18,
+      "passed": true,
+      "readyMs": 947.7644589999982,
+      "configMs": [
+        37.69999998807907
+      ],
+      "sessionsMs": [
+        13.400000005960464
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21190,
+          21193,
+          21194,
+          21221
+        ],
+        "processes": 4,
+        "rssMiB": 681.03125,
+        "cpuPercentSnapshot": 206.60000000000002
+      },
+      "shutdownMs": 160.59100000000035,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 19,
+      "passed": true,
+      "readyMs": 929.2622919999994,
+      "configMs": [
+        39.79999998211861
+      ],
+      "sessionsMs": [
+        1.800000011920929
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21305,
+          21308,
+          21309,
+          21334
+        ],
+        "processes": 4,
+        "rssMiB": 674.203125,
+        "cpuPercentSnapshot": 225.3
+      },
+      "shutdownMs": 170.88204199999745,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 20,
+      "passed": true,
+      "readyMs": 959.3523750000022,
+      "configMs": [
+        10.400000005960464
+      ],
+      "sessionsMs": [
+        1.199999988079071
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21409,
+          21412,
+          21413,
+          21435
+        ],
+        "processes": 4,
+        "rssMiB": 674.3125,
+        "cpuPercentSnapshot": 202.39999999999998
+      },
+      "shutdownMs": 168.44716700000572,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 21,
+      "passed": true,
+      "readyMs": 926.9258750000154,
+      "configMs": [
+        7
+      ],
+      "sessionsMs": [
+        1
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21529,
+          21532,
+          21533,
+          21580
+        ],
+        "processes": 4,
+        "rssMiB": 676.859375,
+        "cpuPercentSnapshot": 217.6
+      },
+      "shutdownMs": 171.8080830000108,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 22,
+      "passed": true,
+      "readyMs": 952.1347499999974,
+      "configMs": [
+        5.9000000059604645
+      ],
+      "sessionsMs": [
+        1.5999999940395355
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21628,
+          21657,
+          21658,
+          21682
+        ],
+        "processes": 4,
+        "rssMiB": 674.1875,
+        "cpuPercentSnapshot": 212.8
+      },
+      "shutdownMs": 164.8815000000177,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 23,
+      "passed": true,
+      "readyMs": 938.9833750000107,
+      "configMs": [
+        38.5
+      ],
+      "sessionsMs": [
+        12.699999988079071
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21779,
+          21786,
+          21787,
+          21808
+        ],
+        "processes": 4,
+        "rssMiB": 707.578125,
+        "cpuPercentSnapshot": 232.39999999999998
+      },
+      "shutdownMs": 177.11537499999395,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 24,
+      "passed": true,
+      "readyMs": 926.6794579999987,
+      "configMs": [
+        42.5
+      ],
+      "sessionsMs": [
+        6.5
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21883,
+          21887,
+          21888,
+          21908
+        ],
+        "processes": 4,
+        "rssMiB": 683.078125,
+        "cpuPercentSnapshot": 202.7
+      },
+      "shutdownMs": 167.5506250000035,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 25,
+      "passed": true,
+      "readyMs": 927.7237500000047,
+      "configMs": [
+        8.300000011920929
+      ],
+      "sessionsMs": [
+        19.19999998807907
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          21995,
+          22001,
+          22002,
+          22028
+        ],
+        "processes": 4,
+        "rssMiB": 701.03125,
+        "cpuPercentSnapshot": 196.6
+      },
+      "shutdownMs": 182.83049999998184,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 26,
+      "passed": true,
+      "readyMs": 1092.2446250000212,
+      "configMs": [
+        10.300000011920929
+      ],
+      "sessionsMs": [
+        1.4000000059604645
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          22099,
+          22105,
+          22106,
+          22126
+        ],
+        "processes": 4,
+        "rssMiB": 676.65625,
+        "cpuPercentSnapshot": 207.6
+      },
+      "shutdownMs": 191.11562500000582,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 27,
+      "passed": true,
+      "readyMs": 1062.4595840000256,
+      "configMs": [
+        7.5999999940395355
+      ],
+      "sessionsMs": [
+        1.300000011920929
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          22202,
+          22212,
+          22213,
+          22276
+        ],
+        "processes": 4,
+        "rssMiB": 670.078125,
+        "cpuPercentSnapshot": 224.5
+      },
+      "shutdownMs": 167.505084000004,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 28,
+      "passed": true,
+      "readyMs": 1037.2505829999864,
+      "configMs": [
+        8.799999982118607
+      ],
+      "sessionsMs": [
+        1.2000000178813934
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          22318,
+          22352,
+          22353,
+          22373
+        ],
+        "processes": 4,
+        "rssMiB": 674.09375,
+        "cpuPercentSnapshot": 209.60000000000002
+      },
+      "shutdownMs": 171.00708300000406,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 29,
+      "passed": true,
+      "readyMs": 1041.0938749999914,
+      "configMs": [
+        10.099999994039536
+      ],
+      "sessionsMs": [
+        1.600000023841858
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          22447,
+          22450,
+          22451,
+          22485
+        ],
+        "processes": 4,
+        "rssMiB": 668.140625,
+        "cpuPercentSnapshot": 200.60000000000002
+      },
+      "shutdownMs": 175.0992499999993,
+      "externalSurvived": true
+    }
+  ],
+  "passed": true,
+  "electronBuildSha256": "26219535eac1019d013edb1db0977ccd0097d093fba63902d36d190f1fb43572",
+  "artifactManifest": {
+    "out/main": {
+      "files": 38,
+      "sha256": "260efa316b5dd7e35ad898ea951c15e47f47ac84e80197bcf600a45875764c7d"
+    },
+    "out/preload": {
+      "files": 6,
+      "sha256": "71648d06f9293bdd4203b1f1633939e97baa9ebb5c44d92cd6b76b8987e0a1c1"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3001,
+      "sha256": "fce643d3152653bb920455ece08be389b3dd622a816bf9ac6253a5bb8a30e1e4"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "summary": {
+    "spawn": {
+      "readyMs": {
+        "count": 30,
+        "mean": 1966.7346152,
+        "p95": 1998.802458000002,
+        "max": 2000.4183749999993
+      },
+      "configMs": {
+        "count": 129,
+        "mean": 7.042635658683703,
+        "p95": 33,
+        "max": 42.400000005960464
+      },
+      "sessionsMs": {
+        "count": 129,
+        "mean": 2.902325582365657,
+        "p95": 19.700000017881393,
+        "max": 20.30000001192093
+      },
+      "shutdownMs": {
+        "count": 30,
+        "mean": 204.48423070000032,
+        "p95": 218.9128750000018,
+        "max": 221.10633400000006
+      },
+      "rssMiB": {
+        "count": 30,
+        "mean": 1008.596875,
+        "p95": 1015.734375,
+        "max": 1029.4375
+      }
+    },
+    "reuse": {
+      "readyMs": {
+        "count": 30,
+        "mean": 958.8655862000024,
+        "p95": 1062.4595840000256,
+        "max": 1092.2446250000212
+      },
+      "configMs": {
+        "count": 129,
+        "mean": 6.8852713181990985,
+        "p95": 37.900000005960464,
+        "max": 49.29999998211861
+      },
+      "sessionsMs": {
+        "count": 129,
+        "mean": 2.7720930234406347,
+        "p95": 12.699999988079071,
+        "max": 20.599999994039536
+      },
+      "shutdownMs": {
+        "count": 30,
+        "mean": 173.18247223333358,
+        "p95": 189.8028340000019,
+        "max": 191.11562500000582
+      },
+      "rssMiB": {
+        "count": 30,
+        "mean": 681.91875,
+        "p95": 702.90625,
+        "max": 707.578125
+      }
+    }
+  },
+  "latencyPopulations": {
+    "spawn": {
+      "configMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 30,
+          "mean": 19.560000001390776,
+          "p95": 37,
+          "max": 42.400000005960464
+        },
+        "subsequentInFirstLaunch": {
+          "count": 99,
+          "mean": 3.249494948772469,
+          "p95": 4.0999999940395355,
+          "max": 20.099999994039536
+        }
+      },
+      "sessionsMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 30,
+          "mean": 8.446666667858759,
+          "p95": 20.19999998807907,
+          "max": 20.30000001192093
+        },
+        "subsequentInFirstLaunch": {
+          "count": 99,
+          "mean": 1.2222222231253228,
+          "p95": 1.9000000059604645,
+          "max": 2.4000000059604645
+        }
+      }
+    },
+    "reuse": {
+      "configMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 30,
+          "mean": 17.960000000397365,
+          "p95": 43.900000005960464,
+          "max": 49.29999998211861
+        },
+        "subsequentInFirstLaunch": {
+          "count": 99,
+          "mean": 3.5292929296541695,
+          "p95": 4.4000000059604645,
+          "max": 10.800000011920929
+        }
+      },
+      "sessionsMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 30,
+          "mean": 6.203333335121473,
+          "p95": 20.5,
+          "max": 20.599999994039536
+        },
+        "subsequentInFirstLaunch": {
+          "count": 99,
+          "mean": 1.7323232320221988,
+          "p95": 2.4000000059604645,
+          "max": 19.5
+        }
+      }
+    }
+  },
+  "comparison": [
+    {
+      "mode": "spawn",
+      "metric": "readyMs",
+      "before": 2038.5515000000005,
+      "after": 1998.802458000002,
+      "maximum": 2140.4790750000006,
+      "passed": true
+    },
+    {
+      "mode": "spawn",
+      "metric": "configMs",
+      "before": 47.599999994039536,
+      "after": 33,
+      "maximum": 52.599999994039536,
+      "passed": true
+    },
+    {
+      "mode": "spawn",
+      "metric": "sessionsMs",
+      "before": 26.600000023841858,
+      "after": 19.700000017881393,
+      "maximum": 31.600000023841858,
+      "passed": true
+    },
+    {
+      "mode": "spawn",
+      "metric": "rssMiB",
+      "before": 1026.328125,
+      "after": 1015.734375,
+      "maximum": 1077.64453125,
+      "passed": true
+    },
+    {
+      "mode": "reuse",
+      "metric": "readyMs",
+      "before": 1002.2085420000076,
+      "after": 1062.4595840000256,
+      "maximum": 1102.2085420000076,
+      "passed": true
+    },
+    {
+      "mode": "reuse",
+      "metric": "configMs",
+      "before": 48.30000001192093,
+      "after": 37.900000005960464,
+      "maximum": 53.30000001192093,
+      "passed": true
+    },
+    {
+      "mode": "reuse",
+      "metric": "sessionsMs",
+      "before": 20,
+      "after": 12.699999988079071,
+      "maximum": 25,
+      "passed": true
+    },
+    {
+      "mode": "reuse",
+      "metric": "rssMiB",
+      "before": 685.265625,
+      "after": 702.90625,
+      "maximum": 719.52890625,
+      "passed": true
+    }
+  ],
+  "finishedAt": "2026-10-31T03:22:51.106Z"
+}

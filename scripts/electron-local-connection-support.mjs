@@ -1,5 +1,21 @@
-import { lstat, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { lstat, mkdir, open, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
+
+/** Include Gateway, static UI and SQL assets, not just Electron entry points. */
+export async function localConnectionArtifactManifest(root) {
+  const manifest = {};
+  for (const directory of ['out/main', 'out/preload', 'out/server', 'dist', 'src/storage/sqlite']) {
+    const hash = createHash('sha256');
+    let entries;
+    try { entries = await readdir(join(root, directory), { recursive: true, withFileTypes: true }); }
+    catch (error) { if (error.code === 'ENOENT') { manifest[directory] = null; continue; } throw error; }
+    const files = entries.filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort();
+    for (const file of files) hash.update(relative(root, file)).update('\0').update(await readFile(file)).update('\0');
+    manifest[directory] = { files: files.length, sha256: hash.digest('hex') };
+  }
+  return manifest;
+}
 
 /** Serialize access to the development layout without replacing existing output. */
 export async function prepareLocalConnectionLayout(root, runnerRoot = root) {
@@ -57,4 +73,21 @@ export async function withTimeout(operation, timeoutMs, message) {
       timer = setTimeout(() => reject(new Error(message)), timeoutMs);
     })]);
   } finally { clearTimeout(timer); }
+}
+
+/** Reserve a fresh evidence file before starting a test process. */
+export async function createAcceptanceOutput(defaultPath, args = process.argv.slice(2)) {
+  const index = args.indexOf('--output');
+  if (index >= 0 && (!args[index + 1] || args[index + 1].startsWith('--'))) throw new Error('Missing acceptance output path');
+  const output = resolve(index < 0 ? defaultPath : args[index + 1]);
+  await mkdir(dirname(output), { recursive: true });
+  let file;
+  try { file = await open(output, 'wx', 0o600); }
+  catch (error) {
+    if (error.code === 'EEXIST') throw new Error('Acceptance output exists; use a new path to retain evidence');
+    throw error;
+  }
+  try { await file.writeFile(JSON.stringify({ passed: false, state: 'initializing', startedAt: new Date().toISOString() }) + '\n'); }
+  finally { await file.close(); }
+  return output;
 }

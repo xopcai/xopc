@@ -132,6 +132,38 @@ describe('resolveGatewayStartupMode', () => {
   });
 });
 
+it('reports authenticated readiness promptly without skipping compatibility checks', async () => {
+  vi.useFakeTimers();
+  let available = false;
+  let ready: number | undefined;
+  const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+    expect(options?.headers).toEqual({ Authorization: 'Bearer readiness-test' });
+    if (url.endsWith('/api/config')) return new Response('{}', { status: available ? 200 : 503 });
+    expect(url).toContain('/api/endpoint-tools/compatibility');
+    return Response.json({ ok: true, payload: { realtimeProtocolVersion: REALTIME_PROTOCOL_VERSION,
+      computerFrameUploadMaxBytes: COMPUTER_FRAME_MAX_BYTES, endpointProtocolVersion: ENDPOINT_PROTOCOL_VERSION,
+      computerControl: COMPUTER_DESCRIPTOR } });
+  });
+  vi.stubGlobal('fetch', fetch);
+  const pending = waitForGatewayReady(12345, 'readiness-test', { exitCode: null, signalCode: null } as any, 2000)
+    .then(port => { ready = port; });
+  try {
+    await vi.advanceTimersByTimeAsync(1);
+    expect(ready).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    available = true;
+    await vi.advanceTimersByTimeAsync(149);
+    expect(ready).toBe(12345);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  } finally {
+    available = true;
+    await vi.advanceTimersByTimeAsync(2000);
+    await pending;
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
+
 describe('gateway connection', () => {
   const runtime = { port: 18790, authToken: 'owned', bind: 'loopback' as const,
     configPath: '/tmp/isolated/xopc.json', workspacePath: '/tmp/isolated/workspace' };

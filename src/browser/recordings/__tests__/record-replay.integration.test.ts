@@ -25,7 +25,9 @@ let base: string;
 beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  // Match the lockfile-installed CI browser and finish before the existing 10s hook deadline.
+  browser = await chromium.launch({ headless: true, channel: 'chromium', timeout: 8000 });
+  console.info(`Recording/replay browser: ${browser.version()}`);
 });
 afterAll(async () => { await browser?.close(); await new Promise<void>((resolve) => server.close(() => resolve())); });
 
