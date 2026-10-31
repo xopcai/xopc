@@ -14,6 +14,7 @@ export const GATEWAY_SCOPES = [
   'notifications.self',
   'device.self',
   'desktop.observe.state',
+  'desktop.observe.screen',
   'phone.view',
   'phone.control',
   'gateway.admin',

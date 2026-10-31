@@ -70,6 +70,7 @@ function verifyUnpackedAppLayout(asarPath) {
     'out/preload/remote-shell.html',
     'out/preload/remote-shell.js',
     'out/preload/remote-shell.css',
+    'out/preload/screen-capture.html',
     'out/server/index.js',
     'out/server/codemode-worker.js',
     'node_modules/quickjs-wasi/quickjs.wasm',

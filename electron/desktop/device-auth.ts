@@ -1,14 +1,15 @@
 import { createHash, createPublicKey, generateKeyPairSync, randomBytes, randomUUID, sign, verify } from 'node:crypto';
 
 import { buildDevicePairingProof, desktopPairingInvitationSchema, type DevicePairingAction } from '@xopcai/gateway-contract';
-import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import { endpointHelloSigningPayload, endpointToolContentSchema, SCREEN_CAPTURE_MAX_BYTES, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import type { EndpointToolFile, EndpointToolUploadGrant } from '@xopcai/endpoint-tools-client';
 
 import { DesktopIdentityStore, type DesktopBinding, type DesktopIdentity } from './device-identity.js';
 
 export type DesktopAuthTransport = (path: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown,
-  headers?: Record<string, string>) => Promise<{ status: number; body: any }>;
+  headers?: Record<string, string>, signal?: AbortSignal) => Promise<{ status: number; body: any }>;
 const refreshToken = () => `xopc_rt_${randomUUID()}_${randomBytes(32).toString('base64url')}`;
-const digest = (value: string) => createHash('sha256').update(value).digest('hex');
+const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const signature = (record: DesktopIdentity, payload: string) => sign('sha256', Buffer.from(payload), { key: record.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
 
 /** Runs only in the main process. The transport never receives or stores an owner credential. */
@@ -84,13 +85,17 @@ export class DesktopDeviceAuth {
     record.refreshToken = nextRefreshToken; delete record.rotation; await this.store.save(record);
     this.access = { token: body.tokens.accessToken, expiresAt: body.tokens.accessTokenExpiresAt };
   }
-  private async deviceRequest(record: DesktopIdentity, method: 'GET' | 'POST' | 'DELETE', target = '/api/devices/me', body?: unknown) {
+  private async deviceRequest(record: DesktopIdentity, method: 'GET' | 'POST' | 'DELETE', target = '/api/devices/me', body?: unknown,
+    extraHeaders: Record<string, string> = {}, signal?: AbortSignal) {
+    signal?.throwIfAborted();
     if (!this.access || this.access.expiresAt - Date.now() < 30000) await this.refresh(record);
-    const timestamp = Date.now(), nonce = randomBytes(24).toString('base64url'), bodyDigest = digest(body === undefined ? '' : JSON.stringify(body)), token = this.access!.token;
+    signal?.throwIfAborted();
+    const headers = { 'content-type': 'application/json', ...extraHeaders };
+    const timestamp = Date.now(), nonce = randomBytes(24).toString('base64url'), bodyDigest = digest(Buffer.isBuffer(body) ? body : body === undefined ? '' : JSON.stringify(body)), token = this.access!.token;
     const payload = ['xopc-request-v1', this.binding.gatewayId, digest(token), method, target, bodyDigest,
-      'application/json', '', '', '', '', String(timestamp), nonce].join('\n');
-    return this.transport(target, method, body, { Authorization: `Bearer ${token}`, 'content-type': 'application/json',
-      'X-Xopc-Proof': `${timestamp}.${nonce}.${bodyDigest}.${signature(record, payload)}` });
+      headers['content-type'], '', '', extraHeaders['x-endpoint-id'] ?? '', extraHeaders['x-endpoint-upload-token'] ?? '', String(timestamp), nonce].join('\n');
+    return this.transport(target, method, body, { Authorization: `Bearer ${token}`, ...headers,
+      'X-Xopc-Proof': `${timestamp}.${nonce}.${bodyDigest}.${signature(record, payload)}` }, signal);
   }
   private async enrolled(): Promise<DesktopIdentity> {
     const record = await this.store.load(this.binding);
@@ -104,14 +109,15 @@ export class DesktopDeviceAuth {
         publicKey: createPublicKey(record.privateKey).export({ type: 'spki', format: 'der' }).toString('base64url') };
     });
   }
-  endpointRequest(path: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown, expectedDeviceId?: string): Promise<any> {
+  endpointRequest(path: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown, expectedDeviceId?: string, signal?: AbortSignal): Promise<any> {
     return this.serial(async () => {
+      signal?.throwIfAborted();
       if (!(method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path)
-        || method === 'GET' && path === '/api/endpoint-tools/compatibility'
-        || method === 'DELETE' && path === '/api/desktop-host/observation')) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
+        || method === 'GET' && ['/api/endpoint-tools/compatibility', '/api/desktop-host/status'].includes(path)
+        || method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path))) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
       const record = await this.enrolled();
       if (expectedDeviceId && record.deviceId !== expectedDeviceId) throw new Error('DESKTOP_DEVICE_IDENTITY_MISMATCH');
-      const response = await this.deviceRequest(record, method, path, body);
+      const response = await this.deviceRequest(record, method, path, body, {}, signal);
       if (response.status === 401) { this.access = undefined; record.phase = 'revoked'; await this.store.save(record); throw new Error('DESKTOP_AUTH_REVOKED'); }
       if (response.status === 403) throw new Error('DESKTOP_OBSERVATION_DENIED');
       if (![200, 201].includes(response.status)) throw new Error('DESKTOP_AUTH_UNAVAILABLE');
@@ -122,8 +128,31 @@ export class DesktopDeviceAuth {
     return this.serial(async () => {
       const record = await this.enrolled();
       if (hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
-        || hello.tools.length !== 1 || hello.tools[0]?.name !== 'desktop.device.get_state') throw new Error('DESKTOP_OBSERVATION_DENIED');
+        || hello.tools.length !== 1 || !['desktop.device.get_state', 'desktop.screen.capture'].includes(hello.tools[0]?.name)) throw new Error('DESKTOP_OBSERVATION_DENIED');
       return { ...hello, signature: signature(record, endpointHelloSigningPayload(hello)) };
+    });
+  }
+  uploadScreenshot(options: { endpointId: string; deviceId: string; invocationId: string; grant: EndpointToolUploadGrant; file: EndpointToolFile; signal: AbortSignal }) {
+    return this.serial(async () => {
+      const { signal, grant, file, invocationId, endpointId } = options;
+      signal.throwIfAborted();
+      if (!grant || grant.path !== `/api/endpoint-tools/invocations/${invocationId}/files` || !/^[0-9a-f-]{36}$/.test(invocationId)
+        || !endpointId.startsWith(options.deviceId + ':') || grant.expiresAt <= Date.now() || file.bytes.byteLength > Math.min(grant.maxBytes, SCREEN_CAPTURE_MAX_BYTES)
+        || file.name !== 'screenshot.png' || file.mimeType !== 'image/png' || !Buffer.from(file.bytes.subarray(0, 8)).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) throw new Error('DESKTOP_SCREEN_UPLOAD_DENIED');
+      const record = await this.enrolled();
+      if (record.deviceId !== options.deviceId) throw new Error('DESKTOP_DEVICE_IDENTITY_MISMATCH');
+      const bytes = Buffer.from(file.bytes);
+      try {
+        const response = await this.deviceRequest(record, 'POST', `${grant.path}?name=screenshot.png`, bytes,
+          { 'content-type': 'image/png', 'content-length': String(bytes.length), 'x-endpoint-id': endpointId, 'x-endpoint-upload-token': grant.token }, signal);
+        if (response.status === 401) { this.access = undefined; record.phase = 'revoked'; await this.store.save(record); throw new Error('DESKTOP_AUTH_REVOKED'); }
+        if (response.status === 403) throw new Error('DESKTOP_OBSERVATION_DENIED');
+        signal.throwIfAborted();
+        const parsed = endpointToolContentSchema.safeParse(response.body?.payload);
+        if (response.status !== 201 || !parsed.success || parsed.data.type !== 'file' || parsed.data.mimeType !== 'image/png'
+          || parsed.data.name !== file.name || parsed.data.size !== bytes.length || parsed.data.sha256 !== digest(bytes)) throw new Error('DESKTOP_SCREEN_UPLOAD_FAILED');
+        return parsed.data;
+      } finally { bytes.fill(0); }
     });
   }
   connectionProof(ticket: string): Promise<string> {

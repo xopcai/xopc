@@ -26,6 +26,10 @@ export class RemoteShellWindow {
     private readonly presentation = new RemoteWindowPresentation()) {}
 
   presentationState() { return { visible: this.window?.isVisible() ?? false, focused: this.window?.isFocused() ?? false }; }
+  captureWindow(): BrowserWindow | undefined {
+    return this.window && !this.window.isDestroyed() && this.activeEpoch === this.manager.snapshot().epoch
+      && this.window.webContents.getURL() === `${this.origin}/` ? this.window : undefined;
+  }
   async setHostOrigin(origin?: EndpointTurnClaim) {
     if (!this.worker || this.activeEpoch === undefined) return;
     await this.worker.request('host-origin', { epoch: this.activeEpoch, hostOrigin: origin });

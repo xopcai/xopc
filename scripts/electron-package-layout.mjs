@@ -9,6 +9,7 @@ export const DESKTOP_PACKAGE_PATHS = [
   'out/preload/computer-preview.cjs', 'out/preload/computer-preview.html',
   'out/preload/gateway-connections.html', 'out/preload/gateway-connections.js',
   'out/preload/remote-shell.html', 'out/preload/remote-shell.js', 'out/preload/remote-shell.css',
+  'out/preload/screen-capture.html',
   'out/server/index.js', 'out/server/result-extraction.js', 'out/server/codemode-worker.js',
   'out/server/schema.sql', 'out/server/workspace-templates/AGENTS.md',
   'dist/gateway/static/root/index.html',

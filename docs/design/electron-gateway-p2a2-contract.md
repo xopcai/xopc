@@ -54,3 +54,12 @@ D3a先仅开放 `desktop.device.get_state`，返回平台、系统版本、语�
 ### D3a结果
 
 D3a设备状态只读Host已通过实际认证/签名协议及安装包原生逐项授权、实际Agent工具发现/调用E2E，本地spawn/reuse、旧schema262/263 Gateway复用和远端聊天回归通过。仅开启设备状态，截图与其他能力没有继承该授权。旧D1 `manifest` 继续描述凭据bootstrap默认权限，新增观察能力通过独立capabilities协商及显式grant开放；不修改聊天bootstrap。详情、原生副本标识差异、冷安全存储超时与模型fixture失败记录见[D3a证据](./evidence/electron-gateway-p2a2/observation-state-20261031/README.md)。接下来实施D3b截图，完整阶段及长测仍未验收。
+
+## D3b截图接口与验收冻结
+
+- 独立 `desktop.observe.screen` scope、`desktop.screen.capture` 工具和独立原生源选择。每次截屏再次确认源及接收Gateway；截图授权不继承设备状态批准，也不包含输入控制、文件、剪贴板或任意窗口选择参数。首版每次连接只启用一种观察能力，换能力先停止再授权。
+- 来源由本机选择：当前远端聊天窗口，或本机选定显示器。远端工具参数为空，不能指定别的窗口/显示器。显示器先列无像素元数据，屏幕录制权限不足时拒绝；捕获只针对选定源，不读取其他屏幕缩略图。OS权限不通过远端请求自动提升。
+- 复用Endpoint v2 uploadGrant和图像校验/内存帧预算。PNG最长边1280、单张不超过既有5MiB帧预算；设备签名请求绑定二进制摘要、endpointId、upload token及准确invocation路径。跨设备、无grant、过期、重复、取消、体积超限和非PNG拒绝；上传不自动重试。
+- 传输缓存使用短期内存帧，经授权Agent单次消费后清零；不能通过通用附件接口下载，不创建持久截图文件。模型图像结果仍受既有会话存储策略管理，不声称对话中没有图像副本。授权/连接/前台状态变化或取消时不上传迟到截图，已发送的内容不能被追溯收回。
+- Electron 45的屏幕获取使用独立的 `display-capture` 权限，不能借此开放摄像头/麦克风；元数据枚举设置零尺寸缩略图。接口依据[官方desktopCapturer文档](https://www.electronjs.org/docs/latest/api/desktop-capturer)及[45版变化](https://www.electronjs.org/docs/latest/breaking-changes)核对，原聊天session仍拒绝媒体权限。
+- 复用持久授权revision，并为新scope升级应用数据schema到v265，使旧程序不会读取不认识的权限；全部既有升级链保留。验收包含本机拒绝/逐次确认、只捕获已选源、真实Agent图像结果、越权/上传故障/取消/撤销以及正式包本地和远端回归。长测、性能和其他平台缺口单列，不等待24小时后才继续开发。

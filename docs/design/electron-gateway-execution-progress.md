@@ -38,3 +38,7 @@
 后续D2主进程接线和原生交互闭环已完成，见[登记与撤销证据](./evidence/electron-gateway-p2a2/enrollment-20261031/README.md)。用户再次要求不等24小时验证，继续后续开发；S5第3轮长测保持独立运行，原预算/失败不变。继续D3逐项只读能力、D4专项验证，再实施可靠执行及授权工作区；长测不作为功能开发等待条件。
 
 D3a已完成独立签名的设备状态只读Host与逐项原生同意，实际Agent通过Endpoint读取Electron状态；授权版本防止迟到批准覆盖撤销。schema264完整支持起点升级、本地新启动/复用、旧schema262/263 Gateway和远端聊天回归通过，见[本批证据](./evidence/electron-gateway-p2a2/observation-state-20261031/README.md)。继续截图，S5/Host长测与性能待办不作为下一批开发的等待条件。
+
+2026-11-01：D3b截图已实现独立权限、原生来源选择与单次确认、绑定设备签名的专属上传、短期内存帧和Agent图像投影；HTTP/WS集成E2E、schema265完整升级链、正式DMG包内验证、本地新启动/复用及旧schema262/264 Gateway回归通过。原生验收因Mac锁屏及安全存储原预算超时未完成，已保留失败并请求解锁；不将D3b或完整P2a-2标为通过。详见[截图证据](./evidence/electron-gateway-p2a2/observation-screen-20261101/README.md)。
+
+未等待24小时或原生交互，独立推进[P2b J1](./electron-gateway-p2b-contract.md)：持久操作元数据、去重/未知状态和跨进程执行锁已实现，103项相关Electron测试及真实子进程崩溃E2E通过。此模块尚未接入工具或现有本地Host；J2调用监督与协议协商、J3安装包故障验收、P3授权工作区和P4后台任务继续待实施。

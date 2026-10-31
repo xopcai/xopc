@@ -282,7 +282,8 @@ export function auth(config?: AuthConfig) {
               gatewayId: getOrCreateGatewayIdentity().id, credential: providedCredential!, method: c.req.method,
               target: url.pathname + url.search, headers: name => c.req.header(name), proof,
             }))) return c.json({ error: 'Unauthorized', code: 'REQUEST_PROOF_INVALID' }, 401);
-          const isUpload = /^(multipart\/form-data|application\/octet-stream)/i.test(c.req.header('content-type') ?? '')
+          const isUpload = /^\/api\/endpoint-tools\/invocations\/[^/]+\/files$/.test(requestPath)
+            || /^(multipart\/form-data|application\/octet-stream)/i.test(c.req.header('content-type') ?? '')
             || Number(c.req.header('content-length') ?? 0) > 65_536;
           const release = isUpload ? acquireProofBodyBudget(device.id) : () => {};
           if (!release) {
@@ -301,10 +302,11 @@ export function auth(config?: AuthConfig) {
         if (device?.platform === 'desktop' && !(
           c.req.method === 'GET' && ['/api/desktop-host/compatibility', '/api/devices/me'].includes(requestPath)
           || c.req.method === 'DELETE' && requestPath === '/api/devices/me'
-          || c.req.method === 'DELETE' && requestPath === '/api/desktop-host/observation'
-          || device.scopes.includes('desktop.observe.state') && (
+          || c.req.method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(requestPath)
+          || device.scopes.includes('desktop.observe.screen') && c.req.method === 'POST' && /^\/api\/endpoint-tools\/invocations\/[0-9a-f-]{36}\/files$/.test(requestPath)
+          || (device.scopes.includes('desktop.observe.state') || device.scopes.includes('desktop.observe.screen')) && (
             c.req.method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(requestPath)
-            || c.req.method === 'GET' && requestPath === '/api/endpoint-tools/compatibility'
+            || c.req.method === 'GET' && ['/api/endpoint-tools/compatibility', '/api/desktop-host/status'].includes(requestPath)
           )
         )) return c.json({ error: 'Forbidden', code: 'DESKTOP_CREDENTIAL_SCOPE_DENIED' }, 403);
         recordSuccess(rl);

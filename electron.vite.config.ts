@@ -80,7 +80,7 @@ export default defineConfig({
       this.emitFile({ type: 'asset', fileName: 'computer-preview.html', source: readFileSync(resolve(__dirname, 'electron/computer/preview-worker.html'), 'utf8') });
       const chat = await buildBrowserScript({ entryPoints: [resolve(__dirname, 'electron/chat/view.ts')], bundle: true, write: false, platform: 'browser', format: 'iife', target: 'chrome140', minify: true });
       this.emitFile({ type: 'asset', fileName: 'remote-shell.js', source: chat.outputFiles[0]!.text });
-      for (const fileName of ['gateway-connections.html', 'gateway-connections.js', 'remote-shell.html', 'remote-shell.css']) {
+      for (const fileName of ['gateway-connections.html', 'gateway-connections.js', 'remote-shell.html', 'remote-shell.css', 'screen-capture.html']) {
         this.emitFile({ type: 'asset', fileName, source: readFileSync(resolve(__dirname, 'electron/gateway', fileName), 'utf8') });
       }
     } }],

@@ -1,0 +1,15 @@
+{
+  "bundleId": "ai.xopc.desktop-screen.acceptance",
+  "differences": [
+    {
+      "path": "Contents/Info.plist",
+      "production": "fce29af6ec9c6dd4fc5071d5abc0f03bf5a578b213a77b8843ab702158e5efa9",
+      "native": "f17d77b55dc91e105a066671f85631d6ec9ac45c5f7b731b2d4a68f449a77cf6"
+    },
+    {
+      "path": "Contents/MacOS/xopc",
+      "production": "52039c6406232bcd6528b8cfd647f67186d1546adaa215e259ef1ba7823d5c1d",
+      "native": "a5b0a63111445ebe9a2d59a74e881bd553748b62e4113d81c9906b9156aab95e"
+    }
+  ]
+}
