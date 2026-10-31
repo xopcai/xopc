@@ -1,0 +1,27 @@
+{
+  "head": "228a316d053077e0752b54d3d8db51a5ec044d26",
+  "auditedAt": "2026-10-31T09:39:15.090Z",
+  "passed": true,
+  "frozenBaselineSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "artifactManifest": {
+    "out/main": {
+      "files": 42,
+      "sha256": "b339d7c916445e713cc977c9dd2911a1b49484153e52c3e99de129ce895e2735"
+    },
+    "out/preload": {
+      "files": 10,
+      "sha256": "aa655f913c2a41ea12d16518ddb9ea37e850aeb9ec87b1e05be78136be06b834"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3003,
+      "sha256": "8024bac2a427ad12d7b41e943ebc3647bbf30f921a6767365452025e8fd1894a"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "originalBudgetGatesPassed": 16,
+  "noResampling": "Product and accepted artifacts unchanged; both existing runs verified against original S0"
+}

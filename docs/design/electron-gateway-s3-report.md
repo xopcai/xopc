@@ -65,3 +65,7 @@ review 确认并修复会话切换/关闭时的旧历史与迟到连接、旧停
 修复后相关946项 / 113文件、完整类型检查、lint（0 errors / 5个既有 warnings）、depcheck（0 violations）及CLI启动导入检查通过，Electron产物重新构建；Node/Web/Gateway/SQL源码未变，沿用此前通过的构建。相关证据、最终E2E与性能原始数据见[review记录](./evidence/electron-gateway-s3-review/README.md)。本地默认入口与监督、原采样器及历史证据保持不变，S4/S5与远端Host/本机能力继续不接入。
 
 review 后10组E2E和两轮原预算对照通过：每轮新启动/复用各30次，每模式每API129样本，均8/8；out/main、dist/Gateway/Web和SQL指纹与原S3验收相同。未改变采样或预算，最终指纹/原始耗时/命令见review的validation.json。
+
+## PR #41 合并前复核
+
+原head CI全绿且无review意见；本地复用功能重跑发现引导自动切换时fixture仍点击旧按钮的竞态，原始失败已保存。只修复功能脚本并新增3个回归，不改产品/采样器/预算，不强制点击，不增加超时。修复后949项/114文件与10组E2E通过，原两轮性能产物指纹及16项指标已复核。详见[合并前证据](./evidence/electron-gateway-pr41-premerge/README.md)；新head CI须通过后再合并。

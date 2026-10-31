@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 2,
+  "samplingPlan": "first-launch-heavy-v1",
+  "startedAt": "2026-10-31T09:45:25.280Z",
+  "commit": "228a316d053077e0752b54d3d8db51a5ec044d26",
+  "worktreeDirty": true,
+  "artifactSha256": "360f6533eee53d9b92730a3e8295e045acd85df0f6e0fd8ef27969b3664330ed",
+  "developmentLayoutLink": true,
+  "node": "v26.12.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "osRelease": "25.6.0",
+  "artifactSourceRef": "913729032",
+  "scope": "Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server",
+  "runs": 1,
+  "operations": 2,
+  "functional": true,
+  "diagnostics": false,
+  "serverDiagnostics": false,
+  "modes": [
+    "spawn",
+    "reuse"
+  ],
+  "samples": [
+    {
+      "mode": "spawn",
+      "index": 0,
+      "passed": true,
+      "readyMs": 2772.8396669999997,
+      "configMs": [
+        7.199999988079071,
+        9.200000017881393
+      ],
+      "sessionsMs": [
+        1.5999999940395355,
+        1.800000011920929
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "functional": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "448c2803-4cb2-4748-b1fc-dfdd71b6125c",
+        "authenticatedAutomationLazyRoute": true,
+        "authenticatedProviderMetaRoute": true,
+        "corruptRemoteProfileIgnored": true,
+        "ownedRestartPreservesChat": true
+      },
+      "resources": {
+        "pids": [
+          49439,
+          49442,
+          49443,
+          49642,
+          50025
+        ],
+        "processes": 5,
+        "rssMiB": 985.53125,
+        "cpuPercentSnapshot": 187.6
+      },
+      "shutdownMs": 313.3410409999997,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "reuse",
+      "index": 0,
+      "passed": true,
+      "readyMs": 1207.5770420000008,
+      "configMs": [
+        15.300000011920929,
+        5.300000011920929
+      ],
+      "sessionsMs": [
+        1.2999999821186066,
+        1.4000000059604645
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "functional": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "199cc2aa-0395-4c85-90b6-cc43d6f1573c",
+        "authenticatedAutomationLazyRoute": true,
+        "authenticatedProviderMetaRoute": true,
+        "corruptRemoteProfileIgnored": true,
+        "externalRestartDenied": true
+      },
+      "resources": {
+        "pids": [
+          51882,
+          51919,
+          51920,
+          51976
+        ],
+        "processes": 4,
+        "rssMiB": 647.171875,
+        "cpuPercentSnapshot": 63.099999999999994
+      },
+      "shutdownMs": 167.10412499999984,
+      "externalSurvived": true
+    }
+  ],
+  "passed": true,
+  "electronBuildSha256": "7aac25be31d42e99c91c9ef893fdd6a1b4410c203032bd7fa2863c8130f0a815",
+  "artifactManifest": {
+    "out/main": {
+      "files": 42,
+      "sha256": "b339d7c916445e713cc977c9dd2911a1b49484153e52c3e99de129ce895e2735"
+    },
+    "out/preload": {
+      "files": 10,
+      "sha256": "aa655f913c2a41ea12d16518ddb9ea37e850aeb9ec87b1e05be78136be06b834"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3003,
+      "sha256": "8024bac2a427ad12d7b41e943ebc3647bbf30f921a6767365452025e8fd1894a"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "summary": {
+    "spawn": {
+      "readyMs": {
+        "count": 1,
+        "mean": 2772.8396669999997,
+        "p95": 2772.8396669999997,
+        "max": 2772.8396669999997
+      },
+      "configMs": {
+        "count": 2,
+        "mean": 8.200000002980232,
+        "p95": 9.200000017881393,
+        "max": 9.200000017881393
+      },
+      "sessionsMs": {
+        "count": 2,
+        "mean": 1.7000000029802322,
+        "p95": 1.800000011920929,
+        "max": 1.800000011920929
+      },
+      "shutdownMs": {
+        "count": 1,
+        "mean": 313.3410409999997,
+        "p95": 313.3410409999997,
+        "max": 313.3410409999997
+      },
+      "rssMiB": {
+        "count": 1,
+        "mean": 985.53125,
+        "p95": 985.53125,
+        "max": 985.53125
+      }
+    },
+    "reuse": {
+      "readyMs": {
+        "count": 1,
+        "mean": 1207.5770420000008,
+        "p95": 1207.5770420000008,
+        "max": 1207.5770420000008
+      },
+      "configMs": {
+        "count": 2,
+        "mean": 10.300000011920929,
+        "p95": 15.300000011920929,
+        "max": 15.300000011920929
+      },
+      "sessionsMs": {
+        "count": 2,
+        "mean": 1.3499999940395355,
+        "p95": 1.4000000059604645,
+        "max": 1.4000000059604645
+      },
+      "shutdownMs": {
+        "count": 1,
+        "mean": 167.10412499999984,
+        "p95": 167.10412499999984,
+        "max": 167.10412499999984
+      },
+      "rssMiB": {
+        "count": 1,
+        "mean": 647.171875,
+        "p95": 647.171875,
+        "max": 647.171875
+      }
+    }
+  },
+  "latencyPopulations": {
+    "spawn": {
+      "configMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 1,
+          "mean": 7.199999988079071,
+          "p95": 7.199999988079071,
+          "max": 7.199999988079071
+        },
+        "subsequentInFirstLaunch": {
+          "count": 1,
+          "mean": 9.200000017881393,
+          "p95": 9.200000017881393,
+          "max": 9.200000017881393
+        }
+      },
+      "sessionsMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 1,
+          "mean": 1.5999999940395355,
+          "p95": 1.5999999940395355,
+          "max": 1.5999999940395355
+        },
+        "subsequentInFirstLaunch": {
+          "count": 1,
+          "mean": 1.800000011920929,
+          "p95": 1.800000011920929,
+          "max": 1.800000011920929
+        }
+      }
+    },
+    "reuse": {
+      "configMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 1,
+          "mean": 15.300000011920929,
+          "p95": 15.300000011920929,
+          "max": 15.300000011920929
+        },
+        "subsequentInFirstLaunch": {
+          "count": 1,
+          "mean": 5.300000011920929,
+          "p95": 5.300000011920929,
+          "max": 5.300000011920929
+        }
+      },
+      "sessionsMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 1,
+          "mean": 1.2999999821186066,
+          "p95": 1.2999999821186066,
+          "max": 1.2999999821186066
+        },
+        "subsequentInFirstLaunch": {
+          "count": 1,
+          "mean": 1.4000000059604645,
+          "p95": 1.4000000059604645,
+          "max": 1.4000000059604645
+        }
+      }
+    }
+  },
+  "finishedAt": "2026-10-31T09:45:38.305Z"
+}
