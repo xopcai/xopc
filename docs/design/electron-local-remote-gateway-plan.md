@@ -2,7 +2,7 @@
 
 日期：2026-10-30；本次修订：2026-10-31
 
-状态：P0/P1 已随 [PR #38](https://github.com/xopcai/xopc/pull/38) 合并到 main（`f5b4b660`）；P2a-1 的 S0 冻结与 S1 配置预览/能力隔离已在 worktree 实施，验收状态见[阶段记录](./electron-gateway-p2a1-s0-s1-report.md)。S2 及后续仍待实施，尚未接入远端聊天或 Host；完整发布门槛未通过。
+状态：P0/P1 已随 [PR #38](https://github.com/xopcai/xopc/pull/38) 合并到 main（`f5b4b660`）；P2a-1 的 S0 冻结与 S1 配置预览/能力隔离已在 worktree 实施，验收状态见[阶段记录](./electron-gateway-p2a1-s0-s1-report.md)。本地性能阻塞已修复，两轮完整复测通过原冻结预算，见[P95 排查与复测](./electron-gateway-config-p95-investigation.md)。S2 及后续仍待实施，尚未接入远端聊天或 Host；完整发布门槛未通过。
 
 目标：同一份 Electron 安装包支持本地 Gateway 和远程 Gateway，并让远端 Agent 按授权使用运行 Electron 的电脑。
 
