@@ -1,0 +1,16 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T14:56:44.440Z",
+  "checks": {},
+  "scope": "Installed macOS application, actual OS safeStorage, native parented consent, independent bundled Gateway through SSH-loopback transport; no local tools or physical WAN claim",
+  "interactions": [],
+  "packageBefore": {
+    "files": 1423,
+    "sha256": "3e293a3938c72df017e1134a4dcd126f0052212a144f885275761b29dbe86d34"
+  },
+  "error": "Error: Installed application exited before Renderer CDP was ready\n    at launchInstalledApplication (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-packaged-acceptance.mjs:109:71)\n    at async launch (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:56:19)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:60:14",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52088\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=74031, lockPath=/Users/micjoyce/.xopc/locks/gateway.9dc53287.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52088...\n✅ Gateway started\n   URL: http://127.0.0.1:52088\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52088\n",
+  "applicationOutput": "[1031/225646.078866:FATAL:electron/shell/app/electron_main_delegate_mac.mm:66] Unable to find helper app\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-wzRvmO",
+  "finishedAt": "2026-10-31T14:56:46.424Z"
+}

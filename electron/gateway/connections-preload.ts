@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld('gatewayConnections', Object.freeze({
   connect: (epoch: number, id: string) => ipcRenderer.invoke('connections:connect', epoch, id),
   select: (epoch: number, id: string) => ipcRenderer.invoke('connections:select', epoch, id),
   remove: (epoch: number, id: string) => ipcRenderer.invoke('connections:remove', epoch, id),
+  enrollDesktop: (epoch: number, id: string) => ipcRenderer.invoke('connections:desktop-enroll', epoch, id),
+  checkDesktop: (epoch: number, id: string) => ipcRenderer.invoke('connections:desktop-check', epoch, id),
+  disableDesktop: (epoch: number, id: string) => ipcRenderer.invoke('connections:desktop-disable', epoch, id),
+  reenrollDesktop: (epoch: number, id: string) => ipcRenderer.invoke('connections:desktop-reenroll', epoch, id),
   useLocal: () => ipcRenderer.invoke('connections:local'),
   quit: () => ipcRenderer.invoke('connections:quit'),
 }));

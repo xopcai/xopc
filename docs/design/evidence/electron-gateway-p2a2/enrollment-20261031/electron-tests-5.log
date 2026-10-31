@@ -1,0 +1,11 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-10-31T14:52:20.628Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-empty-local-eLvBHx/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:52:20.636Z","module":"WorkspaceSeed","profileDir":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-empty-local-eLvBHx/agents/main/profile","seeded":1,"msg":"Seeded profile Markdown files"}
+
+ Test Files  8 passed (8)
+      Tests  93 passed (93)
+   Start at  22:52:19
+   Duration  1.46s (transform 429ms, setup 37ms, import 841ms, tests 1.58s, environment 0ms)
+

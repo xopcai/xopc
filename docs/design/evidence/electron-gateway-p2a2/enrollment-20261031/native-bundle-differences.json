@@ -1,0 +1,17 @@
+{
+  "productionIdentifier": "ai.xopc.xopc",
+  "nativeAutomationIdentifier": "ai.xopc.desktop-enrollment.acceptance",
+  "reason": "Disambiguate concurrently running apps in native UI automation; runtime files and entitlements unchanged",
+  "differences": [
+    {
+      "path": "Contents/Info.plist",
+      "production": "4331e31e7cc0fb78e288a6a683b78c93daf24b974960b4602c55bee9e5105edf",
+      "native": "520fb6518934c09c92e10ff1498ca53c1d6bcd5cd3c1ba68fdae0e9e81c742ab"
+    },
+    {
+      "path": "Contents/MacOS/xopc",
+      "production": "e2dd9ed1bfa3d343eb8afff3fa4a29312dce13754607ae7995ece4188cee01e8",
+      "native": "eb8a19bc261d0f7626c3665eedccd0333693104cba685595296adca5e1f8e9f8"
+    }
+  ]
+}

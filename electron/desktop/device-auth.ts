@@ -37,10 +37,16 @@ export class DesktopDeviceAuth {
       : `/api/device-pairing/requests/${record.requestId}/${action}`, 'POST', { ...body, signature: signature(record, buildDevicePairingProof(action, body)) }), body.nonce);
   }
   enroll(options: { displayName: string; consent(binding: DesktopBinding): Promise<boolean>;
-    setup(): Promise<unknown>; approve(requestId: string, revision: number): Promise<void> }): Promise<{ deviceId: string }> {
+    setup(): Promise<unknown>; approve(requestId: string, revision: number): Promise<void>;
+    confirmRevoked?(identity: Pick<DesktopIdentity, 'deviceId' | 'revocationConfirmed'> & { setupId: string }): Promise<boolean> }): Promise<{ deviceId: string }> {
     return this.serial(async () => {
       let record = await this.store.load(this.binding);
-      if (record?.phase === 'revoked') throw new Error('DESKTOP_REENROLLMENT_REQUIRED');
+      if (record?.phase === 'revoked') {
+        if (!options.confirmRevoked || !await options.confirmRevoked({ deviceId: record.deviceId, revocationConfirmed: record.revocationConfirmed,
+          setupId: record.pairingToken.slice(10, 46) })) throw new Error('DESKTOP_REENROLLMENT_REQUIRED');
+        this.access = undefined;
+        record = undefined;
+      }
       if (record?.phase === 'enrolled') return { deviceId: record.deviceId! };
       if (!await options.consent(this.binding)) throw new Error('DESKTOP_LOCAL_CONSENT_DENIED');
       if (!record) {
@@ -77,20 +83,52 @@ export class DesktopDeviceAuth {
     record.refreshToken = nextRefreshToken; delete record.rotation; await this.store.save(record);
     this.access = { token: body.tokens.accessToken, expiresAt: body.tokens.accessTokenExpiresAt };
   }
+  private async deviceRequest(record: DesktopIdentity, method: 'GET' | 'DELETE') {
+    if (!this.access || this.access.expiresAt - Date.now() < 30000) await this.refresh(record);
+    const timestamp = Date.now(), nonce = randomBytes(24).toString('base64url'), bodyDigest = digest(''), token = this.access!.token;
+    const payload = ['xopc-request-v1', this.binding.gatewayId, digest(token), method, '/api/devices/me', bodyDigest,
+      'application/json', '', '', '', '', String(timestamp), nonce].join('\n');
+    return this.transport('/api/devices/me', method, undefined, { Authorization: `Bearer ${token}`, 'content-type': 'application/json',
+      'X-Xopc-Proof': `${timestamp}.${nonce}.${bodyDigest}.${signature(record, payload)}` });
+  }
   readSelf(): Promise<{ deviceId: string; platform: 'desktop' }> {
     return this.serial(async () => {
       const record = await this.store.load(this.binding);
+      if (!record) throw new Error('DESKTOP_NOT_ENROLLED');
+      if (record.phase === 'pending') throw new Error('DESKTOP_ENROLLMENT_PENDING');
       if (record?.phase !== 'enrolled' || !record.deviceId || !record.refreshToken) throw new Error('DESKTOP_REENROLLMENT_REQUIRED');
-      if (!this.access || this.access.expiresAt - Date.now() < 30000) await this.refresh(record);
-      const timestamp = Date.now(), nonce = randomBytes(24).toString('base64url'), bodyDigest = digest(''), token = this.access!.token;
-      const payload = ['xopc-request-v1', this.binding.gatewayId, digest(token), 'GET', '/api/devices/me', bodyDigest,
-        'application/json', '', '', '', '', String(timestamp), nonce].join('\n');
-      const response = await this.transport('/api/devices/me', 'GET', undefined, { Authorization: `Bearer ${token}`, 'content-type': 'application/json',
-        'X-Xopc-Proof': `${timestamp}.${nonce}.${bodyDigest}.${signature(record, payload)}` });
+      const response = await this.deviceRequest(record, 'GET');
       if (response.status === 401) { this.access = undefined; record.phase = 'revoked'; await this.store.save(record); throw new Error('DESKTOP_AUTH_REVOKED'); }
       if (response.status !== 200) throw new Error('DESKTOP_AUTH_UNAVAILABLE');
       if (response.body.device?.id !== record.deviceId || response.body.device.platform !== 'desktop') throw new Error('DESKTOP_DEVICE_IDENTITY_MISMATCH');
       return { deviceId: record.deviceId, platform: 'desktop' };
     });
   }
+  disable(localOnly = false): Promise<{ localDisabled: true; remoteRevocationConfirmed: boolean; hadIdentity: boolean }> {
+    return this.serial(async () => {
+      const record = await this.store.load(this.binding);
+      if (!record) return { localDisabled: true, remoteRevocationConfirmed: false, hadIdentity: false };
+      record.phase = 'revoked'; await this.store.save(record);
+      let confirmed = record.revocationConfirmed === true;
+      try {
+        if (!confirmed && !localOnly) {
+          if (!record.deviceId) {
+            const status = (await this.pair(record, 'status')).request;
+            if (status?.requestId === record.requestId && status.status === 'completed' && /^[0-9a-f-]{36}$/.test(status.deviceId)) {
+              record.deviceId = status.deviceId; record.refreshToken = record.initialRefreshToken;
+              await this.store.save(record);
+            }
+          }
+          if (record.deviceId && record.refreshToken) {
+            const response = await this.deviceRequest(record, 'DELETE');
+            confirmed = response.status === 200 && response.body.ok === true && response.body.revoked === true;
+          } else confirmed = (await this.pair(record, 'cancel')).request?.status === 'cancelled';
+        }
+      } catch { /* Local disable remains effective when remote revocation cannot be confirmed. */ }
+      finally { this.access = undefined; }
+      if (confirmed) { record.revocationConfirmed = true; await this.store.save(record); }
+      return { localDisabled: true, remoteRevocationConfirmed: confirmed, hadIdentity: true };
+    });
+  }
+
 }

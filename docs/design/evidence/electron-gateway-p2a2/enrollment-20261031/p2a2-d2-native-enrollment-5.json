@@ -1,0 +1,44 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T14:57:06.909Z",
+  "checks": {},
+  "scope": "Installed macOS application, actual OS safeStorage, native parented consent, independent bundled Gateway through SSH-loopback transport; no local tools or physical WAN claim",
+  "interactions": [
+    {
+      "label": "cancel first enrollment",
+      "startedAt": "2026-10-31T14:57:15.171Z",
+      "status": "native-dialog-returned",
+      "pid": 74600,
+      "finishedAt": "2026-10-31T14:57:16.959Z"
+    }
+  ],
+  "packageBefore": {
+    "files": 1423,
+    "sha256": "bd1b4c1fb05a5095faebe05fafb18da0b2bbb393a6540ddb91fdd25874fc71ae"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p2a2-d2-delivery/native-automation/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p2a2-d2-delivery/native-automation/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-OJSTRP",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 74600
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'registered'\n- 'cancelled'\n\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:88:10",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52199\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=74574, lockPath=/Users/micjoyce/.xopc/locks/gateway.1a694ba0.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52199...\n✅ Gateway started\n   URL: http://127.0.0.1:52199\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52199\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:52212/devtools/browser/97334a4b-cb7d-4b25-b73b-0bc119af0a8a\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-OJSTRP",
+  "finishedAt": "2026-10-31T14:57:17.180Z"
+}

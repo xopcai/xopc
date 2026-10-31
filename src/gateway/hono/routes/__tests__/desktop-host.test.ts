@@ -41,3 +41,13 @@ it('refuses disabled authentication and missing secure routes', async () => {
   const secure = new Hono(); secure.use('*', auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-owner' }) })); registerDesktopHostRoutes(secure, deps('token', ''));
   expect((await secure.request('/api/desktop-host/pairing-setups', { method: 'POST', headers, body: '{}' })).status).toBe(409);
 });
+it('allows an explicitly selected desktop SSH loopback without broadening browser or mobile invitations', async () => {
+  const app = new Hono(); app.use('*', auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-owner' }) })); registerDesktopHostRoutes(app, deps('token', ''));
+  for (const sshOrigin of ['http://remote.example.com:18790', 'http://127.0.0.1:18790/path', 'http://user@127.0.0.1:18790', 'https://127.0.0.1:18790']) {
+    expect((await app.request('/api/desktop-host/pairing-setups', { method: 'POST', headers, body: JSON.stringify({ sshOrigin }) })).status).toBe(400);
+  }
+  const response = await app.request('/api/desktop-host/pairing-setups', { method: 'POST', headers, body: JSON.stringify({ sshOrigin: 'http://127.0.0.1:19340' }) });
+  expect(response.status).toBe(201);
+  const invitation = desktopPairingInvitationSchema.parse((await response.json()).payload.invitation);
+  expect(invitation.targetKind).toBe('desktop'); expect(invitation.routes).toEqual([{ id: 'desktop-ssh', kind: 'ssh-loopback', url: 'http://127.0.0.1:19340' }]);
+});

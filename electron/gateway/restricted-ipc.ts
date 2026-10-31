@@ -1,7 +1,8 @@
 import type { IpcMain, IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron';
 
 export const CONNECTION_CHANNELS = ['connections:snapshot', 'connections:save', 'connections:select', 'connections:remove',
-  'connections:local', 'connections:quit', 'connections:connect'] as const;
+  'connections:local', 'connections:quit', 'connections:connect',
+  'connections:desktop-enroll', 'connections:desktop-check', 'connections:desktop-disable', 'connections:desktop-reenroll'] as const;
 
 /** Startup-only boundary for the isolated remote-preview runtime, never installed in local main. */
 export function installConnectionIpcBoundary(ipc: IpcMain, authorize: (event: IpcMainEvent | IpcMainInvokeEvent, channel: string) => void): void {

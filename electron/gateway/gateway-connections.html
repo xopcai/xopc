@@ -8,6 +8,10 @@
     :root { color-scheme: light dark; font: 15px system-ui; } body { margin: 32px auto; padding: 0 24px; max-width: 680px; }
     h1 { font-size: 24px; } p { line-height: 1.6; } label { display: block; margin-top: 16px; } input { box-sizing: border-box; width: 100%; padding: 9px; margin-top: 5px; }
     button { padding: 9px 14px; margin: 12px 8px 0 0; cursor: pointer; } li { margin: 12px 0; overflow-wrap: anywhere; } #error { color: #e75454; } small { opacity: .75; }
+    button:focus-visible, input:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+    .desktop-actions { margin: 12px 0; padding: 12px; border: 1px solid GrayText; border-radius: 8px; }
+    .desktop-actions p { margin: 0 0 8px; } .desktop-actions button { min-height: 44px; margin-top: 0; }
+    button:disabled { cursor: default; opacity: .55; }
   </style>
 </head>
 <body>
@@ -15,6 +19,12 @@
   <p>选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力保持禁用，不启动本地 Gateway。</p>
   <p id="status" role="status"></p><p id="error" role="alert"></p>
   <ul id="profiles"></ul>
+  <form id="login-update" hidden>
+    <h2>更新登录凭据</h2><p id="login-target"></p>
+    <p>更新聊天和管理登录，保留已有电脑登记。</p>
+    <label>新的管理凭据<input id="login-credential" type="password" maxlength="8192" required autocomplete="new-password"></label>
+    <button type="submit">保存登录凭据</button><button type="button" id="login-cancel">取消</button>
+  </form>
   <form id="profile-form">
     <label>连接名称<input id="name" maxlength="80" required autocomplete="off"></label>
     <label>Gateway origin<input id="origin" maxlength="2048" placeholder="https://gateway.example.com" required autocomplete="off"></label>

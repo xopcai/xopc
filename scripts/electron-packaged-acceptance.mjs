@@ -126,7 +126,7 @@ export async function launchInstalledApplication(target, args, env, cwd, timeout
         finally { clearTimeout(timer); await browser.close().catch(() => {}); }
       },
     };
-  } catch (error) { killAcceptanceApplication(adapter); await browser?.close().catch(() => {}); throw error; }
+  } catch (error) { error.installedApplicationOutput = output; killAcceptanceApplication(adapter); await browser?.close().catch(() => {}); throw error; }
 }
 
 export function killInstalledShellWorker(application) {
