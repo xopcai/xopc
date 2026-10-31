@@ -1,0 +1,54 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T13:32:31.219Z",
+  "scope": "Actual authenticated Node Gateway and lazy route selection; D1 device credentials only, no Electron consent or local tools",
+  "checks": {
+    "explicitApprovalAndIdempotentCompletion": true,
+    "boundRefreshAndLostResponseRecovery": true,
+    "requestProofAndReplayRejection": true,
+    "noOwnerMobileBrowserEndpointOrRealtimeAuthority": true,
+    "revocationAndChatIndependence": true
+  },
+  "denied": [
+    {
+      "path": "/api/sessions",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/endpoint-tools/devices",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/endpoint-tools/principals",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/realtime/tickets",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/desktop-host/pairing-setups",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/device-pairing/requests/other/decision",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/desktop-chat/bootstrap",
+      "method": "GET",
+      "status": 403
+    }
+  ],
+  "error": "Error: DESKTOP_AUTH_REVOKED\n    at <anonymous> (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/electron/desktop/device-auth.ts:90:126)",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 53629\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=16685, lockPath=/Users/micjoyce/.xopc/locks/gateway.9ad64cde.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:53629...\n✅ Gateway started\n   URL: http://127.0.0.1:53629\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:53629\n",
+  "cleanupConfirmed": true,
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-auth-hWRmdP",
+  "finishedAt": "2026-10-31T13:32:39.644Z"
+}

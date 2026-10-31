@@ -42,6 +42,25 @@ describe('computer-approved device pairing', () => {
   }
   const refreshToken = () => `xopc_rt_${crypto.randomUUID()}_${crypto.randomBytes(32).toString('base64url')}`;
 
+  it('pairs desktops only with an explicit desktop setup and never grants mobile or browser powers', () => {
+    const device = { displayName: 'Work computer', platform: 'desktop', publicKeyJwk: keys.publicKey.export({ format: 'jwk' }) };
+    expect(() => submitDevicePairingRequest(signed('request', { device }), now)).toThrow('PAIRING_DEVICE_MISMATCH');
+    const setup = createDevicePairingSetup(routes, now, { targetKind: 'desktop' });
+    base = { gatewayId: getOrCreateGatewayIdentity().id, requestId: crypto.randomUUID(), pairingToken: setup.token };
+    expect(() => request()).toThrow('PAIRING_DEVICE_MISMATCH');
+    const pending = submitDevicePairingRequest(signed('request', { device }), now);
+    expect(pending.status).toBe('pending');
+    const complete = signed('complete', { idempotencyKey: crypto.randomUUID(), initialRefreshToken: refreshToken() });
+    expect(() => operateDevicePairingRequest('complete', complete, now)).toThrow('PAIRING_NOT_APPROVED');
+    decideDevicePairingRequest(pending.requestId, 'approve', pending.revision, now);
+    operateDevicePairingRequest('complete', complete, now);
+    expect(listDevices()).toHaveLength(1);
+    expect(listDevices()[0].scopes).toEqual(['gateway.status', 'device.self']);
+    expect(setDevicePhoneAccess(listDevices()[0].id, 'control')).toBeUndefined();
+    revokeDevice(listDevices()[0].id, now);
+    expect(() => operateDevicePairingRequest('complete', complete, now)).toThrow('DEVICE_REVOKED');
+  });
+
   it.each(['android', 'ios', 'harmonyos'] as const)('defaults %s pairing to cloud phone control and preserves an explicit disable', platform => {
     const pending = request(platform);
     decideDevicePairingRequest(pending.requestId, 'approve', pending.revision, now);

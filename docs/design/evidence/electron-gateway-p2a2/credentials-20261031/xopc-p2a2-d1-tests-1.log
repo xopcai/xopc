@@ -1,0 +1,56 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-10-31T13:21:27.932Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:27.962Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:27.980Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-aoywFP/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:27.981Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-10-31T13:21:27.992Z","module":"Gateway:Auth","path":"/api/desktop-chat/bootstrap","method":"GET","clientIp":"unknown","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"warn","time":"2026-10-31T13:21:27.994Z","module":"Gateway:Auth","path":"/api/desktop-chat/bootstrap","method":"GET","clientIp":"unknown","reason":"invalid_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: credential mismatch"}
+{"level":"info","time":"2026-10-31T13:21:28.000Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.020Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.043Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.046Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-hMnGKq/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.065Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.081Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.083Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-routes-wcbRGj/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.092Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-kOZZaK/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.098Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.114Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.129Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.132Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-QjfF8w/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.144Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-routes-NAn2DN/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.144Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.160Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+ ❯ |component| src/storage/sqlite/__tests__/device-pairing-approval.test.ts (13 tests | 1 failed) 245ms
+     × pairs desktops only with an explicit desktop setup and never grants mobile or browser powers 32ms
+{"level":"info","time":"2026-10-31T13:21:28.174Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-55MQCB/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.193Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-routes-L4THdR/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.230Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-routes-tYfzKL/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.268Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-routes-wPURSF/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.317Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-routes-8Z1g3S/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T13:21:28.357Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-routes-mWSiX3/xopc.db","msg":"Opened xopc SQLite database"}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |component| src/storage/sqlite/__tests__/device-pairing-approval.test.ts > computer-approved device pairing > pairs desktops only with an explicit desktop setup and never grants mobile or browser powers
+Error: CHECK constraint failed: target_kind IN ('mobile', 'browser')
+ ❯ src/storage/sqlite/device-pairing-repository.ts:58:8
+     56|         enrollment_public_key_thumbprint, enrollment_nonce, target_kind
+     57|       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     58|     `).run(
+       |        ^
+     59|       id, hashToken(token), JSON.stringify(routes), expiresAt, PAIRING…
+     60|       options?.enrollment?.issuer ?? null,
+ ❯ runSqliteWriteTransaction src/storage/sqlite/transaction.ts:134:14
+ ❯ createDevicePairingSetup src/storage/sqlite/device-pairing-repository.ts:49:3
+ ❯ src/storage/sqlite/__tests__/device-pairing-approval.test.ts:48:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 83 passed (84)
+   Start at  21:21:27
+   Duration  1.16s (transform 1.27s, setup 55ms, import 2.04s, tests 822ms, environment 0ms)
+

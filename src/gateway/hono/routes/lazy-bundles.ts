@@ -105,6 +105,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'desktop-host',
+    match: path => path === '/api/desktop-host/compatibility' || path === '/api/desktop-host/pairing-setups',
+    load: async () => {
+      const { registerDesktopHostRoutes } = await import('./desktop-host.js');
+      return { register: registerDesktopHostRoutes };
+    },
+  },
+  {
     id: 'device-authorizations',
     match: path => /^\/api\/endpoint-tools\/target-authorizations(?:\/[^/]+)?$/.test(path),
     load: async () => {

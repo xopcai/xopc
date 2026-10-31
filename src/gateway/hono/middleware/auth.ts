@@ -298,6 +298,10 @@ export function auth(config?: AuthConfig) {
             return c.json({ error: 'Unauthorized', code: 'REQUEST_REPLAYED' }, 401);
           }
         }
+        if (device?.platform === 'desktop' && !(
+          c.req.method === 'GET' && ['/api/desktop-host/compatibility', '/api/devices/me'].includes(requestPath)
+          || c.req.method === 'DELETE' && requestPath === '/api/devices/me'
+        )) return c.json({ error: 'Forbidden', code: 'DESKTOP_CREDENTIAL_SCOPE_DENIED' }, 403);
         recordSuccess(rl);
         setGatewayPrincipal(c, {
           kind: 'device',

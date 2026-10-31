@@ -1430,7 +1430,7 @@ CREATE TABLE device_pairing_sessions (
   enrollment_extension_id TEXT,
   enrollment_public_key_thumbprint TEXT,
   enrollment_nonce TEXT,
-  target_kind TEXT NOT NULL CHECK (target_kind IN ('mobile', 'browser'))
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('mobile', 'browser', 'desktop'))
 );
 
 CREATE TABLE device_pairing_requests (
@@ -1526,7 +1526,7 @@ CREATE VIRTUAL TABLE "transcript_fts" USING fts5(
 CREATE TABLE "devices" (
   device_id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL,
-  platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'harmonyos', 'chrome')),
+  platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'harmonyos', 'chrome', 'desktop')),
   extension_id TEXT CHECK (extension_id IS NULL OR length(extension_id) = 32),
   public_key_jwk TEXT NOT NULL,
   scopes_json TEXT NOT NULL,

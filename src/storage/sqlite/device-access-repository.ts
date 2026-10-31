@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-import { initialDeviceRefreshTokenSchema } from '@xopcai/gateway-contract';
+import { initialDeviceRefreshTokenSchema, isMobileDevicePlatform } from '@xopcai/gateway-contract';
 
 import { buckets } from '../../gateway/rate-limit/index.js';
 
@@ -373,7 +373,7 @@ export function isDeviceAccessSessionActive(deviceId: string, sessionId: string,
 export function setDevicePhoneAccess(deviceId: string, access: 'none' | 'view' | 'control'): DeviceRecord | undefined {
   return runSqliteWriteTransaction(db => {
     const device = getDevice(deviceId);
-    if (!device || device.revokedAt !== undefined || device.platform === 'chrome') return undefined;
+    if (!device || device.revokedAt !== undefined || !isMobileDevicePlatform(device.platform)) return undefined;
     const scopes: GatewayScope[] = device.scopes.filter(scope => scope !== 'phone.view' && scope !== 'phone.control');
     if (access !== 'none') scopes.push('phone.view');
     if (access === 'control') scopes.push('phone.control');

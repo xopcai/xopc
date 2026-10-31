@@ -82,7 +82,7 @@ export function registerEndpointToolRoutes(
         id,
         displayName: settings?.nickname ?? principal?.displayName ?? access?.displayName ?? id,
         settingsRevision: settings?.revision ?? 0,
-        kind: principal?.kind ?? (access?.platform === 'chrome' ? 'browser' : 'mobile'),
+        kind: principal?.kind ?? (access?.platform === 'chrome' ? 'browser' : access?.platform === 'desktop' ? 'desktop' : 'mobile'),
         platform: principal?.platform ?? access?.platform ?? 'unknown',
         createdAt: Math.min(access?.createdAt ?? Number.POSITIVE_INFINITY, principal?.createdAt ?? Number.POSITIVE_INFINITY),
         ...(lastSeenAt ? { lastSeenAt } : {}),
