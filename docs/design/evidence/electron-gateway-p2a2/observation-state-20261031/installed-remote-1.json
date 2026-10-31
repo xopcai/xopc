@@ -1,0 +1,233 @@
+{
+  "passed": true,
+  "tls": false,
+  "startedAt": "2026-10-31T15:39:23.523Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "halfOpenRealtimeDetectedWithinOriginalBudget": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "background": true,
+  "fixtureLifetimeSeconds": 86400,
+  "application": "/tmp/xopc-p2a2-d3-delivery/installed-remote/xopc.app",
+  "packageBefore": {
+    "files": 1424,
+    "sha256": "f507f2a2eea48b568c713c54e44bceb59db9540c38cd27f73a1e3dbf89db56f4"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p2a2-d3-delivery/installed-remote/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p2a2-d3-delivery/installed-remote/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-bPL93H",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": true,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 61168
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 308
+    },
+    {
+      "input": 2,
+      "durationMs": 217
+    }
+  ],
+  "inputIntervalMs": 0,
+  "endurance": {
+    "options": {
+      "connectionCycles": 3,
+      "connectionIntervalMs": 5000,
+      "soakSeconds": 20,
+      "sampleIntervalMs": 10000
+    },
+    "connectionSamples": [
+      {
+        "cycle": 1,
+        "target": "A",
+        "openedMs": 296.0100000000093,
+        "totalMs": 416.1362080000108,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            62336,
+            62340,
+            62341,
+            62342
+          ],
+          "rssMiB": 424.28125,
+          "cpuPercentSnapshot": 17.1,
+          "openFds": 95
+        }
+      },
+      {
+        "cycle": 2,
+        "target": "B",
+        "openedMs": 317.8475829999952,
+        "totalMs": 435.4393330000021,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            62336,
+            62340,
+            62341,
+            62342
+          ],
+          "rssMiB": 426.921875,
+          "cpuPercentSnapshot": 11.399999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 3,
+        "target": "A",
+        "openedMs": 304.8529580000031,
+        "totalMs": 424.5378750000091,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            62336,
+            62340,
+            62341,
+            62342
+          ],
+          "rssMiB": 429.078125,
+          "cpuPercentSnapshot": 12.799999999999999,
+          "openFds": 94
+        }
+      }
+    ],
+    "soakSamples": [
+      {
+        "iteration": 1,
+        "elapsedMs": 240.45495899999514,
+        "cycleMs": 242.65691700000025,
+        "posts": 5,
+        "localSessionExpiresAt": 1793462139838,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            62336,
+            62340,
+            62341,
+            62342,
+            62711,
+            62712
+          ],
+          "rssMiB": 658.25,
+          "cpuPercentSnapshot": 54.7,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 2,
+        "elapsedMs": 10278.226791999987,
+        "cycleMs": 254.61437500000466,
+        "posts": 6,
+        "localSessionExpiresAt": 1793462139838,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            62336,
+            62340,
+            62341,
+            62342,
+            62711,
+            62712
+          ],
+          "rssMiB": 533.25,
+          "cpuPercentSnapshot": 18,
+          "openFds": 150
+        }
+      },
+      {
+        "iteration": 3,
+        "elapsedMs": 20235.908624999996,
+        "cycleMs": 238.33987500000512,
+        "posts": 7,
+        "localSessionExpiresAt": 1793462139838,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            62336,
+            62340,
+            62341,
+            62342,
+            62711,
+            62712
+          ],
+          "rssMiB": 523.140625,
+          "cpuPercentSnapshot": 28.4,
+          "openFds": 147
+        }
+      }
+    ],
+    "faults": [],
+    "minimumConnectionCyclesMet": false,
+    "minimumSoakDurationMet": false,
+    "minimumSoakSamplesMet": false,
+    "completeFunctionalSoak": false,
+    "fullS5Acceptance": false,
+    "pendingMatrix": [
+      "network-layer delay/loss/blackholes",
+      "certificate/auth/version combinations",
+      "real sleep/wake",
+      "supported upgrade/rollback combinations"
+    ],
+    "performanceAcceptance": "deferred by user; observations only",
+    "soakStartedAt": "2026-10-31T15:40:40.047Z",
+    "soakElapsedMs": 20290.046875,
+    "soakFinishedAt": "2026-10-31T15:41:00.337Z"
+  },
+  "compatibilityMatrix": {
+    "cases": [
+      {
+        "expected": "GATEWAY_AUTH_FAILED",
+        "observed": "GATEWAY_AUTH_FAILED",
+        "durationMs": 72.01674999999523
+      },
+      {
+        "expected": "GATEWAY_CHAT_INCOMPATIBLE",
+        "observed": "GATEWAY_CHAT_INCOMPATIBLE",
+        "durationMs": 76.48929199999839
+      },
+      {
+        "expected": "GATEWAY_IDENTITY_PROOF_FAILED",
+        "observed": "GATEWAY_IDENTITY_PROOF_FAILED",
+        "durationMs": 82.88287499999569
+      }
+    ],
+    "passed": true,
+    "identityCredentialLeaks": 0
+  },
+  "packageAfter": {
+    "files": 1424,
+    "sha256": "f507f2a2eea48b568c713c54e44bceb59db9540c38cd27f73a1e3dbf89db56f4"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-10-31T15:41:04.196Z"
+}

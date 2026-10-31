@@ -32,9 +32,16 @@ export type DesktopIdentity = z.infer<typeof desktopIdentitySchema>;
 /** A single encrypted record commits keys, enrollment intent and refresh rotation together. */
 export class DesktopIdentityStore {
   private failed = false;
+  private readonly operations = new Map<string, Promise<unknown>>();
   constructor(private readonly directory: string, private readonly encryption: ConnectionEncryption) {}
   private key(binding: DesktopBinding): string {
     return createHash('sha256').update(JSON.stringify(desktopBindingSchema.parse(binding))).digest('hex') + '.bin';
+  }
+  serialize<T>(binding: DesktopBinding, work: () => Promise<T>): Promise<T> {
+    const key = this.key(binding), previous = this.operations.get(key) ?? Promise.resolve();
+    const next = previous.catch(() => {}).then(work); this.operations.set(key, next);
+    void next.then(() => { if (this.operations.get(key) === next) this.operations.delete(key); }, () => { if (this.operations.get(key) === next) this.operations.delete(key); });
+    return next;
   }
   private async encrypted<T>(work: () => Promise<T>): Promise<T> {
     if (this.failed) throw new Error('DESKTOP_IDENTITY_RESTART_REQUIRED');

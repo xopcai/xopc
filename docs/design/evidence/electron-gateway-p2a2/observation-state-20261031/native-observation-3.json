@@ -1,0 +1,73 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T15:40:46.082Z",
+  "checks": {
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "actualAgentDiscoveryAndSignedElectronStateInvocation": true,
+    "explicitDesktopOriginAcceptedThroughShellAndGateway": true,
+    "localStopRetainsDraftWithoutImplicitServerFallback": true,
+    "osSafeStorageSurvivesRestart": true,
+    "deviceCheckIndependentOfOwnerCredential": true,
+    "offlineLocalDisableAndOnlineConfirmation": true,
+    "replacementRequiresFreshNativeConsent": true,
+    "externalRevocationNeverAutoReenrolls": true,
+    "encryptedIdentityAndNoLocalGatewayDatabase": true,
+    "noWriteToolsAndOnlyExplicitStateEndpoint": true
+  },
+  "scope": "Installed macOS runtime with OS safeStorage, native granular consent, independently authenticated state-only Host and explicit chat origin against a bundled Gateway; synthetic inference and same-host SSH-loopback, no screenshot/files/commands or physical WAN claim",
+  "interactions": [
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-10-31T15:40:49.016Z",
+      "status": "native-dialog-returned",
+      "pid": 62933,
+      "finishedAt": "2026-10-31T15:41:19.853Z"
+    },
+    {
+      "label": "approve state observation",
+      "startedAt": "2026-10-31T15:41:20.284Z",
+      "status": "native-dialog-returned",
+      "pid": 62933,
+      "finishedAt": "2026-10-31T15:41:36.568Z"
+    },
+    {
+      "label": "approve replacement enrollment",
+      "startedAt": "2026-10-31T15:41:39.854Z",
+      "status": "native-dialog-returned",
+      "pid": 64320,
+      "finishedAt": "2026-10-31T15:42:03.692Z"
+    }
+  ],
+  "nativeCancelCovered": false,
+  "packageBefore": {
+    "files": 1424,
+    "sha256": "81376f6b00ffd43204088f96aa04a145e8f132011e673f1c2c941df628419093"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p2a2-d3-delivery/native-automation/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p2a2-d3-delivery/native-automation/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-EvIJUd",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 64320
+  },
+  "packageAfter": {
+    "files": 1424,
+    "sha256": "81376f6b00ffd43204088f96aa04a145e8f132011e673f1c2c941df628419093"
+  },
+  "inferenceError": "AssertionError [ERR_ASSERTION]: Device tool discovery was not available",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-EvIJUd",
+  "finishedAt": "2026-10-31T15:42:04.549Z"
+}

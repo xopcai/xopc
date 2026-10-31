@@ -301,6 +301,11 @@ export function auth(config?: AuthConfig) {
         if (device?.platform === 'desktop' && !(
           c.req.method === 'GET' && ['/api/desktop-host/compatibility', '/api/devices/me'].includes(requestPath)
           || c.req.method === 'DELETE' && requestPath === '/api/devices/me'
+          || c.req.method === 'DELETE' && requestPath === '/api/desktop-host/observation'
+          || device.scopes.includes('desktop.observe.state') && (
+            c.req.method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(requestPath)
+            || c.req.method === 'GET' && requestPath === '/api/endpoint-tools/compatibility'
+          )
         )) return c.json({ error: 'Forbidden', code: 'DESKTOP_CREDENTIAL_SCOPE_DENIED' }, 403);
         recordSuccess(rl);
         setGatewayPrincipal(c, {

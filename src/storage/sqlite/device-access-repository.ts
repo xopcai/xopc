@@ -381,3 +381,26 @@ export function setDevicePhoneAccess(deviceId: string, access: 'none' | 'view' |
     return getDevice(deviceId);
   });
 }
+
+export function getDesktopStateObservation(deviceId: string): { deviceId: string; stateEnabled: boolean; revision: number } | undefined {
+  const device = getDevice(deviceId);
+  if (!device || device.revokedAt !== undefined || device.platform !== 'desktop') return;
+  const row = getSqliteDatabase().prepare('SELECT revision FROM desktop_observation_grants WHERE device_id = ?').get(deviceId) as { revision: number } | undefined;
+  return { deviceId, stateEnabled: device.scopes.includes('desktop.observe.state'), revision: row?.revision ?? 0 };
+}
+
+/** Revocation advances the version even before an earlier grant reaches the server. */
+export function setDesktopStateObservation(deviceId: string, enabled: boolean, expectedRevision?: number): ReturnType<typeof getDesktopStateObservation> {
+  return runSqliteWriteTransaction(db => {
+    const device = getDevice(deviceId), current = getDesktopStateObservation(deviceId);
+    if (!device || !current) return undefined;
+    if (expectedRevision !== undefined && current.revision !== expectedRevision) throw new Error('DESKTOP_OBSERVATION_REVISION_CHANGED');
+    if (!Number.isSafeInteger(current.revision + 1)) throw new Error('DESKTOP_OBSERVATION_REVISION_LIMIT');
+    const scopes: GatewayScope[] = device.scopes.filter(scope => scope !== 'desktop.observe.state');
+    if (enabled) scopes.push('desktop.observe.state');
+    db.prepare('UPDATE devices SET scopes_json = ? WHERE device_id = ?').run(JSON.stringify(scopes), deviceId);
+    db.prepare(`INSERT INTO desktop_observation_grants(device_id, revision, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(device_id) DO UPDATE SET revision = excluded.revision, updated_at = excluded.updated_at`).run(deviceId, current.revision + 1, Date.now());
+    return getDesktopStateObservation(deviceId);
+  });
+}

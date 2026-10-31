@@ -3,12 +3,19 @@ import type { Hono } from 'hono';
 import { z } from 'zod';
 
 import { createDevicePairingSetup } from '../../../storage/sqlite/device-pairing-repository.js';
+import { getDesktopStateObservation, setDesktopStateObservation } from '../../../storage/sqlite/device-access-repository.js';
 import { getGatewayIdentityPublicKeyRaw, getOrCreateGatewayIdentity } from '../../../storage/sqlite/gateway-identity-repository.js';
 import { resolveSecureDeviceRoutes } from '../../device-routes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerDesktopHostRoutes(app: Hono, { service }: AuthenticatedRouteDeps): void {
+  const observation = (deviceId: string, enabled: boolean, expectedRevision?: number) => {
+    const grant = setDesktopStateObservation(deviceId, enabled, expectedRevision);
+    if (!grant) return undefined;
+    service.realtime.disconnectPrincipal(deviceId);
+    return grant;
+  };
   app.get('/api/desktop-host/compatibility', c => {
     c.header('Cache-Control', 'no-store');
     if (service.getResolvedAuth().mode !== 'token') return c.json({ ok: false, error: { code: 'OWNER_TOKEN_REQUIRED' } }, 403);
@@ -29,5 +36,34 @@ export function registerDesktopHostRoutes(app: Hono, { service }: AuthenticatedR
     const invitation = desktopPairingInvitationSchema.parse({ version: 1, targetKind: 'desktop', pairingToken: setup.token,
       gatewayId: identity.id, gatewayPublicKey: getGatewayIdentityPublicKeyRaw(identity), routes, expiresAt: setup.expiresAt });
     return c.json({ ok: true, payload: { setupId: setup.id, invitation } }, 201);
+  });
+  app.get('/api/desktop-host/devices/:id/observation', c => {
+    c.header('Cache-Control', 'no-store');
+    if (getGatewayPrincipal(c).kind !== 'owner' || service.getResolvedAuth().mode !== 'token') return c.json({ ok: false, error: { code: 'OWNER_REQUIRED' } }, 403);
+    const id = z.uuid().safeParse(c.req.param('id'));
+    if (!id.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST' } }, 400);
+    const payload = getDesktopStateObservation(id.data);
+    return payload ? c.json({ ok: true, payload }) : c.json({ ok: false, error: { code: 'DESKTOP_NOT_FOUND' } }, 404);
+  });
+  app.post('/api/desktop-host/devices/:id/observation', async c => {
+    c.header('Cache-Control', 'no-store');
+    if (getGatewayPrincipal(c).kind !== 'owner' || service.getResolvedAuth().mode !== 'token') return c.json({ ok: false, error: { code: 'OWNER_REQUIRED' } }, 403);
+    const id = z.uuid().safeParse(c.req.param('id'));
+    const input = z.strictObject({ state: z.boolean(), expectedRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) }).safeParse(await c.req.json().catch(() => null));
+    if (!id.success || !input.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST' } }, 400);
+    try {
+      const payload = observation(id.data, input.data.state, input.data.expectedRevision);
+      return payload ? c.json({ ok: true, payload }) : c.json({ ok: false, error: { code: 'DESKTOP_NOT_FOUND' } }, 404);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'DESKTOP_OBSERVATION_REVISION_CHANGED') return c.json({ ok: false, error: { code: error.message } }, 409);
+      throw error;
+    }
+  });
+  app.delete('/api/desktop-host/observation', c => {
+    c.header('Cache-Control', 'no-store');
+    const actor = getGatewayPrincipal(c);
+    if (actor.kind !== 'device' || !actor.deviceId) return c.json({ ok: false, error: { code: 'DEVICE_REQUIRED' } }, 403);
+    const payload = observation(actor.deviceId, false);
+    return payload ? c.json({ ok: true, payload }) : c.json({ ok: false, error: { code: 'DESKTOP_NOT_FOUND' } }, 404);
   });
 }

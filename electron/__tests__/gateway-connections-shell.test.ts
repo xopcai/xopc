@@ -282,6 +282,18 @@ it('forwards only negotiated text commands, blocks endpoint context and locks on
   expect(upstreamCalls.at(-1)!.path).toBe('/api/gateway-identity/challenge'); expect(upstreamCalls.at(-1)!.headers.authorization).toBeUndefined();
   expect((await get('/api/models')).status).toBe(401);
 });
+it('binds an exact Host source only through the main-only control plane and clears it on stop', async () => {
+  mode = 's3';
+  const id = randomUUID(), origin = { type: 'endpoint' as const, endpointId: 'approved-pc', token: 'x'.repeat(43) };
+  const body = { kind: 'start', clientMessageId: randomUUID(), origin, input: { content: 'device question' }, creation: { agentId: 'main', projectId: null, execution: null, temporary: false, model: 'fixture/model', thinkingLevel: 'off' } };
+  const post = (value: unknown) => fetch(fixture.shell.origin + `/api/sessions/${id}/inputs`, { method: 'POST', headers: { ...fixture.headers, 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+  expect((await post(body)).status).toBe(400);
+  expect(() => fixture.shell.setHostOrigin(6, origin)).toThrow('STALE_CONNECTION_EPOCH');
+  fixture.shell.setHostOrigin(7, origin); expect((await post(body)).status).toBe(200);
+  expect(upstreamCalls.at(-1)!.body).toEqual(body);
+  expect((await post({ ...body, origin: { ...origin, endpointId: 'other-pc' } })).status).toBe(400);
+  fixture.shell.setHostOrigin(7, undefined); expect((await post(body)).status).toBe(400);
+});
 it('keeps old Gateways readable without granting undeclared S3 text submission', async () => {
   expect((await get('/api/models')).status).toBe(200);
   const body = { kind: 'start', clientMessageId: randomUUID(), origin: { type: 'system', source: 'cli' }, input: { content: 'x' }, creation: { agentId: 'main', projectId: null, execution: null, temporary: false, model: 'fixture/model', thinkingLevel: 'off' } };

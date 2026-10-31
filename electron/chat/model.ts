@@ -6,6 +6,8 @@ import type { ChatState } from './state.js';
 export class ChatApiError extends Error {
   constructor(readonly status: number, readonly code: string, message = code) { super(message); }
 }
+export class ChatOriginUnavailable extends Error {}
+export type RemoteChatOrigin = { type: 'endpoint'; endpointId: string; token: string };
 export interface ChatApi { <T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> }
 export type ChatMessage = { id?: string; role: string; content: string; media?: Array<{ uri?: string; name?: string; mimeType?: string }> };
 /** Never guess a stream-to-history identity from equal text. Persisted replies win. */
@@ -59,7 +61,8 @@ export class RemoteChatModel {
   private history: ChatMessage[] = [];
   constructor(private readonly api: ChatApi, private readonly persistence: ChatPersistence,
     private readonly changed: (view: ChatView) => void, private readonly websocket: (url: string) => WebSocket,
-    private readonly socketUrl: string, private readonly chatEnabled = true) {}
+    private readonly socketUrl: string, private readonly chatEnabled = true,
+    private readonly inputOrigin?: () => Promise<RemoteChatOrigin | undefined>) {}
   private emit() {
     if (this.disposed) return;
     this.view.pending = Boolean(this.state.pending);
@@ -264,7 +267,9 @@ export class RemoteChatModel {
       await this.writeQueue;
       if (!current()) return;
       let command: unknown;
-      const common = { clientMessageId: crypto.randomUUID(), input: { content: text }, origin: { type: 'system', source: 'cli' } };
+      const origin = await this.inputOrigin?.();
+      if (!current()) return;
+      const common = { clientMessageId: crypto.randomUUID(), input: { content: text }, origin: origin ?? { type: 'system', source: 'cli' } };
       try {
         const [session, config] = await Promise.all([
           this.api<{ session: { transcriptId: string } }>(`/api/sessions/${conversationId}`, undefined, this.abort.signal),
@@ -295,7 +300,9 @@ export class RemoteChatModel {
       await this.refresh();
     } catch (error) {
       if (!this.disposed && !this.locked) {
-        if (!posted && error instanceof ChatApiError && error.status === 429) {
+        if (!posted && error instanceof ChatOriginUnavailable) {
+          this.view.phase = 'ready'; this.view.notice = error.message; this.emit();
+        } else if (!posted && error instanceof ChatApiError && error.status === 429) {
           this.view.phase = 'retrying'; this.view.notice = '服务器限流，本次输入未发送；草稿已保留，请稍后重试。'; this.emit();
         } else if (!posted) this.fail(error);
         else if (error instanceof ChatApiError && [400, 404, 409, 422, 429].includes(error.status) && !error.code.startsWith('GATEWAY_')) {

@@ -7,8 +7,8 @@ import {
 
 describe('lazy route bundles', () => {
   it('maps independent desktop discovery and pairing without capturing chat or nearby routes', () => {
-    for (const path of ['/api/desktop-host/compatibility', '/api/desktop-host/pairing-setups']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('desktop-host');
-    for (const path of ['/api/desktop-chat/bootstrap', '/api/desktop-host/compatibility/extra', '/api/desktop-host-other/compatibility', '/api/device-pairing/setups']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
+    for (const path of ['/api/desktop-host/compatibility', '/api/desktop-host/pairing-setups', '/api/desktop-host/observation', '/api/desktop-host/devices/device-id/observation']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('desktop-host');
+    for (const path of ['/api/desktop-chat/bootstrap', '/api/desktop-host/compatibility/extra', '/api/desktop-host-other/compatibility', '/api/device-pairing/setups', '/api/desktop-host/devices/device-id/observation/extra', '/api/desktop-host/devices/device-id/control']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
   });
 
   it('maps only the authenticated desktop chat discovery endpoint', () => {

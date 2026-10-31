@@ -1,0 +1,13 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-10-31T15:33:42.068Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-TOgzgq/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:33:42.082Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-TOgzgq/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:33:42.117Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-SD3VYB/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:33:42.158Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-poKyD3/xopc.db","msg":"Opened xopc SQLite database"}
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  23:33:41
+   Duration  541ms (transform 199ms, setup 14ms, import 312ms, tests 136ms, environment 0ms)
+

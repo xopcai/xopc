@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RemoteChatStateStore, type ChatState } from '../chat/state.js';
-import { ChatApiError, RemoteChatModel, mergeRemoteMessages, type ChatApi } from '../chat/model.js';
+import { ChatApiError, ChatOriginUnavailable, RemoteChatModel, mergeRemoteMessages, type ChatApi, type RemoteChatOrigin } from '../chat/model.js';
 import { shellRoute, shellWrite } from '../shell/policy.js';
 
 const clients = vi.hoisted(() => [] as Array<{ options: Record<string, (...args: unknown[]) => unknown>; subscribe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>);
@@ -23,6 +23,12 @@ const command = { kind: 'start', clientMessageId: randomUUID(), origin: { type: 
   creation: { agentId: 'main', projectId: null, execution: null, model: 'fixture/model', temporary: false, thinkingLevel: 'off' } };
 
 describe('text-only proxy contract', () => {
+  it('accepts only the exact Host claim bound by main and never authorizes a different device', () => {
+    const origin: RemoteChatOrigin = { type: 'endpoint', endpointId: 'approved-pc', token: 'x'.repeat(43) };
+    expect(JSON.parse(shellWrite('input', { ...command, origin }, origin)).origin).toEqual(origin);
+    for (const value of [{ ...origin, endpointId: 'other-pc' }, { ...origin, token: 'y'.repeat(43) }]) expect(() => shellWrite('input', { ...command, origin: value }, origin)).toThrow('DENIED');
+    expect(() => shellWrite('input', { ...command, origin })).toThrow('DENIED');
+  });
   it('permits only explicit text/receipt/stop routes and rejects execution context', () => {
     expect(shellRoute('POST', `/api/sessions/${conversationId}/inputs`)).toBe('input');
     expect(shellRoute('GET', `/api/sessions/${conversationId}/input-receipts/${command.clientMessageId}`)).toBe('json');
@@ -97,16 +103,22 @@ describe('receipt recovery and window state', () => {
     });
     model = make();
   });
-  function make() {
+  function make(inputOrigin?: () => Promise<RemoteChatOrigin | undefined>) {
     return new RemoteChatModel(api as ChatApi, { read: async () => structuredClone(state), write: async value => {
       if (value.pending) pendingWriteStarted = true;
       if (writeBarrier) await writeBarrier;
       if (failWrite) throw new Error('disk failed'); state = structuredClone(value); writes.push(state);
-    } }, () => {}, () => { throw new Error('mock realtime'); }, 'ws://fixture');
+    } }, () => {}, () => { throw new Error('mock realtime'); }, 'ws://fixture', true, inputOrigin);
   }
   afterEach(() => { model.dispose(); });
   async function ready() { await model.initialize(); await vi.waitFor(() => expect(model.view.phase).toBe('ready')); }
   const posts = () => api.mock.calls.filter(([path, body]) => String(path).endsWith('/inputs') && body);
+  it('does not post or fall back to the server when an explicitly selected local origin is unavailable', async () => {
+    model.dispose(); model = make(async () => { throw new ChatOriginUnavailable('device offline'); });
+    await ready(); await model.draft('retained local question'); await model.send();
+    expect(posts()).toHaveLength(0); expect(state.pending).toBeUndefined(); expect(state.drafts[conversationId]).toBe('retained local question');
+    expect(model.view.phase).toBe('ready'); expect(model.view.notice).toBe('device offline');
+  });
   it('keeps a throttled pre-submit read retryable and never automatically posts the retained draft', async () => {
     await ready(); await model.draft('retained');
     const original = api.getMockImplementation()!;

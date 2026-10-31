@@ -9,6 +9,9 @@ export function desktopAuthTransport(binding: DesktopBinding, transport: 'direct
   const request: DesktopAuthTransport = async (path, method, body, headers = {}) => {
     if (!(/^\/api\/device-pairing\/requests(?:\/[0-9a-f-]{36}\/(?:status|complete|cancel))?$/.test(path) && method === 'POST'
       || path === '/api/device-auth/refresh' && method === 'POST'
+      || ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path) && method === 'POST'
+      || path === '/api/endpoint-tools/compatibility' && method === 'GET'
+      || path === '/api/desktop-host/observation' && method === 'DELETE'
       || path === '/api/devices/me' && ['GET', 'DELETE'].includes(method))) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
     const signal = lifetime ? AbortSignal.any([lifetime, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
     await upstream.verifyPinnedIdentity(signal);

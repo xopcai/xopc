@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import http from 'node:http';
+import { connect as tcpConnect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -16,11 +17,13 @@ const root = resolve(import.meta.dirname, '..'), index = process.argv.indexOf('-
 assert(index >= 0, 'An installed --app is required');
 const target = await macPackagedTarget(process.argv[index + 1]);
 const approvalOnly = process.argv.includes('--approval-only');
+const observation = process.argv.includes('--observation');
 const output = await createAcceptanceOutput(join(root, 'reports/p2a2-native-enrollment.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-native-enrollment-')), token = randomUUID();
 const report = { passed: false, startedAt: new Date().toISOString(), checks: {}, scope: 'Installed macOS application, actual OS safeStorage, native parented consent, independent bundled Gateway through SSH-loopback transport; no local tools or physical WAN claim', interactions: [] };
 report.nativeCancelCovered = !approvalOnly;
-let gateway, application, proxy, logs = '', offline = false;
+if (observation) report.scope = 'Installed macOS runtime with OS safeStorage, native granular consent, independently authenticated state-only Host and explicit chat origin against a bundled Gateway; synthetic inference and same-host SSH-loopback, no screenshot/files/commands or physical WAN claim';
+let gateway, application, proxy, inference, logs = '', offline = false, inputPosts = 0, lastInputOrigin, stateReadSeen = false, inferenceError;
 const redact = value => String(value).replaceAll(token, '[redacted]').replace(/Token: [^\n]+/g, 'Token: [redacted]').replace(/xopc_(?:at|rt|pair)_[A-Za-z0-9_-]+/g, '[redacted-device-credential]');
 async function until(probe, ms = 30000) {
   const end = Date.now() + ms;
@@ -34,6 +37,31 @@ async function port() {
 try {
   report.packageBefore = await installedAppFingerprint(target.application);
   const serverState = join(state, 'gateway'); await mkdir(serverState);
+  if (observation) {
+    inference = http.createServer(async (req, res) => {
+      try {
+        const chunks = []; for await (const chunk of req) chunks.push(chunk);
+        const body = JSON.parse(Buffer.concat(chunks).toString()), messages = body.messages ?? [], lastUser = messages.findLastIndex(message => message.role === 'user');
+        const prompt = JSON.stringify(messages[lastUser]?.content ?? ''), results = messages.slice(lastUser + 1).filter(message => message.role === 'tool');
+        const names = (body.tools ?? []).map(tool => tool.function?.name);
+        const chunk = (delta, finish_reason = null) => `data: ${JSON.stringify({ id: 'd3-fixture', object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'chat', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+        let tool;
+        report.inferenceRequests ??= [];
+        if (report.inferenceRequests.length < 40) report.inferenceRequests.push({ tools: names.slice(0, 24), toolResults: results.length, explicitDesktopTurn: prompt.includes('Synthetic explicit desktop origin') });
+        if (prompt.includes('Synthetic explicit desktop origin') && names.length) {
+          if (!results.length) { assert(names.includes('tool_search'), 'Device tool discovery was not available'); tool = { name: 'tool_search', arguments: JSON.stringify({ query: 'desktop device environment', limit: 5 }) }; }
+          else if (!JSON.stringify(results).includes('systemVersion')) {
+            const name = names.find(name => name?.startsWith('device__desktop_device_get_state_'));
+            assert(name, 'Discovery did not load the explicitly selected desktop state tool'); tool = { name, arguments: '{}' };
+          } else { assert(JSON.stringify(results).includes('darwin')); stateReadSeen = true; }
+        } else if (prompt.includes('Retained while desktop offline')) assert(!names.some(name => name?.startsWith('device__')), 'A stopped desktop tool remained declared for the server-only turn');
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        res.end(chunk({ role: 'assistant' }) + (tool ? chunk({ tool_calls: [{ index: 0, id: `d3-${results.length}`, type: 'function', function: tool }] }) + chunk({}, 'tool_calls')
+          : chunk({ content: 'OBSERVATION_CHAT_OK' }) + chunk({}, 'stop')) + 'data: [DONE]\n\n');
+      } catch (error) { inferenceError = String(error); res.writeHead(500).end('{}'); }
+    }).listen(0, '127.0.0.1'); await once(inference, 'listening');
+    await writeFile(join(serverState, 'models.json'), JSON.stringify({ providers: { 'd3-fixture': { baseUrl: `http://127.0.0.1:${inference.address().port}/v1`, apiKey: 'synthetic-fixture', api: 'openai-completions', models: [{ id: 'chat', name: 'D3 fixture', input: ['text'], reasoning: false, contextWindow: 128000, maxTokens: 2000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] } } }));
+  }
   const serverPort = await port(), config = join(serverState, 'xopc.json');
   await writeFile(config, JSON.stringify({ gateway: { mode: 'local', bind: 'loopback', port: serverPort, auth: { mode: 'token', token } }, browser: { enabled: false } }), { mode: 0o600 });
   gateway = spawn(target.executablePath, [target.server, 'gateway', '--foreground', '--bind', 'loopback', '--port', String(serverPort), '--no-hot-reload'], {
@@ -45,11 +73,32 @@ try {
     assert(response.ok, `Owner fixture ${path}: ${response.status}`); const json = await response.json(); return json.payload ?? json;
   };
   await until(() => owner('/api/desktop-host/compatibility').then(() => true).catch(() => false), 60000);
+  if (observation) {
+    const { defaults } = await owner('/api/global-defaults'); defaults.models.chat = { primary: 'd3-fixture/chat', fallbacks: [] };
+    await owner('/api/global-defaults', 'PATCH', { defaults, scope: 'models' });
+    const catalog = await owner('/api/agents'), agent = catalog.agents.find(agent => agent.id === catalog.defaultId) ?? catalog.agents[0];
+    await owner(`/api/agents/${agent.id}`, 'PATCH', { models: { chat: { primary: 'd3-fixture/chat', fallbacks: [] } }, runtime: { codemode: { enabled: true } } });
+  }
   proxy = http.createServer((req, res) => {
     if (offline) { res.writeHead(503).end('{}'); return; }
+    if (req.method === 'POST' && /\/inputs$/.test(req.url)) {
+      inputPosts++; const chunks = []; req.on('data', chunk => chunks.push(chunk));
+      req.on('end', () => { lastInputOrigin = JSON.parse(Buffer.concat(chunks).toString()).origin; });
+    }
     const upstream = http.request({ host: '127.0.0.1', port: serverPort, path: req.url, method: req.method, headers: req.headers }, response => { res.writeHead(response.statusCode, response.headers); response.pipe(res); });
     upstream.on('error', () => res.destroy()); req.pipe(upstream);
   }).listen(0, '127.0.0.1'); await once(proxy, 'listening');
+  proxy.on('upgrade', (request, socket, head) => {
+    if (offline) { socket.destroy(); return; }
+    const upstream = tcpConnect(serverPort, '127.0.0.1', () => {
+      const headers = [];
+      for (let index = 0; index < request.rawHeaders.length; index += 2) headers.push(`${request.rawHeaders[index]}: ${request.rawHeaders[index + 1]}`);
+      upstream.write([`${request.method} ${request.url} HTTP/${request.httpVersion}`, ...headers, '', ''].join('\r\n'));
+      if (head.length) upstream.write(head); socket.pipe(upstream); upstream.pipe(socket);
+    });
+    upstream.on('error', () => socket.destroy()); socket.on('error', () => upstream.destroy());
+    socket.once('close', () => upstream.destroy()); upstream.once('close', () => socket.destroy());
+  });
   const origin = `http://127.0.0.1:${proxy.address().port}`;
   const client = join(state, 'client'); await mkdir(client); const clientConfig = join(client, 'xopc.json');
   await writeFile(clientConfig, '{invalid-local-config');
@@ -98,6 +147,47 @@ try {
   await native('enroll', 'approve first enrollment');
   assert.equal((await deviceStatus()).state, 'registered'); const firstId = (await deviceStatus()).deviceId;
   report.checks.nativeApprovalCreatesIndependentIdentity = true;
+  if (observation) {
+    const connected = await page.evaluate(async id => { const api = window.gatewayConnections, state = await api.snapshot(); return api.connect(state.epoch, id); }, id);
+    assert(connected.ok, connected.error);
+    const chat = application.windows().find(item => item !== page); assert(chat);
+    await until(async () => await chat.locator('#status').textContent() === '就绪');
+    await chat.locator('#host-settings').click(); await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    if (!approvalOnly) {
+      await native('observe-state', 'cancel state observation');
+      assert.equal((await owner('/api/endpoint-tools/devices')).filter(device => device.endpoints.length).length, 0);
+      report.checks.cancelledObservationExposesNoEndpoint = true;
+    }
+    await native('observe-state', 'approve state observation');
+    await until(async () => (await snapshot()).observation?.state === 'online');
+    assert.equal((await snapshot()).localCapabilities, true);
+    const registered = (await owner('/api/endpoint-tools/devices')).find(device => device.id === firstId);
+    assert.equal(registered.endpoints.length, 1); assert.deepEqual(registered.endpoints[0].tools.map(tool => tool.descriptor.name), ['desktop.device.get_state']);
+    assert(registered.access.scopes.includes('desktop.observe.state'));
+    const hostOrigin = await chat.evaluate(() => window.desktopShell.hostOrigin());
+    assert.equal(hostOrigin.type, 'endpoint'); assert.equal(hostOrigin.endpointId, registered.endpoints[0].endpointId);
+    await chat.locator('#use-host').check(); await chat.locator('#input').fill('Synthetic explicit desktop origin'); await chat.locator('#send').click();
+    await until(async () => await chat.locator('#messages').textContent().then(value => value.includes('OBSERVATION_CHAT_OK')));
+    assert(stateReadSeen, 'The model did not receive an actual Electron device-state tool result');
+    const audit = await owner(`/api/endpoint-tools/invocations?principalId=${firstId}`);
+    assert.equal(audit.items.filter(item => item.status === 'succeeded').length, 1);
+    report.checks.actualAgentDiscoveryAndSignedElectronStateInvocation = true;
+    assert.equal(lastInputOrigin.endpointId, hostOrigin.endpointId); report.checks.explicitDesktopOriginAcceptedThroughShellAndGateway = true;
+    await page.locator('#observation-stop').evaluate(button => button.click());
+    await until(async () => (await snapshot()).observation?.state === 'stopped');
+    await until(async () => (await snapshot()).observation?.serverRevocationConfirmed === true);
+    assert.equal((await snapshot()).localCapabilities, false);
+    await until(async () => !(await owner('/api/endpoint-tools/devices')).find(device => device.id === firstId).endpoints.length);
+    const before = inputPosts; await chat.locator('#input').fill('Retained while desktop offline'); await chat.locator('#send').click();
+    await until(async () => await chat.locator('#notice').textContent().then(value => value.includes('本机设备状态尚未连接')));
+    assert.equal(inputPosts, before); assert.equal(await chat.locator('#input').inputValue(), 'Retained while desktop offline');
+    await chat.locator('#use-host').uncheck(); await chat.locator('#send').click();
+    await until(() => inputPosts > before && lastInputOrigin?.type === 'system');
+    await until(async () => await chat.locator('#messages article[data-role="assistant"]').count() >= 2);
+    report.checks.localStopRetainsDraftWithoutImplicitServerFallback = true;
+    await chat.locator('#recover').click(); await until(() => Promise.resolve(chat.isClosed()));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  }
   await application.close(); page = await launch();
   const selected = await page.evaluate(async id => { const api = window.gatewayConnections, state = await api.snapshot(); return api.select(state.epoch, id); }, id);
   assert(selected.ok, selected.error);
@@ -130,9 +220,10 @@ try {
   report.checks.encryptedIdentityAndNoLocalGatewayDatabase = true;
   const devices = await owner('/api/endpoint-tools/devices');
   for (const device of devices.filter(device => device.platform === 'desktop')) {
-    assert.deepEqual(device.access.scopes, ['gateway.status', 'device.self']); assert.equal(device.endpoints.length, 0); assert.equal(device.principal, null);
+    assert.deepEqual(device.access.scopes, ['gateway.status', 'device.self']); assert.equal(device.endpoints.length, 0);
+    if (!observation) assert.equal(device.principal, null);
   }
-  report.checks.noEndpointRegistrationOrLocalTools = true;
+  report.checks[observation ? 'noWriteToolsAndOnlyExplicitStateEndpoint' : 'noEndpointRegistrationOrLocalTools'] = true;
   await application.close(); application = undefined;
   report.packageAfter = await installedAppFingerprint(target.application); assert.deepEqual(report.packageAfter, report.packageBefore);
   report.passed = true;
@@ -140,10 +231,12 @@ try {
 finally {
   if (application) { try { await application.close(); } catch { killAcceptanceApplication(application); } }
   proxy?.closeAllConnections(); if (proxy) await new Promise(resolve => proxy.close(resolve));
+  inference?.closeAllConnections(); if (inference) await new Promise(resolve => inference.close(resolve));
   if (gateway?.exitCode === null) {
     try { const stopped = once(gateway, 'exit'); gateway.kill('SIGTERM'); await withTimeout(stopped, 10000, 'Enrollment fixture stop'); }
     catch { gateway.kill('SIGKILL'); report.cleanupFailure = true; report.passed = false; process.exitCode = 1; }
   }
+  if (inferenceError) { report.inferenceError = redact(inferenceError); report.passed = false; process.exitCode = 1; }
   if (report.passed) await rm(state, { recursive: true, force: true }); else report.failureStateDirectory = state;
   report.finishedAt = new Date().toISOString(); await writeFile(output, JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify(report));
 }

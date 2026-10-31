@@ -9,6 +9,8 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { buildDevicePairingProof, desktopPairingInvitationSchema, DESKTOP_HOST_MANIFEST } from '@xopcai/gateway-contract';
+import { deviceStateDescriptor, endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import WebSocket from 'ws';
 
 import { desktopAuthTransport } from '../electron/desktop/device-transport.js';
 import { DesktopDeviceAuth } from '../electron/desktop/device-auth.js';
@@ -92,7 +94,25 @@ try {
     const result = await device(path, method, body); assert.equal(result.status, 403, path); report.denied.push({ path, method, status: result.status });
   }
   report.checks.noOwnerMobileBrowserEndpointOrRealtimeAuthority = true;
+  const rejectOwnerBypass = async () => {
+    if (compatibility.body.payload.capabilities?.deviceStateObservation !== true) return;
+    const registration = await owner('/api/endpoint-tools/principals', 'POST', { principalId: deviceId, displayName: 'Synthetic desktop auth', kind: 'desktop', platform: 'desktop', publicKey: keys.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url') });
+    assert([200, 201].includes(registration.status));
+    const clientId = randomUUID(), ticket = await owner('/api/realtime/tickets', 'POST', { clientId, clientKind: 'desktop', protocolVersion: 2 }); assert.equal(ticket.status, 200);
+    const hello: EndpointHelloPayload = { principalId: deviceId, endpointId: randomUUID(), connectionInstanceId: randomUUID(), displayName: 'Synthetic desktop auth', kind: 'desktop', platform: 'desktop', appVersion: '1', availability: 'background', nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: [deviceStateDescriptor('desktop', 'state')] };
+    hello.signature = sign('sha256', Buffer.from(endpointHelloSigningPayload(hello)), { key: keys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+    const socket = new WebSocket(origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws');
+    try {
+      await withTimeout(once(socket, 'open'), 5000, 'Owner bypass fixture connection');
+      const closed = once(socket, 'close');
+      socket.send(JSON.stringify({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), kind: 'realtime.hello', payload: { ticket: ticket.body.payload.ticket, clientId, clientKind: 'desktop', endpoint: hello } }));
+      assert.equal((await withTimeout(closed, 5000, 'Owner bypass rejection'))[0], 4401);
+    } finally { socket.terminate(); }
+    report.checks.ownerTicketCannotBypassIndependentDesktopAuthorization = true;
+  };
+  await rejectOwnerBypass();
   assert.equal((await device('/api/devices/me', 'DELETE')).status, 200);
+  await rejectOwnerBypass();
   assert.equal((await device('/api/devices/me')).status, 401);
   assert.equal((await request('/api/device-auth/refresh', 'POST', refreshBody)).status, 401);
   assert.equal((await complete()).body.error.code, 'DEVICE_REVOKED');
