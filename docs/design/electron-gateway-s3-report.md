@@ -1,6 +1,6 @@
 # P2a-1 S3 实施与验收记录
 
-基于 main `3f86a8af255b1d52108ba11c59b0703ab85592aa`（PR #40）。新 worktree `/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc`，分支 `codex/gateway-p2a1-s3`。先提交[范围/契约冻结](./electron-gateway-s3-contract.md)，再提交受限传输和恢复存储、聊天 UI/切换、保守流核实修复。最终产品源码为 `e6298c4fc`，本轮不 push、不创建 PR、不合并。
+基于 main `3f86a8af255b1d52108ba11c59b0703ab85592aa`（PR #40）。新 worktree `/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc`，分支 `codex/gateway-p2a1-s3`。先提交[范围/契约冻结](./electron-gateway-s3-contract.md)，再提交受限传输和恢复存储、聊天 UI/切换、保守流核实修复。最终产品源码为 `e6298c4fc`，初次实施未 push、创建 PR 或合并；后续按 review 授权验证并提交 PR，见文末补充。
 
 ## 交付与改造边界
 
@@ -57,3 +57,11 @@
 | reuse rssMiB | 719.53MiB | 708.36MiB | 698.02MiB |
 
 额外本地故障验收通过：移除 S3 专用连接入口chunk、worker、包内远端HTML/JS/CSS和两种受限preload后，本地新建/复用完整功能E2E均通过。副本共享开发依赖、Gateway/Web/SQL与辅助资源映射，仅证明所列资产缺失不阻断本地原路径，不替代安装包验证。首次准备副本误以为chunk在out/main根目录，断言失败且尚未启动功能测试；修正实际out/main/chunks路径后通过，准备失败记录也保留。
+
+## S3 review 补充
+
+review 确认并修复会话切换/关闭时的旧历史与迟到连接、旧停止回执污染、草稿 drain 收尾微任务漏写、意图落盘期间断线后仍发送、初始化与显式选择竞争。先以受控异步边界复现6项失败，再修复；复现日志保留。切换先撤销旧 generation/请求，每个等待后再核对；写入 Promise 覆盖真正持久化，发送调用前再验证当前状态。没有重放未知 POST 或放宽预算。
+
+修复后相关946项 / 113文件、完整类型检查、lint（0 errors / 5个既有 warnings）、depcheck（0 violations）及CLI启动导入检查通过，Electron产物重新构建；Node/Web/Gateway/SQL源码未变，沿用此前通过的构建。相关证据、最终E2E与性能原始数据见[review记录](./evidence/electron-gateway-s3-review/README.md)。本地默认入口与监督、原采样器及历史证据保持不变，S4/S5与远端Host/本机能力继续不接入。
+
+review 后10组E2E和两轮原预算对照通过：每轮新启动/复用各30次，每模式每API129样本，均8/8；out/main、dist/Gateway/Web和SQL指纹与原S3验收相同。未改变采样或预算，最终指纹/原始耗时/命令见review的validation.json。

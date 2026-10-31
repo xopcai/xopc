@@ -2,7 +2,7 @@
 
 日期：2026-10-30；本次修订：2026-10-31
 
-状态：P0/P1（PR #38）、S0/S1（PR #39）及 S2（PR #40，`3f86a8af2`）已合并。基于该 main 的 S3 已在新 worktree 完成纯文本远端聊天、业务提示隔离及恢复；940项相关测试、10组开发E2E与两轮原预算对照通过，见[S3记录](./electron-gateway-s3-report.md)。S4/S5完整产物/独立服务器/跨平台/长期验收及远端Host仍待推进，不代表完整P2a-1发布。
+状态：P0/P1（PR #38）、S0/S1（PR #39）及 S2（PR #40，`3f86a8af2`）已合并。基于该 main 的 S3 已在新 worktree 完成纯文本远端聊天、业务提示隔离及恢复；review后946项相关测试、10组开发E2E与两轮原预算对照通过，见[S3记录](./electron-gateway-s3-report.md)。S4/S5完整产物/独立服务器/跨平台/长期验收及远端Host仍待推进，不代表完整P2a-1发布。
 
 目标：同一份 Electron 安装包支持本地 Gateway 和远程 Gateway，并让远端 Agent 按授权使用运行 Electron 的电脑。
 
