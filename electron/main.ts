@@ -69,6 +69,7 @@ import { assertTrustedRenderer } from './ipc/trusted-renderer.js';
 import { DesktopEndpointHost } from './computer/desktop-host.js';
 import { registerComputerPreviewIpc } from './computer/preview-ipc.js';
 import { getGatewayConnection } from './gateway-process.js';
+import { localGatewayOrigin } from './gateway/local-connection.js';
 import {
   getLoadingPageDataUrl,
   getRendererCrashPageDataUrl,
@@ -739,7 +740,7 @@ async function resolveWindowLoad(reportProgress: StartupProgressReporter = () =>
       void maybeAutoStartTunnel();
       startTunnelStatusPolling();
       reportProgress({ phase: 'opening-workspace' });
-      const u = new URL(`http://127.0.0.1:${port}/`);
+      const u = new URL(`${localGatewayOrigin({ port })}/`);
       u.hash = '#/chat';
       return { kind: 'url', href: u.toString(), openDevTools: false };
     } catch (e) {

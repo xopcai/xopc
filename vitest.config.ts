@@ -66,6 +66,8 @@ export default defineConfig({
             'electron/__tests__/temporary-preview-file.test.ts',
             'electron/__tests__/external-intake.test.ts',
             'electron/__tests__/file-resource-path.test.ts',
+            'electron/__tests__/terminal-ipc.test.ts',
+            'electron/__tests__/quit-impact.test.ts',
             'electron/__tests__/uninstall-paths.test.ts',
           ],
           setupFiles: [setupFile],

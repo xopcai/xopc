@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-10-30T15:38:52.484Z",
+  "commit": "f362d177861508aac0e6785ddc5afda3c94bf656",
+  "artifactSha256": "4e995b412a1b74f459f20dfec9e380588ec70824f7a1dfea1fea801d9e35c738",
+  "developmentLayoutLink": true,
+  "node": "v26.12.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "osRelease": "25.6.0",
+  "scope": "Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server",
+  "runs": 30,
+  "operations": 100,
+  "passed": true,
+  "summary": {
+    "spawn": {
+      "readyMs": {
+        "count": 30,
+        "mean": 1961.6911568666662,
+        "p95": 1997.452624999998,
+        "max": 2002.5674580000014
+      },
+      "configMs": {
+        "count": 129,
+        "mean": 8.60232558176499,
+        "p95": 47.10000002384186,
+        "max": 56.70000001788139
+      },
+      "sessionsMs": {
+        "count": 129,
+        "mean": 3.571317828440851,
+        "p95": 20.099999994039536,
+        "max": 34.20000001788139
+      },
+      "shutdownMs": {
+        "count": 30,
+        "mean": 215.01392496666702,
+        "p95": 229.81354199999987,
+        "max": 256.78820900000574
+      },
+      "rssMiB": {
+        "count": 30,
+        "mean": 1015.909375,
+        "p95": 1025.09375,
+        "max": 1027.515625
+      }
+    },
+    "reuse": {
+      "readyMs": {
+        "count": 30,
+        "mean": 879.5394430999993,
+        "p95": 913.8414579999953,
+        "max": 915.9232920000068
+      },
+      "configMs": {
+        "count": 129,
+        "mean": 7.513178295867387,
+        "p95": 59.80000001192093,
+        "max": 101.90000000596046
+      },
+      "sessionsMs": {
+        "count": 129,
+        "mean": 2.0798449601775917,
+        "p95": 2.699999988079071,
+        "max": 29.899999976158142
+      },
+      "shutdownMs": {
+        "count": 30,
+        "mean": 167.3933166999986,
+        "p95": 187.54112500000338,
+        "max": 193.234375
+      },
+      "rssMiB": {
+        "count": 30,
+        "mean": 670.7921875,
+        "p95": 677.15625,
+        "max": 687.03125
+      }
+    }
+  },
+  "comparison": [
+    {
+      "mode": "spawn",
+      "metric": "readyMs",
+      "before": 2166.945125000002,
+      "after": 1997.452624999998,
+      "maximum": 2275.292381250002,
+      "passed": true
+    },
+    {
+      "mode": "spawn",
+      "metric": "configMs",
+      "before": 48.30000001192093,
+      "after": 47.10000002384186,
+      "maximum": 53.30000001192093,
+      "passed": true
+    },
+    {
+      "mode": "spawn",
+      "metric": "sessionsMs",
+      "before": 19.69999998807907,
+      "after": 20.099999994039536,
+      "maximum": 24.69999998807907,
+      "passed": true
+    },
+    {
+      "mode": "spawn",
+      "metric": "rssMiB",
+      "before": 1023.609375,
+      "after": 1025.09375,
+      "maximum": 1074.78984375,
+      "passed": true
+    },
+    {
+      "mode": "reuse",
+      "metric": "readyMs",
+      "before": 1034.612541999988,
+      "after": 913.8414579999953,
+      "maximum": 1134.612541999988,
+      "passed": true
+    },
+    {
+      "mode": "reuse",
+      "metric": "configMs",
+      "before": 67,
+      "after": 59.80000001192093,
+      "maximum": 72,
+      "passed": true
+    },
+    {
+      "mode": "reuse",
+      "metric": "sessionsMs",
+      "before": 3.800000011920929,
+      "after": 2.699999988079071,
+      "maximum": 8.800000011920929,
+      "passed": true
+    },
+    {
+      "mode": "reuse",
+      "metric": "rssMiB",
+      "before": 689.3125,
+      "after": 677.15625,
+      "maximum": 723.778125,
+      "passed": true
+    }
+  ],
+  "finishedAt": "2026-10-30T15:41:19.641Z",
+  "samples": [
+    {"mode":"spawn","index":0,"passed":true,"readyMs":1977.561458,"configMs":[37.29999998211861,4.0999999940395355,3.2000000178813934,3.600000023841858,2.5999999940395355,3.5999999940395355,2.7999999821186066,3.199999988079071,2.4000000059604645,3.2000000178813934,2.5999999940395355,3.0999999940395355,2.4000000059604645,2.4000000059604645,3.100000023841858,4,2.899999976158142,4.300000011920929,4.5,3.2000000178813934,4.5999999940395355,2.5999999940395355,3.0999999940395355,2.5,2.7000000178813934,4.399999976158142,3.4000000059604645,2.4000000059604645,2.7999999821186066,3.4000000059604645,2.5999999940395355,3.9000000059604645,2.399999976158142,2.4000000059604645,2.800000011920929,2.5,2.800000011920929,2.300000011920929,2.7999999821186066,2.300000011920929,3,2.4000000059604645,3.5999999940395355,2.5,4.699999988079071,2.5999999940395355,3.5,2.5,2.699999988079071,3,3.5,2.9000000059604645,3.5,2.699999988079071,3.699999988079071,2.300000011920929,3.4000000059604645,3.4000000059604645,3.800000011920929,3,3.699999988079071,2.9000000059604645,3.5,3.7000000178813934,3,3.300000011920929,3.4000000059604645,3.300000011920929,4.9000000059604645,3.0999999940395355,3.5999999940395355,3.7999999821186066,4.0999999940395355,4.199999988079071,3,3,3.2999999821186066,2.5999999940395355,2.2999999821186066,2.9000000059604645,2.2999999821186066,2.800000011920929,2.2000000178813934,3,2.2000000178813934,3.100000023841858,3.300000011920929,2.4000000059604645,2.800000011920929,2.300000011920929,2.699999988079071,2.399999976158142,3.300000011920929,2.5,3.5,2.699999988079071,4.300000011920929,3.0999999940395355,3.199999988079071,2.5],"sessionsMs":[1.2000000178813934,1.699999988079071,0.8999999761581421,1.0999999940395355,1,1.300000011920929,1.7000000178813934,1.0999999940395355,1,0.8999999761581421,0.9000000059604645,1.0999999940395355,0.7999999821186066,1.5999999940395355,1,1.5,0.8999999761581421,1.9000000059604645,1.699999988079071,1.0999999940395355,1.0999999940395355,1.800000011920929,0.800000011920929,1.7999999821186066,0.9000000059604645,1.9000000059604645,0.9000000059604645,1.5999999940395355,0.800000011920929,1.5,0.9000000059604645,1.399999976158142,0.800000011920929,1.699999988079071,0.9000000059604645,1.699999988079071,0.8999999761581421,0.800000011920929,1,1,1.0999999940395355,1,1,0.800000011920929,1.0999999940395355,1.100000023841858,1,0.699999988079071,1.800000011920929,0.9000000059604645,1.5999999940395355,1,1.0999999940395355,1.100000023841858,1.0999999940395355,0.9000000059604645,1.199999988079071,1.0999999940395355,1.2999999821186066,1.300000011920929,1.0999999940395355,1.9000000059604645,1.0999999940395355,1.5,1.199999988079071,1.399999976158142,1.9000000059604645,1.0999999940395355,1.7999999821186066,2.100000023841858,1.300000011920929,2,1.100000023841858,17.80000001192093,1.699999988079071,0.9000000059604645,1.7000000178813934,0.9000000059604645,1.7000000178813934,1,1.4000000059604645,0.7999999821186066,0.9000000059604645,0.8999999761581421,0.7999999821186066,1.399999976158142,0.800000011920929,1.199999988079071,0.7999999821186066,1.4000000059604645,0.800000011920929,0.800000011920929,1.0999999940395355,0.9000000059604645,1.0999999940395355,1.0999999940395355,1,1.9000000059604645,0.9000000059604645,0.7000000178813934],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[88682,88687,88688,88696,88711],"processes":5,"rssMiB":1027.515625,"cpuPercentSnapshot":261.5},"shutdownMs":229.81354199999987,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":1,"passed":true,"readyMs":1965.473375,"configMs":[50.599999994039536],"sessionsMs":[7.699999988079071],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[88731,88734,88735,88744,88764],"processes":5,"rssMiB":1024.859375,"cpuPercentSnapshot":136.2},"shutdownMs":221.78358299999945,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":2,"passed":true,"readyMs":1968.281,"configMs":[47.30000001192093],"sessionsMs":[4.9000000059604645],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[88775,88782,88783,88791,88811],"processes":5,"rssMiB":1020.890625,"cpuPercentSnapshot":135.4},"shutdownMs":226.8052919999991,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":3,"passed":true,"readyMs":1962.5368749999998,"configMs":[19.80000001192093],"sessionsMs":[5.399999976158142],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[88828,88832,88833,88846,88862],"processes":5,"rssMiB":1014.578125,"cpuPercentSnapshot":140.2},"shutdownMs":206.0623340000002,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":4,"passed":true,"readyMs":1964.1875410000011,"configMs":[5.199999988079071],"sessionsMs":[19.599999994039536],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[88880,88883,88884,88892,88917],"processes":5,"rssMiB":1021.828125,"cpuPercentSnapshot":127.6},"shutdownMs":216.23949999999968,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":5,"passed":true,"readyMs":2002.5674580000014,"configMs":[22.5],"sessionsMs":[30],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[88928,88931,88932,88945,88960],"processes":5,"rssMiB":1017.875,"cpuPercentSnapshot":146.6},"shutdownMs":202.66075000000274,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":6,"passed":true,"readyMs":1961.138041000002,"configMs":[50.20000001788139],"sessionsMs":[3.7999999821186066],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[88976,88983,88984,88993,89018],"processes":5,"rssMiB":1023.078125,"cpuPercentSnapshot":131},"shutdownMs":210.81083299999955,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":7,"passed":true,"readyMs":1974.9845830000013,"configMs":[3.5999999940395355],"sessionsMs":[19.599999994039536],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89034,89037,89038,89050,89070],"processes":5,"rssMiB":1025.09375,"cpuPercentSnapshot":142.70000000000002},"shutdownMs":207.1077089999999,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":8,"passed":true,"readyMs":1953.933083,"configMs":[50.89999997615814],"sessionsMs":[3.7000000178813934],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89081,89085,89086,89099,89133],"processes":5,"rssMiB":1021.15625,"cpuPercentSnapshot":111.5},"shutdownMs":213.4330000000009,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":9,"passed":true,"readyMs":1978.2710829999996,"configMs":[4.5999999940395355],"sessionsMs":[20.599999994039536],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89150,89153,89154,89163,89183],"processes":5,"rssMiB":1017.90625,"cpuPercentSnapshot":123.19999999999999},"shutdownMs":216.09920799999963,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":10,"passed":true,"readyMs":1966.365291000002,"configMs":[6],"sessionsMs":[1],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89198,89201,89202,89210,89241],"processes":5,"rssMiB":1019.78125,"cpuPercentSnapshot":131.5},"shutdownMs":222.1417079999992,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":11,"passed":true,"readyMs":1977.3552500000005,"configMs":[3.9000000059604645],"sessionsMs":[19.900000005960464],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89253,89263,89264,89275,89290],"processes":5,"rssMiB":1006.875,"cpuPercentSnapshot":136.7},"shutdownMs":222.93204100000003,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":12,"passed":true,"readyMs":1967.101542000004,"configMs":[5.299999982118607],"sessionsMs":[19.80000001192093],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89306,89309,89310,89322,89343],"processes":5,"rssMiB":1023.6875,"cpuPercentSnapshot":116.6},"shutdownMs":227.36633299999812,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":13,"passed":true,"readyMs":1955.591124999999,"configMs":[19.69999998807907],"sessionsMs":[28.5],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89354,89357,89358,89366,89399],"processes":5,"rssMiB":1025.078125,"cpuPercentSnapshot":122.6},"shutdownMs":224.59850000000006,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":14,"passed":true,"readyMs":1997.452624999998,"configMs":[24],"sessionsMs":[30.19999998807907],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89419,89425,89426,89434,89449],"processes":5,"rssMiB":1020.890625,"cpuPercentSnapshot":145.39999999999998},"shutdownMs":215.12574999999924,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":15,"passed":true,"readyMs":1962.489499999996,"configMs":[44.400000005960464],"sessionsMs":[1],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89469,89476,89477,89485,89505],"processes":5,"rssMiB":1017.546875,"cpuPercentSnapshot":121.6},"shutdownMs":219.96729100000084,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":16,"passed":true,"readyMs":1976.8968749999985,"configMs":[4.5],"sessionsMs":[1],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89517,89520,89521,89533,89553],"processes":5,"rssMiB":1015.59375,"cpuPercentSnapshot":121.4},"shutdownMs":205.84674999999697,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":17,"passed":true,"readyMs":1978.3390419999996,"configMs":[47.10000002384186],"sessionsMs":[5.5999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89571,89574,89575,89584,89601],"processes":5,"rssMiB":1024.78125,"cpuPercentSnapshot":125},"shutdownMs":210.39904099999694,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":18,"passed":true,"readyMs":1954.7559579999943,"configMs":[56.70000001788139],"sessionsMs":[28.299999982118607],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89620,89623,89624,89632,89652],"processes":5,"rssMiB":1012.546875,"cpuPercentSnapshot":119.1},"shutdownMs":201.250208999998,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":19,"passed":true,"readyMs":1970.4069170000002,"configMs":[39.400000005960464],"sessionsMs":[1.4000000059604645],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89663,89671,89672,89685,89700],"processes":5,"rssMiB":1023.484375,"cpuPercentSnapshot":122.80000000000001},"shutdownMs":219.01229199999943,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":20,"passed":true,"readyMs":1973.081542,"configMs":[18.799999982118607],"sessionsMs":[5.4000000059604645],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89716,89719,89720,89732,89747],"processes":5,"rssMiB":1024.296875,"cpuPercentSnapshot":155.5},"shutdownMs":226.56233300000167,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":21,"passed":true,"readyMs":1987.5513340000034,"configMs":[4.800000011920929],"sessionsMs":[1.0999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89764,89767,89768,89776,89811],"processes":5,"rssMiB":1018.609375,"cpuPercentSnapshot":134.2},"shutdownMs":216.80291599999327,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":22,"passed":true,"readyMs":1992.2998329999973,"configMs":[33.29999998211861],"sessionsMs":[1.300000011920929],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89849,89852,89853,89867,89883],"processes":5,"rssMiB":1021.765625,"cpuPercentSnapshot":122.6},"shutdownMs":226.2335000000021,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":23,"passed":true,"readyMs":1978.4165830000056,"configMs":[4],"sessionsMs":[20.099999994039536],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89899,89908,89909,89917,89937],"processes":5,"rssMiB":1021.5625,"cpuPercentSnapshot":132.6},"shutdownMs":223.02049999999872,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":24,"passed":true,"readyMs":1982.2215419999993,"configMs":[23.899999976158142],"sessionsMs":[34.20000001788139],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[89948,89959,89960,89972,90002],"processes":5,"rssMiB":936.4375,"cpuPercentSnapshot":136.8},"shutdownMs":200.20041700000002,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":25,"passed":true,"readyMs":1903.5949580000015,"configMs":[54.20000001788139],"sessionsMs":[2.5],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90014,90022,90023,90031,90068],"processes":5,"rssMiB":1010.046875,"cpuPercentSnapshot":109.2},"shutdownMs":256.78820900000574,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":26,"passed":true,"readyMs":1914.0040420000005,"configMs":[5.300000011920929],"sessionsMs":[1.199999988079071],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90088,90091,90092,90100,90125],"processes":5,"rssMiB":1014.390625,"cpuPercentSnapshot":125},"shutdownMs":190.14683300000615,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":27,"passed":true,"readyMs":1909.1552919999958,"configMs":[31.599999994039536],"sessionsMs":[1.4000000059604645],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90137,90144,90145,90154,90174],"processes":5,"rssMiB":1008.875,"cpuPercentSnapshot":126.9},"shutdownMs":194.81945799999812,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":28,"passed":true,"readyMs":1905.950165999995,"configMs":[45.30000001192093],"sessionsMs":[3.699999988079071],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90184,90192,90193,90201,90220],"processes":5,"rssMiB":1003.46875,"cpuPercentSnapshot":115.6},"shutdownMs":184.87929200001236,"ownedGatewayStopped":true},
+    {"mode":"spawn","index":29,"passed":true,"readyMs":1888.7707919999957,"configMs":[38.70000001788139],"sessionsMs":[1.0999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90237,90240,90241,90258,90289],"processes":5,"rssMiB":1012.78125,"cpuPercentSnapshot":124.19999999999999},"shutdownMs":211.5086250000022,"ownedGatewayStopped":true},
+    {"mode":"reuse","index":0,"passed":true,"readyMs":913.6525830000028,"configMs":[18.399999976158142,4.4000000059604645,3.0999999940395355,3.5999999940395355,2.9000000059604645,3.4000000059604645,3.0999999940395355,3.5,2.5999999940395355,3.300000011920929,3.4000000059604645,3.399999976158142,2.5,3.2999999821186066,3,3.2000000178813934,2.5,3.4000000059604645,2.5999999940395355,3.4000000059604645,2.699999988079071,3.5,2.9000000059604645,3.9000000059604645,3.199999988079071,3.5999999940395355,2.699999988079071,3.300000011920929,2.5999999940395355,3.0999999940395355,2.4000000059604645,3,2.899999976158142,2.4000000059604645,2.800000011920929,3.4000000059604645,2.7000000178813934,3.199999988079071,2.7000000178813934,3.0999999940395355,2.5999999940395355,2.4000000059604645,3,3,2.5,2.4000000059604645,3.0999999940395355,2.4000000059604645,2.7999999821186066,2.7000000178813934,3.2000000178813934,2.7000000178813934,3.2999999821186066,2.5999999940395355,3.199999988079071,2.5999999940395355,3.0999999940395355,2.699999988079071,2.199999988079071,2.9000000059604645,2.2999999821186066,2.9000000059604645,2.5999999940395355,3.100000023841858,2.5,3.0999999940395355,3.5,3.0999999940395355,2.5,3.199999988079071,2.7000000178813934,3.300000011920929,2.600000023841858,2.5999999940395355,3.2000000178813934,3.199999988079071,2.600000023841858,3,2.9000000059604645,2.2000000178813934,3.699999988079071,3.2999999821186066,2.5999999940395355,2.4000000059604645,2.9000000059604645,2.2999999821186066,2.9000000059604645,2.600000023841858,2.2000000178813934,2.9000000059604645,2.2999999821186066,2.7999999821186066,2.4000000059604645,3.100000023841858,3.199999988079071,3.0999999940395355,2.699999988079071,3.2000000178813934,2.9000000059604645,3.300000011920929],"sessionsMs":[29.899999976158142,1.800000011920929,1,1.5999999940395355,0.9000000059604645,1.5,1,1.0999999940395355,1,1,0.9000000059604645,0.9000000059604645,0.800000011920929,1.5,0.9000000059604645,1,0.7999999821186066,1.5,0.800000011920929,1.5,0.9000000059604645,1.5999999940395355,1,1.0999999940395355,0.9000000059604645,0.9000000059604645,0.9000000059604645,1,0.800000011920929,0.9000000059604645,0.8999999761581421,1.600000023841858,0.800000011920929,1.5999999940395355,0.8999999761581421,1.5,1,1.699999988079071,0.9000000059604645,1.5,0.9000000059604645,1.2999999821186066,0.800000011920929,1.5,0.800000011920929,1.2999999821186066,1,0.800000011920929,1.4000000059604645,0.7999999821186066,1.2999999821186066,1,1.5,0.800000011920929,1.4000000059604645,0.800000011920929,1.300000011920929,0.800000011920929,1.300000011920929,0.9000000059604645,1.4000000059604645,1,0.699999988079071,1,0.699999988079071,1.4000000059604645,1,1.4000000059604645,1,1.4000000059604645,0.7999999821186066,1.2999999821186066,0.7999999821186066,1.5,0.9000000059604645,1.199999988079071,0.8999999761581421,1.300000011920929,0.7999999821186066,1.4000000059604645,0.800000011920929,1.4000000059604645,0.7000000178813934,1.2999999821186066,0.9000000059604645,0.800000011920929,1.2999999821186066,0.7999999821186066,1.2999999821186066,0.800000011920929,1.300000011920929,0.800000011920929,0.7999999821186066,1,0.800000011920929,1.4000000059604645,0.699999988079071,1.5,0.7999999821186066,1.2999999821186066],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90319,90326,90327,90335],"processes":4,"rssMiB":687.03125,"cpuPercentSnapshot":157.6},"shutdownMs":168.0333329999994,"externalSurvived":true},
+    {"mode":"reuse","index":1,"passed":true,"readyMs":846.5334169999987,"configMs":[63.5],"sessionsMs":[2.4000000059604645],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90365,90368,90369,90380],"processes":4,"rssMiB":673.421875,"cpuPercentSnapshot":230.8},"shutdownMs":163.46812499999942,"externalSurvived":true},
+    {"mode":"reuse","index":2,"passed":true,"readyMs":907.6572500000038,"configMs":[6.9000000059604645],"sessionsMs":[1.399999976158142],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90409,90412,90413,90440],"processes":4,"rssMiB":669.90625,"cpuPercentSnapshot":207.9},"shutdownMs":171.68891700000677,"externalSurvived":true},
+    {"mode":"reuse","index":3,"passed":true,"readyMs":852.7788330000039,"configMs":[7.800000011920929],"sessionsMs":[1.0999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90465,90468,90469,90482],"processes":4,"rssMiB":669.125,"cpuPercentSnapshot":191},"shutdownMs":185.22708399999829,"externalSurvived":true},
+    {"mode":"reuse","index":4,"passed":true,"readyMs":907.2942919999914,"configMs":[3.4000000059604645],"sessionsMs":[1.5999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90508,90515,90516,90525],"processes":4,"rssMiB":666.375,"cpuPercentSnapshot":192.6},"shutdownMs":193.234375,"externalSurvived":true},
+    {"mode":"reuse","index":5,"passed":true,"readyMs":866.9057500000054,"configMs":[64.80000001192093],"sessionsMs":[2.5],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90551,90557,90558,90568],"processes":4,"rssMiB":675.984375,"cpuPercentSnapshot":227.3},"shutdownMs":168.9587909999973,"externalSurvived":true},
+    {"mode":"reuse","index":6,"passed":true,"readyMs":863.1497499999969,"configMs":[10.799999982118607],"sessionsMs":[1.5],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90600,90612,90613,90627],"processes":4,"rssMiB":667.09375,"cpuPercentSnapshot":211.10000000000002},"shutdownMs":168.43970800000534,"externalSurvived":true},
+    {"mode":"reuse","index":7,"passed":true,"readyMs":896.5118340000045,"configMs":[9.800000011920929],"sessionsMs":[1.5999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90656,90659,90660,90669],"processes":4,"rssMiB":669.96875,"cpuPercentSnapshot":204.9},"shutdownMs":162.26541700000234,"externalSurvived":true},
+    {"mode":"reuse","index":8,"passed":true,"readyMs":876.7200000000012,"configMs":[7.199999988079071],"sessionsMs":[1],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90713,90717,90718,90742],"processes":4,"rssMiB":671.109375,"cpuPercentSnapshot":206.60000000000002},"shutdownMs":156.30599999999686,"externalSurvived":true},
+    {"mode":"reuse","index":9,"passed":true,"readyMs":871.3854169999977,"configMs":[7.600000023841858],"sessionsMs":[1.5999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90778,90782,90783,90792],"processes":4,"rssMiB":666.59375,"cpuPercentSnapshot":210.9},"shutdownMs":173.49366700000246,"externalSurvived":true},
+    {"mode":"reuse","index":10,"passed":true,"readyMs":889.2300420000101,"configMs":[7.9000000059604645],"sessionsMs":[1.5],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90820,90824,90825,90837],"processes":4,"rssMiB":670.671875,"cpuPercentSnapshot":210.4},"shutdownMs":167.26774999999907,"externalSurvived":true},
+    {"mode":"reuse","index":11,"passed":true,"readyMs":870.7386669999978,"configMs":[7.199999988079071],"sessionsMs":[1],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90867,90871,90872,90889],"processes":4,"rssMiB":669.171875,"cpuPercentSnapshot":211.7},"shutdownMs":159.37050000000454,"externalSurvived":true},
+    {"mode":"reuse","index":12,"passed":true,"readyMs":852.8371670000051,"configMs":[24.600000023841858],"sessionsMs":[28.599999994039536],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90913,90920,90921,90934],"processes":4,"rssMiB":674.328125,"cpuPercentSnapshot":226.6},"shutdownMs":177.60187500000757,"externalSurvived":true},
+    {"mode":"reuse","index":13,"passed":true,"readyMs":862.8513749999984,"configMs":[62.80000001192093],"sessionsMs":[2.2999999821186066],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[90959,90962,90963,90976],"processes":4,"rssMiB":672.28125,"cpuPercentSnapshot":218.7},"shutdownMs":149.89858399999503,"externalSurvived":true},
+    {"mode":"reuse","index":14,"passed":true,"readyMs":876.9410420000058,"configMs":[64.90000000596046],"sessionsMs":[3.5999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91018,91028,91029,91043],"processes":4,"rssMiB":674.78125,"cpuPercentSnapshot":211},"shutdownMs":167.89720900000248,"externalSurvived":true},
+    {"mode":"reuse","index":15,"passed":true,"readyMs":866.6135829999985,"configMs":[61.900000005960464],"sessionsMs":[2.4000000059604645],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91073,91076,91077,91085],"processes":4,"rssMiB":672.8125,"cpuPercentSnapshot":200.89999999999998},"shutdownMs":150.15899999999965,"externalSurvived":true},
+    {"mode":"reuse","index":16,"passed":true,"readyMs":889.455999999991,"configMs":[9.5],"sessionsMs":[19.600000023841858],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91117,91120,91121,91129],"processes":4,"rssMiB":675.34375,"cpuPercentSnapshot":214.3},"shutdownMs":164.7043330000015,"externalSurvived":true},
+    {"mode":"reuse","index":17,"passed":true,"readyMs":913.8414579999953,"configMs":[5.699999988079071],"sessionsMs":[1.800000011920929],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91159,91162,91163,91175],"processes":4,"rssMiB":667.375,"cpuPercentSnapshot":202.2},"shutdownMs":187.54112500000338,"externalSurvived":true},
+    {"mode":"reuse","index":18,"passed":true,"readyMs":886.6740829999908,"configMs":[7.800000011920929],"sessionsMs":[19.5],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91201,91204,91205,91217],"processes":4,"rssMiB":670.796875,"cpuPercentSnapshot":214},"shutdownMs":155.66649999999208,"externalSurvived":true},
+    {"mode":"reuse","index":19,"passed":true,"readyMs":887.1871669999964,"configMs":[7.300000011920929],"sessionsMs":[1],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91243,91250,91251,91259],"processes":4,"rssMiB":666.234375,"cpuPercentSnapshot":206.6},"shutdownMs":165.83112499999697,"externalSurvived":true},
+    {"mode":"reuse","index":20,"passed":true,"readyMs":915.9232920000068,"configMs":[4.9000000059604645],"sessionsMs":[1.0999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91294,91297,91298,91306],"processes":4,"rssMiB":670.328125,"cpuPercentSnapshot":211.5},"shutdownMs":157.30233299999963,"externalSurvived":true},
+    {"mode":"reuse","index":21,"passed":true,"readyMs":855.0250000000087,"configMs":[101.90000000596046],"sessionsMs":[2],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91337,91341,91342,91350],"processes":4,"rssMiB":677.15625,"cpuPercentSnapshot":211},"shutdownMs":172.13612499999,"externalSurvived":true},
+    {"mode":"reuse","index":22,"passed":true,"readyMs":887.7931669999962,"configMs":[9],"sessionsMs":[1],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91381,91384,91385,91393],"processes":4,"rssMiB":666.375,"cpuPercentSnapshot":209.5},"shutdownMs":173.16095900000073,"externalSurvived":true},
+    {"mode":"reuse","index":23,"passed":true,"readyMs":908.9356660000049,"configMs":[6.899999976158142],"sessionsMs":[1.0999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91425,91428,91429,91442],"processes":4,"rssMiB":669.609375,"cpuPercentSnapshot":203.20000000000002},"shutdownMs":176.73487499999464,"externalSurvived":true},
+    {"mode":"reuse","index":24,"passed":true,"readyMs":862.3929999999818,"configMs":[7.4000000059604645],"sessionsMs":[2],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91467,91470,91471,91486],"processes":4,"rssMiB":667.328125,"cpuPercentSnapshot":191.3},"shutdownMs":170.32487499999115,"externalSurvived":true},
+    {"mode":"reuse","index":25,"passed":true,"readyMs":866.5947079999896,"configMs":[7.5],"sessionsMs":[1.699999988079071],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91518,91521,91522,91535],"processes":4,"rssMiB":667.703125,"cpuPercentSnapshot":203.9},"shutdownMs":162.8949159999902,"externalSurvived":true},
+    {"mode":"reuse","index":26,"passed":true,"readyMs":881.4132499999832,"configMs":[9.099999994039536],"sessionsMs":[19.5],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91563,91570,91571,91580],"processes":4,"rssMiB":670.015625,"cpuPercentSnapshot":206.60000000000002},"shutdownMs":151.22862499998882,"externalSurvived":true},
+    {"mode":"reuse","index":27,"passed":true,"readyMs":862.1248750000086,"configMs":[59.80000001192093],"sessionsMs":[2.699999988079071],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91609,91612,91613,91622],"processes":4,"rssMiB":675.265625,"cpuPercentSnapshot":215.2},"shutdownMs":155.31829200001084,"externalSurvived":true},
+    {"mode":"reuse","index":28,"passed":true,"readyMs":878.5372919999936,"configMs":[6.700000017881393],"sessionsMs":[2.199999988079071],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91653,91656,91657,91666],"processes":4,"rssMiB":660.84375,"cpuPercentSnapshot":201},"shutdownMs":169.11745799999335,"externalSurvived":true},
+    {"mode":"reuse","index":29,"passed":true,"readyMs":868.483333000011,"configMs":[6.200000017881393],"sessionsMs":[1.0999999940395355],"browserSession":true,"endpointConnected":true,"runtime":{"node":"24.22.0","electron":"45.0.0"},"resources":{"pids":[91696,91699,91700,91714],"processes":4,"rssMiB":668.734375,"cpuPercentSnapshot":199.5},"shutdownMs":176.5276249999879,"externalSurvived":true}
+  ]
+}

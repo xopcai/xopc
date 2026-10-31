@@ -11,6 +11,7 @@ import { createProcessDiagnosticWriter } from '../src/infra/process-diagnostics.
 import type { GatewayBindMode } from '../src/config/schema.js';
 import { assertGatewayCompatibility, GATEWAY_PROTOCOL_INCOMPATIBLE } from './gateway-compatibility.js';
 import { resolvePackagedAppPath } from './packaged-app-path.js';
+import { LocalGatewayConnectionRegistry, localGatewayOrigin, type GatewayConnectionCredentials } from './gateway/local-connection.js';
 
 import {
   GatewayStartupError,
@@ -24,24 +25,29 @@ let gatewayExitHandler: ((code: number | null, signal: string | null) => void) |
 
 type EmbeddedGatewayRuntime = GatewayProcessOptions & { authToken: string };
 let embeddedGatewayRuntime: EmbeddedGatewayRuntime | null = null;
-type GatewayConnection = { port: number; token: string };
-let gatewayConnection: GatewayConnection | null = null;
+let gatewayRestartInProgress = false;
+const gatewayConnections = new LocalGatewayConnectionRegistry();
 
-export function registerGatewayConnection(connection: GatewayConnection): void {
-  gatewayConnection = connection;
+export function registerGatewayConnection(connection: GatewayConnectionCredentials): void {
+  gatewayConnections.register(connection);
+  embeddedGatewayRuntime = null;
 }
 
 export function registerEmbeddedGatewayRuntime(runtime: EmbeddedGatewayRuntime): void {
-  embeddedGatewayRuntime = runtime;
-  registerGatewayConnection({ port: runtime.port, token: runtime.authToken });
+  gatewayConnections.register({ port: runtime.port, token: runtime.authToken }, 'embedded');
+  embeddedGatewayRuntime = { ...runtime };
 }
 
 export function getGatewayCredential(): string | undefined {
-  return gatewayConnection?.token;
+  return gatewayConnections.getCredentials()?.token;
 }
 
-export function getGatewayConnection(): GatewayConnection | undefined {
-  return gatewayConnection ?? undefined;
+export function getGatewayConnection(): GatewayConnectionCredentials | undefined {
+  return gatewayConnections.getCredentials();
+}
+
+export function getGatewayConnectionDescriptor() {
+  return gatewayConnections.describe();
 }
 
 export function isEmbeddedGatewayRegistered(): boolean {
@@ -91,7 +97,7 @@ function tryListenOnce(hostname: string, port: number): Promise<boolean> {
 
 async function acceptsConfiguredGatewayToken(port: number, token: string): Promise<boolean> {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/api/config`, {
+    const res = await fetch(`${localGatewayOrigin({ port })}/api/config`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(1500),
     });
@@ -320,7 +326,7 @@ export async function waitForGatewayReady(
   timeoutMs = 120_000,
 ): Promise<number> {
   const deadline = Date.now() + timeoutMs;
-  const url = `http://127.0.0.1:${port}/api/config`;
+  const url = `${localGatewayOrigin({ port })}/api/config`;
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
       const logHint = gatewayLogSnippetForError();
@@ -369,25 +375,51 @@ export async function restartEmbeddedGatewayFromSavedConfig(params: {
     bindHost: string;
   }>;
 }): Promise<{ port: number; token: string }> {
-  if (!embeddedGatewayRuntime) {
+  const runtime = embeddedGatewayRuntime;
+  if (!runtime) {
     throw new Error('Embedded gateway is not registered');
   }
-  await stopGatewayProcessAndWait();
-  const { port, token, bind } = await params.resolveCredentials();
-
-  const opts: GatewayProcessOptions = {
-    configPath: params.configPath,
-    workspacePath: params.workspacePath,
-    port,
-    bind,
-    proxyUrl: embeddedGatewayRuntime.proxyUrl,
-    onUnexpectedExit: embeddedGatewayRuntime.onUnexpectedExit,
+  if (gatewayRestartInProgress) throw new Error('Gateway restart is already in progress');
+  const epoch = gatewayConnections.describe()?.epoch;
+  const assertRestartAuthority = () => {
+    if (embeddedGatewayRuntime !== runtime || gatewayConnections.describe()?.epoch !== epoch) {
+      throw new Error('Gateway connection changed during restart');
+    }
   };
-  const child = spawnGatewayProcess(opts);
-  const readyPort = await waitForGatewayReady(port, token, child);
-  embeddedGatewayRuntime = { ...opts, port: readyPort, authToken: token };
-  registerGatewayConnection({ port: readyPort, token });
-  return { port: readyPort, token };
+  gatewayRestartInProgress = true;
+  try {
+    await stopGatewayProcessAndWait();
+    assertRestartAuthority();
+    const { port, token, bind, bindHost } = await params.resolveCredentials();
+    assertRestartAuthority();
+    const mode = await resolveGatewayStartupMode({ port, token, bindHost });
+    assertRestartAuthority();
+    if (mode === 'reuse') {
+      registerGatewayConnection({ port, token });
+      return { port, token };
+    }
+
+    const opts: GatewayProcessOptions = {
+      configPath: params.configPath,
+      workspacePath: params.workspacePath,
+      port,
+      bind,
+      proxyUrl: runtime.proxyUrl,
+      onUnexpectedExit: runtime.onUnexpectedExit,
+    };
+    const child = spawnGatewayProcess(opts);
+    try {
+      const readyPort = await waitForGatewayReady(port, token, child);
+      assertRestartAuthority();
+      registerEmbeddedGatewayRuntime({ ...opts, port: readyPort, authToken: token });
+      return { port: readyPort, token };
+    } catch (error) {
+      if (gatewayChild === child) await stopGatewayProcessAndWait();
+      throw error;
+    }
+  } finally {
+    gatewayRestartInProgress = false;
+  }
 }
 
 function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
@@ -416,7 +448,11 @@ export async function stopGatewayProcessAndWait(timeoutMs = 7000): Promise<void>
   } catch {
     /* ignore */
   }
-  await waitForChildExit(child, 2000);
+  if (!await waitForChildExit(child, 2000)) {
+    // Retain the owned handle so shutdown can be retried instead of adopting it as external.
+    if (!gatewayChild) gatewayChild = child;
+    throw new Error('Gateway process did not exit after forced shutdown');
+  }
 }
 
 export function stopGatewayProcess(): void {
