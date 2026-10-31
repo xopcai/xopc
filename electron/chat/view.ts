@@ -1,8 +1,9 @@
-import { RemoteChatModel, ChatApiError, type ChatView, type ChatApi } from './model.js';
+import { RemoteChatModel, ChatApiError, ChatOriginUnavailable, type RemoteChatOrigin, type ChatView, type ChatApi } from './model.js';
 import type { ChatState } from './state.js';
 
 declare global {
-  interface Window { desktopShell: { bootstrap(): Promise<{ ok: boolean }>; recover(): Promise<unknown>; readState(): Promise<ChatState>; writeState(value: ChatState): Promise<unknown> } }
+  interface Window { desktopShell: { bootstrap(): Promise<{ ok: boolean }>; recover(): Promise<unknown>; readState(): Promise<ChatState>; writeState(value: ChatState): Promise<unknown>;
+    hostSettings(): Promise<unknown>; hostOrigin(): Promise<RemoteChatOrigin | undefined>; stopHost(): Promise<unknown> } }
 }
 const element = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 let model: RemoteChatModel | undefined;
@@ -26,7 +27,7 @@ function render(view: ChatView) {
   const history = element('messages'); const bottom = history.scrollHeight - history.scrollTop - history.clientHeight < 80;
   history.replaceChildren(...view.messages.map(message => {
     const article = document.createElement('article'); article.dataset.role = message.role; if (message.id) article.dataset.messageId = message.id;
-    const label = document.createElement('strong'); label.textContent = message.role === 'user' ? '你' : message.role === 'assistant' ? 'Assistant' : '服务器记录（本机能力不可用）';
+    const label = document.createElement('strong'); label.textContent = message.role === 'user' ? '你' : message.role === 'assistant' ? 'Assistant' : '工具记录';
     const text = document.createElement('p'); text.textContent = message.content; article.append(label, text);
     for (const media of message.media ?? []) {
       if (!media.uri || !view.selected) continue;
@@ -59,10 +60,15 @@ async function start() {
     if (!(await window.desktopShell.bootstrap()).ok) throw new Error('会话未建立。');
     const state = await api<{ gatewayId: string; epoch: number; authenticated: boolean; chatEnabled: boolean }>('/api/browser-session');
     if (!state.authenticated || closed) throw new Error('连接需恢复。');
-    element('verified').textContent = '身份已核验；本机能力保持禁用。';
+    element('verified').textContent = '身份已核验；本机能力需要单独授权。';
     element('details').textContent = `Gateway ${state.gatewayId}`;
     model = new RemoteChatModel(api, { read: () => window.desktopShell.readState(), write: value => window.desktopShell.writeState(value) }, render,
-      url => new WebSocket(url), location.origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws', state.chatEnabled);
+      url => new WebSocket(url), location.origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws', state.chatEnabled, async () => {
+        if (!element<HTMLInputElement>('use-host').checked) return;
+        const origin = await window.desktopShell.hostOrigin().catch(() => undefined);
+        if (!origin) throw new ChatOriginUnavailable('本机设备状态尚未连接。本次输入未发送；可检查本机只读设置，或取消勾选后发送给服务器。');
+        return origin;
+      });
     await model.initialize();
   } catch (error) { showError(error); element('status').textContent = '需恢复连接'; }
 }
@@ -73,10 +79,11 @@ element('verify').onclick = () => { void model?.verifyPending().then(() => model
 element('older').onclick = () => { void model?.loadOlder().catch(showError); };
 element('latest').onclick = () => { void model?.latest().catch(showError); };
 element('stop').onclick = () => { void model?.stop().catch(showError); };
+element('host-settings').onclick = () => { void window.desktopShell.hostSettings().catch(showError); };
 element('recover').onclick = async () => {
   try { await model?.flush(); model?.dispose(); await window.desktopShell.recover(); } catch (error) { showError(error); }
 };
-element('logout').onclick = async () => { model?.dispose(); await fetch('/api/browser-session', { method: 'DELETE' }).catch(() => {}); element('status').textContent = '会话已退出，请返回配置恢复。'; };
+element('logout').onclick = async () => { model?.dispose(); await window.desktopShell.stopHost().catch(() => {}); await fetch('/api/browser-session', { method: 'DELETE' }).catch(() => {}); element('status').textContent = '会话已退出，请返回配置恢复。'; };
 window.addEventListener('beforeunload', () => { closed = true; model?.dispose(); });
 document.addEventListener('dragover', event => event.preventDefault()); document.addEventListener('drop', event => event.preventDefault());
 void start();

@@ -1,0 +1,21 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-10-31T15:23:27.622Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-routes-q2jU2n/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.690Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-routes-n1Wan9/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.721Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-FA2awb/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-10-31T15:23:27.731Z","module":"Gateway:Auth","path":"/api/desktop-host/compatibility","method":"GET","clientIp":"unknown","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"info","time":"2026-10-31T15:23:27.759Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-routes-CLWVEY/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.780Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-VEljXM/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.806Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-routes-pV0gn1/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.827Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-K8R3ux/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.852Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-routes-MLhrKs/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.872Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-GgG5Dc/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.908Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-u69igL/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:23:27.947Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-UoLc9A/xopc.db","msg":"Opened xopc SQLite database"}
+
+ Test Files  3 passed (3)
+      Tests  70 passed (70)
+   Start at  23:23:26
+   Duration  1.01s (transform 756ms, setup 33ms, import 1.24s, tests 587ms, environment 0ms)
+

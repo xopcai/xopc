@@ -39,3 +39,18 @@ D1安装包 `f962f15912f8f5ba8944894b22d58c679b125bf7858c0f1d23c38ea5ae857164` �
 - 当前只登记身份，不授权屏幕/文件/命令。只读能力继续在D3逐项同意；登记和观察授权不能互相代替。
 - HTTPS和已有SSH loopback都维持remote模式；SSH登记使用独立的desktop SSH邀请路由，仅接受规范的loopback origin，不扩大旧mobile/browser邀请的HTTP边界，也不使用browser native-host自动批准。
 - 用户关闭窗口、选择/切换/修改配置或返回本地时，取消待处理的原生确认和设备请求，旧结果不能更新新连接状态。主进程安全存储不可用时拒绝登记，不回落明文。远端聊天不依赖可选设备登记成功。
+
+## D3分批接口冻结
+
+D3a先仅开放 `desktop.device.get_state`，返回平台、系统版本、语言、时区和采样时间，复用既有设备状态descriptor及Endpoint v2 invoke/received/result/cancel。截图是D3b的另一项明确授权，不以整个computer-control描述符冒充只读；文件、剪贴板、命令、URL打开和通知继续禁用。
+
+- 新增 `desktop.observe.state` 独立scope；初始配对默认仍只有原有两项scope。owner通过独立desktop路由开关服务端观察授权，本机原生确认和本机内存授权同时成立才启动Host。设备可撤销自己的观察scope，不能提升scope。关闭/切换/重启不恢复本机观察批准。
+- 服务端限制desktop凭据只有原认证路由及授权后的Endpoint身份登记、协议发现和Realtime ticket；不开放会话、文件、配置、手机能力、任意Endpoint调用/上传。登记绑定相同deviceId与P-256公钥，Realtime hello再核验设备、scope和允许的工具名称，不能靠descriptor自报read-only获得控制能力。
+- Host使用独立clientId，每次重连新connectionInstanceId。独立Host协议能力增加已签名Gateway帧：确认及每个工具调用绑定Gateway、设备、clientId、连接实例和递增序号。本机在交给Endpoint控制器前验证，不信任同源代理提供的无签名工具调用；旧聊天和原本地Host不要求该扩展。
+- 只读Host恢复沿用Realtime退避/心跳和取消；身份变化、401/设备撤销/授权撤销终止重试，本机停止立即关闭能力连接并清除本机批准。网络失败不影响聊天；停用服务器未确认时不宣称服务器撤销完成。
+- 每个批次跑设备串用/公钥替换/伪造只读名称/无授权/签名帧重放/断网/撤销/切换/E2E及本地回归。D4专项长测另行并行运行，不等待S5长测结束。
+- 观察授权使用持久化revision：主进程在原生确认前读取版本，确认后的POST必须匹配expectedRevision；撤销即使尚未收到授权也递增版本，迟到授权不能覆盖撤销。新增v264授权版本表，保留v202起全部升级链及v263独立设备凭据；旧版本不能直接打开包含新scope的v264数据库，避免同schema版本下旧程序误读未知权限。升级/回退依旧执行停机、一致备份和事务完整性校验。
+
+### D3a结果
+
+D3a设备状态只读Host已通过实际认证/签名协议及安装包原生逐项授权、实际Agent工具发现/调用E2E，本地spawn/reuse、旧schema262/263 Gateway复用和远端聊天回归通过。仅开启设备状态，截图与其他能力没有继承该授权。旧D1 `manifest` 继续描述凭据bootstrap默认权限，新增观察能力通过独立capabilities协商及显式grant开放；不修改聊天bootstrap。详情、原生副本标识差异、冷安全存储超时与模型fixture失败记录见[D3a证据](./evidence/electron-gateway-p2a2/observation-state-20261031/README.md)。接下来实施D3b截图，完整阶段及长测仍未验收。

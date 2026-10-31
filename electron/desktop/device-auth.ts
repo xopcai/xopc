@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, generateKeyPairSync, randomBytes, randomUUID, sign, verify } from 'node:crypto';
 
 import { buildDevicePairingProof, desktopPairingInvitationSchema, type DevicePairingAction } from '@xopcai/gateway-contract';
+import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
 
 import { DesktopIdentityStore, type DesktopBinding, type DesktopIdentity } from './device-identity.js';
 
@@ -16,7 +17,7 @@ export class DesktopDeviceAuth {
   private queue = Promise.resolve();
   constructor(private readonly binding: DesktopBinding, private readonly store: DesktopIdentityStore, private readonly transport: DesktopAuthTransport) {}
   private serial<T>(work: () => Promise<T>): Promise<T> {
-    const next = this.queue.then(work); this.queue = next.then(() => {}, () => {}); return next;
+    const next = this.queue.then(() => this.store.serialize(this.binding, work)); this.queue = next.then(() => {}, () => {}); return next;
   }
   private signedResponse(response: { status: number; body: any }, nonce: string): any {
     if (response.status !== 200) throw new Error(response.status === 401 ? 'DESKTOP_AUTH_REVOKED' : 'DESKTOP_AUTH_UNAVAILABLE');
@@ -83,13 +84,55 @@ export class DesktopDeviceAuth {
     record.refreshToken = nextRefreshToken; delete record.rotation; await this.store.save(record);
     this.access = { token: body.tokens.accessToken, expiresAt: body.tokens.accessTokenExpiresAt };
   }
-  private async deviceRequest(record: DesktopIdentity, method: 'GET' | 'DELETE') {
+  private async deviceRequest(record: DesktopIdentity, method: 'GET' | 'POST' | 'DELETE', target = '/api/devices/me', body?: unknown) {
     if (!this.access || this.access.expiresAt - Date.now() < 30000) await this.refresh(record);
-    const timestamp = Date.now(), nonce = randomBytes(24).toString('base64url'), bodyDigest = digest(''), token = this.access!.token;
-    const payload = ['xopc-request-v1', this.binding.gatewayId, digest(token), method, '/api/devices/me', bodyDigest,
+    const timestamp = Date.now(), nonce = randomBytes(24).toString('base64url'), bodyDigest = digest(body === undefined ? '' : JSON.stringify(body)), token = this.access!.token;
+    const payload = ['xopc-request-v1', this.binding.gatewayId, digest(token), method, target, bodyDigest,
       'application/json', '', '', '', '', String(timestamp), nonce].join('\n');
-    return this.transport('/api/devices/me', method, undefined, { Authorization: `Bearer ${token}`, 'content-type': 'application/json',
+    return this.transport(target, method, body, { Authorization: `Bearer ${token}`, 'content-type': 'application/json',
       'X-Xopc-Proof': `${timestamp}.${nonce}.${bodyDigest}.${signature(record, payload)}` });
+  }
+  private async enrolled(): Promise<DesktopIdentity> {
+    const record = await this.store.load(this.binding);
+    if (record?.phase !== 'enrolled' || !record.deviceId || !record.refreshToken) throw new Error('DESKTOP_REENROLLMENT_REQUIRED');
+    return record;
+  }
+  endpointIdentity(): Promise<{ deviceId: string; displayName: string; publicKey: string }> {
+    return this.serial(async () => {
+      const record = await this.enrolled();
+      return { deviceId: record.deviceId!, displayName: record.displayName,
+        publicKey: createPublicKey(record.privateKey).export({ type: 'spki', format: 'der' }).toString('base64url') };
+    });
+  }
+  endpointRequest(path: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown, expectedDeviceId?: string): Promise<any> {
+    return this.serial(async () => {
+      if (!(method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path)
+        || method === 'GET' && path === '/api/endpoint-tools/compatibility'
+        || method === 'DELETE' && path === '/api/desktop-host/observation')) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
+      const record = await this.enrolled();
+      if (expectedDeviceId && record.deviceId !== expectedDeviceId) throw new Error('DESKTOP_DEVICE_IDENTITY_MISMATCH');
+      const response = await this.deviceRequest(record, method, path, body);
+      if (response.status === 401) { this.access = undefined; record.phase = 'revoked'; await this.store.save(record); throw new Error('DESKTOP_AUTH_REVOKED'); }
+      if (response.status === 403) throw new Error('DESKTOP_OBSERVATION_DENIED');
+      if (![200, 201].includes(response.status)) throw new Error('DESKTOP_AUTH_UNAVAILABLE');
+      return response.body.payload;
+    });
+  }
+  signEndpointHello(hello: EndpointHelloPayload): Promise<EndpointHelloPayload> {
+    return this.serial(async () => {
+      const record = await this.enrolled();
+      if (hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
+        || hello.tools.length !== 1 || hello.tools[0]?.name !== 'desktop.device.get_state') throw new Error('DESKTOP_OBSERVATION_DENIED');
+      return { ...hello, signature: signature(record, endpointHelloSigningPayload(hello)) };
+    });
+  }
+  connectionProof(ticket: string): Promise<string> {
+    return this.serial(async () => {
+      const record = await this.enrolled(), timestamp = Date.now(), nonce = randomBytes(24).toString('base64url'), bodyDigest = digest('');
+      const payload = ['xopc-request-v1', this.binding.gatewayId, digest(ticket), 'CONNECT', '/api/realtime/v1/ws', bodyDigest,
+        '', '', '', '', '', String(timestamp), nonce].join('\n');
+      return `${timestamp}.${nonce}.${bodyDigest}.${signature(record, payload)}`;
+    });
   }
   readSelf(): Promise<{ deviceId: string; platform: 'desktop' }> {
     return this.serial(async () => {

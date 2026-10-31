@@ -42,3 +42,11 @@ it('quarantines a failed disk commit until a new process reloads state', async (
   const file = join(root, 'blocked'); await writeFile(file, 'not a directory'); const store = new DesktopIdentityStore(file, encryption), identity = record();
   await expect(store.save(identity)).rejects.toThrow(); await expect(store.load(identity.binding)).rejects.toThrow('DESKTOP_IDENTITY_RESTART_REQUIRED');
 });
+it('serializes independent auth clients sharing an identity while allowing a different binding to proceed', async () => {
+  const store = new DesktopIdentityStore(root, encryption), identity = record(), events: string[] = [];
+  let release!: () => void;
+  const first = store.serialize(identity.binding, async () => { events.push('first'); await new Promise<void>(resolve => { release = resolve; }); });
+  const second = store.serialize(identity.binding, async () => { events.push('second'); });
+  await store.serialize({ ...identity.binding, profileId: randomUUID() }, async () => { events.push('other'); });
+  expect(events).toEqual(['first', 'other']); release(); await Promise.all([first, second]); expect(events).toEqual(['first', 'other', 'second']);
+});

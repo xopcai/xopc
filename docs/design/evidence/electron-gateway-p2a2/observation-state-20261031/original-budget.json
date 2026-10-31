@@ -1,0 +1,5 @@
+{
+  "path": "docs/design/evidence/electron-gateway-p2a1-s0-s1/s0-local-baseline.json",
+  "sha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "status": "unchanged; performance acceptance deferred; long run does not gate function development"
+}

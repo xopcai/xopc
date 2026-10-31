@@ -1,11 +1,13 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { release } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session } from 'electron';
 
 import { DesktopEnrollmentManager, type DesktopEnrollmentAction } from '../desktop/enrollment.js';
 import { DesktopIdentityStore } from '../desktop/device-identity.js';
+import { DesktopObservationManager } from '../desktop/observation-manager.js';
 import { RemoteChatStateStore } from '../chat/state.js';
 import { RemoteShellWindow } from '../shell/window.js';
 
@@ -57,9 +59,23 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     title: 'xopc · Gateway connections (S1 preview)',
     webPreferences: { preload: join(assetRoot, 'connections.cjs'), session: isolated,
       contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, navigateOnDragDrop: false } });
-  const desktop = new DesktopEnrollmentManager({ manager, store: new DesktopIdentityStore(join(root, 'desktop-identities'), encryption),
-    visible: () => !window.isDestroyed() && window.isVisible() && !window.isMinimized()
-      && window.webContents.getURL() === documentUrl && window.webContents.mainFrame.url === documentUrl,
+  const desktopStore = new DesktopIdentityStore(join(root, 'desktop-identities'), encryption);
+  const visible = () => !window.isDestroyed() && window.isVisible() && !window.isMinimized()
+    && window.webContents.getURL() === documentUrl && window.webContents.mainFrame.url === documentUrl;
+  const observation = new DesktopObservationManager({ manager, store: desktopStore, visible, appVersion: app.getVersion(),
+    readState: async () => ({ platform: process.platform, systemVersion: release(), locale: app.getLocale(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    consent: async (binding, signal) => {
+      if (!visible() || signal.aborted) return false;
+      const result = await dialog.showMessageBox(window, { type: 'question', title: '授权只读设备状态',
+        message: '允许此Gateway读取本机设备状态？',
+        detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n\n仅提供平台、系统版本、语言、时区和采样时间。授权在本次连接内有效；不会读取屏幕、文件、剪贴板或执行命令。`,
+        buttons: ['取消', '允许读取设备状态'], defaultId: 0, cancelId: 0, noLink: true, signal });
+      return result.response === 1 && !signal.aborted && visible();
+    },
+  });
+  const stopObservation = () => { observation.stop(); void shell?.setHostOrigin().catch(() => {}); };
+  const cancelDesktop = () => { stopObservation(); desktop.cancel(); };
+  const desktop = new DesktopEnrollmentManager({ manager, store: desktopStore, visible,
     consent: async (binding, signal, reenroll) => {
       if (window.isDestroyed() || !window.isVisible() || window.isMinimized() || signal.aborted) return false;
       const answer = await dialog.showMessageBox(window, {
@@ -80,16 +96,16 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   window.webContents.on('will-redirect', event => event.preventDefault());
   window.webContents.on('will-attach-webview', event => event.preventDefault());
   window.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
-    if (mainFrame && !inPlace && window.webContents.getURL() === documentUrl) { desktop.cancel(); policy.revoke(); }
+    if (mainFrame && !inPlace && window.webContents.getURL() === documentUrl) { cancelDesktop(); policy.revoke(); }
   });
   window.webContents.on('did-navigate-in-page', (_event, url, mainFrame) => {
-    if (mainFrame && url !== documentUrl) { desktop.cancel(); policy.revoke(); }
+    if (mainFrame && url !== documentUrl) { cancelDesktop(); policy.revoke(); }
   });
-  window.webContents.on('render-process-gone', () => { desktop.cancel(); policy.revoke(); });
-  window.on('closed', () => { desktop.cancel(); policy.revoke(); void shell?.close().then(() => app.quit(), () => app.quit()); });
+  window.webContents.on('render-process-gone', () => { cancelDesktop(); policy.revoke(); });
+  window.on('closed', () => { cancelDesktop(); policy.revoke(); void shell?.close().then(() => app.quit(), () => app.quit()); });
   app.on('second-instance', () => presentation.reveal(window, true));
-  shell = new RemoteShellWindow(dirname(fileURLToPath(entryUrl)), assetRoot, manager, () => presentation.reveal(window), chatState, presentation);
-  const snapshot = () => ({ ...manager.snapshot(), desktop: desktop.snapshot(), presentation: {
+  shell = new RemoteShellWindow(dirname(fileURLToPath(entryUrl)), assetRoot, manager, () => { stopObservation(); presentation.reveal(window); }, chatState, presentation);
+  const snapshot = () => ({ ...manager.snapshot(), localCapabilities: Boolean(observation.origin()), desktop: desktop.snapshot(), observation: observation.snapshot(), presentation: {
     connectionVisible: window.isVisible(), connectionFocused: window.isFocused(), chat: shell!.presentationState(),
   } });
   let operations = Promise.resolve();
@@ -108,13 +124,21 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   ipcMain.handle('connections:snapshot', snapshot);
   ipcMain.handle('connections:save', (_event, epoch, input) => {
     if (Buffer.byteLength(JSON.stringify(input) ?? '') > 16 * 1024) return { ok: false, error: 'CONNECTION_REQUEST_TOO_LARGE' };
-    return reply(() => atEpoch(epoch, async () => { desktop.cancel(); await shell!.close(); const result = await manager.save(epoch, input); await chatState.prune(result.profiles); return snapshot(); }));
+    return reply(() => atEpoch(epoch, async () => { cancelDesktop(); await shell!.close(); const result = await manager.save(epoch, input); await chatState.prune(result.profiles); return snapshot(); }));
   });
-  ipcMain.handle('connections:select', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { desktop.cancel(); await shell!.close(); await manager.select(epoch, id); return snapshot(); })));
-  ipcMain.handle('connections:remove', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { desktop.cancel(); await shell!.close(); const result = await manager.remove(epoch, id); await chatState.prune(result.profiles); return snapshot(); })));
-  ipcMain.handle('connections:connect', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { desktop.cancel(); await shell!.connect(epoch, id); return snapshot(); })));
+  ipcMain.handle('connections:select', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { cancelDesktop(); await shell!.close(); await manager.select(epoch, id); return snapshot(); })));
+  ipcMain.handle('connections:remove', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { cancelDesktop(); await shell!.close(); const result = await manager.remove(epoch, id); await chatState.prune(result.profiles); return snapshot(); })));
+  ipcMain.handle('connections:connect', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { cancelDesktop(); await shell!.connect(epoch, id); return snapshot(); })));
   ipcMain.handle('shell:bootstrap', event => serialize(() => { shell!.authorize(event, 'shell:bootstrap'); return shell!.bootstrap(); }));
-  ipcMain.handle('shell:recover', event => serialize(async () => { shell!.authorize(event, 'shell:recover'); await shell!.close(); presentation.reveal(window); return { ok: true }; }));
+  ipcMain.handle('shell:recover', event => serialize(async () => { shell!.authorize(event, 'shell:recover'); stopObservation(); await shell!.close(); presentation.reveal(window); return { ok: true }; }));
+  ipcMain.handle('shell:host-settings', event => { shell!.authorize(event, 'shell:host-settings'); presentation.reveal(window); return { ok: true }; });
+  ipcMain.handle('shell:host-origin', async event => {
+    shell!.authorize(event, 'shell:host-origin'); const origin = observation.origin();
+    await shell!.setHostOrigin(origin);
+    if (JSON.stringify(origin) !== JSON.stringify(observation.origin())) { await shell!.setHostOrigin(); return; }
+    return origin;
+  });
+  ipcMain.handle('shell:host-stop', event => { shell!.authorize(event, 'shell:host-stop'); stopObservation(); return { ok: true }; });
   ipcMain.handle('shell:state-read', event => serialize(() => { shell!.authorize(event, 'shell:state-read'); return shell!.readState(); }));
   ipcMain.handle('shell:state-write', (event, value) => {
     if (Buffer.byteLength(JSON.stringify(value) ?? '') > 256 * 1024) throw new Error('CHAT_STATE_TOO_LARGE');
@@ -122,11 +146,17 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   });
   for (const action of ['enroll', 'check', 'disable', 'reenroll'] as DesktopEnrollmentAction[]) {
     ipcMain.handle(`connections:desktop-${action}`, (_event, epoch, id) => reply(async () => {
-      await desktop.perform(action, epoch, id); return snapshot();
+      if (epoch !== manager.snapshot().epoch) throw new Error('STALE_CONNECTION_EPOCH');
+      if (action !== 'check') stopObservation();
+      try { await desktop.perform(action, epoch, id); }
+      catch (error) { if (error instanceof Error && error.message === 'DESKTOP_AUTH_REVOKED') stopObservation(); throw error; }
+      return snapshot();
     }));
   }
-  ipcMain.handle('connections:quit', () => { desktop.cancel(); app.quit(); });
-  ipcMain.handle('connections:local', () => { desktop.cancel(); return reply(() => serialize(async () => {
+  ipcMain.handle('connections:observation-start', (_event, epoch, id) => reply(async () => { await observation.start(epoch, id); return snapshot(); }));
+  ipcMain.handle('connections:observation-stop', () => { stopObservation(); return { ok: true, snapshot: snapshot() }; });
+  ipcMain.handle('connections:quit', () => { cancelDesktop(); app.quit(); });
+  ipcMain.handle('connections:local', () => { cancelDesktop(); return reply(() => serialize(async () => {
     await shell!.close();
     policy.revoke();
     app.relaunch({ args: process.defaultApp ? [process.argv[1]!] : [] });

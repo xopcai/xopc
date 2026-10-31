@@ -21,12 +21,22 @@ const errors = {
   DESKTOP_REENROLLMENT_REQUIRED: '请先确认旧登记已撤销，再重新登记。', DESKTOP_OPERATION_BUSY: '另一项登记操作仍在结束，请稍后重试。',
   SECURE_STORAGE_UNAVAILABLE: '系统安全存储不可用，无法保存电脑身份。',
   DESKTOP_NOT_ENROLLED: '未找到本机登记。', DESKTOP_ENROLLMENT_PENDING: '登记尚未完成，请继续登记或停用。',
+  DESKTOP_OBSERVATION_UNSUPPORTED: '此Gateway暂不支持已签名的只读设备状态连接。',
+  DESKTOP_OBSERVATION_DENIED: '设备状态读取未获授权，请检查登记和服务器权限。',
+  DESKTOP_OBSERVATION_REVISION_CHANGED: '授权状态已变化，旧的确认已失效。请重新检查并授权。',
 };
 function render(value) {
+  const focus = document.activeElement?.dataset;
+  const focusedAction = focus?.desktop && focus?.profile ? `[data-desktop="${focus.desktop}"][data-profile="${focus.profile}"]` : undefined;
   snapshot = value;
+  const observation = value.observation;
+  const observing = observation && ['connecting', 'online', 'offline'].includes(observation.state);
+  const labels = { connecting: '只读设备状态正在连接。', online: '已授权读取设备状态；屏幕、文件、命令保持禁用。', offline: '只读设备状态连接已断开，正在恢复。', stopped: '本机只读能力已停止。', error: '本机只读能力连接失败，请重新授权。' };
+  element('observation-status').textContent = observation ? labels[observation.state] : '本机只读能力未授权。';
+  element('observation-stop').disabled = !observation || observation.state === 'stopped';
   element('status').textContent = value.status === 'storage-error'
     ? '配置存储不可用，请退出后修复独立的连接配置；本地模式仍可使用。'
-    : value.selectedId ? '配置已选择；点击连接打开远端聊天。本机能力保持禁用。' : '请选择或保存连接配置。本机能力保持禁用。';
+    : value.selectedId ? '配置已选择；点击连接打开远端聊天。本机能力需要单独授权。' : '请选择或保存连接配置。本机能力保持禁用。';
   element('profiles').replaceChildren();
   for (const profile of value.profiles) {
     const row = document.createElement('li');
@@ -69,9 +79,11 @@ function render(value) {
     actionButton(disabled ? '重新登记此电脑' : '登记此电脑', disabled ? api.reenrollDesktop : api.enrollDesktop, selected && state !== 'registered', 'enroll');
     actionButton('检查登记', api.checkDesktop, selected, 'check');
     actionButton('停用登记', api.disableDesktop, Boolean(profile.identity), 'disable');
+    actionButton('授权读取设备状态', api.startObservation, selected && state === 'registered' && !observing, 'observe-state');
     row.append(group);
     element('profiles').append(row);
   }
+  if (focusedAction) document.querySelector(focusedAction)?.focus();
 }
 async function perform(work) {
   if (busy) return;
@@ -108,6 +120,7 @@ element('profile-form').onsubmit = event => {
     origin: element('origin').value, transport, ...(credential ? { credential } : {}) }));
 };
 element('local').onclick = () => void api.useLocal();
+element('observation-stop').onclick = () => { void api.stopObservation().then(result => { if (result?.snapshot) render(result.snapshot); }).catch(() => {}); };
 element('quit').onclick = () => void api.quit();
 element('login-update').onsubmit = event => {
   event.preventDefault(); if (!credentialTarget) return;
@@ -117,6 +130,9 @@ element('login-update').onsubmit = event => {
 };
 element('login-cancel').onclick = () => { credentialTarget = undefined; element('login-credential').value = ''; element('login-update').hidden = true; };
 window.addEventListener('focus', () => { if (!busy) void api.snapshot().then(render).catch(() => {}); });
+setInterval(() => {
+  if (!busy && document.visibilityState === 'visible') void api.snapshot().then(next => { if (JSON.stringify(next) !== JSON.stringify(snapshot)) render(next); }).catch(() => {});
+}, 3000);
 document.addEventListener('dragover', event => event.preventDefault());
 document.addEventListener('drop', event => event.preventDefault());
 api.snapshot().then(render).catch(() => { element('error').textContent = '连接配置加载失败，可以退出后使用本地模式。'; });

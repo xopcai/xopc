@@ -24,6 +24,11 @@ import type { RawData, WebSocket } from 'ws';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import { EndpointToolPolicyError } from '../endpoint-tools/policy.js';
 import type { EndpointTransport } from '../endpoint-tools/registry.js';
+import { assertDesktopObservationHello } from '../endpoint-tools/desktop-observation.js';
+import { signDesktopGatewayFrame, type DesktopFrameBinding } from '../endpoint-tools/desktop-frame.js';
+import { getDevice } from '../storage/sqlite/device-access-repository.js';
+import { getEndpointPrincipal } from '../storage/sqlite/endpoint-principal-repository.js';
+import { getOrCreateGatewayIdentity, signGatewayPayload } from '../storage/sqlite/gateway-identity-repository.js';
 import { createLogger } from '../utils/logger.js';
 import { createPreauthConnectionBudget } from '../gateway/security/preauth-connection-budget.js';
 import { hasGatewayScope, type GatewayScope } from '../gateway/security/gateway-scopes.js';
@@ -161,6 +166,12 @@ export class RealtimeRuntime {
     let endpointId: string | undefined;
     let principalId: string | undefined;
     let grantedScopes: readonly GatewayScope[] = [];
+    let desktopBinding: DesktopFrameBinding | undefined;
+    let desktopSequence = 0;
+    let desktopReady = false;
+    const pendingDesktopFrames: ServerRealtimeMessage[] = [];
+    const scopedFrame = (message: ServerRealtimeMessage): ServerRealtimeMessage => desktopBinding
+      ? signDesktopGatewayFrame(message, desktopBinding, ++desktopSequence, signGatewayPayload) as unknown as ServerRealtimeMessage : message;
     let budgetHeld = true;
 
     const releaseBudget = () => {
@@ -197,7 +208,7 @@ export class RealtimeRuntime {
 
     const subscribe = (requested: RealtimeSubscription[]): boolean => {
       const authorized = requested.filter((item) => {
-        if (isAuthorizedTopic(item.topic, grantedScopes)) return true;
+        if (!desktopBinding && isAuthorizedTopic(item.topic, grantedScopes)) return true;
         sendError('FORBIDDEN_TOPIC', `Topic is not available: ${item.topic}`);
         return false;
       });
@@ -285,6 +296,17 @@ export class RealtimeRuntime {
         principalSockets.add(socket);
         this.socketsByPrincipal.set(principalId, principalSockets);
         connectionId = crypto.randomUUID();
+        const endpointPrincipalId = message.payload.endpoint?.kind === 'desktop' ? message.payload.endpoint.principalId : undefined;
+        const device = claim.deviceId ? getDevice(claim.deviceId)
+          : endpointPrincipalId && /^[0-9a-f-]{36}$/.test(endpointPrincipalId) ? getDevice(endpointPrincipalId) : undefined;
+        if (device?.platform === 'desktop') {
+          try {
+            if (claim.deviceId !== device.id || claim.clientKind !== 'desktop' || !message.payload.endpoint) throw new Error('DESKTOP_OBSERVATION_DENIED');
+            assertDesktopObservationHello(device, message.payload.endpoint, getEndpointPrincipal(device.id)?.publicKey);
+            desktopBinding = { gatewayId: getOrCreateGatewayIdentity().id, deviceId: device.id, clientId: claim.clientId,
+              connectionInstanceId: message.payload.endpoint.connectionInstanceId };
+          } catch { socket.close(4401, 'Desktop observation is not authorized'); return; }
+        }
         let endpointReady: { endpointId: string; turnToken: string } | undefined;
         if (message.payload.endpoint) {
           const endpointKindMatches = message.payload.endpoint.kind === message.payload.clientKind
@@ -299,7 +321,12 @@ export class RealtimeRuntime {
               return socket.readyState;
             },
             send: (data) => {
-              writer.enqueue(serverMessage('endpoint.message', JSON.parse(data)), 'critical');
+              const frame = serverMessage('endpoint.message', JSON.parse(data));
+              if (desktopBinding && !desktopReady) {
+                if (pendingDesktopFrames.length >= 32) { socket.close(4413, 'Desktop startup message limit'); return; }
+                pendingDesktopFrames.push(frame); return;
+              }
+              writer.enqueue(scopedFrame(frame), 'critical');
             },
             close: (code, reason) => socket.close(code, reason),
           };
@@ -330,13 +357,15 @@ export class RealtimeRuntime {
           ? [...new Set(message.payload.capabilities.filter(capability =>
             (REALTIME_CAPABILITIES as readonly string[]).includes(capability)))]
           : undefined;
-        writer.enqueue(serverMessage('realtime.ready', {
+        writer.enqueue(scopedFrame(serverMessage('realtime.ready', {
           connectionId,
           heartbeatIntervalMs: REALTIME_HEARTBEAT_INTERVAL_MS,
           heartbeatTimeoutMs: REALTIME_HEARTBEAT_TIMEOUT_MS,
           ...(message.payload.capabilities ? { negotiatedCapabilities } : {}),
           ...(endpointReady ? { endpoint: endpointReady } : {}),
-        }), 'critical');
+        })), 'critical');
+        desktopReady = true;
+        for (const frame of pendingDesktopFrames.splice(0)) writer.enqueue(scopedFrame(frame), 'critical');
         subscribe(message.payload.subscriptions);
         log.info({ connectionId, principalId, clientId: claim.clientId, clientKind: claim.clientKind }, 'Realtime client connected');
         return;

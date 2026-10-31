@@ -1,0 +1,27 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-10-31T15:18:05.495Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-10-31T15:18:05.507Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-10-31T15:18:05.512Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-10-31T15:18:06.172Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-observation-qToLHw/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T15:18:06.325Z","module":"Gateway:HTTP","requestId":"96ef9aa8-62f3-4d98-a6e7-9e2e1a370dae","method":"POST","path":"/api/realtime/tickets","status":403,"durationMs":1,"clientIp":"unknown","contentLength":94,"msg":"HTTP POST /api/realtime/tickets → 403 (1ms)"}
+{"level":"info","time":"2026-10-31T15:18:06.404Z","module":"EndpointTools","endpointId":"0b948c37-4be0-4c9e-8fed-cf3c549bd004:ea5816c1-5109-4660-b4d8-f3a77a21bdf7","connectionId":"b5d04c7c-29e4-4f01-945d-325b210b14c9","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-10-31T15:18:06.405Z","module":"Realtime","connectionId":"b5d04c7c-29e4-4f01-945d-325b210b14c9","principalId":"0b948c37-4be0-4c9e-8fed-cf3c549bd004","clientId":"b0c7fe32-263d-4ea5-a824-e6fcaace7f5d","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-10-31T15:18:06.443Z","module":"Gateway:HTTP","requestId":"8e618cc6-fcb4-4e6d-ae7e-0eae364b7f98","method":"POST","path":"/api/endpoint-tools/principals","status":403,"durationMs":1,"clientIp":"unknown","contentLength":264,"msg":"HTTP POST /api/endpoint-tools/principals → 403 (1ms)"}
+{"level":"info","time":"2026-10-31T15:18:06.448Z","module":"Realtime","connectionId":"4b02cdde-3b8d-418f-a864-08a363bb1ca8","code":4401,"reason":"Desktop observation is not authorized","msg":"Realtime client disconnected (4401: Desktop observation is not authorized)"}
+{"level":"info","time":"2026-10-31T15:18:06.451Z","module":"Realtime","connectionId":"11e35d34-1a19-4b7a-995e-a54532837580","code":4401,"reason":"Desktop observation is not authorized","msg":"Realtime client disconnected (4401: Desktop observation is not authorized)"}
+{"level":"info","time":"2026-10-31T15:18:06.452Z","module":"EndpointTools","endpointId":"0b948c37-4be0-4c9e-8fed-cf3c549bd004:ea5816c1-5109-4660-b4d8-f3a77a21bdf7","connectionId":"b5d04c7c-29e4-4f01-945d-325b210b14c9","msg":"Endpoint disconnected"}
+{"level":"info","time":"2026-10-31T15:18:06.452Z","module":"Realtime","connectionId":"b5d04c7c-29e4-4f01-945d-325b210b14c9","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+{"level":"info","time":"2026-10-31T15:18:06.519Z","module":"EndpointTools","endpointId":"0b948c37-4be0-4c9e-8fed-cf3c549bd004:90e99059-9cf4-4a26-877f-7d0ea798b865","connectionId":"d080b001-53d2-4118-a7a2-87cb7603dd90","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-10-31T15:18:06.519Z","module":"Realtime","connectionId":"d080b001-53d2-4118-a7a2-87cb7603dd90","principalId":"0b948c37-4be0-4c9e-8fed-cf3c549bd004","clientId":"ec380153-ffb5-4023-9bce-eb91835e90b1","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-10-31T15:18:06.539Z","module":"EndpointTools","endpointId":"0b948c37-4be0-4c9e-8fed-cf3c549bd004:90e99059-9cf4-4a26-877f-7d0ea798b865","connectionId":"d080b001-53d2-4118-a7a2-87cb7603dd90","msg":"Endpoint disconnected"}
+{"level":"info","time":"2026-10-31T15:18:06.539Z","module":"Realtime","connectionId":"d080b001-53d2-4118-a7a2-87cb7603dd90","code":1006,"msg":"Realtime client disconnected (1006)"}
+{"level":"info","time":"2026-10-31T15:18:07.288Z","module":"Gateway:HTTP","requestId":"feb19676-f3ae-4ccd-8c09-658c2cbececb","method":"POST","path":"/api/realtime/tickets","status":403,"durationMs":3,"clientIp":"unknown","contentLength":94,"msg":"HTTP POST /api/realtime/tickets → 403 (3ms)"}
+{"level":"info","time":"2026-10-31T15:18:07.291Z","module":"Gateway:HTTP","requestId":"08ff173b-0711-48a6-98c5-d57243df4dd4","method":"POST","path":"/api/endpoint-tools/principals","status":403,"durationMs":1,"clientIp":"unknown","contentLength":264,"msg":"HTTP POST /api/endpoint-tools/principals → 403 (1ms)"}
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  23:18:02
+   Duration  4.55s (transform 1.98s, setup 14ms, import 3.28s, tests 1.18s, environment 0ms)
+

@@ -1,4 +1,5 @@
 import { sessionInputCommandSchema } from '@xopcai/gateway-contract';
+import type { EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 
 import { parseClientRealtimeMessage, parseServerRealtimeMessage, type ClientRealtimeMessage, type ServerRealtimeMessage } from '@xopcai/realtime-protocol';
 
@@ -63,8 +64,8 @@ export class ShellSlots {
   close() { this.closed = true; for (const wake of this.waiting.splice(0)) wake(); }
 }
 
-/** Restrict the existing owner command contract to server-side plain text turns. */
-export function shellWrite(route: 'input' | 'stop', value: unknown): string {
+/** A desktop source is accepted only when main binds the exact live Host claim to this Shell. */
+export function shellWrite(route: 'input' | 'stop', value: unknown, hostOrigin?: EndpointTurnClaim): string {
   if (route === 'stop') {
     if (!value || typeof value !== 'object' || Array.isArray(value)
       || Object.keys(value).length !== 1 || !('runId' in value) || typeof value.runId !== 'string'
@@ -74,7 +75,9 @@ export function shellWrite(route: 'input' | 'stop', value: unknown): string {
   const parsed = sessionInputCommandSchema.safeParse(value);
   if (!parsed.success) throw new Error('SHELL_INPUT_DENIED');
   const command = parsed.data;
-  if (!/^[0-9a-f-]{36}$/.test(command.clientMessageId) || command.origin.type !== 'system'
+  const permittedOrigin = command.origin.type === 'system' || command.origin.type === 'endpoint' && hostOrigin
+    && command.origin.endpointId === hostOrigin.endpointId && command.origin.token === hostOrigin.token;
+  if (!/^[0-9a-f-]{36}$/.test(command.clientMessageId) || !permittedOrigin
     || Object.keys(command.input).some(key => key !== 'content') || !command.input.content.trim()
     || command.input.content.length > 8192
     || (command.kind === 'start' ? command.creation.projectId !== null || command.creation.execution !== null || command.creation.temporary

@@ -16,7 +16,7 @@
 </head>
 <body>
   <h1>Gateway 连接预览</h1>
-  <p>选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力保持禁用，不启动本地 Gateway。</p>
+  <p>选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力需要单独授权，不启动本地 Gateway。</p>
   <p id="status" role="status"></p><p id="error" role="alert"></p>
   <ul id="profiles"></ul>
   <form id="login-update" hidden>
@@ -34,6 +34,7 @@
     <button type="submit">保存连接配置</button>
   </form>
   <p><small>SSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。</small></p>
+  <p id="observation-status" role="status">本机只读能力未授权。</p><button id="observation-stop" type="button">立即停止本机只读能力</button>
   <button id="local">使用原本地模式（重启应用）</button><button id="quit">退出预览</button>
   <script src="./gateway-connections.js"></script>
 </body>

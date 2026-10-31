@@ -8,6 +8,7 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { WebSocket, WebSocketServer } from 'ws';
+import { endpointTurnClaimSchema, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 
 import { filterRealtime, shellRoute, shellWrite, ShellSlots } from './policy.js';
 import { ShellUpstream, ShellUpstreamThrottle } from './upstream.js';
@@ -32,6 +33,7 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
   const websockets = new Set<WebSocket>();
   const tickets = new Map<string, { clientId: string; expiresAt: number }>();
   let active = true, bootstrapped = false, connections = 0, origin = '';
+  let hostOrigin: EndpointTurnClaim | undefined;
   let monotonicExpiry = performance.now() + 15 * 60_000;
   let pendingRenewal: { id: string; value: string; expiresAt: number; monotonicExpiry: number } | undefined;
   let renewalDeadline: ReturnType<typeof setTimeout> | undefined;
@@ -102,7 +104,7 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
         for (const [id, ticket] of tickets) if (ticket.expiresAt <= Date.now()) tickets.delete(id);
         if (tickets.size >= 32) throw new Error('SHELL_TICKET_LIMIT');
         clientId = value.clientId; body = JSON.stringify(value);
-        } else body = shellWrite(route as 'input' | 'stop', value);
+        } else body = shellWrite(route as 'input' | 'stop', value, hostOrigin);
         headers['Content-Type'] = 'application/json';
       }
       await upstream.authenticate(signal);
@@ -219,6 +221,11 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
   const expire = () => { clearTimeout(expiry); expiry = setTimeout(invalidate, Math.max(1, Math.min(expiresAt - Date.now(), monotonicExpiry - performance.now()))); expiry.unref(); };
   expire();
   return {
+    setHostOrigin(expectedEpoch: unknown, value: unknown) {
+      if (expectedEpoch !== epoch || !active) throw new Error('STALE_CONNECTION_EPOCH');
+      hostOrigin = value === undefined ? undefined : endpointTurnClaimSchema.parse(value);
+      return { ok: true };
+    },
     origin, proof, epoch,
     bootstrap() { if (!active || bootstrapped) throw new Error('SHELL_BOOTSTRAP_CONSUMED'); bootstrapped = true; return { ...cookie, expiresAt }; },
     async renew() {

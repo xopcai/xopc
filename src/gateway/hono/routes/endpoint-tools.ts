@@ -17,6 +17,7 @@ import {
   listEndpointToolInvocationAuditPage,
 } from '../../../storage/sqlite/index.js';
 import { parseEndpointPublicKey } from '../../../endpoint-tools/auth.js';
+import { desktopDeviceEndpointKey } from '../../../endpoint-tools/desktop-observation.js';
 import {
   ENDPOINT_UPLOAD_MAX_BYTES,
   EndpointUploadError,
@@ -145,6 +146,8 @@ export function registerEndpointToolRoutes(
       const ownsPrincipal = parsed.data.principalId === gatewayPrincipal.deviceId;
       const compatibleKind = device?.platform === 'chrome'
         ? parsed.data.kind === 'browser' && parsed.data.platform === 'chrome'
+        : device?.platform === 'desktop' ? parsed.data.kind === 'desktop' && parsed.data.platform === 'desktop'
+          && device.scopes.includes('desktop.observe.state') && parsed.data.publicKey === desktopDeviceEndpointKey(device)
         : parsed.data.kind === 'mobile';
       if (!ownsPrincipal || !compatibleKind) {
         return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint identity does not match this device' } }, 403);

@@ -1,0 +1,16 @@
+{
+  "productionIdentifier": "ai.xopc.xopc",
+  "nativeIdentifier": "ai.xopc.desktop-observation.acceptance",
+  "differences": [
+    {
+      "path": "Contents/Info.plist",
+      "production": "997f930c44fffa50c4cc1e1f9c4b4193946fbae015108e120118b80588544f23",
+      "native": "a798910de5afd9c24b5c0d617069c784aaca617669c703d36d8b10443586a2f8"
+    },
+    {
+      "path": "Contents/MacOS/xopc",
+      "production": "1125d5652439670c1790bd820bc499aee5e568730591e0176eb000a31a488efe",
+      "native": "892c6ae606fb4f87f9fe2730c31cb4c441805a9968aa59e3f4f60092b6ce8b50"
+    }
+  ]
+}

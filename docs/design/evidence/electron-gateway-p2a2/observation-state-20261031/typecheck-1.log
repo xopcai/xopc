@@ -1,0 +1,3 @@
+$ tsc --noEmit -p tsconfig.json && pnpm run typecheck:electron
+src/storage/sqlite/device-access-repository.ts(391,30): error TS2345: Argument of type '"desktop.observe.state"' is not assignable to parameter of type '"voice.configure" | "gateway.status" | "agents.read" | "agents.run" | "sessions.read" | "sessions.write" | "workspace.read" | "workspace.write" | "tasks.read" | "tasks.write" | ... 6 more ... | "gateway.admin"'.
+[ELIFECYCLE] Command failed with exit code 2.

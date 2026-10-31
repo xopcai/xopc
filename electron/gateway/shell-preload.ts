@@ -5,4 +5,7 @@ contextBridge.exposeInMainWorld('desktopShell', Object.freeze({
   readState: () => ipcRenderer.invoke('shell:state-read'),
   writeState: (value: unknown) => ipcRenderer.invoke('shell:state-write', value),
   recover: () => ipcRenderer.invoke('shell:recover'),
+  hostSettings: () => ipcRenderer.invoke('shell:host-settings'),
+  hostOrigin: () => ipcRenderer.invoke('shell:host-origin'),
+  stopHost: () => ipcRenderer.invoke('shell:host-stop'),
 }));

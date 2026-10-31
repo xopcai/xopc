@@ -1,0 +1,34 @@
+$ pnpm run assets:brand && node scripts/electron-builder.mjs -- --mac --arm64
+$ node scripts/generate-brand-assets.mjs
+Brand assets generated from assets/brand/xopc-mark.svg (0 written, 39 unchanged).
+[electron-compatibility] PASS: built desktop + built Gateway, authenticated preflight, >1MB upload admission, isolated clean state
+Progress: resolved 1, reused 0, downloaded 0, added 0
+
+devDependencies: skipped
+
+Packages: +20
+++++++++++++++++++++
+Progress: resolved 80, reused 20, downloaded 0, added 20, done
+Done in 379ms using pnpm v11.9.0
+[prepare-electron-pack-dir] Staged /var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-electron-pack-rDrtTj
+  • electron-builder  version=26.15.3 os=25.6.0
+  • loaded configuration  file=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-electron-pack-rDrtTj/electron-builder.effective.yml
+  • skipped dependencies rebuild  reason=npmRebuild is set to false
+  • packaging       platform=darwin arch=arm64 electron=45.0.0 appOutDir=/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/release/mac-arm64
+  • downloaded      label=electron progress=100%
+  • downloaded electron zip extracted successfully  output=/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/release/mac-arm64
+  • searching for node modules  pm=pnpm searchDir=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-electron-pack-rDrtTj
+  • platform-specific optional dependencies not bundled — add them to your project's optionalDependencies if your app requires them (pnpm 10+ does not auto-install transitive platform binaries)  dependencies=["@trycua/cua-driver-darwin-x64@0.36.0","@trycua/cua-driver-linux-arm64-gnu@0.36.0","@trycua/cua-driver-linux-x64-gnu@0.36.0","@trycua/cua-driver-win32-arm64-msvc@0.36.0","@trycua/cua-driver-win32-x64-msvc@0.36.0","@img/sharp-libvips-darwin-x64@1.3.4","@img/sharp-libvips-linux-arm@1.3.4","@img/sharp-libvips-linux-arm64@1.3.4","@img/sharp-libvips-linux-ppc64@1.3.4","@img/sharp-libvips-linux-riscv64@1.3.4","@img/sharp-libvips-linux-s390x@1.3.4","@img/sharp-libvips-linux-x64@1.3.4","@img/sharp-win32-arm64@0.35.5","@img/sharp-win32-ia32@0.35.5","@img/sharp-win32-x64@0.35.5","@img/sharp-darwin-x64@0.35.5","@img/sharp-linux-arm@0.35.5","@img/sharp-linux-arm64@0.35.5","@img/sharp-linux-ppc64@0.35.5","@img/sharp-linux-riscv64@0.35.5","@img/sharp-linux-s390x@0.35.5","@img/sharp-linux-x64@0.35.5","@ubjs/node-darwin-x64@0.31.0-3","@ubjs/node-linux-arm64-gnu@0.31.0-3","@ubjs/node-linux-arm64-musl@0.31.0-3","@ubjs/node-linux-x64-gnu@0.31.0-3","@ubjs/node-linux-x64-musl@0.31.0-3","@ubjs/node-win32-arm64-msvc@0.31.0-3","@ubjs/node-win32-x64-msvc@0.31.0-3","@vscode/ripgrep-darwin-arm64@1.18.0"]
+  • dependency not found on disk  dependencies=["@napi-rs/canvas@1.0.13","@img/sharp-libvips-linuxmusl-arm64@1.3.4","@img/sharp-libvips-linuxmusl-x64@1.3.4","@img/sharp-linuxmusl-arm64@0.35.5","@img/sharp-linuxmusl-x64@0.35.5","@img/sharp-webcontainers-wasm32@0.35.5","@img/sharp-freebsd-wasm32@0.35.5"]
+  • executing @electron/fuses  electronPath=/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/release/mac-arm64/xopc.app
+  • signing         file=/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/release/mac-arm64/xopc.app platform=darwin type=distribution identityName=Developer ID Application: Qiaomin Xu (73R6WF52UJ) identityHash=5A81A5F7FA29754015AF37EE2F4E5DAF662EFCD1 provisioningProfile=none
+  • skipped macOS notarization  reason=`notarize` options were unable to be generated
+  • building        target=macOS zip arch=arm64 file=/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/release/xopc-0.0.437-arm64.zip
+  • building        target=DMG arch=arm64 file=/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/release/xopc-0.0.437-arm64.dmg
+  • building block map  blockMapFile=/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/release/xopc-0.0.437-arm64.dmg.blockmap
+  • building block map  blockMapFile=/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/release/xopc-0.0.437-arm64.zip.blockmap
+[verify-electron-asar-deps] OK — node_modules 58.25 MB
+[verify-electron-asar-deps] OK — runtime deps present (ws, sharp, silk-wasm, node-pty, @trycua/cua-driver, quickjs-wasi, pdfjs-dist)
+[verify-electron-asar-deps] OK — unpacked app runtime layout present
+[verify-electron-asar-deps] OK — 369 desktop UI, Shell, Gateway and SQL resources
+[verify-electron-asar-deps] OK — 662 packaged files match built runtime bytes

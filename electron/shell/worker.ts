@@ -9,7 +9,7 @@ let identity: { gatewayId: string; publicKey: string } | undefined;
 let initialized = false, activated = false, closed = false;
 let queue = Promise.resolve();
 
-async function handle(message: { id: number; command: string; renewalId?: string; target?: RemoteTarget; assets?: string; epoch?: number }) {
+async function handle(message: { id: number; command: string; renewalId?: string; target?: RemoteTarget; assets?: string; epoch?: number; hostOrigin?: unknown }) {
   try {
     if (closed) throw new Error('SHELL_CLOSED');
     let value: unknown;
@@ -24,6 +24,7 @@ async function handle(message: { id: number; command: string; renewalId?: string
     } else if (message.command === 'bootstrap' && shell) value = shell.bootstrap();
     else if (message.command === 'renew' && shell) value = await shell.renew();
     else if (message.command === 'commit-renewal' && shell) value = shell.commitRenewal(message.renewalId);
+    else if (message.command === 'host-origin' && shell) value = shell.setHostOrigin(message.epoch, message.hostOrigin);
     else if (message.command === 'stop') {
       closed = true; await shell?.close(); upstream?.close(); send({ id: message.id, ok: true }); process.exit(0);
     } else throw new Error('SHELL_COMMAND_DENIED');

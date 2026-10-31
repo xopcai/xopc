@@ -13,6 +13,7 @@ export const GATEWAY_SCOPES = [
   'automations.write',
   'notifications.self',
   'device.self',
+  'desktop.observe.state',
   'phone.view',
   'phone.control',
   'gateway.admin',

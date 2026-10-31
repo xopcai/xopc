@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
 import { BrowserWindow, session, type IpcMainInvokeEvent, type Session } from 'electron';
+import type { EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
 import { RemoteChatStateStore, type ChatNamespace } from '../chat/state.js';
@@ -25,9 +26,13 @@ export class RemoteShellWindow {
     private readonly presentation = new RemoteWindowPresentation()) {}
 
   presentationState() { return { visible: this.window?.isVisible() ?? false, focused: this.window?.isFocused() ?? false }; }
+  async setHostOrigin(origin?: EndpointTurnClaim) {
+    if (!this.worker || this.activeEpoch === undefined) return;
+    await this.worker.request('host-origin', { epoch: this.activeEpoch, hostOrigin: origin });
+  }
 
   authorize(event: IpcMainInvokeEvent, channel: string) {
-    if (!['shell:bootstrap', 'shell:recover', 'shell:state-read', 'shell:state-write'].includes(channel)) throw new Error('REMOTE_CAPABILITY_DISABLED');
+    if (!['shell:bootstrap', 'shell:recover', 'shell:state-read', 'shell:state-write', 'shell:host-settings', 'shell:host-origin', 'shell:host-stop'].includes(channel)) throw new Error('REMOTE_CAPABILITY_DISABLED');
     if (!this.window || this.window.isDestroyed() || event.sender !== this.window.webContents
       || event.senderFrame !== this.window.webContents.mainFrame || event.senderFrame?.url !== `${this.origin}/`
       || event.sender.getURL() !== `${this.origin}/` || this.activeEpoch !== this.manager.snapshot().epoch) throw new Error('UNTRUSTED_SHELL_WINDOW');

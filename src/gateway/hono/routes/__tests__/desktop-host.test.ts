@@ -1,12 +1,13 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { generateKeyPairSync } from 'node:crypto';
 
 import { DESKTOP_HOST_MANIFEST, desktopPairingInvitationSchema } from '@xopcai/gateway-contract';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
+import { closeXopcDatabase, createDevice, getDevice, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
 import { auth } from '../../middleware/auth.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import { registerDesktopHostRoutes } from '../desktop-host.js';
@@ -17,6 +18,7 @@ beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'xopc-desktop-credential-')
 afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(root, { recursive: true, force: true }); });
 const deps = (mode = 'token', publicUrl = 'https://gateway.example.com') => ({ service: {
   getResolvedAuth: () => ({ mode, token: 'test-owner' }), currentConfig: { gateway: { publicUrl } },
+  realtime: { disconnectPrincipal: vi.fn() },
 } }) as unknown as AuthenticatedRouteDeps;
 const headers = { Authorization: 'Bearer test-owner', 'Content-Type': 'application/json' };
 it('requires authentication, advertises credentials only, and separates desktop invitations', async () => {
@@ -50,4 +52,21 @@ it('allows an explicitly selected desktop SSH loopback without broadening browse
   expect(response.status).toBe(201);
   const invitation = desktopPairingInvitationSchema.parse((await response.json()).payload.invitation);
   expect(invitation.targetKind).toBe('desktop'); expect(invitation.routes).toEqual([{ id: 'desktop-ssh', kind: 'ssh-loopback', url: 'http://127.0.0.1:19340' }]);
+});
+it('grants only a desktop observation scope as owner and lets that device remove, never elevate, its own grant', async () => {
+  const publicKeyJwk = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).publicKey.export({ format: 'jwk' });
+  const desktop = createDevice({ displayName: 'Desktop', platform: 'desktop', publicKeyJwk, scopes: ['gateway.status', 'device.self'] });
+  const mobile = createDevice({ displayName: 'Mobile', platform: 'android', publicKeyJwk, scopes: ['device.self'] });
+  const app = new Hono(); app.use('*', auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-owner' }) })); registerDesktopHostRoutes(app, deps());
+  const grant = (id: string) => app.request(`/api/desktop-host/devices/${id}/observation`, { method: 'POST', headers, body: JSON.stringify({ state: true, expectedRevision: 0 }) });
+  expect((await grant(mobile.id)).status).toBe(404); expect(getDevice(mobile.id)?.scopes).toEqual(['device.self']);
+  expect((await grant(desktop.id)).status).toBe(200); expect(getDevice(desktop.id)?.scopes).toEqual(['gateway.status', 'device.self', 'desktop.observe.state']);
+  const deviceApp = new Hono(); deviceApp.use('*', async (c, next) => { setGatewayPrincipal(c, { kind: 'device', principalId: desktop.id, deviceId: desktop.id, scopes: ['gateway.admin'] }); await next(); }); registerDesktopHostRoutes(deviceApp, deps());
+  expect((await deviceApp.request(`/api/desktop-host/devices/${desktop.id}/observation`, { method: 'POST', headers, body: JSON.stringify({ state: true }) })).status).toBe(403);
+  expect((await deviceApp.request('/api/desktop-host/observation', { method: 'DELETE', headers })).status).toBe(200);
+  expect(getDevice(desktop.id)?.scopes).toEqual(['gateway.status', 'device.self']);
+  expect((await grant(desktop.id)).status).toBe(409);
+  expect(getDevice(desktop.id)?.scopes).toEqual(['gateway.status', 'device.self']);
+  const disabled = new Hono(); disabled.use('*', auth({ getResolvedAuth: () => ({ mode: 'none' }) })); registerDesktopHostRoutes(disabled, deps('none'));
+  expect((await disabled.request(`/api/desktop-host/devices/${desktop.id}/observation`, { method: 'POST', headers, body: JSON.stringify({ state: true }) })).status).toBe(403);
 });

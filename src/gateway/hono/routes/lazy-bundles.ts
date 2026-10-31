@@ -106,7 +106,8 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'desktop-host',
-    match: path => path === '/api/desktop-host/compatibility' || path === '/api/desktop-host/pairing-setups',
+    match: path => path === '/api/desktop-host/compatibility' || path === '/api/desktop-host/pairing-setups'
+      || path === '/api/desktop-host/observation' || /^\/api\/desktop-host\/devices\/[^/]+\/observation$/.test(path),
     load: async () => {
       const { registerDesktopHostRoutes } = await import('./desktop-host.js');
       return { register: registerDesktopHostRoutes };
