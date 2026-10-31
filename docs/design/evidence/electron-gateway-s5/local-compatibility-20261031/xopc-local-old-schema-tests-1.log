@@ -1,0 +1,10 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-10-31T13:55:20.256Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+
+ Test Files  3 passed (3)
+      Tests  17 passed (17)
+   Start at  21:55:19
+   Duration  851ms (transform 591ms, setup 24ms, import 1.10s, tests 150ms, environment 0ms)
+

@@ -100,7 +100,10 @@ export async function exerciseRemoteEndurance(context) {
       }
       assert.equal(posts(), before + 1, 'Recovery or restart resubmitted a soak input');
       result.soakElapsedMs = performance.now() - started;
-      result.soakSamples.push({ iteration: index, elapsedMs: result.soakElapsedMs, cycleMs: performance.now() - cycleStarted, posts: posts(), resources: resources() });
+      const localSession = await page.evaluate(() => fetch('/api/browser-session').then(response => response.json()));
+      assert.equal(localSession.authenticated, true); assert(localSession.expiresAt > Date.now());
+      result.soakSamples.push({ iteration: index, elapsedMs: result.soakElapsedMs, cycleMs: performance.now() - cycleStarted,
+        posts: posts(), localSessionExpiresAt: localSession.expiresAt, resources: resources() });
       await checkpoint(); console.log(`S5 soak ${index}: ${Math.floor(result.soakElapsedMs / 1000)}/${options.soakSeconds}s`);
       const remaining = options.soakSeconds * 1000 - (performance.now() - started);
       if (remaining > 0) await delay(Math.min(remaining, Math.max(0, options.sampleIntervalMs - (performance.now() - cycleStarted))));

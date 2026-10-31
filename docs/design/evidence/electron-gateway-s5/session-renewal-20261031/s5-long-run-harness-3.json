@@ -1,0 +1,33 @@
+{
+  "recordedAt": "2026-10-31T14:13:45.096Z",
+  "launch": "reports/s5-long-run-launch-3.json",
+  "files": [
+    {
+      "path": "scripts/verify-electron-remote-chat.mjs",
+      "sha256": "dab8f2a8ba59f303cb455101b9f30fb6d8d89c5b0012109c289041eb26e90927",
+      "mtimeBeforeLaunch": true
+    },
+    {
+      "path": "scripts/electron-remote-endurance.mjs",
+      "sha256": "5e518ef7c9a0d397c961ec5a58415f326e635163740b96e1ed0bf8097c32daee",
+      "mtimeBeforeLaunch": true
+    },
+    {
+      "path": "scripts/electron-network-fixture.mjs",
+      "sha256": "e58ae05a272c4c0d407e15091dd9631932afa0a951c7e93baa2e8df4adf74db9",
+      "mtimeBeforeLaunch": true
+    },
+    {
+      "path": "scripts/electron-packaged-acceptance.mjs",
+      "sha256": "2b437050c48f2c19ad1e1c5d4ecd6f3b0ae2e299cd993d041662353632163886",
+      "mtimeBeforeLaunch": true
+    },
+    {
+      "path": "scripts/electron-local-connection-support.mjs",
+      "sha256": "671c9afd7145e7c4d5f4001893934794235c46a90df43e81f6b3218f5e971d7a",
+      "mtimeBeforeLaunch": true
+    }
+  ],
+  "baselineSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "performance": "deferred; original budgets and sampler unchanged"
+}

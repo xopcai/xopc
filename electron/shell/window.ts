@@ -18,6 +18,8 @@ export class RemoteShellWindow {
   private activeEpoch?: number;
   private closing?: Promise<void>;
   private namespace?: ChatNamespace;
+  private renewalTimer?: ReturnType<typeof setTimeout>;
+  private cookieWrite?: Promise<void>;
   constructor(private readonly mainDirectory: string, private readonly assets: string,
     private readonly manager: GatewayConnectionPreview, private readonly recover: () => void, private readonly state: RemoteChatStateStore,
     private readonly presentation = new RemoteWindowPresentation()) {}
@@ -82,17 +84,48 @@ export class RemoteShellWindow {
     if (this.bootstrapped || !this.partition || !this.worker || !this.origin) throw new Error('SHELL_BOOTSTRAP_CONSUMED');
     this.bootstrapped = true;
     const cookie = await this.worker.request<{ name: string; value: string; expiresAt: number }>('bootstrap');
+    await this.installCookie(cookie);
+    this.scheduleRenewal(cookie.expiresAt);
+    return { ok: true };
+  }
+  private installCookie(cookie: { name: string; value: string; expiresAt: number }): Promise<void> {
+    const pending = this.writeCookie(cookie); this.cookieWrite = pending;
+    void pending.finally(() => { if (this.cookieWrite === pending) this.cookieWrite = undefined; }).catch(() => {});
+    return pending;
+  }
+  private async writeCookie(cookie: { name: string; value: string; expiresAt: number }) {
     const partition = this.partition, origin = this.origin;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([partition.cookies.set({ url: origin, name: cookie.name, value: cookie.value, httpOnly: true, secure: false, sameSite: 'strict', path: '/', expirationDate: cookie.expiresAt / 1000 }),
         new Promise<never>((_, reject) => { timer = setTimeout(() => { this.failedCleanup = true; reject(new Error('SHELL_COOKIE_RESTART_REQUIRED')); }, 15_000); })]);
     } finally { clearTimeout(timer); }
-    return { ok: true };
+  }
+  private scheduleRenewal(expiresAt: number, retry = false): void {
+    clearTimeout(this.renewalTimer);
+    const worker = this.worker, partition = this.partition, epoch = this.activeEpoch;
+    this.renewalTimer = setTimeout(() => { void (async () => {
+      if (!worker || worker !== this.worker || partition !== this.partition || epoch !== this.manager.snapshot().epoch) return;
+      try {
+        const cookie = await worker.request<{ name: string; value: string; expiresAt: number; renewalId: string }>('renew');
+        if (worker !== this.worker || partition !== this.partition || epoch !== this.manager.snapshot().epoch) return;
+        await this.installCookie(cookie);
+        if (worker !== this.worker || epoch !== this.manager.snapshot().epoch) return;
+        await worker.request('commit-renewal', { renewalId: cookie.renewalId });
+        this.scheduleRenewal(cookie.expiresAt);
+      } catch (error) {
+        if (worker !== this.worker) return;
+        if (error instanceof Error && ['GATEWAY_NETWORK_FAILED', 'SHELL_UPSTREAM_THROTTLED'].includes(error.message)
+          && expiresAt - Date.now() > 60000) this.scheduleRenewal(expiresAt, true);
+        else { await this.close().catch(() => {}); this.recover(); }
+      }
+    })(); }, retry ? 30000 : Math.max(1, expiresAt - Date.now() - 5 * 60000));
+    this.renewalTimer.unref();
   }
   close(): Promise<void> {
     if (this.closing) return this.closing;
-    const worker = this.worker, partition = this.partition, window = this.window;
+    clearTimeout(this.renewalTimer); this.renewalTimer = undefined;
+    const worker = this.worker, partition = this.partition, window = this.window, cookieWrite = this.cookieWrite;
     this.worker = undefined; this.partition = undefined; this.window = undefined; this.origin = undefined; this.activeEpoch = undefined; this.namespace = undefined;
     if (window && !window.isDestroyed()) window.destroy();
     this.closing = (async () => {
@@ -100,6 +133,7 @@ export class RemoteShellWindow {
       try {
         await Promise.race([(async () => {
           await worker?.stop();
+          await cookieWrite;
           if (partition) { partition.webRequest.onBeforeSendHeaders(null); await partition.closeAllConnections(); await partition.clearStorageData(); await partition.clearCache(); }
         })(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('SHELL_CLEANUP_RESTART_REQUIRED')), 15_000); })]);
       } catch (error) { this.failedCleanup = true; throw error; }

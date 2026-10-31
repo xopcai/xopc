@@ -24,7 +24,7 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
   const proof = randomBytes(32).toString('base64url');
   const cookie = { name: `xopc_shell_${randomBytes(8).toString('hex')}`, value: randomBytes(32).toString('base64url') };
   const sessionId = randomUUID();
-  const expiresAt = Date.now() + 15 * 60_000;
+  let expiresAt = Date.now() + 15 * 60_000;
   const slots = new ShellSlots();
   const mediaSlots = new ShellSlots(4, 0);
   const abort = new AbortController();
@@ -32,7 +32,9 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
   const websockets = new Set<WebSocket>();
   const tickets = new Map<string, { clientId: string; expiresAt: number }>();
   let active = true, bootstrapped = false, connections = 0, origin = '';
-  const monotonicExpiry = performance.now() + 15 * 60_000;
+  let monotonicExpiry = performance.now() + 15 * 60_000;
+  let pendingRenewal: { id: string; value: string; expiresAt: number; monotonicExpiry: number } | undefined;
+  let renewalDeadline: ReturnType<typeof setTimeout> | undefined;
   const live = () => {
     if (!active || !bootstrapped) return false;
     if (Date.now() >= expiresAt || performance.now() >= monotonicExpiry) { invalidate(); return false; }
@@ -42,9 +44,9 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
   const secure = (req: IncomingMessage, ws = false) => live() && req.headers.host === new URL(origin).host
     && equalSecret(req.headers['x-xopc-desktop-window'], proof)
     && (!req.headers.origin ? !ws && req.method === 'GET' : req.headers.origin === origin)
-    && equalSecret((req.headers.cookie ?? '').split(';').map(c => c.trim()).find(c => c.startsWith(`${cookie.name}=`))?.slice(cookie.name.length + 1), cookie.value);
+    && [cookie.value, ...(pendingRenewal ? [pendingRenewal.value] : [])].some(value => equalSecret((req.headers.cookie ?? '').split(';').map(c => c.trim()).find(c => c.startsWith(`${cookie.name}=`))?.slice(cookie.name.length + 1), value));
   const invalidate = () => {
-    active = false; abort.abort(); slots.close(); mediaSlots.close(); tickets.clear();
+    active = false; pendingRenewal = undefined; clearTimeout(renewalDeadline); abort.abort(); slots.close(); mediaSlots.close(); tickets.clear();
     for (const ws of websockets) ws.terminate(); upstream.close();
   };
   const server = createServer(async (req, res) => {
@@ -213,10 +215,28 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
   });
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   origin = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
-  const expiry = setTimeout(invalidate, Math.max(1, expiresAt - Date.now())); expiry.unref();
+  let expiry: ReturnType<typeof setTimeout>;
+  const expire = () => { clearTimeout(expiry); expiry = setTimeout(invalidate, Math.max(1, Math.min(expiresAt - Date.now(), monotonicExpiry - performance.now()))); expiry.unref(); };
+  expire();
   return {
     origin, proof, epoch,
     bootstrap() { if (!active || bootstrapped) throw new Error('SHELL_BOOTSTRAP_CONSUMED'); bootstrapped = true; return { ...cookie, expiresAt }; },
+    async renew() {
+      if (!live() || pendingRenewal) throw new Error('SHELL_RENEWAL_DENIED');
+      await upstream.authenticate(AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]));
+      if (!live() || pendingRenewal) throw new Error('SHELL_RENEWAL_DENIED');
+      pendingRenewal = { id: randomUUID(), value: randomBytes(32).toString('base64url'),
+        expiresAt: Date.now() + 15 * 60_000, monotonicExpiry: performance.now() + 15 * 60_000 };
+      // Only a trusted main-process commit can extend the lease; abandoned handoffs fail closed.
+      renewalDeadline = setTimeout(invalidate, 15000); renewalDeadline.unref();
+      return { name: cookie.name, value: pendingRenewal.value, expiresAt: pendingRenewal.expiresAt, renewalId: pendingRenewal.id };
+    },
+    commitRenewal(id: unknown) {
+      if (!live() || !pendingRenewal || pendingRenewal.id !== id) throw new Error('SHELL_RENEWAL_DENIED');
+      cookie.value = pendingRenewal.value; expiresAt = pendingRenewal.expiresAt; monotonicExpiry = pendingRenewal.monotonicExpiry;
+      pendingRenewal = undefined; clearTimeout(renewalDeadline); expire();
+      return { ok: true };
+    },
     async close() { invalidate(); clearTimeout(expiry); for (const socket of sockets) socket.destroy(); wss.close(); await new Promise<void>(resolve => server.close(() => resolve())); },
   };
 }

@@ -1,0 +1,30 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts (31 tests | 1 failed) 210ms
+   × refuses renewed authorization after identity replacement without committing another cookie 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts > refuses renewed authorization after identity replacement without committing another cookie
+AssertionError: expected [Function] to throw error including 'GATEWAY_IDENTITY_PROOF_FAILED' but got 'GATEWAY_IDENTITY_CHANGED'
+
+Expected: "GATEWAY_IDENTITY_PROOF_FAILED"
+Received: "GATEWAY_IDENTITY_CHANGED"
+
+ ❯ electron/__tests__/gateway-connections-shell.test.ts:312:57
+    310| });
+    311| it('refuses renewed authorization after identity replacement without c…
+    312|   mode = 'identity'; await expect(fixture.shell.renew()).rejects.toThr…
+       |                                                         ^
+    313|   expect(() => fixture.shell.commitRenewal(randomUUID())).toThrow('SHE…
+    314| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 passed (31)
+   Start at  21:39:06
+   Duration  477ms (transform 129ms, setup 11ms, import 196ms, tests 210ms, environment 0ms)
+

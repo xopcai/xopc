@@ -1,0 +1,36 @@
+{
+  "requestedAt": "2026-10-31T14:07:29.183Z",
+  "reason": "Replace intermediate renewal candidate with the final candidate containing confirmed cookie cleanup and old-Gateway reuse fixes. This is an intentional supervisor stop, not a product failure.",
+  "ownedApplication": "/tmp/xopc-s5-delivery/installed-session-renewal/xopc.app/Contents/MacOS/xopc",
+  "pids": [
+    38340
+  ],
+  "cycles": 100,
+  "samples": 16,
+  "last": {
+    "iteration": 16,
+    "elapsedMs": 900352.414667,
+    "cycleMs": 348.1138750000391,
+    "posts": 20,
+    "localSessionExpiresAt": 1793456197672,
+    "resources": {
+      "processes": 6,
+      "pids": [
+        38340,
+        38341,
+        38342,
+        38343,
+        63913,
+        63914
+      ],
+      "rssMiB": 334.328125,
+      "cpuPercentSnapshot": 19.4,
+      "openFds": 147
+    }
+  },
+  "packageFingerprint": {
+    "files": 1423,
+    "sha256": "37c047e4e04bd2c2f8a14ec91d2ba8765ace0a58dbcfc262cd991aa39f47ee07"
+  },
+  "minimum24hMet": false
+}

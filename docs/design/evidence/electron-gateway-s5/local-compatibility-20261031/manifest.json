@@ -1,0 +1,38 @@
+{
+  "scope": "Retained old-Gateway reuse failures and final installed local compatibility; existing older database remains v262",
+  "files": [
+    {
+      "file": "s5-renewal-cleanup-local-old-server-1.json",
+      "sha256": "d4eca138790c44a51184d8bf78bf54e20b67b8ff1c4939e095260b5a5ab53eb6"
+    },
+    {
+      "file": "s5-renewal-cleanup-local-old-server-2.json",
+      "sha256": "c3579629bf1ffd42ad44d42df4c9da014f677af122791665c77951a0a5019e8b"
+    },
+    {
+      "file": "s5-local-old-schema-preview-1.json",
+      "sha256": "ed2348b4f1dac2c3326653c74a9e6195ad884db7f83015400da175420bca043f"
+    },
+    {
+      "file": "s5-final-local-1.json",
+      "sha256": "8f5e1bb84b2500846d910bba458e0806585fac79084c061c403427d7741b1817"
+    },
+    {
+      "file": "s5-final-old-server-1.json",
+      "sha256": "3ca0d25d00793d20a0dcb247ac6381b3c83df9333fae086f0bf5207bf7791cf1"
+    },
+    {
+      "file": "s5-local-old-schema-idle-1.json",
+      "sha256": "33bfaa306d50b76d309cfc87ba953b3e8b2f81bd88cf794b6bc1258a26ee4d68"
+    },
+    {
+      "file": "xopc-local-old-schema-tests-1.log",
+      "sha256": "3d21a9742f921677911dde48cfc48c65491e1d1a05cb9c5423ed2f2ea7de194a"
+    },
+    {
+      "file": "xopc-local-old-schema-tests-4.log",
+      "sha256": "82b2a6de30a1c668315c6aeab54e642907a2a7ed6299a47c6a132839c22b2dc5"
+    }
+  ],
+  "archivedAt": "2026-10-31T14:13:45.104Z"
+}

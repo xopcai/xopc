@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "startedAt": "2026-10-31T14:13:25.987Z",
+  "scope": "Readonly actual distribution DMG mount, copied installed app signature and exact fingerprint; not notarization",
+  "installed": {
+    "files": 1423,
+    "sha256": "0aee597f3798b6453944cec78bd767fa96446ab6bee21c988eaf866a543108a3"
+  },
+  "artifacts": [
+    {
+      "path": "reports/s5-final-delivery/xopc-0.0.437-arm64.dmg",
+      "sha256": "3fa722258f4abd28a7eedf43d606e9ced1dc93828d6aa0ec9f260573eb5712d3"
+    },
+    {
+      "path": "reports/s5-final-delivery/xopc-0.0.437-arm64.zip",
+      "sha256": "f0a3e937c6d736125ab68eeeff1b88aea284b05105b4ea238bda4a9b02872c17"
+    }
+  ],
+  "detached": true
+}
