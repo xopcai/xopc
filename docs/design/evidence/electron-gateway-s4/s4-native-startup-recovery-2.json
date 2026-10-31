@@ -1,0 +1,8 @@
+{
+  "passed": false,
+  "fault": "missing remote connection HTML; deliberately modified resource seal, not a release artifact",
+  "startedAt": "2026-10-31T10:41:46.740Z",
+  "checks": {},
+  "error": "browserType.connectOverCDP: Timeout 29860ms exceeded.\nCall log:\n\u001b[2m  - <ws preparing> retrieving websocket url from http://127.0.0.1:64347\u001b[22m\n\u001b[2m  - <ws connecting> ws://127.0.0.1:64347/devtools/browser/5d6e3961-1c24-4ea5-82cf-469d351c0984\u001b[22m\n\u001b[2m  - <ws connected> ws://127.0.0.1:64347/devtools/browser/5d6e3961-1c24-4ea5-82cf-469d351c0984\u001b[22m\n\n    at launchInstalledApplication (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-packaged-acceptance.mjs:92:30)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-startup-recovery.mjs:29:9",
+  "finishedAt": "2026-10-31T10:42:16.809Z"
+}

@@ -1,0 +1,14 @@
+{
+  "testedAppFingerprint": "887d7aa714f198eb9648912bf86654e0c9e8c0d50a048993612a444c9b4da18c",
+  "source": "DMG mounted read-only and copied to clean directory before testing",
+  "files": {
+    "xopc-0.0.437-arm64.dmg": {
+      "bytes": 177566554,
+      "sha256": "834a76016348880702367e4eb0c135d249e90954303576ed009bff937ea2eb76"
+    },
+    "xopc-0.0.437-arm64.zip": {
+      "bytes": 175204379,
+      "sha256": "6ebbb9ef7963cbf2ce9dc9f93128b3a52b51e306593e77b23bc119276e8e2034"
+    }
+  }
+}

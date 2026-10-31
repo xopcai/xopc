@@ -1,0 +1,14 @@
+Executable=/private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/MacOS/xopc
+Identifier=ai.xopc.xopc
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=440 flags=0x10000(runtime) hashes=3+7 location=embedded
+Signature size=8971
+Authority=Developer ID Application: Qiaomin Xu (73R6WF52UJ)
+Authority=Developer ID Certification Authority
+Authority=Apple Root CA
+Timestamp=Oct 31, 2026 at 17:59:51
+Info.plist entries=36
+TeamIdentifier=73R6WF52UJ
+Runtime Version=26.5.0
+Sealed Resources version=2 rules=13 files=1364
+Internal requirements count=1 size=172

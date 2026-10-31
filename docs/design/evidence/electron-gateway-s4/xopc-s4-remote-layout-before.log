@@ -1,0 +1,3 @@
+[verify-electron-asar-deps] OK — node_modules 58.25 MB
+[verify-electron-asar-deps] OK — runtime deps present (ws, sharp, silk-wasm, node-pty, @trycua/cua-driver, quickjs-wasi, pdfjs-dist)
+[verify-electron-asar-deps] missing runtime paths: out/preload/connections.cjs, out/preload/shell.cjs, out/preload/gateway-connections.html, out/preload/gateway-connections.js, out/preload/remote-shell.html, out/preload/remote-shell.js, out/preload/remote-shell.css

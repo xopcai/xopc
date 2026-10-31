@@ -10,7 +10,7 @@ import { pipeline } from 'node:stream/promises';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import { filterRealtime, shellRoute, shellWrite, ShellSlots } from './policy.js';
-import { ShellUpstream } from './upstream.js';
+import { ShellUpstream, ShellUpstreamThrottle } from './upstream.js';
 
 const JSON_MAX = 4 * 1024 * 1024;
 const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'";
@@ -157,6 +157,9 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
         res.statusCode = status; res.setHeader('Content-Type', 'application/json'); res.end(text);
       }
     } catch (error) {
+      if (error instanceof ShellUpstreamThrottle) {
+        res.setHeader('Retry-After', String(error.retryAfterSeconds)); fail(429, 'SHELL_UPSTREAM_THROTTLED'); return;
+      }
       const code = error instanceof Error ? error.message : '';
       if (/^GATEWAY_(?:AUTH_FAILED|TLS_FAILED|IDENTITY|CHAT_INCOMPATIBLE|CONTRACT_UNAVAILABLE)/.test(code)) { invalidate(); fail(code === 'GATEWAY_AUTH_FAILED' ? 401 : 409, code); return; }
       const status = code === 'SHELL_BUSY' || code === 'SHELL_TICKET_LIMIT' ? 429 : code === 'SHELL_BODY_LIMIT' ? 413 : code === 'SHELL_TICKET_DENIED' || code === 'SHELL_INPUT_DENIED' ? 400 : 502;

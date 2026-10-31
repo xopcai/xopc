@@ -1,0 +1,40 @@
+{
+  "passed": false,
+  "tls": false,
+  "startedAt": "2026-10-31T10:10:35.221Z",
+  "checks": {},
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "application": "/tmp/xopc-s4-delivery/installed/xopc.app",
+  "packageBefore": {
+    "files": 1415,
+    "sha256": "b9558d06653e5336710308afa9a9d442a5ee93b6ce4f6541dfed4c36de7eb43d"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-s4-delivery/installed/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-ah5M4N",
+    "rendererCdpOnly": true,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 88581
+  },
+  "error": "browserContext.waitForEvent: Target page, context or browser has been closed\n    at Object.firstWindow (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-packaged-acceptance.mjs:94:68)\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:126:25",
+  "serverLogs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52906\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=88513, lockPath=/Users/micjoyce/.xopc/locks/gateway.99c2e131.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52906...\n✅ Gateway started\n   URL: http://127.0.0.1:52906\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52906\n🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52927\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=88540, lockPath=/Users/micjoyce/.xopc/locks/gateway.65aa359e.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52927...\n✅ Gateway started\n   URL: http://127.0.0.1:52927\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52927\n",
+  "applicationLogs": "\nDevTools listening on ws://127.0.0.1:52944/devtools/browser/7d51fbe8-f466-426b-bcde-682692ceb6ab\n(node:88581) electron: Failed to load URL: file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar/out/preload/gateway-connections.html with error: ERR_FILE_NOT_FOUND\n(Use `xopc --trace-warnings ...` to show where the warning was created)\n[GatewayConnections] Preview startup failed; restart without --gateway-connections for local mode.\n",
+  "windows": [],
+  "finishedAt": "2026-10-31T10:10:37.852Z",
+  "packageAfter": {
+    "files": 1415,
+    "sha256": "b9558d06653e5336710308afa9a9d442a5ee93b6ce4f6541dfed4c36de7eb43d"
+  }
+}

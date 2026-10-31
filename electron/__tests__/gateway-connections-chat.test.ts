@@ -107,6 +107,19 @@ describe('receipt recovery and window state', () => {
   afterEach(() => { model.dispose(); });
   async function ready() { await model.initialize(); await vi.waitFor(() => expect(model.view.phase).toBe('ready')); }
   const posts = () => api.mock.calls.filter(([path, body]) => String(path).endsWith('/inputs') && body);
+  it('keeps a throttled pre-submit read retryable and never automatically posts the retained draft', async () => {
+    await ready(); await model.draft('retained');
+    const original = api.getMockImplementation()!;
+    let limited = true;
+    api.mockImplementation(async (path: string, body?: unknown) => {
+      if (limited && path === `/api/sessions/${conversationId}`) throw new ChatApiError(429, 'SHELL_UPSTREAM_THROTTLED');
+      return original(path, body);
+    });
+    await model.send(); expect(posts()).toHaveLength(0); expect(state.drafts[conversationId]).toBe('retained');
+    expect(model.view.phase).not.toBe('recovery');
+    limited = false; await model.refresh(); await vi.waitFor(() => expect(model.view.phase).toBe('ready'));
+    expect(posts()).toHaveLength(0);
+  });
   it('records intent before POST and never replays a lost response during reconnect/new window', async () => {
     await ready(); await model.draft('hello'); lost = true; receiptVisible = false;
     await model.send(); await vi.waitFor(() => expect(model.view.phase).toBe('unknown'));

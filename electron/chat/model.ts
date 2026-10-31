@@ -295,7 +295,9 @@ export class RemoteChatModel {
       await this.refresh();
     } catch (error) {
       if (!this.disposed && !this.locked) {
-        if (!posted) this.fail(error);
+        if (!posted && error instanceof ChatApiError && error.status === 429) {
+          this.view.phase = 'retrying'; this.view.notice = '服务器限流，本次输入未发送；草稿已保留，请稍后重试。'; this.emit();
+        } else if (!posted) this.fail(error);
         else if (error instanceof ChatApiError && [400, 404, 409, 422, 429].includes(error.status) && !error.code.startsWith('GATEWAY_')) {
           this.state.pending = undefined; await this.persist(); this.view.notice = `服务器未接受输入：${error.message}。请刷新后检查草稿。`;
         } else { this.view.phase = 'unknown'; this.view.notice = '输入结果未知，正在等待核实；不会自动重发。'; this.emit(); }

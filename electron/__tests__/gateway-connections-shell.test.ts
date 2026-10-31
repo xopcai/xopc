@@ -27,6 +27,7 @@ async function setup() {
     upstreamCalls.push({ path: req.url!, headers: req.headers });
     if (req.url !== '/api/gateway-identity/challenge' && req.headers.authorization !== `Bearer ${token}`) { res.writeHead(401).end(); return; }
     if (mode === '401') { res.writeHead(401).end(); return; }
+    if (mode === '429') { res.writeHead(429, { 'Retry-After': '2' }).end('{}'); return; }
     if (mode === 'redirect') { res.writeHead(302, { Location: 'http://not-allowed.invalid', 'Set-Cookie': 'leak=1' }).end(); return; }
     if (req.url === '/api/desktop-chat/bootstrap?chat=1') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ok: true, payload: { ...identity, manifest: mode === 's3' ? { ...DESKTOP_CHAT_MANIFEST, chat: 'text-receipt.v1' } : DESKTOP_CHAT_MANIFEST } })); return; }
     if (req.url === '/api/gateway-identity/challenge') {
@@ -89,6 +90,14 @@ it('authenticates a fresh nonce against the persistent identity and rejects chan
   const changed = new ShellUpstream({ origin: fixture.origin, transport: 'ssh', token, identity: { ...identity, gatewayId: randomUUID() } });
   await expect(changed.authenticate()).rejects.toThrow('GATEWAY_IDENTITY_CHANGED'); changed.close();
   mode = 'nonce'; await expect(fixture.upstream.authenticate()).rejects.toThrow('GATEWAY_IDENTITY_PROOF_FAILED');
+});
+it('keeps a throttled identity preflight recoverable without forwarding the request', async () => {
+  mode = '429';
+  const response = await get('/api/models');
+  expect(response.status).toBe(429); expect(response.headers.get('retry-after')).toBe('2');
+  expect((await response.json()).error.code).toBe('SHELL_UPSTREAM_THROTTLED');
+  expect(upstreamCalls.some(call => call.path === '/api/models')).toBe(false);
+  mode = ''; expect((await get('/api/models')).status).toBe(200);
 });
 it('restricts SSH localhost resolution to loopback and proves a pin before sending owner credentials', async () => {
   const pinned = new ShellUpstream({ origin: fixture.origin.replace('127.0.0.1', 'localhost'), transport: 'ssh', token, identity });

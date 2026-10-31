@@ -1,0 +1,47 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts (29 tests | 1 failed) 195ms
+   × keeps a throttled identity preflight recoverable without forwarding the request 10ms
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts (20 tests | 1 failed) 1071ms
+     × keeps a throttled pre-submit read retryable and never automatically posts the retained draft 54ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts > receipt recovery and window state > keeps a throttled pre-submit read retryable and never automatically posts the retained draft
+AssertionError: expected 'recovery' not to be 'recovery' // Object.is equality
+ ❯ electron/__tests__/gateway-connections-chat.test.ts:119:34
+    117|     });
+    118|     await model.send(); expect(posts()).toHaveLength(0); expect(state.…
+    119|     expect(model.view.phase).not.toBe('recovery');
+       |                                  ^
+    120|     limited = false; await model.refresh(); await vi.waitFor(() => exp…
+    121|     expect(posts()).toHaveLength(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts > keeps a throttled identity preflight recoverable without forwarding the request
+AssertionError: expected 409 to be 429 // Object.is equality
+
+- Expected
++ Received
+
+- 429
++ 409
+
+ ❯ electron/__tests__/gateway-connections-shell.test.ts:97:27
+     95|   mode = '429';
+     96|   const response = await get('/api/models');
+     97|   expect(response.status).toBe(429); expect(response.headers.get('retr…
+       |                           ^
+     98|   expect((await response.json()).error.code).toBe('SHELL_UPSTREAM_THRO…
+     99|   expect(upstreamCalls.some(call => call.path === '/api/models')).toBe…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 47 passed (49)
+   Start at  18:28:41
+   Duration  1.35s (transform 252ms, setup 22ms, import 410ms, tests 1.27s, environment 0ms)
+

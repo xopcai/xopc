@@ -1,0 +1,40 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T10:07:02.161Z",
+  "scope": "Installed macOS app local spawn/reuse, real bundled Gateway/SQLite/IPC/PTY/browser with deterministic inference; not upgrade or S5 acceptance",
+  "samples": [
+    {
+      "mode": "spawn",
+      "passed": false,
+      "runtime": {
+        "executable": "/tmp/xopc-s4-delivery/installed/xopc.app/Contents/MacOS/xopc",
+        "appAsar": "/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar",
+        "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-local-oC1K07",
+        "rendererCdpOnly": true,
+        "pid": 84161
+      },
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "662484f5-3825-4b4e-9793-7970a5912167"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('main').getByText('XOPC_LOCAL_CHAT_OK', { exact: true }).first() to be visible\u001b[22m\n\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-installed-local.mjs:55:116",
+      "logs": ""
+    }
+  ],
+  "packageBefore": {
+    "files": 1415,
+    "sha256": "b9558d06653e5336710308afa9a9d442a5ee93b6ce4f6541dfed4c36de7eb43d"
+  },
+  "packageAfter": {
+    "files": 1415,
+    "sha256": "b9558d06653e5336710308afa9a9d442a5ee93b6ce4f6541dfed4c36de7eb43d"
+  },
+  "finishedAt": "2026-10-31T10:07:47.200Z"
+}

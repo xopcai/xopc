@@ -1,0 +1,10 @@
+node:internal/process/promises:324
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+TimeoutError: Timeout 60000ms exceeded.
+    at _ProgressController.run (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_1152b278c7fe15a16871b06812a0f2af/node_modules/playwright-core/lib/coreBundle.js:12962:32)
+    at ElectronDispatcher._runCommand (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_1152b278c7fe15a16871b06812a0f2af/node_modules/playwright-core/lib/coreBundle.js:24019:35)
+    at DispatcherConnection.dispatch (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_1152b278c7fe15a16871b06812a0f2af/node_modules/playwright-core/lib/coreBundle.js:24253:44)
+
+Node.js v26.12.1

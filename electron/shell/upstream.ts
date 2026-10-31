@@ -10,6 +10,15 @@ import { parseRemoteProfile } from '../gateway/profiles.js';
 
 export type RemoteTarget = { origin: string; transport: 'direct' | 'ssh'; token: string; identity?: DesktopChatIdentity };
 
+export class ShellUpstreamThrottle extends Error {
+  readonly retryAfterSeconds: number;
+  constructor(value: string | string[] | undefined) {
+    super('SHELL_UPSTREAM_THROTTLED');
+    const seconds = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : 30;
+    this.retryAfterSeconds = Math.min(30, Math.max(1, Number.isSafeInteger(seconds) ? seconds : 30));
+  }
+}
+
 /** A dedicated pool, always pinned to one configured origin; no redirect following. */
 export class ShellUpstream {
   readonly agent: http.Agent | https.Agent;
@@ -46,6 +55,7 @@ export class ShellUpstream {
         reject(new Error(/CERT|TLS|SELF_SIGNED|UNABLE_TO_VERIFY/.test(code) ? 'GATEWAY_TLS_FAILED' : 'GATEWAY_NETWORK_FAILED'));
       });
       req.on('response', res => {
+        if (res.statusCode === 429) { res.destroy(); reject(new ShellUpstreamThrottle(res.headers['retry-after'])); return; }
         if (res.statusCode !== 200 || !/^application\/json\b/i.test(res.headers['content-type'] ?? '')) {
           res.destroy(); reject(new Error(res.statusCode === 401 || res.statusCode === 403 ? 'GATEWAY_AUTH_FAILED' : res.statusCode! >= 500 ? 'GATEWAY_NETWORK_FAILED' : 'GATEWAY_CONTRACT_UNAVAILABLE')); return;
         }

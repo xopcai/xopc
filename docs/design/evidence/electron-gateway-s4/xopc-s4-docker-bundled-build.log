@@ -1,0 +1,83 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 924B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:26.12.1-bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context:
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [runtime  1/15] FROM docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c
+#4 resolve docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c 0.0s done
+#4 DONE 0.0s
+
+#5 [runtime  2/15] WORKDIR /app
+#5 CACHED
+
+#6 [internal] load build context
+#6 transferring context: 70.04MB 0.4s done
+#6 DONE 0.4s
+
+#7 [3/9] COPY pnpm /opt/pnpm
+#7 DONE 0.2s
+
+#8 [4/9] COPY package.json ./
+#8 DONE 0.1s
+
+#9 [5/9] RUN node /opt/pnpm/bin/pnpm.mjs install --prod --ignore-scripts --node-linker=hoisted --no-frozen-lockfile
+#9 5.685 Progress: resolved 1, reused 0, downloaded 0, added 0
+#9 6.685 Progress: resolved 13, reused 0, downloaded 0, added 0
+#9 6.787 
+#9 6.787    ╭──────────────────────────────────────────╮
+#9 6.787    │                                          │
+#9 6.787    │   Update available! 11.9.0 → 12.16.1.    │
+#9 6.787    │   Changelog: https://pnpm.io/v/12.16.1   │
+#9 6.787    │     To update, run: pnpm add -g pnpm     │
+#9 6.787    │                                          │
+#9 6.787    ╰──────────────────────────────────────────╯
+#9 6.787 
+#9 7.689 Progress: resolved 14, reused 0, downloaded 0, added 0
+#9 10.74 Progress: resolved 15, reused 0, downloaded 0, added 0
+#9 11.74 Progress: resolved 45, reused 0, downloaded 0, added 0
+#9 12.42 
+#9 12.42 devDependencies: skipped
+#9 12.42 
+#9 12.43 Packages: +19
+#9 12.43 +++++++++++++++++++
+#9 12.74 Progress: resolved 67, reused 0, downloaded 1, added 1
+#9 13.74 Progress: resolved 67, reused 0, downloaded 14, added 14
+#9 14.89 Progress: resolved 67, reused 0, downloaded 15, added 14
+#9 15.89 Progress: resolved 67, reused 0, downloaded 18, added 18
+#9 16.61 Progress: resolved 67, reused 0, downloaded 19, added 19, done
+#9 16.70 Done in 16.5s using pnpm v11.9.0
+#9 DONE 17.1s
+
+#10 [6/9] COPY out out
+#10 DONE 0.1s
+
+#11 [7/9] COPY dist dist
+#11 DONE 0.2s
+
+#12 [8/9] COPY skills skills
+#12 DONE 0.1s
+
+#13 [9/9] RUN mkdir -p /home/node/.xopc && chown -R node:node /home/node/.xopc
+#13 DONE 0.2s
+
+#14 exporting to image
+#14 exporting layers
+#14 exporting layers 6.4s done
+#14 exporting manifest sha256:08ee763f4aa65cf6483a63bf3d5be9595010c7357d20bcb648d4c36ab1fe04f2
+#14 exporting manifest sha256:08ee763f4aa65cf6483a63bf3d5be9595010c7357d20bcb648d4c36ab1fe04f2 done
+#14 exporting config sha256:1c554dcde8c8e54754f6cb5f40b283125836528aa864c30fbd2eadcb16af0184 done
+#14 exporting attestation manifest sha256:277836b10688585aacd7f962a89d27f0eb4c77442f7970b46b2aa456f2a60ded 0.0s done
+#14 exporting manifest list sha256:c0a813a112ab6b65f15c5f5fcc724d34a42b0d19da3726dc03a7b812df865972 done
+#14 naming to docker.io/library/xopc:s4-bundled-gateway done
+#14 unpacking to docker.io/library/xopc:s4-bundled-gateway
+#14 unpacking to docker.io/library/xopc:s4-bundled-gateway 1.3s done
+#14 DONE 7.7s

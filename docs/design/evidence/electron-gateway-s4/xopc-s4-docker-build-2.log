@@ -1,0 +1,24 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from xopc-s4-Dockerfile
+#1 transferring dockerfile: 38B 0.1s
+#1 transferring dockerfile: 6.51kB 0.1s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/node:26.12.1-bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:26.12.1-bookworm
+#3 ERROR: failed to authorize: DeadlineExceeded: failed to fetch anonymous token: Get "https://auth.docker.io/token?scope=repository%3Alibrary%2Fnode%3Apull&service=registry.docker.io": dial tcp [2a03:2880:f12d:83:face:b00c:0:25de]:443: i/o timeout
+------
+ > [internal] load metadata for docker.io/library/node:26.12.1-bookworm:
+------
+xopc-s4-Dockerfile:8
+--------------------
+   6 |     ARG XOPC_PNPM_VERSION=11.9.0
+   7 |     
+   8 | >>> FROM ${XOPC_NODE_IMAGE} AS build
+   9 |     ARG XOPC_PNPM_VERSION
+  10 |     
+--------------------
+ERROR: failed to build: failed to solve: DeadlineExceeded: failed to fetch anonymous token: Get "https://auth.docker.io/token?scope=repository%3Alibrary%2Fnode%3Apull&service=registry.docker.io": dial tcp [2a03:2880:f12d:83:face:b00c:0:25de]:443: i/o timeout

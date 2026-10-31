@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "image": "xopc:s4-bundled-gateway",
+  "startedAt": "2026-10-31T10:19:20.118Z",
+  "scope": "Linux text-only bundled Gateway fixture; lifecycle scripts disabled, no native PTY/browser/Host coverage; not the standalone production Docker image",
+  "pnpm": "11.9.0",
+  "serverSha256": "5473c956f62b8705df2bfb293044688aab4a6d13afff4323041a567bd75d3988",
+  "dependencies": {
+    "ws": "8.21.0",
+    "sharp": "0.35.5",
+    "silk-wasm": "3.7.1",
+    "node-pty": "1.1.0",
+    "@trycua/cua-driver": "0.36.0",
+    "quickjs-wasi": "3.6.2",
+    "pdfjs-dist": "6.2.108"
+  },
+  "imageId": "sha256:1e60dbcce3849b6fbd629f430a98dd0a475806d0a36b2b20f4ea166ee30f52c8",
+  "finishedAt": "2026-10-31T10:19:21.327Z"
+}

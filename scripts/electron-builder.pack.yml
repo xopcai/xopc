@@ -30,6 +30,12 @@ files:
 # Gateway bundle runs in a Node subprocess; asar fs adapter overhead on a 19MB require
 # slows cold start. Unpacking it (and its sibling templates) puts it on plain disk.
 asarUnpack:
+  # The file:// connection page must stay on disk with file protocol privileges disabled.
+  # Keep the original local preload layout; only the remote entry assets are added here.
+  - 'out/preload/connections.cjs'
+  - 'out/preload/shell.cjs'
+  - 'out/preload/gateway-connections.*'
+  - 'out/preload/remote-shell.*'
   - 'out/server/**'
   - 'node_modules/**'
   - 'dist/electron/extensions/**'

@@ -1,0 +1,5 @@
+[verify-electron-asar-deps] OK — node_modules 58.25 MB
+[verify-electron-asar-deps] OK — runtime deps present (ws, sharp, silk-wasm, node-pty, @trycua/cua-driver, quickjs-wasi, pdfjs-dist)
+[verify-electron-asar-deps] OK — unpacked app runtime layout present
+[verify-electron-asar-deps] OK — 367 desktop UI, Shell, Gateway and SQL resources
+[verify-electron-asar-deps] OK — 657 packaged files match built runtime bytes

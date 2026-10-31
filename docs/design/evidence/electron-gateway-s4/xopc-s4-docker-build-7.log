@@ -1,0 +1,73 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from xopc-s4-Dockerfile
+#1 transferring dockerfile: 6.51kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/xopc:s4-node26-build
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:26.12.1-bookworm-slim
+#3 DONE 0.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 1.02kB done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 DONE 0.0s
+
+#6 [build  1/10] FROM docker.io/library/xopc:s4-node26-build@sha256:0fd6b72ed63f9f9366795e775ae6fbe59aae78c228ba64484173cbc7993ea762
+#6 resolve docker.io/library/xopc:s4-node26-build@sha256:0fd6b72ed63f9f9366795e775ae6fbe59aae78c228ba64484173cbc7993ea762 0.0s done
+#6 DONE 0.0s
+
+#7 [runtime  1/15] FROM docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c
+#7 resolve docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c
+#7 resolve docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c 0.0s done
+#7 DONE 0.0s
+
+#8 [runtime  2/15] WORKDIR /app
+#8 CACHED
+
+#5 [internal] load build context
+#5 transferring context: 669.95kB 0.3s done
+#5 DONE 0.3s
+
+#6 [build  1/10] FROM docker.io/library/xopc:s4-node26-build@sha256:0fd6b72ed63f9f9366795e775ae6fbe59aae78c228ba64484173cbc7993ea762
+#6 DONE 0.2s
+
+#9 [build  2/10] WORKDIR /app
+#9 DONE 0.2s
+
+#10 [build  3/10] RUN npm install --global "pnpm@11.9.0"
+#10 5.560 npm error code EEXIST
+#10 5.560 npm error path /usr/local/bin/pnpx
+#10 5.560 npm error EEXIST: file already exists
+#10 5.560 npm error File exists: /usr/local/bin/pnpx
+#10 5.560 npm error Remove the existing file and try again, or run npm
+#10 5.560 npm error with --force to overwrite files recklessly.
+#10 5.560 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-10-31T10_14_07_744Z-debug-0.log
+#10 ERROR: process "/bin/sh -c npm install --global \"pnpm@${XOPC_PNPM_VERSION}\"" did not complete successfully: exit code: 1
+
+#11 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "https://deb.debian.org/debian" ]; then       sed -i "s|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|http://deb.debian.org/debian-security|https://deb.debian.org/debian-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#11 4.111 Ign:1 https://deb.debian.org/debian bookworm InRelease
+#11 CANCELED
+------
+ > [build  3/10] RUN npm install --global "pnpm@11.9.0":
+5.560 npm error code EEXIST
+5.560 npm error path /usr/local/bin/pnpx
+5.560 npm error EEXIST: file already exists
+5.560 npm error File exists: /usr/local/bin/pnpx
+5.560 npm error Remove the existing file and try again, or run npm
+5.560 npm error with --force to overwrite files recklessly.
+5.560 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-10-31T10_14_07_744Z-debug-0.log
+------
+xopc-s4-Dockerfile:19
+--------------------
+  17 |     WORKDIR /app
+  18 |     
+  19 | >>> RUN npm install --global "pnpm@${XOPC_PNPM_VERSION}"
+  20 |     
+  21 |     # Persist fetched packages in a normal layer, including on ephemeral CI builders.
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c npm install --global \"pnpm@${XOPC_PNPM_VERSION}\"" did not complete successfully: exit code: 1

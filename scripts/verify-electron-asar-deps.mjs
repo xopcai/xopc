@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ELECTRON_PACKAGED_DEPENDENCIES } from './electron-runtime-externals.mjs';
+import { supportedUpgradeFiles, verifyCanonicalSqlBytes, verifyDesktopArtifactBytes, verifyDesktopPackageLayout } from './electron-package-layout.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const requireRoot = createRequire(join(root, 'package.json'));
@@ -62,6 +63,13 @@ function verifyUnpackedRuntimeDeps(asarPath) {
 function verifyUnpackedAppLayout(asarPath) {
   const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
   const required = [
+    'out/preload/connections.cjs',
+    'out/preload/shell.cjs',
+    'out/preload/gateway-connections.html',
+    'out/preload/gateway-connections.js',
+    'out/preload/remote-shell.html',
+    'out/preload/remote-shell.js',
+    'out/preload/remote-shell.css',
     'out/server/index.js',
     'out/server/codemode-worker.js',
     'node_modules/quickjs-wasi/quickjs.wasm',
@@ -105,6 +113,11 @@ function main() {
     }
     verifyUnpackedRuntimeDeps(asarPath);
     verifyUnpackedAppLayout(asarPath);
+    const manifest = verifyDesktopPackageLayout(path => asar.extractFile(asarPath, path), supportedUpgradeFiles(root));
+    verifyCanonicalSqlBytes(path => asar.extractFile(asarPath, path), root);
+    console.log(`[verify-electron-asar-deps] OK — ${Object.keys(manifest.files).length} desktop UI, Shell, Gateway and SQL resources`);
+    const artifacts = verifyDesktopArtifactBytes(path => asar.extractFile(asarPath, path), root);
+    console.log(`[verify-electron-asar-deps] OK — ${Object.keys(artifacts.files).length} packaged files match built runtime bytes`);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
