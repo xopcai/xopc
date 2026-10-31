@@ -127,6 +127,8 @@ async function run(mode, index) {
   let external;
   let application;
   let logs = '';
+  let stopStartupProbe = false;
+  let startupProbe;
   const authenticated = () => fetch(`${base}/api/config`, {
     headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(1500),
   }).then(response => response.ok).catch(() => false);
@@ -142,7 +144,33 @@ async function run(mode, index) {
       });
     }
     const start = performance.now();
+    if (diagnostics) startupProbe = (async () => {
+      while (!stopStartupProbe) {
+        if (await authenticated()) return { firstObservedAuthenticatedAt: performance.timeOrigin + performance.now() };
+        await delay(50);
+      }
+      return undefined;
+    })();
     application = await _electron.launch({ args: [entry], cwd: root, env, timeout: 60_000 });
+    if (diagnostics) await application.evaluate(() => {
+      globalThis.__acceptanceStartupTrace = [];
+      const original = globalThis.fetch;
+      globalThis.fetch = async (...args) => {
+        const start = performance.now();
+        let path = '[unparseable]';
+        try { path = new URL(args[0] instanceof Request ? args[0].url : String(args[0])).pathname; } catch { /* Diagnostics must not change fetch behavior. */ }
+        try {
+          const response = await original(...args);
+          globalThis.__acceptanceStartupTrace.push({ path, start: performance.timeOrigin + start,
+            elapsedMs: performance.now() - start, status: response.status });
+          return response;
+        } catch (error) {
+          globalThis.__acceptanceStartupTrace.push({ path, start: performance.timeOrigin + start,
+            elapsedMs: performance.now() - start, failed: true });
+          throw error;
+        }
+      };
+    });
     application.process().stdout?.on('data', chunk => { logs = (logs + chunk).slice(-8000); });
     application.process().stderr?.on('data', chunk => { logs = (logs + chunk).slice(-8000); });
     const page = await until(async () => {
@@ -181,13 +209,18 @@ async function run(mode, index) {
     }, { count, diagnostics });
     Object.assign(sample, metrics);
     if (diagnostics) {
+      sample.startupDiagnostics = {
+        independentProbe: await startupProbe,
+        mainRequests: await application.evaluate(() => globalThis.__acceptanceStartupTrace),
+        lifecycleLog: (await readFile(join(state, 'electron/electron-startup.log'), 'utf8')).slice(-20_000).replaceAll(token, '[redacted]'),
+      };
       sample.browserDiagnostics = await page.evaluate(async () => {
         const longTasks = [];
         const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => ({ startTime: e.startTime, duration: e.duration }))));
         observer.observe({ type: 'longtask', buffered: true });
         await new Promise(resolve => setTimeout(resolve, 0));
         observer.disconnect();
-        return { longTasks, resources: performance.getEntriesByType('resource').filter(e => ['/api/config', '/api/sessions'].includes(new URL(e.name).pathname)).map(e => e.toJSON()) };
+        return { longTasks, navigation: performance.getEntriesByType('navigation').map(e => e.toJSON()), resources: performance.getEntriesByType('resource').filter(e => ['/api/config', '/api/sessions'].includes(new URL(e.name).pathname)).map(e => e.toJSON()) };
       });
     }
     if (serverDiagnostics) sample.httpTrace = (await readFile(env.XOPC_ACCEPTANCE_HTTP_TRACE, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
@@ -268,6 +301,8 @@ async function run(mode, index) {
     if (logs) sample.gatewayLogTail = logs.replaceAll(token, '[redacted]');
     throw error;
   } finally {
+    stopStartupProbe = true;
+    await startupProbe;
     if (application && application.process().exitCode === null && application.process().signalCode === null) {
       // A failing fixture can leave a native quit-confirmation dialog open.
       // Only reap this test instance's descendants, never an external/reused Gateway.
