@@ -36,17 +36,23 @@ export function validateSampling(report) {
         latencySummary(sample[metric]);
       }
     }
-    for (const metric of ['configMs', 'sessionsMs']) {
-      assert.deepEqual(report.summary[mode][metric], latencySummary(report.samples.filter(s => s.mode === mode).flatMap(s => s[metric])),
+    for (const metric of ['configMs', 'sessionsMs', 'readyMs', 'shutdownMs', 'rssMiB']) {
+      const values = report.samples.filter(s => s.mode === mode).flatMap(s => metric === 'rssMiB' ? s.resources?.rssMiB : s[metric]);
+      assert.deepEqual(report.summary[mode][metric], latencySummary(values),
         'Summary does not match retained raw timings');
     }
   }
+  const runtime = report.samples[0].runtime;
+  assert(typeof runtime?.node === 'string' && typeof runtime?.electron === 'string', 'Missing embedded runtime');
+  for (const sample of report.samples) assert.deepEqual(sample.runtime, runtime, 'Runtime changed within report');
   return modes;
 }
 
 export function assertComparableSampling(baseline, candidate) {
   assert(baseline.passed, 'Comparison baseline did not pass');
   assert.deepEqual(validateSampling(candidate), validateSampling(baseline), 'Mode selection changed');
+  assert.equal(candidate.osRelease, baseline.osRelease, 'OS release changed');
+  assert.deepEqual(candidate.samples[0].runtime, baseline.samples[0].runtime, 'Embedded runtime changed');
   assert.equal(candidate.runs, baseline.runs);
   assert.equal(candidate.operations, baseline.operations);
   assert.equal(Boolean(candidate.functional), Boolean(baseline.functional));

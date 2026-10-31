@@ -13,7 +13,7 @@ export function installConnectionIpcBoundary(ipc: IpcMain, authorize: (event: Ip
     });
   }
   // Rejected fire-and-forget messages must not execute a handler or crash main.
-  for (const method of ['on', 'once', 'addListener'] as const) {
+  for (const method of ['on', 'once', 'addListener', 'prependListener', 'prependOnceListener'] as const) {
     const original = ipc[method].bind(ipc);
     ipc[method] = (channel, listener) => original(channel, Object.assign(function (event, ...args) {
       try { authorize(event, channel); }

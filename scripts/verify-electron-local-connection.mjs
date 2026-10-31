@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { lstat, mkdir, mkdtemp, readFile, readdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir, platform, arch, release } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -12,7 +12,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { _electron } from 'playwright-core';
 
-import { localConnectionArtifactManifest, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
+import { createAcceptanceOutput, localConnectionArtifactManifest, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
 import { assertComparableSampling, LEGACY_SAMPLE_PLAN, latencyPopulations, latencySummary as summary } from './electron-local-connection-metrics.mjs';
 
 assert.notEqual(platform(), 'win32', 'This acceptance runner requires POSIX process inspection; Windows acceptance is separate');
@@ -36,8 +36,7 @@ assert(Number.isInteger(runs) && runs > 0);
 assert(Number.isInteger(operations) && operations > 0);
 const output = resolve(flag('--output', 'reports/electron-local-connection.json'));
 assert(!comparePath || resolve(comparePath) !== output, 'Do not overwrite the comparison baseline');
-try { await lstat(output); throw new Error('Acceptance output exists; use a new path to retain evidence'); }
-catch (error) { if (error.code !== 'ENOENT') throw error; }
+await createAcceptanceOutput(output);
 const root = resolve(import.meta.dirname, '..');
 const artifactRoot = resolve(flag('--artifact-root', root));
 const entry = join(artifactRoot, 'out/main/index.js');

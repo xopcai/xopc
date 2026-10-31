@@ -11,9 +11,10 @@ import { setTimeout as delay } from 'node:timers/promises';
 import electron from 'electron';
 import { chromium } from 'playwright-core';
 
-import { localConnectionEnvironment, withTimeout } from './electron-local-connection-support.mjs';
+import { createAcceptanceOutput, localConnectionEnvironment, withTimeout } from './electron-local-connection-support.mjs';
 
 const root = resolve(import.meta.dirname, '..');
+const output = await createAcceptanceOutput(join(root, 'reports/p2a1-s1-native-keychain-e2e.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-keychain-e2e-'));
 const env = localConnectionEnvironment(process.env, root, state, join(state, 'unused.json'), join(state, 'unused-workspace'));
 const report = { startedAt: new Date().toISOString(), passed: false,
@@ -91,7 +92,7 @@ finally {
   await stop();
   report.finishedAt = new Date().toISOString();
   await mkdir(join(root, 'reports'), { recursive: true });
-  await writeFile(join(root, 'reports/p2a1-s1-native-keychain-e2e.json'), `${JSON.stringify(report, null, 2)}\n`);
+  await writeFile(output, `${JSON.stringify(report, null, 2)}\n`);
   await rm(state, { recursive: true, force: true });
   console.log(JSON.stringify(report));
 }

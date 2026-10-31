@@ -8,14 +8,14 @@ import { once } from 'node:events';
 
 import { _electron } from 'playwright-core';
 
-import { localConnectionEnvironment, withTimeout } from './electron-local-connection-support.mjs';
+import { createAcceptanceOutput, localConnectionEnvironment, withTimeout } from './electron-local-connection-support.mjs';
 
 const root = resolve(import.meta.dirname, '..');
+const output = await createAcceptanceOutput(join(root, 'reports/p2a1-s1-preview-e2e.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-preview-e2e-'));
 const config = join(state, 'xopc.json');
 await writeFile(config, '{intentionally-invalid-local-config');
 const env = localConnectionEnvironment(process.env, root, state, config, join(state, 'workspace'));
-const output = join(root, 'reports/p2a1-s1-preview-e2e.json');
 const inventory = JSON.parse(await readFile(join(root, 'docs/design/evidence/electron-gateway-p2a1-s0-s1/s0-legacy-ipc-inventory.json'), 'utf8'));
 const channels = inventory.channels.map(entry => entry.channel);
 const report = { startedAt: new Date().toISOString(), passed: false, checks: {},
@@ -78,6 +78,8 @@ try {
     for (const channel of channels) {
       ipcMain.handle(channel, () => { globalThis.__previewEffects++; return 'FORBIDDEN'; });
       ipcMain.on(channel, () => { globalThis.__previewEffects++; });
+      ipcMain.prependListener(channel, () => { globalThis.__previewEffects++; });
+      ipcMain.prependOnceListener(channel, () => { globalThis.__previewEffects++; });
     }
     const original = BrowserWindow.getAllWindows()[0];
     const probe = new BrowserWindow({ show: false, webPreferences: { preload: probePreload,
@@ -100,7 +102,7 @@ try {
   }, channels);
   assert(results.every(Boolean));
   assert.equal(await application.evaluate(() => globalThis.__previewEffects), 0);
-  report.checks.legacyIpcDenied = { channels: channels.length, transports: ['invoke', 'send', 'MessagePort'], sideEffects: 0 };
+  report.checks.legacyIpcDenied = { channels: channels.length, transports: ['invoke', 'send', 'MessagePort'], listenerMethods: ['on', 'prependListener', 'prependOnceListener'], sideEffects: 0 };
   await probe.close();
   const href = page.url();
   await page.evaluate(() => { location.href = 'https://example.com'; });

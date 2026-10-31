@@ -180,12 +180,16 @@ describe('connection window authority', () => {
       ipc.handle(channel, effect);
       expect(() => handlers.get(channel)!(event)).toThrow('REMOTE_CAPABILITY_DISABLED');
     }
+    ipc.prependListener('terminal:prepend-write', effect);
+    ipc.prependOnceListener('terminal:prepend-port', effect);
     ipc.on('terminal:write', effect);
     ipc.once('computer-preview:port', effect);
     const close = vi.fn();
+    ipc.emit('terminal:prepend-write', event, 'command');
+    ipc.emit('terminal:prepend-port', { ...event, ports: [{ close }] });
     ipc.emit('terminal:write', event, 'command');
     ipc.emit('computer-preview:port', { ...event, ports: [{ close }] });
-    expect(close).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledTimes(2);
     expect(effect).not.toHaveBeenCalled();
     ipc.handle(CONNECTION_CHANNELS[0], () => 'status');
     expect(handlers.get(CONNECTION_CHANNELS[0])!(event)).toBe('status');
@@ -194,6 +198,10 @@ describe('connection window authority', () => {
     ipc.emit(CONNECTION_CHANNELS[0], event);
     ipc.emit(CONNECTION_CHANNELS[0], event);
     expect(once).toHaveBeenCalledTimes(1);
+    ipc.prependOnceListener(CONNECTION_CHANNELS[0], once);
+    ipc.emit(CONNECTION_CHANNELS[0], event);
+    ipc.emit(CONNECTION_CHANNELS[0], event);
+    expect(once).toHaveBeenCalledTimes(2);
     expect(ipc.listenerCount(CONNECTION_CHANNELS[0])).toBe(0);
   });
 });

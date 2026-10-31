@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { lstat, mkdir, open, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 
 /** Include Gateway, static UI and SQL assets, not just Electron entry points. */
 export async function localConnectionArtifactManifest(root) {
@@ -73,4 +73,21 @@ export async function withTimeout(operation, timeoutMs, message) {
       timer = setTimeout(() => reject(new Error(message)), timeoutMs);
     })]);
   } finally { clearTimeout(timer); }
+}
+
+/** Reserve a fresh evidence file before starting a test process. */
+export async function createAcceptanceOutput(defaultPath, args = process.argv.slice(2)) {
+  const index = args.indexOf('--output');
+  if (index >= 0 && (!args[index + 1] || args[index + 1].startsWith('--'))) throw new Error('Missing acceptance output path');
+  const output = resolve(index < 0 ? defaultPath : args[index + 1]);
+  await mkdir(dirname(output), { recursive: true });
+  let file;
+  try { file = await open(output, 'wx', 0o600); }
+  catch (error) {
+    if (error.code === 'EEXIST') throw new Error('Acceptance output exists; use a new path to retain evidence');
+    throw error;
+  }
+  try { await file.writeFile(JSON.stringify({ passed: false, state: 'initializing', startedAt: new Date().toISOString() }) + '\n'); }
+  finally { await file.close(); }
+  return output;
 }
