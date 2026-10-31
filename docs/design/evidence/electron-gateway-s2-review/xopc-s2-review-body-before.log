@@ -1,0 +1,33 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts (25 tests | 1 failed) 672ms
+   × releases an incomplete ticket upload when its unchanged body deadline expires 515ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts > releases an incomplete ticket upload when its unchanged body deadline expires
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ electron/__tests__/gateway-connections-shell.test.ts:166:118
+    164|     for (let index = 0; index < 50 && !expire; index++) await new Prom…
+    165|     expect(expire).toBeTypeOf('function'); expire!();
+    166|     expect(await Promise.race([closed, new Promise<boolean>(resolve =>…
+       |                                                                                                                      ^
+    167|     expect((await get('/api/models')).status).toBe(200);
+    168|     expect(upstreamCalls.some(call => call.path === '/api/realtime/tic…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 24 passed (25)
+   Start at  15:04:45
+   Duration  971ms (transform 139ms, setup 12ms, import 226ms, tests 672ms, environment 0ms)
+

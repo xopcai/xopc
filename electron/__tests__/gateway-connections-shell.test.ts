@@ -147,6 +147,27 @@ it('rejects oversized JSON requests and responses before forwarding data', async
   const response = await fetch(fixture.shell.origin + '/api/realtime/tickets', { method: 'POST', headers: { ...fixture.headers, 'Content-Type': 'application/json' }, body: 'x'.repeat(1025) });
   expect(response.status).toBe(413); expect(upstreamCalls).toHaveLength(before);
 });
+it('releases an incomplete ticket upload when its unchanged body deadline expires', async () => {
+  const realSetTimeout = globalThis.setTimeout;
+  let expire: (() => void) | undefined;
+  vi.spyOn(globalThis, 'setTimeout').mockImplementation(((callback: () => void, delay: number, ...args: unknown[]) => {
+    if (delay === 15_000) expire = callback;
+    return realSetTimeout(callback, delay, ...args);
+  }) as typeof setTimeout);
+  const pending = request(fixture.shell.origin + '/api/realtime/tickets', {
+    method: 'POST', headers: { ...fixture.headers, 'Content-Type': 'application/json', 'Content-Length': '100' },
+  });
+  pending.on('error', () => {});
+  const closed = new Promise<boolean>(resolve => pending.once('close', () => resolve(true)));
+  try {
+    pending.write('{');
+    for (let index = 0; index < 50 && !expire; index++) await new Promise(resolve => realSetTimeout(resolve, 10));
+    expect(expire).toBeTypeOf('function'); expire!();
+    expect(await Promise.race([closed, new Promise<boolean>(resolve => realSetTimeout(() => resolve(false), 500))])).toBe(true);
+    expect((await get('/api/models')).status).toBe(200);
+    expect(upstreamCalls.some(call => call.path === '/api/realtime/tickets')).toBe(false);
+  } finally { pending.destroy(); }
+});
 it('bounds HTTP concurrency and queues without changing the request budget', async () => {
   mode = 'blocked';
   const calls = Array.from({ length: 33 }, () => get('/api/models').then(async response => { await response.arrayBuffer(); return response.status; }, () => -1));

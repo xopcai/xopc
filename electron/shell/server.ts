@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { addAbortListener } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
@@ -89,8 +90,9 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
         if (!/^application\/json\b/i.test(req.headers['content-type'] ?? '')) { fail(415, 'SHELL_JSON_REQUIRED'); return; }
         let size = 0; const chunks: Buffer[] = [];
         const timer = setTimeout(() => controller.abort(), 15_000);
+        const cancelled = addAbortListener(signal, () => req.destroy());
         try { for await (const chunk of req) { size += chunk.length; if (size > 1024) throw new Error('SHELL_BODY_LIMIT'); chunks.push(chunk); } }
-        finally { clearTimeout(timer); }
+        finally { clearTimeout(timer); cancelled[Symbol.dispose](); }
         const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (value.clientKind !== 'web' || value.protocolVersion !== 2 || typeof value.clientId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(value.clientId)
           || Object.keys(value).some(k => !['clientId', 'clientKind', 'protocolVersion'].includes(k))) throw new Error('SHELL_TICKET_DENIED');
