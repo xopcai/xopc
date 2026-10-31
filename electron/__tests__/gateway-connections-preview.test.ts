@@ -227,7 +227,8 @@ it('advances the epoch on every explicit connection attempt, including already-p
   const saved = await manager.save(0, { ...input, credential: 'owner-token' });
   const id = saved.profiles[0].id;
   const first = await manager.beginConnection(saved.epoch, id);
-  const second = await manager.beginConnection(first.epoch, id);
-  expect(second.epoch).toBeGreaterThan(first.epoch);
-  await expect(manager.beginConnection(first.epoch, id)).rejects.toThrow('STALE_CONNECTION_EPOCH');
+  const pinned = await manager.pinIdentity(first.epoch, id, { gatewayId: randomUUID(), publicKey: 'public-key'.repeat(10) });
+  const second = await manager.beginConnection(pinned.epoch, id);
+  expect(second.epoch).toBeGreaterThan(pinned.epoch);
+  await expect(manager.beginConnection(pinned.epoch, id)).rejects.toThrow('STALE_CONNECTION_EPOCH');
 });

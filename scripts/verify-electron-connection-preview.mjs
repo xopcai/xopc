@@ -67,7 +67,7 @@ try {
   snapshot = await page.evaluate(() => window.gatewayConnections.snapshot());
   assert.equal(snapshot.status, 'remote-chat-unavailable');
   const stale = await page.evaluate(({ id, epoch }) => window.gatewayConnections.select(epoch - 1, id), { id: snapshot.profiles[0].id, epoch: snapshot.epoch });
-  assert.deepEqual(stale, { ok: false, error: 'STALE_CONNECTION_EPOCH' });
+  assert.deepEqual(stale, { ok: false, error: 'STALE_CONNECTION_EPOCH', snapshot });
   report.checks.epochAndNoReadyClaim = true;
 
   // Even accidental legacy registrations must be blocked before a side effect.

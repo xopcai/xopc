@@ -8,17 +8,15 @@ export class ChatApiError extends Error {
 }
 export interface ChatApi { <T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> }
 export type ChatMessage = { id?: string; role: string; content: string; media?: Array<{ uri?: string; name?: string; mimeType?: string }> };
-/** History may omit stream ids; reconcile only ordered replies after the latest user row. */
+/** Never guess a stream-to-history identity from equal text. Persisted replies win. */
 export function mergeRemoteMessages(history: ChatMessage[], stream: ReadonlyMap<string, string>): ChatMessage[] {
   const messages = history.map(message => ({ ...message }));
   const lastUser = messages.findLastIndex(message => message.role === 'user');
-  const matched = new Set<number>();
+  const persistedReply = messages.some((message, index) => index > lastUser && message.role === 'assistant');
   for (const [id, content] of stream) {
-    let index = messages.findIndex(message => message.role === 'assistant' && message.id === id);
-    if (index < 0) index = messages.findIndex((message, position) => position > lastUser && !matched.has(position)
-      && message.role === 'assistant' && Boolean(message.content) && (content.startsWith(message.content) || message.content.startsWith(content)));
-    if (index >= 0) { matched.add(index); if (content.length > messages[index]!.content.length) messages[index]!.content = content; }
-    else { matched.add(messages.length); messages.push({ id, role: 'assistant', content }); }
+    const index = messages.findIndex(message => message.role === 'assistant' && message.id === id);
+    if (index >= 0) { if (content.length > messages[index]!.content.length) messages[index]!.content = content; }
+    else if (!persistedReply) messages.push({ id, role: 'assistant', content });
   }
   return messages;
 }

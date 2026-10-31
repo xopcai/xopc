@@ -151,5 +151,11 @@ it('reconciles id-less server replies without deduplicating equal replies from d
   const history = [{ role: 'user', content: 'one' }, { role: 'assistant', content: 'same' }, { role: 'user', content: 'two' }, { role: 'assistant', content: 'same' }];
   expect(mergeRemoteMessages([], new Map([['one', 'same'], ['two', 'same']]))).toHaveLength(2);
   expect(mergeRemoteMessages(history, new Map([['stream-id', 'same']]))).toEqual(history);
-  expect(mergeRemoteMessages(history, new Map([['stream-id', 'same plus']])).map(message => message.content)).toEqual(['one', 'same', 'two', 'same plus']);
+  expect(mergeRemoteMessages(history, new Map([['stream-id', 'same plus']]))).toEqual(history);
+  expect(mergeRemoteMessages([{ id: 'known', role: 'assistant', content: 'same' }], new Map([['known', 'same plus']]))[0].content).toBe('same plus');
+});
+
+it('uses authoritative history when a replayed stream id has no unambiguous persisted mapping', () => {
+  const history = [{ role: 'user', content: 'question' }, { role: 'assistant', content: 'same prefix' }, { role: 'assistant', content: 'same prefix answer' }];
+  expect(mergeRemoteMessages(history, new Map([['later-stream-id', 'same prefix answer continued']]))).toEqual(history);
 });
