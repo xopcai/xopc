@@ -16,12 +16,13 @@ import { createAcceptanceOutput, localConnectionEnvironment, prepareLocalConnect
 
 const tls = process.argv.includes('--tls');
 const untrusted = process.argv.includes('--untrusted');
+const cleanupFailure = process.argv.includes('--cleanup-failure');
 const wrongHost = process.argv.includes('--wrong-host');
 const root = resolve(import.meta.dirname, '..');
 const output = await createAcceptanceOutput(join(root, 'reports/s2-shell-e2e.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-s2-shell-'));
 const cleanupLayout = await prepareLocalConnectionLayout(root);
-const report = { tls, untrusted, wrongHost, passed: false, startedAt: new Date().toISOString(), checks: {}, scope: 'S2 production main/preloads/utility worker and independent real Gateway; development Electron, not installer or S3 chat' };
+const report = { tls, untrusted, wrongHost, cleanupFailure, passed: false, startedAt: new Date().toISOString(), checks: {}, scope: 'S2 production main/preloads/utility worker and independent real Gateway; development Electron, not installer or S3 chat' };
 let app, gateway, tlsProxy;
 const proxySockets = new Set();
 let gatewayLogs = '';
@@ -103,6 +104,12 @@ try {
   await shell.getByText('身份与聊天传输契约已核验；S2 会话已建立。', { exact: true }).waitFor({ timeout: 20_000 });
   assert.equal(await shell.evaluate(() => window.electronAPI), undefined);
   assert.equal(await shell.evaluate(() => window.gatewayConnections), undefined);
+  const partition = await app.evaluate(({ BrowserWindow }, url) => {
+    const value = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === url).webContents.session;
+    return { persistent: value.isPersistent(), storagePath: value.getStoragePath() };
+  }, shell.url());
+  assert.deepEqual(partition, { persistent: false, storagePath: null }); report.checks.memoryOnlyPartition = true;
+
   const summary = await shell.evaluate(async () => ({ session: await (await fetch('/api/browser-session')).json(), cookie: document.cookie,
     allowed: (await fetch('/api/models')).status, denied: (await fetch('/api/config')).status, files: (await fetch('/api/files')).status }));
   assert.equal(summary.session.authenticated, true); assert.equal(summary.session.localCapabilities, false);
@@ -163,6 +170,18 @@ try {
   assert.equal(await readFile(localConfig, 'utf8'), '{invalid-local-config-must-not-be-read');
   assert(!(await readdir(clientState, { recursive: true })).some(path => path.endsWith('xopc.db') || path.startsWith('workspace')));
   report.checks.noLocalGatewayDatabaseHostOrWorkspace = true;
+  if (cleanupFailure) {
+    await app.evaluate(({ BrowserWindow }, url) => {
+      const window = BrowserWindow.getAllWindows().find(value => value.webContents.getURL() === url);
+      window.webContents.session.clearStorageData = async () => { throw new Error('Injected cleanup failure'); };
+    }, shell.url());
+    const closed = shell.waitForEvent('close');
+    await shell.getByRole('button', { name: '返回连接配置' }).click(); await closed;
+    const refused = await setup.evaluate(async () => { const value = await window.gatewayConnections.snapshot(); return window.gatewayConnections.connect(value.epoch, value.profiles[0].id); });
+    assert.equal(refused.ok, false); assert.equal(refused.error, 'SHELL_CLEANUP_RESTART_REQUIRED');
+    assert.equal(app.windows().length, 1); report.checks.cleanupFailureBlocksNewActivation = true;
+    report.passed = true;
+  } else {
   const closed = shell.waitForEvent('close');
   await shell.getByRole('button', { name: '返回连接配置' }).click();
   await closed;
@@ -201,6 +220,7 @@ try {
   assert.equal((await setup.evaluate(() => window.gatewayConnections.snapshot())).profiles[0].identity.gatewayId, discovery.payload.gatewayId);
   report.checks.changedGatewayIdentityLockedWithoutFallback = true;
   report.passed = true;
+  }
   }
 } catch (error) {
   report.error = redact(error); report.gatewayLogTail = redact(gatewayLogs);

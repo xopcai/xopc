@@ -58,7 +58,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     if (mainFrame && !inPlace && window.webContents.getURL() === documentUrl) policy.revoke();
   });
   window.webContents.on('render-process-gone', () => policy.revoke());
-  window.on('closed', () => { policy.revoke(); void shell?.close().finally(() => app.quit()); });
+  window.on('closed', () => { policy.revoke(); void shell?.close().then(() => app.quit(), () => app.quit()); });
   app.on('second-instance', () => { if (!window.isDestroyed()) { window.show(); window.focus(); } });
   shell = new RemoteShellWindow(dirname(fileURLToPath(entryUrl)), assetRoot, manager, () => { if (!window.isDestroyed()) { window.show(); window.focus(); } });
   let operations = Promise.resolve();
