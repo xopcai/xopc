@@ -1,0 +1,22 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T05:23:26.140Z",
+  "checks": {
+    "realAuthenticatedLazyRoute": true,
+    "identityPinnedHttpOnlyAndRouteIsolation": true
+  },
+  "scope": "S2 production main/preloads/utility worker and independent real Gateway; development Electron, not installer or S3 chat",
+  "error": "Error: page.evaluate: Error: Shell websocket failed\n    at ws.onerror (eval at evaluate (:302:30), <anonymous>:10:56)",
+  "gatewayLogTail": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 62779\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=1386, lockPath=/Users/micjoyce/.xopc/locks/gateway.afa22cbe.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:62779...\n✅ Gateway started\n   URL: http://127.0.0.1:62779\n   Token: 69671ba4...565c8211\n\n[GatewayServer] Gateway server running at http://127.0.0.1:62779\n",
+  "windows": [
+    {
+      "url": "file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/out/preload/gateway-connections.html",
+      "body": "Gateway 连接预览\n\n选择配置不发起网络请求。显式建立 S2 连接可核验身份并启动受控 Shell；聊天界面尚未接入，本机能力已禁用，不启动本地 Gateway。\n\n请选择或保存连接配置。本机能力保持禁用。\n\n连接名称\nGateway origin\n传输方式\nHTTPS已有 SSH loopback 转发\n管理凭据（可留空；仅加密保存）\n保存连接配置\n\nSSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。\n\n使用原本地模式（重启应用）退出预览"
+    },
+    {
+      "url": "http://127.0.0.1:62803/",
+      "body": "远端连接 · S2\n\n认证与受控传输底座。本机能力已禁用；聊天界面将在 S3 接入。\n\n身份与聊天传输契约已核验；S2 会话已建立。\n\nGateway: 60d6d4db-cc33-47ac-b349-85157dae9e07\nEpoch: 2\n本机能力：禁用\n退出此连接返回连接配置"
+    }
+  ],
+  "finishedAt": "2026-10-31T05:23:28.155Z"
+}

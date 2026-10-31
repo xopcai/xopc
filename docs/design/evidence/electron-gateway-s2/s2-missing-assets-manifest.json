@@ -1,0 +1,15 @@
+{
+  "scope": "Development fault copy, shared built Gateway/Web and SQL mappings; not installer",
+  "root": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s2-missing-assets-yi47zm6z",
+  "removed": [
+    "out/main/remote-shell-worker.js",
+    "out/preload/remote-shell.html",
+    "out/preload/remote-shell.js",
+    "out/preload/remote-shell.css",
+    "out/preload/shell.cjs",
+    "out/preload/gateway-connections.html",
+    "out/preload/gateway-connections.js",
+    "out/preload/connections.cjs",
+    "out/main/chunks/connection-entry-nlq2UK6J.js"
+  ]
+}

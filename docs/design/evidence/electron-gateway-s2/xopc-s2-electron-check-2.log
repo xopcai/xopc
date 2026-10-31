@@ -1,0 +1,6 @@
+$ tsc -p tsconfig.electron.json
+electron/shell/window.ts(56,140): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '"will-navigate" | "will-frame-navigate" | "will-redirect" | "will-attach-webview"' is not assignable to parameter of type '"zoom-changed"'.
+      Type '"will-navigate"' is not assignable to type '"zoom-changed"'.
+[ELIFECYCLE] Command failed with exit code 2.
