@@ -103,7 +103,10 @@ export async function verifyLocalConnectionFunctions(page, fixture, until) {
   const dismiss = page.getByRole('button', { name: 'Maybe later, keep using my current model', exact: true });
   if (await dismiss.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
     await dismiss.click();
-    await page.getByRole('button', { name: 'Skip for now', exact: true }).click({ timeout: 10_000 });
+  }
+  const skip = page.getByRole('button', { name: 'Skip for now', exact: true });
+  if (await skip.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
+    await skip.click({ timeout: 10_000 });
   }
   await page.getByRole('main').getByText('XOPC_LOCAL_CHAT_OK', { exact: true }).first().waitFor({ timeout: 30_000 });
   console.log('Functional: chat rendered; verifying native file, PTY and browser IPC');
