@@ -9,7 +9,7 @@ import { pipeline } from 'node:stream/promises';
 
 import { WebSocket, WebSocketServer } from 'ws';
 
-import { filterRealtime, shellRoute, ShellSlots } from './policy.js';
+import { filterRealtime, shellRoute, shellWrite, ShellSlots } from './policy.js';
 import { ShellUpstream } from './upstream.js';
 
 const JSON_MAX = 4 * 1024 * 1024;
@@ -38,7 +38,7 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
     if (Date.now() >= expiresAt || performance.now() >= monotonicExpiry) { invalidate(); return false; }
     return true;
   };
-  const session = () => ({ authenticated: live(), sessionId, expiresAt, gatewayId, epoch, mode: 'remote', localCapabilities: false });
+  const session = () => ({ authenticated: live(), sessionId, expiresAt, gatewayId, epoch, mode: 'remote', localCapabilities: false, chatEnabled: upstream.chatEnabled });
   const secure = (req: IncomingMessage, ws = false) => live() && req.headers.host === new URL(origin).host
     && equalSecret(req.headers['x-xopc-desktop-window'], proof)
     && (!req.headers.origin ? !ws && req.method === 'GET' : req.headers.origin === origin)
@@ -86,20 +86,25 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
         headers.Range = req.headers.range;
       }
       let body: string | undefined, clientId: string | undefined;
-      if (route === 'ticket') {
+      if (['ticket', 'input', 'stop'].includes(route)) {
         if (!/^application\/json\b/i.test(req.headers['content-type'] ?? '')) { fail(415, 'SHELL_JSON_REQUIRED'); return; }
         let size = 0; const chunks: Buffer[] = [];
         const timer = setTimeout(() => controller.abort(), 15_000);
         const cancelled = addAbortListener(signal, () => req.destroy());
-        try { for await (const chunk of req) { size += chunk.length; if (size > 1024) throw new Error('SHELL_BODY_LIMIT'); chunks.push(chunk); } }
+        try { for await (const chunk of req) { size += chunk.length; if (size > (route === 'ticket' ? 1024 : 64 * 1024)) throw new Error('SHELL_BODY_LIMIT'); chunks.push(chunk); } }
         finally { clearTimeout(timer); cancelled[Symbol.dispose](); }
         const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (route === 'ticket') {
         if (value.clientKind !== 'web' || value.protocolVersion !== 2 || typeof value.clientId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(value.clientId)
           || Object.keys(value).some(k => !['clientId', 'clientKind', 'protocolVersion'].includes(k))) throw new Error('SHELL_TICKET_DENIED');
         for (const [id, ticket] of tickets) if (ticket.expiresAt <= Date.now()) tickets.delete(id);
         if (tickets.size >= 32) throw new Error('SHELL_TICKET_LIMIT');
-        clientId = value.clientId; body = JSON.stringify(value); headers['Content-Type'] = 'application/json';
+        clientId = value.clientId; body = JSON.stringify(value);
+        } else body = shellWrite(route as 'input' | 'stop', value);
+        headers['Content-Type'] = 'application/json';
       }
+      await upstream.authenticate(signal);
+      if ((route === 'input' || route === 'stop') && !upstream.chatEnabled) throw new Error('GATEWAY_CHAT_INCOMPATIBLE');
       const outgoing = upstream.request(req.url!, req.method, headers, signal);
       headerTimer = setTimeout(() => controller.abort(), 15_000);
       outgoing.end(body);
@@ -107,7 +112,7 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
       clearTimeout(headerTimer);
       const status = response.statusCode ?? 502;
       if (status === 401 || status === 403) { response.destroy(); invalidate(); fail(401, 'GATEWAY_AUTH_FAILED'); return; }
-      if (status < 200 || status >= 300) { response.destroy(); fail(status >= 300 && status < 400 ? 502 : status, 'GATEWAY_REQUEST_FAILED'); return; }
+      if ((status < 200 || status >= 300) && !((route === 'input' || route === 'stop') && status >= 400 && status < 500)) { response.destroy(); fail(status >= 300 && status < 400 ? 502 : status, 'GATEWAY_REQUEST_FAILED'); return; }
       const mime = (response.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
       if ((route !== 'media' && mime !== 'application/json') || (route === 'media' && !/^(?:image\/(?:png|jpeg|gif|webp)|audio\/(?:mpeg|wav|ogg|mp4)|video\/(?:mp4|webm))$/.test(mime))) {
         response.destroy(); fail(502, 'SHELL_RESPONSE_TYPE_DENIED'); return;
@@ -153,7 +158,8 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
       }
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
-      const status = code === 'SHELL_BUSY' || code === 'SHELL_TICKET_LIMIT' ? 429 : code === 'SHELL_BODY_LIMIT' ? 413 : code === 'SHELL_TICKET_DENIED' ? 400 : 502;
+      if (/^GATEWAY_(?:AUTH_FAILED|TLS_FAILED|IDENTITY|CHAT_INCOMPATIBLE|CONTRACT_UNAVAILABLE)/.test(code)) { invalidate(); fail(code === 'GATEWAY_AUTH_FAILED' ? 401 : 409, code); return; }
+      const status = code === 'SHELL_BUSY' || code === 'SHELL_TICKET_LIMIT' ? 429 : code === 'SHELL_BODY_LIMIT' ? 413 : code === 'SHELL_TICKET_DENIED' || code === 'SHELL_INPUT_DENIED' ? 400 : 502;
       fail(status, status === 502 ? 'SHELL_REQUEST_FAILED' : code);
     }
     finally { clearTimeout(headerTimer); clearTimeout(idle); controller.abort(); release?.(); releaseMedia?.(); }

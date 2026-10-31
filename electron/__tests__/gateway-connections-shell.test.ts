@@ -28,7 +28,7 @@ async function setup() {
     if (req.url !== '/api/gateway-identity/challenge' && req.headers.authorization !== `Bearer ${token}`) { res.writeHead(401).end(); return; }
     if (mode === '401') { res.writeHead(401).end(); return; }
     if (mode === 'redirect') { res.writeHead(302, { Location: 'http://not-allowed.invalid', 'Set-Cookie': 'leak=1' }).end(); return; }
-    if (req.url === '/api/desktop-chat/bootstrap') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ok: true, payload: { ...identity, manifest: DESKTOP_CHAT_MANIFEST } })); return; }
+    if (req.url === '/api/desktop-chat/bootstrap?chat=1') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ok: true, payload: { ...identity, manifest: DESKTOP_CHAT_MANIFEST } })); return; }
     if (req.url === '/api/gateway-identity/challenge') {
       const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(chunk);
       const { nonce } = JSON.parse(Buffer.concat(chunks).toString());
@@ -122,8 +122,11 @@ it('constructs upstream auth/origin without forwarding credentials or trusting u
   expect(response.headers.get('set-cookie')).toBeNull(); expect(response.headers.get('cache-control')).toBe('no-store');
   expect(response.headers.get('content-security-policy')).not.toContain('bad.invalid');
 });
-it('refuses redirects/HTML and locks on upstream auth revocation', async () => {
-  mode = 'redirect'; expect((await get('/api/models')).status).toBe(502);
+it('locks when identity discovery redirects instead of following it', async () => {
+  mode = 'redirect'; expect((await get('/api/models')).status).toBe(409);
+  mode = ''; expect((await get('/api/models')).status).toBe(401);
+});
+it('refuses HTML and locks on upstream auth revocation', async () => {
   mode = 'html'; expect((await get('/api/models')).status).toBe(502);
   mode = '401'; expect((await get('/api/models')).status).toBe(401);
   mode = ''; expect((await get('/api/models')).status).toBe(401);
