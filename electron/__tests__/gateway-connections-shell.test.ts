@@ -288,3 +288,36 @@ it('keeps old Gateways readable without granting undeclared S3 text submission',
   const response = await fetch(fixture.shell.origin + `/api/sessions/${randomUUID()}/inputs`, { method: 'POST', headers: { ...fixture.headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   expect(response.status).toBe(409); expect(upstreamCalls.some(call => call.path.endsWith('/inputs'))).toBe(false);
 });
+
+it('rotates a bounded local cookie only after identity revalidation and trusted commit', async () => {
+  const clock = vi.spyOn(Date, 'now'), start = Date.now(); clock.mockReturnValue(start + 8 * 60000);
+  const before = upstreamCalls.length, renewed = await fixture.shell.renew();
+  expect(renewed.expiresAt).toBe(Date.now() + 15 * 60000);
+  expect(upstreamCalls[before].path).toBe('/api/gateway-identity/challenge');
+  expect(upstreamCalls[before].headers.authorization).toBeUndefined();
+  await expect(fixture.shell.renew()).rejects.toThrow('SHELL_RENEWAL_DENIED');
+  const headers = { Cookie: `${renewed.name}=${renewed.value}` };
+  expect((await get('/api/browser-session', headers)).status).toBe(200);
+  expect(() => fixture.shell.commitRenewal('wrong')).toThrow('SHELL_RENEWAL_DENIED');
+  fixture.shell.commitRenewal(renewed.renewalId);
+  expect((await get('/api/browser-session')).status).toBe(401);
+  clock.mockReturnValue(start + 15 * 60000 + 1);
+  const response = await get('/api/browser-session', headers); expect(response.status).toBe(200);
+  expect((await response.json()).expiresAt).toBe(renewed.expiresAt);
+  clock.mockReturnValue(renewed.expiresAt + 1);
+  expect((await get('/api/browser-session', headers)).status).toBe(401);
+  await expect(fixture.shell.renew()).rejects.toThrow('SHELL_RENEWAL_DENIED');
+});
+it('refuses renewed authorization after identity replacement without committing another cookie', async () => {
+  mode = 'identity'; await expect(fixture.shell.renew()).rejects.toThrow('GATEWAY_IDENTITY_CHANGED');
+  expect(() => fixture.shell.commitRenewal(randomUUID())).toThrow('SHELL_RENEWAL_DENIED');
+});
+it('invalidates an abandoned cookie handoff at the original 15-second bound', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    const renewed = await fixture.shell.renew();
+    await vi.advanceTimersByTimeAsync(15001);
+    expect(() => fixture.shell.commitRenewal(renewed.renewalId)).toThrow('SHELL_RENEWAL_DENIED');
+    expect((await get('/api/browser-session')).status).toBe(401);
+  } finally { vi.useRealTimers(); }
+});

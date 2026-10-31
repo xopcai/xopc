@@ -1,0 +1,31 @@
+{
+  "startedAt": "2026-10-31T14:07:37.288Z",
+  "pid": 3379,
+  "args": [
+    "scripts/verify-electron-remote-chat.mjs",
+    "--app",
+    "/tmp/xopc-s5-delivery/installed-final/xopc.app",
+    "--gateway-container",
+    "xopc:s4-bundled-gateway",
+    "--background",
+    "--connection-cycles",
+    "100",
+    "--connection-interval-ms",
+    "5000",
+    "--soak-seconds",
+    "86400",
+    "--soak-interval-ms",
+    "60000",
+    "--half-open",
+    "--output",
+    "reports/s5-100-cycles-24h-3.json"
+  ],
+  "log": "/tmp/xopc-s5-100-cycles-24h-3.log",
+  "packageFingerprint": {
+    "files": 1423,
+    "sha256": "0aee597f3798b6453944cec78bd767fa96446ab6bee21c988eaf866a543108a3"
+  },
+  "status": "started-not-accepted",
+  "priorFailure": "reports/s5-100-cycles-24h-1.json",
+  "supersededControl": "reports/s5-long-run-2-superseded.json"
+}

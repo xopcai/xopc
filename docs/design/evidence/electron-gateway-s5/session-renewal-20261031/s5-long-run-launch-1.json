@@ -1,0 +1,27 @@
+{
+  "startedAt": "2026-10-31T13:11:22.570Z",
+  "pid": 72584,
+  "executable": "/Users/micjoyce/.nvm/versions/node/v26.12.1/bin/node",
+  "args": [
+    "scripts/verify-electron-remote-chat.mjs",
+    "--app",
+    "/tmp/xopc-s5-delivery/installed-recovery-timers/xopc.app",
+    "--gateway-container",
+    "xopc:s4-bundled-gateway",
+    "--background",
+    "--connection-cycles",
+    "100",
+    "--connection-interval-ms",
+    "5000",
+    "--soak-seconds",
+    "86400",
+    "--soak-interval-ms",
+    "60000",
+    "--half-open",
+    "--output",
+    "reports/s5-100-cycles-24h-1.json"
+  ],
+  "log": "/tmp/xopc-s5-100-cycles-24h-1.log",
+  "packageFingerprint": "edf3a24357747a9b18a2f1adfc409cb16a8529faad10f16ecdf918fffce9f84c",
+  "status": "started-not-accepted"
+}

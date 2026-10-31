@@ -1,0 +1,1310 @@
+{
+  "passed": true,
+  "tls": false,
+  "startedAt": "2026-10-31T13:51:47.382Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "halfOpenRealtimeDetectedWithinOriginalBudget": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "scope": "Installed macOS app to two isolated Docker Gateways using the built bundled server and exact direct runtime dependencies; deterministic inference, same physical host, not standalone Docker release or WAN acceptance",
+  "background": true,
+  "fixtureLifetimeSeconds": 86400,
+  "application": "/tmp/xopc-s5-delivery/installed-renewal-cleanup-matrix/xopc.app",
+  "packageBefore": {
+    "files": 1423,
+    "sha256": "8cafc224d0acdc73fc7974c3aef95d92afac3d9ae7d76eecffe98b9d430ea70b"
+  },
+  "containerImage": "sha256:ae910eb21bcc6f9acd21af6a49bb30c865b5d0b59dac74ce0e08f2820e61542e",
+  "runtime": {
+    "executable": "/tmp/xopc-s5-delivery/installed-renewal-cleanup-matrix/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-s5-delivery/installed-renewal-cleanup-matrix/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-rzAAFB",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": true,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 64451
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 802
+    },
+    {
+      "input": 2,
+      "durationMs": 214
+    }
+  ],
+  "inputIntervalMs": 0,
+  "endurance": {
+    "options": {
+      "connectionCycles": 3,
+      "connectionIntervalMs": 5000,
+      "soakSeconds": 20,
+      "sampleIntervalMs": 10000
+    },
+    "connectionSamples": [
+      {
+        "cycle": 1,
+        "target": "A",
+        "openedMs": 283.31287500000326,
+        "totalMs": 398.46416599999066,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            65654,
+            65655,
+            65656,
+            65658
+          ],
+          "rssMiB": 420.65625,
+          "cpuPercentSnapshot": 15.2,
+          "openFds": 95
+        }
+      },
+      {
+        "cycle": 2,
+        "target": "B",
+        "openedMs": 305.940333999999,
+        "totalMs": 421.01745899999514,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            65654,
+            65655,
+            65656,
+            65658
+          ],
+          "rssMiB": 424.015625,
+          "cpuPercentSnapshot": 10.5,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 3,
+        "target": "A",
+        "openedMs": 290.88262499999837,
+        "totalMs": 406.19566700000723,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            65654,
+            65655,
+            65656,
+            65658
+          ],
+          "rssMiB": 426.984375,
+          "cpuPercentSnapshot": 11.9,
+          "openFds": 94
+        }
+      }
+    ],
+    "soakSamples": [
+      {
+        "iteration": 1,
+        "elapsedMs": 346.23262499998964,
+        "cycleMs": 348.65291699999943,
+        "posts": 5,
+        "localSessionExpiresAt": 1793455685835,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            65654,
+            65655,
+            65656,
+            65658,
+            66045,
+            66046
+          ],
+          "rssMiB": 653.421875,
+          "cpuPercentSnapshot": 28.4,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 2,
+        "elapsedMs": 10348.297999999995,
+        "cycleMs": 350.22966599999927,
+        "posts": 6,
+        "localSessionExpiresAt": 1793455685835,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            65654,
+            65655,
+            65656,
+            65658,
+            66045,
+            66046
+          ],
+          "rssMiB": 658.1875,
+          "cpuPercentSnapshot": 18,
+          "openFds": 147
+        }
+      }
+    ],
+    "faults": [],
+    "minimumConnectionCyclesMet": false,
+    "minimumSoakDurationMet": false,
+    "minimumSoakSamplesMet": false,
+    "completeFunctionalSoak": false,
+    "fullS5Acceptance": false,
+    "pendingMatrix": [
+      "network-layer delay/loss/blackholes",
+      "certificate/auth/version combinations",
+      "real sleep/wake",
+      "supported upgrade/rollback combinations"
+    ],
+    "performanceAcceptance": "deferred by user; observations only",
+    "soakStartedAt": "2026-10-31T13:53:06.035Z",
+    "soakElapsedMs": 20000.074416999996,
+    "soakFinishedAt": "2026-10-31T13:53:26.035Z"
+  },
+  "networkMatrix": {
+    "scope": "Actual TCP egress netem and port-scoped iptables in one isolated Linux container; not WAN or host-wide faults",
+    "cases": [
+      {
+        "name": "rtt-50ms",
+        "delayMs": 50,
+        "lossPercent": 0,
+        "health": [
+          {
+            "status": 200,
+            "durationMs": 111.20562499998778
+          },
+          {
+            "status": 200,
+            "durationMs": 110.75270799999998
+          },
+          {
+            "status": 200,
+            "durationMs": 110.8465000000142
+          },
+          {
+            "status": 200,
+            "durationMs": 111.02633300000161
+          },
+          {
+            "status": 200,
+            "durationMs": 58.86699999999837
+          }
+        ],
+        "submitted": true,
+        "kernel": [
+          {
+            "kind": "netem",
+            "handle": "5:",
+            "root": true,
+            "refcnt": 16,
+            "options": {
+              "limit": 1000,
+              "delay": {
+                "delay": 0.05,
+                "jitter": 0,
+                "correlation": 0
+              },
+              "ecn": false,
+              "gap": 0
+            },
+            "bytes": 12603,
+            "packets": 19,
+            "drops": 0,
+            "overlimits": 0,
+            "requeues": 0,
+            "backlog": 0,
+            "qlen": 0
+          }
+        ],
+        "recovered": {
+          "state": "就绪",
+          "pending": false
+        },
+        "postsBefore": 6,
+        "postsAfter": 7,
+        "durationMs": 685.4153339999903
+      },
+      {
+        "name": "rtt-200ms",
+        "delayMs": 200,
+        "lossPercent": 0,
+        "health": [
+          {
+            "status": 200,
+            "durationMs": 205.70129100000486
+          },
+          {
+            "status": 200,
+            "durationMs": 204.82770800001163
+          },
+          {
+            "status": 200,
+            "durationMs": 205.0434580000001
+          },
+          {
+            "status": 200,
+            "durationMs": 204.36483400000725
+          },
+          {
+            "status": 200,
+            "durationMs": 204.7177079999965
+          }
+        ],
+        "submitted": true,
+        "kernel": [
+          {
+            "kind": "netem",
+            "handle": "5:",
+            "root": true,
+            "refcnt": 16,
+            "options": {
+              "limit": 1000,
+              "delay": {
+                "delay": 0.2,
+                "jitter": 0,
+                "correlation": 0
+              },
+              "ecn": false,
+              "gap": 0
+            },
+            "bytes": 10107,
+            "packets": 9,
+            "drops": 0,
+            "overlimits": 0,
+            "requeues": 0,
+            "backlog": 0,
+            "qlen": 0
+          }
+        ],
+        "recovered": {
+          "state": "就绪",
+          "pending": false
+        },
+        "postsBefore": 7,
+        "postsAfter": 8,
+        "durationMs": 1057.4419589999889
+      },
+      {
+        "name": "rtt-1000ms",
+        "delayMs": 1000,
+        "lossPercent": 0,
+        "health": [
+          {
+            "status": 200,
+            "durationMs": 1010.7266669999954
+          },
+          {
+            "status": 200,
+            "durationMs": 1009.2306659999886
+          },
+          {
+            "status": 200,
+            "durationMs": 1010.7409580000094
+          },
+          {
+            "status": 200,
+            "durationMs": 1009.9753750000091
+          },
+          {
+            "status": 200,
+            "durationMs": 1005.509625000006
+          }
+        ],
+        "submitted": true,
+        "kernel": [
+          {
+            "kind": "netem",
+            "handle": "5:",
+            "root": true,
+            "refcnt": 16,
+            "options": {
+              "limit": 1000,
+              "delay": {
+                "delay": 1,
+                "jitter": 0,
+                "correlation": 0
+              },
+              "ecn": false,
+              "gap": 0
+            },
+            "bytes": 11397,
+            "packets": 26,
+            "drops": 0,
+            "overlimits": 0,
+            "requeues": 0,
+            "backlog": 234,
+            "qlen": 3
+          }
+        ],
+        "recovered": {
+          "state": "就绪",
+          "pending": false
+        },
+        "postsBefore": 8,
+        "postsAfter": 9,
+        "durationMs": 2518.387124999994
+      },
+      {
+        "name": "loss-1percent",
+        "delayMs": 0,
+        "lossPercent": 1,
+        "health": [
+          {
+            "status": 200,
+            "durationMs": 2.2848329999978887
+          },
+          {
+            "status": 200,
+            "durationMs": 2.783584000004339
+          },
+          {
+            "status": 200,
+            "durationMs": 3.807375000003958
+          },
+          {
+            "status": 200,
+            "durationMs": 3.2411670000001322
+          },
+          {
+            "status": 200,
+            "durationMs": 1.6959999999962747
+          },
+          {
+            "status": 200,
+            "durationMs": 2.9359160000021802
+          },
+          {
+            "status": 200,
+            "durationMs": 2.329750000004424
+          },
+          {
+            "status": 200,
+            "durationMs": 3.5172079999902053
+          },
+          {
+            "status": 200,
+            "durationMs": 3.4144589999923483
+          },
+          {
+            "status": 200,
+            "durationMs": 2.6533329999947455
+          },
+          {
+            "status": 200,
+            "durationMs": 1.4139159999904223
+          },
+          {
+            "status": 200,
+            "durationMs": 1.8354589999944437
+          },
+          {
+            "status": 200,
+            "durationMs": 3.5732910000078846
+          },
+          {
+            "status": 200,
+            "durationMs": 3.785915999993449
+          },
+          {
+            "status": 200,
+            "durationMs": 4.3602499999979045
+          },
+          {
+            "status": 200,
+            "durationMs": 4.058833000002778
+          },
+          {
+            "status": 200,
+            "durationMs": 5.296291000006022
+          },
+          {
+            "status": 200,
+            "durationMs": 5.556499999991502
+          },
+          {
+            "status": 200,
+            "durationMs": 5.293582999991486
+          },
+          {
+            "status": 200,
+            "durationMs": 5.652291999998852
+          },
+          {
+            "status": 200,
+            "durationMs": 0.7250420000054874
+          },
+          {
+            "status": 200,
+            "durationMs": 0.5252500000060536
+          },
+          {
+            "status": 200,
+            "durationMs": 0.8322079999925336
+          },
+          {
+            "status": 200,
+            "durationMs": 1.5845829999889247
+          },
+          {
+            "status": 200,
+            "durationMs": 1.6495839999988675
+          },
+          {
+            "status": 200,
+            "durationMs": 1.5346669999998994
+          },
+          {
+            "status": 200,
+            "durationMs": 1.374083000002429
+          },
+          {
+            "status": 200,
+            "durationMs": 1.4270830000023125
+          },
+          {
+            "status": 200,
+            "durationMs": 1.4852499999979045
+          },
+          {
+            "status": 200,
+            "durationMs": 1.2371669999993173
+          },
+          {
+            "status": 200,
+            "durationMs": 0.9872079999913694
+          },
+          {
+            "status": 200,
+            "durationMs": 1.667208999991999
+          },
+          {
+            "status": 200,
+            "durationMs": 1.4327079999929992
+          },
+          {
+            "status": 200,
+            "durationMs": 1.1888340000004973
+          },
+          {
+            "status": 200,
+            "durationMs": 1.349333000005572
+          },
+          {
+            "status": 200,
+            "durationMs": 1.1950420000066515
+          },
+          {
+            "status": 200,
+            "durationMs": 1.1107500000071013
+          },
+          {
+            "status": 200,
+            "durationMs": 1.1196670000063023
+          },
+          {
+            "status": 200,
+            "durationMs": 1.1982920000009472
+          },
+          {
+            "status": 200,
+            "durationMs": 1.131582999994862
+          },
+          {
+            "status": 200,
+            "durationMs": 0.9246249999996508
+          },
+          {
+            "status": 200,
+            "durationMs": 0.6048329999903217
+          },
+          {
+            "status": 200,
+            "durationMs": 0.6985839999979362
+          },
+          {
+            "status": 200,
+            "durationMs": 0.9855830000014976
+          },
+          {
+            "status": 200,
+            "durationMs": 0.5665840000001481
+          },
+          {
+            "status": 200,
+            "durationMs": 0.8091669999994338
+          },
+          {
+            "status": 200,
+            "durationMs": 0.40045899999677204
+          },
+          {
+            "status": 200,
+            "durationMs": 0.6830420000042068
+          },
+          {
+            "status": 200,
+            "durationMs": 83.56258299999172
+          },
+          {
+            "status": 200,
+            "durationMs": 83.79087500000605
+          },
+          {
+            "status": 200,
+            "durationMs": 83.27254099999845
+          },
+          {
+            "status": 200,
+            "durationMs": 84.00933400000213
+          },
+          {
+            "status": 200,
+            "durationMs": 1.6257499999919673
+          },
+          {
+            "status": 200,
+            "durationMs": 30.199250000005122
+          },
+          {
+            "status": 200,
+            "durationMs": 1.6144170000043232
+          },
+          {
+            "status": 200,
+            "durationMs": 1.2580000000016298
+          },
+          {
+            "status": 200,
+            "durationMs": 7.981667000000016
+          },
+          {
+            "status": 200,
+            "durationMs": 7.587083000005805
+          },
+          {
+            "status": 200,
+            "durationMs": 7.965416999999434
+          },
+          {
+            "status": 200,
+            "durationMs": 7.62379100000544
+          },
+          {
+            "status": 200,
+            "durationMs": 4.152000000001863
+          },
+          {
+            "status": 200,
+            "durationMs": 4.147874999995111
+          },
+          {
+            "status": 200,
+            "durationMs": 4.315000000002328
+          },
+          {
+            "status": 200,
+            "durationMs": 4.487709000008181
+          },
+          {
+            "status": 200,
+            "durationMs": 3.936708000008366
+          },
+          {
+            "status": 200,
+            "durationMs": 3.9195420000032755
+          },
+          {
+            "status": 200,
+            "durationMs": 3.9419590000034077
+          },
+          {
+            "status": 200,
+            "durationMs": 4.1027089999988675
+          },
+          {
+            "status": 200,
+            "durationMs": 3.0308749999967404
+          },
+          {
+            "status": 200,
+            "durationMs": 3.11637500001234
+          },
+          {
+            "status": 200,
+            "durationMs": 2.808082999996259
+          },
+          {
+            "status": 200,
+            "durationMs": 2.6363750000018626
+          },
+          {
+            "status": 200,
+            "durationMs": 2.941167000011774
+          },
+          {
+            "status": 200,
+            "durationMs": 3.0077089999977034
+          },
+          {
+            "status": 200,
+            "durationMs": 3.1416250000038417
+          },
+          {
+            "status": 200,
+            "durationMs": 2.7228749999922
+          },
+          {
+            "status": 200,
+            "durationMs": 5.48145900000236
+          },
+          {
+            "status": 200,
+            "durationMs": 5.237375000011525
+          },
+          {
+            "status": 200,
+            "durationMs": 4.720375000004424
+          },
+          {
+            "status": 200,
+            "durationMs": 5.025999999998021
+          },
+          {
+            "status": 200,
+            "durationMs": 4.5616660000086995
+          },
+          {
+            "status": 200,
+            "durationMs": 4.654417000012472
+          },
+          {
+            "status": 200,
+            "durationMs": 4.756375000011758
+          },
+          {
+            "status": 200,
+            "durationMs": 4.4945000000006985
+          },
+          {
+            "status": 200,
+            "durationMs": 36.951708000007784
+          },
+          {
+            "status": 200,
+            "durationMs": 36.94466699998884
+          },
+          {
+            "status": 200,
+            "durationMs": 36.62050000000454
+          },
+          {
+            "status": 200,
+            "durationMs": 36.94870800001081
+          },
+          {
+            "status": 200,
+            "durationMs": 1.7990419999987353
+          },
+          {
+            "status": 200,
+            "durationMs": 2.289916000008816
+          },
+          {
+            "status": 200,
+            "durationMs": 1.9000419999938458
+          },
+          {
+            "status": 200,
+            "durationMs": 2.047082999997656
+          },
+          {
+            "status": 200,
+            "durationMs": 1.7717499999998836
+          },
+          {
+            "status": 200,
+            "durationMs": 2.055332999996608
+          },
+          {
+            "status": 200,
+            "durationMs": 1.8496250000025611
+          },
+          {
+            "status": 200,
+            "durationMs": 1.2887079999927664
+          },
+          {
+            "status": 200,
+            "durationMs": 1.073999999993248
+          },
+          {
+            "status": 200,
+            "durationMs": 1.2488330000051064
+          },
+          {
+            "status": 200,
+            "durationMs": 261.67225000000326
+          },
+          {
+            "status": 200,
+            "durationMs": 1.1509579999983544
+          }
+        ],
+        "submitted": true,
+        "kernel": [
+          {
+            "kind": "netem",
+            "handle": "5:",
+            "root": true,
+            "refcnt": 16,
+            "options": {
+              "limit": 1000,
+              "loss-random": {
+                "loss": 0.01,
+                "correlation": 0
+              },
+              "ecn": false,
+              "gap": 0
+            },
+            "bytes": 244325,
+            "packets": 239,
+            "drops": 2,
+            "overlimits": 0,
+            "requeues": 0,
+            "backlog": 0,
+            "qlen": 0
+          }
+        ],
+        "recovered": {
+          "state": "就绪",
+          "pending": false
+        },
+        "postsBefore": 9,
+        "postsAfter": 10,
+        "durationMs": 750.2534999999916
+      },
+      {
+        "name": "loss-5percent",
+        "delayMs": 0,
+        "lossPercent": 5,
+        "health": [
+          {
+            "status": 200,
+            "durationMs": 3.7240829999936977
+          },
+          {
+            "status": 200,
+            "durationMs": 3.0264579999929992
+          },
+          {
+            "status": 200,
+            "durationMs": 3.997417000005953
+          },
+          {
+            "status": 200,
+            "durationMs": 2.1959999999962747
+          },
+          {
+            "status": 200,
+            "durationMs": 221.66170799999963
+          },
+          {
+            "status": 200,
+            "durationMs": 2.4679159999941476
+          },
+          {
+            "status": 200,
+            "durationMs": 1.165208000005805
+          },
+          {
+            "status": 200,
+            "durationMs": 2.030957999988459
+          },
+          {
+            "status": 200,
+            "durationMs": 3.007583999991766
+          },
+          {
+            "status": 200,
+            "durationMs": 2.5676670000102604
+          },
+          {
+            "status": 200,
+            "durationMs": 2.576375000004191
+          },
+          {
+            "status": 200,
+            "durationMs": 2.245374999998603
+          },
+          {
+            "status": 200,
+            "durationMs": 36.020707999996375
+          },
+          {
+            "status": 200,
+            "durationMs": 36.217333000007784
+          },
+          {
+            "status": 200,
+            "durationMs": 36.010708000001614
+          },
+          {
+            "status": 200,
+            "durationMs": 36.24504100000195
+          },
+          {
+            "status": 200,
+            "durationMs": 5.893624999996973
+          },
+          {
+            "status": 200,
+            "durationMs": 5.8674579999933485
+          },
+          {
+            "status": 200,
+            "durationMs": 5.367666999998619
+          },
+          {
+            "status": 200,
+            "durationMs": 5.519584000008763
+          },
+          {
+            "status": 200,
+            "durationMs": 1.0010409999958938
+          },
+          {
+            "status": 200,
+            "durationMs": 0.7133340000000317
+          },
+          {
+            "status": 200,
+            "durationMs": 1.0130409999983385
+          },
+          {
+            "status": 200,
+            "durationMs": 1.120666999995592
+          },
+          {
+            "status": 200,
+            "durationMs": 1.0117499999905704
+          },
+          {
+            "status": 200,
+            "durationMs": 1.2024579999997513
+          },
+          {
+            "status": 200,
+            "durationMs": 1.0204579999990528
+          },
+          {
+            "status": 200,
+            "durationMs": 1.2303329999995185
+          },
+          {
+            "status": 200,
+            "durationMs": 1.0026250000082655
+          },
+          {
+            "status": 200,
+            "durationMs": 1.0073330000013812
+          },
+          {
+            "status": 200,
+            "durationMs": 1.0359590000007302
+          },
+          {
+            "status": 200,
+            "durationMs": 0.5955830000020796
+          },
+          {
+            "status": 200,
+            "durationMs": 0.8728750000009313
+          },
+          {
+            "status": 200,
+            "durationMs": 0.984375
+          },
+          {
+            "status": 200,
+            "durationMs": 0.630749999996624
+          },
+          {
+            "status": 200,
+            "durationMs": 1.0431249999965075
+          },
+          {
+            "status": 200,
+            "durationMs": 3.4575840000034077
+          },
+          {
+            "status": 200,
+            "durationMs": 3.3157919999939622
+          },
+          {
+            "status": 200,
+            "durationMs": 3.146833000006154
+          },
+          {
+            "status": 200,
+            "durationMs": 2.951415999996243
+          },
+          {
+            "status": 200,
+            "durationMs": 1.1362500000104774
+          },
+          {
+            "status": 200,
+            "durationMs": 0.7847079999919515
+          },
+          {
+            "status": 200,
+            "durationMs": 218.2725000000064
+          },
+          {
+            "status": 200,
+            "durationMs": 0.8720829999947455
+          },
+          {
+            "status": 200,
+            "durationMs": 8.254957999990438
+          },
+          {
+            "status": 200,
+            "durationMs": 4.716792000006535
+          },
+          {
+            "status": 200,
+            "durationMs": 3.418875000003027
+          },
+          {
+            "status": 200,
+            "durationMs": 6.63591599999927
+          },
+          {
+            "status": 200,
+            "durationMs": 4.1148749999993015
+          },
+          {
+            "status": 200,
+            "durationMs": 2.34991699999955
+          },
+          {
+            "status": 200,
+            "durationMs": 2.6127079999860143
+          },
+          {
+            "status": 200,
+            "durationMs": 3.1033749999915017
+          },
+          {
+            "status": 200,
+            "durationMs": 5.833874999996624
+          },
+          {
+            "status": 200,
+            "durationMs": 5.31091600000218
+          },
+          {
+            "status": 200,
+            "durationMs": 218.6284580000065
+          },
+          {
+            "status": 200,
+            "durationMs": 2.9807920000021113
+          },
+          {
+            "status": 200,
+            "durationMs": 3.8146669999987353
+          },
+          {
+            "status": 200,
+            "durationMs": 4.862624999994296
+          },
+          {
+            "status": 200,
+            "durationMs": 2.7557919999962905
+          },
+          {
+            "status": 200,
+            "durationMs": 5.716042000000016
+          },
+          {
+            "status": 200,
+            "durationMs": 3.279167000000598
+          },
+          {
+            "status": 200,
+            "durationMs": 4.407582999992883
+          },
+          {
+            "status": 200,
+            "durationMs": 1.7520839999924647
+          },
+          {
+            "status": 200,
+            "durationMs": 5.093000000008033
+          },
+          {
+            "status": 200,
+            "durationMs": 2.7842079999973066
+          },
+          {
+            "status": 200,
+            "durationMs": 2.1137500000040745
+          },
+          {
+            "status": 200,
+            "durationMs": 3.071750000002794
+          },
+          {
+            "status": 200,
+            "durationMs": 1.5370419999962905
+          },
+          {
+            "status": 200,
+            "durationMs": 4.467708999989554
+          },
+          {
+            "status": 200,
+            "durationMs": 2.9509580000012647
+          },
+          {
+            "status": 200,
+            "durationMs": 4.918207999988226
+          },
+          {
+            "status": 200,
+            "durationMs": 1.884250000002794
+          },
+          {
+            "status": 200,
+            "durationMs": 4.399084000004223
+          },
+          {
+            "status": 200,
+            "durationMs": 2.2929580000054557
+          },
+          {
+            "status": 200,
+            "durationMs": 4.274332999993931
+          },
+          {
+            "status": 200,
+            "durationMs": 3.981832999998005
+          },
+          {
+            "status": 200,
+            "durationMs": 3.081917000003159
+          },
+          {
+            "status": 200,
+            "durationMs": 3.17783299999428
+          },
+          {
+            "status": 200,
+            "durationMs": 2.621167000004789
+          },
+          {
+            "status": 200,
+            "durationMs": 2.759124999996857
+          },
+          {
+            "status": 200,
+            "durationMs": 213.23733300001186
+          },
+          {
+            "status": 200,
+            "durationMs": 2.0529999999998836
+          },
+          {
+            "status": 200,
+            "durationMs": 4.865791999996873
+          },
+          {
+            "status": 200,
+            "durationMs": 2.79216599999927
+          },
+          {
+            "status": 200,
+            "durationMs": 7.576833999992232
+          },
+          {
+            "status": 200,
+            "durationMs": 5.446040999988327
+          },
+          {
+            "status": 200,
+            "durationMs": 3.6170419999980368
+          },
+          {
+            "status": 200,
+            "durationMs": 6.35670800000662
+          },
+          {
+            "status": 200,
+            "durationMs": 6.390333000003011
+          },
+          {
+            "status": 200,
+            "durationMs": 4.346083999989787
+          },
+          {
+            "status": 200,
+            "durationMs": 5.374291000000085
+          },
+          {
+            "status": 200,
+            "durationMs": 2.5382919999974547
+          },
+          {
+            "status": 200,
+            "durationMs": 3.3840409999975236
+          },
+          {
+            "status": 200,
+            "durationMs": 2.366583000009996
+          },
+          {
+            "status": 200,
+            "durationMs": 3.80549999998766
+          },
+          {
+            "status": 200,
+            "durationMs": 1.5911250000062864
+          },
+          {
+            "status": 200,
+            "durationMs": 2.6784590000024764
+          },
+          {
+            "status": 200,
+            "durationMs": 1.7307500000024447
+          },
+          {
+            "status": 200,
+            "durationMs": 4.172833000004175
+          },
+          {
+            "status": 200,
+            "durationMs": 4.897207999994862
+          }
+        ],
+        "submitted": true,
+        "kernel": [
+          {
+            "kind": "netem",
+            "handle": "5:",
+            "root": true,
+            "refcnt": 16,
+            "options": {
+              "limit": 1000,
+              "loss-random": {
+                "loss": 0.05,
+                "correlation": 0
+              },
+              "ecn": false,
+              "gap": 0
+            },
+            "bytes": 210520,
+            "packets": 206,
+            "drops": 10,
+            "overlimits": 0,
+            "requeues": 0,
+            "backlog": 0,
+            "qlen": 0
+          }
+        ],
+        "recovered": {
+          "state": "就绪",
+          "pending": false
+        },
+        "postsBefore": 10,
+        "postsAfter": 11,
+        "durationMs": 1301.0427500000078
+      },
+      {
+        "name": "bidirectional-blackhole-10s",
+        "seconds": 10,
+        "durationMs": 10318.166333000001,
+        "recovered": {
+          "state": "就绪",
+          "pending": false
+        },
+        "postsBefore": 11,
+        "postsAfter": 11
+      },
+      {
+        "name": "bidirectional-blackhole-60s",
+        "seconds": 60,
+        "durationMs": 61845.743,
+        "recovered": {
+          "state": "就绪",
+          "pending": false
+        },
+        "postsBefore": 11,
+        "postsAfter": 11
+      },
+      {
+        "name": "input-reachable-response-unreachable",
+        "recovered": {
+          "state": "就绪",
+          "pending": false
+        },
+        "authoritativeInputCount": 1,
+        "postsBefore": 11,
+        "postsAfter": 12
+      }
+    ],
+    "configuredRttInterpretation": "Delay on the server egress adds the configured delay to each network roundtrip",
+    "passed": true
+  },
+  "compatibilityMatrix": {
+    "cases": [
+      {
+        "expected": "GATEWAY_AUTH_FAILED",
+        "observed": "GATEWAY_AUTH_FAILED",
+        "durationMs": 84.2447080000129
+      },
+      {
+        "expected": "GATEWAY_CHAT_INCOMPATIBLE",
+        "observed": "GATEWAY_CHAT_INCOMPATIBLE",
+        "durationMs": 73.51624999998603
+      },
+      {
+        "expected": "GATEWAY_IDENTITY_PROOF_FAILED",
+        "observed": "GATEWAY_IDENTITY_PROOF_FAILED",
+        "durationMs": 81.8422080000164
+      }
+    ],
+    "passed": true,
+    "identityCredentialLeaks": 0
+  },
+  "packageAfter": {
+    "files": 1423,
+    "sha256": "8cafc224d0acdc73fc7974c3aef95d92afac3d9ae7d76eecffe98b9d430ea70b"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-10-31T13:55:13.326Z"
+}

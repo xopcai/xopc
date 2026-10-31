@@ -1,0 +1,89 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T13:48:38.295Z",
+  "scope": "Installed macOS app local spawn/reuse, real bundled Gateway/SQLite/IPC/PTY/browser with deterministic inference; not upgrade or S5 acceptance",
+  "samples": [
+    {
+      "mode": "spawn",
+      "passed": true,
+      "runtime": {
+        "executable": "/tmp/xopc-s5-delivery/installed-renewal-cleanup-local/xopc.app/Contents/MacOS/xopc",
+        "appAsar": "/tmp/xopc-s5-delivery/installed-renewal-cleanup-local/xopc.app/Contents/Resources/app.asar",
+        "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-local-mQ2DUI",
+        "rendererCdpOnly": true,
+        "preserveBrowserDefaults": false,
+        "fuses": {
+          "0": 49,
+          "1": 49,
+          "2": 48,
+          "3": 48,
+          "4": 49,
+          "5": 49,
+          "6": 48,
+          "7": 48,
+          "8": 49,
+          "version": "1"
+        },
+        "pid": 58143
+      },
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "af6bbed0-4449-4a59-b34d-e777d3f883ac"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "ownedRestartPreservesChat": true
+    },
+    {
+      "mode": "reuse",
+      "passed": false,
+      "reusedDatabaseVersionBefore": "262",
+      "runtime": {
+        "executable": "/tmp/xopc-s5-delivery/installed-renewal-cleanup-local/xopc.app/Contents/MacOS/xopc",
+        "appAsar": "/tmp/xopc-s5-delivery/installed-renewal-cleanup-local/xopc.app/Contents/Resources/app.asar",
+        "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-local-Ipy7jL",
+        "rendererCdpOnly": true,
+        "preserveBrowserDefaults": false,
+        "fuses": {
+          "0": 49,
+          "1": 49,
+          "2": 48,
+          "3": 48,
+          "4": 49,
+          "5": 49,
+          "6": 48,
+          "7": 48,
+          "8": 49,
+          "version": "1"
+        },
+        "pid": 59213
+      },
+      "error": "browserContext.waitForEvent: Timeout 30000ms exceeded while waiting for event \"page\"\n    at Object.firstWindow (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-packaged-acceptance.mjs:117:68)\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-installed-local.mjs:51:30",
+      "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 62390\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=59068, lockPath=/Users/micjoyce/.xopc/locks/gateway.247a08ad.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:62390...\n✅ Gateway started\n   URL: http://127.0.0.1:62390\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:62390\n\nDevTools listening on ws://127.0.0.1:62432/devtools/browser/2fb59147-b96f-4867-8a11-6f827463a951\n",
+      "windows": [],
+      "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-local-Ipy7jL"
+    }
+  ],
+  "packageBefore": {
+    "files": 1423,
+    "sha256": "8cafc224d0acdc73fc7974c3aef95d92afac3d9ae7d76eecffe98b9d430ea70b"
+  },
+  "externalServerPackageBefore": {
+    "files": 1421,
+    "sha256": "edf3a24357747a9b18a2f1adfc409cb16a8529faad10f16ecdf918fffce9f84c"
+  },
+  "packageAfter": {
+    "files": 1423,
+    "sha256": "8cafc224d0acdc73fc7974c3aef95d92afac3d9ae7d76eecffe98b9d430ea70b"
+  },
+  "externalServerPackageAfter": {
+    "files": 1421,
+    "sha256": "edf3a24357747a9b18a2f1adfc409cb16a8529faad10f16ecdf918fffce9f84c"
+  },
+  "finishedAt": "2026-10-31T13:49:32.333Z"
+}

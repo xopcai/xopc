@@ -1,6 +1,6 @@
 {
-  "archivedAt": "2026-10-31T13:40:51.035Z",
-  "scope": "D1 device auth, D2 client primitives only; native consent, safeStorage and Host not accepted",
+  "archivedAt": "2026-10-31T14:13:45.105Z",
+  "scope": "D1 independently paired desktop credentials and D2 client primitives only; no native consent, safeStorage or Host acceptance",
   "files": [
     {
       "file": "p2a2-desktop-device-auth-1.json",
@@ -61,6 +61,14 @@
     {
       "file": "xopc-p2a2-desktop-device-auth-client-1.log",
       "sha256": "abb96888a412c22b7d7ccf1d96b30f6eadfaf54b1cd57a743bb4a13852cf922e"
+    },
+    {
+      "file": "p2a2-final-device-auth-1.json",
+      "sha256": "5f83b448abda1f14f67a640548f436574390cc2dd851a07b766c0a4608cd2099"
+    },
+    {
+      "file": "xopc-p2a2-gateway-contract-tests.log",
+      "sha256": "a3053eeb2569cbff5b3f1a36c09bfcbad21eec4918dd54663062e6526d2d472a"
     }
   ]
 }

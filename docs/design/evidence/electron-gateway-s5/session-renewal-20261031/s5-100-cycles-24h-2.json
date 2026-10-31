@@ -1,0 +1,2347 @@
+{
+  "passed": false,
+  "tls": false,
+  "startedAt": "2026-10-31T13:42:13.273Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "halfOpenRealtimeDetectedWithinOriginalBudget": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true
+  },
+  "scope": "Installed macOS app to two isolated Docker Gateways using the built bundled server and exact direct runtime dependencies; deterministic inference, same physical host, not standalone Docker release or WAN acceptance",
+  "background": true,
+  "fixtureLifetimeSeconds": 90500,
+  "application": "/tmp/xopc-s5-delivery/installed-session-renewal/xopc.app",
+  "packageBefore": {
+    "files": 1423,
+    "sha256": "37c047e4e04bd2c2f8a14ec91d2ba8765ace0a58dbcfc262cd991aa39f47ee07"
+  },
+  "containerImage": "sha256:1e60dbcce3849b6fbd629f430a98dd0a475806d0a36b2b20f4ea166ee30f52c8",
+  "runtime": {
+    "executable": "/tmp/xopc-s5-delivery/installed-session-renewal/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-s5-delivery/installed-session-renewal/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-trDWXD",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": true,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 36834
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 814
+    },
+    {
+      "input": 2,
+      "durationMs": 328
+    }
+  ],
+  "inputIntervalMs": 0,
+  "endurance": {
+    "options": {
+      "connectionCycles": 100,
+      "connectionIntervalMs": 5000,
+      "soakSeconds": 86400,
+      "sampleIntervalMs": 60000
+    },
+    "connectionSamples": [
+      {
+        "cycle": 1,
+        "target": "A",
+        "openedMs": 284.85691699999734,
+        "totalMs": 400.9875420000026,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 420.328125,
+          "cpuPercentSnapshot": 13.2,
+          "openFds": 95
+        }
+      },
+      {
+        "cycle": 2,
+        "target": "B",
+        "openedMs": 304.70558300000266,
+        "totalMs": 421.19595800001116,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 423.671875,
+          "cpuPercentSnapshot": 10.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 3,
+        "target": "A",
+        "openedMs": 303.6856669999979,
+        "totalMs": 420.56900000000314,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 426.515625,
+          "cpuPercentSnapshot": 10.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 4,
+        "target": "B",
+        "openedMs": 1308.107250000001,
+        "totalMs": 1450.8595420000056,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 358.109375,
+          "cpuPercentSnapshot": 11.3,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 5,
+        "target": "A",
+        "openedMs": 379.6195000000007,
+        "totalMs": 502.3237090000039,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 359.5625,
+          "cpuPercentSnapshot": 17.3,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 6,
+        "target": "B",
+        "openedMs": 331.8506669999915,
+        "totalMs": 449.50541699999303,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 356.078125,
+          "cpuPercentSnapshot": 12.9,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 7,
+        "target": "A",
+        "openedMs": 316.2992079999967,
+        "totalMs": 436.52716599999985,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 365.4375,
+          "cpuPercentSnapshot": 12.299999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 8,
+        "target": "B",
+        "openedMs": 306.32291700001224,
+        "totalMs": 430.997000000003,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 368.984375,
+          "cpuPercentSnapshot": 10.8,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 9,
+        "target": "A",
+        "openedMs": 292.929707999996,
+        "totalMs": 409.68962499999907,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 372.515625,
+          "cpuPercentSnapshot": 12.3,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 10,
+        "target": "B",
+        "openedMs": 299.75800000000163,
+        "totalMs": 415.33445799999754,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 376.125,
+          "cpuPercentSnapshot": 11.999999999999998,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 11,
+        "target": "A",
+        "openedMs": 294.82799999999406,
+        "totalMs": 411.4994580000057,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 379.09375,
+          "cpuPercentSnapshot": 12.9,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 12,
+        "target": "B",
+        "openedMs": 320.0161669999943,
+        "totalMs": 440.8604170000035,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 381.203125,
+          "cpuPercentSnapshot": 13,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 13,
+        "target": "A",
+        "openedMs": 315.0948330000101,
+        "totalMs": 331.0187920000026,
+        "posts": 4,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            40915,
+            40920
+          ],
+          "rssMiB": 378.015625,
+          "cpuPercentSnapshot": 13.2,
+          "openFds": null
+        }
+      },
+      {
+        "cycle": 14,
+        "target": "B",
+        "openedMs": 332.2811670000083,
+        "totalMs": 450.7854170000064,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 360.296875,
+          "cpuPercentSnapshot": 13.4,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 15,
+        "target": "A",
+        "openedMs": 305.4195830000099,
+        "totalMs": 421.3385830000043,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 363.40625,
+          "cpuPercentSnapshot": 13.899999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 16,
+        "target": "B",
+        "openedMs": 297.940042000002,
+        "totalMs": 416.8547500000277,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 361.359375,
+          "cpuPercentSnapshot": 14.100000000000001,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 17,
+        "target": "A",
+        "openedMs": 325.91358299998683,
+        "totalMs": 442.6057079999882,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 343.453125,
+          "cpuPercentSnapshot": 11.4,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 18,
+        "target": "B",
+        "openedMs": 363.5457919999899,
+        "totalMs": 478.68458299999475,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 322.859375,
+          "cpuPercentSnapshot": 11.899999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 19,
+        "target": "A",
+        "openedMs": 282.65212499999325,
+        "totalMs": 398.0370830000029,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 334.015625,
+          "cpuPercentSnapshot": 12.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 20,
+        "target": "B",
+        "openedMs": 291.6532909999951,
+        "totalMs": 407.29175000000396,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 337.09375,
+          "cpuPercentSnapshot": 12.5,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 21,
+        "target": "A",
+        "openedMs": 300.28429199999664,
+        "totalMs": 416.56795900000725,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 339.4375,
+          "cpuPercentSnapshot": 13.5,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 22,
+        "target": "B",
+        "openedMs": 290.07595800000126,
+        "totalMs": 404.6887080000015,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 342.328125,
+          "cpuPercentSnapshot": 11.7,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 23,
+        "target": "A",
+        "openedMs": 285.0940830000036,
+        "totalMs": 399.0090410000121,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 344.5625,
+          "cpuPercentSnapshot": 11,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 24,
+        "target": "B",
+        "openedMs": 291.493083999987,
+        "totalMs": 407.22179199999664,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 352.59375,
+          "cpuPercentSnapshot": 11.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 25,
+        "target": "A",
+        "openedMs": 288.6414999999979,
+        "totalMs": 404.1502920000057,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 355.46875,
+          "cpuPercentSnapshot": 11.8,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 26,
+        "target": "B",
+        "openedMs": 295.6747499999765,
+        "totalMs": 409.7802499999816,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 356.96875,
+          "cpuPercentSnapshot": 12.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 27,
+        "target": "A",
+        "openedMs": 289.21254199999385,
+        "totalMs": 404.534416999988,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 359.21875,
+          "cpuPercentSnapshot": 11.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 28,
+        "target": "B",
+        "openedMs": 350.3831669999927,
+        "totalMs": 465.13749999998254,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 352.34375,
+          "cpuPercentSnapshot": 12.799999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 29,
+        "target": "A",
+        "openedMs": 294.28429199999664,
+        "totalMs": 411.3318750000035,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 347.96875,
+          "cpuPercentSnapshot": 12.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 30,
+        "target": "B",
+        "openedMs": 302.6378750000149,
+        "totalMs": 419.32741699999315,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 352.65625,
+          "cpuPercentSnapshot": 11.599999999999998,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 31,
+        "target": "A",
+        "openedMs": 294.53670799999963,
+        "totalMs": 411.0891249999986,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 354.65625,
+          "cpuPercentSnapshot": 11.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 32,
+        "target": "B",
+        "openedMs": 290.4821670000092,
+        "totalMs": 407.25795800000196,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 347.890625,
+          "cpuPercentSnapshot": 11.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 33,
+        "target": "A",
+        "openedMs": 303.33545900002355,
+        "totalMs": 420.70812500000466,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 348.890625,
+          "cpuPercentSnapshot": 11.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 34,
+        "target": "B",
+        "openedMs": 292.3592920000083,
+        "totalMs": 409.1417080000101,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 352.171875,
+          "cpuPercentSnapshot": 11.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 35,
+        "target": "A",
+        "openedMs": 283.9450840000063,
+        "totalMs": 400.4684170000255,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 354.96875,
+          "cpuPercentSnapshot": 10.899999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 36,
+        "target": "B",
+        "openedMs": 287.83766700001433,
+        "totalMs": 403.96737500000745,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 357.71875,
+          "cpuPercentSnapshot": 10.7,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 37,
+        "target": "A",
+        "openedMs": 288.58212499998626,
+        "totalMs": 405.054375000007,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 346.78125,
+          "cpuPercentSnapshot": 11,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 38,
+        "target": "B",
+        "openedMs": 272.8726660000102,
+        "totalMs": 387.23916600001394,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 350.359375,
+          "cpuPercentSnapshot": 10,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 39,
+        "target": "A",
+        "openedMs": 285.66512499999953,
+        "totalMs": 399.9734999999928,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 353.21875,
+          "cpuPercentSnapshot": 10.299999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 40,
+        "target": "B",
+        "openedMs": 272.6946250000037,
+        "totalMs": 385.20945800002664,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 354.34375,
+          "cpuPercentSnapshot": 9.5,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 41,
+        "target": "A",
+        "openedMs": 280.16829200001666,
+        "totalMs": 294.1774999999907,
+        "posts": 4,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            53579,
+            53584
+          ],
+          "rssMiB": 356.15625,
+          "cpuPercentSnapshot": 10.7,
+          "openFds": null
+        }
+      },
+      {
+        "cycle": 42,
+        "target": "B",
+        "openedMs": 313.4192500000354,
+        "totalMs": 429.3730000000214,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 358.53125,
+          "cpuPercentSnapshot": 11.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 43,
+        "target": "A",
+        "openedMs": 298.06716599996435,
+        "totalMs": 412.69699999998556,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 360.265625,
+          "cpuPercentSnapshot": 10.4,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 44,
+        "target": "B",
+        "openedMs": 310.2006249999977,
+        "totalMs": 427.2445830000215,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 342,
+          "cpuPercentSnapshot": 11.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 45,
+        "target": "A",
+        "openedMs": 320.0258749999921,
+        "totalMs": 434.14729100000113,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 345.640625,
+          "cpuPercentSnapshot": 12.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 46,
+        "target": "B",
+        "openedMs": 308.4630420000176,
+        "totalMs": 425.0887090000324,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 349.390625,
+          "cpuPercentSnapshot": 10.899999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 47,
+        "target": "A",
+        "openedMs": 297.3780829999596,
+        "totalMs": 413.38991599995643,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 340.328125,
+          "cpuPercentSnapshot": 10.3,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 48,
+        "target": "B",
+        "openedMs": 323.7232499999809,
+        "totalMs": 443.1641669999808,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 322.78125,
+          "cpuPercentSnapshot": 13.9,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 49,
+        "target": "A",
+        "openedMs": 300.44624999997905,
+        "totalMs": 415.8600410000072,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 327.921875,
+          "cpuPercentSnapshot": 10.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 50,
+        "target": "B",
+        "openedMs": 311.2174590000068,
+        "totalMs": 426.97400000004563,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 338.0625,
+          "cpuPercentSnapshot": 12.299999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 51,
+        "target": "A",
+        "openedMs": 312.483917000005,
+        "totalMs": 436.2348340000026,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 330.3125,
+          "cpuPercentSnapshot": 13.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 52,
+        "target": "B",
+        "openedMs": 321.2880829999922,
+        "totalMs": 437.58675000001676,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 322.40625,
+          "cpuPercentSnapshot": 11.999999999999998,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 53,
+        "target": "A",
+        "openedMs": 348.0620830000262,
+        "totalMs": 462.5892500000191,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 326.578125,
+          "cpuPercentSnapshot": 12.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 54,
+        "target": "B",
+        "openedMs": 331.3876659999951,
+        "totalMs": 449.5874579999945,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 329.8125,
+          "cpuPercentSnapshot": 13,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 55,
+        "target": "A",
+        "openedMs": 331.8944579999661,
+        "totalMs": 450.22033300000476,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 325.734375,
+          "cpuPercentSnapshot": 12.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 56,
+        "target": "B",
+        "openedMs": 336.3657499999972,
+        "totalMs": 453.4412500000326,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 323.46875,
+          "cpuPercentSnapshot": 13.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 57,
+        "target": "A",
+        "openedMs": 306.2784170000232,
+        "totalMs": 421.2959169999813,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 329.28125,
+          "cpuPercentSnapshot": 11.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 58,
+        "target": "B",
+        "openedMs": 313.2133330000215,
+        "totalMs": 430.32454200001666,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 333.46875,
+          "cpuPercentSnapshot": 10.799999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 59,
+        "target": "A",
+        "openedMs": 303.9980420000502,
+        "totalMs": 421.4710420000483,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 337.0625,
+          "cpuPercentSnapshot": 10.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 60,
+        "target": "B",
+        "openedMs": 306.92145799996797,
+        "totalMs": 423.60416699998314,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 340.203125,
+          "cpuPercentSnapshot": 10.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 61,
+        "target": "A",
+        "openedMs": 293.1147500000079,
+        "totalMs": 408.86383300001035,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 343.625,
+          "cpuPercentSnapshot": 12,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 62,
+        "target": "B",
+        "openedMs": 305.32475000002887,
+        "totalMs": 421.7960830000229,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 346.328125,
+          "cpuPercentSnapshot": 10.999999999999998,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 63,
+        "target": "A",
+        "openedMs": 276.5164170000353,
+        "totalMs": 392.01512500003446,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 348.515625,
+          "cpuPercentSnapshot": 12.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 64,
+        "target": "B",
+        "openedMs": 311.89704199996777,
+        "totalMs": 428.6013340000063,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 351.265625,
+          "cpuPercentSnapshot": 11.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 65,
+        "target": "A",
+        "openedMs": 353.8508750000037,
+        "totalMs": 471.8740000000107,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 331.8125,
+          "cpuPercentSnapshot": 13.099999999999998,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 66,
+        "target": "B",
+        "openedMs": 337.78483299998334,
+        "totalMs": 457.5905419999617,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 336.921875,
+          "cpuPercentSnapshot": 12.5,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 67,
+        "target": "A",
+        "openedMs": 300.1928750000079,
+        "totalMs": 417.07541700004367,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 340.1875,
+          "cpuPercentSnapshot": 14.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 68,
+        "target": "B",
+        "openedMs": 323.7223750000121,
+        "totalMs": 441.1167499999865,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 343.0625,
+          "cpuPercentSnapshot": 12.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 69,
+        "target": "A",
+        "openedMs": 315.41554199997336,
+        "totalMs": 431.80804199998965,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 333.859375,
+          "cpuPercentSnapshot": 12.5,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 70,
+        "target": "B",
+        "openedMs": 299.06891699996777,
+        "totalMs": 415.90533300000243,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 336.875,
+          "cpuPercentSnapshot": 13.799999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 71,
+        "target": "A",
+        "openedMs": 305.46724999998696,
+        "totalMs": 419.9922079999815,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 337.5625,
+          "cpuPercentSnapshot": 13.999999999999998,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 72,
+        "target": "B",
+        "openedMs": 311.57091700000456,
+        "totalMs": 427.92654199997196,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 341.28125,
+          "cpuPercentSnapshot": 14.299999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 73,
+        "target": "A",
+        "openedMs": 323.19766599999275,
+        "totalMs": 441.00533299997915,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 343.53125,
+          "cpuPercentSnapshot": 11.7,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 74,
+        "target": "B",
+        "openedMs": 308.41245900001377,
+        "totalMs": 424.6683750000084,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 346.15625,
+          "cpuPercentSnapshot": 14.399999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 75,
+        "target": "A",
+        "openedMs": 280.43029200000456,
+        "totalMs": 394.12133399996674,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 348.1875,
+          "cpuPercentSnapshot": 10.5,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 76,
+        "target": "B",
+        "openedMs": 313.6279590000049,
+        "totalMs": 430.27679199998965,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 349.890625,
+          "cpuPercentSnapshot": 13.5,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 77,
+        "target": "A",
+        "openedMs": 294.1114579999703,
+        "totalMs": 409.39562500000466,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 352.859375,
+          "cpuPercentSnapshot": 12.299999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 78,
+        "target": "B",
+        "openedMs": 316.19866699998965,
+        "totalMs": 431.5727499999921,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 355.28125,
+          "cpuPercentSnapshot": 12.9,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 79,
+        "target": "A",
+        "openedMs": 300.61725000001024,
+        "totalMs": 417.5769169999985,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 357.921875,
+          "cpuPercentSnapshot": 12.3,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 80,
+        "target": "B",
+        "openedMs": 333.6545829999959,
+        "totalMs": 448.77054200001294,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 360.25,
+          "cpuPercentSnapshot": 13.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 81,
+        "target": "A",
+        "openedMs": 310.76808299997356,
+        "totalMs": 426.6438329999801,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 361.46875,
+          "cpuPercentSnapshot": 11.9,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 82,
+        "target": "B",
+        "openedMs": 301.3111660000286,
+        "totalMs": 417.99145800003316,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 363.734375,
+          "cpuPercentSnapshot": 11.799999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 83,
+        "target": "A",
+        "openedMs": 290.0950409999932,
+        "totalMs": 406.8926249999786,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 365.765625,
+          "cpuPercentSnapshot": 11.299999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 84,
+        "target": "B",
+        "openedMs": 315.4329170000274,
+        "totalMs": 430.091791999992,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 367.171875,
+          "cpuPercentSnapshot": 11.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 85,
+        "target": "A",
+        "openedMs": 303.4598330000299,
+        "totalMs": 420.3069170000381,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 369.34375,
+          "cpuPercentSnapshot": 11.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 86,
+        "target": "B",
+        "openedMs": 315.2830420000246,
+        "totalMs": 431.5337920000311,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 371.578125,
+          "cpuPercentSnapshot": 11.499999999999998,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 87,
+        "target": "A",
+        "openedMs": 301.3629160000128,
+        "totalMs": 417.40025000000605,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 373.59375,
+          "cpuPercentSnapshot": 11,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 88,
+        "target": "B",
+        "openedMs": 299.1604159999988,
+        "totalMs": 412.9946249999921,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 375.765625,
+          "cpuPercentSnapshot": 11.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 89,
+        "target": "A",
+        "openedMs": 301.2222919999622,
+        "totalMs": 416.39870899997186,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 376.5,
+          "cpuPercentSnapshot": 11.299999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 90,
+        "target": "B",
+        "openedMs": 321.34533300000476,
+        "totalMs": 436.61658299999544,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 378.65625,
+          "cpuPercentSnapshot": 11,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 91,
+        "target": "A",
+        "openedMs": 306.4555420000106,
+        "totalMs": 423.4417920000269,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 380.40625,
+          "cpuPercentSnapshot": 11.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 92,
+        "target": "B",
+        "openedMs": 293.99983300006716,
+        "totalMs": 412.11725000006845,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 380.828125,
+          "cpuPercentSnapshot": 10.7,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 93,
+        "target": "A",
+        "openedMs": 294.80187500000466,
+        "totalMs": 409.30233299999963,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 383.03125,
+          "cpuPercentSnapshot": 10.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 94,
+        "target": "B",
+        "openedMs": 291.404959000065,
+        "totalMs": 406.3702090000734,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 385.328125,
+          "cpuPercentSnapshot": 10.6,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 95,
+        "target": "A",
+        "openedMs": 368.59058299998287,
+        "totalMs": 485.30395800003316,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 357.78125,
+          "cpuPercentSnapshot": 15.1,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 96,
+        "target": "B",
+        "openedMs": 311.5250000000233,
+        "totalMs": 427.4513750000624,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 361.25,
+          "cpuPercentSnapshot": 11.7,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 97,
+        "target": "A",
+        "openedMs": 335.9782500000438,
+        "totalMs": 454.0825000000186,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 366.078125,
+          "cpuPercentSnapshot": 12.4,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 98,
+        "target": "B",
+        "openedMs": 317.501958000008,
+        "totalMs": 434.2261249999283,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 373.140625,
+          "cpuPercentSnapshot": 12.799999999999999,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 99,
+        "target": "A",
+        "openedMs": 321.1480829999782,
+        "totalMs": 437.7571250000037,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 375.546875,
+          "cpuPercentSnapshot": 11.2,
+          "openFds": 94
+        }
+      },
+      {
+        "cycle": 100,
+        "target": "B",
+        "openedMs": 299.11162500001956,
+        "totalMs": 415.5146670000395,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343
+          ],
+          "rssMiB": 376.921875,
+          "cpuPercentSnapshot": 10.4,
+          "openFds": 94
+        }
+      }
+    ],
+    "soakSamples": [
+      {
+        "iteration": 1,
+        "elapsedMs": 349.200916999951,
+        "cycleMs": 351.281917000073,
+        "posts": 5,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 605.671875,
+          "cpuPercentSnapshot": 25.6,
+          "openFds": 150
+        }
+      },
+      {
+        "iteration": 2,
+        "elapsedMs": 60349.593999999925,
+        "cycleMs": 350.74183399998583,
+        "posts": 6,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 528.015625,
+          "cpuPercentSnapshot": 16.7,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 3,
+        "elapsedMs": 120346.90099999995,
+        "cycleMs": 347.38891700003296,
+        "posts": 7,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 514.390625,
+          "cpuPercentSnapshot": 22.200000000000003,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 4,
+        "elapsedMs": 180331.4704169999,
+        "cycleMs": 331.42258300003596,
+        "posts": 8,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 501.84375,
+          "cpuPercentSnapshot": 11.7,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 5,
+        "elapsedMs": 240352.46079199994,
+        "cycleMs": 351.3212910000002,
+        "posts": 9,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 495.8125,
+          "cpuPercentSnapshot": 13.100000000000001,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 6,
+        "elapsedMs": 300336.3496249999,
+        "cycleMs": 335.02470800001174,
+        "posts": 10,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 483.1875,
+          "cpuPercentSnapshot": 10.4,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 7,
+        "elapsedMs": 360342.653833,
+        "cycleMs": 340.8034579999512,
+        "posts": 11,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 487.40625,
+          "cpuPercentSnapshot": 13.100000000000001,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 8,
+        "elapsedMs": 420345.719375,
+        "cycleMs": 345.05583299999125,
+        "posts": 12,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 491.28125,
+          "cpuPercentSnapshot": 15.1,
+          "openFds": 145
+        }
+      },
+      {
+        "iteration": 9,
+        "elapsedMs": 480475.4388329999,
+        "cycleMs": 475.4079170000041,
+        "posts": 13,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 316.765625,
+          "cpuPercentSnapshot": 10.1,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 10,
+        "elapsedMs": 551183.2246249999,
+        "cycleMs": 11180.121207999997,
+        "posts": 14,
+        "localSessionExpiresAt": 1793455597651,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 341.875,
+          "cpuPercentSnapshot": 0.8999999999999999,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 11,
+        "elapsedMs": 600357.864042,
+        "cycleMs": 354.8102080000099,
+        "posts": 15,
+        "localSessionExpiresAt": 1793456197672,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 348.546875,
+          "cpuPercentSnapshot": 17.4,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 12,
+        "elapsedMs": 660851.468792,
+        "cycleMs": 851.4335000000428,
+        "posts": 16,
+        "localSessionExpiresAt": 1793456197672,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 301.796875,
+          "cpuPercentSnapshot": 13.8,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 13,
+        "elapsedMs": 720363.7857499999,
+        "cycleMs": 359.68279099999927,
+        "posts": 17,
+        "localSessionExpiresAt": 1793456197672,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 329.59375,
+          "cpuPercentSnapshot": 17.8,
+          "openFds": 145
+        }
+      },
+      {
+        "iteration": 14,
+        "elapsedMs": 780360.648833,
+        "cycleMs": 356.7087499999907,
+        "posts": 18,
+        "localSessionExpiresAt": 1793456197672,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 333.140625,
+          "cpuPercentSnapshot": 15.8,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 15,
+        "elapsedMs": 840350.243625,
+        "cycleMs": 346.264290999854,
+        "posts": 19,
+        "localSessionExpiresAt": 1793456197672,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 336.234375,
+          "cpuPercentSnapshot": 20.6,
+          "openFds": 147
+        }
+      },
+      {
+        "iteration": 16,
+        "elapsedMs": 900352.414667,
+        "cycleMs": 348.1138750000391,
+        "posts": 20,
+        "localSessionExpiresAt": 1793456197672,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            38340,
+            38341,
+            38342,
+            38343,
+            63913,
+            63914
+          ],
+          "rssMiB": 334.328125,
+          "cpuPercentSnapshot": 19.4,
+          "openFds": 147
+        }
+      }
+    ],
+    "faults": [
+      {
+        "iteration": 10,
+        "kind": "application-proxy-offline-10s",
+        "durationMs": 10836.18229100015
+      }
+    ],
+    "minimumConnectionCyclesMet": true,
+    "minimumSoakDurationMet": false,
+    "minimumSoakSamplesMet": false,
+    "completeFunctionalSoak": false,
+    "fullS5Acceptance": false,
+    "pendingMatrix": [
+      "network-layer delay/loss/blackholes",
+      "certificate/auth/version combinations",
+      "real sleep/wake",
+      "supported upgrade/rollback combinations"
+    ],
+    "performanceAcceptance": "deferred by user; observations only",
+    "soakStartedAt": "2026-10-31T13:51:37.852Z",
+    "soakElapsedMs": 900352.414667
+  },
+  "error": "Error: Condition deadline exceeded\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:66:188)\n    at async exerciseRemoteEndurance (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-remote-endurance.mjs:80:7)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:319:10",
+  "serverLogs": "🚀 Starting xopc gateway...\n   Bind: lan (0.0.0.0)\n   Port: 18790\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=12, lockPath=/home/node/.xopc/locks/gateway.a0398df5.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 0.0.0.0:18790...\n✅ Gateway started\n   URL: http://localhost:18790\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://0.0.0.0:18790\n🚀 Starting xopc gateway...\n   Bind: lan (0.0.0.0)\n   Port: 18790\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=12, lockPath=/home/node/.xopc/locks/gateway.a0398df5.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 0.0.0.0:18790...\n✅ Gateway started\n   URL: http://localhost:18790\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://0.0.0.0:18790\n",
+  "applicationLogs": "\nDevTools listening on ws://127.0.0.1:58507/devtools/browser/6cac4ffd-f0f3-4a24-8a15-270516c7b651\n",
+  "windows": [],
+  "packageAfter": {
+    "files": 1423,
+    "sha256": "37c047e4e04bd2c2f8a14ec91d2ba8765ace0a58dbcfc262cd991aa39f47ee07"
+  },
+  "retainedContainerState": {
+    "path": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-trDWXD/failed-container-state",
+    "scope": "Raw state from stopped test containers; not a verified recovery backup",
+    "errors": []
+  },
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-trDWXD",
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-10-31T14:08:19.034Z"
+}

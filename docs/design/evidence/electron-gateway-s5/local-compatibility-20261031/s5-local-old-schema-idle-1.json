@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "scope": "Only explicitly named installed test bundles; unrelated host load is not covered",
+  "startedAt": "2026-10-31T14:00:25.012Z",
+  "applications": [
+    "/tmp/xopc-s5-delivery/installed-renewal-cleanup-local/xopc.app",
+    "/private/tmp/xopc-s5-delivery/installed-renewal-cleanup-local/xopc.app",
+    "/tmp/xopc-s5-delivery/installed-old-schema-preview/xopc.app",
+    "/private/tmp/xopc-s5-delivery/installed-old-schema-preview/xopc.app",
+    "/tmp/xopc-s5-delivery/installed-recovery-timers/xopc.app",
+    "/private/tmp/xopc-s5-delivery/installed-recovery-timers/xopc.app"
+  ],
+  "remaining": [],
+  "finishedAt": "2026-10-31T14:00:25.035Z"
+}

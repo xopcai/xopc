@@ -1,0 +1,98 @@
+{
+  "archivedAt": "2026-10-31T14:13:45.102Z",
+  "scope": "Remote session renewal, controlled stop of intermediate test and current final package matrix; 24h run 3 is not accepted",
+  "files": [
+    {
+      "file": "s5-100-cycles-24h-1.json",
+      "sha256": "0a7a85c3dc5395ecb48042b7c6ed934973f4150e8e55535343a41f129698dadc"
+    },
+    {
+      "file": "s5-long-run-launch-1.json",
+      "sha256": "05d6090e2ca0e7e184ce79977af59fd01ee19115ac695f46f225fad044fe34b6"
+    },
+    {
+      "file": "s5-untrusted-tls-rejection-1.json",
+      "sha256": "44ebf89a475a728646bb6249e646d324180e71e86a4fb4ff5b0a615be6c80c78"
+    },
+    {
+      "file": "s5-compatibility-tls-1.json",
+      "sha256": "238dca8bcb7d683ff76d9fff6a511fc58bd89901c1cbf9fb88eb8239f0dabbcf"
+    },
+    {
+      "file": "s5-session-renewal-local-1.json",
+      "sha256": "ebfbe88941e50dea69b7ac25de9378d0f1023376c55e78845c4c518398610eb0"
+    },
+    {
+      "file": "xopc-s5-session-renewal-tests-1.log",
+      "sha256": "2f735d65eb884fec4ab952abf2e3ab9623dda24b8b0efe431c9b3bac4f6e4972"
+    },
+    {
+      "file": "xopc-s5-session-renewal-tests-2.log",
+      "sha256": "fa93537829d8fb7c8636c3cd1bc050c809bc461590dcf9c2097460e3e9a5d92f"
+    },
+    {
+      "file": "xopc-s5-session-renewal-cleanup-tests-1.log",
+      "sha256": "7c21e93d4b7fcde6f36f0390acb0172036e0b5adc893e34a7f66fe3b15ca03fd"
+    },
+    {
+      "file": "xopc-s5-session-renewal-script-tests.log",
+      "sha256": "bdc4b3e72965c3144a1f8f157a9ba291ed932f515ea708d44be89f24b324c5b9"
+    },
+    {
+      "file": "s5-session-renewal-matrix-1.json",
+      "sha256": "e851756013da3e0c1b13a29f388925ede19ca10f2fea74086d1e058844df5c14"
+    },
+    {
+      "file": "s5-renewal-cleanup-matrix-1.json",
+      "sha256": "e77c2ebc08e5b93ecb244f13775333a20691e0b56d02d00abe761c58d43d3c69"
+    },
+    {
+      "file": "s5-renewal-cleanup-matrix-2.json",
+      "sha256": "4985ae3f61668c3e645a0e3fa85de6882da0b71c037884ade92fe8504817cbda"
+    },
+    {
+      "file": "s5-final-remote-1.json",
+      "sha256": "7e8ba1c5f9a4db4fa2093053ea75f36194ffb7e10cdc5f8659e7edee595a276d"
+    },
+    {
+      "file": "s5-100-cycles-24h-2.json",
+      "sha256": "98f413a62e6702a9a442e2859c95feab92392df660810ef7608b9eea23df9ed2"
+    },
+    {
+      "file": "s5-long-run-2-superseded.json",
+      "sha256": "4318369b605cc5356f99e93ce19af7204ae421946983ae512b630e4b86dff15b"
+    },
+    {
+      "file": "s5-long-run-launch-3.json",
+      "sha256": "60689a286e675c617afd38c6045af2dddd2ffd32d703704fa0e19f7cf01a788e"
+    },
+    {
+      "file": "s5-long-run-harness-3.json",
+      "sha256": "fc9c79827ac3c32b80d659b0199023f1fc9ba43deab4282b60d66d4dda2ee22a"
+    },
+    {
+      "file": "xopc-s5-session-renewal-final-tests.log",
+      "sha256": "2388a7e9d9f47fe48151459080afe9a8c7a599c8904242cee96daa745b85fd2d"
+    },
+    {
+      "file": "xopc-s5-final-electron-tests.log",
+      "sha256": "64048424b55f666522e8206b9c736884d449c138ba3af783695aad77402bb215"
+    },
+    {
+      "file": "xopc-s5-final-lint.log",
+      "sha256": "2a6208645b4a1ac8613043c0d07ab18b3749bcb938a45284de06511d19501fd8"
+    },
+    {
+      "file": "xopc-local-old-schema-final-typecheck.log",
+      "sha256": "c5d49d12ec75980eef47b8c6f8d913ff0fea7eb7d49927c39a378a1a866bc9d0"
+    },
+    {
+      "file": "xopc-local-old-schema-final-package.log",
+      "sha256": "a3b4a0690f9132aa646ca23317fcd070461ea51bead64440bd8e9742f85316fd"
+    },
+    {
+      "file": "s5-final-delivery-manifest.json",
+      "sha256": "c97c412650e78a782dfceb09a131c2d0497a392434fdc76856d121a354b58668"
+    }
+  ]
+}

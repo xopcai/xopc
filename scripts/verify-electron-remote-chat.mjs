@@ -34,6 +34,8 @@ assert(!containerImage || packaged, 'Container acceptance requires an installed 
 assert(!networkMatrix || containerImage && packaged, 'Network matrix requires an installed app and network-capable container image');
 const cleanupLayout = packaged ? async () => {} : await prepareLocalConnectionLayout(root);
 const tls = process.argv.includes('--tls');
+const tlsRejection = process.argv.includes('--tls-rejection');
+assert(!tlsRejection || tls && packaged, 'TLS rejection acceptance requires an installed app and TLS fixture');
 const normalIndex = process.argv.indexOf('--normal-inputs');
 const normalInputs = normalIndex < 0 ? 2 : Number(process.argv[normalIndex + 1]);
 assert(Number.isInteger(normalInputs) && normalInputs >= 2 && normalInputs <= 100);
@@ -88,6 +90,7 @@ async function gateway(name, faulted) {
   const directory = join(state, name); await mkdir(directory);
   const port = await freePort(), token = randomUUID(); if (faulted) tokenA = token;
   const forward = (req, res) => {
+    if (faulted) faults.httpRequests = (faults.httpRequests ?? 0) + 1;
     if (faulted && faults.offline) { res.writeHead(503, { 'Content-Type': 'application/json' }).end('{}'); return; }
     if (faulted && faults.hideReceipt && req.url.includes('/input-receipts/')) { res.writeHead(404, { 'Content-Type': 'application/json' }).end('{"ok":false,"error":{"code":"NOT_RECEIVED"}}'); return; }
     const input = req.method === 'POST' && /\/inputs$/.test(req.url);
@@ -107,11 +110,17 @@ async function gateway(name, faulted) {
     }); upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
     req.on('aborted', () => upstream.destroy()); req.pipe(upstream);
   };
-  let proxy;
+  let proxy, restoreCertificate, untrustCertificate;
   if (tls && faulted) {
     const cert = join(directory, 'cert.pem'), key = join(directory, 'key.pem');
     execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1,DNS:localhost', '-keyout', key, '-out', cert], { stdio: 'ignore' });
-    proxy = https.createServer({ cert: await readFile(cert), key: await readFile(key) }, forward);
+    const originalTls = { cert: await readFile(cert), key: await readFile(key) };
+    proxy = https.createServer(originalTls, forward);
+    const otherCert = join(directory, 'untrusted-cert.pem'), otherKey = join(directory, 'untrusted-key.pem');
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=untrusted-fixture', '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', otherKey, '-out', otherCert], { stdio: 'ignore' });
+    const untrustedTls = { cert: await readFile(otherCert), key: await readFile(otherKey) };
+    restoreCertificate = () => proxy.setSecureContext(originalTls);
+    untrustCertificate = () => proxy.setSecureContext(untrustedTls);
   } else proxy = http.createServer(forward);
   proxy.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   const wss = new WebSocketServer({ noServer: true });
@@ -166,7 +175,7 @@ async function gateway(name, faulted) {
   const catalog = await api('/api/agents'); const agent = catalog.agents.find(agent => agent.id === catalog.defaultId) ?? catalog.agents[0];
   await api(`/api/agents/${agent.id}`, { models: { chat: { primary: 's3-fixture/chat', fallbacks: [] } } }, 'PATCH');
   const devicesBefore = await api('/api/endpoint-tools/devices');
-  return { origin, port, token, api, networkFixture, health: async () => {
+  return { origin, port, token, api, networkFixture, restoreCertificate, untrustCertificate, health: async () => {
     const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(15000) });
     await response.arrayBuffer(); return { status: response.status };
   }, devicesBefore, devices: () => api('/api/endpoint-tools/devices'), certificate: tls && faulted ? join(directory, 'cert.pem') : undefined };
@@ -205,6 +214,15 @@ try {
     page.setDefaultTimeout(30_000); await until(() => page.locator('#status').textContent().then(value => ['就绪', '输入待核实'].includes(value)));
     return page;
   }
+  if (tlsRejection) {
+    const result = await setup.evaluate(async id => { const snapshot = await window.gatewayConnections.snapshot(); return window.gatewayConnections.connect(snapshot.epoch, id); }, idA);
+    assert.equal(result.ok, false); assert.equal(result.error, 'GATEWAY_TLS_FAILED');
+    assert.equal(faults.httpRequests ?? 0, 0, 'Untrusted certificate must fail before sending a credentialed HTTP request');
+    assert.equal(app.windows().length, 1); assert.deepEqual(await a.devices(), a.devicesBefore);
+    const files = await readdir(client); assert(!files.includes('xopc.db') && !files.includes('workspace'));
+    report.checks.untrustedCertificateRejectedBeforeHttp = true;
+    report.checks.noLocalGatewayHostOrWorkspace = true; report.passed = true;
+  } else {
   console.log('Connecting remote chat');
   let page = await open(idA);
   async function send(text) { await fillDraft(page, text); await activate(page, 'send'); }
@@ -368,6 +386,7 @@ try {
     page = await open(idA);
   }
   if (compatibilityMatrix) {
+    const expectedState = { selected: (await page.evaluate(() => window.desktopShell.readState())).selected, draft: await page.locator('#input').inputValue() };
     await activate(page, 'recover'); await until(() => Promise.resolve(page.isClosed()));
     report.compatibilityMatrix = { cases: [], passed: false };
     const reject = async (id, expected) => {
@@ -382,13 +401,17 @@ try {
     await reject(await save({ ...a, token: randomUUID() }, 'invalid-credential'), 'GATEWAY_AUTH_FAILED');
     faults.incompatible = true;
     try { await reject(idA, 'GATEWAY_CHAT_INCOMPATIBLE'); } finally { faults.incompatible = false; }
+    if (tls) {
+      a.untrustCertificate();
+      try { await reject(idA, 'GATEWAY_TLS_FAILED'); } finally { a.restoreCertificate(); }
+    }
     faults.identityCredentialLeaks = 0; faults.identityPort = b.port; faults.identityOrigin = b.origin;
     try { await reject(idA, 'GATEWAY_IDENTITY_PROOF_FAILED'); } finally { faults.identityPort = undefined; }
     assert.equal(faults.identityCredentialLeaks, 0, 'Pinned identity replacement received an owner credential');
     report.compatibilityMatrix.identityCredentialLeaks = 0;
     page = await open(idA);
-    assert.equal((await page.evaluate(() => window.desktopShell.readState())).selected, conversationA);
-    assert.equal(await page.locator('#input').inputValue(), 'private-A-draft');
+    assert.equal((await page.evaluate(() => window.desktopShell.readState())).selected, expectedState.selected);
+    assert.equal(await page.locator('#input').inputValue(), expectedState.draft);
     assert.deepEqual(await a.devices(), a.devicesBefore); assert.deepEqual(await b.devices(), b.devicesBefore);
     report.compatibilityMatrix.passed = true;
     await writeFile(output, JSON.stringify(report, null, 2) + '\n');
@@ -426,6 +449,7 @@ try {
     }
   }
   report.passed = true;
+  }
 } catch (error) {
   report.error = redact(error?.stack ?? error); report.serverLogs = redact(serverLogs);
   if (packaged && app) report.applicationLogs = redact(app.output());
