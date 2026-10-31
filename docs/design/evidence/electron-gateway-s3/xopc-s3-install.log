@@ -1,0 +1,153 @@
+Scope: all 36 workspace projects
+✓ Lockfile passes supply-chain policies (verified 5h ago)
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +1410
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 1410, reused 1401, downloaded 0, added 116
+Progress: resolved 1410, reused 1401, downloaded 0, added 478
+Progress: resolved 1410, reused 1401, downloaded 0, added 769
+Progress: resolved 1410, reused 1401, downloaded 0, added 1088
+
+   ╭──────────────────────────────────────────╮
+   │                                          │
+   │   Update available! 11.9.0 → 12.16.1.    │
+   │   Changelog: https://pnpm.io/v/12.16.1   │
+   │     To update, run: pnpm add -g pnpm     │
+   │                                          │
+   ╰──────────────────────────────────────────╯
+
+Progress: resolved 1410, reused 1401, downloaded 0, added 1406
+Progress: resolved 1410, reused 1401, downloaded 0, added 1410, done
+.../node_modules/@swc/core postinstall$ node postinstall.js
+.../node_modules/protobufjs postinstall$ node scripts/postinstall
+.../node_modules/protobufjs postinstall$ node scripts/postinstall
+.../node-pty@1.1.0/node_modules/node-pty install$ node scripts/prebuild.js || node-gyp rebuild
+.../node-pty@1.1.0/node_modules/node-pty install: [32m> Checking prebuilds...[0m
+.../node_modules/protobufjs postinstall: Done
+.../node_modules/protobufjs postinstall: Done
+.../node-pty@1.1.0/node_modules/node-pty install: Done
+.../node-pty@1.1.0/node_modules/node-pty postinstall$ node scripts/post-install.js
+.../node-pty@1.1.0/node_modules/node-pty postinstall: [32m> Cleaning release folder...[0m
+.../node-pty@1.1.0/node_modules/node-pty postinstall: [32m> Moving conpty.dll...[0m
+.../node-pty@1.1.0/node_modules/node-pty postinstall:   SKIPPED (not Windows)
+.../node-pty@1.1.0/node_modules/node-pty postinstall: Done
+.../node_modules/@swc/core postinstall: Done
+.../node_modules/@google/genai preinstall$ echo 'preinstall: no-op'
+.../node_modules/@google/genai preinstall: preinstall: no-op
+.../node_modules/@google/genai preinstall: Done
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/demo-provider/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/bin.js'
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/demo-skill-hub/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/bin.js'
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/feishu/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/bin.js'
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/telegram/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/bin.js'
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/weixin/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/bin.js'
+
+dependencies:
++ @composio/core 0.21.0
++ @dicebear/collection 9.4.2
++ @dicebear/core 9.4.2
++ @earendil-works/chord 1.4.0
++ @earendil-works/pi-agent-core 1.4.0
++ @earendil-works/pi-ai 1.4.0
++ @earendil-works/pi-codemode 1.4.0
++ @earendil-works/pi-coding-agent 1.4.0
++ @earendil-works/pi-mcp 1.4.0
++ @earendil-works/pi-tui 1.4.0
++ @grammyjs/runner 2.0.3
++ @hono/node-server 2.0.4
++ @inquirer/prompts 8.5.0
++ @modelcontextprotocol/sdk 1.32.1
++ @mozilla/readability 0.6.0
++ @opentelemetry/api 1.9.1
++ @opentelemetry/context-async-hooks 2.12.0
++ @opentelemetry/sdk-trace-base 2.12.0
++ @sinclair/typebox 0.34.49
++ @trycua/cua-driver 0.36.0
++ @vscode/ripgrep 1.18.0
++ @yume-chan/adb 2.6.4
++ @yume-chan/scrcpy 2.3.0
++ @yume-chan/stream-extra 2.6.1
++ abort-controller 3.0.0
++ adm-zip 0.6.1
++ ajv 8.20.0
++ chalk 5.6.2
++ chokidar 5.0.0
++ cli-table3 0.6.5
++ commander 14.0.3
++ cron-parser 5.10.2
++ dotenv 17.4.2
++ glob 13.0.6
++ grammy 1.43.0
++ hono 4.12.25
++ jiti 2.7.0
++ js-yaml 4.3.2
++ linkedom 0.18.13
++ luxon 3.7.2
++ markdown-it 14.3.3
++ node-edge-tts 1.2.10
++ openai 6.48.0
++ pdfjs-dist 6.2.108
++ pino 10.3.1
++ pino-pretty 13.1.3
++ proper-lockfile 4.1.2
++ quickjs-wasi 3.6.2
++ semver 7.8.1
++ sharp 0.35.5
++ silk-wasm 3.7.1
++ smol-toml 1.8.0
++ thread-stream 4.2.0
++ undici 8.12.2
++ uuid 14.0.0
++ ws 8.21.0
++ zod 4.6.6
+
+devDependencies:
++ @larksuiteoapi/node-sdk 1.66.0
++ @resvg/resvg-js 2.6.2
++ @tailwindcss/vite 4.3.0
++ @types/adm-zip 0.5.8
++ @types/js-yaml 4.0.9
++ @types/jsdom 28.0.3
++ @types/luxon 3.7.5
++ @types/markdown-it 14.1.2
++ @types/node 26.6.5
++ @types/qrcode-terminal 0.12.2
++ @types/ws 8.18.1
++ @vitejs/plugin-react-swc 4.3.1
++ @xopcai/browser-control-contract 0.1.0 <- packages/browser-control-contract
++ @xopcai/computer-control-contract 0.1.0 <- packages/computer-control-contract
++ @xopcai/endpoint-tools-client 0.0.0 <- packages/endpoint-tools-client
++ @xopcai/endpoint-tools-protocol 0.0.0 <- packages/endpoint-tools-protocol
++ @xopcai/gateway-contract 0.0.0 <- packages/gateway-contract
++ @xopcai/image-providers 0.1.0 <- packages/image-providers
++ @xopcai/realtime-client 0.0.0 <- packages/realtime-client
++ @xopcai/realtime-protocol 0.0.0 <- packages/realtime-protocol
++ cross-env 10.1.0
++ dependency-cruiser 17.4.3
++ electron 45.0.0
++ electron-builder 26.15.3
++ electron-updater 6.8.9
++ electron-vite 6.0.0-beta.1
++ esbuild 0.28.1
++ eslint 10.4.0
++ jsdom 29.1.1
++ node-pty 1.1.0
++ playwright-core 1.60.0
++ svgo 4.1.0
++ tailwindcss 4.3.0
++ tsdown 0.21.10
++ tsx 4.22.3
++ typescript 6.0.3
++ typescript-eslint 8.60.0
++ vite 8.1.6
++ vitepress 1.6.4
++ vitest 4.1.5
++ vue 3.5.35
++ xlsx 0.20.3
+
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/demo-skill-hub/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/demo-skill-hub/node_modules/@xopcai/xopc/dist/src/cli/bin.js'
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/demo-provider/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/demo-provider/node_modules/@xopcai/xopc/dist/src/cli/bin.js'
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/feishu/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/feishu/node_modules/@xopcai/xopc/dist/src/cli/bin.js'
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/telegram/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/telegram/node_modules/@xopcai/xopc/dist/src/cli/bin.js'
+[WARN] Failed to create bin at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/weixin/node_modules/.bin/xopc. ENOENT: no such file or directory, open '/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/extensions/weixin/node_modules/@xopcai/xopc/dist/src/cli/bin.js'
+Done in 7.6s using pnpm v11.9.0

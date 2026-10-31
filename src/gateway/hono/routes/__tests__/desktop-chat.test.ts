@@ -39,3 +39,12 @@ it('does not expose remote discovery when authentication is disabled', async () 
   registerDesktopChatRoutes(app, { service: { getResolvedAuth: () => ({ mode: 'none' }), currentConfig: { gateway: { auth: { mode: 'token' } } } } } as never);
   expect((await app.request('/api/desktop-chat/bootstrap')).status).toBe(403);
 });
+
+it('advertises S3 only on explicit negotiation without changing the S2 response', async () => {
+  const app = new Hono(); app.use('*', auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-owner' }) })); registerDesktopChatRoutes(app, deps);
+  const headers = { Authorization: 'Bearer test-owner' };
+  const old = await (await app.request('/api/desktop-chat/bootstrap', { headers })).json();
+  const next = await (await app.request('/api/desktop-chat/bootstrap?chat=1', { headers })).json();
+  expect(old.payload.manifest.chat).toBeUndefined(); expect(next.payload.manifest.chat).toBe('text-receipt.v1');
+  expect(DesktopChatBootstrapSchema.safeParse(next).success).toBe(true); expect(next.payload.gatewayId).toBe(old.payload.gatewayId);
+});

@@ -221,3 +221,14 @@ describe('connection window authority', () => {
     expect(ipc.listenerCount(CONNECTION_CHANNELS[0])).toBe(0);
   });
 });
+
+it('advances the epoch on every explicit connection attempt, including already-pinned profiles', async () => {
+  await manager.initialize();
+  const saved = await manager.save(0, { ...input, credential: 'owner-token' });
+  const id = saved.profiles[0].id;
+  const first = await manager.beginConnection(saved.epoch, id);
+  const pinned = await manager.pinIdentity(first.epoch, id, { gatewayId: randomUUID(), publicKey: 'public-key'.repeat(10) });
+  const second = await manager.beginConnection(pinned.epoch, id);
+  expect(second.epoch).toBeGreaterThan(pinned.epoch);
+  await expect(manager.beginConnection(pinned.epoch, id)).rejects.toThrow('STALE_CONNECTION_EPOCH');
+});

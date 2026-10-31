@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-31",
+  "originalPrHead": "228a316d053077e0752b54d3d8db51a5ec044d26",
+  "runtimeSource": "913729032",
+  "change": "Functional fixture handles model-to-sources onboarding transition; product, sampling and budgets unchanged",
+  "tests": {
+    "files": 114,
+    "passed": 949
+  },
+  "e2e": [
+    "pr41-premerge-chat-ssh.json",
+    "pr41-premerge-chat-tls.json",
+    "pr41-premerge-shell-ssh.json",
+    "pr41-premerge-shell-tls.json",
+    "pr41-premerge-untrusted.json",
+    "pr41-premerge-hostname.json",
+    "pr41-premerge-cleanup.json",
+    "pr41-premerge-preview.json",
+    "pr41-premerge-keychain.json",
+    "pr41-premerge-local-functional-retry.json"
+  ],
+  "failureEvidence": [
+    "pr41-local-functional-failed.json",
+    "pr41-local-functional-failed.log",
+    "xopc-pr41-onboarding-before.log"
+  ],
+  "typecheck": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": 5
+  },
+  "dependencyViolations": 0,
+  "cliImportGuard": "passed",
+  "budgetAudit": "budget-audit.json",
+  "scope": "No S4/S5, remote Host or local capability implementation",
+  "limitations": "macOS development Electron; original S3 acceptance limitations remain"
+}

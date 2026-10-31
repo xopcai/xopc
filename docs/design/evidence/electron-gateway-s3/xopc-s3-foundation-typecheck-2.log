@@ -1,0 +1,4 @@
+$ tsc -p tsconfig.electron.json
+electron/chat/model.ts(121,11): error TS2741: Property 'onThinkingEnd' is missing in type '{ onStreamStart: () => void; onThinking: () => void; onToolStart: () => void; onToolEnd: () => void; onProgress: () => void; onToken: (delta: string, messageId: string, offset: number) => void; onResult: () => void; onError: () => void; onReplayGap: () => Promise<...>; }' but required in type 'AgentStreamCallbacks'.
+electron/chat/view.ts(19,32): error TS2345: Argument of type 'string' is not assignable to parameter of type '`${string}-${string}-${string}-${string}-${string}`'.
+[ELIFECYCLE] Command failed with exit code 2.

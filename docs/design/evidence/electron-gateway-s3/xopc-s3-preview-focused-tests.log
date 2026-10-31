@@ -1,0 +1,13 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc
+
+No test files found, exiting with code 1
+
+filter: electron/__tests__/gateway-connections-preview.test.ts
+projects: scripts
+
+|scripts| 
+
+include: scripts/**/*.{test,spec}.{ts,tsx}
+exclude:  **/node_modules/**, **/dist/**, apps/mobile-harmony/**/build/**
+

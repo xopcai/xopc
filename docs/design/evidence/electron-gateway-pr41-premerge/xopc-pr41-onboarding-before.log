@@ -1,0 +1,28 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc
+
+ ❯ |scripts| scripts/__tests__/electron-local-onboarding.test.ts (3 tests | 1 failed) 3ms
+   × handles the next onboarding step when the previous click is detached 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |scripts| scripts/__tests__/electron-local-onboarding.test.ts > handles the next onboarding step when the previous click is detached
+Error: previous step detached
+ ❯ Object.<anonymous> scripts/__tests__/electron-local-onboarding.test.ts:12:39
+     10|       if (blocked) throw new Error('genuine click failure');
+     11|       stage = 'sources';
+     12|       if (advanceWhileClicking) throw new Error('previous step detache…
+       |                                       ^
+     13|     }),
+     14|   };
+ ❯ dismissLocalConnectionOnboarding scripts/electron-local-connection-fixture.mjs:52:19
+ ❯ scripts/__tests__/electron-local-onboarding.test.ts:22:32
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  17:45:10
+   Duration  89ms (transform 14ms, setup 11ms, import 16ms, tests 3ms, environment 0ms)
+

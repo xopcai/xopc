@@ -87,6 +87,14 @@ export class GatewayConnectionPreview {
     });
   }
 
+  beginConnection(expectedEpoch: unknown, id: unknown) {
+    return this.mutate(expectedEpoch, async () => {
+      if (!this.profiles.some(profile => profile.id === id)) throw new Error('UNKNOWN_PROFILE');
+      this.selectedId = String(id); this.epoch++;
+      return this.snapshot();
+    });
+  }
+
   privateConnection(expectedEpoch: unknown, id: unknown) {
     return this.mutate(expectedEpoch, async () => {
       const profile = this.profiles.find(p => p.id === id);

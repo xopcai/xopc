@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "tls": true,
+  "startedAt": "2026-10-31T09:41:11.812Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "cleanLocalRelaunchWithOriginalMain": true
+  },
+  "scope": "S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server",
+  "finishedAt": "2026-10-31T09:41:21.411Z"
+}

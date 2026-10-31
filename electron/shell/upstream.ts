@@ -15,7 +15,10 @@ export class ShellUpstream {
   readonly agent: http.Agent | https.Agent;
   readonly origin: string;
   readonly lookup?: LookupFunction;
+  private identity?: DesktopChatIdentity;
+  chatEnabled = false;
   constructor(readonly target: RemoteTarget) {
+    this.identity = target.identity;
     if (!target.token?.trim() || Buffer.byteLength(target.token) > 8192) throw new Error('INVALID_CREDENTIAL');
     this.origin = parseRemoteProfile({ id: '00000000-0000-0000-0000-000000000000', mode: 'remote', name: 'Shell', origin: target.origin, transport: target.transport }).origin;
     if (target.transport === 'ssh') this.lookup = (hostname, options, done) => {
@@ -44,7 +47,7 @@ export class ShellUpstream {
       });
       req.on('response', res => {
         if (res.statusCode !== 200 || !/^application\/json\b/i.test(res.headers['content-type'] ?? '')) {
-          res.destroy(); reject(new Error(res.statusCode === 401 || res.statusCode === 403 ? 'GATEWAY_AUTH_FAILED' : 'GATEWAY_CONTRACT_UNAVAILABLE')); return;
+          res.destroy(); reject(new Error(res.statusCode === 401 || res.statusCode === 403 ? 'GATEWAY_AUTH_FAILED' : res.statusCode! >= 500 ? 'GATEWAY_NETWORK_FAILED' : 'GATEWAY_CONTRACT_UNAVAILABLE')); return;
         }
         const parts: Buffer[] = []; let bytes = 0;
         res.on('data', chunk => { bytes += chunk.length; if (bytes > 64 * 1024) res.destroy(new Error('GATEWAY_RESPONSE_LIMIT')); else parts.push(chunk); });
@@ -54,15 +57,16 @@ export class ShellUpstream {
       req.end(body === undefined ? undefined : JSON.stringify(body));
     });
   }
-  async authenticate(): Promise<DesktopChatIdentity> {
-    const signal = AbortSignal.timeout(15_000);
-    if (this.target.identity) await this.prove(this.target.identity, signal);
-    const parsed = DesktopChatBootstrapSchema.safeParse(await this.json('/api/desktop-chat/bootstrap', signal));
+  async authenticate(cancel?: AbortSignal): Promise<DesktopChatIdentity> {
+    const signal = cancel ? AbortSignal.any([cancel, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+    if (this.identity) await this.prove(this.identity, signal);
+    const parsed = DesktopChatBootstrapSchema.safeParse(await this.json('/api/desktop-chat/bootstrap?chat=1', signal));
     if (!parsed.success) throw new Error('GATEWAY_CHAT_INCOMPATIBLE');
     const { gatewayId, publicKey } = parsed.data.payload;
-    if (this.target.identity && (this.target.identity.gatewayId !== gatewayId || this.target.identity.publicKey !== publicKey)) throw new Error('GATEWAY_IDENTITY_CHANGED');
+    if (this.identity && (this.identity.gatewayId !== gatewayId || this.identity.publicKey !== publicKey)) throw new Error('GATEWAY_IDENTITY_CHANGED');
     const identity = { gatewayId, publicKey };
-    if (!this.target.identity) await this.prove(identity, signal);
+    if (!this.identity) await this.prove(identity, signal);
+    this.identity = identity; this.chatEnabled = parsed.data.payload.manifest.chat === 'text-receipt.v1';
     return identity;
   }
   private async prove({ gatewayId, publicKey }: DesktopChatIdentity, signal: AbortSignal) {

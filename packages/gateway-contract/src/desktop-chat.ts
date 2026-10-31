@@ -20,6 +20,7 @@ export const DesktopChatBootstrapSchema = z.strictObject({
       realtimeProtocolVersion: z.literal(DESKTOP_CHAT_MANIFEST.realtimeProtocolVersion),
       identityProofVersion: z.literal(1),
       transport: z.literal(DESKTOP_CHAT_MANIFEST.transport),
+      chat: z.literal('text-receipt.v1').optional(),
     }),
   }),
 });

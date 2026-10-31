@@ -1,0 +1,8 @@
+Preparing actual Gateway fixtures
+Connecting remote chat
+Verifying initial text input
+Verifying server stop
+Verifying network recovery
+Verifying dropped reply and A/B isolation
+Verifying explicit return to local
+{"passed":true,"tls":false,"startedAt":"2026-10-31T07:56:58.403Z","checks":{"actualRemoteStartAppendHistory":true,"serverStopVerified":true,"networkAndGapRecoveryWithoutResubmission":true,"lostReplyReceiptRecoveryAndGatewayDraftIsolation":true,"encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace":true,"cleanLocalRelaunchWithOriginalMain":true},"scope":"S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server","finishedAt":"2026-10-31T07:57:06.618Z"}

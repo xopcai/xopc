@@ -1,0 +1,5 @@
+{
+  "passed": false,
+  "stage": "fixture setup; functional test not started",
+  "reason": "AssertionError: expected connection-entry-*.js at out/main, actual emitted chunk is nested in out/main/chunks; fixed deletion manifest, original artifact unchanged"
+}

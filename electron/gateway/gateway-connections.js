@@ -8,7 +8,7 @@ function render(value) {
   snapshot = value;
   element('status').textContent = value.status === 'storage-error'
     ? '配置存储不可用，请退出后修复独立的连接配置；本地模式仍可使用。'
-    : value.selectedId ? '配置已选择；远端聊天尚未实现。本机能力保持禁用。' : '请选择或保存连接配置。本机能力保持禁用。';
+    : value.selectedId ? '配置已选择；点击连接打开远端聊天。本机能力保持禁用。' : '请选择或保存连接配置。本机能力保持禁用。';
   element('profiles').replaceChildren();
   for (const profile of value.profiles) {
     const row = document.createElement('li');
@@ -18,12 +18,12 @@ function render(value) {
     select.onclick = () => perform(() => api.select(snapshot.epoch, profile.id));
     row.append(select);
     const connect = document.createElement('button');
-    connect.textContent = '建立 S2 连接';
+    connect.textContent = '连接并打开聊天';
     connect.onclick = () => perform(() => api.connect(snapshot.epoch, profile.id));
     row.append(connect);
     const remove = document.createElement('button');
     remove.textContent = '移除配置';
-    remove.onclick = () => perform(() => api.remove(snapshot.epoch, profile.id));
+    remove.onclick = () => { if (window.confirm('移除配置会删除此连接的本机草稿和待核实记录，不会停止服务器任务。是否继续？')) void perform(() => api.remove(snapshot.epoch, profile.id)); };
     row.append(remove);
     element('profiles').append(row);
   }
@@ -35,7 +35,7 @@ async function perform(work) {
   try {
     const result = await work();
     if (result.ok) render(result.snapshot);
-    else element('error').textContent = `操作未完成：${result.error}`;
+    else { if (result.snapshot) render(result.snapshot); element('error').textContent = `操作未完成：${result.error}`; }
   } catch { element('error').textContent = '配置入口不可用，请退出预览后重试。'; }
   finally { busy = false; }
 }

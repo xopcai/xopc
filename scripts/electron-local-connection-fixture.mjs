@@ -46,6 +46,21 @@ export async function createLocalConnectionFixture(state) {
   };
 }
 
+/** The UI may advance while the previous step's click is still pending. */
+export async function dismissLocalConnectionOnboarding(page) {
+  const skip = page.getByRole('button', { name: 'Skip for now', exact: true });
+  const dismiss = page.getByRole('button', { name: 'Maybe later, keep using my current model', exact: true });
+  if (await dismiss.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
+    try { await dismiss.click({ timeout: 1000 }); }
+    catch (error) {
+      if (!await skip.isVisible() && await dismiss.isVisible()) throw error;
+    }
+  }
+  if (await skip.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
+    await skip.click({ timeout: 10_000 });
+  }
+}
+
 export async function verifyLocalConnectionFunctions(page, fixture, until) {
   const prepared = await page.evaluate(async () => {
     const api = async (path, body, method = 'POST') => {
@@ -100,14 +115,7 @@ export async function verifyLocalConnectionFunctions(page, fixture, until) {
   await until(() => fixture.requests() > 0, 30_000);
   console.log('Functional: realtime delivered; verifying rendered chat');
   await page.goto(`${new URL(page.url()).origin}/#/chat/${prepared.conversationId}`);
-  const dismiss = page.getByRole('button', { name: 'Maybe later, keep using my current model', exact: true });
-  if (await dismiss.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
-    await dismiss.click();
-  }
-  const skip = page.getByRole('button', { name: 'Skip for now', exact: true });
-  if (await skip.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
-    await skip.click({ timeout: 10_000 });
-  }
+  await dismissLocalConnectionOnboarding(page);
   await page.getByRole('main').getByText('XOPC_LOCAL_CHAT_OK', { exact: true }).first().waitFor({ timeout: 30_000 });
   console.log('Functional: chat rendered; verifying native file, PTY and browser IPC');
   const checks = await page.evaluate(async ({ conversationId, workspace, browserUrl, outside }) => {

@@ -1,0 +1,9 @@
+Functional: durable input accepted; verifying realtime delivery
+Functional: realtime delivered; verifying rendered chat
+Functional: chat rendered; verifying native file, PTY and browser IPC
+spawn 1/1 passed
+Functional: durable input accepted; verifying realtime delivery
+Functional: realtime delivered; verifying rendered chat
+Functional: chat rendered; verifying native file, PTY and browser IPC
+reuse 1/1 passed
+Report: /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/reports/s3-release-local-functional.json

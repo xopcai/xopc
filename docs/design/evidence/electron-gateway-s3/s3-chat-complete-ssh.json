@@ -1,0 +1,24 @@
+{
+  "passed": false,
+  "tls": false,
+  "startedAt": "2026-10-31T07:58:32.834Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true
+  },
+  "scope": "S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server",
+  "error": "electronApplication.evaluate: Error: Missing owned Shell worker\n    at eval (eval at evaluate (:302:30), <anonymous>:1:129)\n    at UtilityScript.evaluate (<anonymous>:304:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/scripts/verify-electron-remote-chat.mjs:153:13",
+  "serverLogs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52415\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=6383, lockPath=/Users/micjoyce/.xopc/locks/gateway.7d67dc29.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52415...\n✅ Gateway started\n   URL: http://127.0.0.1:52415\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52415\n🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52444\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=6461, lockPath=/Users/micjoyce/.xopc/locks/gateway.3f01cbf8.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52444...\n✅ Gateway started\n   URL: http://127.0.0.1:52444\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52444\n",
+  "windows": [
+    {
+      "url": "file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/out/preload/gateway-connections.html",
+      "text": "Gateway 连接预览\n\n选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力保持禁用，不启动本地 Gateway。\n\n请选择或保存连接配置。本机能力保持禁用。\n\nA · http://127.0.0.1:52416 · 凭据已加密保存 选择配置连接并打开聊天移除配置\nB · http://127.0.0.1:52445 · 凭据已加密保存 选择配置连接并打开聊天移除配置\n连接名称\nGateway origin\n传输方式\nHTTPS已有 SSH loopback 转发\n管理凭据（可留空；仅加密保存）\n保存连接配置\n\nSSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。\n\n使用原本地模式（重启应用）退出预览"
+    },
+    {
+      "url": "http://127.0.0.1:52586/",
+      "text": "远端聊天\n\n身份已核验；本机能力保持禁用。\n\nGateway 41f6579f-2335-417e-96b0-7fb02449481b\n退出此连接\n返回连接配置\n\nAgent、会话和工具在服务器运行。本机文件、终端、浏览器控制和设备能力不可用。\n\n新对话\n服务器会话\nREMOTE_CHAT_OK\n本连接草稿\n草稿 · uncertain-once\n新对话设置\n输入待核实\n核实上次输入\n\n上次输入尚待核实；不会自动重发。可稍后核实或返回连接配置。\n\n你\n\nfirst remote message\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\nsecond remote message\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\nSLOW_REMOTE\n\nAssistant\n\nREMOTE_PARTIAL\n\n你\n\nuncertain-once\n\nAssistant\n\nREMOTE_CHAT_OK\n\n消息\n停止服务器运行\n发送"
+    }
+  ],
+  "finishedAt": "2026-10-31T07:58:41.003Z"
+}

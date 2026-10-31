@@ -101,7 +101,7 @@ try {
   assert(connected.ok, `S2 connection failed: ${JSON.stringify(connected)}`);
   const shell = app.windows().find(window => window !== setup && window.url().startsWith('http://127.0.0.1:'));
   assert(shell, 'Shell window was not created');
-  await shell.getByText('身份与聊天传输契约已核验；S2 会话已建立。', { exact: true }).waitFor({ timeout: 20_000 });
+  await shell.getByText('身份已核验；本机能力保持禁用。', { exact: true }).waitFor({ timeout: 20_000 });
   assert.equal(await shell.evaluate(() => window.electronAPI), undefined);
   assert.equal(await shell.evaluate(() => window.gatewayConnections), undefined);
   const partition = await app.evaluate(({ BrowserWindow }, url) => {
@@ -156,7 +156,7 @@ try {
   assert.equal(await rogue.evaluate(async () => (await fetch('/api/models')).status), 401);
   const refused = await rogue.evaluate(async channels => {
     const results = [];
-    for (const channel of [...channels, 'connections:snapshot', 'shell:bootstrap']) {
+    for (const channel of [...channels, 'connections:snapshot', 'shell:bootstrap', 'shell:state-read', 'shell:state-write']) {
       results.push(await window.probe.invoke(channel).then(() => false, () => true));
       if (channels.includes(channel)) { window.probe.send(channel); window.probe.port(channel); }
     }
@@ -195,7 +195,7 @@ try {
   const reopened = await setup.evaluate(({ epoch, id }) => window.gatewayConnections.connect(epoch, id), { epoch: current.epoch, id: current.profiles[0].id });
   assert(reopened.ok);
   const crashWindow = app.windows().find(window => window !== setup);
-  await crashWindow.getByText('身份与聊天传输契约已核验；S2 会话已建立。', { exact: true }).waitFor();
+  await crashWindow.getByText('身份已核验；本机能力保持禁用。', { exact: true }).waitFor();
   const closedOnCrash = crashWindow.waitForEvent('close');
   await app.evaluate(({ app }) => {
     const metrics = app.getAppMetrics();

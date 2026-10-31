@@ -1,0 +1,22 @@
+Functional: durable input accepted; verifying realtime delivery
+Functional: realtime delivered; verifying rendered chat
+Functional: chat rendered; verifying native file, PTY and browser IPC
+spawn 1/1 passed
+Functional: durable input accepted; verifying realtime delivery
+Functional: realtime delivered; verifying rendered chat
+TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByRole('button', { name: 'Maybe later, keep using my current model', exact: true })[22m
+[2m    - locator resolved to <button type="button" class="touch-target inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium duration-150 ease-out transition-transform active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offs…>Maybe later, keep using my current model</button>[22m
+[2m  - attempting click action[22m
+[2m    - waiting for element to be visible, enabled and stable[22m
+[2m    - element is visible, enabled and stable[22m
+[2m    - scrolling into view if needed[22m
+[2m    - done scrolling[22m
+[2m    - performing click action[22m
+[2m    - <html lang="en" data-theme="light" data-font-scale="default" data-color-scheme="default">…</html> intercepts pointer events[22m
+[2m  - retrying click action[22m
+[2m    - waiting for element to be visible, enabled and stable[22m
+[2m  - element was detached from the DOM, retrying[22m
+
+Report: /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/reports/pr41-premerge-local-functional.json

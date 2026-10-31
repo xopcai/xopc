@@ -1,0 +1,256 @@
+{
+  "date": "2026-10-31",
+  "baseMain": "3f86a8af255b1d52108ba11c59b0703ab85592aa",
+  "productSource": "e6298c4fc",
+  "scope": "S3 text chat, business-state isolation and recovery only; no remote Host/local capabilities; no S4/S5 acceptance",
+  "relatedTests": {
+    "files": 113,
+    "passed": 940
+  },
+  "typecheck": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": 5
+  },
+  "dependencyViolations": 0,
+  "cliImportGuard": "passed",
+  "builds": [
+    "Node",
+    "Web",
+    "Electron main/preloads/utility/static browser chat bundle"
+  ],
+  "baseline": {
+    "file": "s3-main-baseline-isolated.json",
+    "passed": true,
+    "excludedAttempt": "s3-main-baseline.json",
+    "exclusionReason": "Brief concurrent typecheck; excluded even though it passed. Identical main build rerun without other tests/builds.",
+    "identicalMainArtifactManifests": true
+  },
+  "frozenBaselineSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "budgetUnchanged": true,
+  "samplingPlan": "first-launch-heavy-v1",
+  "fullAcceptanceRuns": [
+    {
+      "file": "s3-release-budget-1.json",
+      "launches": 60,
+      "passed": true,
+      "comparison": [
+        {
+          "mode": "spawn",
+          "metric": "readyMs",
+          "before": 2038.5515000000005,
+          "after": 1897.5861670000013,
+          "maximum": 2140.4790750000006,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "configMs",
+          "before": 47.599999994039536,
+          "after": 18.200000017881393,
+          "maximum": 52.599999994039536,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "sessionsMs",
+          "before": 26.600000023841858,
+          "after": 20.19999998807907,
+          "maximum": 31.600000023841858,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "rssMiB",
+          "before": 1026.328125,
+          "after": 1025.859375,
+          "maximum": 1077.64453125,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "readyMs",
+          "before": 1002.2085420000076,
+          "after": 993.9715829999914,
+          "maximum": 1102.2085420000076,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "configMs",
+          "before": 48.30000001192093,
+          "after": 18.80000001192093,
+          "maximum": 53.30000001192093,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "sessionsMs",
+          "before": 20,
+          "after": 20.099999994039536,
+          "maximum": 25,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "rssMiB",
+          "before": 685.265625,
+          "after": 708.359375,
+          "maximum": 719.52890625,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "file": "s3-release-budget-2.json",
+      "launches": 60,
+      "passed": true,
+      "comparison": [
+        {
+          "mode": "spawn",
+          "metric": "readyMs",
+          "before": 2038.5515000000005,
+          "after": 1914.401874999996,
+          "maximum": 2140.4790750000006,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "configMs",
+          "before": 47.599999994039536,
+          "after": 17,
+          "maximum": 52.599999994039536,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "sessionsMs",
+          "before": 26.600000023841858,
+          "after": 5.0999999940395355,
+          "maximum": 31.600000023841858,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "rssMiB",
+          "before": 1026.328125,
+          "after": 1023.015625,
+          "maximum": 1077.64453125,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "readyMs",
+          "before": 1002.2085420000076,
+          "after": 952.2118329999939,
+          "maximum": 1102.2085420000076,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "configMs",
+          "before": 48.30000001192093,
+          "after": 25.099999994039536,
+          "maximum": 53.30000001192093,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "sessionsMs",
+          "before": 20,
+          "after": 8.099999994039536,
+          "maximum": 25,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "rssMiB",
+          "before": 685.265625,
+          "after": 698.015625,
+          "maximum": 719.52890625,
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "artifactManifest": {
+    "out/main": {
+      "files": 42,
+      "sha256": "b339d7c916445e713cc977c9dd2911a1b49484153e52c3e99de129ce895e2735"
+    },
+    "out/preload": {
+      "files": 10,
+      "sha256": "18447a7b26d8a13d53bed292a613d48d3c079f755426f799cb1b60f0b3cc1d3f"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3003,
+      "sha256": "8024bac2a427ad12d7b41e943ebc3647bbf30f921a6767365452025e8fd1894a"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "e2e": [
+    "s3-release-chat-ssh.json",
+    "s3-release-chat-tls.json",
+    "s3-release-shell-ssh.json",
+    "s3-release-shell-tls.json",
+    "s3-release-untrusted.json",
+    "s3-release-hostname.json",
+    "s3-release-cleanup.json",
+    "s3-release-preview.json",
+    "s3-release-keychain.json",
+    "s3-release-local-functional.json"
+  ],
+  "commands": [
+    "pnpm install --frozen-lockfile",
+    "pnpm run build:node",
+    "pnpm run build:web",
+    "pnpm run electron:vite:build",
+    "pnpm vitest run electron scripts src/automations src/gateway/hono/middleware/__tests__/auth.test.ts src/gateway/hono/routes/__tests__/desktop-chat.test.ts src/gateway/hono/routes/__tests__/lazy-bundles.test.ts src/gateway/hono/routes/__tests__/provider* packages/gateway-contract packages/agent-stream-client packages/realtime-client",
+    "pnpm run typecheck",
+    "pnpm run lint",
+    "pnpm run depcheck",
+    "pnpm run test:startup:imports",
+    "node scripts/verify-electron-remote-chat.mjs --half-open --output reports/s3-release-chat-ssh.json",
+    "node scripts/verify-electron-remote-chat.mjs --tls --output reports/s3-release-chat-tls.json",
+    "node scripts/verify-electron-shell.mjs  --output reports/s3-release-shell-ssh.json",
+    "node scripts/verify-electron-shell.mjs --tls --output reports/s3-release-shell-tls.json",
+    "node scripts/verify-electron-shell.mjs --tls --untrusted --output reports/s3-release-untrusted.json",
+    "node scripts/verify-electron-shell.mjs --tls --wrong-host --output reports/s3-release-hostname.json",
+    "node scripts/verify-electron-shell.mjs --cleanup-failure --output reports/s3-release-cleanup.json",
+    "node scripts/verify-electron-connection-preview.mjs --output reports/s3-release-preview.json",
+    "node scripts/verify-electron-connection-keychain.mjs --output reports/s3-release-keychain.json",
+    "node scripts/verify-electron-local-connection.mjs --runs 1 --operations 2 --functional --artifact-source-ref e6298c4fc --output reports/s3-release-local-functional.json",
+    "node scripts/verify-electron-local-connection.mjs --compare docs/design/evidence/electron-gateway-p2a1-s0-s1/s0-local-baseline.json --artifact-source-ref e6298c4fc --output reports/s3-release-budget-1.json",
+    "node scripts/verify-electron-local-connection.mjs --compare docs/design/evidence/electron-gateway-p2a1-s0-s1/s0-local-baseline.json --artifact-source-ref e6298c4fc --output reports/s3-release-budget-2.json"
+  ],
+  "limits": [
+    "macOS arm64 development Electron; independent real Gateway processes on the same machine, deterministic inference fixture",
+    "TLS termination fixture, not native Gateway TLS; external SSH login/tunnel manager not implemented",
+    "Local handoff observes production relaunch arguments then test supervisor starts those arguments; not OS-native relaunch acceptance",
+    "S4 installers/physical WAN server/platform matrix and S5 soak/upgrade rollback pending",
+    "Text preview with recent100 sessions and paged100 history; no full local management UI or structured tool interaction",
+    "Id-less persisted replies are authoritative; subsequent live segments refresh from snapshots instead of guessing stream identities"
+  ],
+  "extraFaultAcceptance": {
+    "file": "s3-missing-assets-local-functional.json",
+    "passed": true,
+    "manifest": "s3-missing-assets-manifest.json",
+    "scope": "Removed S3-only artifacts; development copy with shared dependencies/Gateway/Web/SQL/helper mappings. Not installer acceptance."
+  },
+  "retainedFailureReports": [
+    "s3-chat-complete-ssh.json",
+    "s3-final-preview-retry.json",
+    "s3-final-preview.json",
+    "s3-missing-assets-setup-failed.json",
+    "s3-remote-chat-fifth.json",
+    "s3-remote-chat-first.json",
+    "s3-remote-chat-fourth.json",
+    "s3-remote-chat-second.json",
+    "s3-remote-chat-sixth.json",
+    "s3-remote-chat-third.json"
+  ]
+}

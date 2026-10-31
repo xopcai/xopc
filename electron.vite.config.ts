@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'electron-vite';
+import { build as buildBrowserScript } from 'esbuild';
 
 import webPkg from './web/package.json' with { type: 'json' };
 
@@ -75,9 +76,11 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [{ name: 'computer-preview-document', generateBundle() {
+    plugins: [{ name: 'computer-preview-document', async generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'computer-preview.html', source: readFileSync(resolve(__dirname, 'electron/computer/preview-worker.html'), 'utf8') });
-      for (const fileName of ['gateway-connections.html', 'gateway-connections.js', 'remote-shell.html', 'remote-shell.js', 'remote-shell.css']) {
+      const chat = await buildBrowserScript({ entryPoints: [resolve(__dirname, 'electron/chat/view.ts')], bundle: true, write: false, platform: 'browser', format: 'iife', target: 'chrome140', minify: true });
+      this.emitFile({ type: 'asset', fileName: 'remote-shell.js', source: chat.outputFiles[0]!.text });
+      for (const fileName of ['gateway-connections.html', 'gateway-connections.js', 'remote-shell.html', 'remote-shell.css']) {
         this.emitFile({ type: 'asset', fileName, source: readFileSync(resolve(__dirname, 'electron/gateway', fileName), 'utf8') });
       }
     } }],
