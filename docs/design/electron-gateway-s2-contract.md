@@ -36,3 +36,5 @@ S2 仅交付受限 Shell 与认证传输底座，不实现 S3 聊天输入/历�
 沿用原预算：网络/auth/WS 15s；清理 15s；单 JSON/server frame 4MiB，client frame 使用协议更严格的 256KiB；资源 32MiB/无进度 30s；HTTP 活跃 16、队列最多 16（其中媒体最多 4 个活跃，保留控制空间）；WS 最多 2、每端待发送缓冲最多 4MiB。会话仅内存，15 分钟到期后需显式重新连接；S2 不自动重放 POST、不做后台队列或认证硬错误重试。恢复、切换与完整聊天重连由 S3 补齐，不提前宣称 A06/A07/A09 或完整 P2a-1 已验收。
 
 本地 P95 仍比较旧 S0：ready +max(5%,100ms)、API +max(5%,5ms)、RSS +max(5%,32MiB)。新 main 复现结果与最终结果分别存档，不能把新 main 当作较宽替代预算。
+
+实现核对补充：已有 pin 的连接先进行不携带 owner 凭据的随机 nonce 身份证明，再发送认证 discovery；首次连接才按认证 discovery→challenge 建立 pin。profile 文件写入版本升级为 2，仍可读取旧 v1，默认本地入口不读取或迁移它。

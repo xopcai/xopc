@@ -18,10 +18,11 @@ let fixture: Awaited<ReturnType<typeof setup>>;
 let upstreamCalls: Array<{ path: string; headers: import('node:http').IncomingHttpHeaders }>;
 let mode: string;
 let streamClosed: boolean;
+let held: import('node:http').ServerResponse[];
 function envelope(kind: string, payload: unknown) { return { protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), kind, payload }; }
 
 async function setup() {
-  upstreamCalls = []; mode = ''; streamClosed = false;
+  upstreamCalls = []; mode = ''; streamClosed = false; held = [];
   const server = createServer(async (req, res) => {
     upstreamCalls.push({ path: req.url!, headers: req.headers });
     if (req.url !== '/api/gateway-identity/challenge' && req.headers.authorization !== `Bearer ${token}`) { res.writeHead(401).end(); return; }
@@ -53,6 +54,7 @@ async function setup() {
       if (req.headers.range) { res.writeHead(206, { 'Content-Range': 'bytes 0-2/6' }); res.end('png'); return; }
       res.end('png'); return;
     }
+    if (mode === 'blocked') { held.push(res); return; }
     res.setHeader('Content-Type', mode === 'html' ? 'text/html' : 'application/json');
     res.setHeader('Set-Cookie', 'upstream=secret'); res.setHeader('Content-Security-Policy', "script-src https://bad.invalid");
     res.end(JSON.stringify({ ok: true, payload: ['model'] }));
@@ -85,6 +87,15 @@ it('authenticates a fresh nonce against the persistent identity and rejects chan
   const changed = new ShellUpstream({ origin: fixture.origin, transport: 'ssh', token, identity: { ...identity, gatewayId: randomUUID() } });
   await expect(changed.authenticate()).rejects.toThrow('GATEWAY_IDENTITY_CHANGED'); changed.close();
   mode = 'nonce'; await expect(fixture.upstream.authenticate()).rejects.toThrow('GATEWAY_IDENTITY_PROOF_FAILED');
+});
+it('restricts SSH localhost resolution to loopback and proves a pin before sending owner credentials', async () => {
+  const pinned = new ShellUpstream({ origin: fixture.origin.replace('127.0.0.1', 'localhost'), transport: 'ssh', token, identity });
+  const before = upstreamCalls.length;
+  expect(await pinned.authenticate()).toEqual(identity);
+  expect(upstreamCalls[before].path).toBe('/api/gateway-identity/challenge');
+  expect(upstreamCalls[before].headers.authorization).toBeUndefined();
+  expect(upstreamCalls[before + 1].headers.authorization).toBe(`Bearer ${token}`);
+  pinned.close();
 });
 it('keeps bootstrap one-use and requires exact Host, Origin, cookie and window proof', async () => {
   expect(() => fixture.shell.bootstrap()).toThrow('CONSUMED');
@@ -129,6 +140,26 @@ it('streams allowed media/Range, rejects HTML and oversized resources, cancels u
   for (let i = 0; i < 50 && !streamClosed; i++) await new Promise(r => setTimeout(r, 10));
   expect(streamClosed).toBe(true);
 });
+it('bounds HTTP concurrency and queues without changing the request budget', async () => {
+  mode = 'blocked';
+  const calls = Array.from({ length: 33 }, () => get('/api/models').then(async response => { await response.arrayBuffer(); return response.status; }, () => -1));
+  expect(await Promise.race(calls)).toBe(429);
+  expect(held.length).toBe(16);
+  mode = '';
+  for (const res of held) { res.setHeader('Content-Type', 'application/json'); res.end('{}'); }
+  const statuses = await Promise.all(calls);
+  expect(statuses.filter(status => status === 200)).toHaveLength(32);
+  expect(statuses.filter(status => status === 429)).toHaveLength(1);
+});
+it('reserves control capacity while four media streams are active', async () => {
+  mode = 'stream';
+  const aborts = Array.from({ length: 4 }, () => new AbortController());
+  const streams = await Promise.all(aborts.map(abort => fetch(fixture.shell.origin + '/api/media/read?uri=fixture&conversationId=fixture', { headers: fixture.headers, signal: abort.signal })));
+  expect(streams.every(response => response.ok)).toBe(true);
+  expect((await get('/api/media/read?uri=fixture&conversationId=fixture')).status).toBe(429);
+  expect((await get('/api/models')).status).toBe(200);
+  for (const abort of aborts) abort.abort();
+});
 async function ticket() {
   const clientId = randomUUID();
   const response = await fetch(fixture.shell.origin + '/api/realtime/tickets', { method: 'POST', headers: { ...fixture.headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, clientKind: 'web', protocolVersion: 2 }) });
@@ -147,6 +178,14 @@ it('reuses realtime envelopes but rejects ticket replay and Endpoint/control mes
   expect(fixture.remoteMessages).toHaveLength(2);
   const replay = await socket(); const rejected = once(replay, 'close'); replay.send(JSON.stringify(envelope('realtime.hello', hello))); await rejected;
   expect(fixture.remoteMessages).toHaveLength(2);
+});
+it('bounds websocket connections including pending hellos', async () => {
+  const first = await socket(); const second = await socket();
+  const third = new WebSocket(fixture.shell.origin.replace('http', 'ws') + '/api/realtime/v1/ws', { headers: fixture.headers, origin: fixture.shell.origin });
+  third.on('error', () => {});
+  await new Promise(resolve => third.once('close', resolve));
+  expect(fixture.wss.clients.size).toBe(2);
+  first.terminate(); second.terminate();
 });
 it('makes logout immediately invalidate the cookie', async () => {
   const response = await fetch(fixture.shell.origin + '/api/browser-session', { method: 'DELETE', headers: fixture.headers });

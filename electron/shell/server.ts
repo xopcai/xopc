@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
@@ -13,6 +13,7 @@ import { ShellUpstream } from './upstream.js';
 
 const JSON_MAX = 4 * 1024 * 1024;
 const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'";
+const equalSecret = (value: unknown, expected: string) => typeof value === 'string' && Buffer.byteLength(value) === Buffer.byteLength(expected) && timingSafeEqual(Buffer.from(value), Buffer.from(expected));
 const key = (value: string) => createHash('sha256').update(value).digest('hex');
 
 export async function startShell(upstream: ShellUpstream, assets: string, epoch: number, gatewayId: string) {
@@ -38,9 +39,9 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
   };
   const session = () => ({ authenticated: live(), sessionId, expiresAt, gatewayId, epoch, mode: 'remote', localCapabilities: false });
   const secure = (req: IncomingMessage, ws = false) => live() && req.headers.host === new URL(origin).host
-    && req.headers['x-xopc-desktop-window'] === proof
+    && equalSecret(req.headers['x-xopc-desktop-window'], proof)
     && (!req.headers.origin ? !ws && req.method === 'GET' : req.headers.origin === origin)
-    && (req.headers.cookie ?? '').split(';').map(c => c.trim()).includes(`${cookie.name}=${cookie.value}`);
+    && equalSecret((req.headers.cookie ?? '').split(';').map(c => c.trim()).find(c => c.startsWith(`${cookie.name}=`))?.slice(cookie.name.length + 1), cookie.value);
   const invalidate = () => {
     active = false; abort.abort(); slots.close(); mediaSlots.close(); tickets.clear();
     for (const ws of websockets) ws.terminate(); upstream.close();
@@ -162,7 +163,7 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
   server.on('upgrade', (req, socket, head) => {
     if (req.url !== '/api/realtime/v1/ws' || !secure(req, true) || connections >= 2) { socket.destroy(); return; }
     connections++;
-    const remote = new WebSocket(upstream.origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws', { origin: upstream.origin, maxPayload: JSON_MAX, perMessageDeflate: false, handshakeTimeout: 15_000 });
+    const remote = new WebSocket(upstream.origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws', { origin: upstream.origin, lookup: upstream.lookup, maxPayload: JSON_MAX, perMessageDeflate: false, handshakeTimeout: 15_000 });
     const close = () => { remote.terminate(); socket.destroy(); };
     socket.once('close', () => remote.terminate());
     remote.once('error', close);
@@ -186,7 +187,9 @@ export async function startShell(upstream: ShellUpstream, assets: string, epoch:
                   hello = true; clearTimeout(helloTimer);
                 } else if (value.kind === 'realtime.hello') throw new Error();
               }
-              to.send(JSON.stringify(value));
+              const encoded = JSON.stringify(value);
+              if (Buffer.byteLength(encoded) > JSON_MAX || to.bufferedAmount + Buffer.byteLength(encoded) > JSON_MAX) throw new Error('SHELL_FRAME_LIMIT');
+              to.send(encoded);
             } catch { local.terminate(); remote.terminate(); }
           });
         };

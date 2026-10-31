@@ -36,13 +36,16 @@ export class ConnectionCredentialStore {
     return ref;
   }
 
-  async verify(ref: string): Promise<void> {
+  async verify(ref: string): Promise<void> { await this.read(ref); }
+
+  async read(ref: string): Promise<string> {
     if (!isConnectionId(ref)) throw new Error('INVALID_CREDENTIAL_REFERENCE');
     await this.requireEncryption();
     try {
       const encrypted = await readBounded(join(this.directory, `${ref}.bin`), 24 * 1024);
       const value = await boundedCrypto(this.encryption.decrypt(encrypted));
       if (!value.trim() || Buffer.byteLength(value) > 8192) throw new Error('INVALID_CREDENTIAL');
+      return value;
     } catch { throw new Error('CREDENTIAL_UNAVAILABLE'); }
   }
 

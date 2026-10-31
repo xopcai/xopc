@@ -1,4 +1,6 @@
 import { createPublicKey, randomBytes, verify } from 'node:crypto';
+import { lookup } from 'node:dns';
+import type { LookupFunction } from 'node:net';
 import http from 'node:http';
 import https from 'node:https';
 
@@ -12,16 +14,25 @@ export type RemoteTarget = { origin: string; transport: 'direct' | 'ssh'; token:
 export class ShellUpstream {
   readonly agent: http.Agent | https.Agent;
   readonly origin: string;
+  readonly lookup?: LookupFunction;
   constructor(readonly target: RemoteTarget) {
     if (!target.token?.trim() || Buffer.byteLength(target.token) > 8192) throw new Error('INVALID_CREDENTIAL');
     this.origin = parseRemoteProfile({ id: '00000000-0000-0000-0000-000000000000', mode: 'remote', name: 'Shell', origin: target.origin, transport: target.transport }).origin;
+    if (target.transport === 'ssh') this.lookup = (hostname, options, done) => {
+      lookup(hostname, { all: true }, (error, resolved) => {
+        const addresses = (resolved ?? []).filter(value => ['127.0.0.1', '::1'].includes(value.address)
+          && (!options.family || value.family === options.family));
+        if (error || !addresses.length) { done(error ?? new Error('SHELL_LOOPBACK_REQUIRED'), ''); return; }
+        done(null, options.all ? addresses : addresses[0]!.address, addresses[0]!.family);
+      });
+    };
     this.agent = this.origin.startsWith('https:') ? new https.Agent({ keepAlive: true, maxSockets: 16 }) : new http.Agent({ keepAlive: true, maxSockets: 16 });
   }
   request(path: string, method = 'GET', headers: Record<string, string> = {}, signal?: AbortSignal, authenticated = true) {
     if (!path.startsWith('/api/') || /[\\\r\n#]/.test(path) || path.startsWith('//')) throw new Error('SHELL_PATH_DENIED');
     const url = new URL(path, this.origin);
     if (url.origin !== this.origin) throw new Error('SHELL_TARGET_DENIED');
-    return (url.protocol === 'https:' ? https : http).request(url, { method, agent: this.agent, signal,
+    return (url.protocol === 'https:' ? https : http).request(url, { method, agent: this.agent, signal, lookup: this.lookup,
       headers: { ...headers, ...(authenticated ? { Authorization: `Bearer ${this.target.token}` } : {}), Origin: this.origin, 'Accept-Encoding': 'identity' } });
   }
   async json(path: string, signal: AbortSignal, body?: unknown, authenticated = true): Promise<unknown> {
@@ -29,7 +40,7 @@ export class ShellUpstream {
       const req = this.request(path, body === undefined ? 'GET' : 'POST', { 'Content-Type': 'application/json' }, signal, authenticated);
       req.on('error', error => {
         const code = (error as NodeJS.ErrnoException).code ?? '';
-        reject(new Error(/CERT|TLS|SELF_SIGNED/.test(code) ? 'GATEWAY_TLS_FAILED' : 'GATEWAY_NETWORK_FAILED'));
+        reject(new Error(/CERT|TLS|SELF_SIGNED|UNABLE_TO_VERIFY/.test(code) ? 'GATEWAY_TLS_FAILED' : 'GATEWAY_NETWORK_FAILED'));
       });
       req.on('response', res => {
         if (res.statusCode !== 200 || !/^application\/json\b/i.test(res.headers['content-type'] ?? '')) {

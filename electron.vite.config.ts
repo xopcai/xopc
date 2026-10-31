@@ -61,6 +61,7 @@ export default defineConfig({
           // Keep main's import.meta.dirname at out/main for preload and native helper paths.
           main: resolve(__dirname, 'electron/main.ts'),
           compatibility: resolve(__dirname, 'electron/gateway-compatibility.ts'),
+          'remote-shell-worker': resolve(__dirname, 'electron/shell/worker.ts'),
         },
         // electron-vite 6 beta locates the last ESM import with a regex that can overrun into
         // bundled source. Providing the shim explicitly bypasses that unsafe insertion path.
@@ -76,7 +77,7 @@ export default defineConfig({
   preload: {
     plugins: [{ name: 'computer-preview-document', generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'computer-preview.html', source: readFileSync(resolve(__dirname, 'electron/computer/preview-worker.html'), 'utf8') });
-      for (const fileName of ['gateway-connections.html', 'gateway-connections.js']) {
+      for (const fileName of ['gateway-connections.html', 'gateway-connections.js', 'remote-shell.html', 'remote-shell.js', 'remote-shell.css']) {
         this.emitFile({ type: 'asset', fileName, source: readFileSync(resolve(__dirname, 'electron/gateway', fileName), 'utf8') });
       }
     } }],
@@ -89,6 +90,7 @@ export default defineConfig({
           index: resolve(__dirname, 'electron/preload.ts'),
           'computer-preview': resolve(__dirname, 'electron/computer/preview-worker.ts'),
           connections: resolve(__dirname, 'electron/gateway/connections-preload.ts'),
+          shell: resolve(__dirname, 'electron/gateway/shell-preload.ts'),
         },
         // Root package.json is `"type": "module"`, so electron-vite would default preload to ESM
         // (`index.mjs`). Electron does not execute that preload as an ES module. Force CJS (`index.cjs`).

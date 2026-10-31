@@ -17,6 +17,10 @@ function render(value) {
     select.textContent = '选择配置';
     select.onclick = () => perform(() => api.select(snapshot.epoch, profile.id));
     row.append(select);
+    const connect = document.createElement('button');
+    connect.textContent = '建立 S2 连接';
+    connect.onclick = () => perform(() => api.connect(snapshot.epoch, profile.id));
+    row.append(connect);
     const remove = document.createElement('button');
     remove.textContent = '移除配置';
     remove.onclick = () => perform(() => api.remove(snapshot.epoch, profile.id));

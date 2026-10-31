@@ -41,7 +41,7 @@ async function files(directory) {
 try {
   let page = await launch();
   assert.equal(await page.evaluate(() => window.electronAPI), undefined);
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.gatewayConnections).sort()), ['quit', 'remove', 'save', 'select', 'snapshot', 'useLocal'].sort());
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.gatewayConnections).sort()), ['connect', 'quit', 'remove', 'save', 'select', 'snapshot', 'useLocal'].sort());
   report.checks.restrictedPreload = true;
   const secret = `test-only-${randomUUID()}`;
   await page.getByLabel('连接名称', { exact: true }).fill('Server A');

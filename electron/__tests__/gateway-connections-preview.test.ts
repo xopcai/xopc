@@ -68,6 +68,22 @@ describe('remote connection preview', () => {
     await restarted.initialize();
     expect(restarted.snapshot()).toMatchObject({ status: 'unselected', epoch: 0, profiles: [{ hasCredential: true }] });
   });
+  it('pins only a main-process verified identity, retains it on same-origin edits and rejects replacement', async () => {
+    const saved = await manager.save(0, { ...input, credential: 'secret' });
+    const id = saved.profiles[0].id;
+    const identity = { gatewayId: randomUUID(), publicKey: 'p'.repeat(100) };
+    const pinned = await manager.pinIdentity(1, id, identity);
+    expect(pinned.epoch).toBe(2);
+    await expect(manager.pinIdentity(2, id, { ...identity, gatewayId: randomUUID() })).rejects.toThrow('GATEWAY_IDENTITY_CHANGED');
+    expect((await manager.privateConnection(2, id)).token).toBe('secret');
+    expect(JSON.stringify(pinned)).not.toMatch(/secret|credentialRef/);
+    await manager.save(2, { ...input, id, name: 'Renamed' });
+    expect((await store.load())[0].identity).toEqual(identity);
+    expect(JSON.parse(await readFile(join(root, 'profiles.json'), 'utf8')).version).toBe(2);
+    await manager.save(3, { ...input, id, origin: 'https://other.example.com' });
+    expect((await store.load())[0].identity).toBeUndefined();
+    await expect(manager.privateConnection(4, id)).rejects.toThrow('REMOTE_CREDENTIAL_REQUIRED');
+  });
   it('does not inherit credentials after changing destination', async () => {
     const saved = await manager.save(0, { ...input, credential: 'old-secret' });
     await manager.save(1, { ...input, id: saved.profiles[0].id, origin: 'https://other.example.com' });
