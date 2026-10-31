@@ -104,3 +104,7 @@ node scripts/verify-electron-local-connection.mjs --runs 30 --operations 100 --c
 没有签名安装包、Windows/Linux、24 小时运行或跨版本发布/回退验收。本地测量仍使用开发 Electron 和已记录的 SQLite/dev dist 测试映射；不能据此消除 P0/P1 的打包布局限制。预览 E2E 的 OS relaunch 被替换为参数/退出请求断言，真实本地路径另外通过完整本地 E2E 验证；尚未验证操作系统实际重启接力。
 
 本轮不 push、不创建 PR、不合并，不继续 S2。未通过的完整 P2a-1 门槛继续保持待实施/待验收，不以本批次通过代替。
+
+## 后续 review
+
+完整 diff 的 review 与新增修复见 [S0/S1 review](./electron-gateway-s0-s1-review.md)。该轮保留启动 P95 超标批次，并修改产品启动就绪轮询；最终 source/产物和复测以新报告为准，本文原批次与前轮性能数据不重写。S2 保持未实施。

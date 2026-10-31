@@ -1,0 +1,97 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc
+
+ ❯ |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts (13 tests | 8 failed) 143ms
+   × rejects a stale readyMs summary instead of trusting the P95 field 1ms
+   × rejects a stale shutdownMs summary instead of trusting the P95 field 0ms
+   × rejects a stale rssMiB summary instead of trusting the P95 field 0ms
+   × rejects invalid startup and RSS raw samples (null) 0ms
+   × rejects invalid startup and RSS raw samples (-1) 0ms
+   × rejects invalid startup and RSS raw samples (NaN) 0ms
+   × rejects invalid startup and RSS raw samples (Infinity) 0ms
+   × rejects OS and embedded-runtime mismatches within and between reports 0ms
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-preview.test.ts (22 tests | 1 failed) 86ms
+     × blocks invocation and send/MessagePort handlers before their side effects 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-preview.test.ts > connection window authority > blocks invocation and send/MessagePort handlers before their side effects
+AssertionError: expected "vi.fn()" to be called 2 times, but got 1 times
+ ❯ electron/__tests__/gateway-connections-preview.test.ts:192:19
+    190|     ipc.emit('terminal:write', event, 'command');
+    191|     ipc.emit('computer-preview:port', { ...event, ports: [{ close }] }…
+    192|     expect(close).toHaveBeenCalledTimes(2);
+       |                   ^
+    193|     expect(effect).not.toHaveBeenCalled();
+    194|     ipc.handle(CONNECTION_CHANNELS[0], () => 'status');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts > rejects a stale readyMs summary instead of trusting the P95 field
+ FAIL  |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts > rejects a stale shutdownMs summary instead of trusting the P95 field
+ FAIL  |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts > rejects a stale rssMiB summary instead of trusting the P95 field
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ scripts/__tests__/electron-local-connection-metrics.test.ts:66:64
+     64| it.each(['readyMs', 'shutdownMs', 'rssMiB'])('rejects a stale %s summa…
+     65|   const candidate = fixture(); candidate.summary.reuse[metric].p95 = 0;
+     66|   expect(() => assertComparableSampling(fixture(), candidate)).toThrow…
+       |                                                                ^
+     67| });
+     68| it.each([null, -1, NaN, Infinity])('rejects invalid startup and RSS ra…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts > rejects invalid startup and RSS raw samples (null)
+ FAIL  |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts > rejects invalid startup and RSS raw samples (-1)
+ FAIL  |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts > rejects invalid startup and RSS raw samples (NaN)
+ FAIL  |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts > rejects invalid startup and RSS raw samples (Infinity)
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ scripts/__tests__/electron-local-connection-metrics.test.ts:70:62
+     68| it.each([null, -1, NaN, Infinity])('rejects invalid startup and RSS ra…
+     69|   const startup = fixture(); startup.samples[0].readyMs = value;
+     70|   expect(() => assertComparableSampling(fixture(), startup)).toThrow('…
+       |                                                              ^
+     71|   const memory = fixture(); memory.samples[0].resources.rssMiB = value;
+     72|   expect(() => assertComparableSampling(fixture(), memory)).toThrow('I…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  |scripts| scripts/__tests__/electron-local-connection-metrics.test.ts > rejects OS and embedded-runtime mismatches within and between reports
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ scripts/__tests__/electron-local-connection-metrics.test.ts:76:57
+     74| it('rejects OS and embedded-runtime mismatches within and between repo…
+     75|   const os = fixture(); os.osRelease = 'different';
+     76|   expect(() => assertComparableSampling(fixture(), os)).toThrow('OS re…
+       |                                                         ^
+     77|   const mixed = fixture(); mixed.samples[1].runtime.electron = '46.0.0…
+     78|   expect(() => assertComparableSampling(fixture(), mixed)).toThrow('Ru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  9 failed | 26 passed (35)
+   Start at  11:27:52
+   Duration  397ms (transform 31ms, setup 17ms, import 30ms, tests 229ms, environment 0ms)
+

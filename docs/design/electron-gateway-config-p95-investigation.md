@@ -83,3 +83,5 @@ node scripts/verify-electron-local-connection.mjs --runs 30 --operations 100 --c
 ```
 
 诊断与正式测量不得并行，且不能在其运行期间重建产物。用户电脑仍存在其他开发活动，非严格隔离性能实验；两轮通过也不保证所有环境或未来每一批都通过。签名安装包、Windows/Linux、真实远端、24 小时运行和 OS 实际重启接力的既有未覆盖项不变。
+
+后续 review 的 IPC、证据校验及启动轮询修复另见 [S0/S1 review](./electron-gateway-s0-s1-review.md)；本文两轮结果对应 `12e094a35`，保持原始记录。
