@@ -93,7 +93,7 @@ export function killAcceptanceApplication(application) {
 }
 
 /** Production fuses disable Node inspection; drive only the Chromium Renderer endpoint. */
-export async function launchInstalledApplication(target, args, env, cwd, timeout = 30_000) {
+export async function launchInstalledApplication(target, args, env, cwd, timeout = 30_000, { preserveBrowserDefaults = false } = {}) {
   const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
   const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
   const child = spawn(target.executablePath, [...args, `--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1'], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -109,11 +109,11 @@ export async function launchInstalledApplication(target, args, env, cwd, timeout
       await delay(100);
     }
     assert(Date.now() < deadline, 'Installed application startup deadline exceeded');
-    browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: Math.max(1, deadline - Date.now()) });
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: Math.max(1, deadline - Date.now()), noDefaults: preserveBrowserDefaults });
     const context = browser.contexts()[0]; assert(context);
     return { ...adapter, windows: () => context.pages(),
       firstWindow: async () => context.pages()[0] ?? await context.waitForEvent('page', { timeout: 30_000 }),
-      metadata: { executable: target.executablePath, appAsar: join(target.resources, 'app.asar'), cwd, rendererCdpOnly: true, fuses: target.fuses, pid: child.pid },
+      metadata: { executable: target.executablePath, appAsar: join(target.resources, 'app.asar'), cwd, rendererCdpOnly: true, preserveBrowserDefaults, fuses: target.fuses, pid: child.pid },
       output: () => output,
       close: async () => {
         if (child.exitCode !== null || child.signalCode !== null) { await browser.close().catch(() => {}); return; }

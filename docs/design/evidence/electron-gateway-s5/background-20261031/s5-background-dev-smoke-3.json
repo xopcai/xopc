@@ -1,0 +1,227 @@
+{
+  "passed": false,
+  "tls": false,
+  "startedAt": "2026-10-31T12:49:33.694Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true
+  },
+  "scope": "S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server",
+  "background": true,
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 804
+    },
+    {
+      "input": 2,
+      "durationMs": 210
+    }
+  ],
+  "inputIntervalMs": 0,
+  "endurance": {
+    "options": {
+      "connectionCycles": 3,
+      "connectionIntervalMs": 1000,
+      "soakSeconds": 10,
+      "sampleIntervalMs": 1000
+    },
+    "connectionSamples": [
+      {
+        "cycle": 1,
+        "target": "A",
+        "openedMs": 272.259,
+        "totalMs": 385.9006669999999,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            33255,
+            33256,
+            33257,
+            33258
+          ],
+          "rssMiB": 396.765625,
+          "cpuPercentSnapshot": 22.299999999999997,
+          "openFds": 103
+        }
+      },
+      {
+        "cycle": 2,
+        "target": "B",
+        "openedMs": 266.8872910000009,
+        "totalMs": 382.50391599999966,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            33255,
+            33256,
+            33257,
+            33258
+          ],
+          "rssMiB": 398.953125,
+          "cpuPercentSnapshot": 16,
+          "openFds": 103
+        }
+      },
+      {
+        "cycle": 3,
+        "target": "A",
+        "openedMs": 274.0450000000001,
+        "totalMs": 388.036415999999,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            33255,
+            33256,
+            33257,
+            33258
+          ],
+          "rssMiB": 401.96875,
+          "cpuPercentSnapshot": 17.599999999999998,
+          "openFds": 103
+        }
+      }
+    ],
+    "soakSamples": [
+      {
+        "iteration": 1,
+        "elapsedMs": 233.08512500000143,
+        "cycleMs": 233.07866699999977,
+        "posts": 5,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            33255,
+            33256,
+            33257,
+            33258,
+            33660,
+            33661
+          ],
+          "rssMiB": 636.609375,
+          "cpuPercentSnapshot": 57.400000000000006,
+          "openFds": 155
+        }
+      },
+      {
+        "iteration": 2,
+        "elapsedMs": 1224.7085830000015,
+        "cycleMs": 225.29745800000092,
+        "posts": 6,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            33255,
+            33256,
+            33257,
+            33258,
+            33660,
+            33661
+          ],
+          "rssMiB": 643.53125,
+          "cpuPercentSnapshot": 26.000000000000004,
+          "openFds": 155
+        }
+      },
+      {
+        "iteration": 3,
+        "elapsedMs": 2224.778958000001,
+        "cycleMs": 224.70483299999978,
+        "posts": 7,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            33255,
+            33256,
+            33257,
+            33258,
+            33660,
+            33661
+          ],
+          "rssMiB": 648.484375,
+          "cpuPercentSnapshot": 25.5,
+          "openFds": 155
+        }
+      },
+      {
+        "iteration": 4,
+        "elapsedMs": 3226.6410830000004,
+        "cycleMs": 226.0315840000003,
+        "posts": 8,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            33255,
+            33256,
+            33257,
+            33258,
+            33660,
+            33661
+          ],
+          "rssMiB": 652.078125,
+          "cpuPercentSnapshot": 29.400000000000002,
+          "openFds": 153
+        }
+      },
+      {
+        "iteration": 5,
+        "elapsedMs": 4224.996000000001,
+        "cycleMs": 224.43166700000074,
+        "posts": 9,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            33255,
+            33256,
+            33257,
+            33258,
+            33660,
+            33661
+          ],
+          "rssMiB": 657.140625,
+          "cpuPercentSnapshot": 27.299999999999997,
+          "openFds": 155
+        }
+      }
+    ],
+    "faults": [],
+    "minimumConnectionCyclesMet": false,
+    "minimumSoakDurationMet": false,
+    "fullS5Acceptance": false,
+    "pendingMatrix": [
+      "network-layer delay/loss/blackholes",
+      "certificate/auth/version combinations",
+      "real sleep/wake",
+      "supported upgrade/rollback combinations"
+    ],
+    "performanceAcceptance": "deferred by user; observations only",
+    "soakStartedAt": "2026-10-31T12:49:44.673Z",
+    "soakElapsedMs": 4224.996000000001
+  },
+  "error": "Error: Condition deadline exceeded\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:59:188)\n    at async exerciseRemoteEndurance (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-remote-endurance.mjs:71:7)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:277:10",
+  "serverLogs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52639\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=32909, lockPath=/Users/micjoyce/.xopc/locks/gateway.f6caf97d.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52639...\n✅ Gateway started\n   URL: http://127.0.0.1:52639\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52639\n🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52668\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=32978, lockPath=/Users/micjoyce/.xopc/locks/gateway.a8bbaf72.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52668...\n✅ Gateway started\n   URL: http://127.0.0.1:52668\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52668\n",
+  "windows": [
+    {
+      "url": "file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/out/preload/gateway-connections.html",
+      "text": "Gateway 连接预览\n\n选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力保持禁用，不启动本地 Gateway。\n\n请选择或保存连接配置。本机能力保持禁用。\n\nA · http://127.0.0.1:52640 · 凭据已加密保存 选择配置连接并打开聊天移除配置\nB · http://127.0.0.1:52669 · 凭据已加密保存 选择配置连接并打开聊天移除配置\n连接名称\nGateway origin\n传输方式\nHTTPS已有 SSH loopback 转发\n管理凭据（可留空；仅加密保存）\n保存连接配置\n\nSSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。\n\n使用原本地模式（重启应用）退出预览"
+    },
+    {
+      "url": "http://127.0.0.1:52875/",
+      "text": "远端聊天\n\n身份已核验；本机能力保持禁用。\n\nGateway 4118ec34-c6ea-42b3-990b-93b88794edda\n退出此连接\n返回连接配置\n\nAgent、会话和工具在服务器运行。本机文件、终端、浏览器控制和设备能力不可用。\n\n新对话\n服务器会话\nREMOTE_CHAT_OK\n新对话设置\n需恢复连接\n\nCHAT_RETRY_EXHAUSTED\n\n更早记录\n你\n\nfirst remote message\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\nsecond remote message\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\nSLOW_REMOTE\n\nAssistant\n\n你\n\nuncertain-once\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\ns5-soak-1\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\ns5-soak-2\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\ns5-soak-3\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\ns5-soak-4\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\ns5-soak-5\n\nAssistant\n\nREMOTE_CHAT_OK\n\n消息\n停止服务器运行\n发送"
+    }
+  ],
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-LaUmWN",
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-10-31T12:50:19.888Z"
+}

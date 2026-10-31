@@ -6,6 +6,7 @@ import { BrowserWindow, session, type IpcMainInvokeEvent, type Session } from 'e
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
 import { RemoteChatStateStore, type ChatNamespace } from '../chat/state.js';
 import { ShellController } from './controller.js';
+import { RemoteWindowPresentation } from '../gateway/window-presentation.js';
 
 export class RemoteShellWindow {
   private window?: BrowserWindow;
@@ -18,7 +19,10 @@ export class RemoteShellWindow {
   private closing?: Promise<void>;
   private namespace?: ChatNamespace;
   constructor(private readonly mainDirectory: string, private readonly assets: string,
-    private readonly manager: GatewayConnectionPreview, private readonly recover: () => void, private readonly state: RemoteChatStateStore) {}
+    private readonly manager: GatewayConnectionPreview, private readonly recover: () => void, private readonly state: RemoteChatStateStore,
+    private readonly presentation = new RemoteWindowPresentation()) {}
+
+  presentationState() { return { visible: this.window?.isVisible() ?? false, focused: this.window?.isFocused() ?? false }; }
 
   authorize(event: IpcMainInvokeEvent, channel: string) {
     if (!['shell:bootstrap', 'shell:recover', 'shell:state-read', 'shell:state-write'].includes(channel)) throw new Error('REMOTE_CAPABILITY_DISABLED');
@@ -45,7 +49,10 @@ export class RemoteShellWindow {
       partition.setPermissionCheckHandler(() => false);
       partition.setPermissionRequestHandler((_w, _p, done) => done(false));
       partition.on('will-download', event => event.preventDefault());
-      const window = new BrowserWindow({ width: 900, height: 700, title: 'xopc · Remote Shell (S2)', webPreferences: {
+      const window = new BrowserWindow({ width: 900, height: 700, show: this.presentation.showInitially,
+        paintWhenInitiallyHidden: this.presentation.showInitially, title: 'xopc · Remote Shell (S2)', webPreferences: {
+        // Realtime heartbeat and bounded recovery timers must run while the chat window is hidden.
+        backgroundThrottling: false,
         session: partition, preload: join(this.assets, 'shell.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false, navigateOnDragDrop: false,
       } });
       this.window = window;

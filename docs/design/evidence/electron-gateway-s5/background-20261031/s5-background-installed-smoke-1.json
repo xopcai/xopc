@@ -1,0 +1,78 @@
+{
+  "passed": false,
+  "tls": false,
+  "startedAt": "2026-10-31T12:53:54.140Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true
+  },
+  "scope": "Installed macOS app to two isolated Docker Gateways using the built bundled server and exact direct runtime dependencies; deterministic inference, same physical host, not standalone Docker release or WAN acceptance",
+  "background": true,
+  "application": "/tmp/xopc-s5-delivery/installed-background/xopc.app",
+  "packageBefore": {
+    "files": 1421,
+    "sha256": "f844acd9ef0c4fe73fc35e9e85e221de93a0a7a744de62c4c117dc18bcd78623"
+  },
+  "containerImage": "sha256:1e60dbcce3849b6fbd629f430a98dd0a475806d0a36b2b20f4ea166ee30f52c8",
+  "runtime": {
+    "executable": "/tmp/xopc-s5-delivery/installed-background/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-s5-delivery/installed-background/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-06ql5c",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": true,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 45337
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 816
+    },
+    {
+      "input": 2,
+      "durationMs": 219
+    }
+  ],
+  "inputIntervalMs": 0,
+  "error": "Error: Condition deadline exceeded\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:59:188)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:237:5",
+  "serverLogs": "🚀 Starting xopc gateway...\n   Bind: lan (0.0.0.0)\n   Port: 18790\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=12, lockPath=/home/node/.xopc/locks/gateway.a0398df5.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 0.0.0.0:18790...\n✅ Gateway started\n   URL: http://localhost:18790\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://0.0.0.0:18790\n🚀 Starting xopc gateway...\n   Bind: lan (0.0.0.0)\n   Port: 18790\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=12, lockPath=/home/node/.xopc/locks/gateway.a0398df5.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 0.0.0.0:18790...\n✅ Gateway started\n   URL: http://localhost:18790\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://0.0.0.0:18790\n",
+  "applicationLogs": "\nDevTools listening on ws://127.0.0.1:54434/devtools/browser/0410d80c-0e76-4e43-82ed-c9b91eb98469\n",
+  "windows": [
+    {
+      "url": "file:///private/tmp/xopc-s5-delivery/installed-background/xopc.app/Contents/Resources/app.asar.unpacked/out/preload/gateway-connections.html",
+      "text": "Gateway 连接预览\n\n选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力保持禁用，不启动本地 Gateway。\n\n请选择或保存连接配置。本机能力保持禁用。\n\n连接名称\nGateway origin\n传输方式\nHTTPS已有 SSH loopback 转发\n管理凭据（可留空；仅加密保存）\n保存连接配置\n\nSSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。\n\n使用原本地模式（重启应用）退出预览"
+    },
+    {
+      "url": "http://127.0.0.1:54483/",
+      "text": "远端聊天\n\n身份已核验；本机能力保持禁用。\n\nGateway a366acae-eabb-447c-8e94-28357007b51a\n退出此连接\n返回连接配置\n\nAgent、会话和工具在服务器运行。本机文件、终端、浏览器控制和设备能力不可用。\n\n新对话\n服务器会话\nREMOTE_CHAT_OK\n新对话设置\n离线，正在重连\n\n服务器已接收输入。\n\n更早记录\n你\n\nfirst remote message\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\nsecond remote message\n\nAssistant\n\nREMOTE_CHAT_OK\n\n你\n\nSLOW_REMOTE\n\nAssistant\n\nREMOTE_PARTIAL\n\n消息\n已确认服务器运行停止。\n停止服务器运行\n发送"
+    }
+  ],
+  "packageAfter": {
+    "files": 1421,
+    "sha256": "f844acd9ef0c4fe73fc35e9e85e221de93a0a7a744de62c4c117dc18bcd78623"
+  },
+  "retainedContainerState": {
+    "path": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-06ql5c/failed-container-state",
+    "scope": "Raw state from stopped test containers; not a verified recovery backup",
+    "errors": []
+  },
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-06ql5c",
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-10-31T12:55:26.881Z"
+}

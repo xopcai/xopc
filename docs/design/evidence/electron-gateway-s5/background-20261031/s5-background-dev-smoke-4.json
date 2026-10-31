@@ -1,0 +1,158 @@
+{
+  "passed": true,
+  "tls": false,
+  "startedAt": "2026-10-31T12:52:06.088Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "cleanLocalRelaunchWithOriginalMain": true
+  },
+  "scope": "S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server",
+  "background": true,
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 805
+    },
+    {
+      "input": 2,
+      "durationMs": 214
+    }
+  ],
+  "inputIntervalMs": 0,
+  "endurance": {
+    "options": {
+      "connectionCycles": 3,
+      "connectionIntervalMs": 1000,
+      "soakSeconds": 10,
+      "sampleIntervalMs": 5000
+    },
+    "connectionSamples": [
+      {
+        "cycle": 1,
+        "target": "A",
+        "openedMs": 269.78491700000086,
+        "totalMs": 384.87058400000024,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            42893,
+            42894,
+            42895,
+            42922
+          ],
+          "rssMiB": 447.203125,
+          "cpuPercentSnapshot": 19.8,
+          "openFds": 103
+        }
+      },
+      {
+        "cycle": 2,
+        "target": "B",
+        "openedMs": 285.38774999999987,
+        "totalMs": 401.9121249999989,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            42893,
+            42894,
+            42895,
+            42922
+          ],
+          "rssMiB": 449.3125,
+          "cpuPercentSnapshot": 13.6,
+          "openFds": 103
+        }
+      },
+      {
+        "cycle": 3,
+        "target": "A",
+        "openedMs": 291.6886250000007,
+        "totalMs": 407.88820900000064,
+        "posts": 4,
+        "resources": {
+          "processes": 4,
+          "pids": [
+            42893,
+            42894,
+            42895,
+            42922
+          ],
+          "rssMiB": 452.40625,
+          "cpuPercentSnapshot": 13.4,
+          "openFds": 103
+        }
+      }
+    ],
+    "soakSamples": [
+      {
+        "iteration": 1,
+        "elapsedMs": 239.64008300000023,
+        "cycleMs": 239.64008300000023,
+        "posts": 5,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            42893,
+            42894,
+            42895,
+            42922,
+            43122,
+            43123
+          ],
+          "rssMiB": 686.59375,
+          "cpuPercentSnapshot": 64.30000000000001,
+          "openFds": 155
+        }
+      },
+      {
+        "iteration": 2,
+        "elapsedMs": 5231.520958000001,
+        "cycleMs": 230.8612920000014,
+        "posts": 6,
+        "resources": {
+          "processes": 6,
+          "pids": [
+            42893,
+            42894,
+            42895,
+            42922,
+            43122,
+            43123
+          ],
+          "rssMiB": 693.921875,
+          "cpuPercentSnapshot": 32.9,
+          "openFds": 155
+        }
+      }
+    ],
+    "faults": [],
+    "minimumConnectionCyclesMet": false,
+    "minimumSoakDurationMet": false,
+    "minimumSoakSamplesMet": false,
+    "completeFunctionalSoak": false,
+    "fullS5Acceptance": false,
+    "pendingMatrix": [
+      "network-layer delay/loss/blackholes",
+      "certificate/auth/version combinations",
+      "real sleep/wake",
+      "supported upgrade/rollback combinations"
+    ],
+    "performanceAcceptance": "deferred by user; observations only",
+    "soakStartedAt": "2026-10-31T12:52:16.093Z",
+    "soakElapsedMs": 10000.256415999998,
+    "soakFinishedAt": "2026-10-31T12:52:26.093Z"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-10-31T12:52:29.532Z"
+}
