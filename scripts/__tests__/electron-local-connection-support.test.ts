@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, expect, it } from 'vitest';
 
-import { localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from '../electron-local-connection-support.mjs';
+import { localConnectionArtifactManifest, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from '../electron-local-connection-support.mjs';
 
 const roots: string[] = [];
 async function fixture() {
@@ -79,4 +79,15 @@ it('bounds a hung operation and preserves successful values and failures', async
   await expect(withTimeout(new Promise(() => {}), 5, 'fixture deadline')).rejects.toThrow('fixture deadline');
   await expect(withTimeout(Promise.resolve(42), 50, 'unexpected timeout')).resolves.toBe(42);
   await expect(withTimeout(Promise.reject(new Error('original')), 50, 'unexpected timeout')).rejects.toThrow('original');
+});
+
+it('fingerprints Gateway and UI content changes independently of Electron code', async () => {
+  const root = await fixture();
+  await writeFile(join(root, 'dist/gateway.js'), 'original');
+  const before = await localConnectionArtifactManifest(root);
+  expect(before['out/server']).toBeNull();
+  await writeFile(join(root, 'dist/gateway.js'), 'modified');
+  const after = await localConnectionArtifactManifest(root);
+  expect(after.dist.files).toBe(before.dist.files);
+  expect(after.dist.sha256).not.toBe(before.dist.sha256);
 });

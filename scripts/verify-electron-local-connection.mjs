@@ -12,7 +12,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { _electron } from 'playwright-core';
 
-import { localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
+import { localConnectionArtifactManifest, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
 import { assertComparableSampling, LEGACY_SAMPLE_PLAN, latencyPopulations, latencySummary as summary } from './electron-local-connection-metrics.mjs';
 
 assert.notEqual(platform(), 'win32', 'This acceptance runner requires POSIX process inspection; Windows acceptance is separate');
@@ -284,6 +284,7 @@ async function run(mode, index) {
 try {
   cleanupLayout = await prepareLocalConnectionLayout(artifactRoot, root);
   result.electronBuildSha256 = await electronBuildHash();
+  result.artifactManifest = await localConnectionArtifactManifest(artifactRoot);
   for (const mode of modes) for (let index = 0; index < runs; index++) {
     await run(mode, index);
     console.log(`${mode} ${index + 1}/${runs} passed`);
@@ -299,6 +300,7 @@ try {
   result.latencyPopulations = Object.fromEntries(modes.map(mode => [mode, Object.fromEntries(['configMs', 'sessionsMs']
     .map(metric => [metric, latencyPopulations(result.samples.filter(sample => sample.mode === mode), metric)]))]));
   assert.equal(await electronBuildHash(), result.electronBuildSha256, 'Electron build changed during acceptance');
+  assert.deepEqual(await localConnectionArtifactManifest(artifactRoot), result.artifactManifest, 'Gateway/UI/SQL build changed during acceptance');
   result.passed = true;
   if (comparePath) {
     const baseline = JSON.parse(await readFile(resolve(comparePath), 'utf8'));

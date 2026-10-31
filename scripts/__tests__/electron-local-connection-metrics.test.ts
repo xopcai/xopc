@@ -1,3 +1,10 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
 import { expect, it } from 'vitest';
 
 import { assertComparableSampling, latencyPopulations, latencySummary } from '../electron-local-connection-metrics.mjs';
@@ -39,4 +46,16 @@ it('rejects invalid, incomplete, stale-summary and diagnostic reports', () => {
   expect(() => assertComparableSampling(fixture(), stale)).toThrow('Summary');
   expect(() => assertComparableSampling(fixture(), { ...fixture(), diagnostics: true })).toThrow('Diagnostic');
   expect(() => assertComparableSampling(fixture(), { ...fixture(), samplingPlan: 'balanced-v2' })).toThrow('Incompatible');
+});
+
+it('refuses to overwrite retained evidence before launching Electron', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'xopc-retained-evidence-'));
+  const output = join(root, 'failed.json');
+  try {
+    await writeFile(output, 'retained failed evidence');
+    await expect(promisify(execFile)(process.execPath,
+      [fileURLToPath(new URL('../verify-electron-local-connection.mjs', import.meta.url)), '--output', output]))
+      .rejects.toMatchObject({ code: 1, stderr: expect.stringContaining('Acceptance output exists') });
+    expect(await readFile(output, 'utf8')).toBe('retained failed evidence');
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

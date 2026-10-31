@@ -1,5 +1,21 @@
-import { lstat, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { join, relative } from 'node:path';
+
+/** Include Gateway, static UI and SQL assets, not just Electron entry points. */
+export async function localConnectionArtifactManifest(root) {
+  const manifest = {};
+  for (const directory of ['out/main', 'out/preload', 'out/server', 'dist', 'src/storage/sqlite']) {
+    const hash = createHash('sha256');
+    let entries;
+    try { entries = await readdir(join(root, directory), { recursive: true, withFileTypes: true }); }
+    catch (error) { if (error.code === 'ENOENT') { manifest[directory] = null; continue; } throw error; }
+    const files = entries.filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort();
+    for (const file of files) hash.update(relative(root, file)).update('\0').update(await readFile(file)).update('\0');
+    manifest[directory] = { files: files.length, sha256: hash.digest('hex') };
+  }
+  return manifest;
+}
 
 /** Serialize access to the development layout without replacing existing output. */
 export async function prepareLocalConnectionLayout(root, runnerRoot = root) {
