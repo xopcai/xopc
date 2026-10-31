@@ -1,0 +1,15 @@
+
+⎯⎯⎯⎯⎯⎯⎯ Startup Error ⎯⎯⎯⎯⎯⎯⎯⎯
+Error: No projects matched the filter "electron".
+    at Vitest._setServer (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_b02efb50835f503aa94185d565b99317/node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:13149:22)
+    at BasicMinimalPluginContext.handler (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_b02efb50835f503aa94185d565b99317/node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:14175:5)
+    at _createServer (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_7f9d9ef20caf137b9008f2bd8efc233e/node_modules/vite/dist/node/chunks/node.js:26189:84)
+    at createViteServer (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_b02efb50835f503aa94185d565b99317/node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:8818:17)
+    at createVitest (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_b02efb50835f503aa94185d565b99317/node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:14205:18)
+    at prepareVitest (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_b02efb50835f503aa94185d565b99317/node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:14572:14)
+    at startVitest (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_b02efb50835f503aa94185d565b99317/node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:14515:14)
+    at start (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_b02efb50835f503aa94185d565b99317/node_modules/vitest/dist/chunks/cac.DJJmV0dT.js:2340:15)
+    at CAC.run (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_b02efb50835f503aa94185d565b99317/node_modules/vitest/dist/chunks/cac.DJJmV0dT.js:2318:2)
+
+
+

@@ -1,0 +1,28 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-10-31T14:44:09.824Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.851Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.867Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.884Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.899Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.916Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.933Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.948Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.948Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-we64wt/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-10-31T14:44:09.957Z","module":"Gateway:Auth","path":"/api/desktop-host/compatibility","method":"GET","clientIp":"unknown","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"info","time":"2026-10-31T14:44:09.962Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.977Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.992Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:09.994Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-a8cpjU/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:10.007Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:10.022Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:10.027Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-CAQhj0/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:10.057Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-w5gJMg/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T14:44:10.100Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-credential-llVMOP/xopc.db","msg":"Opened xopc SQLite database"}
+
+ Test Files  3 passed (3)
+      Tests  77 passed (77)
+   Start at  22:44:09
+   Duration  833ms (transform 697ms, setup 27ms, import 1.07s, tests 411ms, environment 0ms)
+

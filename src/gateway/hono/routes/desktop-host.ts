@@ -1,4 +1,4 @@
-import { DESKTOP_HOST_MANIFEST, desktopPairingInvitationSchema } from '@xopcai/gateway-contract';
+import { DESKTOP_HOST_MANIFEST, desktopPairingInvitationSchema, desktopSshOriginSchema, DESKTOP_HOST_CAPABILITIES } from '@xopcai/gateway-contract';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -13,15 +13,16 @@ export function registerDesktopHostRoutes(app: Hono, { service }: AuthenticatedR
     c.header('Cache-Control', 'no-store');
     if (service.getResolvedAuth().mode !== 'token') return c.json({ ok: false, error: { code: 'OWNER_TOKEN_REQUIRED' } }, 403);
     const identity = getOrCreateGatewayIdentity();
-    return c.json({ ok: true, payload: { gatewayId: identity.id, publicKey: identity.publicKey, manifest: DESKTOP_HOST_MANIFEST } });
+    return c.json({ ok: true, payload: { gatewayId: identity.id, publicKey: identity.publicKey, manifest: DESKTOP_HOST_MANIFEST, capabilities: DESKTOP_HOST_CAPABILITIES } });
   });
   app.post('/api/desktop-host/pairing-setups', async c => {
     c.header('Cache-Control', 'no-store');
     if (getGatewayPrincipal(c).kind !== 'owner' || service.getResolvedAuth().mode !== 'token') return c.json({ ok: false, error: { code: 'OWNER_REQUIRED' } }, 403);
-    if (!z.strictObject({}).safeParse(await c.req.json().catch(() => null)).success) {
+    const input = z.strictObject({ sshOrigin: desktopSshOriginSchema.optional() }).safeParse(await c.req.json().catch(() => null));
+    if (!input.success) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST' } }, 400);
     }
-    const routes = resolveSecureDeviceRoutes(service.currentConfig);
+    const routes = input.data.sshOrigin ? [{ id: 'desktop-ssh', kind: 'ssh-loopback' as const, url: input.data.sshOrigin }] : resolveSecureDeviceRoutes(service.currentConfig);
     if (!routes.length) return c.json({ ok: false, error: { code: 'NO_SECURE_ROUTE' } }, 409);
     const setup = createDevicePairingSetup(routes, Date.now(), { targetKind: 'desktop' });
     const identity = getOrCreateGatewayIdentity();

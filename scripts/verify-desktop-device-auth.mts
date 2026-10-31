@@ -130,11 +130,34 @@ try {
   assert.equal((await identityStore.load(binding))!.refreshToken, pendingRotation.nextRefreshToken);
   assert.equal((await identityStore.load(binding))!.rotation, undefined);
   await Promise.all([client.readSelf(), client.readSelf()]);
+  const offlineDisable = await client.disable(true);
+  assert.deepEqual(offlineDisable, { localDisabled: true, remoteRevocationConfirmed: false, hadIdentity: true });
+  client = new DesktopDeviceAuth(binding, identityStore, transport);
+  await assert.rejects(client.readSelf(), /DESKTOP_REENROLLMENT_REQUIRED/);
+  await assert.rejects(client.enroll(enrollment), /DESKTOP_REENROLLMENT_REQUIRED/);
+  const onlineDisable = await client.disable(); assert.equal(onlineDisable.remoteRevocationConfirmed, true);
+  const reenrollment = { ...enrollment, confirmRevoked: async (identity: { revocationConfirmed?: boolean }) => identity.revocationConfirmed === true };
+  clientConsent = false;
+  await assert.rejects(client.enroll(reenrollment), /DESKTOP_LOCAL_CONSENT_DENIED/); assert.equal(setupCalls, 1);
+  clientConsent = true;
+  const replacement = await client.enroll(reenrollment); assert.notEqual(replacement.deviceId, clientDeviceId);
+  clientDeviceId = replacement.deviceId; assert.equal(setupCalls, 2);
+  assert.equal((await client.readSelf()).deviceId, clientDeviceId);
+  report.checks.offlineDisableOnlineRevocationAndFreshConsentForReplacement = true;
   const revoked = await owner('/api/endpoint-tools/devices/revoke', 'POST', { ids: [clientDeviceId] }); assert.equal(revoked.status, 200);
   await assert.rejects(client.readSelf(), /DESKTOP_AUTH_REVOKED/);
-  await assert.rejects(client.enroll(enrollment), /DESKTOP_REENROLLMENT_REQUIRED/); assert.equal(setupCalls, 1);
+  await assert.rejects(client.enroll(enrollment), /DESKTOP_REENROLLMENT_REQUIRED/); assert.equal(setupCalls, 2);
   report.checks.clientConsentBeforeEnrollmentDurableCompletionAndRefresh = true;
-  report.checks.clientRevocationNeverAutoReenrolls = true; deviceChannel.close();
+  report.checks.clientRevocationNeverAutoReenrolls = true;
+  const pendingBinding = { ...binding, profileId: randomUUID() };
+  loseCompletion = true;
+  const pendingClient = new DesktopDeviceAuth(pendingBinding, identityStore, transport);
+  await assert.rejects(pendingClient.enroll(enrollment), /Synthetic completion response loss/);
+  assert.equal((await identityStore.load(pendingBinding))!.phase, 'pending');
+  assert.equal((await pendingClient.disable()).remoteRevocationConfirmed, true);
+  assert.equal((await identityStore.load(pendingBinding))!.phase, 'revoked');
+  report.checks.disableRecoversLostCompletionBeforeRevokingDevice = true;
+  deviceChannel.close();
   if (packaged) { report.packageAfter = await installedAppFingerprint(packaged.application); assert.equal(report.packageAfter.sha256, report.packageBefore.sha256); report.scope = 'Actual installed bundled Electron Gateway runtime plus Node-supervised desktop auth client; no native safeStorage, consent UI or local tools'; }
   report.passed = true;
 } catch (error) { report.error = redact((error as Error).stack ?? error); report.logs = redact(logs); process.exitCode = 1; }

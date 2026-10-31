@@ -1,0 +1,13 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+No test files found, exiting with code 1
+
+filter: electron/__tests__/gateway-connections-desktop-enrollment.test.ts, electron/__tests__/gateway-connections-preview.test.ts, electron/__tests__/desktop-device-identity.test.ts
+projects: component
+
+|component| 
+
+include: src/activity/**/*.{test,spec}.{ts,tsx}, src/agent-catalog/**/*.{test,spec}.{ts,tsx}, src/automations/**/*.{test,spec}.{ts,tsx}, src/capabilities/**/*.{test,spec}.{ts,tsx}, src/chat-previews/**/*.{test,spec}.{ts,tsx}, src/connectors/**/*.{test,spec}.{ts,tsx}, src/discussions/**/*.{test,spec}.{ts,tsx}, src/execution-environments/**/*.{test,spec}.{ts,tsx}, src/gateway/**/*.{test,spec}.{ts,tsx}, src/history/**/*.{test,spec}.{ts,tsx}, src/knowledge/**/*.{test,spec}.{ts,tsx}, src/knowledge-memory/**/*.{test,spec}.{ts,tsx}, src/local-apps/**/*.{test,spec}.{ts,tsx}, src/notifications/**/*.{test,spec}.{ts,tsx}, src/projects/**/*.{test,spec}.{ts,tsx}, src/scenes/**/*.{test,spec}.{ts,tsx}, src/session/**/*.{test,spec}.{ts,tsx}, src/storage/**/*.{test,spec}.{ts,tsx}, src/tasks/**/*.{test,spec}.{ts,tsx}, src/work-discovery/**/*.{test,spec}.{ts,tsx}
+exclude:  **/node_modules/**, **/dist/**, apps/mobile-harmony/**/build/**, src/**/*{integration,e2e,live}*.test.{ts,tsx}, src/channels/attachments/__tests__/voice-stt-webchat.test.ts, src/discussions/__tests__/service.test.ts, src/voice/audio/__tests__/normalize.test.ts
+

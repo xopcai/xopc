@@ -1,0 +1,13 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+No test files found, exiting with code 1
+
+filter: electron/__tests__/gateway-connections*.test.ts
+projects: computer-desktop
+
+|computer-desktop| 
+
+include: electron/computer/**/*.{test,spec}.{ts,tsx}, electron/browser/**/*.{test,spec}.{ts,tsx}, electron/__tests__/gateway-process*.test.ts, electron/__tests__/gateway-connections*.test.ts, electron/__tests__/trusted-renderer.test.ts, electron/__tests__/electron-user-paths.test.ts, electron/__tests__/windows-signature.test.ts, electron/__tests__/windows-signature-process.test.ts, electron/__tests__/system-settings-behavior.test.ts, electron/__tests__/temporary-preview-file.test.ts, electron/__tests__/external-intake.test.ts, electron/__tests__/file-resource-path.test.ts, electron/__tests__/terminal-ipc.test.ts, electron/__tests__/quit-impact.test.ts, electron/__tests__/uninstall-paths.test.ts
+exclude:  **/node_modules/**, **/dist/**, apps/mobile-harmony/**/build/**
+

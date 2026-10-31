@@ -22,7 +22,7 @@ export const desktopIdentitySchema = z.strictObject({
   version: z.literal(1), binding: desktopBindingSchema, phase: z.enum(['pending', 'enrolled', 'revoked']),
   privateKey: z.string().min(80).max(4096), displayName: z.string().trim().min(1).max(80),
   requestId: z.uuid(), completionKey: z.uuid(), pairingToken: z.string().max(256), initialRefreshToken: refreshSchema,
-  deviceId: z.uuid().optional(), refreshToken: refreshSchema.optional(),
+  deviceId: z.uuid().optional(), revocationConfirmed: z.boolean().optional(), refreshToken: refreshSchema.optional(),
   rotation: z.strictObject({ requestId: z.uuid(), nextRefreshToken: refreshSchema }).optional(),
 }).superRefine((record, context) => {
   if (record.phase === 'enrolled' && (!record.deviceId || !record.refreshToken)) context.addIssue({ code: 'custom', message: 'Enrolled desktop identity requires its own device id and refresh credential' });
