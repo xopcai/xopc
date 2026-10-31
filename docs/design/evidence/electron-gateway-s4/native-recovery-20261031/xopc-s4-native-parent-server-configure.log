@@ -1,0 +1,2 @@
+{"configured":true,"model":"s4-deepseek/deepseek-flash","models":["s4-deepseek/deepseek-flash"]}
+{"changedTestDomain": "tg.xopc.ai", "originalSha256": "077b3843cf9887f6960df1348d88d39a8de34af2ceac73694d7860d2120455db", "backup": "/tmp/xopc-s4-native-parent-22c9e8251/nginx-tg-before.conf", "otherGatewayPort18790Untouched": true}

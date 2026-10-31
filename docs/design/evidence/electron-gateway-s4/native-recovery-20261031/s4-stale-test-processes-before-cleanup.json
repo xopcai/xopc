@@ -1,0 +1,11 @@
+{
+  "source": "ps pid ppid lstart executable; no environment or credentials captured",
+  "rows": [
+    "33739     1 Sat Oct 31 18:41:22 2026     /private/tmp/xopc-s4-delivery/fault-missing-remote-ui/xopc.app/Contents/MacOS/xopc",
+    "33742     1 Sat Oct 31 18:41:22 2026     /tmp/xopc-s4-delivery/fault-missing-remote-ui/xopc.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler",
+    "33743 33739 Sat Oct 31 18:41:22 2026     /private/tmp/xopc-s4-delivery/fault-missing-remote-ui/xopc.app/Contents/Frameworks/xopc Helper.app/Contents/MacOS/xopc Helper",
+    "33744 33739 Sat Oct 31 18:41:22 2026     /private/tmp/xopc-s4-delivery/fault-missing-remote-ui/xopc.app/Contents/Frameworks/xopc Helper.app/Contents/MacOS/xopc Helper",
+    "33764 33739 Sat Oct 31 18:41:23 2026     /private/tmp/xopc-s4-delivery/fault-missing-remote-ui/xopc.app/Contents/Resources/bin/voice-hotkey-helper",
+    "33798 33739 Sat Oct 31 18:41:23 2026     /private/tmp/xopc-s4-delivery/fault-missing-remote-ui/xopc.app/Contents/Frameworks/xopc Helper (Renderer).app/Contents/MacOS/xopc Helper (Renderer)"
+  ]
+}

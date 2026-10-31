@@ -1,0 +1,41 @@
+{
+  "passed": false,
+  "fault": "missing remote connection HTML; deliberately modified resource seal, not a release artifact",
+  "startedAt": "2026-10-31T12:14:19.167Z",
+  "interactionTimeoutMs": 120000,
+  "recoveryBudgetMs": 30000,
+  "checks": {
+    "noLocalInitializationBeforeUserChoice": true,
+    "explicitLocalChoiceObserved": true
+  },
+  "runtime": {
+    "executable": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/MacOS/xopc",
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 83788,
+    "nativeUiOnly": true
+  },
+  "observedRelaunchPids": [
+    83924
+  ],
+  "originalProcessExit": {
+    "code": 0,
+    "signal": null
+  },
+  "localChoiceToReadyMs": 6982.537541,
+  "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(configBefore.equals(readFileSync(config)))\n\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-startup-recovery.mjs:65:3\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+  "applicationLogs": "(node:83788) electron: Failed to load URL: file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/Resources/app.asar.unpacked/out/preload/gateway-connections.html with error: ERR_FILE_NOT_FOUND\n(Use `xopc --trace-warnings ...` to show where the warning was created)\n[GatewayConnections] Preview startup failed; restart without --gateway-connections for local mode.\n[GatewayConnections] Startup recovery choice: local\n",
+  "localStartupLogs": "[2026-10-31T12:14:29.777Z] app ready platform=darwin packaged=true electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-recovery-PMtCeD/electron/Crashpad\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-recovery-PMtCeD",
+  "finishedAt": "2026-10-31T12:14:31.379Z"
+}

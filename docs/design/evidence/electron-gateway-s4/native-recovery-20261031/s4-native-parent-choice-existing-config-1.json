@@ -1,0 +1,14 @@
+{
+  "passed": false,
+  "fault": "missing remote connection HTML; deliberately modified resource seal, not a release artifact",
+  "startedAt": "2026-10-31T12:16:10.753Z",
+  "interactionTimeoutMs": 120000,
+  "recoveryBudgetMs": 30000,
+  "checks": {
+    "existingConfigPreparedWithoutGateway": false
+  },
+  "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(report.checks.existingConfigPreparedWithoutGateway)\n\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-startup-recovery.mjs:41:3\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+  "applicationLogs": "",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-recovery-MX46et",
+  "finishedAt": "2026-10-31T12:16:11.253Z"
+}

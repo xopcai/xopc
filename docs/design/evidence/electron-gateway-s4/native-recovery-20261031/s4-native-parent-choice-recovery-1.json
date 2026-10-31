@@ -1,0 +1,30 @@
+{
+  "passed": false,
+  "fault": "missing remote connection HTML; deliberately modified resource seal, not a release artifact",
+  "startedAt": "2026-10-31T12:12:05.908Z",
+  "interactionTimeoutMs": 120000,
+  "recoveryBudgetMs": 30000,
+  "checks": {
+    "noLocalInitializationBeforeUserChoice": true,
+    "explicitLocalChoiceObserved": true
+  },
+  "runtime": {
+    "executable": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/MacOS/xopc",
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 80474,
+    "nativeUiOnly": true
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Native recovery did not relaunch local within 30 seconds\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-startup-recovery.mjs:60:3",
+  "finishedAt": "2026-10-31T12:12:55.643Z"
+}
