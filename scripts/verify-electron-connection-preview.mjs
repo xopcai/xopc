@@ -61,7 +61,7 @@ try {
   assert.equal(encryptedFiles.length, 1);
   const ciphertext = await readFile(join(state, 'electron/gateway-connections-v1/credentials', encryptedFiles[0]));
   assert.equal(ciphertext.includes(Buffer.from(secret)), false);
-  report.checks.realSafeStorage = true;
+  report.checks.safeStorageApi = 'Async Electron API under Playwright mock-keychain flags; native backend tested separately';
   await page.getByRole('button', { name: '选择配置', exact: true }).click();
   await page.getByText('配置已选择；远端聊天尚未实现。本机能力保持禁用。', { exact: true }).waitFor();
   snapshot = await page.evaluate(() => window.gatewayConnections.snapshot());

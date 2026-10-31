@@ -182,8 +182,10 @@ describe('connection window authority', () => {
     }
     ipc.on('terminal:write', effect);
     ipc.once('computer-preview:port', effect);
+    const close = vi.fn();
     ipc.emit('terminal:write', event, 'command');
-    ipc.emit('computer-preview:port', event, { ports: [{}] });
+    ipc.emit('computer-preview:port', { ...event, ports: [{ close }] });
+    expect(close).toHaveBeenCalledOnce();
     expect(effect).not.toHaveBeenCalled();
     ipc.handle(CONNECTION_CHANNELS[0], () => 'status');
     expect(handlers.get(CONNECTION_CHANNELS[0])!(event)).toBe('status');

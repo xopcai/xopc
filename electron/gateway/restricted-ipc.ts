@@ -16,7 +16,13 @@ export function installConnectionIpcBoundary(ipc: IpcMain, authorize: (event: Ip
   for (const method of ['on', 'once', 'addListener'] as const) {
     const original = ipc[method].bind(ipc);
     ipc[method] = (channel, listener) => original(channel, Object.assign(function (event, ...args) {
-      try { authorize(event, channel); } catch { return; }
+      try { authorize(event, channel); }
+      catch {
+        for (const port of event.ports ?? []) {
+          try { port.close(); } catch { /* A transferred port may already be closed. */ }
+        }
+        return;
+      }
       return listener.call(this, event, ...args);
     }, { listener }));
   }

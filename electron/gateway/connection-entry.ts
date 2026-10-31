@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { app, BrowserWindow, ipcMain, Menu, safeStorage, session } from 'electron';
 
@@ -9,7 +9,8 @@ import { ConnectionCredentialStore } from './credentials.js';
 import { ConnectionProfileStore } from './profiles.js';
 import { ConnectionWindowPolicy, installConnectionIpcBoundary } from './restricted-ipc.js';
 
-export async function startGatewayConnectionPreview(assetRoot: string): Promise<void> {
+export async function startGatewayConnectionPreview(entryUrl: string): Promise<void> {
+  const assetRoot = join(dirname(fileURLToPath(entryUrl)), '../preload');
   const override = process.env['XOPC_ELECTRON_USER_DATA_DIR'];
   if (override) {
     const directory = resolve(override);
