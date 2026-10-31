@@ -63,7 +63,7 @@ try {
   assert.equal(ciphertext.includes(Buffer.from(secret)), false);
   report.checks.safeStorageApi = 'Async Electron API under Playwright mock-keychain flags; native backend tested separately';
   await page.getByRole('button', { name: '选择配置', exact: true }).click();
-  await page.getByText('配置已选择；远端聊天尚未实现。本机能力保持禁用。', { exact: true }).waitFor();
+  await page.getByText('配置已选择；点击连接打开远端聊天。本机能力保持禁用。', { exact: true }).waitFor();
   snapshot = await page.evaluate(() => window.gatewayConnections.snapshot());
   assert.equal(snapshot.status, 'remote-chat-unavailable');
   const stale = await page.evaluate(({ id, epoch }) => window.gatewayConnections.select(epoch - 1, id), { id: snapshot.profiles[0].id, epoch: snapshot.epoch });
