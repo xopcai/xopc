@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "samplingPlan": "first-launch-heavy-v1",
+  "startedAt": "2026-10-31T07:07:10.317Z",
+  "commit": "dbaad975ae879385d6efab2fa2fb483efd33ccd0",
+  "worktreeDirty": true,
+  "artifactSha256": "3b8038fd44ee971a107d6746a72beacdfde64f6b478ba3fb8ab8ec4537a98ac5",
+  "developmentLayoutLink": true,
+  "node": "v26.12.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "osRelease": "25.6.0",
+  "artifactSourceRef": "dbaad975a",
+  "scope": "Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server",
+  "runs": 1,
+  "operations": 2,
+  "functional": true,
+  "diagnostics": false,
+  "serverDiagnostics": false,
+  "modes": [
+    "spawn",
+    "reuse"
+  ],
+  "samples": [
+    {
+      "mode": "spawn",
+      "index": 0,
+      "passed": true,
+      "readyMs": 2011.672125,
+      "configMs": [
+        9.5,
+        7.299999982118607
+      ],
+      "sessionsMs": [
+        4.800000011920929,
+        1
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "functional": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "58b245e7-cb0e-4e81-bfc6-453e21e3a8ed",
+        "authenticatedAutomationLazyRoute": true,
+        "authenticatedProviderMetaRoute": true,
+        "corruptRemoteProfileIgnored": true,
+        "ownedRestartPreservesChat": true
+      },
+      "resources": {
+        "pids": [
+          27868,
+          27872,
+          27873,
+          27950,
+          28009
+        ],
+        "processes": 5,
+        "rssMiB": 1099.1875,
+        "cpuPercentSnapshot": 195.9
+      },
+      "shutdownMs": 220.99716700000045,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "reuse",
+      "index": 0,
+      "passed": false,
+      "readyMs": 1041.6960419999996,
+      "configMs": [
+        36.599999994039536,
+        10.199999988079071
+      ],
+      "sessionsMs": [
+        5.4000000059604645,
+        3.0999999940395355
+      ],
+      "browserSession": true,
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "error": "TimeoutError: locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('main').getByText('XOPC_LOCAL_CHAT_OK', { exact: true }).first() to be visible\u001b[22m\n",
+      "windows": [
+        {
+          "url": "http://127.0.0.1:60730/#/chat/885d76a0-dde0-4dcf-a721-76f8457058cc",
+          "text": "Skip to main content\nNew chat\nAda\nWork\nCapabilities\nAutomations\nMore\nRecent work\nChats\nXOPC_LOCAL_CHAT_OK\nXOPC\nLanguage, theme, and text size\nXOPC_LOCAL_CHAT_OK\nSmart Assistant\nToday 03:07 PM\nYou\n\nReply with the local connection acceptance marker.\n\nRetry\nAssistant\n\nXOPC_LOCAL_CHAT_OK\n\nConnection fixture\nWelcome to xopc\n\nA personal assistant that carries the busywork while keeping direction, judgment, and final decisions with you.\n\nSTEP 1 · CHOOSE SOURCES\n\nLet xopc understand your work\n\nChoose read-only sources so xopc can understand what matters in your work. Turn them off anytime.\n\nReference local apps\n\nOptional. Only sources you explicitly select are read.\n\nRecent files\nRecent bookmarks\nApple Notes\nApple Mail\nApple Calendar\nApple Reminders\nFind recent projects\nChoose another folder\nFolders are only read after you select them, and files are never modified.\nSkip for now",
+          "realtime": [
+            {
+              "kind": "realtime.event",
+              "event": "session.input-state"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.updated"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.input-state"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.updated"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.updated"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.next-turn-suggestion.changed"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.next-turn-suggestion.changed"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.next-turn-suggestion.changed"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "run.started"
+            },
+            {
+              "kind": "realtime.event",
+              "event": "session.transcript_updated"
+            }
+          ]
+        }
+      ],
+      "gatewayLogTail": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 60730\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=28107, lockPath=/Users/micjoyce/.xopc/locks/gateway.8bbea277.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:60730...\n✅ Gateway started\n   URL: http://127.0.0.1:60730\n   Token: 82d9a2a9...20f1cfd7\n\n[GatewayServer] Gateway server running at http://127.0.0.1:60730\n(electron) 'safeStorage.isEncryptionAvailable' is deprecated and will be removed. Please use 'safeStorage.isAsyncEncryptionAvailable' instead.\n[VoiceInputHotkey] Native helper is unavailable\n(electron) 'safeStorage.encryptString' is deprecated and will be removed. Please use 'safeStorage.encryptStringAsync' instead.\n[28164:1031/150719.339449:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[28164:1031/150719.339733:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[28164:1031/150719.339752:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[28164:1031/150719.339766:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[28164:1031/150719.339947:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[28164:1031/150719.339967:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\nError: Model not found: xopc-cloud/auto\n    at resolveModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/providers/index.js:108:9)\n    at AgentManager.resolveModelStringToModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/agent-manager.js:224:11)\n    at getPrimaryModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/agent-manager.js:281:32)\n    at AgentToolsFactory.createCoreTools (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/tools/factory.js:262:31)\n    at AgentToolsFactory.createAllTools (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/tools/factory.js:723:48)\n    at AgentManager.buildAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/agent-manager.js:558:58)\n    at AgentManager.getAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/agent-manager.js:610:15)\n    at AgentService.getAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/service.js:502:28)\n    at GatewayMarketplaceService.getAgentSkillsApi (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/gateway/service/marketplace-service.js:74:38)\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/gateway/hono/routes/commands-skills.js:97:120\nError: Model not found: xopc-cloud/auto\n    at resolveModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/providers/index.js:108:9)\n    at AgentManager.resolveModelStringToModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/agent-manager.js:224:11)\n    at getPrimaryModel (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/agent-manager.js:281:32)\n    at AgentToolsFactory.createCoreTools (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/tools/factory.js:262:31)\n    at AgentToolsFactory.createAllTools (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/tools/factory.js:723:48)\n    at AgentManager.buildAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/agent-manager.js:558:58)\n    at AgentManager.getAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/agent-manager.js:610:15)\n    at AgentService.getAgentSkillAvailability (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/agent/service.js:502:28)\n    at GatewayMarketplaceService.getAgentSkillsApi (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/gateway/service/marketplace-service.js:74:38)\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/dist/src/gateway/hono/routes/commands-skills.js:97:120\n"
+    }
+  ],
+  "passed": false,
+  "electronBuildSha256": "4d92704ce2440cdb88aad1bc47ef4ac170bcdeb8de0fe024494aacf5c82ebcb6",
+  "artifactManifest": {
+    "out/main": {
+      "files": 42,
+      "sha256": "db05cf1a2b5cde8aec29d07293f356f9ed42647ea450386e83817ff13a742e04"
+    },
+    "out/preload": {
+      "files": 10,
+      "sha256": "7b0de3b365e3e43c83c930cafd3297ae2d177e6c8eb228c964b2f0d3ce868fe3"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3003,
+      "sha256": "75f320d2a42136f08a3263cf189676e1d8e5920fd24005cbc77c0b9e166d5f2c"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "finishedAt": "2026-10-31T07:07:55.367Z"
+}

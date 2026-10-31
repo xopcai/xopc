@@ -1,0 +1,1 @@
+:root { color-scheme: light dark; font: 16px system-ui; } body { margin: 48px auto; padding: 0 24px; max-width: 720px; } p { line-height: 1.6; } pre { white-space: pre-wrap; overflow-wrap: anywhere; } button { padding: 10px 16px; margin: 12px 12px 0 0; }

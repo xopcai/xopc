@@ -75,7 +75,7 @@ export class GatewayConnectionPreview {
         throw new Error('PROFILE_STORAGE_UNAVAILABLE');
       }
       const credentialRef = newRef ?? (sameDestination ? existing.credentialRef : undefined);
-      const updated = parseRemoteProfile({ ...profile, ...(credentialRef ? { credentialRef } : {}) });
+      const updated = parseRemoteProfile({ ...profile, ...(sameDestination && existing.identity ? { identity: existing.identity } : {}), ...(credentialRef ? { credentialRef } : {}) });
       const profiles = [...this.profiles.filter(p => p.id !== profile.id), updated];
       try { await this.store.save(profiles); }
       catch (error) { if (newRef) await this.credentials.remove(newRef).catch(() => {}); throw error; }
@@ -83,6 +83,29 @@ export class GatewayConnectionPreview {
       this.selectedId = undefined;
       this.epoch++;
       if (existing?.credentialRef && existing.credentialRef !== credentialRef) await this.credentials.remove(existing.credentialRef).catch(() => {});
+      return this.snapshot();
+    });
+  }
+
+  privateConnection(expectedEpoch: unknown, id: unknown) {
+    return this.mutate(expectedEpoch, async () => {
+      const profile = this.profiles.find(p => p.id === id);
+      if (!profile?.credentialRef) throw new Error('REMOTE_CREDENTIAL_REQUIRED');
+      const token = await this.credentials.read(profile.credentialRef);
+      if (this.storageError) throw new Error('PROFILE_STORAGE_UNAVAILABLE');
+      return { origin: profile.origin, transport: profile.transport, token, identity: profile.identity };
+    });
+  }
+
+  pinIdentity(expectedEpoch: unknown, id: unknown, identity: { gatewayId: string; publicKey: string }) {
+    return this.mutate(expectedEpoch, async () => {
+      const existing = this.profiles.find(p => p.id === id);
+      if (!existing) throw new Error('UNKNOWN_PROFILE');
+      if (existing.identity && (existing.identity.gatewayId !== identity.gatewayId || existing.identity.publicKey !== identity.publicKey)) throw new Error('GATEWAY_IDENTITY_CHANGED');
+      if (existing.identity) return this.snapshot();
+      const profile = parseRemoteProfile({ ...existing, identity });
+      const profiles = this.profiles.map(p => p.id === id ? profile : p);
+      await this.store.save(profiles); this.profiles = profiles; this.epoch++;
       return this.snapshot();
     });
   }

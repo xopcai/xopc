@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps only the authenticated desktop chat discovery endpoint', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/desktop-chat/bootstrap')?.id).toBe('desktop-chat');
+    for (const path of ['/api/desktop-chat', '/api/desktop-chat/bootstrap/extra', '/api/desktop-chat-other/bootstrap', '/api/gateway-identity/challenge']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-chat');
+    }
+  });
   it('maps session input control without capturing input and transcript routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/input-control')?.id).toBe('session-input-control');
     for (const path of ['/api/sessions/id/inputs', '/api/sessions/id/input-control/extra', '/api/sessions/id/input-state']) {

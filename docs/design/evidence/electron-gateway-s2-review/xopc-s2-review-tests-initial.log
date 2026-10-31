@@ -1,0 +1,16 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc
+
+{"level":"warn","time":"2026-10-31T07:05:06.347Z","module":"ComputerDriver","phase":"capture","expectedPid":42,"actualPid":43,"expectedWindowId":"9","actualWindowId":"9","frameValid":false,"imageCount":0,"msg":"Native window capture rejected"}
+{"level":"warn","time":"2026-10-31T07:05:06.350Z","module":"ComputerDriver","phase":"capture","expectedPid":42,"actualPid":42,"expectedWindowId":"9","actualWindowId":"10","frameValid":false,"imageCount":0,"msg":"Native window capture rejected"}
+{"level":"warn","time":"2026-10-31T07:05:06.436Z","module":"ComputerDriver","phase":"key","msg":"Native window key refused"}
+{"level":"warn","time":"2026-10-31T07:05:06.437Z","module":"ComputerDriver","phase":"key","msg":"Native window key refused"}
+{"level":"warn","time":"2026-10-31T07:05:06.817Z","module":"DesktopEndpointHost","phase":"cleanup","msg":"Computer driver stop could not be confirmed"}
+{"level":"warn","time":"2026-10-31T07:05:07.158Z","module":"ComputerTransport","invocationId":"invocation","phase":"cleanup","msg":"Computer driver cleanup failed after session revocation"}
+{"level":"info","time":"2026-10-31T07:05:07.518Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+
+ Test Files  65 passed (65)
+      Tests  531 passed (531)
+   Start at  15:05:01
+   Duration  7.03s (transform 952ms, setup 214ms, import 2.19s, tests 11.18s, environment 2ms)
+

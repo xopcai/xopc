@@ -24,6 +24,14 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'desktop-chat',
+    match: path => path === '/api/desktop-chat/bootstrap',
+    load: async () => {
+      const { registerDesktopChatRoutes } = await import('./desktop-chat.js');
+      return { register: registerDesktopChatRoutes };
+    },
+  },
+  {
     id: 'location-sharing',
     match: path => /^\/api\/user-context\/environment\/location-shares(?:\/[^/]+(?:\/samples)?)?$/.test(path),
     load: async () => {

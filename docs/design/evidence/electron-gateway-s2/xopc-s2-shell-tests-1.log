@@ -1,0 +1,28 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts (17 tests | 1 failed) 86ms
+   × keeps bootstrap one-use and requires exact Host, Origin, cookie and window proof 12ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-shell.test.ts > keeps bootstrap one-use and requires exact Host, Origin, cookie and window proof
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ electron/__tests__/gateway-connections-shell.test.ts:95:70
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  13:21:11
+   Duration  344ms (transform 114ms, setup 10ms, import 194ms, tests 86ms, environment 0ms)
+

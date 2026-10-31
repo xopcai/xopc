@@ -9,6 +9,7 @@ export type RemoteProfile = Readonly<{
   origin: string;
   transport: 'direct' | 'ssh';
   credentialRef?: string;
+  identity?: Readonly<{ gatewayId: string; publicKey: string }>;
 }>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -17,12 +18,15 @@ export const isConnectionId = (value: unknown): value is string => typeof value 
 export function parseRemoteProfile(value: unknown): RemoteProfile {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_PROFILE');
   const p = value as Record<string, unknown>;
-  if (Object.keys(p).some(key => !['id', 'name', 'mode', 'origin', 'transport', 'credentialRef'].includes(key))
+  if (Object.keys(p).some(key => !['id', 'name', 'mode', 'origin', 'transport', 'credentialRef', 'identity'].includes(key))
     || !isConnectionId(p.id) || p.mode !== 'remote' || typeof p.name !== 'string'
     || !p.name.trim() || p.name.length > 80 || /[\x00-\x1f\x7f]/.test(p.name)
     || typeof p.origin !== 'string' || p.origin.length > 2048
     || !['direct', 'ssh'].includes(p.transport as string)
     || (p.credentialRef !== undefined && !isConnectionId(p.credentialRef))) throw new Error('INVALID_PROFILE');
+  const identity = p.identity as Record<string, unknown> | undefined;
+  if (identity !== undefined && (!identity || typeof identity !== 'object' || Object.keys(identity).some(k => !['gatewayId', 'publicKey'].includes(k))
+    || !isConnectionId(identity.gatewayId) || typeof identity.publicKey !== 'string' || identity.publicKey.length < 80 || identity.publicKey.length > 512)) throw new Error('INVALID_PROFILE_IDENTITY');
   let url: URL;
   try { url = new URL(p.origin); } catch { throw new Error('INVALID_ORIGIN'); }
   if (p.origin !== url.origin && p.origin !== `${url.origin}/`) throw new Error('ORIGIN_ONLY_REQUIRED');
@@ -31,7 +35,7 @@ export function parseRemoteProfile(value: unknown): RemoteProfile {
     throw new Error('SECURE_REMOTE_ORIGIN_REQUIRED');
   }
   return Object.freeze({ id: p.id, name: p.name.trim(), mode: 'remote', origin: url.origin,
-    transport: p.transport as RemoteProfile['transport'], ...(p.credentialRef ? { credentialRef: p.credentialRef as string } : {}) });
+    transport: p.transport as RemoteProfile['transport'], ...(identity ? { identity: Object.freeze({ gatewayId: identity.gatewayId as string, publicKey: identity.publicKey as string }) } : {}), ...(p.credentialRef ? { credentialRef: p.credentialRef as string } : {}) });
 }
 
 export async function readBounded(path: string, maximum: number): Promise<Buffer> {
@@ -70,7 +74,7 @@ export class ConnectionProfileStore {
     try { raw = await readBounded(join(this.directory, 'profiles.json'), 128 * 1024); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
     const body = JSON.parse(raw.toString('utf8'));
-    if (!body || body.version !== 1 || Object.keys(body).some(key => !['version', 'profiles'].includes(key))
+    if (!body || ![1, 2].includes(body.version) || Object.keys(body).some(key => !['version', 'profiles'].includes(key))
       || !Array.isArray(body.profiles) || body.profiles.length > 20) throw new Error('INVALID_PROFILE_STORE');
     const profiles = body.profiles.map(parseRemoteProfile);
     if (new Set(profiles.map(p => p.id)).size !== profiles.length) throw new Error('DUPLICATE_PROFILE');
@@ -80,6 +84,6 @@ export class ConnectionProfileStore {
   async save(profiles: RemoteProfile[]): Promise<void> {
     if (profiles.length > 20) throw new Error('PROFILE_LIMIT');
     const data = profiles.map(parseRemoteProfile);
-    await atomicConnectionWrite(this.directory, 'profiles.json', `${JSON.stringify({ version: 1, profiles: data })}\n`);
+    await atomicConnectionWrite(this.directory, 'profiles.json', `${JSON.stringify({ version: 2, profiles: data })}\n`);
   }
 }
