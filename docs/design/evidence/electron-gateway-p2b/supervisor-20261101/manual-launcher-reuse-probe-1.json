@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "state": "/tmp/xopc-manual-launcher-20261101-1",
+  "port": 53822,
+  "status": 200,
+  "scope": "restart of isolated state against newly built installed preview; not native approval"
+}

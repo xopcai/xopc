@@ -17,9 +17,9 @@ const intentSchema = z.strictObject({
 export type DesktopOperationIntent = z.infer<typeof intentSchema>;
 export type DesktopOperationState = 'recorded' | 'running' | 'cancel-requested' | 'succeeded' | 'failed' | 'stopped' | 'unknown';
 export type DesktopOperationReceipt = {
-  operationId: string; state: DesktopOperationState; resultHash?: string; updatedAt: number; invocationId?: string; connectionInstanceId?: string;
+  operationId: string; state: DesktopOperationState; resultHash?: string; updatedAt: number; invocationId?: string; connectionInstanceId?: string; executionStopped: boolean;
 };
-type Row = { invocation_id: string | null; connection_instance_id: string | null; fingerprint: string; state: DesktopOperationState; result_hash: string | null; updated_at: number };
+type Row = { stop_confirmed: number; invocation_id: string | null; connection_instance_id: string | null; fingerprint: string; state: DesktopOperationState; result_hash: string | null; updated_at: number };
 
 /** OS-released SQLite lock. Every executor must use the same trusted per-user root. */
 export class DesktopExecutionLease {
@@ -50,6 +50,7 @@ export class DesktopExecutionLease {
 export class DesktopOperationJournal {
   private database?: DatabaseSync;
   private failed = false;
+  private supervisorAttached = false;
   constructor(private readonly lease: DesktopExecutionLease) {
     lease.attachJournal();
     const path = join(lease.root, 'operations.db');
@@ -70,7 +71,7 @@ export class DesktopOperationJournal {
         operation_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, generation TEXT NOT NULL,
         state TEXT NOT NULL CHECK(state IN ('recorded','running','cancel-requested','succeeded','failed','stopped','unknown')),
         result_hash TEXT, updated_at INTEGER NOT NULL, invocation_id TEXT, connection_instance_id TEXT
-      );`);
+      ); CREATE TABLE IF NOT EXISTS stop_confirmations (operation_id TEXT PRIMARY KEY REFERENCES operations(operation_id), confirmed_at INTEGER NOT NULL);`);
       // A crashed owner cannot prove whether an external side effect occurred.
       database.prepare("UPDATE operations SET state='unknown', updated_at=? WHERE state IN ('recorded','running','cancel-requested')")
         .run(Date.now());
@@ -92,16 +93,32 @@ export class DesktopOperationJournal {
     return createHash('sha256').update(JSON.stringify(intentSchema.parse(intent))).digest('hex');
   }
   private row(database: DatabaseSync, intent: DesktopOperationIntent): Row | undefined {
-    const row = database.prepare('SELECT fingerprint,state,result_hash,updated_at,invocation_id,connection_instance_id FROM operations WHERE operation_id=?').get(intent.operationId) as Row | undefined;
+    const row = database.prepare('SELECT fingerprint,state,result_hash,updated_at,invocation_id,connection_instance_id,EXISTS(SELECT 1 FROM stop_confirmations s WHERE s.operation_id=operations.operation_id) AS stop_confirmed FROM operations WHERE operation_id=?').get(intent.operationId) as Row | undefined;
     if (row && row.fingerprint !== this.fingerprint(intent)) throw new Error('DESKTOP_OPERATION_IDENTITY_MISMATCH');
     return row;
   }
   private receipt(intent: DesktopOperationIntent, row: Row): DesktopOperationReceipt {
-    return { operationId: intent.operationId, state: row.state, ...(row.result_hash ? { resultHash: row.result_hash } : {}), updatedAt: row.updated_at, ...(row.invocation_id ? { invocationId: row.invocation_id } : {}), ...(row.connection_instance_id ? { connectionInstanceId: row.connection_instance_id } : {}) };
+    return { operationId: intent.operationId, state: row.state, executionStopped: ['succeeded', 'failed', 'stopped'].includes(row.state) || row.stop_confirmed === 1,
+      ...(row.result_hash ? { resultHash: row.result_hash } : {}), updatedAt: row.updated_at, ...(row.invocation_id ? { invocationId: row.invocation_id } : {}), ...(row.connection_instance_id ? { connectionInstanceId: row.connection_instance_id } : {}) };
   }
   inspect(input: DesktopOperationIntent): DesktopOperationReceipt | undefined {
     const intent = intentSchema.parse(input);
     return this.write(database => { const row = this.row(database, intent); return row ? this.receipt(intent, row) : undefined; });
+  }
+  hasUnknown(): boolean {
+    return this.write(database => Boolean(database.prepare("SELECT 1 FROM operations WHERE state='unknown' LIMIT 1").get()));
+  }
+  attachSupervisor(): void {
+    if (this.supervisorAttached) throw new Error('DESKTOP_SUPERVISOR_ALREADY_ATTACHED');
+    this.write(() => { this.supervisorAttached = true; });
+  }
+  confirmUnknownStopped(input: DesktopOperationIntent): DesktopOperationReceipt {
+    const intent = intentSchema.parse(input);
+    return this.write(database => {
+      if (this.row(database, intent)?.state !== 'unknown') throw new Error('DESKTOP_OPERATION_STATE_INVALID');
+      database.prepare('INSERT INTO stop_confirmations VALUES (?,?) ON CONFLICT(operation_id) DO NOTHING').run(intent.operationId, Date.now());
+      return this.receipt(intent, this.row(database, intent)!);
+    });
   }
   record(input: DesktopOperationIntent): { fresh: boolean; receipt: DesktopOperationReceipt } {
     const intent = intentSchema.parse(input);
