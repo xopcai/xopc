@@ -1,3 +1,5 @@
+import { isMobileDevicePlatform } from '@xopcai/gateway-contract';
+
 import { getDevice, isDeviceAccessSessionActive } from '../../storage/sqlite/device-access-repository.js';
 import { PhoneError } from '../../phone/contracts.js';
 import type { GatewayPrincipal } from './gateway-principal.js';
@@ -10,7 +12,7 @@ export function phoneAdministrator(principal: GatewayPrincipal): boolean {
 export function authorizePhoneAccess(principal: GatewayPrincipal, control = false): void {
   if (phoneAdministrator(principal)) return;
   const device = principal.deviceId ? getDevice(principal.deviceId) : undefined;
-  if (principal.kind !== 'device' || !device || device.platform === 'chrome' || !principal.accessSessionId
+  if (principal.kind !== 'device' || !device || !isMobileDevicePlatform(device.platform) || !principal.accessSessionId
     || !isDeviceAccessSessionActive(device.id, principal.accessSessionId)) {
     throw new PhoneError('PHONE_ACCESS_REVOKED', 'Phone access is unavailable for this device', 403);
   }

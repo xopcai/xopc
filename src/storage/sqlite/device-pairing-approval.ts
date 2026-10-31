@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import {
-  buildDevicePairingProof, devicePairingCompleteSchema, devicePairingDeviceSchema,
+  buildDevicePairingProof, devicePairingCompleteSchema, devicePairingDeviceSchema, isMobileDevicePlatform, DEFAULT_DESKTOP_SCOPES,
   type DevicePairingAction, type DevicePairingState, type DevicePairingStatus,
   type DevicePairingTargetKind, type DevicePlatform,
 } from '@xopcai/gateway-contract';
@@ -39,7 +39,7 @@ export class DevicePairingError extends Error {
 }
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (code: string, status?: 400 | 401 | 404 | 409): never => { throw new DevicePairingError(code, status); };
-const scopesForPlatform = (platform: DevicePlatform) => platform === 'chrome'
+const scopesForPlatform = (platform: DevicePlatform) => platform === 'desktop' ? DEFAULT_DESKTOP_SCOPES : platform === 'chrome'
   ? DEFAULT_BROWSER_EXTENSION_SCOPES
   : DEFAULT_MOBILE_SCOPES;
 
@@ -123,7 +123,8 @@ export function submitDevicePairingRequest(body: Record<string, unknown>, now = 
   const device = devicePairingDeviceSchema.parse(body.device);
   const matchesTarget = setup.target_kind === 'browser'
     ? device.platform === 'chrome'
-    : setup.target_kind === 'mobile' && device.platform !== 'chrome';
+    : setup.target_kind === 'desktop' ? device.platform === 'desktop'
+      : setup.target_kind === 'mobile' && isMobileDevicePlatform(device.platform);
   if (!matchesTarget) fail('PAIRING_DEVICE_MISMATCH');
   const deviceJson = JSON.stringify(device);
   const autoApprove = isTrustedLocalBrowserSetup(setup, deviceJson);

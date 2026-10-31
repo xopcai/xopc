@@ -1,0 +1,51 @@
+{
+  "passed": true,
+  "startedAt": "2026-10-31T13:24:28.249Z",
+  "scope": "Actual authenticated Node Gateway and lazy route selection; D1 device credentials only, no Electron consent or local tools",
+  "checks": {
+    "explicitApprovalAndIdempotentCompletion": true,
+    "boundRefreshAndLostResponseRecovery": true,
+    "requestProofAndReplayRejection": true,
+    "noOwnerMobileBrowserEndpointOrRealtimeAuthority": true,
+    "revocationAndChatIndependence": true
+  },
+  "denied": [
+    {
+      "path": "/api/sessions",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/endpoint-tools/devices",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/endpoint-tools/principals",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/realtime/tickets",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/desktop-host/pairing-setups",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/device-pairing/requests/other/decision",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/desktop-chat/bootstrap",
+      "method": "GET",
+      "status": 403
+    }
+  ],
+  "cleanupConfirmed": true,
+  "finishedAt": "2026-10-31T13:24:33.534Z"
+}

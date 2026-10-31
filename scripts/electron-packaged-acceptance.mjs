@@ -8,7 +8,9 @@ import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { chromium } from 'playwright-core';
+import playwright from 'playwright-core';
+
+const { chromium } = playwright;
 
 /** Only state locations are injected; production code locates its own runtime assets. */
 export function packagedAcceptanceEnvironment(env) {

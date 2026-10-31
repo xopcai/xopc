@@ -34,6 +34,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (/^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations)?$/.test(path)) return undefined;
   // Authentication admits this surface; the dispatcher checks each capability's scopes.
   if (path === '/api/capabilities/operations' || path.startsWith('/api/capabilities/operations/')) return undefined;
+  if (method === 'GET' && path === '/api/desktop-host/compatibility') return 'device.self';
   if (method === 'GET' && path === '/api/mobile/privacy') return 'gateway.status';
   if (path === '/api/realtime/tickets' || path.startsWith('/api/status')) return 'gateway.status';
   if (path === '/api/device-auth/refresh' || path === '/api/devices/me') return 'device.self';

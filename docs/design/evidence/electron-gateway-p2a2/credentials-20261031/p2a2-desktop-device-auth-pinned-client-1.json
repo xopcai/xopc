@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "startedAt": "2026-10-31T13:36:22.995Z",
+  "scope": "Actual installed bundled Electron Gateway runtime plus Node-supervised desktop auth client; no native safeStorage, consent UI or local tools",
+  "checks": {
+    "explicitApprovalAndIdempotentCompletion": true,
+    "boundRefreshAndLostResponseRecovery": true,
+    "requestProofAndReplayRejection": true,
+    "noOwnerMobileBrowserEndpointOrRealtimeAuthority": true,
+    "revocationAndChatIndependence": true,
+    "clientConsentBeforeEnrollmentDurableCompletionAndRefresh": true,
+    "clientRevocationNeverAutoReenrolls": true
+  },
+  "packageBefore": {
+    "files": 1423,
+    "sha256": "f962f15912f8f5ba8944894b22d58c679b125bf7858c0f1d23c38ea5ae857164"
+  },
+  "denied": [
+    {
+      "path": "/api/sessions",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/endpoint-tools/devices",
+      "method": "GET",
+      "status": 403
+    },
+    {
+      "path": "/api/endpoint-tools/principals",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/realtime/tickets",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/desktop-host/pairing-setups",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/device-pairing/requests/other/decision",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "path": "/api/desktop-chat/bootstrap",
+      "method": "GET",
+      "status": 403
+    }
+  ],
+  "packageAfter": {
+    "files": 1423,
+    "sha256": "f962f15912f8f5ba8944894b22d58c679b125bf7858c0f1d23c38ea5ae857164"
+  },
+  "cleanupConfirmed": true,
+  "finishedAt": "2026-10-31T13:36:24.890Z"
+}

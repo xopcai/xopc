@@ -1,0 +1,13 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T13:23:46.372Z",
+  "scope": "Actual authenticated Node Gateway and lazy route selection; D1 device credentials only, no Electron consent or local tools",
+  "checks": {
+    "explicitApprovalAndIdempotentCompletion": true
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n+   accessToken: '[redacted-device-credential]',\n+   accessTokenExpiresAt: 1793453928258,\n-   accessToken: '[redacted-device-credential]',\n-   accessTokenExpiresAt: 1793453928256,\n    refreshToken: '[redacted-device-credential]',\n    refreshTokenExpiresAt: 1801229028256\n  }\n\n    at <anonymous> (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-desktop-device-auth.mts:65:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 50486\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=95714, lockPath=/Users/micjoyce/.xopc/locks/gateway.73a8ec05.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:50486...\n✅ Gateway started\n   URL: http://127.0.0.1:50486\n   Token: b0bad52b...178a1a7b\n\n[GatewayServer] Gateway server running at http://127.0.0.1:50486\n",
+  "cleanupConfirmed": true,
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-auth-8FxeG3",
+  "finishedAt": "2026-10-31T13:23:48.289Z"
+}

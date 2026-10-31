@@ -6,7 +6,6 @@ import { z } from 'zod';
 
 import {
   browserPairingInvitationPayloadSchema,
-  devicePairingTargetKindSchema,
   formatBrowserPairingInvitation,
   formatMobilePairingInvitation,
   MOBILE_PAIRING_INVITATION_VERSION,
@@ -54,7 +53,7 @@ const pairingProbeSchema = z.strictObject({
 });
 
 const pairingSetupSchema = z.strictObject({
-  targetKind: devicePairingTargetKindSchema,
+  targetKind: z.enum(['mobile', 'browser']),
 });
 
 export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPublicRouteOptions): void {

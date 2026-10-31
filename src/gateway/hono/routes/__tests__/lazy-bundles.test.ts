@@ -6,6 +6,11 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps independent desktop discovery and pairing without capturing chat or nearby routes', () => {
+    for (const path of ['/api/desktop-host/compatibility', '/api/desktop-host/pairing-setups']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('desktop-host');
+    for (const path of ['/api/desktop-chat/bootstrap', '/api/desktop-host/compatibility/extra', '/api/desktop-host-other/compatibility', '/api/device-pairing/setups']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
+  });
+
   it('maps only the authenticated desktop chat discovery endpoint', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/desktop-chat/bootstrap')?.id).toBe('desktop-chat');
     for (const path of ['/api/desktop-chat', '/api/desktop-chat/bootstrap/extra', '/api/desktop-chat-other/bootstrap', '/api/gateway-identity/challenge']) {

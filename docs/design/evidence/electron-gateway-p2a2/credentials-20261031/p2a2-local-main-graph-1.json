@@ -1,0 +1,7 @@
+{
+  "oldSha256": "b5d9fa570e7cd51048de289559d1d95090e7a292e604c7a33cbc4e61cde59da0",
+  "currentSha256": "900530a70566b4a952b44e8bd2b0ea5fa104c640139840b84821f036001d9339",
+  "sameBodyIgnoringChunkDigests": true,
+  "preloadSha256": "c43168a38aeae9d37aa48a31b4f868e5b3db71e60857ef0c2e99da0652d1c282",
+  "note": "Device contract and schema v263 change shared chunk digests. The main body is unchanged after normalizing imported chunk digests; this does not prove unchanged performance or replace local E2E."
+}

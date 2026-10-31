@@ -1,0 +1,66 @@
+{
+  "archivedAt": "2026-10-31T13:40:51.035Z",
+  "scope": "D1 device auth, D2 client primitives only; native consent, safeStorage and Host not accepted",
+  "files": [
+    {
+      "file": "p2a2-desktop-device-auth-1.json",
+      "sha256": "111de57c5045ca9429c9b4dc217ec04eae23e526a0731ddb6009fc91832d574e"
+    },
+    {
+      "file": "p2a2-desktop-device-auth-2.json",
+      "sha256": "9d71a866bb3325ef318501a3be5a6af9e6b83403d47aa0c337c1b358bfa6e278"
+    },
+    {
+      "file": "p2a2-desktop-device-auth-client-2.json",
+      "sha256": "b714353ed9bdcb0b357d632f66b4f10c3864037ba957d2bf757431a184ce3537"
+    },
+    {
+      "file": "p2a2-desktop-device-auth-client-3.json",
+      "sha256": "1caefd69572e0ec7be822dacf37ce496188cba109436b6743f0f33320a00a859"
+    },
+    {
+      "file": "p2a2-desktop-device-auth-installed-1.json",
+      "sha256": "e726cf4c295982d5ad32fe50f0124d9a8e13513d7d7ea77622912f7efb216860"
+    },
+    {
+      "file": "p2a2-desktop-device-auth-pinned-client-1.json",
+      "sha256": "e12c5fa4ce5445b05d0bbdbb3ed212b8e6ae2424acaa9f387c020f567bb298cd"
+    },
+    {
+      "file": "p2a2-d1-installed-local-1.json",
+      "sha256": "39a5ff87b776a6e66e8208de58152953fa10dc80b68ea2cab3c59f08bb019c61"
+    },
+    {
+      "file": "p2a2-local-main-graph-1.json",
+      "sha256": "00835ea785eb4ece3caf616a657af56097b2250ea8f8db2b63c89a87d4896519"
+    },
+    {
+      "file": "xopc-p2a2-d1-tests-1.log",
+      "sha256": "a05c6f66bed51cbb679d0a88f69a81fa2ba5bdd4ba64e803cb1190fa05b8a6bc"
+    },
+    {
+      "file": "xopc-p2a2-d1-tests-2.log",
+      "sha256": "61d1ecdd72226f0902f81f06a999189a662a95f6fb7e60864cf0fd6255812755"
+    },
+    {
+      "file": "xopc-p2a2-d1-regression-3.log",
+      "sha256": "0d4f4c1a1690012d051f114d9627f0b8804191425a2608247389cc2051ba317a"
+    },
+    {
+      "file": "xopc-p2a2-d1-package.log",
+      "sha256": "483f9c33edef5087af3870dae54c3f2aa26e70485e9596ab8284bf11c669453a"
+    },
+    {
+      "file": "xopc-p2a2-d1-package-2.log",
+      "sha256": "2e940c57634f7ee2274588a88e356e19458dfc5465efb5a862744be5f5e3d1f9"
+    },
+    {
+      "file": "xopc-p2a2-client-identity-tests-2.log",
+      "sha256": "da7799a533b170da9ac631dbaab26f88daa1a78f086952d7f1a057242a6cfdef"
+    },
+    {
+      "file": "xopc-p2a2-desktop-device-auth-client-1.log",
+      "sha256": "abb96888a412c22b7d7ccf1d96b30f6eadfaf54b1cd57a743bb4a13852cf922e"
+    }
+  ]
+}

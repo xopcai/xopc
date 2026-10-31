@@ -79,6 +79,10 @@ export class ShellUpstream {
     this.identity = identity; this.chatEnabled = parsed.data.payload.manifest.chat === 'text-receipt.v1';
     return identity;
   }
+  async verifyPinnedIdentity(signal: AbortSignal): Promise<void> {
+    if (!this.identity) throw new Error('GATEWAY_PINNED_IDENTITY_REQUIRED');
+    await this.prove(this.identity, signal);
+  }
   private async prove({ gatewayId, publicKey }: DesktopChatIdentity, signal: AbortSignal) {
     const nonce = randomBytes(24).toString('base64url');
     const proof = await this.json('/api/gateway-identity/challenge', signal, { nonce }, false) as { signedPayload?: unknown; signature?: unknown };
