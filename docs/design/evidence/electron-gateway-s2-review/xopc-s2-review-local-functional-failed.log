@@ -1,0 +1,11 @@
+Functional: durable input accepted; verifying realtime delivery
+Functional: realtime delivered; verifying rendered chat
+Functional: chat rendered; verifying native file, PTY and browser IPC
+spawn 1/1 passed
+Functional: durable input accepted; verifying realtime delivery
+Functional: realtime delivered; verifying rendered chat
+TimeoutError: locator.waitFor: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByRole('main').getByText('XOPC_LOCAL_CHAT_OK', { exact: true }).first() to be visible[22m
+
+Report: /Users/micjoyce/.codex/worktrees/gateway-p2a1-s2/xopc/reports/s2-review-local-functional.json

@@ -1,0 +1,486 @@
+$ pnpm -C web run build
+$ tsc -b && vite build
+vite v8.1.6 building client environment for production...
+(node:26802) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[2Ktransforming...✓ 4929 modules transformed.
+rendering chunks...
+computing gzip size...
+../dist/gateway/static/root/assets/pcm-capture-worklet-uW_SEACy.js                   0.65 kB
+../dist/gateway/static/root/assets/KaTeX_Size3-Regular-CTq5MqoE.woff                 4.42 kB
+../dist/gateway/static/root/assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2                4.92 kB
+../dist/gateway/static/root/assets/KaTeX_Size2-Regular-Dy4dx90m.woff2                5.20 kB
+../dist/gateway/static/root/assets/KaTeX_Size1-Regular-mCD8mA8B.woff2                5.46 kB
+../dist/gateway/static/root/assets/KaTeX_Size4-Regular-BF-4gkZK.woff                 5.98 kB
+../dist/gateway/static/root/assets/KaTeX_Size2-Regular-oD1tc_U0.woff                 6.18 kB
+../dist/gateway/static/root/assets/KaTeX_Size1-Regular-C195tn64.woff                 6.49 kB
+../dist/gateway/static/root/assets/KaTeX_Caligraphic-Regular-Di6jR-x-.woff2          6.90 kB
+../dist/gateway/static/root/assets/KaTeX_Caligraphic-Bold-Dq_IR9rO.woff2             6.91 kB
+../dist/gateway/static/root/assets/KaTeX_Size3-Regular-DgpXs0kz.ttf                  7.58 kB
+../dist/gateway/static/root/assets/KaTeX_Caligraphic-Regular-CTRA-rTL.woff           7.65 kB
+../dist/gateway/static/root/assets/KaTeX_Caligraphic-Bold-BEiXGLvX.woff              7.71 kB
+../dist/gateway/static/root/assets/KaTeX_Script-Regular-D3wIWfF6.woff2               9.64 kB
+../dist/gateway/static/root/assets/figtree-latin-ext-wght-normal-DCwSJGxG.woff2     10.28 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Regular-DDBCnlJ7.woff2           10.34 kB
+../dist/gateway/static/root/assets/KaTeX_Size4-Regular-DWFBv043.ttf                 10.36 kB
+../dist/gateway/static/root/assets/KaTeX_Script-Regular-D5yQViql.woff               10.58 kB
+../dist/gateway/static/root/assets/KaTeX_Fraktur-Regular-CTYiF6lA.woff2             11.31 kB
+../dist/gateway/static/root/assets/KaTeX_Fraktur-Bold-CL6g_b3V.woff2                11.34 kB
+../dist/gateway/static/root/assets/KaTeX_Size2-Regular-B7gKUWhC.ttf                 11.50 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Italic-C3H0VqGB.woff2            12.02 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Bold-D1sUS0GD.woff2              12.21 kB
+../dist/gateway/static/root/assets/KaTeX_Size1-Regular-Dbsnue_I.ttf                 12.22 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Regular-CS6fqUqJ.woff            12.31 kB
+../dist/gateway/static/root/assets/KaTeX_Caligraphic-Regular-wX97UBjC.ttf           12.34 kB
+../dist/gateway/static/root/assets/KaTeX_Caligraphic-Bold-ATXxdsX0.ttf              12.36 kB
+../dist/gateway/static/root/assets/KaTeX_Fraktur-Regular-Dxdc4cR9.woff              13.20 kB
+../dist/gateway/static/root/assets/KaTeX_Fraktur-Bold-BsDP51OF.woff                 13.29 kB
+../dist/gateway/static/root/assets/KaTeX_Typewriter-Regular-CO6r4hn1.woff2          13.56 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Italic-DN2j7dab.woff             14.11 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Bold-DbIhKOiC.woff               14.40 kB
+../dist/gateway/static/root/assets/KaTeX_Typewriter-Regular-C0xS9mPB.woff           16.02 kB
+../dist/gateway/static/root/assets/KaTeX_Math-BoldItalic-CZnvNsCZ.woff2             16.40 kB
+../dist/gateway/static/root/assets/KaTeX_Math-Italic-t53AETM-.woff2                 16.44 kB
+../dist/gateway/static/root/assets/KaTeX_Script-Regular-C5JkGWo-.ttf                16.64 kB
+../dist/gateway/static/root/assets/KaTeX_Main-BoldItalic-DxDJ3AOS.woff2             16.78 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Italic-NWA7e6Wa.woff2                 16.98 kB
+../dist/gateway/static/root/assets/KaTeX_Math-BoldItalic-iY-2wyZ7.woff              18.66 kB
+../dist/gateway/static/root/assets/KaTeX_Math-Italic-DA0__PXp.woff                  18.74 kB
+../dist/gateway/static/root/assets/KaTeX_Main-BoldItalic-SpSLRI95.woff              19.41 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Regular-BNo7hRIc.ttf             19.43 kB
+../dist/gateway/static/root/assets/KaTeX_Fraktur-Regular-CB_wures.ttf               19.57 kB
+../dist/gateway/static/root/assets/KaTeX_Fraktur-Bold-BdnERNNW.ttf                  19.58 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Italic-BMLOBm91.woff                  19.67 kB
+../dist/gateway/static/root/assets/figtree-latin-wght-normal-D_ZTVpCC.woff2         20.15 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Italic-YYjJ1zSn.ttf              22.36 kB
+../dist/gateway/static/root/assets/KaTeX_SansSerif-Bold-CFMepnvq.ttf                24.50 kB
+../dist/gateway/static/root/index.html                                              24.92 kB │ gzip:   4.69 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Bold-Cx986IdX.woff2                   25.32 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Regular-B22Nviop.woff2                26.27 kB
+../dist/gateway/static/root/assets/KaTeX_Typewriter-Regular-D3Ib7_Hf.ttf            27.55 kB
+../dist/gateway/static/root/assets/KaTeX_AMS-Regular-BQhdFMY1.woff2                 28.07 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Bold-Jm3AIy58.woff                    29.91 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Regular-Dr94JaBh.woff                 30.77 kB
+../dist/gateway/static/root/assets/KaTeX_Math-BoldItalic-B3XSjfu4.ttf               31.19 kB
+../dist/gateway/static/root/assets/KaTeX_Math-Italic-flOr_0UB.ttf                   31.30 kB
+../dist/gateway/static/root/assets/KaTeX_Main-BoldItalic-DzxPMmG6.ttf               32.96 kB
+../dist/gateway/static/root/assets/KaTeX_AMS-Regular-DMm9YOAa.woff                  33.51 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Italic-3WenGoN9.ttf                   33.58 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Bold-waoOVXN0.ttf                     51.33 kB
+../dist/gateway/static/root/assets/KaTeX_Main-Regular-ypZvNtVU.ttf                  53.58 kB
+../dist/gateway/static/root/assets/KaTeX_AMS-Regular-DRggAlZN.ttf                   63.63 kB
+../dist/gateway/static/root/assets/pdf.worker.min-bpyjgR8v.js                    1,171.50 kB
+../dist/gateway/static/root/assets/personal-avatar-BUCb7OiW.css                      0.30 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/loopi-C09I2mNj.css                                0.59 kB │ gzip:   0.32 kB
+../dist/gateway/static/root/assets/chat-page-zQeUaawJ.css                            0.67 kB │ gzip:   0.30 kB
+../dist/gateway/static/root/assets/block-editor-Cvy3D_4T.css                         3.36 kB │ gzip:   0.94 kB
+../dist/gateway/static/root/assets/chat-terminal-dock-uQUnjRtf.css                   4.58 kB │ gzip:   1.20 kB
+../dist/gateway/static/root/assets/desktop-pet-sprite-BuB0g8zv.css                   5.05 kB │ gzip:   1.10 kB
+../dist/gateway/static/root/assets/project-detail-page-DLioOiRN.css                 15.41 kB │ gzip:   2.56 kB
+../dist/gateway/static/root/assets/markdown-view-C-DHb3Io.css                       43.99 kB │ gzip:  11.01 kB
+../dist/gateway/static/root/assets/index-CIYNPxDl.css                              274.12 kB │ gzip:  43.93 kB
+../dist/gateway/static/root/assets/note-image-lightbox-BDZGHYaZ.js                   0.03 kB │ gzip:   0.05 kB
+../dist/gateway/static/root/assets/mermaid-MCJ5UELQ-Ur99GwOg.js                      0.07 kB │ gzip:   0.08 kB
+../dist/gateway/static/root/assets/agents-app-path-ciChvpCS.js                       0.10 kB │ gzip:   0.11 kB
+../dist/gateway/static/root/assets/workspace-editor-agent-store-oZKoWMdV.js          0.11 kB │ gzip:   0.11 kB
+../dist/gateway/static/root/assets/check-DUBLcKHA.js                                 0.12 kB │ gzip:   0.14 kB
+../dist/gateway/static/root/assets/app-chrome-BeB4KgOf.js                            0.12 kB │ gzip:   0.11 kB
+../dist/gateway/static/root/assets/chevron-down-ccbiQQz_.js                          0.12 kB │ gzip:   0.14 kB
+../dist/gateway/static/root/assets/chevron-left-DqFhpbvK.js                          0.13 kB │ gzip:   0.14 kB
+../dist/gateway/static/root/assets/chevron-right-BweFrslA.js                         0.13 kB │ gzip:   0.14 kB
+../dist/gateway/static/root/assets/circle-BoO4YvTx.js                                0.13 kB │ gzip:   0.13 kB
+../dist/gateway/static/root/assets/settings-advanced-gate-CGgt1myW.js                0.14 kB │ gzip:   0.14 kB
+../dist/gateway/static/root/assets/loader-circle-CifKLtgG.js                         0.14 kB │ gzip:   0.15 kB
+../dist/gateway/static/root/assets/open-capability-settings-Cvb65hQB.js              0.14 kB │ gzip:   0.13 kB
+../dist/gateway/static/root/assets/settings-shell-dialog-layer-BU3UuiJr.js           0.14 kB │ gzip:   0.12 kB
+../dist/gateway/static/root/assets/square-DMK_fB-3.js                                0.14 kB │ gzip:   0.15 kB
+../dist/gateway/static/root/assets/gateway-realtime-store-BywiC4CK.js                0.14 kB │ gzip:   0.14 kB
+../dist/gateway/static/root/assets/cn-0WouolD0.js                                    0.15 kB │ gzip:   0.14 kB
+../dist/gateway/static/root/assets/plus-Q2yW6OE7.js                                  0.15 kB │ gzip:   0.15 kB
+../dist/gateway/static/root/assets/is-masked-secret-DOkL5b_X.js                      0.15 kB │ gzip:   0.12 kB
+../dist/gateway/static/root/assets/x-B_N4OPjy.js                                     0.15 kB │ gzip:   0.15 kB
+../dist/gateway/static/root/assets/cloud-C4-yfnnk.js                                 0.16 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/arrow-up-D5ZtR1QT.js                              0.16 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/terminal-oKqqZdiG.js                              0.16 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/arrow-left-D880xG-P.js                            0.16 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/arrow-right-DSSvoX71.js                           0.16 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/arrow-up-right-T72JbQ1Q.js                        0.16 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/clock-3-DnrAnuyZ.js                               0.16 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/page-header-store-BVj8nDdi.js                     0.16 kB │ gzip:   0.15 kB
+../dist/gateway/static/root/assets/power-ZI-pBczI.js                                 0.17 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/search-DA7gz22f.js                                0.17 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/gauge-C78eD2BA.js                                 0.17 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/circle-check-C23XjkUj.js                          0.17 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/electron-env-DHOGevH3.js                          0.17 kB │ gzip:   0.14 kB
+../dist/gateway/static/root/assets/user-round-C9jxPhMR.js                            0.18 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/panel-left-C8MqSXRZ.js                            0.18 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/panel-right-CFGrHTsD.js                           0.18 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/play-kxZvpBg8.js                                  0.19 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/list-filter-CIPvpfLA.js                           0.19 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/smartphone-DSSsQFqA.js                            0.19 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/open-route-MyZ2sB9C.js                            0.19 kB │ gzip:   0.15 kB
+../dist/gateway/static/root/assets/rotate-ccw-JM1TBLpp.js                            0.20 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/rotate-cw-LIg3Am9S.js                             0.20 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/info-CDrmIZhb.js                                  0.20 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/circle-x-DFsCKeya.js                              0.20 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/code-xml-DJtYhZUF.js                              0.20 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/pause-DuPxgSxk.js                                 0.21 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/dev-view-store-BXMp1Npf.js                        0.21 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/ellipsis-0k4rZLoy.js                              0.22 kB │ gzip:   0.16 kB
+../dist/gateway/static/root/assets/folder-CN-pC3XL.js                                0.22 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/git-branch-Dh9uxTot.js                            0.22 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/upload-rrb46c3c.js                                0.23 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/download-Dk-ZjtO6.js                              0.23 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/message-square-fVE7Ghj1.js                        0.23 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/paperclip-f1HujQY1.js                             0.23 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/activity-YogQEteU.js                              0.23 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/mic-CuUb7zc-.js                                   0.23 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/copy-Dv6d4Dvw.js                                  0.23 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/history-DXH_9jsE.js                               0.23 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/timer-rCwGHjuO.js                                 0.23 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/minimize-2-DtOGrlpo.js                            0.24 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/message-circle-Badhj-4D.js                        0.24 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/globe-DSSGFWFn.js                                 0.24 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/link-2-D_ZKYUW7.js                                0.24 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/square-terminal-K87bylpZ.js                       0.24 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/database-CjjeZfRG.js                              0.24 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/circle-pause-CN9jYH2s.js                          0.24 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/circle-alert-BEjgurr2.js                          0.25 kB │ gzip:   0.18 kB
+../dist/gateway/static/root/assets/external-link-DjqjBmc3.js                         0.25 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/mouse-pointer-2-DZ51Onvj.js                       0.25 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/settings-2-D-csvaET.js                            0.25 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/skill-api-utils-C7V4JVXM.js                       0.25 kB │ gzip:   0.17 kB
+../dist/gateway/static/root/assets/archive-Dz0hferG.js                               0.25 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/lock-keyhole-DEK5kH0u.js                          0.25 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/eye-CABVeTq0.js                                   0.25 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/app-window-DXFNqt_0.js                            0.25 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/heart-Cp4rgrqn.js                                 0.25 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/monitor-Af5eAvF7.js                               0.25 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/voice-call-context-BM2A4bLz.js                    0.26 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/zap-dximCGjy.js                                   0.26 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/triangle-alert-2JXFNNKU.js                        0.26 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/image-Cwyalflz.js                                 0.26 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/secret-input-labels-B5Jl5HqK.js                   0.27 kB │ gzip:   0.15 kB
+../dist/gateway/static/root/assets/automations-page-DDNx4Gn3.js                      0.27 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/shield-B1sI_cxl.js                                0.27 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/pencil-DmIY3Oa-.js                                0.27 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/book-open-CCGtrT3R.js                             0.27 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/braces-Cfmtagno.js                                0.27 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/list-checks-BbsExAoq.js                           0.27 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/sticky-note-fzP7NAJq.js                           0.28 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/coins-DjP27vUx.js                                 0.28 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/plug-DKYPEgkR.js                                  0.28 kB │ gzip:   0.20 kB
+../dist/gateway/static/root/assets/folder-open-CyzJ19I9.js                           0.29 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/list-todo-CTVRto8O.js                             0.30 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/skill-wire-pattern-BPpeIcCi.js                    0.30 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/wrench-DFb4r8bH.js                                0.30 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/laptop-CI3hBVrl.js                                0.30 kB │ gzip:   0.23 kB
+../dist/gateway/static/root/assets/skill-list-api-LoIlcCDf.js                        0.30 kB │ gzip:   0.23 kB
+../dist/gateway/static/root/assets/box-DvYoGszj.js                                   0.31 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/message-square-plus-XP0tGdlV.js                   0.31 kB │ gzip:   0.23 kB
+../dist/gateway/static/root/assets/settings-mode-store-xhm6JIs-.js                   0.31 kB │ gzip:   0.23 kB
+../dist/gateway/static/root/assets/skill-reload-api-qSwB_mAH.js                      0.31 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/shield-check-BU58siTV.js                          0.32 kB │ gzip:   0.25 kB
+../dist/gateway/static/root/assets/square-pen-B8FsvqNu.js                            0.32 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/refresh-cw-BRlGaq2w.js                            0.32 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/briefcase-business-BsoCaI_t.js                    0.32 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/save-DRDABU--.js                                  0.32 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/bot-DjLkhyZL.js                                   0.32 kB │ gzip:   0.23 kB
+../dist/gateway/static/root/assets/trash-2-DusmjVPV.js                               0.32 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/server-BlHCBjiE.js                                0.33 kB │ gzip:   0.21 kB
+../dist/gateway/static/root/assets/mobile-pair-qr-CuIbmw5x.js                        0.33 kB │ gzip:   0.27 kB
+../dist/gateway/static/root/assets/stethoscope-DRqTAtjD.js                           0.34 kB │ gzip:   0.23 kB
+../dist/gateway/static/root/assets/extension-paths-DvuaZJuy.js                       0.34 kB │ gzip:   0.26 kB
+../dist/gateway/static/root/assets/layout-grid-CEVZdVFU.js                           0.34 kB │ gzip:   0.19 kB
+../dist/gateway/static/root/assets/folder-kanban-CpLlFI1o.js                         0.34 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/plug-zap-L8NMe3Sv.js                              0.35 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/oauth-authorization-window-o6URRos4.js            0.35 kB │ gzip:   0.26 kB
+../dist/gateway/static/root/assets/key-round-DWbpyU2U.js                             0.35 kB │ gzip:   0.26 kB
+../dist/gateway/static/root/assets/side-chat-shortcut-BIw-1TTD.js                    0.35 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/messages-square-BckAJrEW.js                       0.36 kB │ gzip:   0.25 kB
+../dist/gateway/static/root/assets/package-wATCyihJ.js                               0.37 kB │ gzip:   0.25 kB
+../dist/gateway/static/root/assets/calendar-clock-D-quYVPe.js                        0.37 kB │ gzip:   0.25 kB
+../dist/gateway/static/root/assets/pdf-runtime-JnUAvfIa.js                           0.37 kB │ gzip:   0.27 kB
+../dist/gateway/static/root/assets/clipboard-copy-DuJk5WD6.js                        0.37 kB │ gzip:   0.26 kB
+../dist/gateway/static/root/assets/use-blob-object-url-D4BFuzZB.js                   0.38 kB │ gzip:   0.27 kB
+../dist/gateway/static/root/assets/network-BUQLY1BV.js                               0.38 kB │ gzip:   0.23 kB
+../dist/gateway/static/root/assets/file-text-D12HbeVy.js                             0.38 kB │ gzip:   0.25 kB
+../dist/gateway/static/root/assets/volume-2-BSJhAY97.js                              0.39 kB │ gzip:   0.27 kB
+../dist/gateway/static/root/assets/earth-BMhZtzcj.js                                 0.39 kB │ gzip:   0.26 kB
+../dist/gateway/static/root/assets/file-image-CDUPkZvG.js                            0.40 kB │ gzip:   0.28 kB
+../dist/gateway/static/root/assets/capabilities-f0YyWX04.js                          0.41 kB │ gzip:   0.29 kB
+../dist/gateway/static/root/assets/layers-mJW7JJKm.js                                0.42 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/plugin-presentation-CO5BFDGW.js                   0.42 kB │ gzip:   0.22 kB
+../dist/gateway/static/root/assets/sliders-horizontal-DqsYor6I.js                    0.42 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/file-archive-DanfQJNe.js                          0.43 kB │ gzip:   0.28 kB
+../dist/gateway/static/root/assets/video-B6V0GFss.js                                 0.45 kB │ gzip:   0.31 kB
+../dist/gateway/static/root/assets/skeleton-BI5TyibZ.js                              0.46 kB │ gzip:   0.33 kB
+../dist/gateway/static/root/assets/markdown-editor-BuuGlcfG.js                       0.47 kB │ gzip:   0.33 kB
+../dist/gateway/static/root/assets/star-BUWJqJ5c.js                                  0.47 kB │ gzip:   0.29 kB
+../dist/gateway/static/root/assets/settings-uiTATseT.js                              0.48 kB │ gzip:   0.26 kB
+../dist/gateway/static/root/assets/calendar-days-hw_Y-g-s.js                         0.49 kB │ gzip:   0.26 kB
+../dist/gateway/static/root/assets/sparkles-DHlfQFAF.js                              0.49 kB │ gzip:   0.28 kB
+../dist/gateway/static/root/assets/store-SzD1Jvgm.js                                 0.49 kB │ gzip:   0.28 kB
+../dist/gateway/static/root/assets/use-media-query-ady-FgjK.js                       0.52 kB │ gzip:   0.34 kB
+../dist/gateway/static/root/assets/capability-links-DeO34GIF.js                      0.55 kB │ gzip:   0.34 kB
+../dist/gateway/static/root/assets/runtime-health-D2TDFLLq.js                        0.56 kB │ gzip:   0.36 kB
+../dist/gateway/static/root/assets/puzzle-BptcPjKI.js                                0.57 kB │ gzip:   0.27 kB
+../dist/gateway/static/root/assets/file-BqMS_3DT.js                                  0.57 kB │ gzip:   0.29 kB
+../dist/gateway/static/root/assets/gateway-startup-retry-xpHdw5uq.js                 0.59 kB │ gzip:   0.39 kB
+../dist/gateway/static/root/assets/segmented-styles-Cqb91xsn.js                      0.59 kB │ gzip:   0.31 kB
+../dist/gateway/static/root/assets/phone-workspace-store-CpH233TG.js                 0.60 kB │ gzip:   0.32 kB
+../dist/gateway/static/root/assets/highlight-code-BH65IIbJ.js                        0.61 kB │ gzip:   0.32 kB
+../dist/gateway/static/root/assets/models-hub-cache-BfrcizHv.js                      0.62 kB │ gzip:   0.38 kB
+../dist/gateway/static/root/assets/pin-off-BMRv-Kxr.js                               0.62 kB │ gzip:   0.30 kB
+../dist/gateway/static/root/assets/cpu-B247669f.js                                   0.64 kB │ gzip:   0.29 kB
+../dist/gateway/static/root/assets/beta-badge-BnzdzIEl.js                            0.64 kB │ gzip:   0.45 kB
+../dist/gateway/static/root/assets/highlighted-body-KQOG7T2V-DKGma5wI.js             0.65 kB │ gzip:   0.42 kB
+../dist/gateway/static/root/assets/shield-off-2jsucUds.js                            0.67 kB │ gzip:   0.41 kB
+../dist/gateway/static/root/assets/gateway-restart-srJ9TMC5.js                       0.68 kB │ gzip:   0.44 kB
+../dist/gateway/static/root/assets/source-workspace-editor-kxosllTu.js               0.72 kB │ gzip:   0.49 kB
+../dist/gateway/static/root/assets/files-BNL4kkSB.js                                 0.74 kB │ gzip:   0.40 kB
+../dist/gateway/static/root/assets/settings-form-draft-Dy10ldo8.js                   0.75 kB │ gzip:   0.37 kB
+../dist/gateway/static/root/assets/form-field-width-DJw_jULe.js                      0.76 kB │ gzip:   0.24 kB
+../dist/gateway/static/root/assets/page-context-draft-DRE6i2wO.js                    0.77 kB │ gzip:   0.47 kB
+../dist/gateway/static/root/assets/wand-sparkles-CkSL-3Fy.js                         0.77 kB │ gzip:   0.41 kB
+../dist/gateway/static/root/assets/brand-logo-CgT9zQfr.js                            0.81 kB │ gzip:   0.48 kB
+../dist/gateway/static/root/assets/power-off-CwwQ7Gp7.js                             0.81 kB │ gzip:   0.42 kB
+../dist/gateway/static/root/assets/channels-routes-r2g-9DdC.js                       0.82 kB │ gzip:   0.41 kB
+../dist/gateway/static/root/assets/desktop-pet-narrative-ChwjpnsG.js                 0.86 kB │ gzip:   0.46 kB
+../dist/gateway/static/root/assets/registry-api-B3YqZBhQ.js                          0.92 kB │ gzip:   0.54 kB
+../dist/gateway/static/root/assets/capability-icon-DVoZxEgW.js                       0.94 kB │ gzip:   0.62 kB
+../dist/gateway/static/root/assets/gateway-config-swr-CtEdaxOS.js                    0.95 kB │ gzip:   0.57 kB
+../dist/gateway/static/root/assets/with-selector-xonYxPoM.js                         0.96 kB │ gzip:   0.53 kB
+../dist/gateway/static/root/assets/use-async-resource-BHFGZCY2.js                    1.00 kB │ gzip:   0.51 kB
+../dist/gateway/static/root/assets/settings-page-layout-BftgkTYo.js                  1.02 kB │ gzip:   0.63 kB
+../dist/gateway/static/root/assets/voice-api-key-field-BKXWXCit.js                   1.04 kB │ gzip:   0.64 kB
+../dist/gateway/static/root/assets/session-identity-label-BP7OIYth.js                1.06 kB │ gzip:   0.54 kB
+../dist/gateway/static/root/assets/global-defaults-api-C-ogBDn1.js                   1.06 kB │ gzip:   0.58 kB
+../dist/gateway/static/root/assets/use-personal-profile-sQzaa6Dy.js                  1.07 kB │ gzip:   0.63 kB
+../dist/gateway/static/root/assets/rolldown-runtime-aKtaBQYM.js                      1.08 kB │ gzip:   0.62 kB
+../dist/gateway/static/root/assets/interaction-BdhHBbYa.js                           1.10 kB │ gzip:   0.32 kB
+../dist/gateway/static/root/assets/personal-avatar-TZzkeDZK.js                       1.11 kB │ gzip:   0.67 kB
+../dist/gateway/static/root/assets/file-tree-utils-DJs1faGv.js                       1.14 kB │ gzip:   0.50 kB
+../dist/gateway/static/root/assets/chat-agents-api-BrsUEl3u.js                       1.18 kB │ gzip:   0.54 kB
+../dist/gateway/static/root/assets/preload-helper-Czpn1I53.js                        1.19 kB │ gzip:   0.67 kB
+../dist/gateway/static/root/assets/use-directory-picker-C4p7AgWY.js                  1.21 kB │ gzip:   0.68 kB
+../dist/gateway/static/root/assets/settings-advanced-section-TJ8MAroB.js             1.21 kB │ gzip:   0.74 kB
+../dist/gateway/static/root/assets/connector-filters-Cfcx9EA2.js                     1.24 kB │ gzip:   0.60 kB
+../dist/gateway/static/root/assets/connection-usage-Cm_McddI.js                      1.26 kB │ gzip:   0.95 kB
+../dist/gateway/static/root/assets/number-input-El7Szeln.js                          1.26 kB │ gzip:   0.73 kB
+../dist/gateway/static/root/assets/providers-api-DzeStdCu.js                         1.27 kB │ gzip:   0.67 kB
+../dist/gateway/static/root/assets/browser-control-api-Btwz8koK.js                   1.28 kB │ gzip:   0.66 kB
+../dist/gateway/static/root/assets/runtime-tools-api-8mXDTzc2.js                     1.29 kB │ gzip:   0.70 kB
+../dist/gateway/static/root/assets/date-formatters-DukWSVwc.js                       1.34 kB │ gzip:   0.34 kB
+../dist/gateway/static/root/assets/attachment-load-DrVGNxJm.js                       1.36 kB │ gzip:   0.71 kB
+../dist/gateway/static/root/assets/specialists-xbB3xL9e.js                           1.37 kB │ gzip:   0.58 kB
+../dist/gateway/static/root/assets/copy-to-clipboard-HOJ79TWv.js                     1.40 kB │ gzip:   0.58 kB
+../dist/gateway/static/root/assets/use-workspace-tree-DKPvcyw1.js                    1.41 kB │ gzip:   0.72 kB
+../dist/gateway/static/root/assets/createLucideIcon-DPHK1VkS.js                      1.43 kB │ gzip:   0.80 kB
+../dist/gateway/static/root/assets/api-bT-kA268.js                                   1.45 kB │ gzip:   0.40 kB
+../dist/gateway/static/root/assets/oauth-api-CZiot_FY.js                             1.47 kB │ gzip:   0.55 kB
+../dist/gateway/static/root/assets/settings-loading-skeleton-BTqvr_Fw.js             1.48 kB │ gzip:   0.59 kB
+../dist/gateway/static/root/assets/cloud-credits-B-nbtkqv.js                         1.70 kB │ gzip:   0.79 kB
+../dist/gateway/static/root/assets/new-chat-navigation-B6NPQ4h4.js                   1.73 kB │ gzip:   0.98 kB
+../dist/gateway/static/root/assets/tab-completion-input-CxtEp0aP.js                  1.74 kB │ gzip:   0.72 kB
+../dist/gateway/static/root/assets/sliding-indicator-hwz0sx3h.js                     1.74 kB │ gzip:   0.95 kB
+../dist/gateway/static/root/assets/refresh-button-DiWdGAaX.js                        1.78 kB │ gzip:   0.88 kB
+../dist/gateway/static/root/assets/product-navigation-Co8pLbDP.js                    1.79 kB │ gzip:   0.62 kB
+../dist/gateway/static/root/assets/button-Cc4hUNTt.js                                1.79 kB │ gzip:   0.84 kB
+../dist/gateway/static/root/assets/activity-store-CXhhy7_9.js                        1.80 kB │ gzip:   0.86 kB
+../dist/gateway/static/root/assets/extension-marketplace-api-BNNQYLeu.js             1.85 kB │ gzip:   0.55 kB
+../dist/gateway/static/root/assets/terminal-panel-store-BP3dN3md.js                  1.85 kB │ gzip:   0.66 kB
+../dist/gateway/static/root/assets/attachment-utils-core-BIOUBrpT.js                 1.88 kB │ gzip:   0.88 kB
+../dist/gateway/static/root/assets/middleware-Pd0e8Igk.js                            1.91 kB │ gzip:   0.95 kB
+../dist/gateway/static/root/assets/voice-input-shortcut-events-3kcfHPrY.js           1.91 kB │ gzip:   0.90 kB
+../dist/gateway/static/root/assets/sliding-tab-list-DuQyViqe.js                      1.97 kB │ gzip:   1.12 kB
+../dist/gateway/static/root/assets/resource-unavailable-DH-GGLSM.js                  1.97 kB │ gzip:   1.16 kB
+../dist/gateway/static/root/assets/attachment-process-heavy-DGZZ-M85.js              2.05 kB │ gzip:   1.11 kB
+../dist/gateway/static/root/assets/navigation-D62kPsA9.js                            2.11 kB │ gzip:   0.78 kB
+../dist/gateway/static/root/assets/agent-display-names-Bje7vfSn.js                   2.29 kB │ gzip:   0.98 kB
+../dist/gateway/static/root/assets/theme-store-BZ8YC33M.js                           2.31 kB │ gzip:   1.05 kB
+../dist/gateway/static/root/assets/product-open-page-D-fwzOTB.js                     2.34 kB │ gzip:   1.34 kB
+../dist/gateway/static/root/assets/personal-proactivity-DaRnbB1f.js                  2.35 kB │ gzip:   0.99 kB
+../dist/gateway/static/root/assets/extension-page-C6qZ9pGs.js                        2.36 kB │ gzip:   1.13 kB
+../dist/gateway/static/root/assets/capability-header-actions-BxMYfQ8y.js             2.38 kB │ gzip:   1.20 kB
+../dist/gateway/static/root/assets/page-context-capture-button-C3okR3ap.js           2.40 kB │ gzip:   1.23 kB
+../dist/gateway/static/root/assets/dist-CxGUk8J-.js                                  2.48 kB │ gzip:   1.12 kB
+../dist/gateway/static/root/assets/archive-plugin-BADrW4yR.js                        2.58 kB │ gzip:   1.22 kB
+../dist/gateway/static/root/assets/index.module-Cd9ENXfk.js                          2.61 kB │ gzip:   1.08 kB
+../dist/gateway/static/root/assets/automation-result-state-D0EHDk4V.js               2.67 kB │ gzip:   1.42 kB
+../dist/gateway/static/root/assets/agents-admin-api-DIStX2e1.js                      2.69 kB │ gzip:   0.95 kB
+../dist/gateway/static/root/assets/shares-api-D2HTaQZH.js                            2.77 kB │ gzip:   0.67 kB
+../dist/gateway/static/root/assets/media-plugins-Kpj3pQ3i.js                         2.78 kB │ gzip:   1.10 kB
+../dist/gateway/static/root/assets/preview-open-alternatives-CY_hjK4b.js             2.81 kB │ gzip:   1.19 kB
+../dist/gateway/static/root/assets/confirm-dialog-D7dQJytv.js                        2.82 kB │ gzip:   1.52 kB
+../dist/gateway/static/root/assets/automation-api-CRz5EE_c.js                        2.91 kB │ gzip:   0.81 kB
+../dist/gateway/static/root/assets/extension-debug-page-CE9KJpjL.js                  2.98 kB │ gzip:   1.30 kB
+../dist/gateway/static/root/assets/app-link-DRy3-k7j.js                              3.19 kB │ gzip:   1.43 kB
+../dist/gateway/static/root/assets/settings-form-section-num14vSv.js                 3.28 kB │ gzip:   1.36 kB
+../dist/gateway/static/root/assets/session-channel-icon-D1ktvt1P.js                  3.37 kB │ gzip:   1.54 kB
+../dist/gateway/static/root/assets/use-autosave-CDy9yziL.js                          3.38 kB │ gzip:   1.62 kB
+../dist/gateway/static/root/assets/unlink-BEuthaaq.js                                3.45 kB │ gzip:   1.23 kB
+../dist/gateway/static/root/assets/tool-activity-BtJkgjFf.js                         3.54 kB │ gzip:   0.77 kB
+../dist/gateway/static/root/assets/settings-page-header-BEDxq_lT.js                  3.54 kB │ gzip:   1.88 kB
+../dist/gateway/static/root/assets/new-session-preferences-gb411vZP.js               3.55 kB │ gzip:   1.28 kB
+../dist/gateway/static/root/assets/browser-notification-delivery-DmE2FgGc.js         3.56 kB │ gzip:   1.49 kB
+../dist/gateway/static/root/assets/oauth-provider-connect-BjLEJ4az.js                3.59 kB │ gzip:   1.73 kB
+../dist/gateway/static/root/assets/directory-picker-path-field-P_-tLtwi.js           3.75 kB │ gzip:   1.86 kB
+../dist/gateway/static/root/assets/work-discovery-overlay-B4F3MACu.js                3.77 kB │ gzip:   1.90 kB
+../dist/gateway/static/root/assets/agent-avatar-display-B_QEDfMT.js                  3.83 kB │ gzip:   1.92 kB
+../dist/gateway/static/root/assets/image-generation-api-DFGE3Ait.js                  3.83 kB │ gzip:   1.80 kB
+../dist/gateway/static/root/assets/constants-DBtMsXdW.js                             3.94 kB │ gzip:   1.59 kB
+../dist/gateway/static/root/assets/languages-zXtNocoy.js                             3.95 kB │ gzip:   1.41 kB
+../dist/gateway/static/root/assets/local-apps-Ck6kACsY.js                            4.08 kB │ gzip:   1.47 kB
+../dist/gateway/static/root/assets/phone-model-picker-wK2tRuj0.js                    4.12 kB │ gzip:   2.19 kB
+../dist/gateway/static/root/assets/dist-BGTk37IG.js                                  4.28 kB │ gzip:   1.59 kB
+../dist/gateway/static/root/assets/personal-settings-panel-BilBWHZ1.js               4.48 kB │ gzip:   2.16 kB
+../dist/gateway/static/root/assets/settings-page-B_XKKvWr.js                         4.49 kB │ gzip:   1.52 kB
+../dist/gateway/static/root/assets/understanding-activity-store-3sOhoxX4.js          4.57 kB │ gzip:   1.75 kB
+../dist/gateway/static/root/assets/browser-automation-inputs-C3gQlgox.js             4.63 kB │ gzip:   1.98 kB
+../dist/gateway/static/root/assets/local-apps-page-Bj-nywIv.js                       4.63 kB │ gzip:   2.20 kB
+../dist/gateway/static/root/assets/product-delivery-DRyD9_Xq.js                      4.66 kB │ gzip:   1.82 kB
+../dist/gateway/static/root/assets/page-tabs-oeTY7z3_.js                             4.69 kB │ gzip:   2.32 kB
+../dist/gateway/static/root/assets/api-C4xrqOKi.js                                   4.98 kB │ gzip:   1.62 kB
+../dist/gateway/static/root/assets/dist-GJ8-1PAx.js                                  5.08 kB │ gzip:   1.84 kB
+../dist/gateway/static/root/assets/dependency-picker-XjPB8FJS.js                     5.10 kB │ gzip:   2.11 kB
+../dist/gateway/static/root/assets/command-palette-api-BEqdX7Q-.js                   5.22 kB │ gzip:   2.15 kB
+../dist/gateway/static/root/assets/workspace-api-S2aJOX7w.js                         5.26 kB │ gzip:   1.97 kB
+../dist/gateway/static/root/assets/preference-select-fields-DPXt3YyQ.js              5.51 kB │ gzip:   1.90 kB
+../dist/gateway/static/root/assets/project-understanding-tqZ0etEw.js                 5.63 kB │ gzip:   2.37 kB
+../dist/gateway/static/root/assets/tool-friendly-title-DcCc6g7o.js                   5.69 kB │ gzip:   2.15 kB
+../dist/gateway/static/root/assets/voice-config-api-DNxzs-eF.js                      5.86 kB │ gzip:   2.05 kB
+../dist/gateway/static/root/assets/locale-store-LhhHA2sK.js                          5.95 kB │ gzip:   2.50 kB
+../dist/gateway/static/root/assets/automation-run-list-CnaV2j9R.js                   5.98 kB │ gzip:   2.75 kB
+../dist/gateway/static/root/assets/understanding-refresh-store-BBXlbRLa.js           6.31 kB │ gzip:   2.48 kB
+../dist/gateway/static/root/assets/plugin-details-dialog-DIQH12Ki.js                 6.47 kB │ gzip:   3.16 kB
+../dist/gateway/static/root/assets/workspace-file-preview-dialog-B9f3GN7l.js         6.66 kB │ gzip:   2.70 kB
+../dist/gateway/static/root/assets/skill-api-DOISy5q8.js                             6.79 kB │ gzip:   2.29 kB
+../dist/gateway/static/root/assets/workspace-open-location-menu-BNjipenH.js          6.91 kB │ gzip:   2.34 kB
+../dist/gateway/static/root/assets/setup-interaction-page-BtihoIoz.js                7.26 kB │ gzip:   3.74 kB
+../dist/gateway/static/root/assets/connectors-api-Now9xXuA.js                        7.44 kB │ gzip:   1.74 kB
+../dist/gateway/static/root/assets/secret-input-Dryrns2s.js                          7.56 kB │ gzip:   3.22 kB
+../dist/gateway/static/root/assets/session-api-DZ2Ov33K.js                           8.04 kB │ gzip:   2.52 kB
+../dist/gateway/static/root/assets/date-picker-CBoc2ETg.js                           8.40 kB │ gzip:   3.62 kB
+../dist/gateway/static/root/assets/dist-BuHnPloF.js                                  8.43 kB │ gzip:   3.53 kB
+../dist/gateway/static/root/assets/runtime-tools-settings-panel-S2HxRVlT.js          8.68 kB │ gzip:   2.66 kB
+../dist/gateway/static/root/assets/connector-service-page-C3SmPK1c.js                8.69 kB │ gzip:   3.67 kB
+../dist/gateway/static/root/assets/product-preview-modal-AeEtUDZQ.js                 8.95 kB │ gzip:   3.89 kB
+../dist/gateway/static/root/assets/file-preview-surface-CEDfehx5.js                  9.14 kB │ gzip:   3.42 kB
+../dist/gateway/static/root/assets/service-recommendation-list-DFqBz8S6.js           9.75 kB │ gzip:   4.00 kB
+../dist/gateway/static/root/assets/popover-select-CEMWIrtY.js                        9.80 kB │ gzip:   4.05 kB
+../dist/gateway/static/root/assets/xopc-cloud-account-card-Csye7zKU.js               9.94 kB │ gzip:   3.60 kB
+../dist/gateway/static/root/assets/local-session-drafts-hodTdtvj.js                 10.04 kB │ gzip:   3.55 kB
+../dist/gateway/static/root/assets/appearance-settings-DTj1XI4v.js                  10.24 kB │ gzip:   3.80 kB
+../dist/gateway/static/root/assets/working-directory-picker-modal-BiDK93J_.js       10.31 kB │ gzip:   3.45 kB
+../dist/gateway/static/root/assets/desktop-pet-sprite-D5YYq2zC.js                   10.54 kB │ gzip:   4.26 kB
+../dist/gateway/static/root/assets/extension-settings-page-DWKB4ETv.js              10.82 kB │ gzip:   4.27 kB
+../dist/gateway/static/root/assets/attachment-preview-renderer-DdOEgexg.js          10.88 kB │ gzip:   4.04 kB
+../dist/gateway/static/root/assets/desktop-pet-settings-CzGc9byI.js                 11.09 kB │ gzip:   3.61 kB
+../dist/gateway/static/root/assets/tasks-DRmd6sWt.js                                11.14 kB │ gzip:   3.18 kB
+../dist/gateway/static/root/assets/model-selector-VVkCmNdS.js                       11.19 kB │ gzip:   4.75 kB
+../dist/gateway/static/root/assets/phone-dependencies-card-B_l_JCRy.js              11.22 kB │ gzip:   4.65 kB
+../dist/gateway/static/root/assets/task-result-evidence-CkwEM0In.js                 11.32 kB │ gzip:   5.30 kB
+../dist/gateway/static/root/assets/copy-text-row-CpiRzq4G.js                        11.42 kB │ gzip:   4.51 kB
+../dist/gateway/static/root/assets/binary-plugins-hpeH8g5V.js                       11.85 kB │ gzip:   4.60 kB
+../dist/gateway/static/root/assets/connection-usage-guide-BgvvHMc4.js               11.91 kB │ gzip:   5.00 kB
+../dist/gateway/static/root/assets/desktop-pet-DS2dJydK.js                          11.92 kB │ gzip:   4.22 kB
+../dist/gateway/static/root/assets/loopi-CNtmi9FU.js                                12.00 kB │ gzip:   5.15 kB
+../dist/gateway/static/root/assets/schema-form-C-jw6Hid.js                          12.36 kB │ gzip:   4.28 kB
+../dist/gateway/static/root/assets/extension-iframe-host-ClbrQvGF.js                12.64 kB │ gzip:   5.34 kB
+../dist/gateway/static/root/assets/product-preview-content-DLnOxTnn.js              12.72 kB │ gzip:   5.21 kB
+../dist/gateway/static/root/assets/capabilities-page-CJm5gNu8.js                    12.80 kB │ gzip:   5.51 kB
+../dist/gateway/static/root/assets/recording-upload-Id3p5Vyv.js                     13.56 kB │ gzip:   5.15 kB
+../dist/gateway/static/root/assets/share-preview-page-Cnxfv66F.js                   13.65 kB │ gzip:   5.19 kB
+../dist/gateway/static/root/assets/vendor-swr-CdRzEUwF.js                           13.67 kB │ gzip:   5.94 kB
+../dist/gateway/static/root/assets/share-link-dialog-C-mhzvLF.js                    13.88 kB │ gzip:   5.18 kB
+../dist/gateway/static/root/assets/extension-provider-KmpUveDY.js                   14.39 kB │ gzip:   4.83 kB
+../dist/gateway/static/root/assets/notes-api-DflS6I2c.js                            14.42 kB │ gzip:   5.37 kB
+../dist/gateway/static/root/assets/usage-page-6LW4yLy1.js                           14.75 kB │ gzip:   4.50 kB
+../dist/gateway/static/root/assets/projects-page-D65pw44g.js                        15.24 kB │ gzip:   5.47 kB
+../dist/gateway/static/root/assets/mcp-conversation-setup-page-CfHcS8aO.js          15.97 kB │ gzip:   6.39 kB
+../dist/gateway/static/root/assets/keyboard-shortcuts-settings-DFBpeaA_.js          15.97 kB │ gzip:   5.52 kB
+../dist/gateway/static/root/assets/app-management-settings-panel-Dk75Bmi2.js        16.22 kB │ gzip:   4.49 kB
+../dist/gateway/static/root/assets/use-composer-attachments-C4eSyX-C.js             16.45 kB │ gzip:   5.98 kB
+../dist/gateway/static/root/assets/system-settings-panel-BT6_yFco.js                16.49 kB │ gzip:   3.76 kB
+../dist/gateway/static/root/assets/tunnel-api-CnPOg1pg.js                           16.58 kB │ gzip:   6.10 kB
+../dist/gateway/static/root/assets/discussion-annotation-sync-D_NJLur2.js           16.79 kB │ gzip:   6.95 kB
+../dist/gateway/static/root/assets/file-tree-CFlZnV3Y.js                            17.14 kB │ gzip:   6.31 kB
+../dist/gateway/static/root/assets/computer-settings-page-DUhsxs4l.js               17.43 kB │ gzip:   5.11 kB
+../dist/gateway/static/root/assets/browser-automations-page-CsdyL6q5.js             17.91 kB │ gzip:   6.52 kB
+../dist/gateway/static/root/assets/gateway-realtime-SunJUMP3.js                     18.52 kB │ gzip:   6.23 kB
+../dist/gateway/static/root/assets/chat-chart-block-Cq3aoRzV.js                     20.77 kB │ gzip:   7.67 kB
+../dist/gateway/static/root/assets/floating-ui.dom-seOukHzT.js                      21.00 kB │ gzip:   8.11 kB
+../dist/gateway/static/root/assets/tracing-settings-page-9YvEnES_.js                22.31 kB │ gzip:   7.65 kB
+../dist/gateway/static/root/assets/dist-ZrL34Ps4.js                                 22.75 kB │ gzip:   6.80 kB
+../dist/gateway/static/root/assets/voice-transcribe-api-CVVa_x99.js                 23.08 kB │ gzip:   7.66 kB
+../dist/gateway/static/root/assets/browser-BLJWD7WI.js                              23.47 kB │ gzip:   8.85 kB
+../dist/gateway/static/root/assets/install-connector-dialog-Fctw32Lx.js             24.30 kB │ gzip:   8.04 kB
+../dist/gateway/static/root/assets/device-pairing-wizard--SCayxiS.js                24.43 kB │ gzip:   7.42 kB
+../dist/gateway/static/root/assets/route-preload-C22MIvup.js                        25.22 kB │ gzip:   8.79 kB
+../dist/gateway/static/root/assets/capabilities-C4F2D1gH.js                         26.03 kB │ gzip:   7.02 kB
+../dist/gateway/static/root/assets/es2015-DBLcMg5B.js                               26.83 kB │ gzip:   9.60 kB
+../dist/gateway/static/root/assets/product-automation-feedback-BVkkAJkY.js          27.69 kB │ gzip:   9.43 kB
+../dist/gateway/static/root/assets/bundle-mjs-rHxsej31.js                           28.20 kB │ gzip:   8.95 kB
+../dist/gateway/static/root/assets/setup-status-panel-DehYof2V.js                   29.67 kB │ gzip:   9.56 kB
+../dist/gateway/static/root/assets/phone-model-connection-DmYRqxCF.js               30.06 kB │ gzip:  11.11 kB
+../dist/gateway/static/root/assets/management-settings-gwDIT7mY.js                  31.00 kB │ gzip:  10.15 kB
+../dist/gateway/static/root/assets/imports-page-BkslHrr5.js                         31.66 kB │ gzip:   9.54 kB
+../dist/gateway/static/root/assets/notes-page-DKPHaszO.js                           32.26 kB │ gzip:   9.60 kB
+../dist/gateway/static/root/assets/agent-defaults-settings-panel-DWIluCZB.js        35.47 kB │ gzip:  13.01 kB
+../dist/gateway/static/root/assets/phone-settings-page-DWUZuu3k.js                  35.98 kB │ gzip:  11.95 kB
+../dist/gateway/static/root/assets/apps-page-7iAULaEl.js                            37.01 kB │ gzip:  10.42 kB
+../dist/gateway/static/root/assets/browser-settings-page-B-ks3b8r.js                37.30 kB │ gzip:  13.47 kB
+../dist/gateway/static/root/assets/local-app-workbench-page-hJzkUVoK.js             37.51 kB │ gzip:  11.47 kB
+../dist/gateway/static/root/assets/composer-payload-handoff-BBm3ypBb.js             38.76 kB │ gzip:  14.47 kB
+../dist/gateway/static/root/assets/personal-page-Cz-KnXHT.js                        41.91 kB │ gzip:  12.68 kB
+../dist/gateway/static/root/assets/channels-DYgvP8sO.js                             41.97 kB │ gzip:  14.15 kB
+../dist/gateway/static/root/assets/agent-plugin-dialog-lCWIS06R.js                  42.00 kB │ gzip:  14.42 kB
+../dist/gateway/static/root/assets/work-discovery-page-BuKTCGSR.js                  49.08 kB │ gzip:  14.42 kB
+../dist/gateway/static/root/assets/remote-access-hub-DxAInmWy.js                    52.08 kB │ gzip:  15.10 kB
+../dist/gateway/static/root/assets/xml-_d7dTN2Q.js                                  53.32 kB │ gzip:  17.59 kB
+../dist/gateway/static/root/assets/sessions-page-BpUbNplq.js                        53.90 kB │ gzip:  15.48 kB
+../dist/gateway/static/root/assets/use-file-preview-expanded-SFqd8k7K.js            55.98 kB │ gzip:  18.16 kB
+../dist/gateway/static/root/assets/shares-settings-BLcnCGon.js                      57.36 kB │ gzip:  16.93 kB
+../dist/gateway/static/root/assets/gateway-settings-DWVxjM9y.js                     58.16 kB │ gzip:  15.50 kB
+../dist/gateway/static/root/assets/logs-page-CcM2foZi.js                            63.60 kB │ gzip:  18.46 kB
+../dist/gateway/static/root/assets/home-page-2Uj--v_o.js                            73.61 kB │ gzip:  22.83 kB
+../dist/gateway/static/root/assets/docx-preview-CnIClbYi.js                         74.87 kB │ gzip:  20.14 kB
+../dist/gateway/static/root/assets/skills-page-CJXLVK0U.js                          78.41 kB │ gzip:  24.42 kB
+../dist/gateway/static/root/assets/connected-providers-grid-BsCLGLnw.js             83.37 kB │ gzip:  22.59 kB
+../dist/gateway/static/root/assets/task-detail-page-1AFyRTia.js                     83.71 kB │ gzip:  24.68 kB
+../dist/gateway/static/root/assets/agents-C-tIn72l.js                               86.20 kB │ gzip:  27.99 kB
+../dist/gateway/static/root/assets/session-manager-DSaoWM1F.js                      88.73 kB │ gzip:  27.76 kB
+../dist/gateway/static/root/assets/user-model-page-DYVp7nA6.js                      92.11 kB │ gzip:  28.91 kB
+../dist/gateway/static/root/assets/chunk-KS7C4IRE-CiwuuyV8.js                       94.39 kB │ gzip:  31.20 kB
+../dist/gateway/static/root/assets/jszip.min-Dj17eJqX.js                            95.89 kB │ gzip:  28.47 kB
+../dist/gateway/static/root/assets/schemas-CCWMleym.js                              96.68 kB │ gzip:  27.19 kB
+../dist/gateway/static/root/assets/note-detail-panel-vvlPKLHz.js                   110.53 kB │ gzip:  32.42 kB
+../dist/gateway/static/root/assets/connectors-page-CTMeC7Pt.js                     122.51 kB │ gzip:  35.26 kB
+../dist/gateway/static/root/assets/automation-task-card-DD4yjrI6.js                144.76 kB │ gzip:  45.98 kB
+../dist/gateway/static/root/assets/capabilities-settings-panel-BMg8DBa0.js         184.19 kB │ gzip:  56.00 kB
+../dist/gateway/static/root/assets/automations-workspace-CtidgXTX.js               185.38 kB │ gzip:  57.16 kB
+../dist/gateway/static/root/assets/vendor-react-BOUWij0V.js                        189.81 kB │ gzip:  59.75 kB
+../dist/gateway/static/root/assets/project-detail-page-B7L3Kvhc.js                 335.09 kB │ gzip:  97.14 kB
+../dist/gateway/static/root/assets/chat-terminal-dock-2eGZ5qZ7.js                  347.38 kB │ gzip:  88.99 kB
+../dist/gateway/static/root/assets/markdown-view-usF9EoMp.js                       369.07 kB │ gzip: 115.17 kB
+../dist/gateway/static/root/assets/pdf-EQHMWEbX.js                                 427.54 kB │ gzip: 127.43 kB
+../dist/gateway/static/root/assets/chunk-D32TOXHM-DQIy-Baq.js                      472.94 kB │ gzip: 145.27 kB
+../dist/gateway/static/root/assets/xlsx-Cl_0CZaL.js                                493.22 kB │ gzip: 160.65 kB
+../dist/gateway/static/root/assets/echarts-runtime-QSmTlXOu.js                     533.80 kB │ gzip: 180.54 kB
+../dist/gateway/static/root/assets/agent-avatar-dicebear-_h4GxzUK.js               536.69 kB │ gzip: 195.56 kB
+../dist/gateway/static/root/assets/vendor-codemirror-aCQ0FcJT.js                   561.55 kB │ gzip: 201.17 kB
+../dist/gateway/static/root/assets/block-editor-P_RGb2rE.js                        619.70 kB │ gzip: 208.27 kB
+../dist/gateway/static/root/assets/messages-C3xqMM9W.js                            659.25 kB │ gzip: 225.73 kB
+../dist/gateway/static/root/assets/chat-page-dh7ImvX8.js                           781.66 kB │ gzip: 244.71 kB
+../dist/gateway/static/root/assets/index-DkvLS3ze.js                             1,044.64 kB │ gzip: 303.74 kB
+../dist/gateway/static/root/assets/mermaid-render-oOellPHt.js                    1,525.69 kB │ gzip: 469.40 kB
+
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugin `@rolldown/plugin-babel`. See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 12.90s

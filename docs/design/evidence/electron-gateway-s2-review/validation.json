@@ -1,0 +1,230 @@
+{
+  "date": "2026-10-31",
+  "baseMain": "ab82be00f053bab36e26609a5e6ff8191070fb84",
+  "productCommit": "dbaad975a",
+  "harnessCommit": "368be2556",
+  "scope": "S2 only; no S3, remote Host or local capability execution",
+  "relatedTests": {
+    "files": 110,
+    "passed": 886
+  },
+  "typecheck": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": 5
+  },
+  "dependencyViolations": 0,
+  "cliImportGuard": "passed",
+  "builds": [
+    "Node",
+    "Web",
+    "Electron"
+  ],
+  "frozenBaselineSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "budgetUnchanged": true,
+  "samplingPlan": "first-launch-heavy-v1",
+  "fullAcceptanceRuns": [
+    {
+      "file": "s2-review-budget-1.json",
+      "launches": 60,
+      "passed": true,
+      "comparison": [
+        {
+          "mode": "spawn",
+          "metric": "readyMs",
+          "before": 2038.5515000000005,
+          "after": 1965.2932090000004,
+          "maximum": 2140.4790750000006,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "configMs",
+          "before": 47.599999994039536,
+          "after": 24.099999994039536,
+          "maximum": 52.599999994039536,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "sessionsMs",
+          "before": 26.600000023841858,
+          "after": 5.899999976158142,
+          "maximum": 31.600000023841858,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "rssMiB",
+          "before": 1026.328125,
+          "after": 1019.96875,
+          "maximum": 1077.64453125,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "readyMs",
+          "before": 1002.2085420000076,
+          "after": 978.4609999999957,
+          "maximum": 1102.2085420000076,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "configMs",
+          "before": 48.30000001192093,
+          "after": 38.80000001192093,
+          "maximum": 53.30000001192093,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "sessionsMs",
+          "before": 20,
+          "after": 19.700000017881393,
+          "maximum": 25,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "rssMiB",
+          "before": 685.265625,
+          "after": 705.890625,
+          "maximum": 719.52890625,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "file": "s2-review-budget-2.json",
+      "launches": 60,
+      "passed": true,
+      "comparison": [
+        {
+          "mode": "spawn",
+          "metric": "readyMs",
+          "before": 2038.5515000000005,
+          "after": 2005.5752079999993,
+          "maximum": 2140.4790750000006,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "configMs",
+          "before": 47.599999994039536,
+          "after": 34.89999997615814,
+          "maximum": 52.599999994039536,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "sessionsMs",
+          "before": 26.600000023841858,
+          "after": 8,
+          "maximum": 31.600000023841858,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "rssMiB",
+          "before": 1026.328125,
+          "after": 1025,
+          "maximum": 1077.64453125,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "readyMs",
+          "before": 1002.2085420000076,
+          "after": 974.5861250000016,
+          "maximum": 1102.2085420000076,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "configMs",
+          "before": 48.30000001192093,
+          "after": 40.80000001192093,
+          "maximum": 53.30000001192093,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "sessionsMs",
+          "before": 20,
+          "after": 13,
+          "maximum": 25,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "rssMiB",
+          "before": 685.265625,
+          "after": 706.03125,
+          "maximum": 719.52890625,
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "artifactManifest": {
+    "out/main": {
+      "files": 42,
+      "sha256": "db05cf1a2b5cde8aec29d07293f356f9ed42647ea450386e83817ff13a742e04"
+    },
+    "out/preload": {
+      "files": 10,
+      "sha256": "7b0de3b365e3e43c83c930cafd3297ae2d177e6c8eb228c964b2f0d3ce868fe3"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3003,
+      "sha256": "75f320d2a42136f08a3263cf189676e1d8e5920fd24005cbc77c0b9e166d5f2c"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "e2e": [
+    "s2-review-ssh-e2e.json",
+    "s2-review-tls-e2e.json",
+    "s2-review-untrusted-e2e.json",
+    "s2-review-hostname-e2e.json",
+    "s2-review-cleanup-e2e.json",
+    "s2-review-preview-e2e.json",
+    "s2-review-keychain-e2e.json",
+    "s2-review-local-functional-retry.json"
+  ],
+  "retainedFailures": [
+    "xopc-s2-review-body-before.log",
+    "s2-review-local-functional-failed.json",
+    "xopc-s2-review-local-functional-failed.log"
+  ],
+  "commands": [
+    "pnpm vitest run electron scripts src/automations src/gateway/hono/middleware/__tests__/auth.test.ts src/gateway/hono/routes/__tests__/desktop-chat.test.ts src/gateway/hono/routes/__tests__/lazy-bundles.test.ts src/gateway/hono/routes/__tests__/provider* packages/gateway-contract",
+    "pnpm run typecheck",
+    "pnpm run lint",
+    "pnpm run depcheck",
+    "pnpm run test:startup:imports",
+    "pnpm run electron:vite:build",
+    "pnpm run build:node",
+    "pnpm run build:web",
+    "node scripts/verify-electron-shell.mjs --output reports/s2-review-ssh-e2e.json",
+    "node scripts/verify-electron-shell.mjs --tls --output reports/s2-review-tls-e2e.json",
+    "node scripts/verify-electron-shell.mjs --tls --untrusted --output reports/s2-review-untrusted-e2e.json",
+    "node scripts/verify-electron-shell.mjs --tls --wrong-host --output reports/s2-review-hostname-e2e.json",
+    "node scripts/verify-electron-shell.mjs --cleanup-failure --output reports/s2-review-cleanup-e2e.json",
+    "node scripts/verify-electron-connection-preview.mjs --output reports/s2-review-preview-e2e.json",
+    "node scripts/verify-electron-connection-keychain.mjs --output reports/s2-review-keychain-e2e.json",
+    "node scripts/verify-electron-local-connection.mjs --runs 1 --operations 2 --functional --artifact-source-ref dbaad975a --output reports/s2-review-local-functional-retry.json",
+    "node scripts/verify-electron-local-connection.mjs --compare docs/design/evidence/electron-gateway-p2a1-s0-s1/s0-local-baseline.json --artifact-source-ref dbaad975a --output reports/s2-review-budget-1.json",
+    "node scripts/verify-electron-local-connection.mjs --compare docs/design/evidence/electron-gateway-p2a1-s0-s1/s0-local-baseline.json --artifact-source-ref dbaad975a --output reports/s2-review-budget-2.json"
+  ],
+  "limits": [
+    "macOS arm64 development Electron only; not installed app, physical WAN server, other platforms or soak",
+    "HTTPS TLS termination fixture plus actual Gateway; no native Gateway TLS implementation",
+    "No S3 chat submission, Host or local capabilities",
+    "dependency-cruiser does not scan all Electron code"
+  ]
+}
