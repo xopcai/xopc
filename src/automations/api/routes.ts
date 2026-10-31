@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Context, Hono } from 'hono';
 import { AutomationCancelOutputSchema, AutomationReadOutputSchema, AutomationReadAllOutputSchema, AutomationDeleteOutputSchema, AutomationMutationOutputSchema, AutomationRunMutationOutputSchema, ProductReadContracts } from '@xopcai/gateway-contract';
 import { CapabilityError } from '../../capabilities/runtime/dispatcher.js';
-import { createProductDispatcher } from '../../capabilities/runtime/product.js';
+import { createAutomationDispatcher } from './dispatcher.js';
 import { capabilityHttpContext, capabilityHttpError } from '../../capabilities/adapters/http.js';
 
 import { getAutomationSetup, openAutomationConfiguration } from '../configuration-conversation.js';
@@ -16,7 +16,7 @@ function parseProjectId(raw: string | undefined): string | undefined {
 
 export function registerAutomationRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const capabilities = createProductDispatcher(undefined, { getAutomations: () => service.automationServiceInstance, getProjects: () => service.projects, getConfig: () => service.currentConfig });
+  const capabilities = createAutomationDispatcher(service.automationServiceInstance, service.projects, () => service.currentConfig);
   const queueRun = async (c: Context, command: 'run' | 'rerun', id: string) => {
     try {
       const caller = capabilityHttpContext(c);

@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-10-31T02:46:54.275Z",
+  "passed": true,
+  "checks": {
+    "restrictedPreload": true,
+    "safeStorageApi": "Async Electron API under Playwright mock-keychain flags; native backend tested separately",
+    "epochAndNoReadyClaim": true,
+    "legacyIpcDenied": {
+      "channels": 111,
+      "transports": [
+        "invoke",
+        "send",
+        "MessagePort"
+      ],
+      "sideEffects": 0
+    },
+    "navigationDenied": true,
+    "noGatewayHostOrUpstream": true,
+    "noAutomaticActivation": true,
+    "corruptStorageRecovery": true,
+    "localRelaunchRequest": "Verified clean local entry arguments and quit request; OS relaunch stubbed, actual local path tested separately"
+  },
+  "scope": "Built production main/restricted preload, development Electron; no remote chat, Host or signed installer acceptance",
+  "assetSha256": "21675c1a1320f99c478b1598814a6662b4d09a02f0c1921547f4d73dd0dc747b",
+  "finishedAt": "2026-10-31T02:46:55.753Z"
+}

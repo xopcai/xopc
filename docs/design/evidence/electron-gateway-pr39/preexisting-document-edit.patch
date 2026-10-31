@@ -1,0 +1,13 @@
+diff --git a/docs/design/electron-gateway-config-p95-investigation.md b/docs/design/electron-gateway-config-p95-investigation.md
+index 12ffc89bd..c4146c27b 100644
+--- a/docs/design/electron-gateway-config-p95-investigation.md
++++ b/docs/design/electron-gateway-config-p95-investigation.md
+@@ -7,7 +7,7 @@
+ 确认存在采样解释问题，以及两个实际的启动期 CPU 热点：
+ 
+ 1. 历史 API P95 混合了不同启动阶段。每模式的 129 个请求，包含 30 个“每窗口首个测量请求”和首个窗口后续的 99 个连续请求。约 60ms 的首请求数量跨过 P95 排位边界时，混合 P95 会从几毫秒跳到约 60ms。这不是稳态 API 时延，不能仅凭一次通过或失败判断回归。
+-2. 存在真实的启动期事件循环阻塞。新窗口请求 `/api/automation-runs/product-events` 时，自动化 HTTP bundle 会构建完整 ProductDispatcher，为笔记、任务、设置、Agent 等未被该路由使用的能力同步生成 JSON Schema 和契约摘要。旧路径首次处理约 36–41ms，CPU 工作阻塞其他 HTTP 请求进入处理器。慢 config 调用约 54–69ms，其中 config 处理器自身约 7–9ms；其余主要发生在进入处理器前，与该自动化路由的同步初始化重叠。
++2. 存在真实的启动期事件循环阻塞。新窗口请求 `/api/automation-runs/product-events` 时，自动化 HTTP bundle 会构建完整 zoProductDispatcher，为笔记、任务、设置、Agent 等未被该路由使用的能力同步生成 JSON Schema 和契约摘要。旧路径首次处理约 36–41ms，CPU 工作阻塞其他 HTTP 请求进入处理器。慢 config 调用约 54–69ms，其中 config 处理器自身约 7–9ms；其余主要发生在进入处理器前，与该自动化路由的同步初始化重叠。
+ 
+ 修复将自动化 HTTP 路由改为只注册已有的自动化 read/write/draft 定义，不改全局 ProductDispatcher。相同诊断下，自动化事件路由首次处理约 15–22ms，8 个窗口的首个 config 调用约 6.6–43.1ms。没有给 config 加缓存，没有删除/延迟 UI 功能，没有延长超时或加入等待来压低指标。
+ 

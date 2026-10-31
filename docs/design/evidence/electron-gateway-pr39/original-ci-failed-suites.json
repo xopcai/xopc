@@ -1,0 +1,79 @@
+{
+  "numTotalTestSuites": 1028,
+  "numPassedTestSuites": 1027,
+  "numFailedTestSuites": 1,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 3177,
+  "numPassedTests": 3174,
+  "numFailedTests": 0,
+  "numPendingTests": 3,
+  "numTodoTests": 0,
+  "snapshot": {
+    "added": 0,
+    "failure": false,
+    "filesAdded": 0,
+    "filesRemoved": 0,
+    "filesRemovedList": [],
+    "filesUnmatched": 0,
+    "filesUpdated": 0,
+    "matched": 0,
+    "total": 0,
+    "unchecked": 0,
+    "uncheckedKeysByFile": [],
+    "unmatched": 0,
+    "updated": 0,
+    "didUpdate": false
+  },
+  "startTime": 1793418252541,
+  "success": false,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "real browser recording and replay"
+          ],
+          "fullName": "real browser recording and replay records Enter submission once when Chrome also dispatches an implicit button click",
+          "status": "skipped",
+          "title": "records Enter submission once when Chrome also dispatches an implicit button click",
+          "failureMessages": [],
+          "meta": {},
+          "tags": []
+        },
+        {
+          "ancestorTitles": [
+            "real browser recording and replay"
+          ],
+          "fullName": "real browser recording and replay persists simultaneous events without lost sequences and recovers after a page restart",
+          "status": "skipped",
+          "title": "persists simultaneous events without lost sequences and recovers after a page restart",
+          "failureMessages": [],
+          "meta": {},
+          "tags": []
+        },
+        {
+          "ancestorTitles": [
+            "real browser recording and replay"
+          ],
+          "fullName": "real browser recording and replay records Chinese inputs, excludes secrets, scopes duplicate targets and replays the compiled flow",
+          "status": "skipped",
+          "title": "records Chinese inputs, excludes secrets, scopes duplicate targets and replays the compiled flow",
+          "failureMessages": [],
+          "meta": {},
+          "tags": []
+        }
+      ],
+      "startTime": 1793418252541,
+      "endTime": 1793418252541,
+      "status": "failed",
+      "message": "Hook timed out in 10000ms.\nIf this is a long-running hook, pass a timeout value as the last argument or configure it globally with \"hookTimeout\".",
+      "name": "/home/runner/work/xopc/xopc/src/browser/recordings/__tests__/record-replay.integration.test.ts"
+    }
+  ],
+  "originalArtifact": {
+    "run": 41165579564,
+    "job": 124432307354,
+    "artifact": 13028432622,
+    "resultFileSha256": "0b9240dcd93c865f06fa15246cdb2c8640184093ac369be1eaec0fc7f83e3578"
+  }
+}

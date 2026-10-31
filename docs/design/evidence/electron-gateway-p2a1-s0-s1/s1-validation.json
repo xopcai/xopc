@@ -1,0 +1,55 @@
+{
+  "sourceBase": "f5b4b66015a386813ff31923cde8bde702fa544d",
+  "productSource": "c5dbb7e20",
+  "stage": "S0 scope frozen; S1 functionality implemented; S1 acceptance incomplete; S2 not started",
+  "testFilesPassed": 63,
+  "testsPassed": 489,
+  "typecheck": "passed",
+  "electronBuild": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": 5,
+    "limit": "Root config does not cover all Electron code"
+  },
+  "depcheck": {
+    "violations": 0,
+    "limit": "Root graph does not cover all Electron code"
+  },
+  "previewE2E": "passed: 111 legacy channels via invoke/send/MessagePort, no side effects",
+  "nativeKeychainE2E": "passed without Playwright launcher/mock-keychain",
+  "localFunctionalE2E": "passed spawn/reuse with corrupt remote profile",
+  "missingPreviewAssetsE2E": "passed spawn/reuse",
+  "localPerformance": {
+    "passed": false,
+    "metricsPassed": 7,
+    "totalMetrics": 8,
+    "samplesFunctionalPassed": 60,
+    "reason": "reuse configMs P95 65.2ms exceeds frozen 53.3ms"
+  },
+  "originalControl": {
+    "sameArtifactsAsS0": true,
+    "electronBuildSha256": "24518a8ba1fddaff20a703878f7b47eec219c9b62abdd38c97c20f43745cdd67",
+    "frozenBudgetPassed": false,
+    "reuseConfigP95Ms": 60.5
+  },
+  "localMainSha256": "c30fadfb96852518e2d98a43ac30ac5b2649e6a7a7e449fde6dbf736dee994c2",
+  "finalElectronBuildSha256": "26219535eac1019d013edb1db0977ccd0097d093fba63902d36d190f1fb43572",
+  "evidenceSha256": {
+    "s1-preview-e2e.json": "11be0bbf964d7fc7be07c4cc06d3c190fb21c25775d851df854ff2222762bf70",
+    "s1-native-keychain-e2e.json": "911a97f26c3b7ccd989ea4ed4fd1155de9e8a7890cd0cb8aaf2fb18223798fbe",
+    "s1-final-local-functional.json": "4169a5eab2c4d94df9d278ab074ceb4b64762104b03cb224bd5c73ecdfb11dd0",
+    "s1-missing-assets-local-e2e.json": "3b6fa3556c0f06817971ffdc5353b7f3c09dc4db0adf9efc3315335211fd7cf9",
+    "s1-final-comparison.json": "bfbf9973735802847415e85645c18d31088803250d15fdbe98a916d581a5b375",
+    "s1-local-comparison.json": "f6b5c9a77057a6130c4bf88bde2c700bbfa9c25ce393e5459576fae031bd6869",
+    "s1-local-comparison-repeat.json": "4faed5bcc873e86b0f570a0c21513094bb582868a10d5128b1d1ea2fed5a751f",
+    "s0-control-comparison.json": "ba8c69d324b25ab828ec288bfe3825745de2205b41e94148f06f5fc292f4df04",
+    "s1-preview-startup-failed.json": "0e7b460adbd5d79c4147d1b284e82004eaaa09cdc40c56e501888f071c16e22a"
+  },
+  "limits": [
+    "macOS arm64 development Electron, not signed installer",
+    "No remote Shell/chat/Host/HTTPS or SSH integration",
+    "No Windows/Linux or 24h soak acceptance",
+    "OS relaunch intent stubbed; actual local runtime tested separately",
+    "Frozen performance gate not passed; no baseline reset or tolerance change"
+  ]
+}

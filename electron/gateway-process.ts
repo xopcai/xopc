@@ -353,7 +353,8 @@ export async function waitForGatewayReady(
       if (error instanceof GatewayStartupError) throw error;
       /* retry */
     }
-    await new Promise((r) => setTimeout(r, 250));
+    // Avoid adding a full 250ms startup quantum after the authenticated API becomes available.
+    await new Promise((r) => setTimeout(r, 100));
   }
   const logHint = gatewayLogSnippetForError();
   throw new GatewayStartupError(

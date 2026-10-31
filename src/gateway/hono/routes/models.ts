@@ -865,6 +865,9 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.get('/api/providers/meta', async (c) => {
     const providers = sortProvidersForPicker([...new Set([...getAllProviders(), ...getDomesticProviderPresetIds()])]);
     const pluginRegistry = getProviderRegistry();
+    const modelCounts = new Map<string, number>();
+    for (const model of getAllModels()) modelCounts.set(model.provider, (modelCounts.get(model.provider) ?? 0) + 1);
+    const featuredProviders = new Set(getOnboardingFeaturedProviders());
 
     const meta = await Promise.all(
       providers.map(async (provider) => {
@@ -875,7 +878,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
           : undefined;
         const authState = await getProviderAuthState(provider);
         const configured = authState.authMode !== 'none' || (await isProviderConfigured(provider));
-        const registryModelCount = getAllModels().filter((m) => m.provider === provider).length;
+        const registryModelCount = modelCounts.get(provider) ?? 0;
         return {
           id: provider,
           setupProfile: getProviderSetupProfile(provider, PROVIDER_META[provider]?.name ?? domesticPreset?.displayName ?? provider, PROVIDER_META[provider]?.supportsOAuth, resolveProviderApiBaseUrl(provider)),
@@ -884,7 +887,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
           supportsOAuth: plugin ? false : (PROVIDER_META[provider]?.supportsOAuth ?? false),
           supportsApiKey: plugin ? false : (PROVIDER_META[provider]?.supportsApiKey ?? true),
           configured,
-          onboardingFeatured: getOnboardingFeaturedProviders().includes(provider),
+          onboardingFeatured: featuredProviders.has(provider),
           recommendedModels: getRecommendedModelsForProvider(provider),
           modelCount: registryModelCount || domesticPreset?.models.length || 0,
           ...(getProviderHint(provider) ? { hint: getProviderHint(provider) } : {}),

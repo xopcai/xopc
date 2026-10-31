@@ -9,7 +9,8 @@ permissions:
 jobs:
   shards:
     name: Test shard (${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
+    # Pin a distro supported by the lockfile Playwright browser artifacts.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       VITEST_MAX_WORKERS: '2'
@@ -26,6 +27,26 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Rebuild and verify native terminal runtime
+        run: |
+          npm_config_build_from_source=true pnpm rebuild node-pty
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const { spawn } = require('node-pty');
+          const child = spawn('/bin/sh', ['-c', 'printf XOPC_PTY_OK']);
+          let output = '';
+          const timer = setTimeout(() => {
+            child.kill();
+            throw new Error('Native terminal smoke exceeded 5 seconds');
+          }, 5000);
+          child.onData(data => { output += data; });
+          child.onExit(({ exitCode }) => {
+            clearTimeout(timer);
+            assert.equal(exitCode, 0);
+            assert.match(output, /XOPC_PTY_OK/);
+            console.log('Native terminal spawn/output/exit passed');
+          });
+          NODE
       - name: Install audio test dependencies
         run: |
           if ! command -v ffmpeg >/dev/null; then
@@ -33,6 +54,8 @@ jobs:
             sudo apt-get install -y --no-install-recommends ffmpeg
           fi
           ffmpeg -version
+      - name: Install pinned browser test runtime
+        run: pnpm exec playwright-core install --with-deps --no-shell chromium
       - name: Run tests
         run: |
           mkdir -p test-results

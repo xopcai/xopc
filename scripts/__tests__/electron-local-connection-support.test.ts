@@ -1,10 +1,10 @@
-import { mkdtemp, mkdir, readlink, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, expect, it } from 'vitest';
 
-import { localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from '../electron-local-connection-support.mjs';
+import { createAcceptanceOutput, localConnectionArtifactManifest, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from '../electron-local-connection-support.mjs';
 
 const roots: string[] = [];
 async function fixture() {
@@ -79,4 +79,31 @@ it('bounds a hung operation and preserves successful values and failures', async
   await expect(withTimeout(new Promise(() => {}), 5, 'fixture deadline')).rejects.toThrow('fixture deadline');
   await expect(withTimeout(Promise.resolve(42), 50, 'unexpected timeout')).resolves.toBe(42);
   await expect(withTimeout(Promise.reject(new Error('original')), 50, 'unexpected timeout')).rejects.toThrow('original');
+});
+
+it('fingerprints Gateway and UI content changes independently of Electron code', async () => {
+  const root = await fixture();
+  await writeFile(join(root, 'dist/gateway.js'), 'original');
+  const before = await localConnectionArtifactManifest(root);
+  expect(before['out/server']).toBeNull();
+  await writeFile(join(root, 'dist/gateway.js'), 'modified');
+  const after = await localConnectionArtifactManifest(root);
+  expect(after.dist.files).toBe(before.dist.files);
+  expect(after.dist.sha256).not.toBe(before.dist.sha256);
+});
+
+it('reserves evidence atomically and never replaces another runner or failed result', async () => {
+  const root = await fixture();
+  const output = join(root, 'reports/failure.json');
+  const results = await Promise.allSettled([
+    createAcceptanceOutput('unused', ['--output', output]),
+    createAcceptanceOutput('unused', ['--output', output]),
+  ]);
+  expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter(r => r.status === 'rejected')).toHaveLength(1);
+  expect(JSON.parse(await readFile(output, 'utf8'))).toMatchObject({ passed: false, state: 'initializing' });
+  await writeFile(output, 'failed evidence');
+  await expect(createAcceptanceOutput(output, [])).rejects.toThrow('Acceptance output exists');
+  expect(await readFile(output, 'utf8')).toBe('failed evidence');
+  await expect(createAcceptanceOutput(output, ['--output'])).rejects.toThrow('Missing acceptance output path');
 });

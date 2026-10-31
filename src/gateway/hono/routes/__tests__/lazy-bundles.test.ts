@@ -59,6 +59,8 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/phone/devices')?.id).not.toBe('runtime-tools');
   });
   it('maps provider setup preview and apply through the models bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/providers/meta')?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/providers-other/meta')).toBeUndefined();
     for (const path of ['/api/models/setup/qwen-token-plan-cn', '/api/models/setup/xopc-cloud/preview', '/api/models/setup/xiaomi-token-plan-cn/apply']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('models');
     expect(findAuthenticatedLazyRouteBundle('/api/models-setup/xopc-cloud')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/global-defaults')?.id).not.toBe('models');
@@ -138,7 +140,7 @@ describe('lazy route bundles', () => {
     }
   });
   it('keeps draft and preview adapters in their authenticated domain bundles', () => {
-    for (const path of ['/api/automation-runs', '/api/automation-runs/run-1', '/api/automation-runs/run-1/read', '/api/automations/draft', '/api/automations/simulate', '/api/automation-runs/run/repair-draft', '/api/automation-events', '/api/automation-events/event-1/replay', '/api/automation-deliveries', '/api/automation-deliveries/run-1/gateway_event/retry']) {
+    for (const path of ['/api/automation-runs', '/api/automation-runs/product-events', '/api/automation-runs/run-1', '/api/automation-runs/run-1/read', '/api/automations/draft', '/api/automations/simulate', '/api/automation-runs/run/repair-draft', '/api/automation-events', '/api/automation-events/event-1/replay', '/api/automation-deliveries', '/api/automation-deliveries/run-1/gateway_event/retry']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('automations');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/notes/note/ai/edit')?.id).toBe('notes');
