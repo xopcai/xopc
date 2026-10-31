@@ -1,0 +1,10 @@
+{
+  "passed": false,
+  "tls": false,
+  "startedAt": "2026-10-31T07:47:43.181Z",
+  "checks": {},
+  "scope": "S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server",
+  "error": "Error: Condition deadline exceeded\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/scripts/verify-electron-remote-chat.mjs:27:188)\n    at async gateway (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/scripts/verify-electron-remote-chat.mjs:64:3)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/scripts/verify-electron-remote-chat.mjs:77:13",
+  "serverLogs": "node:internal/modules/run_main:111\n    triggerUncaughtException(\n    ^\n\nZodError: [\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"agents\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key: \\\"agents\\\"\"\n  }\n]\n    at readConfigFileSnapshot (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/config/config-file.js:19:24)\n    at loadConfig (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/config/loader.js:51:20)\n    at runGatewayFromCliOptions (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/commands/gateway/run-foreground.js:49:17)\n    at async Command.<anonymous> (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/gateway-run-fast-path.js:23:3)\n    at async Command.parseAsync (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/.pnpm/commander@14.0.3/node_modules/commander/lib/command.js:1122:5)\n    at async tryRunGatewayRunFastPath (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/gateway-run-fast-path.js:26:2)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/dist/src/cli/bin.js:26:5\n\nNode.js v26.12.1\n",
+  "finishedAt": "2026-10-31T07:48:43.203Z"
+}

@@ -1,0 +1,16 @@
+{
+  "passed": false,
+  "tls": false,
+  "startedAt": "2026-10-31T07:49:15.941Z",
+  "checks": {},
+  "scope": "S3 development production Electron + two actual independent Gateways behind fault/TLS proxies, deterministic inference only; not installed app or physical WAN server",
+  "error": "page.evaluate: Execution context was destroyed, most likely because of a navigation\n    at save (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/scripts/verify-electron-remote-chat.mjs:93:18)\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/scripts/verify-electron-remote-chat.mjs:95:21",
+  "serverLogs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 65006\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=94772, lockPath=/Users/micjoyce/.xopc/locks/gateway.b6c89517.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:65006...\n✅ Gateway started\n   URL: http://127.0.0.1:65006\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:65006\n🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 65045\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=94831, lockPath=/Users/micjoyce/.xopc/locks/gateway.b6375137.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:65045...\n✅ Gateway started\n   URL: http://127.0.0.1:65045\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:65045\n",
+  "windows": [
+    {
+      "url": "",
+      "text": "Gateway 连接预览\n\n选择配置不发起网络请求。显式建立 S2 连接可核验身份并启动受控 Shell；聊天界面尚未接入，本机能力已禁用，不启动本地 Gateway。\n\n请选择或保存连接配置。本机能力保持禁用。\n\n连接名称\nGateway origin\n传输方式\nHTTPS已有 SSH loopback 转发\n管理凭据（可留空；仅加密保存）\n保存连接配置\n\nSSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。\n\n使用原本地模式（重启应用）退出预览"
+    }
+  ],
+  "finishedAt": "2026-10-31T07:49:19.031Z"
+}

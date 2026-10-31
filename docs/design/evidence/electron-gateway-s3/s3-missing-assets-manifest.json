@@ -1,0 +1,14 @@
+{
+  "removed": [
+    "out/main/chunks/connection-entry-CSNCg7Uf.js",
+    "out/main/remote-shell-worker.js",
+    "out/preload/connections.cjs",
+    "out/preload/gateway-connections.html",
+    "out/preload/gateway-connections.js",
+    "out/preload/remote-shell.css",
+    "out/preload/remote-shell.html",
+    "out/preload/remote-shell.js",
+    "out/preload/shell.cjs"
+  ],
+  "scope": "Controlled development copy; shared dependencies, built Gateway/Web, SQL and helper source mappings. Not installer acceptance."
+}

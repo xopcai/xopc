@@ -1,0 +1,18 @@
+$ eslint && pnpm -C web run lint
+
+/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/src/browser/recordings/__tests__/record-replay.integration.test.ts
+  70:50  warning  'moduleUrl' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  82:51  warning  'moduleUrl' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/src/cli/index.ts
+  40:23  warning  'ctx' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/src/providers/__tests__/cloud-thinking.test.ts
+  2:10  warning  'describe' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc/src/tasks/__tests__/task-application-service.test.ts
+  540:22  warning  'task' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 5 problems (0 errors, 5 warnings)
+
+$ eslint

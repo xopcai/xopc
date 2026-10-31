@@ -1,0 +1,21 @@
+{
+  "tls": false,
+  "untrusted": false,
+  "wrongHost": false,
+  "cleanupFailure": true,
+  "passed": true,
+  "startedAt": "2026-10-31T08:13:24.498Z",
+  "checks": {
+    "realAuthenticatedLazyRoute": true,
+    "memoryOnlyPartition": true,
+    "identityPinnedHttpOnlyAndRouteIsolation": true,
+    "staleConfigRequestCannotCloseActiveShell": true,
+    "realRealtimeWithoutEndpoint": true,
+    "sameCookieWindowAndLegacyIpcDenied": 111,
+    "crossWindowAndBootstrapReplayDenied": true,
+    "noLocalGatewayDatabaseHostOrWorkspace": true,
+    "cleanupFailureBlocksNewActivation": true
+  },
+  "scope": "S2 production main/preloads/utility worker and independent real Gateway; development Electron, not installer or S3 chat",
+  "finishedAt": "2026-10-31T08:13:26.158Z"
+}
