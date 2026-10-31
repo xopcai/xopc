@@ -110,6 +110,11 @@ async function run(mode, index) {
     auth: { mode: 'token', token } }, browser: { enabled: false } }));
   const fixtureModule = functional ? await import('./electron-local-connection-fixture.mjs') : undefined;
   const fixture = await fixtureModule?.createLocalConnectionFixture(state);
+  const remoteProfilePath = join(state, 'electron/gateway-connections-v1/profiles.json');
+  if (functional) {
+    await mkdir(dirname(remoteProfilePath), { recursive: true });
+    await writeFile(remoteProfilePath, '{deliberately-corrupt-remote-profile');
+  }
   const env = localConnectionEnvironment(process.env, artifactRoot, state, configPath, workspace);
   const sample = { mode, index, passed: false, readyMs: null, configMs: [], sessionsMs: [] };
   result.samples.push(sample);
@@ -168,6 +173,8 @@ async function run(mode, index) {
     sample.runtime = await application.evaluate(() => ({ node: process.versions.node, electron: process.versions.electron }));
     if (fixture) {
       sample.functional = await withTimeout(fixtureModule.verifyLocalConnectionFunctions(page, fixture, until), 90_000, 'Functional acceptance exceeded 90 seconds');
+      assert.equal(await readFile(remoteProfilePath, 'utf8'), '{deliberately-corrupt-remote-profile', 'Local mode must not read or migrate remote profiles');
+      sample.functional.corruptRemoteProfileIgnored = true;
       await until(() => page.evaluate(async () => {
         const response = await fetch('/api/runtime/quit-impact', { signal: AbortSignal.timeout(2000) });
         if (!response.ok) return false;

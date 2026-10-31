@@ -58,6 +58,7 @@ export default defineConfig({
             'electron/computer/**/*.{test,spec}.{ts,tsx}',
             'electron/browser/**/*.{test,spec}.{ts,tsx}',
             'electron/__tests__/gateway-process*.test.ts',
+            'electron/__tests__/gateway-connections*.test.ts',
             'electron/__tests__/trusted-renderer.test.ts',
             'electron/__tests__/electron-user-paths.test.ts',
             'electron/__tests__/windows-signature.test.ts',
