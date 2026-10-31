@@ -39,6 +39,7 @@ export class RemoteChatModel {
   private state: ChatState = { version: 1, drafts: {} };
   private generation = 0;
   private disposed = false;
+  private initialized = false;
   private locked = false;
   private connected = false;
   private recoveryAttempts = 0;
@@ -75,12 +76,15 @@ export class RemoteChatModel {
   private persist(): Promise<void> {
     this.queuedState = structuredClone(this.state);
     if (!this.writing) {
-      this.writing = (async () => {
-        while (this.queuedState && !this.disposed) {
-          const snapshot = this.queuedState; this.queuedState = undefined;
-          await this.persistence.write(snapshot);
-        }
-      })().catch(error => { this.fail(error); throw error; }).finally(() => { this.writing = undefined; });
+      this.writing = Promise.resolve().then(async () => {
+        try {
+          while (this.queuedState && !this.disposed) {
+            const snapshot = this.queuedState; this.queuedState = undefined;
+            await this.persistence.write(snapshot);
+          }
+        } catch (error) { this.fail(error); throw error; }
+        finally { this.writing = undefined; }
+      });
       this.writeQueue = this.writing.catch(() => {});
     }
     return this.writing;
@@ -88,6 +92,7 @@ export class RemoteChatModel {
   async initialize() {
     try {
       this.state = await this.persistence.read();
+      if (this.disposed) return;
       const [models, agents] = await Promise.all([
         this.api<{ models: ChatCatalog[] }>('/api/models', undefined, this.abort.signal),
         this.api<{ agents: ChatCatalog[]; defaultId?: string }>('/api/agents', undefined, this.abort.signal),
@@ -96,7 +101,7 @@ export class RemoteChatModel {
       this.view.models = models.models ?? []; this.view.agents = agents.agents ?? [];
       this.view.model = this.view.models[0]?.id ?? ''; this.view.thinking = this.view.models[0]?.thinking?.initialValue ?? 'off'; this.view.agent = agents.defaultId ?? this.view.agents[0]?.id ?? '';
       this.state.selected = this.state.pending?.conversationId ?? this.state.selected ?? crypto.randomUUID();
-      this.emit(); this.startRealtime();
+      this.initialized = true; this.emit(); this.startRealtime();
       this.timer = setInterval(() => {
         if (this.connected && performance.now() - this.lastRealtimeAt >= 40_000) { this.connected = false; this.realtime?.reconnect(); }
         else if (this.connected && !this.locked) void this.refresh();
@@ -179,7 +184,7 @@ export class RemoteChatModel {
           this.history = history.messages ?? []; this.view.older = history.pagination?.nextBeforeCursor; this.view.historical = Boolean(before);
           for (const message of this.history) if (message.id && this.stream.get(message.id) === message.content) this.stream.delete(message.id);
           const next = input.activeRunId;
-          if (next !== this.view.activeRun) this.stream.clear();
+          if (next !== this.view.activeRun) { this.stream.clear(); if (next) this.view.stop = ''; }
           if (this.runTopic && this.runTopic !== (next ? `run:${next}` : undefined)) this.realtime?.unsubscribe(this.runTopic);
           if (next && this.runTopic !== `run:${next}`) { this.runTopic = `run:${next}`; this.realtime?.subscribe(this.runTopic, 0); }
           if (!next) { this.runTopic = undefined; this.stream.clear(); }
@@ -203,16 +208,16 @@ export class RemoteChatModel {
     }
   }
   async verifyPending() {
-    const pending = this.state.pending;
+    const pending = this.state.pending, generation = this.generation;
     if (!pending || this.disposed) return;
     try {
       const receipt = await this.api<Receipt>(`/api/sessions/${pending.conversationId}/input-receipts/${pending.clientMessageId}`, undefined, this.abort.signal);
-      if (this.disposed || this.state.pending !== pending) return;
+      if (this.disposed || generation !== this.generation || this.state.pending !== pending) return;
       if (receipt.receipt.clientMessageId !== pending.clientMessageId || receipt.receipt.conversationId !== pending.conversationId) throw new Error('CHAT_RECEIPT_MISMATCH');
       this.state.pending = undefined; delete this.state.drafts[pending.conversationId];
       await this.persist(); this.view.notice = '服务器已接收输入。'; this.emit();
     } catch (error) {
-      if (this.disposed || this.locked) return;
+      if (this.disposed || this.locked || generation !== this.generation) return;
       if (error instanceof ChatApiError && [401, 403, 409].includes(error.status)) { this.fail(error); return; }
       this.view.phase = 'unknown'; this.view.notice = '上次输入尚待核实；不会自动重发。可稍后核实或返回连接配置。'; this.emit();
     }
@@ -228,11 +233,18 @@ export class RemoteChatModel {
     this.emit(); await this.persist();
   }
   async select(conversationId: string = crypto.randomUUID()) {
-    if (this.disposed || this.submitting || this.locked) return;
+    if (this.disposed || this.submitting || this.locked || !this.initialized) return;
+    const generation = ++this.generation;
+    this.abort.abort(); this.abort = new AbortController();
+    this.connected = false; this.realtime?.disconnect();
+    this.view.phase = 'syncing'; this.history = []; this.stream.clear(); this.view.stop = ''; this.view.activeRun = undefined; this.emit();
     await this.writeQueue;
+    if (this.disposed || this.locked || generation !== this.generation) return;
     this.before = undefined; this.view.historical = false; this.view.older = undefined;
-    this.state.selected = conversationId; this.history = []; this.stream.clear(); this.view.stop = ''; this.view.activeRun = undefined;
-    await this.persist(); this.startRealtime(); this.emit();
+    this.state.selected = conversationId;
+    await this.persist();
+    if (this.disposed || this.locked || generation !== this.generation) return;
+    this.startRealtime(); this.emit();
   }
   choose(model: string, agent: string, thinking?: string) {
     if (model !== this.view.model) this.view.thinking = this.view.models.find(item => item.id === model)?.thinking?.initialValue ?? 'off';
@@ -243,12 +255,14 @@ export class RemoteChatModel {
   async latest() { this.before = undefined; this.stream.clear(); await this.refresh(); }
   async send() {
     if (this.disposed || this.locked || this.submitting || this.state.pending || !this.chatEnabled || this.view.phase !== 'ready' || this.view.historical || !this.state.selected) return;
-    const conversationId = this.state.selected, text = this.state.drafts[conversationId]?.trim();
+    const generation = this.generation, conversationId = this.state.selected, text = this.state.drafts[conversationId]?.trim();
+    const current = () => !this.disposed && !this.locked && this.connected && generation === this.generation && this.state.selected === conversationId;
     if (!text) return;
     this.submitting = true; this.view.phase = 'syncing'; this.emit();
     let posted = false;
     try {
       await this.writeQueue;
+      if (!current()) return;
       let command: unknown;
       const common = { clientMessageId: crypto.randomUUID(), input: { content: text }, origin: { type: 'system', source: 'cli' } };
       try {
@@ -264,15 +278,23 @@ export class RemoteChatModel {
         command = { ...common, kind: 'start', creation: { agentId: this.view.agent, projectId: null, execution: null, temporary: false,
           model: model.id, thinkingLevel: this.view.thinking } };
       }
-      if (this.disposed || this.locked || !this.connected) return;
+      if (!current()) return;
       this.state.pending = { conversationId, clientMessageId: common.clientMessageId, createdAt: Date.now() };
-      await this.persist(); this.emit();
+      await this.persist();
+      if (!current()) {
+        if (!this.disposed && this.state.pending?.clientMessageId === common.clientMessageId) {
+          this.state.pending = undefined; await this.persist();
+          if (!this.locked) { this.view.notice = '连接已变化，本次输入未发送；草稿已保留。'; this.emit(); }
+        }
+        return;
+      }
+      this.emit();
       posted = true;
       await this.api<Receipt>(`/api/sessions/${conversationId}/inputs`, command, this.abort.signal);
       await this.verifyPending();
       await this.refresh();
     } catch (error) {
-      if (!this.disposed) {
+      if (!this.disposed && !this.locked) {
         if (!posted) this.fail(error);
         else if (error instanceof ChatApiError && [400, 404, 409, 422, 429].includes(error.status) && !error.code.startsWith('GATEWAY_')) {
           this.state.pending = undefined; await this.persist(); this.view.notice = `服务器未接受输入：${error.message}。请刷新后检查草稿。`;
@@ -282,10 +304,15 @@ export class RemoteChatModel {
   }
   async stop() {
     if (!this.view.activeRun || this.locked || this.disposed || this.view.stop === 'requested') return;
+    const generation = this.generation, selected = this.state.selected, runId = this.view.activeRun;
+    const current = () => !this.disposed && !this.locked && generation === this.generation && this.state.selected === selected && this.view.activeRun === runId;
     this.view.stop = 'requested'; this.emit();
-    try { await this.api('/api/agent/abort', { runId: this.view.activeRun }, this.abort.signal); this.view.stop = 'acknowledged'; await this.refresh(); }
-    catch { if (!this.disposed) this.view.stop = 'unknown'; }
-    this.emit();
+    try {
+      await this.api('/api/agent/abort', { runId }, this.abort.signal);
+      if (!current()) return;
+      this.view.stop = 'acknowledged'; await this.refresh();
+    } catch { if (current()) this.view.stop = 'unknown'; }
+    if (current()) this.emit();
   }
   dispose() { this.disposed = true; this.generation++; this.abort.abort(); this.realtime?.disconnect(); clearInterval(this.timer); this.history = []; this.stream.clear(); }
   async flush() { await this.writeQueue; }

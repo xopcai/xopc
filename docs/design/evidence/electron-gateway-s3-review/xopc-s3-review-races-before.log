@@ -1,0 +1,109 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s3/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts (18 tests | 5 failed) 961ms
+     × persists an update queued at the writer completion boundary 54ms
+     × invalidates old history before waiting for a conversation-switch write 102ms
+     × does not start a new realtime client after disposal while selection is waiting 52ms
+     × ignores an old conversation stop acknowledgement after switching 102ms
+     × does not dispatch an input if realtime disconnects during the intent fsync 103ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts > receipt recovery and window state > persists an update queued at the writer completion boundary
+AssertionError: expected 'first' to be 'last' // Object.is equality
+
+Expected: "last"
+Received: "first"
+
+ ❯ electron/__tests__/gateway-connections-chat.test.ts:142:42
+    140|     const second = new Promise<void>((resolve, reject) => queueMicrota…
+    141|     await Promise.all([first, second]); await model.flush();
+    142|     expect(state.drafts[conversationId]).toBe('last');
+       |                                          ^
+    143|   });
+    144|   it('invalidates old history before waiting for a conversation-switch…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts > receipt recovery and window state > invalidates old history before waiting for a conversation-switch write
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ electron/__tests__/gateway-connections-chat.test.ts:154:93
+    152|     await Promise.resolve();
+    153|     releaseHistory({ messages: [{ role: 'assistant', content: 'late A …
+    154|     try { expect(model.view.messages.some(message => message.content =…
+       |                                                                                             ^
+    155|     finally { releaseWrite(); await selection; }
+    156|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts > receipt recovery and window state > does not start a new realtime client after disposal while selection is waiting
+AssertionError: expected [ RealtimeClient{ …(5) }, …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ electron/__tests__/gateway-connections-chat.test.ts:162:21
+    160|     const writing = model.draft('held'); const selection = model.selec…
+    161|     model.dispose(); release(); await Promise.all([writing, selection]…
+    162|     expect(clients).toHaveLength(1);
+       |                     ^
+    163|   });
+    164|   it('ignores an old conversation stop acknowledgement after switching…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts > receipt recovery and window state > ignores an old conversation stop acknowledgement after switching
+AssertionError: expected 'confirmed' to be '' // Object.is equality
+
+- Expected
++ Received
+
++ confirmed
+
+ ❯ electron/__tests__/gateway-connections-chat.test.ts:169:29
+    167|     const stopping = model.stop(); active = false; await model.select(…
+    168|     await vi.waitFor(() => expect(model.view.phase).toBe('ready')); re…
+    169|     expect(model.view.stop).toBe('');
+       |                             ^
+    170|   });
+    171|   it('does not dispatch an input if realtime disconnects during the in…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-chat.test.ts > receipt recovery and window state > does not dispatch an input if realtime disconnects during the intent fsync
+AssertionError: expected [ [ …(3) ] ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ electron/__tests__/gateway-connections-chat.test.ts:176:21
+    174|     const sending = model.send(); await vi.waitFor(() => expect(pendin…
+    175|     clients.at(-1)!.options.onStateChange('reconnecting'); release(); …
+    176|     expect(posts()).toHaveLength(0);
+       |                     ^
+    177|   });
+    178|   it('uses stream offset replacement to avoid duplicate bubbles and re…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 13 passed (18)
+   Start at  17:13:19
+   Duration  1.26s (transform 146ms, setup 13ms, import 219ms, tests 961ms, environment 0ms)
+

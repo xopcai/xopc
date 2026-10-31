@@ -76,7 +76,9 @@ describe('receipt recovery and window state', () => {
   let state: ChatState, accepted: boolean, receiptVisible: boolean, lost: boolean, failWrite: boolean, active: boolean;
   let api: ReturnType<typeof vi.fn>, model: RemoteChatModel;
   let writes: ChatState[];
+  let writeBarrier: Promise<void> | undefined, pendingWriteStarted: boolean;
   beforeEach(() => {
+    writeBarrier = undefined; pendingWriteStarted = false;
     clients.length = 0; state = { version: 1, selected: conversationId, drafts: {} }; writes = [];
     accepted = false; receiptVisible = true; lost = false; failWrite = false; active = false;
     api = vi.fn(async (path: string, body?: unknown) => {
@@ -97,6 +99,8 @@ describe('receipt recovery and window state', () => {
   });
   function make() {
     return new RemoteChatModel(api as ChatApi, { read: async () => structuredClone(state), write: async value => {
+      if (value.pending) pendingWriteStarted = true;
+      if (writeBarrier) await writeBarrier;
       if (failWrite) throw new Error('disk failed'); state = structuredClone(value); writes.push(state);
     } }, () => {}, () => { throw new Error('mock realtime'); }, 'ws://fixture');
   }
@@ -129,6 +133,54 @@ describe('receipt recovery and window state', () => {
     await ready(); await model.draft('A'); await model.select(otherId); await vi.waitFor(() => expect(model.view.phase).toBe('ready'));
     expect(model.view.draft).toBe(''); await model.draft('B'); await model.select(conversationId);
     expect(model.view.draft).toBe('A'); model.dispose(); clients.at(-1)!.options.onStateChange('connected'); expect(model.view.selected).toBe(conversationId);
+  });
+  it('does not start a competing connection while initialization is pending', async () => {
+    const delegate = api.getMockImplementation()!; let release!: (value: unknown) => void;
+    api.mockImplementation((path: string, body?: unknown) => path === '/api/models' ? new Promise(resolve => { release = resolve; }) : delegate(path, body));
+    const initializing = model.initialize(); await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    await model.select(otherId);
+    try { expect(clients).toHaveLength(0); } finally { release({ models: [{ id: 'fixture/model' }] }); await initializing; }
+  });
+  it('persists an update queued at the writer completion boundary', async () => {
+    await ready();
+    const first = model.draft('first');
+    const second = new Promise<void>((resolve, reject) => queueMicrotask(() => { void model.draft('last').then(resolve, reject); }));
+    await Promise.all([first, second]); await model.flush();
+    expect(state.drafts[conversationId]).toBe('last');
+  });
+  it('invalidates old history before waiting for a conversation-switch write', async () => {
+    await ready(); const delegate = api.getMockImplementation()!;
+    let releaseHistory!: (value: unknown) => void, releaseWrite!: () => void;
+    api.mockImplementation((path: string, body?: unknown) => path.startsWith(`/api/sessions/${conversationId}/messages`)
+      ? new Promise(resolve => { releaseHistory = resolve; }) : delegate(path, body));
+    const refresh = model.refresh(); await vi.waitFor(() => expect(releaseHistory).toBeTypeOf('function'));
+    writeBarrier = new Promise(resolve => { releaseWrite = resolve; });
+    const selection = model.select(otherId);
+    await Promise.resolve();
+    releaseHistory({ messages: [{ role: 'assistant', content: 'late A history' }] }); await refresh;
+    try { expect(model.view.messages.some(message => message.content === 'late A history')).toBe(false); }
+    finally { releaseWrite(); await selection; }
+  });
+  it('does not start a new realtime client after disposal while selection is waiting', async () => {
+    await ready(); let release!: () => void;
+    writeBarrier = new Promise(resolve => { release = resolve; });
+    const writing = model.draft('held'); const selection = model.select(otherId);
+    model.dispose(); release(); await Promise.all([writing, selection]);
+    expect(clients).toHaveLength(1);
+  });
+  it('ignores an old conversation stop acknowledgement after switching', async () => {
+    active = true; await ready(); const delegate = api.getMockImplementation()!; let release!: (value: unknown) => void;
+    api.mockImplementation((path: string, body?: unknown) => path === '/api/agent/abort' ? new Promise(resolve => { release = resolve; }) : delegate(path, body));
+    const stopping = model.stop(); active = false; await model.select(otherId);
+    await vi.waitFor(() => expect(model.view.phase).toBe('ready')); release({ ok: true }); await stopping;
+    expect(model.view.stop).toBe('');
+  });
+  it('does not dispatch an input if realtime disconnects during the intent fsync', async () => {
+    await ready(); await model.draft('hello'); let release!: () => void;
+    writeBarrier = new Promise(resolve => { release = resolve; });
+    const sending = model.send(); await vi.waitFor(() => expect(pendingWriteStarted).toBe(true));
+    clients.at(-1)!.options.onStateChange('reconnecting'); release(); await sending;
+    expect(posts()).toHaveLength(0);
   });
   it('uses stream offset replacement to avoid duplicate bubbles and reconciles gaps from history', async () => {
     active = true; await ready(); const client = clients.at(-1)!;

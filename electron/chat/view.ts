@@ -13,6 +13,7 @@ function button(text: string, action: () => void, selected = false) {
   node.setAttribute('aria-pressed', String(selected)); return node;
 }
 function render(view: ChatView) {
+  element<HTMLButtonElement>('new').disabled = ['connecting', 'syncing', 'recovery'].includes(view.phase);
   element('status').textContent = phases[view.phase]; element('notice').textContent = view.notice;
   element('skeleton').hidden = !['connecting', 'syncing'].includes(view.phase) || view.messages.length > 0;
   element('sessions').replaceChildren(...view.sessions.map(session => button(session.name || session.label || session.key,
