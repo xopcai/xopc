@@ -31,6 +31,15 @@ export function installedApplicationPids(rows, executablePaths) {
   });
 }
 
+/** Include orphaned helpers and bundled CLI processes when checking a test bundle is idle. */
+export function installedBundleProcesses(rows, applicationPaths) {
+  return rows.split('\n').flatMap(row => {
+    const match = row.trim().match(/^(\d+)\s+(.+)$/);
+    return match && applicationPaths.some(path => match[2].startsWith(`${path}/Contents/`))
+      ? [{ pid: Number(match[1]), executable: match[2] }] : [];
+  });
+}
+
 /** Fingerprint the entire installed application, including unpacked and native resources. */
 export async function installedAppFingerprint(directory) {
   const files = {};

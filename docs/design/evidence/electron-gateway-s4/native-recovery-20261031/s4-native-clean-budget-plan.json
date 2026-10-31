@@ -1,0 +1,19 @@
+{
+  "scope": "macOS arm64 original sampler; no injected startup probes; all three outcomes retained",
+  "order": [
+    "candidate-a",
+    "original-main-control",
+    "candidate-b"
+  ],
+  "runsPerMode": 30,
+  "firstLaunchApiOperations": 100,
+  "baselineSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "requireInstalledTestBundlesIdle": true,
+  "requireNoConcurrentBuildOrFunctionalE2eOrUiAutomation": true,
+  "candidateMainSha256": "b5d9fa570e7cd51048de289559d1d95090e7a292e604c7a33cbc4e61cde59da0",
+  "controlMainSha256": "b5d9fa570e7cd51048de289559d1d95090e7a292e604c7a33cbc4e61cde59da0",
+  "budgetsChanged": false,
+  "diagnosticSamplesUsedForAcceptance": false,
+  "executionStatus": "deferred at user request; no acceptance series started",
+  "originalBudgetsRetained": true
+}

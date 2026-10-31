@@ -1,0 +1,8 @@
+{
+  "nginxRestoredSha256": "077b3843cf9887f6960df1348d88d39a8de34af2ceac73694d7860d2120455db",
+  "isolatedGatewayPidStopped": 4036109,
+  "isolatedDirectoryRemoved": true,
+  "originalGatewayPid": 3603089,
+  "originalGatewayAlive": true,
+  "testCredentialFilesRemovedWithDirectory": true
+}

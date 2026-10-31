@@ -1,0 +1,28 @@
+{
+  "passed": false,
+  "scope": "Only explicitly named installed test bundles; unrelated host load is not covered",
+  "startedAt": "2026-10-31T12:12:12.750Z",
+  "applications": [
+    "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app"
+  ],
+  "remaining": [
+    {
+      "pid": 80474,
+      "executable": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/MacOS/xopc"
+    },
+    {
+      "pid": 80512,
+      "executable": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/Frameworks/xopc Helper.app/Contents/MacOS/xopc Helper"
+    },
+    {
+      "pid": 80513,
+      "executable": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/Frameworks/xopc Helper.app/Contents/MacOS/xopc Helper"
+    },
+    {
+      "pid": 80515,
+      "executable": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/Frameworks/xopc Helper (Renderer).app/Contents/MacOS/xopc Helper (Renderer)"
+    }
+  ],
+  "error": "AssertionError [ERR_ASSERTION]: Stale test processes would contaminate acceptance; inspect evidence and clean only owned test instances\n\n4 !== 0\n\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-acceptance-idle.mjs:29:10",
+  "finishedAt": "2026-10-31T12:12:17.843Z"
+}

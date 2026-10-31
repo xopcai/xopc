@@ -2,6 +2,8 @@
 
 日期：2026-10-31。基于已合并 PR #41 的 `main@c8da81aa0280a3a45041bfbfa39c2f389d98b965`，新 worktree `gateway-p2a1-s4/xopc`、分支 `codex/gateway-p2a1-s4`。
 
+**最新：macOS arm64内部预览的功能验证已完成；性能未验收，按用户“先完成整体功能、后续统一优化性能”的新指令移至专项，不阻塞S5功能开发。** 原预算和失败不改。新版包原生恢复、本地、100次Docker输入及独立服务器HTTPS/SSH/实际模型结果见[原生恢复与完整复验](./evidence/electron-gateway-s4/native-recovery-20261031/README.md)。Windows/其他架构和正式公证渠道仍待验证，不声明全面发布条件已满足。以下保留旧批次状态。
+
 后续更新：用户已授权完整方案。最新批次见[继续开发记录](./evidence/electron-gateway-s4/continuation-20261031/README.md)：新版包本地/远端fixture回归通过，原预算及原生恢复点击仍未验收。下文保留原批次结果，不混算新旧包；后续范围见[实施进度](./electron-gateway-execution-progress.md)。
 
 **状态：主要功能和 macOS 安装包链路已验证，S4 尚未整体验收。原本地就绪预算仍有失败，原生恢复按钮点击 E2E、Windows 与正式公证渠道验证仍未完成。** 不推进 S5 或远端 Host/本机能力。

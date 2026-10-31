@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "scope": "Only explicitly named installed test bundles; unrelated host load is not covered",
+  "startedAt": "2026-10-31T12:33:32.755Z",
+  "applications": [
+    "/tmp/xopc-s4-delivery/fault-missing-remote-ui/xopc.app",
+    "/private/tmp/xopc-s4-delivery/fault-missing-remote-ui/xopc.app",
+    "/tmp/xopc-s4-delivery/fault-recovery-unique/xopc.app",
+    "/private/tmp/xopc-s4-delivery/fault-recovery-unique/xopc.app",
+    "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-recovery-fault/xopc.app",
+    "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app",
+    "/tmp/xopc-s4-delivery/installed-native-choice/xopc.app",
+    "/private/tmp/xopc-s4-delivery/installed-native-choice/xopc.app",
+    "/tmp/xopc-s4-delivery/installed-native-physical/xopc.app",
+    "/private/tmp/xopc-s4-delivery/installed-native-physical/xopc.app"
+  ],
+  "remaining": [],
+  "finishedAt": "2026-10-31T12:33:32.778Z"
+}

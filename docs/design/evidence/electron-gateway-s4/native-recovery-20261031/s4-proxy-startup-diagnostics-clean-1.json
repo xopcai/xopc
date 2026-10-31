@@ -1,0 +1,3858 @@
+{
+  "schemaVersion": 2,
+  "samplingPlan": "first-launch-heavy-v1",
+  "startedAt": "2026-10-31T12:08:10.788Z",
+  "commit": "22c9e82513ea7f4816058b78f95f294e1fe2953d",
+  "worktreeDirty": true,
+  "artifactSha256": "7b22aadb6b88c5b1176c72cc2cfd61c6c1b279d864b2ee1c68017aabb4c4b364",
+  "developmentLayoutLink": true,
+  "node": "v26.12.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "osRelease": "25.6.0",
+  "artifactSourceRef": "working-tree",
+  "scope": "Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server",
+  "runs": 10,
+  "operations": 100,
+  "functional": false,
+  "diagnostics": true,
+  "serverDiagnostics": false,
+  "modes": [
+    "reuse"
+  ],
+  "samples": [
+    {
+      "mode": "reuse",
+      "index": 0,
+      "passed": true,
+      "readyMs": 1169.726833,
+      "configMs": [
+        45.30000001192093,
+        5,
+        5.4000000059604645,
+        3.7000000178813934,
+        4.5999999940395355,
+        4.199999988079071,
+        31.900000005960464,
+        5.0999999940395355,
+        5.5999999940395355,
+        4.200000017881393,
+        3.699999988079071,
+        4.5999999940395355,
+        4.700000017881393,
+        3.5999999940395355,
+        3.5,
+        4.399999976158142,
+        5.800000011920929,
+        6.4000000059604645,
+        5.4000000059604645,
+        3.800000011920929,
+        5.4000000059604645,
+        5.5999999940395355,
+        4.399999976158142,
+        4.5,
+        4.5,
+        3.7000000178813934,
+        3.699999988079071,
+        5.299999982118607,
+        4.600000023841858,
+        4.600000023841858,
+        3.7000000178813934,
+        4.300000011920929,
+        4.0999999940395355,
+        3,
+        4.200000017881393,
+        3.2000000178813934,
+        3.600000023841858,
+        4.699999988079071,
+        3.2999999821186066,
+        2.9000000059604645,
+        4,
+        3,
+        3.800000011920929,
+        3.2000000178813934,
+        3.2000000178813934,
+        3.7999999821186066,
+        3.800000011920929,
+        3.100000023841858,
+        4.399999976158142,
+        3.199999988079071,
+        3.7999999821186066,
+        4,
+        3.7000000178813934,
+        3.5,
+        3.199999988079071,
+        3.0999999940395355,
+        4.300000011920929,
+        2.7999999821186066,
+        3.9000000059604645,
+        2.899999976158142,
+        3.4000000059604645,
+        3,
+        3.100000023841858,
+        3.5,
+        2.9000000059604645,
+        3.4000000059604645,
+        2.899999976158142,
+        3.4000000059604645,
+        4,
+        3.2999999821186066,
+        3,
+        2.899999976158142,
+        3.5999999940395355,
+        3.100000023841858,
+        3.0999999940395355,
+        2.800000011920929,
+        3.2000000178813934,
+        3.0999999940395355,
+        3.0999999940395355,
+        3.5999999940395355,
+        3.0999999940395355,
+        3.5999999940395355,
+        2.800000011920929,
+        3.2000000178813934,
+        4.5999999940395355,
+        2.699999988079071,
+        3.4000000059604645,
+        2.600000023841858,
+        3.0999999940395355,
+        2.9000000059604645,
+        2.9000000059604645,
+        2.899999976158142,
+        3.300000011920929,
+        2.7999999821186066,
+        3.4000000059604645,
+        3,
+        4.299999982118607,
+        3.7999999821186066,
+        2.7999999821186066,
+        4
+      ],
+      "sessionsMs": [
+        11.199999988079071,
+        2,
+        1.699999988079071,
+        1.5999999940395355,
+        1.800000011920929,
+        6,
+        1.7000000178813934,
+        2.2999999821186066,
+        1.7999999821186066,
+        2.5999999940395355,
+        1.9000000059604645,
+        1.9000000059604645,
+        1.5999999940395355,
+        2.5,
+        1.2000000178813934,
+        2.300000011920929,
+        2.199999988079071,
+        2.7999999821186066,
+        1.9000000059604645,
+        2.199999988079071,
+        2.5999999940395355,
+        2.7000000178813934,
+        1.899999976158142,
+        1.4000000059604645,
+        1.9000000059604645,
+        2.5999999940395355,
+        1.600000023841858,
+        1.5999999940395355,
+        1.899999976158142,
+        2.2999999821186066,
+        1.899999976158142,
+        1.4000000059604645,
+        1.5999999940395355,
+        1.5,
+        1.399999976158142,
+        2.199999988079071,
+        2,
+        1.300000011920929,
+        2.0999999940395355,
+        1.0999999940395355,
+        1.699999988079071,
+        1.5999999940395355,
+        1.0999999940395355,
+        2.399999976158142,
+        1.4000000059604645,
+        1.899999976158142,
+        2.199999988079071,
+        1.5,
+        1.5,
+        1.300000011920929,
+        1.4000000059604645,
+        1.5999999940395355,
+        1.5,
+        1.0999999940395355,
+        2.100000023841858,
+        1.2999999821186066,
+        1.4000000059604645,
+        1.300000011920929,
+        1.4000000059604645,
+        1.4000000059604645,
+        1.199999988079071,
+        2,
+        1.399999976158142,
+        1.7000000178813934,
+        1.2999999821186066,
+        1.300000011920929,
+        1.300000011920929,
+        1.0999999940395355,
+        1.800000011920929,
+        1.0999999940395355,
+        2.300000011920929,
+        1.4000000059604645,
+        1.5,
+        2.0999999940395355,
+        1.199999988079071,
+        1.5999999940395355,
+        1,
+        2.0999999940395355,
+        1.4000000059604645,
+        1.5,
+        1.300000011920929,
+        1,
+        1.199999988079071,
+        1.199999988079071,
+        1.800000011920929,
+        1.0999999940395355,
+        1.5999999940395355,
+        1.5,
+        1.5,
+        1.2999999821186066,
+        1.2000000178813934,
+        1.5,
+        1.300000011920929,
+        1.4000000059604645,
+        1.199999988079071,
+        1.7000000178813934,
+        1.100000023841858,
+        1.600000023841858,
+        1.4000000059604645,
+        1.0999999940395355
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 582.7999999821186,
+          "headersAt": 627.7999999821186,
+          "completedAt": 628.0999999940395,
+          "requestId": "dedec825-daf4-440b-864c-980fdd42e957"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 628.0999999940395,
+          "headersAt": 638.3999999761581,
+          "completedAt": 639.2999999821186,
+          "requestId": "6f5c5c72-0021-459a-b616-fafde04b792a"
+        },
+        {
+          "path": "/api/config",
+          "index": 1,
+          "start": 639.2999999821186,
+          "headersAt": 643.6999999880791,
+          "completedAt": 644.2999999821186,
+          "requestId": "bcd53f3c-9249-4f99-ab6f-45302d2dda6d"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 1,
+          "start": 644.2999999821186,
+          "headersAt": 646.1999999880791,
+          "completedAt": 646.2999999821186,
+          "requestId": "62d14fbe-a7f3-4302-b66c-3987aa6590c9"
+        },
+        {
+          "path": "/api/config",
+          "index": 2,
+          "start": 646.2999999821186,
+          "headersAt": 651.2999999821186,
+          "completedAt": 651.6999999880791,
+          "requestId": "4cf82a9e-ad5f-4984-9759-cab4bc897cdf"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 2,
+          "start": 651.6999999880791,
+          "headersAt": 653.1999999880791,
+          "completedAt": 653.3999999761581,
+          "requestId": "f379994f-3656-497e-b9d8-04aa2039866d"
+        },
+        {
+          "path": "/api/config",
+          "index": 3,
+          "start": 653.3999999761581,
+          "headersAt": 656.6999999880791,
+          "completedAt": 657.0999999940395,
+          "requestId": "b53a279a-5eb2-4c7b-9aac-89cd13a419e3"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 3,
+          "start": 657.0999999940395,
+          "headersAt": 658.5,
+          "completedAt": 658.6999999880791,
+          "requestId": "002780cd-6f6c-4981-9637-9bb56a8fd049"
+        },
+        {
+          "path": "/api/config",
+          "index": 4,
+          "start": 658.6999999880791,
+          "headersAt": 662.5999999940395,
+          "completedAt": 663.2999999821186,
+          "requestId": "5749f6dc-6808-4780-903c-6bdac848274c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 4,
+          "start": 663.2999999821186,
+          "headersAt": 664.8999999761581,
+          "completedAt": 665.0999999940395,
+          "requestId": "8f349f36-f8e0-4ad7-9bfd-3431a1c026ef"
+        },
+        {
+          "path": "/api/config",
+          "index": 5,
+          "start": 665.0999999940395,
+          "headersAt": 668.6999999880791,
+          "completedAt": 669.2999999821186,
+          "requestId": "d53c1ce1-9a32-4fcb-81b3-2a3fcbf0b6ce"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 5,
+          "start": 669.2999999821186,
+          "headersAt": 674.5999999940395,
+          "completedAt": 675.2999999821186,
+          "requestId": "16758a9e-653e-413e-8156-9fe0c86a56e2"
+        },
+        {
+          "path": "/api/config",
+          "index": 6,
+          "start": 675.3999999761581,
+          "headersAt": 706.7999999821186,
+          "completedAt": 707.2999999821186,
+          "requestId": "cd3e0eab-cf28-4311-9593-9a3011b0bb50"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 6,
+          "start": 707.2999999821186,
+          "headersAt": 708.8999999761581,
+          "completedAt": 709,
+          "requestId": "0f3ceba1-a64a-40cc-8f26-cf09fe664b7c"
+        },
+        {
+          "path": "/api/config",
+          "index": 7,
+          "start": 709,
+          "headersAt": 713.8999999761581,
+          "completedAt": 714.0999999940395,
+          "requestId": "950ec170-63c5-4b98-be71-50e06934d81e"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 7,
+          "start": 714.0999999940395,
+          "headersAt": 716.1999999880791,
+          "completedAt": 716.3999999761581,
+          "requestId": "0fd455c0-dd16-4ca0-8a3e-e30976e758c2"
+        },
+        {
+          "path": "/api/config",
+          "index": 8,
+          "start": 716.5,
+          "headersAt": 720.6999999880791,
+          "completedAt": 722.0999999940395,
+          "requestId": "576b2968-3679-4381-8963-67a8cd3c9843"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 8,
+          "start": 722.0999999940395,
+          "headersAt": 723.8999999761581,
+          "completedAt": 723.8999999761581,
+          "requestId": "6a013020-fb88-400e-972c-73cf5f559ec7"
+        },
+        {
+          "path": "/api/config",
+          "index": 9,
+          "start": 723.8999999761581,
+          "headersAt": 727.6999999880791,
+          "completedAt": 728.0999999940395,
+          "requestId": "399cca92-60a4-447c-8bc0-76ea01d1832a"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 9,
+          "start": 728.0999999940395,
+          "headersAt": 730.5,
+          "completedAt": 730.6999999880791,
+          "requestId": "b445dc6d-4a0c-432b-89c4-054644e544c5"
+        },
+        {
+          "path": "/api/config",
+          "index": 10,
+          "start": 730.6999999880791,
+          "headersAt": 733.8999999761581,
+          "completedAt": 734.3999999761581,
+          "requestId": "a874e955-6e39-487d-9c46-c391b8b05ea8"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 10,
+          "start": 734.3999999761581,
+          "headersAt": 736.0999999940395,
+          "completedAt": 736.2999999821186,
+          "requestId": "b825479c-89b0-4d2c-a079-03b561ddd6bf"
+        },
+        {
+          "path": "/api/config",
+          "index": 11,
+          "start": 736.2999999821186,
+          "headersAt": 740.3999999761581,
+          "completedAt": 740.8999999761581,
+          "requestId": "822eb4e3-439b-4c25-ba7f-fb4bc86365da"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 11,
+          "start": 740.8999999761581,
+          "headersAt": 742.7999999821186,
+          "completedAt": 742.7999999821186,
+          "requestId": "fe666ee7-33ec-44fb-8d39-73dce1fd71ee"
+        },
+        {
+          "path": "/api/config",
+          "index": 12,
+          "start": 742.7999999821186,
+          "headersAt": 747,
+          "completedAt": 747.5,
+          "requestId": "240ba207-ea1f-41ab-aa55-523a94869298"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 12,
+          "start": 747.5,
+          "headersAt": 748.8999999761581,
+          "completedAt": 749.0999999940395,
+          "requestId": "b2298345-c2f5-451a-8561-3e09317336da"
+        },
+        {
+          "path": "/api/config",
+          "index": 13,
+          "start": 749.0999999940395,
+          "headersAt": 752.2999999821186,
+          "completedAt": 752.6999999880791,
+          "requestId": "f3424c98-a4f7-4c7e-8af9-79c49a4938b3"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 13,
+          "start": 752.6999999880791,
+          "headersAt": 755.0999999940395,
+          "completedAt": 755.1999999880791,
+          "requestId": "6351ede7-6f8f-481a-a1ec-ae5f5d1a812a"
+        },
+        {
+          "path": "/api/config",
+          "index": 14,
+          "start": 755.2999999821186,
+          "headersAt": 758.5,
+          "completedAt": 758.7999999821186,
+          "requestId": "877c0387-0e1f-49ff-bb56-ce00f1a7ece5"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 14,
+          "start": 758.7999999821186,
+          "headersAt": 759.8999999761581,
+          "completedAt": 760,
+          "requestId": "66f3cc1f-68e1-4fa1-aaa7-0d78481efd88"
+        },
+        {
+          "path": "/api/config",
+          "index": 15,
+          "start": 760,
+          "headersAt": 762.3999999761581,
+          "completedAt": 764.3999999761581,
+          "requestId": "471829ce-5e89-4b1b-9934-2c30e5ce58bd"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 15,
+          "start": 764.3999999761581,
+          "headersAt": 766.5,
+          "completedAt": 766.6999999880791,
+          "requestId": "2360fec8-26da-4b32-9cf6-9ab65cc992e3"
+        },
+        {
+          "path": "/api/config",
+          "index": 16,
+          "start": 766.6999999880791,
+          "headersAt": 770.3999999761581,
+          "completedAt": 772.5,
+          "requestId": "1d5538e7-d98a-463f-ba1c-5b710aa22f8e"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 16,
+          "start": 772.5,
+          "headersAt": 774.5,
+          "completedAt": 774.6999999880791,
+          "requestId": "1d5a62fe-ddc7-45aa-b0ce-a0f8efa5e3cd"
+        },
+        {
+          "path": "/api/config",
+          "index": 17,
+          "start": 774.6999999880791,
+          "headersAt": 780.6999999880791,
+          "completedAt": 781.0999999940395,
+          "requestId": "f9e7e23d-07be-42d1-8284-663568abfa05"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 17,
+          "start": 781.0999999940395,
+          "headersAt": 783.7999999821186,
+          "completedAt": 783.8999999761581,
+          "requestId": "0ad7911a-f19b-49a5-a134-c8b4f081d592"
+        },
+        {
+          "path": "/api/config",
+          "index": 18,
+          "start": 783.8999999761581,
+          "headersAt": 789,
+          "completedAt": 789.2999999821186,
+          "requestId": "5b32090b-94d0-4f8f-92ee-f3bc3bd210c3"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 18,
+          "start": 789.2999999821186,
+          "headersAt": 791,
+          "completedAt": 791.1999999880791,
+          "requestId": "2d8092e1-9dfd-4e35-bf18-ed13ec67bc08"
+        },
+        {
+          "path": "/api/config",
+          "index": 19,
+          "start": 791.1999999880791,
+          "headersAt": 794.5,
+          "completedAt": 795,
+          "requestId": "75cdb974-e227-4f8d-9f67-4703428fd68e"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 19,
+          "start": 795,
+          "headersAt": 797.0999999940395,
+          "completedAt": 797.1999999880791,
+          "requestId": "d78bdc6c-9d87-4686-8dee-a2218c3be9d2"
+        },
+        {
+          "path": "/api/config",
+          "index": 20,
+          "start": 797.1999999880791,
+          "headersAt": 802.0999999940395,
+          "completedAt": 802.5999999940395,
+          "requestId": "6208d042-d613-400a-81bb-c23e7344e729"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 20,
+          "start": 802.5999999940395,
+          "headersAt": 805,
+          "completedAt": 805.1999999880791,
+          "requestId": "b60b535b-395f-442b-9363-7abf83f107cd"
+        },
+        {
+          "path": "/api/config",
+          "index": 21,
+          "start": 805.1999999880791,
+          "headersAt": 810.1999999880791,
+          "completedAt": 810.7999999821186,
+          "requestId": "a8f6ffdc-51d1-4534-9499-c7716b78cc20"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 21,
+          "start": 810.7999999821186,
+          "headersAt": 813.3999999761581,
+          "completedAt": 813.5,
+          "requestId": "69f8111e-9000-4b08-a8e2-10488f119575"
+        },
+        {
+          "path": "/api/config",
+          "index": 22,
+          "start": 813.5,
+          "headersAt": 817.3999999761581,
+          "completedAt": 817.8999999761581,
+          "requestId": "bf51b0db-f545-4b6c-a730-14ebb0587726"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 22,
+          "start": 818,
+          "headersAt": 819.6999999880791,
+          "completedAt": 819.8999999761581,
+          "requestId": "128baddb-a98f-4a0c-9222-0feebcffa33f"
+        },
+        {
+          "path": "/api/config",
+          "index": 23,
+          "start": 819.8999999761581,
+          "headersAt": 823.8999999761581,
+          "completedAt": 824.3999999761581,
+          "requestId": "7b2ce939-4bdf-45a7-b5b8-2c3acc0a1d02"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 23,
+          "start": 824.3999999761581,
+          "headersAt": 825.7999999821186,
+          "completedAt": 825.7999999821186,
+          "requestId": "6a1f600e-8f90-4dba-bf2e-6082f4313f92"
+        },
+        {
+          "path": "/api/config",
+          "index": 24,
+          "start": 825.8999999761581,
+          "headersAt": 830.0999999940395,
+          "completedAt": 830.3999999761581,
+          "requestId": "26b1c66b-15aa-47e5-ab42-48fbfd3cdfb4"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 24,
+          "start": 830.3999999761581,
+          "headersAt": 832.1999999880791,
+          "completedAt": 832.2999999821186,
+          "requestId": "58f5c898-ce7a-4d7e-942a-52dac76eef53"
+        },
+        {
+          "path": "/api/config",
+          "index": 25,
+          "start": 832.2999999821186,
+          "headersAt": 835.5999999940395,
+          "completedAt": 836,
+          "requestId": "4ad00b5f-1a7d-4ecc-a8d2-08ceaa31b58c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 25,
+          "start": 836.0999999940395,
+          "headersAt": 838.5999999940395,
+          "completedAt": 838.6999999880791,
+          "requestId": "e04f95d3-b599-449d-9518-b3e68fa928b7"
+        },
+        {
+          "path": "/api/config",
+          "index": 26,
+          "start": 838.6999999880791,
+          "headersAt": 841.8999999761581,
+          "completedAt": 842.3999999761581,
+          "requestId": "7737899f-dc86-43ba-ab28-9e3180dc3f88"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 26,
+          "start": 842.3999999761581,
+          "headersAt": 844,
+          "completedAt": 844,
+          "requestId": "248519a9-d5fc-4052-87e4-e905cdad7b35"
+        },
+        {
+          "path": "/api/config",
+          "index": 27,
+          "start": 844,
+          "headersAt": 848.8999999761581,
+          "completedAt": 849.2999999821186,
+          "requestId": "e66cf4e6-0a5c-4999-929e-c0bbca46e1c9"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 27,
+          "start": 849.2999999821186,
+          "headersAt": 850.7999999821186,
+          "completedAt": 850.8999999761581,
+          "requestId": "5cccc525-53a9-48f7-acae-be116403e95a"
+        },
+        {
+          "path": "/api/config",
+          "index": 28,
+          "start": 850.8999999761581,
+          "headersAt": 855.1999999880791,
+          "completedAt": 855.5,
+          "requestId": "4c922062-2d26-489c-8c8b-8d0ac5b181be"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 28,
+          "start": 855.5,
+          "headersAt": 857.2999999821186,
+          "completedAt": 857.3999999761581,
+          "requestId": "b82b9ac3-cba5-41f8-bcce-6c351a0e17a8"
+        },
+        {
+          "path": "/api/config",
+          "index": 29,
+          "start": 857.3999999761581,
+          "headersAt": 861.6999999880791,
+          "completedAt": 862,
+          "requestId": "6618e51e-d768-4817-ba71-70f32bd35ae9"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 29,
+          "start": 862,
+          "headersAt": 864.0999999940395,
+          "completedAt": 864.2999999821186,
+          "requestId": "92047ce2-5898-497f-9c6c-17eeacd9a9fc"
+        },
+        {
+          "path": "/api/config",
+          "index": 30,
+          "start": 864.2999999821186,
+          "headersAt": 867.5999999940395,
+          "completedAt": 868,
+          "requestId": "2cedbdb5-34fa-495d-a400-55c07f905062"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 30,
+          "start": 868,
+          "headersAt": 869.7999999821186,
+          "completedAt": 869.8999999761581,
+          "requestId": "32ee4bf1-6acb-4567-8022-08570fb2b803"
+        },
+        {
+          "path": "/api/config",
+          "index": 31,
+          "start": 869.8999999761581,
+          "headersAt": 873.8999999761581,
+          "completedAt": 874.1999999880791,
+          "requestId": "1464e57a-2d2f-4fdd-92a9-bf76c9ec6b50"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 31,
+          "start": 874.1999999880791,
+          "headersAt": 875.5,
+          "completedAt": 875.5999999940395,
+          "requestId": "b9847745-c491-4e4e-9862-219c68670246"
+        },
+        {
+          "path": "/api/config",
+          "index": 32,
+          "start": 875.5999999940395,
+          "headersAt": 879.5,
+          "completedAt": 879.6999999880791,
+          "requestId": "6ac7ffc6-6112-4432-a089-0e10cfc50652"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 32,
+          "start": 879.6999999880791,
+          "headersAt": 881.1999999880791,
+          "completedAt": 881.2999999821186,
+          "requestId": "e42f722d-d38c-449a-b58e-18d892990780"
+        },
+        {
+          "path": "/api/config",
+          "index": 33,
+          "start": 881.2999999821186,
+          "headersAt": 883.8999999761581,
+          "completedAt": 884.2999999821186,
+          "requestId": "6181240a-4047-4ea2-92c2-1a3a906078ea"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 33,
+          "start": 884.2999999821186,
+          "headersAt": 885.6999999880791,
+          "completedAt": 885.7999999821186,
+          "requestId": "d579e34b-b0c5-48a2-8d30-a2d8c6e3d40d"
+        },
+        {
+          "path": "/api/config",
+          "index": 34,
+          "start": 885.7999999821186,
+          "headersAt": 889.5,
+          "completedAt": 890,
+          "requestId": "f3559b53-1454-4261-a468-1c3b0404c06d"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 34,
+          "start": 890,
+          "headersAt": 891.2999999821186,
+          "completedAt": 891.3999999761581,
+          "requestId": "06d94ad1-85f9-498e-b457-3838bbd2350f"
+        },
+        {
+          "path": "/api/config",
+          "index": 35,
+          "start": 891.3999999761581,
+          "headersAt": 894.1999999880791,
+          "completedAt": 894.5999999940395,
+          "requestId": "0b512ab2-179f-4c64-9ed7-84c56769d94d"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 35,
+          "start": 894.5999999940395,
+          "headersAt": 896.5999999940395,
+          "completedAt": 896.7999999821186,
+          "requestId": "de4ea248-d373-43e9-9d32-3cf97f6bad41"
+        },
+        {
+          "path": "/api/config",
+          "index": 36,
+          "start": 896.8999999761581,
+          "headersAt": 900.0999999940395,
+          "completedAt": 900.5,
+          "requestId": "71aa4010-d360-47a1-bfd3-a2a8e0ec5b5c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 36,
+          "start": 900.5,
+          "headersAt": 902.3999999761581,
+          "completedAt": 902.5,
+          "requestId": "5a582c81-a8c7-49b0-a673-68bd3b15d9cf"
+        },
+        {
+          "path": "/api/config",
+          "index": 37,
+          "start": 902.5,
+          "headersAt": 906.7999999821186,
+          "completedAt": 907.1999999880791,
+          "requestId": "2a95536a-53f2-44c6-9c3f-700426c5fb47"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 37,
+          "start": 907.1999999880791,
+          "headersAt": 908.3999999761581,
+          "completedAt": 908.5,
+          "requestId": "3c37f9d4-4ceb-40e7-900a-183db6b9edbf"
+        },
+        {
+          "path": "/api/config",
+          "index": 38,
+          "start": 908.5,
+          "headersAt": 911.2999999821186,
+          "completedAt": 911.7999999821186,
+          "requestId": "9a093794-51b2-4469-99e5-ac00e3ffa4fe"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 38,
+          "start": 911.7999999821186,
+          "headersAt": 913.7999999821186,
+          "completedAt": 913.8999999761581,
+          "requestId": "835ccf15-6550-4b49-9df8-b9cd43b8240f"
+        },
+        {
+          "path": "/api/config",
+          "index": 39,
+          "start": 913.8999999761581,
+          "headersAt": 916.5,
+          "completedAt": 916.7999999821186,
+          "requestId": "e69e8835-f5c2-4d97-ba68-91c268f9cae3"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 39,
+          "start": 916.7999999821186,
+          "headersAt": 917.7999999821186,
+          "completedAt": 917.8999999761581,
+          "requestId": "f39cf437-9331-4b92-a7f8-6f94dbecf447"
+        },
+        {
+          "path": "/api/config",
+          "index": 40,
+          "start": 917.8999999761581,
+          "headersAt": 921.6999999880791,
+          "completedAt": 921.8999999761581,
+          "requestId": "1d5b683d-7609-4653-b770-72d34ac5f6c2"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 40,
+          "start": 922,
+          "headersAt": 923.5999999940395,
+          "completedAt": 923.6999999880791,
+          "requestId": "7d6ce953-c4d5-4b55-aebc-ccc9358caa85"
+        },
+        {
+          "path": "/api/config",
+          "index": 41,
+          "start": 923.6999999880791,
+          "headersAt": 926.1999999880791,
+          "completedAt": 926.6999999880791,
+          "requestId": "ba68c757-e94d-4a91-87a7-636f437c6f4a"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 41,
+          "start": 926.6999999880791,
+          "headersAt": 928.2999999821186,
+          "completedAt": 928.2999999821186,
+          "requestId": "ebbe1030-4501-49c7-8221-ecd4744ce2c0"
+        },
+        {
+          "path": "/api/config",
+          "index": 42,
+          "start": 928.2999999821186,
+          "headersAt": 931.6999999880791,
+          "completedAt": 932.0999999940395,
+          "requestId": "d38f31b8-2bc4-40ba-94e2-0215762f9ca1"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 42,
+          "start": 932.0999999940395,
+          "headersAt": 933.1999999880791,
+          "completedAt": 933.1999999880791,
+          "requestId": "2d330465-9b27-4a36-94c4-dda896f05755"
+        },
+        {
+          "path": "/api/config",
+          "index": 43,
+          "start": 933.2999999821186,
+          "headersAt": 936,
+          "completedAt": 936.5,
+          "requestId": "0282ab78-d438-44b1-aa9a-68a365d790ac"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 43,
+          "start": 936.5,
+          "headersAt": 938.7999999821186,
+          "completedAt": 938.8999999761581,
+          "requestId": "62411465-fd17-4e13-beba-2585ac1cc32e"
+        },
+        {
+          "path": "/api/config",
+          "index": 44,
+          "start": 938.8999999761581,
+          "headersAt": 941.7999999821186,
+          "completedAt": 942.0999999940395,
+          "requestId": "518e8d79-a7d5-4e10-b1c4-9db906ddbf0e"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 44,
+          "start": 942.0999999940395,
+          "headersAt": 943.3999999761581,
+          "completedAt": 943.5,
+          "requestId": "811a4ee7-a3f2-4bae-bda3-4c4b9c10b4a2"
+        },
+        {
+          "path": "/api/config",
+          "index": 45,
+          "start": 943.5999999940395,
+          "headersAt": 946.7999999821186,
+          "completedAt": 947.3999999761581,
+          "requestId": "1fefa331-b58a-44e4-b8ba-c7840e160c4f"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 45,
+          "start": 947.5,
+          "headersAt": 949.2999999821186,
+          "completedAt": 949.3999999761581,
+          "requestId": "9ac55021-4c5b-4453-9e5d-2c0afaacbfd2"
+        },
+        {
+          "path": "/api/config",
+          "index": 46,
+          "start": 949.3999999761581,
+          "headersAt": 952.6999999880791,
+          "completedAt": 953.1999999880791,
+          "requestId": "4f98faab-02be-4a56-b6fb-88ce145cf2f2"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 46,
+          "start": 953.1999999880791,
+          "headersAt": 955.2999999821186,
+          "completedAt": 955.3999999761581,
+          "requestId": "0a6a6cc6-c7db-41f7-8a44-34b28c160b87"
+        },
+        {
+          "path": "/api/config",
+          "index": 47,
+          "start": 955.3999999761581,
+          "headersAt": 958.0999999940395,
+          "completedAt": 958.5,
+          "requestId": "acd0b44f-1eda-4a29-a34b-452c73723a19"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 47,
+          "start": 958.5,
+          "headersAt": 959.8999999761581,
+          "completedAt": 960,
+          "requestId": "7ca3a41a-1739-4bf4-b2f8-a6a574197fe4"
+        },
+        {
+          "path": "/api/config",
+          "index": 48,
+          "start": 960,
+          "headersAt": 964,
+          "completedAt": 964.3999999761581,
+          "requestId": "9dffeaf2-ad1b-40f7-835d-2e988992c75e"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 48,
+          "start": 964.3999999761581,
+          "headersAt": 965.8999999761581,
+          "completedAt": 965.8999999761581,
+          "requestId": "b65fe4e1-2a58-43cb-8d41-be411f06a8af"
+        },
+        {
+          "path": "/api/config",
+          "index": 49,
+          "start": 966,
+          "headersAt": 968.6999999880791,
+          "completedAt": 969.1999999880791,
+          "requestId": "d5775466-d84a-4fae-a0cd-1ef214d3f8af"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 49,
+          "start": 969.1999999880791,
+          "headersAt": 970.3999999761581,
+          "completedAt": 970.5,
+          "requestId": "e2c911be-3892-4392-8ea5-3412b1c061f5"
+        },
+        {
+          "path": "/api/config",
+          "index": 50,
+          "start": 970.5,
+          "headersAt": 973.8999999761581,
+          "completedAt": 974.2999999821186,
+          "requestId": "ac96b7d8-85d9-43d1-99e1-3aaacc02b062"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 50,
+          "start": 974.2999999821186,
+          "headersAt": 975.5999999940395,
+          "completedAt": 975.6999999880791,
+          "requestId": "426eb64a-5998-4403-867e-7429ad66328a"
+        },
+        {
+          "path": "/api/config",
+          "index": 51,
+          "start": 975.6999999880791,
+          "headersAt": 978.5,
+          "completedAt": 979.6999999880791,
+          "requestId": "6d82f92d-3f29-46ea-a007-cfdd65fec3ec"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 51,
+          "start": 979.6999999880791,
+          "headersAt": 981.1999999880791,
+          "completedAt": 981.2999999821186,
+          "requestId": "328e9f58-514a-4d4c-9abd-cd20a79fa72e"
+        },
+        {
+          "path": "/api/config",
+          "index": 52,
+          "start": 981.2999999821186,
+          "headersAt": 984.5,
+          "completedAt": 985,
+          "requestId": "457afa40-53c7-46b0-aa5d-f231f9715e33"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 52,
+          "start": 985,
+          "headersAt": 986.3999999761581,
+          "completedAt": 986.5,
+          "requestId": "b33ebbfa-ae09-4c7b-9899-a4795c1d8c6e"
+        },
+        {
+          "path": "/api/config",
+          "index": 53,
+          "start": 986.5,
+          "headersAt": 989.6999999880791,
+          "completedAt": 990,
+          "requestId": "31eb8197-3772-43b9-be85-e5f80f72e9bd"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 53,
+          "start": 990.0999999940395,
+          "headersAt": 991,
+          "completedAt": 991.1999999880791,
+          "requestId": "3335e768-d148-450e-937e-50265b9fb30b"
+        },
+        {
+          "path": "/api/config",
+          "index": 54,
+          "start": 991.1999999880791,
+          "headersAt": 994,
+          "completedAt": 994.3999999761581,
+          "requestId": "e0f5e6bf-23f0-406a-94b6-4c9b9aaabdc9"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 54,
+          "start": 994.3999999761581,
+          "headersAt": 996.3999999761581,
+          "completedAt": 996.5,
+          "requestId": "e9185853-96ab-475f-89fe-857207a6d405"
+        },
+        {
+          "path": "/api/config",
+          "index": 55,
+          "start": 996.5,
+          "headersAt": 999.2999999821186,
+          "completedAt": 999.5999999940395,
+          "requestId": "c7d75567-4e78-4fd2-90a4-ab04f43a6381"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 55,
+          "start": 999.5999999940395,
+          "headersAt": 1000.6999999880791,
+          "completedAt": 1000.8999999761581,
+          "requestId": "a4dffb9d-9e48-46bf-a567-995e62584cd9"
+        },
+        {
+          "path": "/api/config",
+          "index": 56,
+          "start": 1000.8999999761581,
+          "headersAt": 1003.6999999880791,
+          "completedAt": 1005.1999999880791,
+          "requestId": "d6e87b16-cd22-4b49-b993-5b730c709cf0"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 56,
+          "start": 1005.1999999880791,
+          "headersAt": 1006.5,
+          "completedAt": 1006.5999999940395,
+          "requestId": "e99efbda-cb1a-4211-8e6d-19ae159d1711"
+        },
+        {
+          "path": "/api/config",
+          "index": 57,
+          "start": 1006.5999999940395,
+          "headersAt": 1009.0999999940395,
+          "completedAt": 1009.3999999761581,
+          "requestId": "0a1d97f3-551a-4bce-a402-e9e97afa75a0"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 57,
+          "start": 1009.3999999761581,
+          "headersAt": 1010.5999999940395,
+          "completedAt": 1010.6999999880791,
+          "requestId": "a87a923f-9462-4a45-9f7a-b8b72b3fbd3a"
+        },
+        {
+          "path": "/api/config",
+          "index": 58,
+          "start": 1010.6999999880791,
+          "headersAt": 1014.2999999821186,
+          "completedAt": 1014.5999999940395,
+          "requestId": "32871ea2-fca0-4c27-b8e2-26e8236caf4b"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 58,
+          "start": 1014.5999999940395,
+          "headersAt": 1015.8999999761581,
+          "completedAt": 1016,
+          "requestId": "7ec9f81c-1551-4e3f-bf8a-9ec2a197120e"
+        },
+        {
+          "path": "/api/config",
+          "index": 59,
+          "start": 1016,
+          "headersAt": 1018.5999999940395,
+          "completedAt": 1018.8999999761581,
+          "requestId": "7f927fa2-fe93-45bc-839c-83f6683c6532"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 59,
+          "start": 1018.8999999761581,
+          "headersAt": 1020.1999999880791,
+          "completedAt": 1020.2999999821186,
+          "requestId": "26f773e9-8cd2-4318-8809-91671ea176e4"
+        },
+        {
+          "path": "/api/config",
+          "index": 60,
+          "start": 1020.2999999821186,
+          "headersAt": 1023.2999999821186,
+          "completedAt": 1023.6999999880791,
+          "requestId": "a92785b9-1bc8-4c79-a058-1a4db765a108"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 60,
+          "start": 1023.6999999880791,
+          "headersAt": 1024.8999999761581,
+          "completedAt": 1024.8999999761581,
+          "requestId": "3be175f1-7d8b-4962-81cf-cc71bd6d6799"
+        },
+        {
+          "path": "/api/config",
+          "index": 61,
+          "start": 1024.8999999761581,
+          "headersAt": 1027.5,
+          "completedAt": 1027.8999999761581,
+          "requestId": "3c42efa3-aea3-47d4-81b7-948be1ff8f2c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 61,
+          "start": 1027.8999999761581,
+          "headersAt": 1029.7999999821186,
+          "completedAt": 1029.8999999761581,
+          "requestId": "d149db2e-f9f7-41b1-be79-298ba6626191"
+        },
+        {
+          "path": "/api/config",
+          "index": 62,
+          "start": 1029.8999999761581,
+          "headersAt": 1032.5999999940395,
+          "completedAt": 1033,
+          "requestId": "8ff6fe92-31f9-48d8-b636-08597bfc0b90"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 62,
+          "start": 1033,
+          "headersAt": 1034.2999999821186,
+          "completedAt": 1034.3999999761581,
+          "requestId": "f48fb601-7188-455e-928f-1d7ff95223f6"
+        },
+        {
+          "path": "/api/config",
+          "index": 63,
+          "start": 1034.3999999761581,
+          "headersAt": 1037.699999988079,
+          "completedAt": 1037.8999999761581,
+          "requestId": "2342eaa6-7bba-4d6f-9dbd-ab5dc3c352eb"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 63,
+          "start": 1037.8999999761581,
+          "headersAt": 1039.3999999761581,
+          "completedAt": 1039.5999999940395,
+          "requestId": "c25e178f-bb13-41ea-966f-a089edbb8d06"
+        },
+        {
+          "path": "/api/config",
+          "index": 64,
+          "start": 1039.5999999940395,
+          "headersAt": 1042,
+          "completedAt": 1042.5,
+          "requestId": "fb3dfc7e-32bd-4177-bea9-8c7d9966e7c0"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 64,
+          "start": 1042.5,
+          "headersAt": 1043.699999988079,
+          "completedAt": 1043.7999999821186,
+          "requestId": "244b491e-c5a0-45a1-a682-03b816144778"
+        },
+        {
+          "path": "/api/config",
+          "index": 65,
+          "start": 1043.7999999821186,
+          "headersAt": 1046.699999988079,
+          "completedAt": 1047.199999988079,
+          "requestId": "2aaf5ac9-a7be-4c2f-8211-69bc6266002d"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 65,
+          "start": 1047.199999988079,
+          "headersAt": 1048.5,
+          "completedAt": 1048.5,
+          "requestId": "7d88bcb5-e28f-497e-8f6b-97cacf22e556"
+        },
+        {
+          "path": "/api/config",
+          "index": 66,
+          "start": 1048.5,
+          "headersAt": 1051,
+          "completedAt": 1051.3999999761581,
+          "requestId": "aa376a6b-0700-4fb7-a345-8a3699ddaf85"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 66,
+          "start": 1051.3999999761581,
+          "headersAt": 1052.5999999940395,
+          "completedAt": 1052.699999988079,
+          "requestId": "b54d478e-6b24-46e9-890e-b12a6ef499d4"
+        },
+        {
+          "path": "/api/config",
+          "index": 67,
+          "start": 1052.699999988079,
+          "headersAt": 1055.7999999821186,
+          "completedAt": 1056.0999999940395,
+          "requestId": "c381231c-0c11-4580-af25-0487ec0ababd"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 67,
+          "start": 1056.0999999940395,
+          "headersAt": 1057.0999999940395,
+          "completedAt": 1057.199999988079,
+          "requestId": "914e036c-e557-41fb-99be-9d06f6054ca7"
+        },
+        {
+          "path": "/api/config",
+          "index": 68,
+          "start": 1057.199999988079,
+          "headersAt": 1060.699999988079,
+          "completedAt": 1061.199999988079,
+          "requestId": "5422baa9-f874-4ae5-96da-02d3aed70efa"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 68,
+          "start": 1061.2999999821186,
+          "headersAt": 1062.8999999761581,
+          "completedAt": 1063.0999999940395,
+          "requestId": "0266e52e-292c-4758-9c07-19c213f958d9"
+        },
+        {
+          "path": "/api/config",
+          "index": 69,
+          "start": 1063.0999999940395,
+          "headersAt": 1066,
+          "completedAt": 1066.3999999761581,
+          "requestId": "4f6b4d66-2506-4872-a2e6-b1684895be1d"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 69,
+          "start": 1066.5,
+          "headersAt": 1067.5,
+          "completedAt": 1067.5999999940395,
+          "requestId": "c3ef2e1b-5146-4b17-9c7c-e5ee638e81b4"
+        },
+        {
+          "path": "/api/config",
+          "index": 70,
+          "start": 1067.699999988079,
+          "headersAt": 1070.3999999761581,
+          "completedAt": 1070.699999988079,
+          "requestId": "2cacc858-5b0e-4577-b9d9-827126207312"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 70,
+          "start": 1070.699999988079,
+          "headersAt": 1072.7999999821186,
+          "completedAt": 1073,
+          "requestId": "7ce82f62-8b71-44ad-be40-206ef8a05cb2"
+        },
+        {
+          "path": "/api/config",
+          "index": 71,
+          "start": 1073,
+          "headersAt": 1075.5,
+          "completedAt": 1075.8999999761581,
+          "requestId": "ea096199-effe-4fcc-8fef-a52369c77197"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 71,
+          "start": 1075.8999999761581,
+          "headersAt": 1077.0999999940395,
+          "completedAt": 1077.2999999821186,
+          "requestId": "a90725f8-6157-4415-b84c-82152226930a"
+        },
+        {
+          "path": "/api/config",
+          "index": 72,
+          "start": 1077.2999999821186,
+          "headersAt": 1080.5,
+          "completedAt": 1080.8999999761581,
+          "requestId": "ceaca0b4-373c-4a78-ac5c-8fd1a55b078e"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 72,
+          "start": 1080.8999999761581,
+          "headersAt": 1082.2999999821186,
+          "completedAt": 1082.3999999761581,
+          "requestId": "ebbccffe-b629-4151-98f9-f314a692074d"
+        },
+        {
+          "path": "/api/config",
+          "index": 73,
+          "start": 1082.3999999761581,
+          "headersAt": 1085,
+          "completedAt": 1085.5,
+          "requestId": "6188554b-94c9-4835-a61c-3c890b3ba95b"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 73,
+          "start": 1085.5,
+          "headersAt": 1086.699999988079,
+          "completedAt": 1087.5999999940395,
+          "requestId": "661ba37d-7812-4e05-aa67-d8f7cf3e9f2e"
+        },
+        {
+          "path": "/api/config",
+          "index": 74,
+          "start": 1087.5999999940395,
+          "headersAt": 1090.3999999761581,
+          "completedAt": 1090.699999988079,
+          "requestId": "80b3bf17-1fc7-4e23-ba71-d4bb8d1b7505"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 74,
+          "start": 1090.699999988079,
+          "headersAt": 1091.7999999821186,
+          "completedAt": 1091.8999999761581,
+          "requestId": "4ff2768f-b790-49c5-99da-bc05951ff957"
+        },
+        {
+          "path": "/api/config",
+          "index": 75,
+          "start": 1091.8999999761581,
+          "headersAt": 1094.2999999821186,
+          "completedAt": 1094.699999988079,
+          "requestId": "dba13801-b702-4d28-bc76-09e0378e6356"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 75,
+          "start": 1094.699999988079,
+          "headersAt": 1096.0999999940395,
+          "completedAt": 1096.2999999821186,
+          "requestId": "5f345047-dc1c-4eb3-be94-5241b8ca46af"
+        },
+        {
+          "path": "/api/config",
+          "index": 76,
+          "start": 1096.2999999821186,
+          "headersAt": 1099.0999999940395,
+          "completedAt": 1099.5,
+          "requestId": "a8139ed7-2192-4aa0-a45d-d6a2a7afc844"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 76,
+          "start": 1099.5,
+          "headersAt": 1100.5,
+          "completedAt": 1100.5,
+          "requestId": "b0b5578a-16ce-45c9-aefe-065e3fcef612"
+        },
+        {
+          "path": "/api/config",
+          "index": 77,
+          "start": 1100.5,
+          "headersAt": 1103.199999988079,
+          "completedAt": 1103.5999999940395,
+          "requestId": "886fc819-cfa9-41ab-8f0e-b3648549323b"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 77,
+          "start": 1103.5999999940395,
+          "headersAt": 1105.5,
+          "completedAt": 1105.699999988079,
+          "requestId": "d36b603c-41a5-452a-bd44-4ac8cf571a0b"
+        },
+        {
+          "path": "/api/config",
+          "index": 78,
+          "start": 1105.699999988079,
+          "headersAt": 1108.5,
+          "completedAt": 1108.7999999821186,
+          "requestId": "fa56f451-29ad-485f-8ef6-c8f838bb6152"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 78,
+          "start": 1108.7999999821186,
+          "headersAt": 1110,
+          "completedAt": 1110.199999988079,
+          "requestId": "1fc7d961-b137-4520-bb8f-0e6d9a741504"
+        },
+        {
+          "path": "/api/config",
+          "index": 79,
+          "start": 1110.199999988079,
+          "headersAt": 1113.3999999761581,
+          "completedAt": 1113.7999999821186,
+          "requestId": "782c3d70-af5a-4f40-bf55-3bd1bd993d2b"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 79,
+          "start": 1113.7999999821186,
+          "headersAt": 1115.199999988079,
+          "completedAt": 1115.2999999821186,
+          "requestId": "739615e1-ebeb-4a0a-8238-7065321df71e"
+        },
+        {
+          "path": "/api/config",
+          "index": 80,
+          "start": 1115.2999999821186,
+          "headersAt": 1118,
+          "completedAt": 1118.3999999761581,
+          "requestId": "aa50acb6-ffb7-41fc-aa14-712af4391c5d"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 80,
+          "start": 1118.3999999761581,
+          "headersAt": 1119.5,
+          "completedAt": 1119.699999988079,
+          "requestId": "1faf67f3-498d-4917-b58f-0b7e2d70fee2"
+        },
+        {
+          "path": "/api/config",
+          "index": 81,
+          "start": 1119.699999988079,
+          "headersAt": 1122.8999999761581,
+          "completedAt": 1123.2999999821186,
+          "requestId": "a340cb4d-0004-45e1-8046-2ec43f293c71"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 81,
+          "start": 1123.2999999821186,
+          "headersAt": 1124.2999999821186,
+          "completedAt": 1124.2999999821186,
+          "requestId": "2771caee-9709-49ac-8491-06ddfe0a14ba"
+        },
+        {
+          "path": "/api/config",
+          "index": 82,
+          "start": 1124.2999999821186,
+          "headersAt": 1126.699999988079,
+          "completedAt": 1127.0999999940395,
+          "requestId": "9acf00c8-b14f-4c98-8500-dc8baa2ef014"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 82,
+          "start": 1127.0999999940395,
+          "headersAt": 1128.199999988079,
+          "completedAt": 1128.2999999821186,
+          "requestId": "8bc23e48-dd52-42e9-947f-ad7e436ec0bf"
+        },
+        {
+          "path": "/api/config",
+          "index": 83,
+          "start": 1128.2999999821186,
+          "headersAt": 1131.199999988079,
+          "completedAt": 1131.5,
+          "requestId": "9806179c-c079-4c34-afd4-51e0eb487aa1"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 83,
+          "start": 1131.5,
+          "headersAt": 1132.699999988079,
+          "completedAt": 1132.699999988079,
+          "requestId": "a1d6e6c4-29c0-4651-b7df-8a9fc7883d72"
+        },
+        {
+          "path": "/api/config",
+          "index": 84,
+          "start": 1132.699999988079,
+          "headersAt": 1136.2999999821186,
+          "completedAt": 1137.2999999821186,
+          "requestId": "7e211b71-cd7e-4246-a524-a6d1e4b20579"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 84,
+          "start": 1137.2999999821186,
+          "headersAt": 1138.8999999761581,
+          "completedAt": 1139.0999999940395,
+          "requestId": "d18fac77-4214-4043-be3e-1b9c4e58bfa8"
+        },
+        {
+          "path": "/api/config",
+          "index": 85,
+          "start": 1139.0999999940395,
+          "headersAt": 1141.5,
+          "completedAt": 1141.7999999821186,
+          "requestId": "47733bf5-17e3-43c0-a362-2e3b98313fb0"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 85,
+          "start": 1141.7999999821186,
+          "headersAt": 1142.7999999821186,
+          "completedAt": 1142.8999999761581,
+          "requestId": "b367a7c2-6ddc-45ce-8391-92e07ca7ec87"
+        },
+        {
+          "path": "/api/config",
+          "index": 86,
+          "start": 1142.8999999761581,
+          "headersAt": 1145.2999999821186,
+          "completedAt": 1146.2999999821186,
+          "requestId": "4dcee5da-9396-4292-8cd7-c47523e77ad5"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 86,
+          "start": 1146.2999999821186,
+          "headersAt": 1147.7999999821186,
+          "completedAt": 1147.8999999761581,
+          "requestId": "268d8341-ac4b-4e33-9cf8-82358d8ea6bd"
+        },
+        {
+          "path": "/api/config",
+          "index": 87,
+          "start": 1147.8999999761581,
+          "headersAt": 1150.199999988079,
+          "completedAt": 1150.5,
+          "requestId": "6670956b-99aa-41b5-820c-5718de61152f"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 87,
+          "start": 1150.5,
+          "headersAt": 1151.8999999761581,
+          "completedAt": 1152,
+          "requestId": "355674d8-35fa-438d-ac2b-3df67c7e93b3"
+        },
+        {
+          "path": "/api/config",
+          "index": 88,
+          "start": 1152,
+          "headersAt": 1155,
+          "completedAt": 1155.0999999940395,
+          "requestId": "af0f54fa-1cdf-4292-bf58-aad8559dc2cb"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 88,
+          "start": 1155.0999999940395,
+          "headersAt": 1156.5,
+          "completedAt": 1156.5999999940395,
+          "requestId": "02a144d0-f600-40c5-b68b-83b91f27c309"
+        },
+        {
+          "path": "/api/config",
+          "index": 89,
+          "start": 1156.5999999940395,
+          "headersAt": 1159,
+          "completedAt": 1159.5,
+          "requestId": "48e625dd-9a19-4b24-ade8-e7944d555ed5"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 89,
+          "start": 1159.5,
+          "headersAt": 1160.7999999821186,
+          "completedAt": 1160.7999999821186,
+          "requestId": "cc7e65a0-3589-4041-bd8e-d9a418f34fc7"
+        },
+        {
+          "path": "/api/config",
+          "index": 90,
+          "start": 1160.7999999821186,
+          "headersAt": 1163.3999999761581,
+          "completedAt": 1163.699999988079,
+          "requestId": "75250190-11dd-41e5-82c2-5fc06662418c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 90,
+          "start": 1163.7999999821186,
+          "headersAt": 1165,
+          "completedAt": 1165,
+          "requestId": "720cb848-f7ae-45bd-ac9c-a21091fab791"
+        },
+        {
+          "path": "/api/config",
+          "index": 91,
+          "start": 1165,
+          "headersAt": 1167.5,
+          "completedAt": 1167.8999999761581,
+          "requestId": "1e629f13-f363-415d-b537-c9a163dd92f6"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 91,
+          "start": 1167.8999999761581,
+          "headersAt": 1169.199999988079,
+          "completedAt": 1169.3999999761581,
+          "requestId": "6aefb46d-17d0-4084-b59c-dccd812fbc1a"
+        },
+        {
+          "path": "/api/config",
+          "index": 92,
+          "start": 1169.3999999761581,
+          "headersAt": 1172.2999999821186,
+          "completedAt": 1172.699999988079,
+          "requestId": "c049ace2-663f-47d8-83ae-6cbbf225a9c1"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 92,
+          "start": 1172.699999988079,
+          "headersAt": 1174,
+          "completedAt": 1174,
+          "requestId": "27f062f2-11d8-4143-ae92-e307fcdf3171"
+        },
+        {
+          "path": "/api/config",
+          "index": 93,
+          "start": 1174,
+          "headersAt": 1176.5,
+          "completedAt": 1176.7999999821186,
+          "requestId": "765afb14-5b07-4422-9ddc-518274a6ef19"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 93,
+          "start": 1176.7999999821186,
+          "headersAt": 1178,
+          "completedAt": 1178.199999988079,
+          "requestId": "9beeb703-a6f5-415d-844c-4cca5bf71126"
+        },
+        {
+          "path": "/api/config",
+          "index": 94,
+          "start": 1178.199999988079,
+          "headersAt": 1181.2999999821186,
+          "completedAt": 1181.5999999940395,
+          "requestId": "92aeff35-9a51-4ef7-8cb8-233a08aded3a"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 94,
+          "start": 1181.5999999940395,
+          "headersAt": 1182.5999999940395,
+          "completedAt": 1182.7999999821186,
+          "requestId": "8e524b55-b601-48e0-96de-09268eea7a0a"
+        },
+        {
+          "path": "/api/config",
+          "index": 95,
+          "start": 1182.8999999761581,
+          "headersAt": 1185.5,
+          "completedAt": 1185.8999999761581,
+          "requestId": "08657845-92ac-4aff-bdc5-6dcca1028737"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 95,
+          "start": 1185.8999999761581,
+          "headersAt": 1187.5,
+          "completedAt": 1187.5999999940395,
+          "requestId": "7292dfda-47e4-4031-85fe-3a90a9be05b5"
+        },
+        {
+          "path": "/api/config",
+          "index": 96,
+          "start": 1187.5999999940395,
+          "headersAt": 1191.5,
+          "completedAt": 1191.8999999761581,
+          "requestId": "10cf6d51-0de9-4f9e-a254-6fbf4cd19254"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 96,
+          "start": 1191.8999999761581,
+          "headersAt": 1192.8999999761581,
+          "completedAt": 1193,
+          "requestId": "887cc7ce-2b70-4138-91f0-30d0d3758815"
+        },
+        {
+          "path": "/api/config",
+          "index": 97,
+          "start": 1193.0999999940395,
+          "headersAt": 1195.7999999821186,
+          "completedAt": 1196.8999999761581,
+          "requestId": "02db7ff5-0c31-42a6-9f33-e8e0bd69c9b8"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 97,
+          "start": 1196.8999999761581,
+          "headersAt": 1198.3999999761581,
+          "completedAt": 1198.5,
+          "requestId": "099799b9-41fc-4b02-b593-2fa1fe166fd4"
+        },
+        {
+          "path": "/api/config",
+          "index": 98,
+          "start": 1198.5,
+          "headersAt": 1200.8999999761581,
+          "completedAt": 1201.2999999821186,
+          "requestId": "dccc27d7-ed44-4853-a5d1-ebfbbfe9d990"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 98,
+          "start": 1201.2999999821186,
+          "headersAt": 1202.5,
+          "completedAt": 1202.699999988079,
+          "requestId": "93933332-c00f-4e17-9615-d1c89a2ba52f"
+        },
+        {
+          "path": "/api/config",
+          "index": 99,
+          "start": 1202.699999988079,
+          "headersAt": 1206.199999988079,
+          "completedAt": 1206.699999988079,
+          "requestId": "16953c1b-25e3-4e1c-88e8-0cbbd7856f12"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 99,
+          "start": 1206.699999988079,
+          "headersAt": 1207.7999999821186,
+          "completedAt": 1207.7999999821186,
+          "requestId": "a48b715c-92f4-45ab-ab0f-445e14674e73"
+        }
+      ],
+      "timeOrigin": 1793448493223.8,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448492601.4524
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448493010.8992,
+            "elapsedMs": 13.12458300000003,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448493025.1592,
+            "elapsedMs": 10.235458999999992,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448493035.508,
+            "elapsedMs": 9.350833000000023,
+            "status": 200
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448493041.7393,
+            "elapsedMs": 20.326625000000035,
+            "cpuMicroseconds": {
+              "user": 19013,
+              "system": 5283
+            }
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448493047.361,
+            "elapsedMs": 15.847958000000006,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448493047.6396,
+            "elapsedMs": 17.252583999999956,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448493065.326,
+            "elapsedMs": 3.2567080000000033,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448493062.368,
+            "elapsedMs": 8.61708299999998,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448493071.0112,
+            "elapsedMs": 2.1879580000000374,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448493073.581,
+            "elapsedMs": 48.521124999999984,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448493073.7593,
+            "elapsedMs": 48.56429200000002,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:12.835Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-Kd2lxS/electron/Crashpad\n[2026-10-31T12:08:13.222Z] loading gateway url=http://127.0.0.1:54817/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 263,
+            "duration": 61
+          },
+          {
+            "startTime": 337.2999999821186,
+            "duration": 57
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:54817/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 324.39999997615814,
+            "navigationId": 1072,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 4.399999976158142,
+            "domainLookupEnd": 4.699999988079071,
+            "connectStart": 4.699999988079071,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.899999976158142,
+            "requestStart": 5,
+            "responseStart": 6.299999982118607,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.299999982118607,
+            "responseEnd": 6.899999976158142,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 97.5,
+            "domContentLoadedEventStart": 324.19999998807907,
+            "domContentLoadedEventEnd": 324.19999998807907,
+            "domComplete": 324.39999997615814,
+            "loadEventStart": 324.39999997615814,
+            "loadEventEnd": 324.39999997615814,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          68893,
+          68896,
+          68897,
+          68918,
+          68924
+        ],
+        "processes": 5,
+        "rssMiB": 651.1875,
+        "cpuPercentSnapshot": 151.8
+      },
+      "shutdownMs": 80.04108299999962,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 1,
+      "passed": true,
+      "readyMs": 1033.7992080000004,
+      "configMs": [
+        11.199999988079071
+      ],
+      "sessionsMs": [
+        1.5999999940395355
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 499,
+          "headersAt": 509.7999999821186,
+          "completedAt": 510.19999998807907,
+          "requestId": "789e98ea-db83-43ef-a9bc-473393d8c481"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 510.19999998807907,
+          "headersAt": 511.7999999821186,
+          "completedAt": 511.7999999821186,
+          "requestId": "ab327849-fc69-44e7-b97b-8a3fe590fa54"
+        }
+      ],
+      "timeOrigin": 1793448496229.8,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448495675.162
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448496035.3843,
+            "elapsedMs": 22.438541999999984,
+            "status": 200
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448496066.679,
+            "elapsedMs": 3.6289580000000115,
+            "cpuMicroseconds": {
+              "user": 9102,
+              "system": 1157
+            }
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448496059.1116,
+            "elapsedMs": 17.358333999999957,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448496076.5803,
+            "elapsedMs": 3.648416999999995,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448496070.5288,
+            "elapsedMs": 12.586332999999968,
+            "status": 200
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448496082.2324,
+            "elapsedMs": 2.7089579999999955,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448496082.48,
+            "elapsedMs": 3.0644169999999917,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448496083.15,
+            "elapsedMs": 3.317375000000027,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448496085.935,
+            "elapsedMs": 1.8217919999999594,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448496086.8225,
+            "elapsedMs": 3.6307499999999777,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448496086.9824,
+            "elapsedMs": 4.194249999999954,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:15.895Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-2IqrMc/electron/Crashpad\n[2026-10-31T12:08:16.228Z] loading gateway url=http://127.0.0.1:54861/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 208.39999997615814,
+            "duration": 59
+          },
+          {
+            "startTime": 279.69999998807907,
+            "duration": 57
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:54861/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 267.69999998807907,
+            "navigationId": 4789,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.09999999403953552,
+            "domainLookupStart": 3.399999976158142,
+            "domainLookupEnd": 3.5999999940395355,
+            "connectStart": 3.5999999940395355,
+            "secureConnectionStart": 0,
+            "connectEnd": 3.699999988079071,
+            "requestStart": 3.7999999821186066,
+            "responseStart": 5.199999988079071,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.199999988079071,
+            "responseEnd": 5.899999976158142,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 68,
+            "domContentLoadedEventStart": 267.39999997615814,
+            "domContentLoadedEventEnd": 267.5,
+            "domComplete": 267.69999998807907,
+            "loadEventStart": 267.69999998807907,
+            "loadEventEnd": 267.69999998807907,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69043,
+          69046,
+          69047,
+          69067,
+          69073
+        ],
+        "processes": 5,
+        "rssMiB": 703.15625,
+        "cpuPercentSnapshot": 204.1
+      },
+      "shutdownMs": 187.61104199999954,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 2,
+      "passed": true,
+      "readyMs": 994.7471249999999,
+      "configMs": [
+        9.099999994039536
+      ],
+      "sessionsMs": [
+        2.4000000059604645
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 499,
+          "headersAt": 507.69999998807907,
+          "completedAt": 508.09999999403954,
+          "requestId": "3f7eae7c-8969-4eec-adcf-260e8f5efded"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 508.09999999403954,
+          "headersAt": 510.40000000596046,
+          "completedAt": 510.5,
+          "requestId": "694069b4-6559-432e-b2ca-b969478c1a5d"
+        }
+      ],
+      "timeOrigin": 1793448498652,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448498118.7864
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448498460.5237,
+            "elapsedMs": 17.826332999999977,
+            "status": 200
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448498486.6167,
+            "elapsedMs": 6.532958000000008,
+            "cpuMicroseconds": {
+              "user": 15598,
+              "system": 2918
+            }
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448498479.6545,
+            "elapsedMs": 18.37375000000003,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448498498.1394,
+            "elapsedMs": 4.4451669999999694,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448498493.3613,
+            "elapsedMs": 12.219042000000002,
+            "status": 200
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448498504.632,
+            "elapsedMs": 2.34375,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448498504.905,
+            "elapsedMs": 2.5444160000000124,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448498505.6052,
+            "elapsedMs": 2.6732079999999883,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448498507.7988,
+            "elapsedMs": 1.9529999999999745,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448498508.6794,
+            "elapsedMs": 4.054916999999989,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448498508.853,
+            "elapsedMs": 4.581999999999994,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:18.334Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-OkotEQ/electron/Crashpad\n[2026-10-31T12:08:18.650Z] loading gateway url=http://127.0.0.1:54899/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 203.80000001192093,
+            "duration": 59
+          },
+          {
+            "startTime": 274.5,
+            "duration": 59
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:54899/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 263,
+            "navigationId": 762,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 4.199999988079071,
+            "domainLookupEnd": 4.300000011920929,
+            "connectStart": 4.300000011920929,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.4000000059604645,
+            "requestStart": 4.5,
+            "responseStart": 5.5999999940395355,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.5999999940395355,
+            "responseEnd": 6.199999988079071,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 61.30000001192093,
+            "domContentLoadedEventStart": 262.69999998807907,
+            "domContentLoadedEventEnd": 262.90000000596046,
+            "domComplete": 263,
+            "loadEventStart": 263,
+            "loadEventEnd": 263,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69141,
+          69149,
+          69150,
+          69170,
+          69171
+        ],
+        "processes": 5,
+        "rssMiB": 723.4375,
+        "cpuPercentSnapshot": 242.70000000000002
+      },
+      "shutdownMs": 110.71987500000068,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 3,
+      "passed": true,
+      "readyMs": 1077.4212499999994,
+      "configMs": [
+        46
+      ],
+      "sessionsMs": [
+        8.900000005960464
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 461.09999999403954,
+          "headersAt": 501.7999999821186,
+          "completedAt": 507.09999999403954,
+          "requestId": "c9418b73-78fc-4bce-97ca-2e5d020ba8ef"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 507.19999998807907,
+          "headersAt": 515.8999999761581,
+          "completedAt": 516.0999999940395,
+          "requestId": "a32b143f-b3e7-448e-8e33-786dad6efe83"
+        }
+      ],
+      "timeOrigin": 1793448501229.8,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448500605.3691
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448501033.4814,
+            "elapsedMs": 12.739666,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448501047.4438,
+            "elapsedMs": 9.54691699999995,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448501057.0913,
+            "elapsedMs": 1.858542,
+            "status": 200
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448501061.4763,
+            "elapsedMs": 10.465082999999993,
+            "status": 200
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448501070.8057,
+            "elapsedMs": 1.5394999999999754,
+            "cpuMicroseconds": {
+              "user": 2532,
+              "system": 539
+            }
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448501061.7542,
+            "elapsedMs": 13.407332999999994,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448501075.573,
+            "elapsedMs": 4.002499999999998,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448501072.618,
+            "elapsedMs": 10.981207999999981,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448501083.6467,
+            "elapsedMs": 2.6138749999999504,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448501086.6572,
+            "elapsedMs": 30.56383299999999,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448501086.859,
+            "elapsedMs": 30.867458,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:20.866Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-HNj7vl/electron/Crashpad\n[2026-10-31T12:08:21.228Z] loading gateway url=http://127.0.0.1:54950/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 204.59999999403954,
+            "duration": 61
+          },
+          {
+            "startTime": 279.19999998807907,
+            "duration": 59
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:54950/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 265.89999997615814,
+            "navigationId": 845,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 4.0999999940395355,
+            "domainLookupEnd": 4.299999982118607,
+            "connectStart": 4.299999982118607,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.399999976158142,
+            "requestStart": 4.5,
+            "responseStart": 5.5999999940395355,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.5999999940395355,
+            "responseEnd": 6.0999999940395355,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 61.099999994039536,
+            "domContentLoadedEventStart": 265.5,
+            "domContentLoadedEventEnd": 265.5,
+            "domComplete": 265.89999997615814,
+            "loadEventStart": 265.89999997615814,
+            "loadEventEnd": 265.89999997615814,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69245,
+          69248,
+          69249,
+          69269,
+          69274
+        ],
+        "processes": 5,
+        "rssMiB": 699.765625,
+        "cpuPercentSnapshot": 212.6
+      },
+      "shutdownMs": 199.23870800000077,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 4,
+      "passed": true,
+      "readyMs": 1049.9840409999997,
+      "configMs": [
+        8.5
+      ],
+      "sessionsMs": [
+        1.699999988079071
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 537.0999999940395,
+          "headersAt": 545.1999999880791,
+          "completedAt": 545.5999999940395,
+          "requestId": "95173b5e-c952-4cd4-8c1b-5d24e4ed132a"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 545.5999999940395,
+          "headersAt": 547.1999999880791,
+          "completedAt": 547.2999999821186,
+          "requestId": "e33be6f9-5fda-4605-af3b-c8e57951bcab"
+        }
+      ],
+      "timeOrigin": 1793448503640.8,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448503083.1099
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448503444.8374,
+            "elapsedMs": 15.759875000000022,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448503461.767,
+            "elapsedMs": 8.235541000000012,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448503470.1064,
+            "elapsedMs": 8.456165999999996,
+            "status": 200
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448503476.4124,
+            "elapsedMs": 5.804834000000028,
+            "cpuMicroseconds": {
+              "user": 11559,
+              "system": 1768
+            }
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448503481.3032,
+            "elapsedMs": 3.1743749999999977,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448503481.6091,
+            "elapsedMs": 4.7131669999999986,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448503486.7046,
+            "elapsedMs": 4.252666999999974,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448503482.4058,
+            "elapsedMs": 12.126792000000023,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448503494.5967,
+            "elapsedMs": 2.262875000000008,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448503497.305,
+            "elapsedMs": 33.984083,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448503497.5608,
+            "elapsedMs": 35.05012500000004,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:23.309Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-rBDlKT/electron/Crashpad\n[2026-10-31T12:08:23.638Z] loading gateway url=http://127.0.0.1:54987/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 210.69999998807907,
+            "duration": 62
+          },
+          {
+            "startTime": 289.2999999821186,
+            "duration": 61
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:54987/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 272.7999999821186,
+            "navigationId": 7432,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 3.7999999821186066,
+            "domainLookupEnd": 4,
+            "connectStart": 4,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.0999999940395355,
+            "requestStart": 4.0999999940395355,
+            "responseStart": 5.299999982118607,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.299999982118607,
+            "responseEnd": 5.899999976158142,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 63.89999997615814,
+            "domContentLoadedEventStart": 272.39999997615814,
+            "domContentLoadedEventEnd": 272.5,
+            "domComplete": 272.7999999821186,
+            "loadEventStart": 272.7999999821186,
+            "loadEventEnd": 272.7999999821186,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69343,
+          69352,
+          69353,
+          69373,
+          69401
+        ],
+        "processes": 5,
+        "rssMiB": 687.578125,
+        "cpuPercentSnapshot": 234.7
+      },
+      "shutdownMs": 83.29754099999991,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 5,
+      "passed": true,
+      "readyMs": 1054.5407080000004,
+      "configMs": [
+        44.599999994039536
+      ],
+      "sessionsMs": [
+        5.5999999940395355
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 488,
+          "headersAt": 526.6999999880791,
+          "completedAt": 532.5999999940395,
+          "requestId": "87e44392-6f90-447a-ad22-ca3a6c1b8951"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 532.5999999940395,
+          "headersAt": 538.0999999940395,
+          "completedAt": 538.1999999880791,
+          "requestId": "8b775320-d3a3-427e-88c8-cf8e6283d5f6"
+        }
+      ],
+      "timeOrigin": 1793448506130,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448505553.4053
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448505924.6667,
+            "elapsedMs": 14.571583000000032,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448505940.4338,
+            "elapsedMs": 18.550666999999976,
+            "status": 201
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448505958.3616,
+            "elapsedMs": 5.78612499999997,
+            "cpuMicroseconds": {
+              "user": 9179,
+              "system": 3031
+            }
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448505959.0835,
+            "elapsedMs": 5.920875000000024,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448505968.0552,
+            "elapsedMs": 4.207875000000001,
+            "status": 200
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448505967.703,
+            "elapsedMs": 6.31129199999998,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448505964.368,
+            "elapsedMs": 10.513833000000034,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448505972.6123,
+            "elapsedMs": 3.605415999999991,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448505974.932,
+            "elapsedMs": 3.578708000000006,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448505978.8306,
+            "elapsedMs": 4.915625000000034,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448505978.9878,
+            "elapsedMs": 5.426832999999988,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:25.766Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-KaLbZ6/electron/Crashpad\n[2026-10-31T12:08:26.128Z] loading gateway url=http://127.0.0.1:55021/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 203.19999998807907,
+            "duration": 59
+          },
+          {
+            "startTime": 285.19999998807907,
+            "duration": 59
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:55021/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 262.30000001192093,
+            "navigationId": 8274,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 4.5999999940395355,
+            "domainLookupEnd": 4.800000011920929,
+            "connectStart": 4.800000011920929,
+            "secureConnectionStart": 0,
+            "connectEnd": 5,
+            "requestStart": 5.0999999940395355,
+            "responseStart": 7.4000000059604645,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 7.4000000059604645,
+            "responseEnd": 8.099999994039536,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 64.40000000596046,
+            "domContentLoadedEventStart": 262,
+            "domContentLoadedEventEnd": 262,
+            "domComplete": 262.30000001192093,
+            "loadEventStart": 262.30000001192093,
+            "loadEventEnd": 262.30000001192093,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69449,
+          69478,
+          69479,
+          69499,
+          69500
+        ],
+        "processes": 5,
+        "rssMiB": 697.390625,
+        "cpuPercentSnapshot": 208.89999999999998
+      },
+      "shutdownMs": 192.1782920000005,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 6,
+      "passed": true,
+      "readyMs": 1060.046000000002,
+      "configMs": [
+        8.699999988079071
+      ],
+      "sessionsMs": [
+        22.80000001192093
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 503.90000000596046,
+          "headersAt": 512.2999999821186,
+          "completedAt": 512.5999999940395,
+          "requestId": "2bfec301-d16c-44c1-ba8d-9c4405854fcc"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 512.5999999940395,
+          "headersAt": 530.1999999880791,
+          "completedAt": 535.4000000059605,
+          "requestId": "4c64f7ba-a797-4ffc-9078-d09197f9201a"
+        }
+      ],
+      "timeOrigin": 1793448508586.9,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448508000.6265
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448508375.2544,
+            "elapsedMs": 16.24908300000004,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448508392.7034,
+            "elapsedMs": 20.619334000000038,
+            "status": 201
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448508410.525,
+            "elapsedMs": 3.4365829999999846,
+            "cpuMicroseconds": {
+              "user": 6355,
+              "system": 1127
+            }
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448508413.424,
+            "elapsedMs": 16.21158300000002,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448508414.1577,
+            "elapsedMs": 18.460249999999974,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448508432.045,
+            "elapsedMs": 3.207499999999982,
+            "status": 200
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448508431.7297,
+            "elapsedMs": 5.4575419999999895,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448508432.6501,
+            "elapsedMs": 5.283208999999999,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448508435.6582,
+            "elapsedMs": 3.5598340000000235,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448508438.3086,
+            "elapsedMs": 5.078332999999986,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448508438.4763,
+            "elapsedMs": 5.904416999999967,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:28.223Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-a5Kos1/electron/Crashpad\n[2026-10-31T12:08:28.585Z] loading gateway url=http://127.0.0.1:55060/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 208.5,
+            "duration": 60
+          },
+          {
+            "startTime": 281.7999999821186,
+            "duration": 60
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:55060/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 268.90000000596046,
+            "navigationId": 6278,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.09999999403953552,
+            "domainLookupStart": 4.699999988079071,
+            "domainLookupEnd": 4.799999982118607,
+            "connectStart": 4.799999982118607,
+            "secureConnectionStart": 0,
+            "connectEnd": 5,
+            "requestStart": 5.199999988079071,
+            "responseStart": 6.9000000059604645,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.9000000059604645,
+            "responseEnd": 7.699999988079071,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 64.19999998807907,
+            "domContentLoadedEventStart": 268.59999999403954,
+            "domContentLoadedEventEnd": 268.69999998807907,
+            "domComplete": 268.90000000596046,
+            "loadEventStart": 268.90000000596046,
+            "loadEventEnd": 268.90000000596046,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69574,
+          69578,
+          69579,
+          69603,
+          69605
+        ],
+        "processes": 5,
+        "rssMiB": 693.25,
+        "cpuPercentSnapshot": 212
+      },
+      "shutdownMs": 184.4604999999974,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 7,
+      "passed": true,
+      "readyMs": 1026.0183749999997,
+      "configMs": [
+        26.19999998807907
+      ],
+      "sessionsMs": [
+        1.100000023841858
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 482.90000000596046,
+          "headersAt": 508.80000001192093,
+          "completedAt": 509.09999999403954,
+          "requestId": "b24d30b3-8377-4985-a67c-f070a5a66f2c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 509.09999999403954,
+          "headersAt": 510.2000000178814,
+          "completedAt": 510.2000000178814,
+          "requestId": "07f65232-5b14-407f-81ce-b983df627216"
+        }
+      ],
+      "timeOrigin": 1793448511129.7,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448510562.2695
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448510926.1045,
+            "elapsedMs": 14.631416000000002,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448510941.8215,
+            "elapsedMs": 10.598208,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448510952.5217,
+            "elapsedMs": 8.35020800000001,
+            "status": 200
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448510958.9314,
+            "elapsedMs": 11.111625000000004,
+            "cpuMicroseconds": {
+              "user": 13551,
+              "system": 3023
+            }
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448510963.3906,
+            "elapsedMs": 7.36345799999998,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448510963.6833,
+            "elapsedMs": 16.238958000000025,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448510970.2925,
+            "elapsedMs": 10.370249999999999,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448510980.2896,
+            "elapsedMs": 3.447249999999997,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448510980.7083,
+            "elapsedMs": 5.412708000000009,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448510986.4626,
+            "elapsedMs": 4.5910840000000235,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448510986.6257,
+            "elapsedMs": 5.244625000000042,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:30.781Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-6yWfAR/electron/Crashpad\n[2026-10-31T12:08:31.127Z] loading gateway url=http://127.0.0.1:55095/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 211.30000001192093,
+            "duration": 59
+          },
+          {
+            "startTime": 282.90000000596046,
+            "duration": 58
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:55095/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 270.59999999403954,
+            "navigationId": 4854,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.09999999403953552,
+            "domainLookupStart": 3.4000000059604645,
+            "domainLookupEnd": 3.5,
+            "connectStart": 3.5,
+            "secureConnectionStart": 0,
+            "connectEnd": 3.5999999940395355,
+            "requestStart": 3.800000011920929,
+            "responseStart": 5,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5,
+            "responseEnd": 5.700000017881393,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 63.599999994039536,
+            "domContentLoadedEventStart": 270.2000000178814,
+            "domContentLoadedEventEnd": 270.30000001192093,
+            "domComplete": 270.59999999403954,
+            "loadEventStart": 270.59999999403954,
+            "loadEventEnd": 270.59999999403954,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "low"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69678,
+          69681,
+          69682,
+          69703,
+          69704
+        ],
+        "processes": 5,
+        "rssMiB": 692.375,
+        "cpuPercentSnapshot": 203.8
+      },
+      "shutdownMs": 190.0794169999972,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 8,
+      "passed": true,
+      "readyMs": 1027.073124999999,
+      "configMs": [
+        10.300000011920929
+      ],
+      "sessionsMs": [
+        1.399999976158142
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 503.19999998807907,
+          "headersAt": 513.1999999880791,
+          "completedAt": 513.5,
+          "requestId": "cbc8031b-8e7b-41a0-b235-8a619570a91a"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 513.5,
+          "headersAt": 514.8999999761581,
+          "completedAt": 514.8999999761581,
+          "requestId": "609498af-a83e-413b-9be7-33bf89591456"
+        }
+      ],
+      "timeOrigin": 1793448513554.3,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448513007.0671
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448513351.0715,
+            "elapsedMs": 25.636166000000003,
+            "status": 200
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448513386.2063,
+            "elapsedMs": 6.146708999999987,
+            "cpuMicroseconds": {
+              "user": 14655,
+              "system": 2737
+            }
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448513378.0857,
+            "elapsedMs": 20.710915999999997,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448513398.9084,
+            "elapsedMs": 2.9029580000000124,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448513392.5957,
+            "elapsedMs": 12.276166999999987,
+            "status": 200
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448513403.9316,
+            "elapsedMs": 5.617083999999977,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448513404.1929,
+            "elapsedMs": 5.623041000000001,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448513404.9004,
+            "elapsedMs": 5.526625000000024,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448513410.153,
+            "elapsedMs": 2.6213750000000005,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448513410.7239,
+            "elapsedMs": 5.36345799999998,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448513410.92,
+            "elapsedMs": 6.0699579999999855,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:33.220Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-UDiJed/electron/Crashpad\n[2026-10-31T12:08:33.552Z] loading gateway url=http://127.0.0.1:55134/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 211.09999999403954,
+            "duration": 59
+          },
+          {
+            "startTime": 282.89999997615814,
+            "duration": 59
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:55134/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 270.2999999821186,
+            "navigationId": 2247,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.09999999403953552,
+            "domainLookupStart": 4.0999999940395355,
+            "domainLookupEnd": 4.299999982118607,
+            "connectStart": 4.299999982118607,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.5,
+            "requestStart": 4.5999999940395355,
+            "responseStart": 6.199999988079071,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.199999988079071,
+            "responseEnd": 7.0999999940395355,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 65.39999997615814,
+            "domContentLoadedEventStart": 270,
+            "domContentLoadedEventEnd": 270.09999999403954,
+            "domComplete": 270.2999999821186,
+            "loadEventStart": 270.2999999821186,
+            "loadEventEnd": 270.2999999821186,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "low"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69779,
+          69784,
+          69785,
+          69808,
+          69809
+        ],
+        "processes": 5,
+        "rssMiB": 696.53125,
+        "cpuPercentSnapshot": 222.9
+      },
+      "shutdownMs": 195.62616700000217,
+      "externalSurvived": true
+    },
+    {
+      "mode": "reuse",
+      "index": 9,
+      "passed": true,
+      "readyMs": 1056.796624999999,
+      "configMs": [
+        22.399999976158142
+      ],
+      "sessionsMs": [
+        14.300000011920929
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 505,
+          "headersAt": 526.7999999821186,
+          "completedAt": 527.3999999761581,
+          "requestId": "cb561ad2-489f-4f22-b26b-7d5af4ef34c4"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 527.3999999761581,
+          "headersAt": 541.3999999761581,
+          "completedAt": 541.6999999880791,
+          "requestId": "a290f198-b800-47ac-82d7-647e4306192b"
+        }
+      ],
+      "timeOrigin": 1793448516010.4,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793448515424.08
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448515798.4285,
+            "elapsedMs": 18.688375000000008,
+            "status": 200
+          },
+          {
+            "kind": "electron-proxy-resolution",
+            "start": 1793448515837.9724,
+            "elapsedMs": 2.64224999999999,
+            "cpuMicroseconds": {
+              "user": 5074,
+              "system": 769
+            }
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448515818.3171,
+            "elapsedMs": 27.091499999999996,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448515845.5076,
+            "elapsedMs": 5.31087500000001,
+            "status": 200
+          },
+          {
+            "path": "/api/config",
+            "start": 1793448515840.8235,
+            "elapsedMs": 13.399457999999981,
+            "status": 200
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793448515853.1829,
+            "elapsedMs": 3.0634999999999764,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448515853.4736,
+            "elapsedMs": 3.425707999999986,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793448515854.2585,
+            "elapsedMs": 3.4502090000000294,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793448515857.2517,
+            "elapsedMs": 2.231790999999987,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448515858.1016,
+            "elapsedMs": 5.806290999999987,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793448515858.275,
+            "elapsedMs": 6.353707999999983,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T12:08:35.650Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-WkPDKF/electron/Crashpad\n[2026-10-31T12:08:36.008Z] loading gateway url=http://127.0.0.1:55186/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 214.7999999821186,
+            "duration": 60
+          },
+          {
+            "startTime": 287.09999999403954,
+            "duration": 58
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:55186/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 275.5,
+            "navigationId": 1220,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 7,
+            "domainLookupEnd": 7.5,
+            "connectStart": 7.5,
+            "secureConnectionStart": 0,
+            "connectEnd": 7.699999988079071,
+            "requestStart": 7.799999982118607,
+            "responseStart": 9.5,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 9.5,
+            "responseEnd": 10.199999988079071,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 62.5,
+            "domContentLoadedEventStart": 275.2999999821186,
+            "domContentLoadedEventEnd": 275.2999999821186,
+            "domComplete": 275.5,
+            "loadEventStart": 275.5,
+            "loadEventEnd": 275.5,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "low"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          69885,
+          69888,
+          69889,
+          69909,
+          69936
+        ],
+        "processes": 5,
+        "rssMiB": 687.375,
+        "cpuPercentSnapshot": 198.3
+      },
+      "shutdownMs": 125.29741599999761,
+      "externalSurvived": true
+    }
+  ],
+  "passed": true,
+  "electronBuildSha256": "f67c145c9c449791931fa3116d11b1e4429f4df1769d841bce18bbaf17aafd16",
+  "artifactManifest": {
+    "out/main": {
+      "files": 43,
+      "sha256": "f09753d0fee7f4433954e07492486421c538e1d40fb09f32004d669ffe0ad1c2"
+    },
+    "out/preload": {
+      "files": 10,
+      "sha256": "d89e559eb16b0d0059b3dbdf7a278ff5d1f31216dce03cbc60f3a423cd310b0a"
+    },
+    "out/server": {
+      "files": 68,
+      "sha256": "85b9f0aa9edbd100b59084e6a929c52bc0ccb01e97e8d9bfbdf1e5b2b3059347"
+    },
+    "dist": {
+      "files": 4467,
+      "sha256": "d0a14f0c1df2f00fb1e514b67e711fac665c456ee43adf5af9ea59acb13169f3"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "summary": {
+    "reuse": {
+      "readyMs": {
+        "count": 10,
+        "mean": 1055.0153289999998,
+        "p95": 1169.726833,
+        "max": 1169.726833
+      },
+      "configMs": {
+        "count": 109,
+        "mean": 5.793577981651376,
+        "p95": 22.399999976158142,
+        "max": 46
+      },
+      "sessionsMs": {
+        "count": 109,
+        "mean": 2.1871559622637724,
+        "p95": 5.5999999940395355,
+        "max": 22.80000001192093
+      },
+      "shutdownMs": {
+        "count": 10,
+        "mean": 154.85500409999955,
+        "p95": 199.23870800000077,
+        "max": 199.23870800000077
+      },
+      "rssMiB": {
+        "count": 10,
+        "mean": 693.2046875,
+        "p95": 723.4375,
+        "max": 723.4375
+      }
+    }
+  },
+  "latencyPopulations": {
+    "reuse": {
+      "configMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 10,
+          "mean": 23.22999999523163,
+          "p95": 46,
+          "max": 46
+        },
+        "subsequentInFirstLaunch": {
+          "count": 99,
+          "mean": 4.032323232804886,
+          "p95": 5.5999999940395355,
+          "max": 31.900000005960464
+        }
+      },
+      "sessionsMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 10,
+          "mean": 7.1,
+          "p95": 22.80000001192093,
+          "max": 22.80000001192093
+        },
+        "subsequentInFirstLaunch": {
+          "count": 99,
+          "mean": 1.6909090897651633,
+          "p95": 2.5999999940395355,
+          "max": 6
+        }
+      }
+    }
+  },
+  "finishedAt": "2026-10-31T12:08:37.583Z"
+}

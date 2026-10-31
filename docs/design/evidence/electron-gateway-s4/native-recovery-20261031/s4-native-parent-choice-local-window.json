@@ -1,0 +1,44 @@
+{
+  "passed": true,
+  "fault": "missing remote connection HTML; deliberately modified resource seal, not a release artifact",
+  "startedAt": "2026-10-31T12:29:04.480Z",
+  "interactionTimeoutMs": 120000,
+  "recoveryBudgetMs": 30000,
+  "checks": {
+    "existingConfigPreparedWithoutGateway": true,
+    "noLocalInitializationBeforeUserChoice": true,
+    "explicitLocalChoiceObserved": true,
+    "originalLocalWindowAndPreloadLoaded": true,
+    "configBytesUnchanged": true,
+    "explicitNativeChoiceRelaunchesLocal": true,
+    "localConfigPreserved": true
+  },
+  "runtime": {
+    "executable": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/MacOS/xopc",
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 8721,
+    "nativeUiOnly": true
+  },
+  "observedRelaunchPids": [
+    9007
+  ],
+  "originalProcessExit": {
+    "code": 0,
+    "signal": null
+  },
+  "localChoiceToReadyMs": 2783.6960839999992,
+  "applicationLogs": "(node:8721) electron: Failed to load URL: file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/reports/s4-parented-choice-fault/xopc.app/Contents/Resources/app.asar.unpacked/out/preload/gateway-connections.html with error: ERR_FILE_NOT_FOUND\n(Use `xopc --trace-warnings ...` to show where the warning was created)\n[GatewayConnections] Preview startup failed; restart without --gateway-connections for local mode.\n[GatewayConnections] Startup recovery choice: local\n",
+  "localStartupLogs": "[2026-10-31T12:29:17.573Z] app ready platform=darwin packaged=true electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-recovery-QQgTKP/electron/Crashpad\n[2026-10-31T12:29:17.690Z] window created url=about:blank loading=false crashed=false\n[2026-10-31T12:29:17.692Z] window did-start-loading url=about:blank loading=true crashed=false\n[2026-10-31T12:29:17.692Z] window did-start-navigation target=data:<23533 chars> sameDocument=false url=about:blank loading=true crashed=false\n[2026-10-31T12:29:17.769Z] window did-navigate target=data:<23533 chars> url=data:<23533 chars> loading=true crashed=false\n[2026-10-31T12:29:17.770Z] preload ready url=data:<23533 chars>\n[2026-10-31T12:29:17.782Z] preload dom-content-loaded url=data:<23533 chars>\n[2026-10-31T12:29:17.783Z] window dom-ready url=data:<23533 chars> loading=true crashed=false\n[2026-10-31T12:29:17.783Z] window did-frame-finish-load url=data:<23533 chars> loading=true crashed=false\n[2026-10-31T12:29:17.784Z] window did-finish-load url=data:<23533 chars> loading=true crashed=false\n[2026-10-31T12:29:17.790Z] window did-stop-loading url=data:<23533 chars> loading=false crashed=false\n[2026-10-31T12:29:19.275Z] loading gateway url=http://127.0.0.1:63313/#/chat\n[2026-10-31T12:29:19.277Z] window did-start-loading url=data:<23533 chars> loading=true crashed=false\n[2026-10-31T12:29:19.277Z] window did-start-navigation target=http://127.0.0.1:63313/#/chat sameDocument=false url=data:<23533 chars> loading=true crashed=false\n[2026-10-31T12:29:19.320Z] window did-navigate target=http://127.0.0.1:63313/#/chat url=http://127.0.0.1:63313/#/chat loading=true crashed=false\n[2026-10-31T12:29:19.329Z] preload ready url=http://127.0.0.1:63313/#/chat\n[2026-10-31T12:29:19.426Z] renderer console level=3 source=http://127.0.0.1:63313/#/chat:0 Loading the font 'data:font/woff2;base64,d09GMgABAAAAAA4oAA4AAAAAHbQAAA3TAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAAgRQIDgmcDBEICo1oijYBNgIkA14LMgAEIAWJAAeBHAyBHBvbGiMRdnO0IkRRkiYDgr9KsJ1NUAf2kILNxgUmgqIgq1P89vcbIcmsQbRps3vCcXdYOKSWEPEKgZgQkprQQsxIXUgq0DqpGKmIvrgkeVGtEQD9DzAO29fM9jYhxZEsL2FeURH2JN4MIcTdO049NCVdxQ/w9NrSYFEBKTDKpLKfNkCGDc1RwjZLQcm3vqJ2UW9Xfa3tgAHz6ivp6vgC2yD4/6352ndnN0X0TL7seypkjZlMsjmZnf0Mm5Q+JykRWQBKCVCVPbARPXWyQtb5VgLB6Biq7/Uixcj2WGqdI8tGSgkuRG+t910GKP2D7AQH0DB9FMDW/obJZ8giFI3Wg8Cvevz0M+5m0rTh7XDBlvo9Y4vm13EXmftt...mCahLsdlyA5fdQkRSan9LgnnLEyGSkaKJCJog0wAgvepWBt80+1yKln1bMVtCljfNWDueKLsWwaEbBSfSPTEmVRsUcYYMnEjcjeyCZzBXK9E9BYBXLKjOSpUDR+nEV3TFSUdQaz+ot98QxgXwx0GQ+EEUAKB2qZPkQQ0GqFD8UPFMqyaCHM24BZmSGic9EYMagKizOw9Hz50DMrDLrqqLkTAhplMictiCAx5S3BIUQdeJeLnBy2CNtMfz6cV4u8XKoFZQesbf9YZiIERiHjaNodDW6LgcirX/mPnJIkBGDUpTBhSa0EIr38D5hCIszhCM8URGBqImoWjpvpt1ebu/v3Gl3qJfMnNM+9V+kiRFyROTPHQWOcs1dNW94/ukKMPZBvDi55i5CttdeJz84DLngLqjcdwEZ87bFFR8CIG35OAkDVN6VRDZ7aq67NteYqZ2lpT8oYB2CytoBd6VuAx4WgiAsnuj3WohG+LugzXiQRDeM3XYXlULv4dp5VFYC' violates the following Content Security Policy directive: \"font-src 'self'\". The action has been blocked.\n[2026-10-31T12:29:19.562Z] window did-start-navigation target=http://127.0.0.1:63313/#/chat sameDocument=true url=http://127.0.0.1:63313/#/chat loading=true crashed=false\n[2026-10-31T12:29:19.564Z] preload dom-content-loaded url=http://127.0.0.1:63313/#/chat\n[2026-10-31T12:29:19.564Z] window dom-ready url=http://127.0.0.1:63313/#/chat loading=true crashed=false\n[2026-10-31T12:29:19.564Z] window did-frame-finish-load url=http://127.0.0.1:63313/#/chat loading=true crashed=false\n[2026-10-31T12:29:19.564Z] window did-finish-load url=http://127.0.0.1:63313/#/chat loading=true crashed=false\n[2026-10-31T12:29:19.564Z] window did-stop-loading url=http://127.0.0.1:63313/#/chat loading=false crashed=false\n[2026-10-31T12:29:19.732Z] window did-start-loading url=http://127.0.0.1:63313/#/chat loading=true crashed=false\n[2026-10-31T12:29:19.733Z] window did-start-navigation target=http://127.0.0.1:63313/#/chat/d3665be7-76db-4708-896c-ea7a0471db10 sameDocument=true url=http://127.0.0.1:63313/#/chat loading=true crashed=false\n[2026-10-31T12:29:19.733Z] window did-stop-loading url=http://127.0.0.1:63313/#/chat/d3665be7-76db-4708-896c-ea7a0471db10 loading=false crashed=false\n",
+  "finishedAt": "2026-10-31T12:29:19.892Z"
+}
