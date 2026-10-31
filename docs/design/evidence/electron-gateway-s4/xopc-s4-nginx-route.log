@@ -1,0 +1,8 @@
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+Traceback (most recent call last):
+  File "/tmp/xopc-s4-c8da81aa/xopc-s4-nginx-route.py", line 24, in <module>
+    subprocess.run(['nginx','-t'],check=True,capture_output=True)
+  File "/usr/lib64/python3.6/subprocess.py", line 423, in run
+    with Popen(*popenargs, **kwargs) as process:
+TypeError: __init__() got an unexpected keyword argument 'capture_output'

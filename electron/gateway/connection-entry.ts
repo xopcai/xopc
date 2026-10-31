@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { app, BrowserWindow, ipcMain, Menu, safeStorage, session } from 'electron';
 
 import { RemoteChatStateStore } from '../chat/state.js';
+import { resolvePackagedAppPath } from '../packaged-app-path.js';
 import { RemoteShellWindow } from '../shell/window.js';
 
 import { GatewayConnectionPreview } from './connection-manager.js';
@@ -13,7 +14,8 @@ import { ConnectionProfileStore } from './profiles.js';
 import { ConnectionWindowPolicy, installConnectionIpcBoundary } from './restricted-ipc.js';
 
 export async function startGatewayConnectionPreview(entryUrl: string): Promise<void> {
-  const assetRoot = join(dirname(fileURLToPath(entryUrl)), '../preload');
+  const assetRoot = app.isPackaged ? resolvePackagedAppPath('out', 'preload')
+    : join(dirname(fileURLToPath(entryUrl)), '../preload');
   const override = process.env['XOPC_ELECTRON_USER_DATA_DIR'];
   if (override) {
     const directory = resolve(override);

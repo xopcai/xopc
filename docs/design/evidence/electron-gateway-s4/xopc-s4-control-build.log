@@ -1,0 +1,17 @@
+Scope: all 26 workspace projects
+[ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY] Aborted removal of modules directory due to no TTY
+
+If you are running pnpm in CI, set the CI environment variable to "true", or set "confirmModulesPurge" to "false".
+[ERROR] Command failed with exit code 1: pnpm install
+
+pnpm: Command failed with exit code 1: pnpm install
+    at getFinalError (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:34291:14)
+    at makeError (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:36598:21)
+    at getSyncResult (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:38442:10)
+    at spawnSubprocessSync (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:38402:14)
+    at execaCoreSync (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:38332:23)
+    at callBoundExeca (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:40860:23)
+    at boundExeca (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:40837:49)
+    at sync (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:40992:14)
+    at runPnpmCli (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:247128:5)
+    at runDepsStatusCheck (file:///Users/micjoyce/.nvm/versions/node/v26.12.1/lib/node_modules/pnpm/dist/pnpm.mjs:248869:7)

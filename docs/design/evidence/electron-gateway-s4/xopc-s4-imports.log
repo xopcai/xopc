@@ -1,0 +1,2 @@
+$ node scripts/check-cli-bootstrap-imports.mjs
+CLI bootstrap import guard passed

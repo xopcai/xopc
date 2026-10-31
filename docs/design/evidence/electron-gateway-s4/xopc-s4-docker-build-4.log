@@ -1,0 +1,191 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from xopc-s4-Dockerfile
+#1 transferring dockerfile: 6.51kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:26.12.1-bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 1.02kB done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 DONE 0.0s
+
+#5 [build  1/10] FROM docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c
+#5 resolve docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c 0.0s done
+#5 DONE 0.0s
+
+#6 [build  2/10] WORKDIR /app
+#6 CACHED
+
+#4 [internal] load build context
+#4 transferring context: 681.80kB 0.2s done
+#4 DONE 0.2s
+
+#7 [build  3/10] RUN npm install --global "pnpm@11.9.0"
+#7 CACHED
+
+#8 [build  4/10] COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+#8 CACHED
+
+#9 [build  5/10] COPY patches ./patches
+#9 CACHED
+
+#10 [build  6/10] COPY web/vendor ./web/vendor
+#10 CACHED
+
+#11 [build  7/10] RUN pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu="$(node -p 'process.arch')"       --config.supportedArchitectures.libc=glibc
+#11 0.478 ? Verifying lockfile against supply-chain policies (1657 entries)...
+#11 0.482 Importing packages to virtual store
+#11 0.520 Already up to date
+#11 0.539 Progress: resolved 1, reused 0, downloaded 0, added 0
+#11 1.543 Progress: resolved 1409, reused 0, downloaded 1, added 1
+#11 4.376 Progress: resolved 1409, reused 0, downloaded 2, added 1
+#11 5.377 Progress: resolved 1409, reused 0, downloaded 67, added 67
+#11 6.377 Progress: resolved 1409, reused 0, downloaded 179, added 176
+#11 7.377 Progress: resolved 1409, reused 0, downloaded 281, added 281
+#11 8.378 Progress: resolved 1409, reused 0, downloaded 326, added 326
+#11 9.379 Progress: resolved 1409, reused 0, downloaded 371, added 371
+#11 ...
+
+#12 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "https://deb.debian.org/debian" ]; then       sed -i "s|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|http://deb.debian.org/debian-security|https://deb.debian.org/debian-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#12 3.898 Ign:1 https://deb.debian.org/debian bookworm InRelease
+#12 8.905 Ign:2 https://deb.debian.org/debian bookworm-updates InRelease
+#12 10.08 Ign:3 https://deb.debian.org/debian-security bookworm-security InRelease
+#12 ...
+
+#11 [build  7/10] RUN pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu="$(node -p 'process.arch')"       --config.supportedArchitectures.libc=glibc
+#11 10.38 Progress: resolved 1409, reused 0, downloaded 437, added 437
+#11 11.38 Progress: resolved 1409, reused 0, downloaded 484, added 484
+#11 11.62 [WARN] Tarball download average speed 29 KiB/s (size 109 KiB) is below 50 KiB/s: https://registry.npmjs.org/yaml/-/yaml-2.9.0.tgz (GET)
+#11 12.38 Progress: resolved 1409, reused 0, downloaded 556, added 557
+#11 13.38 Progress: resolved 1409, reused 0, downloaded 611, added 612
+#11 14.38 Progress: resolved 1409, reused 0, downloaded 708, added 708
+#11 15.39 Progress: resolved 1409, reused 0, downloaded 726, added 727
+#11 16.39 Progress: resolved 1409, reused 0, downloaded 781, added 782
+#11 17.39 Progress: resolved 1409, reused 0, downloaded 833, added 837
+#11 17.86 [WARN] Tarball download average speed 23 KiB/s (size 99 KiB) is below 50 KiB/s: https://registry.npmjs.org/minimatch/-/minimatch-9.0.9.tgz (GET)
+#11 18.20 [WARN] Tarball download average speed 43 KiB/s (size 136 KiB) is below 50 KiB/s: https://registry.npmjs.org/bluebird/-/bluebird-3.7.2.tgz (GET)
+#11 18.40 Progress: resolved 1409, reused 0, downloaded 881, added 883
+#11 19.40 Progress: resolved 1409, reused 0, downloaded 955, added 961
+#11 20.40 Progress: resolved 1409, reused 0, downloaded 1011, added 1018
+#11 21.40 Progress: resolved 1409, reused 0, downloaded 1072, added 1079
+#11 21.40 [WARN] Tarball download average speed 23 KiB/s (size 68 KiB) is below 50 KiB/s: https://registry.npmjs.org/decimal.js/-/decimal.js-10.6.0.tgz (GET)
+#11 22.40 Progress: resolved 1409, reused 0, downloaded 1162, added 1171
+#11 22.44 [WARN] Tarball download average speed 44 KiB/s (size 102 KiB) is below 50 KiB/s: https://registry.npmjs.org/mark.js/-/mark.js-8.11.1.tgz (GET)
+#11 23.40 Progress: resolved 1409, reused 0, downloaded 1248, added 1257
+#11 24.40 Progress: resolved 1409, reused 0, downloaded 1318, added 1326
+#11 ...
+
+#12 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "https://deb.debian.org/debian" ]; then       sed -i "s|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|http://deb.debian.org/debian-security|https://deb.debian.org/debian-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#12 15.08 Ign:1 https://deb.debian.org/debian bookworm InRelease
+#12 21.51 Ign:2 https://deb.debian.org/debian bookworm-updates InRelease
+#12 22.42 Ign:3 https://deb.debian.org/debian-security bookworm-security InRelease
+#12 ...
+
+#11 [build  7/10] RUN pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu="$(node -p 'process.arch')"       --config.supportedArchitectures.libc=glibc
+#11 25.40 Progress: resolved 1409, reused 0, downloaded 1389, added 1398
+#11 26.07 [WARN] Tarball download average speed 42 KiB/s (size 67 KiB) is below 50 KiB/s: https://registry.npmjs.org/swr/-/swr-2.4.1.tgz (GET)
+#11 26.40 Progress: resolved 1409, reused 0, downloaded 1392, added 1401
+#11 27.79 Progress: resolved 1409, reused 0, downloaded 1393, added 1401
+#11 28.80 Progress: resolved 1409, reused 0, downloaded 1395, added 1404
+#11 33.52 Progress: resolved 1409, reused 0, downloaded 1396, added 1404
+#11 34.52 Progress: resolved 1409, reused 0, downloaded 1398, added 1407
+#11 35.87 Progress: resolved 1409, reused 0, downloaded 1399, added 1407
+#11 36.81 Progress: resolved 1409, reused 0, downloaded 1400, added 1409, done
+#11 ...
+
+#12 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "https://deb.debian.org/debian" ]; then       sed -i "s|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|http://deb.debian.org/debian-security|https://deb.debian.org/debian-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#12 27.94 Ign:1 https://deb.debian.org/debian bookworm InRelease
+#12 32.94 Ign:2 https://deb.debian.org/debian bookworm-updates InRelease
+#12 33.68 Ign:3 https://deb.debian.org/debian-security bookworm-security InRelease
+#12 34.16 Ign:1 https://deb.debian.org/debian bookworm InRelease
+#12 ...
+
+#11 [build  7/10] RUN pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu="$(node -p 'process.arch')"       --config.supportedArchitectures.libc=glibc
+#11 37.88 ✓ Lockfile passes supply-chain policies (1657 entries in 37.4s)
+#11 37.91 .../node_modules/@swc/core postinstall$ node postinstall.js
+#11 37.91 .../node-pty@1.1.0/node_modules/node-pty install$ node scripts/prebuild.js || node-gyp rebuild
+#11 37.91 .../node_modules/protobufjs postinstall$ node scripts/postinstall
+#11 37.97 .../node_modules/electron-winstaller install$ node ./script/select-7z-arch.js
+#11 37.97 .../esbuild@0.28.1/node_modules/esbuild postinstall$ node install.js
+#11 38.01 .../node-pty@1.1.0/node_modules/node-pty install: [32m> Checking prebuilds...[0m
+#11 38.01 .../node_modules/electron-winstaller install: Selecting 7-Zip for arch arm64
+#11 38.01 .../node-pty@1.1.0/node_modules/node-pty install: [33m> Rebuilding because directory /app/.pnpm/node-pty@1.1.0/node_modules/node-pty/prebuilds/linux-arm64 does not exist[0m
+#11 38.01 .../node_modules/electron-winstaller install: Done
+#11 38.01 .../node_modules/@swc/core postinstall: Done
+#11 38.01 .../node_modules/protobufjs postinstall: Done
+#11 38.03 .../node_modules/protobufjs postinstall$ node scripts/postinstall
+#11 38.04 .../node-pty@1.1.0/node_modules/node-pty install: gyp info it worked if it ends with ok
+#11 38.04 .../node-pty@1.1.0/node_modules/node-pty install: gyp info using node-gyp@12.4.0
+#11 38.04 .../node-pty@1.1.0/node_modules/node-pty install: gyp info using node@26.12.1 | linux | arm64
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python 
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python --python was not set on the command line
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python Python is not set from environment variable PYTHON
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python checking if "python3" can be used
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python - executable path is ""
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python - "" could not be run
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python checking if "python" can be used
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python - executable path is ""
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python - "" could not be run
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python 
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python **********************************************************
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python You need to install the latest version of Python.
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python Node-gyp should be able to find and use Python. If not,
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python you can try one of the following options:
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python - Use the switch --python="/path/to/pythonexecutable"
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python (accepted by both node-gyp and npm)
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python - Set the environment variable PYTHON
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python For more information consult the documentation at:
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python https://github.com/nodejs/node-gyp#installation
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python **********************************************************
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! find Python 
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! configure error 
+#11 38.05 .../node_modules/protobufjs postinstall: Done
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! stack Error: Could not find any Python installation to use
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! stack at PythonFinder.fail (/usr/local/lib/node_modules/pnpm/dist/node_modules/node-gyp/lib/find-python.js:300:11)
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! stack at PythonFinder.findPython (/usr/local/lib/node_modules/pnpm/dist/node_modules/node-gyp/lib/find-python.js:160:17)
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! stack at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! stack at async configure (/usr/local/lib/node_modules/pnpm/dist/node_modules/node-gyp/lib/configure.js:27:18)
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! stack at async run (/usr/local/lib/node_modules/pnpm/dist/node_modules/node-gyp/bin/node-gyp.js:81:18)
+#11 38.05 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! System Linux 7.2.12-orbstack-00394-gbecdd6130068
+#11 38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! command "/usr/local/bin/node" "/usr/local/lib/node_modules/pnpm/dist/node_modules/node-gyp/bin/node-gyp.js" "rebuild"
+#11 38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! cwd /app/.pnpm/node-pty@1.1.0/node_modules/node-pty
+#11 38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! node -v v26.12.1
+#11 38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! node-gyp -v v12.4.0
+#11 38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! $npm_package_name node-pty
+#11 38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! $npm_package_version 1.1.0
+#11 38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! not ok 
+#11 38.06 .../node-pty@1.1.0/node_modules/node-pty install: Failed
+#11 38.08 .../esbuild@0.28.1/node_modules/esbuild postinstall: Done
+#11 38.24 [ELIFECYCLE] Command failed with exit code 1.
+#11 ERROR: process "/bin/sh -c pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu=\"$(node -p 'process.arch')\"       --config.supportedArchitectures.libc=glibc" did not complete successfully: exit code: 1
+
+#12 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "https://deb.debian.org/debian" ]; then       sed -i "s|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|http://deb.debian.org/debian-security|https://deb.debian.org/debian-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#12 CANCELED
+------
+ > [build  7/10] RUN pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu="$(node -p 'process.arch')"       --config.supportedArchitectures.libc=glibc:
+38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! command "/usr/local/bin/node" "/usr/local/lib/node_modules/pnpm/dist/node_modules/node-gyp/bin/node-gyp.js" "rebuild"
+38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! cwd /app/.pnpm/node-pty@1.1.0/node_modules/node-pty
+38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! node -v v26.12.1
+38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! node-gyp -v v12.4.0
+38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! $npm_package_name node-pty
+38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! $npm_package_version 1.1.0
+38.06 .../node-pty@1.1.0/node_modules/node-pty install: gyp ERR! not ok 
+38.06 .../node-pty@1.1.0/node_modules/node-pty install: Failed
+38.08 .../esbuild@0.28.1/node_modules/esbuild postinstall: Done
+38.24 [ELIFECYCLE] Command failed with exit code 1.
+------
+xopc-s4-Dockerfile:25
+--------------------
+  24 |     COPY web/vendor ./web/vendor
+  25 | >>> RUN pnpm fetch --config.store-dir=/pnpm/store \
+  26 | >>>       --config.supportedArchitectures.os=linux \
+  27 | >>>       --config.supportedArchitectures.cpu="$(node -p 'process.arch')" \
+  28 | >>>       --config.supportedArchitectures.libc=glibc
+  29 |     
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu=\"$(node -p 'process.arch')\"       --config.supportedArchitectures.libc=glibc" did not complete successfully: exit code: 1

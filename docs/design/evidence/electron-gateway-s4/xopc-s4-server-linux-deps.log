@@ -1,0 +1,22 @@
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Progress: resolved 5, reused 0, downloaded 0, added 0
+Progress: resolved 10, reused 0, downloaded 0, added 0
+Progress: resolved 36, reused 0, downloaded 0, added 0
+Progress: resolved 43, reused 0, downloaded 0, added 0
+Progress: resolved 53, reused 0, downloaded 0, added 0
+Progress: resolved 63, reused 0, downloaded 0, added 0
+Progress: resolved 66, reused 0, downloaded 0, added 0
+
+devDependencies: skipped
+
+Packages: +23
++++++++++++++++++++++++
+Progress: resolved 67, reused 13, downloaded 0, added 13
+Progress: resolved 67, reused 13, downloaded 4, added 17
+Progress: resolved 67, reused 13, downloaded 7, added 20
+Progress: resolved 67, reused 13, downloaded 8, added 21
+Progress: resolved 67, reused 13, downloaded 9, added 21
+Progress: resolved 67, reused 13, downloaded 9, added 22
+Progress: resolved 67, reused 13, downloaded 10, added 22
+Progress: resolved 67, reused 13, downloaded 10, added 23, done
+Done in 15.3s using pnpm v11.9.0

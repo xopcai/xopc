@@ -1,0 +1,18 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T10:45:33.245Z",
+  "scope": "Installed macOS app against explicitly configured external Gateway; one real configured Agent/model input, not S5 or full platform acceptance",
+  "transport": "direct",
+  "origin": "https://tg.xopc.ai",
+  "checks": {},
+  "packageBefore": {
+    "files": 1422,
+    "sha256": "887d7aa714f198eb9648912bf86654e0c9e8c0d50a048993612a444c9b4da18c"
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Server device audit failed: 404\n    at devices (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-installed-gateway.mjs:26:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-installed-gateway.mjs:36:25",
+  "packageAfter": {
+    "files": 1422,
+    "sha256": "887d7aa714f198eb9648912bf86654e0c9e8c0d50a048993612a444c9b4da18c"
+  },
+  "finishedAt": "2026-10-31T10:45:35.151Z"
+}

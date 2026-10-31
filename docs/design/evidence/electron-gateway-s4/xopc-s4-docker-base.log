@@ -1,0 +1,23 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from xopc-s4-node26.Dockerfile
+#1 transferring dockerfile: 45B 0.1s
+#1 transferring dockerfile: 194B 0.1s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/node:26.12.1-bookworm-slim
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/library/node:24.14.1-bookworm
+#3 ERROR: failed to copy: httpReadSeeker: failed open: failed to authorize: failed to fetch anonymous token: Get "https://auth.docker.io/token?scope=repository%3Alibrary%2Fnode%3Apull&service=registry.docker.io": dial tcp [2a03:2880:f136:83:face:b00c:0:25de]:443: i/o timeout
+------
+ > [internal] load metadata for docker.io/library/node:24.14.1-bookworm:
+------
+xopc-s4-node26.Dockerfile:2
+--------------------
+   1 |     FROM node:26.12.1-bookworm-slim AS node26
+   2 | >>> FROM node:24.14.1-bookworm
+   3 |     COPY --from=node26 /usr/local/bin/node /usr/local/bin/node
+   4 |     RUN node -v
+--------------------
+ERROR: failed to build: failed to solve: failed to fetch anonymous token: Get "https://auth.docker.io/token?scope=repository%3Alibrary%2Fnode%3Apull&service=registry.docker.io": dial tcp [2a03:2880:f136:83:face:b00c:0:25de]:443: i/o timeout

@@ -1,0 +1,95 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from xopc-s4-node26-cached.Dockerfile
+#1 transferring dockerfile: 232B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:26.12.1-bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/xopc:release-perf-build
+#3 DONE 0.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [node26 1/1] FROM docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c
+#5 resolve docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c 0.0s done
+#5 CACHED
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 resolve docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f 0.0s done
+#6 DONE 0.8s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:450fe15cad1eddfa7c19e4191f4de2d5c46b0c201ddee1db8d6f41d2fec7a742
+#6 extracting sha256:450fe15cad1eddfa7c19e4191f4de2d5c46b0c201ddee1db8d6f41d2fec7a742 0.5s done
+#6 DONE 1.3s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:e528fa46febdafdfec8e02c978fc9de14e76dd532505c33472d8f915ac27a2f8
+#6 extracting sha256:e528fa46febdafdfec8e02c978fc9de14e76dd532505c33472d8f915ac27a2f8 0.2s done
+#6 DONE 1.5s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:328a0fa474a1ca8d79c015c72bce6d935298ea38f98b4e04dec9e350442e03d7
+#6 extracting sha256:328a0fa474a1ca8d79c015c72bce6d935298ea38f98b4e04dec9e350442e03d7 0.6s done
+#6 extracting sha256:4d3ba406c16b69d4aa51efbc3e6261745f96834c1468f508f6c0eedfc94b57ad
+#6 extracting sha256:4d3ba406c16b69d4aa51efbc3e6261745f96834c1468f508f6c0eedfc94b57ad 2.5s done
+#6 DONE 4.5s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:df80b7e36cafd4a802b3b1e4df7a630422108aeddf3cc184cbfe9fa9e372a321 0.0s done
+#6 extracting sha256:67ff4665dd815ee99907e6f0707ec7752d5ad038f7f714e9509b2c5d8a121197
+#6 extracting sha256:67ff4665dd815ee99907e6f0707ec7752d5ad038f7f714e9509b2c5d8a121197 0.7s done
+#6 extracting sha256:257103b1b1da20540063853f42d7cadc3195c6a4316efb22fd9d49c3baf3f51a
+#6 extracting sha256:257103b1b1da20540063853f42d7cadc3195c6a4316efb22fd9d49c3baf3f51a 0.0s done
+#6 extracting sha256:20c3cebe9eb0a2f14837f8d2382dc04de00c517d5a034be31687ada89ebeef4f 0.0s done
+#6 extracting sha256:ccd591209161127d403e6f965a99e859df92d9ccb731d4dbc5ae61bdf6824aa9 0.0s done
+#6 extracting sha256:6fd10af0291a6789a31bb89945dc353fe53db5a065a5de7a2d0b8b7ec38198e3 0.1s done
+#6 DONE 5.5s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:eac58e7d5099b0f78d128ab31bdca0f46b3f438e6bac69a47ffa3c2ca05da826 0.0s done
+#6 extracting sha256:6a4e3e3d24de1263499bd7c30e2cf78669c1ac657b78f7a20223c5f1b13139fa 0.0s done
+#6 extracting sha256:fb2e37741e5208e96cc932edb1cc8e39d95a7dcc407f552a85f44412c26dc7e1 0.1s done
+#6 DONE 5.6s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:2293ccdfae20d2accb28089474413f1e347517adaae675960c104a8583c606aa
+#6 extracting sha256:2293ccdfae20d2accb28089474413f1e347517adaae675960c104a8583c606aa 17.2s done
+#6 DONE 22.8s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:9cf6640fdbb74fccc212e133fcc85871c5577bd5c0357668d8de515addfb25b1
+#6 extracting sha256:9cf6640fdbb74fccc212e133fcc85871c5577bd5c0357668d8de515addfb25b1 0.4s done
+#6 DONE 23.2s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:b5ebe052e2303ac0c69b1e96f2d27027f75a818eb610e3243a948e158209bdc9 0.1s done
+#6 DONE 23.4s
+
+#6 [stage-1 1/3] FROM docker.io/library/xopc:release-perf-build@sha256:4950c82334bcfcd9ce8466adeb55b181e126bfb5292949644cf5abfd87c94e2f
+#6 extracting sha256:afb44b5c6f401233c78bc61da1398c2d35c8a0f6f822d98686e323c4131e664f
+#6 extracting sha256:afb44b5c6f401233c78bc61da1398c2d35c8a0f6f822d98686e323c4131e664f 0.8s done
+#6 DONE 24.2s
+
+#7 [stage-1 2/3] COPY --from=node26 /usr/local/bin/node /usr/local/bin/node
+#7 DONE 0.1s
+
+#8 [stage-1 3/3] RUN rm -rf /app && mkdir /app && node -v
+#8 2.743 v26.12.1
+#8 DONE 2.8s
+
+#9 exporting to image
+#9 exporting layers
+#9 exporting layers 2.5s done
+#9 exporting manifest sha256:bdec2ccfcff3a17403405e2d4b7ee5448757ce2bd3ffea645b4320bac83c9119 0.0s done
+#9 exporting config sha256:996377060794a6dbc6f7e8f61cf0b5888c860d49354afeea8e7e5d1c790a980b done
+#9 exporting attestation manifest sha256:2617b235151d7ef67d8bc6cc58bc2be07c4196de6d2f33c0f2c162db957ff2f3 0.0s done
+#9 exporting manifest list sha256:0fd6b72ed63f9f9366795e775ae6fbe59aae78c228ba64484173cbc7993ea762 done
+#9 naming to docker.io/library/xopc:s4-node26-build done
+#9 unpacking to docker.io/library/xopc:s4-node26-build
+#9 unpacking to docker.io/library/xopc:s4-node26-build 0.4s done
+#9 DONE 3.0s

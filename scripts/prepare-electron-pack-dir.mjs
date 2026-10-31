@@ -14,6 +14,7 @@ import { pruneElectronPdfjsRuntime } from './prune-electron-pdfjs-runtime.mjs';
 import { prepareCuaSdkRuntime } from './prepare-cua-sdk.mjs';
 import { COMPUTER_DRIVER_VERSION, computerDriverRelease } from './lib/computer-driver-release.mjs';
 import { createHash } from 'node:crypto';
+import { verifyStagedDesktopPackage } from './electron-package-layout.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const packDir = mkdtempSync(join(tmpdir(), 'xopc-electron-pack-'));
@@ -155,6 +156,7 @@ export function prepareElectronPackDir(
 
   for (const { from, to } of APP_COPY_PATHS) copyRequired(repoRoot, from, to);
   for (const { from, to } of PACK_RESOURCE_COPIES) copyRequired(repoRoot, from, to);
+  verifyStagedDesktopPackage(packDir, repoRoot);
 
   const rootPkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
   const minimalPkg = buildMinimalElectronPackageJson(rootPkg, repoRoot);

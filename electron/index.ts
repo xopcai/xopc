@@ -6,8 +6,8 @@ if (process.argv.includes('--gateway-connections')) {
   // Electron emits ready only after the entry module finishes evaluating.
   void startGatewayConnectionPreview(import.meta.url).catch(async () => {
     console.error('[GatewayConnections] Preview startup failed; restart without --gateway-connections for local mode.');
-    const { app } = await import('electron');
-    app.quit();
+    const { recoverGatewayConnectionStartup } = await import('./gateway/startup-recovery.js');
+    await recoverGatewayConnectionStartup();
   });
 } else {
   await import('./main.js');

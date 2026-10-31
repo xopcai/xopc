@@ -1,0 +1,32 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from xopc-s4-clean-build.Dockerfile
+#1 transferring dockerfile: 133B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/xopc:s4-node26-build
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/xopc:s4-node26-build@sha256:0fd6b72ed63f9f9366795e775ae6fbe59aae78c228ba64484173cbc7993ea762
+#4 resolve docker.io/library/xopc:s4-node26-build@sha256:0fd6b72ed63f9f9366795e775ae6fbe59aae78c228ba64484173cbc7993ea762 0.0s done
+#4 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/xopc:s4-node26-build@sha256:0fd6b72ed63f9f9366795e775ae6fbe59aae78c228ba64484173cbc7993ea762
+#4 CACHED
+
+#5 [2/2] RUN rm -f /usr/local/bin/pnpm /usr/local/bin/pnpx
+#5 DONE 0.1s
+
+#6 exporting to image
+#6 exporting layers 0.1s done
+#6 exporting manifest sha256:2254629f0a246f106d4d1abb91fdaf28a0d715f6ce73e62659a0bc809eb80b6d 0.0s done
+#6 exporting config sha256:70c6d0f8c10b63ba96dedecac41f16fe7c2fa738b6a2c7d6c6c994645b2e6760 done
+#6 exporting attestation manifest sha256:9948deaaba60d3ba8e081b1d031de7442f6d3ee5ec9cbd9c6fa106746a7468a1 done
+#6 exporting manifest list sha256:557c6d9039c2d29e4a7ad632fc919fbcd92669d0c41c866525907831ed241066 done
+#6 naming to docker.io/library/xopc:s4-node26-clean-build done
+#6 unpacking to docker.io/library/xopc:s4-node26-clean-build 0.0s done
+#6 DONE 0.1s

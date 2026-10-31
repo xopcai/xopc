@@ -1,0 +1,58 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T10:08:05.981Z",
+  "scope": "Installed macOS app local spawn/reuse, real bundled Gateway/SQLite/IPC/PTY/browser with deterministic inference; not upgrade or S5 acceptance",
+  "samples": [
+    {
+      "mode": "spawn",
+      "passed": false,
+      "runtime": {
+        "executable": "/tmp/xopc-s4-delivery/installed/xopc.app/Contents/MacOS/xopc",
+        "appAsar": "/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar",
+        "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-local-wVqMPG",
+        "rendererCdpOnly": true,
+        "fuses": {
+          "0": 49,
+          "1": 49,
+          "2": 48,
+          "3": 48,
+          "4": 49,
+          "5": 49,
+          "6": 48,
+          "7": 48,
+          "8": 49,
+          "version": "1"
+        },
+        "pid": 85439
+      },
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "43d3ec4a-792c-4ab2-ad19-358882782515"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('main').getByText('XOPC_LOCAL_CHAT_OK', { exact: true }).first() to be visible\u001b[22m\n\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-installed-local.mjs:56:116",
+      "logs": "\nDevTools listening on ws://127.0.0.1:51758/devtools/browser/62d16bcd-b132-4338-ae02-d1312d63fe4b\n(electron) 'safeStorage.isEncryptionAvailable' is deprecated and will be removed. Please use 'safeStorage.isAsyncEncryptionAvailable' instead.\n(electron) 'safeStorage.encryptString' is deprecated and will be removed. Please use 'safeStorage.encryptStringAsync' instead.\n[gateway:stdout] 🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 51756\n\nPress Ctrl+C to stop\n[gateway:stdout] [GatewayLock] Lock acquired: pid=85480, lockPath=/Users/micjoyce/.xopc/locks/gateway.6ff38389.lock\n[gateway:stdout] [GatewayRunLoop] Starting gateway server...\n[gateway:stdout] [GatewayServer] Starting gateway server on 127.0.0.1:51756...\n[gateway:stdout] ✅ Gateway started\n   URL: http://127.0.0.1:51756\n   Token: [redacted]\n[gateway:stdout] [GatewayServer] Gateway server running at http://127.0.0.1:51756\n[85443:1031/180807.835692:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[85443:1031/180807.835964:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[85443:1031/180807.835984:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[85443:1031/180807.836000:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[85443:1031/180807.836205:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:260] SharedImageManager::ProduceSkia: Trying to Produce a Skia representation from a non-existent mailbox.\n[gateway:stderr] Error: Model not found: xopc-cloud/auto\n    at qr (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:4287:6338)\n    at Bvn.resolveModelStringToModel (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8561:3154)\n    at getPrimaryModel (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8561:4280)\n    at t.createCoreTools (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8523:13993)\n    at t.createAllTools (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8523:25694)\n    at Bvn.buildAgentSkillAvailability (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8561:12254)\n    at Bvn.getAgentSkillAvailability (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8561:13755)\n    at Rue.getAgentSkillAvailability (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8578:12906)\n    at kwn.getAgentSkillsApi (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8992:17966)\n    at file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:9595:7017\n[gateway:stderr] Error: Model not found: xopc-cloud/auto\n    at qr (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:4287:6338)\n    at Bvn.resolveModelStringToModel (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8561:3154)\n    at getPrimaryModel (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8561:4280)\n    at t.createCoreTools (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8523:13993)\n    at t.createAllTools (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8523:25694)\n    at Bvn.buildAgentSkillAvailability (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8561:12254)\n    at Bvn.getAgentSkillAvailability (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8561:13755)\n    at Rue.getAgentSkillAvailability (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8578:12906)\n    at kwn.getAgentSkillsApi (file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:8992:17966)\n    at file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/server/index.js:9595:7017\n(electron) 'safeStorage.decryptString' is deprecated and will be removed. Please use 'safeStorage.decryptStringAsync' instead.\nError occurred in handler for 'file:read': Error: Path is outside the Electron-managed workspace.\n    at file:///private/tmp/xopc-s4-delivery/installed/xopc.app/Contents/Resources/app.asar/out/main/main.js:462:17145\n[gateway:stdout] [GatewayRunLoop] SIGTERM received\n[gateway:stdout] [GatewayRunLoop] Received SIGTERM; shutting down\n[GatewayServer] Closing gateway server: gateway stopping\n[GatewayServer] Stopping gateway server...\n[gateway:stdout] [GatewayServer] Gateway server stopped\n[gateway:stdout] [GatewayLock] Lock released: lockPath=/Users/micjoyce/.xopc/locks/gateway.6ff38389.lock\n[gateway] process exited normally (code=0)\n[gateway:stdout] 🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 51756\n\nPress Ctrl+C to stop\n[gateway:stdout] \n[gateway:stdout] [GatewayLock] Lock acquired: pid=85761, lockPath=/Users/micjoyce/.xopc/locks/gateway.6ff38389.lock\n[gateway:stdout] [GatewayRunLoop] Starting gateway server...\n[gateway:stdout] [GatewayServer] Starting gateway server on 127.0.0.1:51756...\n[gateway:stdout] ✅ Gateway started\n   URL: http://127.0.0.1:51756\n   Token: [redacted]\n[gateway:stdout] [GatewayServer] Gateway server running at http://127.0.0.1:51756\n",
+      "windows": [
+        {
+          "url": "http://127.0.0.1:51756/#/chat/43d3ec4a-792c-4ab2-ad19-358882782515",
+          "text": "Skip to main content\nNew chat\nAda\nWork\nCapabilities\nAutomations\nMore\nRecent work\nChats\nXOPC_LOCAL_CHAT_OK\nXOPC\nLanguage, theme, and text size\nXOPC_LOCAL_CHAT_OK\nSmart Assistant\nToday 06:08 PM\nYou\n\nReply with the local connection acceptance marker.\n\nRetry\nAssistant\n\nXOPC_LOCAL_CHAT_OK\n\nConnection fixture\nWelcome to xopc\n\nA personal assistant that carries the busywork while keeping direction, judgment, and final decisions with you.\n\nSTEP 1 · CHOOSE SOURCES\n\nLet xopc understand your work\n\nChoose read-only sources so xopc can understand what matters in your work. Turn them off anytime.\n\nReference local apps\n\nOptional. Only sources you explicitly select are read.\n\nRecent files\nRecent bookmarks\nApple Notes\nApple Mail\nApple Calendar\nApple Reminders\nFind recent projects\nChoose another folder\nFolders are only read after you select them, and files are never modified.\nSkip for now"
+        }
+      ]
+    }
+  ],
+  "packageBefore": {
+    "files": 1415,
+    "sha256": "b9558d06653e5336710308afa9a9d442a5ee93b6ce4f6541dfed4c36de7eb43d"
+  },
+  "packageAfter": {
+    "files": 1415,
+    "sha256": "b9558d06653e5336710308afa9a9d442a5ee93b6ce4f6541dfed4c36de7eb43d"
+  },
+  "finishedAt": "2026-10-31T10:08:51.920Z"
+}

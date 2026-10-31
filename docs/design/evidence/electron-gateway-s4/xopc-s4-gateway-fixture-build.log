@@ -1,0 +1,56 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 924B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:26.12.1-bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context:
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/9] FROM docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c
+#4 resolve docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 70.04MB 0.2s done
+#5 DONE 0.3s
+
+#6 [7/9] COPY dist dist
+#6 CACHED
+
+#7 [5/9] RUN node /opt/pnpm/bin/pnpm.mjs install --prod --ignore-scripts --node-linker=hoisted --no-frozen-lockfile
+#7 CACHED
+
+#8 [8/9] COPY skills skills
+#8 CACHED
+
+#9 [4/9] COPY package.json ./
+#9 CACHED
+
+#10 [6/9] COPY out out
+#10 CACHED
+
+#11 [3/9] COPY pnpm /opt/pnpm
+#11 CACHED
+
+#12 [2/9] WORKDIR /app
+#12 CACHED
+
+#13 [9/9] RUN mkdir -p /home/node/.xopc && chown -R node:node /home/node/.xopc
+#13 CACHED
+
+#14 exporting to image
+#14 exporting layers done
+#14 exporting manifest sha256:08ee763f4aa65cf6483a63bf3d5be9595010c7357d20bcb648d4c36ab1fe04f2 done
+#14 exporting config sha256:1c554dcde8c8e54754f6cb5f40b283125836528aa864c30fbd2eadcb16af0184 done
+#14 exporting attestation manifest sha256:0b9c285351cce4a1438d8b4f52117d90c88769b528287776b94460d1b3b12ec8 0.0s done
+#14 exporting manifest list sha256:1e60dbcce3849b6fbd629f430a98dd0a475806d0a36b2b20f4ea166ee30f52c8 0.0s done
+#14 naming to docker.io/library/xopc:s4-bundled-gateway
+#14 naming to docker.io/library/xopc:s4-bundled-gateway done
+#14 unpacking to docker.io/library/xopc:s4-bundled-gateway done
+#14 DONE 0.1s

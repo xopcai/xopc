@@ -1,0 +1,328 @@
+{
+  "date": "2026-10-31",
+  "baseMain": "c8da81aa0280a3a45041bfbfa39c2f389d98b965",
+  "stage": "S4 in progress; acceptance not closed",
+  "tests": {
+    "files": 64,
+    "passed": 590
+  },
+  "typecheck": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": 5
+  },
+  "dependencyViolations": 0,
+  "cliImportGuard": "passed",
+  "budgetUnchanged": true,
+  "frozenBaselineSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "budgetRuns": {
+    "s4-local-budget-1.json": {
+      "passed": false,
+      "gatesPassed": 7,
+      "comparison": [
+        {
+          "mode": "spawn",
+          "metric": "readyMs",
+          "before": 2038.5515000000005,
+          "after": 1981.113958,
+          "maximum": 2140.4790750000006,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "configMs",
+          "before": 47.599999994039536,
+          "after": 33.80000001192093,
+          "maximum": 52.599999994039536,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "sessionsMs",
+          "before": 26.600000023841858,
+          "after": 6,
+          "maximum": 31.600000023841858,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "rssMiB",
+          "before": 1026.328125,
+          "after": 1036.375,
+          "maximum": 1077.64453125,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "readyMs",
+          "before": 1002.2085420000076,
+          "after": 967.9213329999911,
+          "maximum": 1102.2085420000076,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "configMs",
+          "before": 48.30000001192093,
+          "after": 39.900000005960464,
+          "maximum": 53.30000001192093,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "sessionsMs",
+          "before": 20,
+          "after": 8.399999976158142,
+          "maximum": 25,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "rssMiB",
+          "before": 685.265625,
+          "after": 721.40625,
+          "maximum": 719.52890625,
+          "passed": false
+        }
+      ]
+    },
+    "s4-local-budget-2.json": {
+      "passed": false,
+      "gatesPassed": 6,
+      "comparison": [
+        {
+          "mode": "spawn",
+          "metric": "readyMs",
+          "before": 2038.5515000000005,
+          "after": 2341.4798750000045,
+          "maximum": 2140.4790750000006,
+          "passed": false
+        },
+        {
+          "mode": "spawn",
+          "metric": "configMs",
+          "before": 47.599999994039536,
+          "after": 44.099999994039536,
+          "maximum": 52.599999994039536,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "sessionsMs",
+          "before": 26.600000023841858,
+          "after": 19,
+          "maximum": 31.600000023841858,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "rssMiB",
+          "before": 1026.328125,
+          "after": 1038.671875,
+          "maximum": 1077.64453125,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "readyMs",
+          "before": 1002.2085420000076,
+          "after": 1343.9214999999967,
+          "maximum": 1102.2085420000076,
+          "passed": false
+        },
+        {
+          "mode": "reuse",
+          "metric": "configMs",
+          "before": 48.30000001192093,
+          "after": 24.599999994039536,
+          "maximum": 53.30000001192093,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "sessionsMs",
+          "before": 20,
+          "after": 6.4000000059604645,
+          "maximum": 25,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "rssMiB",
+          "before": 685.265625,
+          "after": 718.171875,
+          "maximum": 719.52890625,
+          "passed": true
+        }
+      ]
+    },
+    "s4-local-budget-3.json": {
+      "passed": false,
+      "gatesPassed": 6,
+      "comparison": [
+        {
+          "mode": "spawn",
+          "metric": "readyMs",
+          "before": 2038.5515000000005,
+          "after": 2188.726458,
+          "maximum": 2140.4790750000006,
+          "passed": false
+        },
+        {
+          "mode": "spawn",
+          "metric": "configMs",
+          "before": 47.599999994039536,
+          "after": 40.29999998211861,
+          "maximum": 52.599999994039536,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "sessionsMs",
+          "before": 26.600000023841858,
+          "after": 6.0999999940395355,
+          "maximum": 31.600000023841858,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "rssMiB",
+          "before": 1026.328125,
+          "after": 1035.25,
+          "maximum": 1077.64453125,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "readyMs",
+          "before": 1002.2085420000076,
+          "after": 1365.8516660000023,
+          "maximum": 1102.2085420000076,
+          "passed": false
+        },
+        {
+          "mode": "reuse",
+          "metric": "configMs",
+          "before": 48.30000001192093,
+          "after": 49.099999994039536,
+          "maximum": 53.30000001192093,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "sessionsMs",
+          "before": 20,
+          "after": 10.100000023841858,
+          "maximum": 25,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "rssMiB",
+          "before": 685.265625,
+          "after": 705.75,
+          "maximum": 719.52890625,
+          "passed": true
+        }
+      ]
+    },
+    "s4-source-control-full-native.json": {
+      "passed": false,
+      "gatesPassed": 6,
+      "comparison": [
+        {
+          "mode": "spawn",
+          "metric": "readyMs",
+          "before": 2038.5515000000005,
+          "after": 2151.627708,
+          "maximum": 2140.4790750000006,
+          "passed": false
+        },
+        {
+          "mode": "spawn",
+          "metric": "configMs",
+          "before": 47.599999994039536,
+          "after": 38.30000001192093,
+          "maximum": 52.599999994039536,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "sessionsMs",
+          "before": 26.600000023841858,
+          "after": 21.599999994039536,
+          "maximum": 31.600000023841858,
+          "passed": true
+        },
+        {
+          "mode": "spawn",
+          "metric": "rssMiB",
+          "before": 1026.328125,
+          "after": 1032.453125,
+          "maximum": 1077.64453125,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "readyMs",
+          "before": 1002.2085420000076,
+          "after": 1137.6705000000075,
+          "maximum": 1102.2085420000076,
+          "passed": false
+        },
+        {
+          "mode": "reuse",
+          "metric": "configMs",
+          "before": 48.30000001192093,
+          "after": 12.400000005960464,
+          "maximum": 53.30000001192093,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "sessionsMs",
+          "before": 20,
+          "after": 3.300000011920929,
+          "maximum": 25,
+          "passed": true
+        },
+        {
+          "mode": "reuse",
+          "metric": "rssMiB",
+          "before": 685.265625,
+          "after": 715.609375,
+          "maximum": 719.52890625,
+          "passed": true
+        }
+      ]
+    }
+  },
+  "artifactFingerprint": "887d7aa714f198eb9648912bf86654e0c9e8c0d50a048993612a444c9b4da18c",
+  "positiveE2E": [
+    "s4-installed-local-candidate-final.json",
+    "s4-fault-ui-local.json",
+    "s4-installed-docker-paced-100.json",
+    "s4-physical-ssh-actual-history.json",
+    "s4-physical-tls-actual-2.json"
+  ],
+  "openGates": [
+    "Original local ready P95 budgets",
+    "Native recovery button CUA click",
+    "Windows/platform matrix",
+    "Notarization/release channel",
+    "Full A01-A10 coverage"
+  ],
+  "scope": "No S5, remote Host or local capability implementation",
+  "cuaErrors": [
+    "Computer Use is not active for the test app; get_app_state requested by driver",
+    "Computer Use server error -10005: timeoutReached"
+  ],
+  "serverCleanup": {
+    "temporaryNginxConfigRestored": true,
+    "originalConfigSha256": "077b3843cf9887f6960df1348d88d39a8de34af2ceac73694d7860d2120455db",
+    "ownedProcessesStopped": true,
+    "testPortsClosed": true,
+    "original18790GatewayPreserved": true,
+    "temporaryCredentialsRemovedFromServer": true
+  }
+}

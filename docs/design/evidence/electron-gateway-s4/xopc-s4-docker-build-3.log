@@ -1,0 +1,130 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from xopc-s4-Dockerfile
+#1 transferring dockerfile: 6.51kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:26.12.1-bookworm-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 1.02kB done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 99.58MB 1.0s done
+#4 DONE 1.3s
+
+#5 [build  1/10] FROM docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c
+#5 resolve docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c 0.0s done
+#5 extracting sha256:f791e47cf52abf7b364878f2141547e3781072e437f599f6632849d88fca8ca4 0.6s done
+#5 extracting sha256:98ca5a832b3d7ec4949a30309cb6260caa920d6ccc58574cf0add5648d3477a3 0.0s done
+#5 extracting sha256:57201560b02b78f3aa9a0770c96b7ee1665431a012db2f164f7be17d0433e789
+#5 extracting sha256:57201560b02b78f3aa9a0770c96b7ee1665431a012db2f164f7be17d0433e789 0.7s done
+#5 DONE 1.6s
+
+#5 [build  1/10] FROM docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c
+#5 extracting sha256:04c23272fd08d8b80b614a8c549ee2bcd05b274add434f0d64ca2bc55fef0923 0.0s done
+#5 DONE 1.6s
+
+#6 [build  2/10] WORKDIR /app
+#6 DONE 0.2s
+
+#7 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "" ]; then       sed -i "s|http://deb.debian.org/debian||g; s|http://deb.debian.org/debian-security|-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#7 1.396 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#7 ...
+
+#8 [build  3/10] RUN npm install --global "pnpm@11.9.0"
+#8 3.790 
+#8 3.790 added 1 package in 4s
+#8 DONE 3.8s
+
+#9 [build  4/10] COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+#9 DONE 0.1s
+
+#10 [build  5/10] COPY patches ./patches
+#10 DONE 0.1s
+
+#11 [build  6/10] COPY web/vendor ./web/vendor
+#11 DONE 0.1s
+
+#7 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "" ]; then       sed -i "s|http://deb.debian.org/debian||g; s|http://deb.debian.org/debian-security|-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#7 ...
+
+#12 [build  7/10] RUN pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu="$(node -p 'process.arch')"       --config.supportedArchitectures.libc=glibc
+#12 0.382 ? Verifying lockfile against supply-chain policies (1657 entries)...
+#12 0.386 Importing packages to virtual store
+#12 0.425 Already up to date
+#12 0.446 Progress: resolved 1, reused 0, downloaded 0, added 0
+#12 1.458 Progress: resolved 1409, reused 0, downloaded 1, added 1
+#12 3.982 Progress: resolved 1409, reused 0, downloaded 2, added 1
+#12 4.983 Progress: resolved 1409, reused 0, downloaded 87, added 86
+#12 5.983 Progress: resolved 1409, reused 0, downloaded 187, added 187
+#12 6.984 Progress: resolved 1409, reused 0, downloaded 298, added 298
+#12 7.984 Progress: resolved 1409, reused 0, downloaded 405, added 405
+#12 8.744 [WARN] Tarball download average speed 27 KiB/s (size 28 KiB) is below 50 KiB/s: https://registry.npmjs.org/semver/-/semver-7.8.1.tgz (GET)
+#12 8.985 Progress: resolved 1409, reused 0, downloaded 443, added 443
+#12 9.991 Progress: resolved 1409, reused 0, downloaded 474, added 474
+#12 10.99 Progress: resolved 1409, reused 0, downloaded 530, added 531
+#12 11.99 Progress: resolved 1409, reused 0, downloaded 647, added 648
+#12 ...
+
+#7 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "" ]; then       sed -i "s|http://deb.debian.org/debian||g; s|http://deb.debian.org/debian-security|-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#7 6.833 Err:2 http://deb.debian.org/debian bookworm-updates InRelease
+#7 6.833   502  Bad Gateway [IP: 0.250.250.254 7897]
+#7 7.424 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+#7 12.63 Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+#7 14.18 Get:5 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [357 kB]
+#7 ...
+
+#12 [build  7/10] RUN pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu="$(node -p 'process.arch')"       --config.supportedArchitectures.libc=glibc
+#12 12.99 Progress: resolved 1409, reused 0, downloaded 759, added 760
+#12 13.99 Progress: resolved 1409, reused 0, downloaded 831, added 837
+#12 14.99 Progress: resolved 1409, reused 0, downloaded 919, added 925
+#12 16.00 Progress: resolved 1409, reused 0, downloaded 975, added 980
+#12 16.91 [WARN] Tarball download average speed 30 KiB/s (size 34 KiB) is below 50 KiB/s: https://registry.npmjs.org/@vueuse/metadata/-/metadata-12.8.2.tgz (GET)
+#12 17.00 Progress: resolved 1409, reused 0, downloaded 1043, added 1052
+#12 18.00 Progress: resolved 1409, reused 0, downloaded 1122, added 1131
+#12 18.19 [WARN] Tarball download average speed 17 KiB/s (size 34 KiB) is below 50 KiB/s: https://registry.npmjs.org/speakingurl/-/speakingurl-14.0.1.tgz (GET)
+#12 19.00 Progress: resolved 1409, reused 0, downloaded 1181, added 1189
+#12 20.00 Progress: resolved 1409, reused 0, downloaded 1254, added 1262
+#12 ...
+
+#7 [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "" ]; then       sed -i "s|http://deb.debian.org/debian||g; s|http://deb.debian.org/debian-security|-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*
+#7 20.22 Get:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8689 kB]
+#7 23.16 Reading package lists...
+#7 23.38 E: Failed to fetch http://deb.debian.org/debian/dists/bookworm-updates/InRelease  502  Bad Gateway [IP: 0.250.250.254 7897]
+#7 23.38 E: The repository 'http://deb.debian.org/debian bookworm-updates InRelease' is not signed.
+#7 ERROR: process "/bin/sh -c if [ -n \"$XOPC_APT_MIRROR\" ]; then       sed -i \"s|http://deb.debian.org/debian|$XOPC_APT_MIRROR|g; s|http://deb.debian.org/debian-security|$XOPC_APT_MIRROR-security|g\" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100
+
+#12 [build  7/10] RUN pnpm fetch --config.store-dir=/pnpm/store       --config.supportedArchitectures.os=linux       --config.supportedArchitectures.cpu="$(node -p 'process.arch')"       --config.supportedArchitectures.libc=glibc
+#12 CANCELED
+------
+ > [runtime  3/15] RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked     if [ -n "" ]; then       sed -i "s|http://deb.debian.org/debian||g; s|http://deb.debian.org/debian-security|-security|g" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*:
+1.396 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+6.833 Err:2 http://deb.debian.org/debian bookworm-updates InRelease
+6.833   502  Bad Gateway [IP: 0.250.250.254 7897]
+7.424 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+12.63 Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+14.18 Get:5 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [357 kB]
+20.22 Get:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8689 kB]
+23.16 Reading package lists...
+23.38 E: Failed to fetch http://deb.debian.org/debian/dists/bookworm-updates/InRelease  502  Bad Gateway [IP: 0.250.250.254 7897]
+23.38 E: The repository 'http://deb.debian.org/debian bookworm-updates InRelease' is not signed.
+------
+xopc-s4-Dockerfile:86
+--------------------
+  85 |     
+  86 | >>> RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=locked \
+  87 | >>>     --mount=type=cache,id=xopc-bookworm-apt-lists,target=/var/lib/apt,sharing=locked \
+  88 | >>>     if [ -n "$XOPC_APT_MIRROR" ]; then \
+  89 | >>>       sed -i "s|http://deb.debian.org/debian|$XOPC_APT_MIRROR|g; s|http://deb.debian.org/debian-security|$XOPC_APT_MIRROR-security|g" /etc/apt/sources.list.d/debian.sources; \
+  90 | >>>     fi && \
+  91 | >>>     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && \
+  92 | >>>     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  93 | >>>       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini && \
+  94 | >>>     update-ca-certificates && \
+  95 | >>>     rm -rf /var/lib/apt/lists/*
+  96 |     
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c if [ -n \"$XOPC_APT_MIRROR\" ]; then       sed -i \"s|http://deb.debian.org/debian|$XOPC_APT_MIRROR|g; s|http://deb.debian.org/debian-security|$XOPC_APT_MIRROR-security|g\" /etc/apt/sources.list.d/debian.sources;     fi &&     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini &&     update-ca-certificates &&     rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100

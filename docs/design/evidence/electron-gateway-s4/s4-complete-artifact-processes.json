@@ -1,0 +1,30 @@
+{
+  "time": "2026-10-31T10:55:03.022Z",
+  "scope": "One read-only process observation of the original-main control under the complete native artifact layout",
+  "owned": [
+    {
+      "pid": 50063,
+      "ppid": 50054,
+      "rssMiB": 155.90625,
+      "args": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/electron@45.0.0/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron -r /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/_1152b278c7fe15a16871b06812a0f2af/node_modules/playwright-core/lib/server/electron/loader.js --inspect=0 --remote-debugging-port=0 /tmp/xopc-s4-main-control/out/main/index.js"
+    },
+    {
+      "pid": 50092,
+      "ppid": 50063,
+      "rssMiB": 58.578125,
+      "args": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/electron@45.0.0/node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron Helper.app/Contents/MacOS/Electron Helper --type=gpu-process --gpu-recent-crash-count=0 --disable-breakpad --user-data-dir=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-ILgNzb/electron --gpu-preferences=WAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAAQAAAAAAAAAADAAAAAAAAADgAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAoAAAAAAAAAAgAAAAAAAAADAAAAAEAAAAAAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --shared-files --field-trial-handle=1718379636,r,9742285659888234670,10243387021615434832,262144 --enable-features=CDPScreenshotNewSurface,PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma,ThrottleResizeIpc --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,DropInputEventsWhilePaintHolding,GlobalMediaControls,HttpsUpgrades,LensOverlay,LocalNetworkAccessChecks,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ScreenAIOCREnabled,SpareRendererForSitePerProcess,ThirdPartyStoragePartitioning,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=1935764596,r,6136958474652110243,17518661930704440014,4 --trace-process-track-uuid=3190708988185955192 --seatbelt-client=41"
+    },
+    {
+      "pid": 50093,
+      "ppid": 50063,
+      "rssMiB": 47.390625,
+      "args": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/electron@45.0.0/node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron Helper.app/Contents/MacOS/Electron Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --user-data-dir=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-ILgNzb/electron --shared-files --field-trial-handle=1718379636,r,9742285659888234670,10243387021615434832,262144 --enable-features=CDPScreenshotNewSurface,PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma,ThrottleResizeIpc --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,DropInputEventsWhilePaintHolding,GlobalMediaControls,HttpsUpgrades,LensOverlay,LocalNetworkAccessChecks,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ScreenAIOCREnabled,SpareRendererForSitePerProcess,ThirdPartyStoragePartitioning,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=1935764596,r,6136958474652110243,17518661930704440014,4 --trace-process-track-uuid=3190708989122997041 --seatbelt-client=45"
+    },
+    {
+      "pid": 50100,
+      "ppid": 50063,
+      "rssMiB": 64.3125,
+      "args": "/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/.pnpm/electron@45.0.0/node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron Helper (Renderer).app/Contents/MacOS/Electron Helper (Renderer) --type=renderer --user-data-dir=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-ILgNzb/electron --app-path=/private/tmp/xopc-s4-main-control/out/main --enable-sandbox --allow-file-access-from-files --disable-back-forward-cache --disable-background-timer-throttling --disable-breakpad --force-color-profile=srgb --remote-debugging-port=0 --allow-pre-commit-input --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=4 --launch-time-ticks=210689410434 --shared-files --field-trial-handle=1718379636,r,9742285659888234670,10243387021615434832,262144 --enable-features=CDPScreenshotNewSurface,PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma,ThrottleResizeIpc --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,DropInputEventsWhilePaintHolding,GlobalMediaControls,HttpsUpgrades,LensOverlay,LocalNetworkAccessChecks,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ScreenAIOCREnabled,SpareRendererForSitePerProcess,ThirdPartyStoragePartitioning,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=1935764596,r,6136958474652110243,17518661930704440014,4 --trace-process-track-uuid=3190708990060038890 --seatbelt-client=74"
+    }
+  ]
+}

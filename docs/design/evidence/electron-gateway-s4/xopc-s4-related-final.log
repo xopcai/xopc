@@ -1,0 +1,38 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-10-31T11:05:58.363Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-upgrade-3HmFaj/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T11:05:58.400Z","module":"WorkspaceSeed","profileDir":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-upgrade-3HmFaj/agents/main/profile","seeded":1,"msg":"Seeded profile Markdown files"}
+{"level":"info","time":"2026-10-31T11:05:58.496Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-upgrade-AcXfrX/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T11:05:58.505Z","module":"WorkspaceSeed","profileDir":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-upgrade-AcXfrX/agents/main/profile","seeded":1,"msg":"Seeded profile Markdown files"}
+{"level":"info","time":"2026-10-31T11:05:58.575Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-upgrade-B6tWeD/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T11:05:58.594Z","module":"WorkspaceSeed","profileDir":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-upgrade-B6tWeD/agents/main/profile","seeded":1,"msg":"Seeded profile Markdown files"}
+{"level":"info","time":"2026-10-31T11:05:59.554Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-Bf1jKU/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-10-31T11:05:59.570Z","module":"Gateway:Auth","path":"/api/desktop-chat/bootstrap","method":"GET","clientIp":"unknown","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"warn","time":"2026-10-31T11:05:59.572Z","module":"Gateway:Auth","path":"/api/desktop-chat/bootstrap","method":"GET","clientIp":"unknown","reason":"invalid_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: credential mismatch"}
+{"level":"info","time":"2026-10-31T11:05:59.628Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-xnfwek/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T11:05:59.676Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-FPoXSr/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T11:05:59.730Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-UyfUIS/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-10-31T11:05:59.812Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-chat-identity-hqFzI9/xopc.db","msg":"Opened xopc SQLite database"}
+Progress: resolved 1, reused 0, downloaded 0, added 0
+
+devDependencies: skipped
+
+Packages: +20
+++++++++++++++++++++
+Progress: resolved 80, reused 20, downloaded 0, added 18
+Progress: resolved 80, reused 20, downloaded 0, added 20, done
+Done in 1.7s using pnpm v11.9.0
+{"level":"warn","time":"2026-10-31T11:06:07.623Z","module":"ComputerDriver","phase":"capture","expectedPid":42,"actualPid":43,"expectedWindowId":"9","actualWindowId":"9","frameValid":false,"imageCount":0,"msg":"Native window capture rejected"}
+{"level":"warn","time":"2026-10-31T11:06:07.625Z","module":"ComputerDriver","phase":"capture","expectedPid":42,"actualPid":42,"expectedWindowId":"9","actualWindowId":"10","frameValid":false,"imageCount":0,"msg":"Native window capture rejected"}
+{"level":"warn","time":"2026-10-31T11:06:07.700Z","module":"ComputerDriver","phase":"key","msg":"Native window key refused"}
+{"level":"warn","time":"2026-10-31T11:06:07.701Z","module":"ComputerDriver","phase":"key","msg":"Native window key refused"}
+{"level":"warn","time":"2026-10-31T11:06:08.905Z","module":"DesktopEndpointHost","phase":"cleanup","msg":"Computer driver stop could not be confirmed"}
+{"level":"warn","time":"2026-10-31T11:06:09.328Z","module":"ComputerTransport","invocationId":"invocation","phase":"cleanup","msg":"Computer driver cleanup failed after session revocation"}
+{"level":"info","time":"2026-10-31T11:06:09.960Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+
+ Test Files  64 passed (64)
+      Tests  590 passed (590)
+   Start at  19:05:57
+   Duration  14.25s (transform 3.12s, setup 452ms, import 6.28s, tests 21.65s, environment 4ms)
+
