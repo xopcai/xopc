@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { open, readdir } from 'node:fs/promises';
+import { mkdir, open, readdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { FileResourceSchema, type FileResource } from '@xopcai/gateway-contract';
@@ -52,12 +52,12 @@ export class RemoteFileSnapshots {
       })]);
     } finally { clearTimeout(timer); }
   }
-  private async names(): Promise<string[]> {
+  private async names(directory = this.directory, maximum = 20): Promise<string[]> {
     let names: string[];
-    try { names = await this.storage(() => readdir(this.directory)); }
+    try { names = await this.storage(() => readdir(directory)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
     const records = names.filter(name => /^[a-f0-9-]{36}\.bin$/.test(name));
-    if (names.length > 100 || records.length > 20) throw new Error('REMOTE_FILE_CACHE_LIMIT');
+    if (names.length > maximum + 80 || records.length > maximum) throw new Error('REMOTE_FILE_CACHE_LIMIT');
     return records;
   }
   private async save(record: RemoteFileSnapshot): Promise<void> {
@@ -71,15 +71,19 @@ export class RemoteFileSnapshots {
       this.current();
     });
   }
-  private async read(id: unknown): Promise<RemoteFileSnapshot> {
+  private async load(id: unknown, directory: string): Promise<RemoteFileSnapshot> {
     const uuid = z.uuid().parse(id);
     const record = await this.storage(async () => {
       if (!await this.options.encryption.available()) throw new Error('SECURE_STORAGE_UNAVAILABLE');
-      const bytes = await readBounded(join(this.directory, uuid + '.bin'), 256 * 1024);
+      const bytes = await readBounded(join(directory, uuid + '.bin'), 256 * 1024);
       return recordSchema.parse(JSON.parse(await this.options.encryption.decrypt(bytes)));
     });
     this.current();
     if (record.id !== uuid || record.namespace !== this.scope) throw new Error('REMOTE_FILE_IDENTITY_MISMATCH');
+    return record;
+  }
+  private async read(id: unknown): Promise<RemoteFileSnapshot> {
+    const record = await this.load(id, this.directory);
     if (record.state === 'uploading') { record.state = 'unknown'; await this.save(record); }
     return record;
   }
@@ -94,6 +98,43 @@ export class RemoteFileSnapshots {
     });
   }
   get(id: unknown) { return this.serialize(() => this.read(id)); }
+  archived() {
+    return this.serialize(async () => {
+      const directory = join(this.directory, 'archive'), result = [];
+      for (const name of await this.names(directory, 200)) {
+        const record = await this.load(name.slice(0, -4), directory);
+        if (record.state !== 'clean') throw new Error('REMOTE_FILE_ARCHIVE_INVALID');
+        result.push({ id: record.id, name: record.resource.name });
+      }
+      return result;
+    });
+  }
+  private async move(id: string, from: string, to: string) {
+    try { await this.load(id, to); throw new Error('REMOTE_FILE_CACHE_ID_CONFLICT'); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    await this.storage(async () => {
+      this.current(); await mkdir(to, { recursive: true, mode: 0o700 });
+      await rename(join(from, id + '.bin'), join(to, id + '.bin'));
+      for (const path of [from, to]) { const directory = await open(path, 'r'); try { await directory.sync(); } finally { await directory.close(); } }
+      this.current();
+    });
+  }
+  archive(id: unknown) {
+    return this.serialize(async () => {
+      const record = await this.read(id), directory = join(this.directory, 'archive');
+      if (record.state !== 'clean') throw new Error('REMOTE_FILE_UNSYNCED_CACHE_RETAINED');
+      if ((await this.names(directory, 200)).length >= 200) throw new Error('REMOTE_FILE_ARCHIVE_LIMIT');
+      await this.move(record.id, this.directory, directory); return { id: record.id, archived: true };
+    });
+  }
+  restore(id: unknown) {
+    return this.serialize(async () => {
+      if ((await this.names()).length >= 20) throw new Error('REMOTE_FILE_CACHE_LIMIT');
+      const directory = join(this.directory, 'archive'), record = await this.load(id, directory);
+      if (record.state !== 'clean') throw new Error('REMOTE_FILE_ARCHIVE_INVALID');
+      await this.move(record.id, directory, this.directory); return record;
+    });
+  }
   download(id: unknown) {
     return this.serialize(async () => {
       if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,160}\.[A-Za-z0-9_-]{1,4000}$/.test(id)) throw new Error('REMOTE_FILE_ID_INVALID');

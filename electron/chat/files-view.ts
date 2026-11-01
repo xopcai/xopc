@@ -7,6 +7,8 @@ export function installRemoteFiles(action: FileAction, conversation: () => strin
   const get = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
   const dialog = get<HTMLDialogElement>('remote-files'), editor = get<HTMLTextAreaElement>('remote-file-text');
   let snapshot: Snapshot | undefined, unsaved = false, busy = false;
+  let listedConversation: string | undefined;
+  const directories: Array<{ id: string; name: string }> = [];
   const notice = (text: string) => { get('remote-file-status').textContent = text; };
   const request = async <T>(name: string, value?: unknown): Promise<T> => {
     const response = await action(name, value);
@@ -16,6 +18,7 @@ export function installRemoteFiles(action: FileAction, conversation: () => strin
   const controls = () => {
     get<HTMLButtonElement>('remote-file-upload').disabled = busy || unsaved || snapshot?.state !== 'dirty';
     get<HTMLButtonElement>('remote-file-save').disabled = busy || !unsaved;
+    get<HTMLButtonElement>('remote-file-archive').disabled = busy || unsaved || snapshot?.state !== 'clean';
     editor.disabled = busy || !snapshot || ['unknown', 'uploading'].includes(snapshot.state);
   };
   const save = async () => {
@@ -45,18 +48,34 @@ export function installRemoteFiles(action: FileAction, conversation: () => strin
       const button = document.createElement('button'); button.type = 'button'; button.textContent = `${item.name} · ${statuses[item.state] ?? item.state}`;
       button.onclick = () => { void open('get', item.id); }; return button;
     }));
+    const archived = await request<Array<{ id: string; name: string }>>('archived');
+    get('remote-file-archives').replaceChildren(...archived.map(item => {
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = `恢复：${item.name}`;
+      button.onclick = () => { void run(async () => { await request('restore', item.id); await list(); notice('已恢复本机缓存副本。'); }); }; return button;
+    }));
     const id = conversation();
+    if (id !== listedConversation) { listedConversation = id; directories.splice(0); }
     if (!id) { get('remote-file-server').textContent = '先选择服务器会话，再查看该会话工作区的文本文件。'; return; }
-    const files = await request<Array<{ id: string; name: string; size: number }>>('browse', id);
+    get('remote-file-path').textContent = ['工作区', ...directories.map(item => item.name)].join(' / ');
+    get<HTMLButtonElement>('remote-file-up').disabled = !directories.length;
+    const files = await request<Array<{ id: string; name: string; size: number; kind: 'file' | 'directory' }>>('browse', { conversationId: id, directoryId: directories.at(-1)?.id });
     get('remote-file-server').replaceChildren(...files.map(item => {
-      const button = document.createElement('button'); button.type = 'button'; button.textContent = `${item.name} · ${item.size}字节`;
-      button.onclick = () => { void open('download', item.id); }; return button;
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = item.kind === 'directory' ? `${item.name} /` : `${item.name} · ${item.size}字节`;
+      button.onclick = item.kind === 'directory' ? () => { void run(async () => { await save(); directories.push({ id: item.id, name: item.name }); await list(); }); }
+        : () => { void open('download', item.id); }; return button;
     }));
     if (!files.length) get('remote-file-server').textContent = '当前目录没有可编辑的32 KiB以内文本文件。';
   };
   get('remote-files-open').onclick = () => { dialog.showModal(); void run(list); };
   get('remote-file-refresh').onclick = () => { void run(list); };
+  get('remote-file-up').onclick = () => { void run(async () => { await save(); directories.pop(); await list(); }); };
   get('remote-file-save').onclick = () => { void run(save); };
+  get('remote-file-archive').onclick = () => { void run(async () => {
+    if (!snapshot || unsaved) return;
+    await request('archive', snapshot.id); snapshot = undefined; editor.value = ''; unsaved = false;
+    get('remote-file-name').textContent = '选择一份文本副本'; get('remote-file-version').textContent = '';
+    await list(); notice('已移至可恢复的本机归档，服务器文件不变。');
+  }); };
   get('remote-file-upload').onclick = () => { void run(async () => {
     if (!snapshot || unsaved) return;
     snapshot = await request<Snapshot>('upload', snapshot.id); notice(statuses[snapshot.state] ?? snapshot.state);

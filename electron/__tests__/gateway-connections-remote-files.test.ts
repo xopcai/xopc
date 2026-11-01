@@ -56,6 +56,44 @@ it('preserves a draft on conflict and never retries an uncertain upload after re
     expect(f.transport.put).toHaveBeenCalledTimes(2);
   } finally { await f.cleanup(); }
 });
+
+it('archives only synchronized ciphertext, restores after restart, and keeps active cache limits and Gateway isolation', async () => {
+  const f = await fixture();
+  try {
+    const store = f.create(), doc = await store.download(f.resource.id);
+    await store.archive(doc.id);
+    expect(await store.list()).toEqual([]);
+    await expect(store.get(doc.id)).rejects.toThrow();
+    const restarted = f.create(); expect(await restarted.archived()).toEqual([{ id: doc.id, name: 'file.txt' }]);
+    const directory = join(f.root, (await readdir(f.root))[0]);
+    expect((await readFile(join(directory, 'archive', doc.id + '.bin'))).includes(Buffer.from('original'))).toBe(false);
+    expect(await f.create({ ...f.namespace, gatewayId: randomUUID() }).archived()).toEqual([]);
+    await expect(f.create({ ...f.namespace, gatewayId: randomUUID() }).restore(doc.id)).rejects.toThrow();
+    const active = [];
+    for (let i = 0; i < 20; i++) active.push(await restarted.download(f.resource.id));
+    await expect(restarted.restore(doc.id)).rejects.toThrow('CACHE_LIMIT');
+    expect(await restarted.archived()).toEqual([{ id: doc.id, name: 'file.txt' }]);
+    await restarted.archive(active[0].id);
+    expect(await restarted.restore(doc.id)).toMatchObject({ id: doc.id, text: 'original', state: 'clean' });
+    expect(await restarted.list()).toHaveLength(20); expect(await restarted.archived()).toEqual([{ id: active[0].id, name: 'file.txt' }]);
+    expect(f.transport.put).not.toHaveBeenCalled();
+  } finally { await f.cleanup(); }
+});
+
+it('never archives unsynchronized, conflicted or unknown drafts to bypass recovery', async () => {
+  const f = await fixture();
+  try {
+    const store = f.create(), doc = await store.download(f.resource.id); await store.edit(doc.id, 'private unsynchronized draft');
+    await expect(store.archive(doc.id)).rejects.toThrow('UNSYNCED_CACHE_RETAINED');
+    f.transport.put.mockResolvedValueOnce({ status: 'conflict' } as any); await store.upload(doc.id);
+    await expect(store.archive(doc.id)).rejects.toThrow('UNSYNCED_CACHE_RETAINED');
+    await store.edit(doc.id, 'private unknown draft'); f.transport.put.mockRejectedValueOnce(new Error('fixture lost reply'));
+    await expect(store.upload(doc.id)).rejects.toThrow('OUTCOME_UNKNOWN');
+    await expect(store.archive(doc.id)).rejects.toThrow('UNSYNCED_CACHE_RETAINED');
+    expect(await store.archived()).toEqual([]); expect(await store.get(doc.id)).toMatchObject({ state: 'unknown', text: 'private unknown draft' });
+    await expect(store.archive('../other')).rejects.toThrow();
+  } finally { await f.cleanup(); }
+});
 it('rejects version changes, unsafe ids, oversize data and late approval after a connection switch', async () => {
   const f = await fixture();
   try {

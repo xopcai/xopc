@@ -26,6 +26,7 @@ it('downloads and explicitly returns text snapshots through real owner authentic
   const previousState = process.env.XOPC_STATE_DIR; process.env.XOPC_STATE_DIR = root;
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(root, 'gateway.db') });
   await mkdir(workspace); await writeFile(join(workspace, 'fixture.txt'), 'original');
+  await mkdir(join(workspace, 'nested')); await writeFile(join(workspace, 'nested', 'child.txt'), 'nested fixture');
   seedTestAgentCatalog({ agents: [{ id: 'main', workspace }] }); ensureSessionRecord(conversationId, workspace, { agentId: 'main' });
   const projects = new ProjectService(); projects.create({ name: 'Remote files fixture', workspaceRoot: workspace });
   const token = randomUUID(), config = ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } });
@@ -53,6 +54,10 @@ it('downloads and explicitly returns text snapshots through real owner authentic
     upstream = new ShellUpstream({ origin, transport: 'ssh', token }); const identity = await upstream.authenticate();
     const transport = new RemoteFileUpstream(upstream);
     expect(await transport.browse(conversationId)).toEqual(expect.arrayContaining([expect.objectContaining({ id, name: 'fixture.txt' })]));
+    const directoryId = fileResourceId(fileSpaceId(await realpath(workspace)), 'nested');
+    expect(await transport.browse(conversationId)).toEqual(expect.arrayContaining([expect.objectContaining({ id: directoryId, kind: 'directory' })]));
+    expect(await transport.browse(conversationId, AbortSignal.timeout(5000), directoryId)).toEqual([expect.objectContaining({ name: 'child.txt', kind: 'file' })]);
+    await expect(transport.browse(conversationId, AbortSignal.timeout(5000), id)).rejects.toThrow('DIRECTORY_INVALID');
     let allowed = false;
     const store = new RemoteFileSnapshots({ root: join(root, 'client-cache'), namespace: { profileId: randomUUID(), ...identity },
       encryption: { available: async () => true, encrypt: async text => Buffer.from(text), decrypt: async bytes => bytes.toString() },
