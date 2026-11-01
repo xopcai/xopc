@@ -125,10 +125,14 @@ it('uploads only individually confirmed screenshots through signed grants, keeps
       const hello: EndpointHelloPayload = { principalId, endpointId: randomUUID(), connectionInstanceId: randomUUID(), kind: 'desktop', platform: 'desktop', displayName: record.displayName,
         appVersion: '1', availability: 'background', signedAt: Date.now(), nonce: randomUUID(), signature: 'pending', tools };
       hello.signature = sign('sha256', Buffer.from(endpointHelloSigningPayload(hello)), { key: record.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
-      const connectionProof = await client.connectionProof(ticket.ticket), socket = new WebSocket(origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws');
+      const connectionProof = await client.connectionProof(ticket.ticket);
+      const accepted = once((realtime as unknown as { wss: WebSocketServer }).wss, 'connection');
+      const socket = new WebSocket(origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws');
       await once(socket, 'open'); const closed = once(socket, 'close');
+      const serverClosed = once((await accepted)[0] as WebSocket, 'close');
       socket.send(JSON.stringify({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), kind: 'realtime.hello', payload: { ticket: ticket.ticket, connectionProof, clientId, clientKind: 'desktop', endpoint: hello } }));
       expect((await closed)[0]).toBe(4401);
+      await serverClosed;
     };
     await rejectedHello([{ ...screenCaptureDescriptor(), name: 'desktop.file.save' }]);
     await rejectedHello([screenCaptureDescriptor()], randomUUID());

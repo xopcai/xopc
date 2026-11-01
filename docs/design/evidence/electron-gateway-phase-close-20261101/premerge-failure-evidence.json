@@ -1,0 +1,34 @@
+{
+  "ciRun": "https://github.com/xopcai/xopc/actions/runs/41313848052",
+  "logs": [
+    {
+      "log": "/tmp/xopc-phase-close-test-all-1.log",
+      "sha256": "6a96008cfafee30c7702a7542896aa5675962684b24b6f42f2c7d658a408c0d9"
+    },
+    {
+      "log": "/tmp/xopc-phase-close-test-all-2.log",
+      "sha256": "df3693f18744d387c2c273d1124eca680e1943494e6bef64e38aae313f86a61e"
+    },
+    {
+      "log": "/tmp/xopc-phase-close-ci-1-failed.log",
+      "sha256": "0a7da89753037c0c19e5f70afb30fbdcc02c33fa96c1cccf8e597152e8189ba7"
+    },
+    {
+      "log": "/tmp/xopc-phase-close-audit-fixture-1.log",
+      "sha256": "d839f68851ef28352ac21f5149dfe779f079a586e0546733191309e146ec500b"
+    },
+    {
+      "log": "/tmp/xopc-phase-close-race-fixtures-1.log",
+      "sha256": "2492acbbd43252d5188bdd203878c8ae7768f2c3330bf79edb82116c5a120e68"
+    }
+  ],
+  "failures": [
+    "First full run: missing owner principal in invocation audit fixture.",
+    "Second full run: intake fixture assumed ordering for equal millisecond timestamps.",
+    "Linux CI: rejected-hello client close preceded server-side socket removal in observation/screen fixtures."
+  ],
+  "fixes": "Owner principal explicitly injected; intake batch identity verified with deliberately identical timestamps; exact rejected server socket close awaited before unique active socket assertion. Production behavior and timeout budgets unchanged.",
+  "targetedAuditTests": 5,
+  "targetedRaceTests": 6,
+  "fullRunsMustBeReverified": true
+}

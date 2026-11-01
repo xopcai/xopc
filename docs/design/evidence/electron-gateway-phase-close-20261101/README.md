@@ -27,3 +27,7 @@ P4目录分页只有未完成草稿，类型检查发现FileServiceError状态�
 收尾前类型、lint（0错误/49警告）、依赖架构、CLI导入检查通过。全量测试首次发现调用审计夹具漏注入owner，修复后5项单独复验通过，原失败日志 `/tmp/xopc-phase-close-test-all-1.log` 保留；全量最终结果及远端CI以实际报告为准，不把单独复验写成全量通过。
 
 最近已通过的阶段DMG在 `/tmp/xopc-computer-recovery-delivery-1/xopc-preview-arm64.dmg`，摘要 `56141e726246eca87efacc314855bfa69a9c7a93b72af81997580b99ad0fe5d7`；它是改写/合入前的验证候选，未公证。最终main交付必须从实际main提交重新构建并记录摘要，不能把旧候选改名冒充。
+
+### 收尾检查修订
+
+首次全量13073通过/1审计夹具失败；第二次全量13073通过/1同毫秒批次顺序夹具失败。Linux CI第1轮另发现被拒绝hello在客户端关闭后、服务端socket集合尚未删除的竞争；原假帧用例断言2条而不是1条。分别修复为明确owner、按批次身份校验（刻意相同时间戳），以及在原时限内等待精确拒绝socket的服务端close，继续严格断言唯一活动socket。只改测试夹具，不改生产认证/队列或预算。5项审计、6项竞争专项及类型通过，后续全量与CI重新验证。原失败日志摘要见premerge-failure-evidence.json。
