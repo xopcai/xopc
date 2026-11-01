@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 import Ajv2020 from 'ajv/dist/2020.js';
 import { z } from 'zod';
+import { REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import {
   ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS,
@@ -125,6 +126,9 @@ export class EndpointInvocationService {
     }
     const endpoint = this.registry.get(params.endpointId);
     if (!endpoint) return Promise.reject(this.error('ENDPOINT_OFFLINE', 'Endpoint is offline'));
+    if (params.toolName === REMOTE_COMPUTER_CONTROL_TOOL && !endpoint.executionAuthority) {
+      return Promise.reject(new EndpointToolExecutionError('PERMISSION_DENIED', 'Remote Computer control requires independent desktop execution authority', true));
+    }
     const tool = this.registry.getTool(params.endpointId, params.toolName);
     if (!tool) return Promise.reject(this.error('TOOL_NOT_FOUND', 'Endpoint tool is unavailable'));
     if (tool.revision !== params.descriptorRevision) {
@@ -195,7 +199,7 @@ export class EndpointInvocationService {
       if (!operationQuery) return Promise.reject(this.error('TOOL_NOT_FOUND', 'Operation metadata is not available for this device'));
     }
     const uploadGrant = tool.descriptor.resultKinds.includes('file')
-      ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, ['desktop.computer.control', 'desktop.screen.capture'].includes(params.toolName) ? 'computer-frame' : params.toolName.startsWith('mobile.') ? 'personal' : 'durable', endpoint.principalId)
+      ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, ['desktop.computer.control', REMOTE_COMPUTER_CONTROL_TOOL, 'desktop.screen.capture'].includes(params.toolName) ? 'computer-frame' : params.toolName.startsWith('mobile.') ? 'personal' : 'durable', endpoint.principalId)
       : undefined;
     try {
       this.options.audit?.started({
@@ -411,7 +415,7 @@ export class EndpointInvocationService {
     const pending = this.take(invocationId);
     if (!pending) return;
     this.finishAudit(pending, { id: invocationId, status: 'succeeded', completedAt: Date.now() });
-    pending.resolve(['desktop.computer.control', 'desktop.screen.capture'].includes(pending.toolName) ? { ...result, invocationId } : result);
+    pending.resolve(['desktop.computer.control', REMOTE_COMPUTER_CONTROL_TOOL, 'desktop.screen.capture'].includes(pending.toolName) ? { ...result, invocationId } : result);
   }
 
   private fail(invocationId: string, error: Error): void {

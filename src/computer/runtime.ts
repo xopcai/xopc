@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import {
-  COMPUTER_CONTROL_TOOL, computerActionInputCount, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
+  computerActionInputCount, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
   type ActionEnvelope, type ComputerCommand, type ComputerModelBinding,
 } from '@xopcai/computer-control-contract';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
@@ -21,6 +21,7 @@ import { executeComputerProgram, type ComputerProgramHost } from './program-runt
 import { executeComputerBatch } from './batch.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
 import { ComputerStabilityTracker } from './stability-diagnostics.js';
+import { invokeComputerCommand } from './endpoint-transport.js';
 import { createLogger } from '../utils/logger.js';
 import { ComputerExpectationSchema, ComputerTaskState, verifyComputerExpectation,
   type ComputerExpectation, type ComputerVerification } from './task-state.js';
@@ -653,10 +654,7 @@ export class ComputerRuntime {
   }
   private async send(s: Pick<Session, 'endpointId' | 'id'> & Partial<Pick<Session, 'diagnostics'>>, command: ComputerCommand, signal?: AbortSignal) {
     signal?.throwIfAborted();
-    const tool = this.endpoints.registry.getTool(s.endpointId, COMPUTER_CONTROL_TOOL);
-    if (!tool) throw new Error('COMPUTER_DESKTOP_UPGRADE_REQUIRED');
-    const invoke = () => this.endpoints.invocations.invoke({ endpointId: s.endpointId, toolCallId: randomUUID(),
-      toolName: COMPUTER_CONTROL_TOOL, arguments: command, descriptorRevision: tool.revision, signal });
+    const invoke = () => invokeComputerCommand(this.endpoints, s.endpointId, command, signal);
     const phase = command.op === 'open' ? 'open' : command.op === 'act' ? 'dispatch' : command.op === 'observe' ? 'observe' : command.op === 'release' ? 'release' : undefined;
     if (command.op === 'observe') s.diagnostics?.count('observations');
     const startedAt = performance.now();
