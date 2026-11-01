@@ -23,6 +23,8 @@ const background = process.argv.includes('--background');
 const networkMatrix = process.argv.includes('--network-matrix');
 const compatibilityMatrix = process.argv.includes('--compatibility-matrix');
 const remoteFiles = process.argv.includes('--remote-files');
+const remoteFileManagement = process.argv.includes('--remote-file-management');
+assert(!remoteFileManagement || remoteFiles, 'Remote file management acceptance requires remote-files');
 const output = await createAcceptanceOutput(join(root, 'reports/s3-remote-chat-e2e.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-s3-chat-'));
 const appIndex = process.argv.indexOf('--app');
@@ -247,10 +249,19 @@ try {
     assert(fixtureRoot.startsWith(privateRoot + '/'), 'Only a private fixture workspace may be written');
     const name = `remote-snapshot-${randomUUID()}.txt`, path = join(fixtureRoot, name);
     await writeFile(path, 'snapshot original');
+    const directoryName = `nested-${randomUUID()}`;
+    if (remoteFileManagement) { await mkdir(join(fixtureRoot, directoryName)); await writeFile(join(fixtureRoot, directoryName, 'child.txt'), 'directory fixture'); }
     console.log('NATIVE FILES focus the actual chat window, then use native upload prompts only');
     await page.bringToFront();
     await until(async () => (await setup.evaluate(() => window.gatewayConnections.snapshot())).presentation.chat.focused === true, 120000);
     await page.locator('#remote-files-open').click();
+    if (remoteFileManagement) {
+      await page.locator('#remote-file-server').getByRole('button', { name: directoryName + ' /', exact: true }).click();
+      await until(() => page.locator('#remote-file-path').textContent().then(text => text.includes(directoryName)));
+      await page.locator('#remote-file-server').getByRole('button', { name: 'child.txt · 17字节', exact: true }).click();
+      await until(() => page.locator('#remote-file-text').inputValue().then(text => text === 'directory fixture'));
+      await page.locator('#remote-file-up').click(); await until(() => page.locator('#remote-file-up').isDisabled());
+    }
     const download = async () => {
       await page.locator('#remote-file-refresh').click();
       await page.locator('#remote-file-server').getByRole('button', { name: new RegExp(name) }).click();
@@ -263,6 +274,14 @@ try {
       await until(() => page.locator('#remote-file-status').textContent().then(text => text.includes(expected)), 120000);
     };
     await download(); assert.equal(await page.locator('#remote-file-text').inputValue(), 'snapshot original');
+    if (remoteFileManagement) {
+      await page.locator('#remote-file-archive').click(); await until(() => page.locator('#remote-file-text').isDisabled());
+      await page.locator('#remote-file-archives').getByRole('button', { name: `恢复：${name}`, exact: true }).click();
+      await until(() => page.locator('#remote-file-archives button').count().then(count => count === 0));
+      await page.locator('#remote-file-drafts').getByRole('button', { name: `${name} · 缓存副本已同步`, exact: true }).click();
+      await until(() => page.locator('#remote-file-text').inputValue().then(text => text === 'snapshot original'));
+      report.checks.directoryNavigationAndArchiveRestore = true;
+    }
     await edit('snapshot changed'); await upload('CANCEL return; cached draft must remain', '已取消回传');
     assert.equal(await readFile(path, 'utf8'), 'snapshot original'); assert.equal(faults.fileWrites ?? 0, 0);
     await upload('APPROVE versioned return', '缓存副本已同步'); assert.equal(await readFile(path, 'utf8'), 'snapshot changed');
@@ -273,10 +292,23 @@ try {
     await upload('APPROVE return with lost response; no retry', '结果未知'); assert.equal(await readFile(path, 'utf8'), 'applied before lost reply');
     const writes = faults.fileWrites; assert(await page.locator('#remote-file-upload').isDisabled());
     const cached = await page.evaluate(() => window.desktopShell.fileAction('list')); assert(cached.ok); assert(cached.value.some(item => item.state === 'unknown'));
+    if (remoteFileManagement) {
+      assert(await page.locator('#remote-file-archive').isDisabled());
+      const uncertain = cached.value.find(item => item.state === 'unknown');
+      const archive = await page.evaluate(id => window.desktopShell.fileAction('archive', id), uncertain.id);
+      assert.equal(archive.ok, false); assert(archive.error.includes('UNSYNCED_CACHE_RETAINED')); report.checks.unknownCacheCannotBeArchived = true;
+    }
     const cacheRoot = join(client, 'electron/gateway-connections-v1/remote-file-snapshots');
     const cacheScopes = await readdir(cacheRoot); assert.equal(cacheScopes.length, 1);
-    for (const file of await readdir(join(cacheRoot, cacheScopes[0]))) {
-      const encrypted = await readFile(join(cacheRoot, cacheScopes[0], file));
+    const encryptedFiles = [];
+    const scopeRoot = join(cacheRoot, cacheScopes[0]);
+    for (const entry of await readdir(scopeRoot, { withFileTypes: true })) {
+      assert(!entry.isSymbolicLink());
+      if (entry.isDirectory()) { assert.equal(entry.name, 'archive'); for (const name of await readdir(join(scopeRoot, entry.name))) encryptedFiles.push(join(scopeRoot, entry.name, name)); }
+      else encryptedFiles.push(join(scopeRoot, entry.name));
+    }
+    for (const file of encryptedFiles) {
+      const encrypted = await readFile(file);
       for (const text of ['snapshot original', 'conflicting draft', 'applied before lost reply', name]) assert(!encrypted.includes(Buffer.from(text)), 'Remote snapshot cache contains plaintext fixture data');
     }
     report.checks.remoteFileCacheEncrypted = true;

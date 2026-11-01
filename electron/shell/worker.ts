@@ -14,7 +14,7 @@ let fileSessionsDisabled = false;
 let activeFileRequest: { session: string; abort: AbortController } | undefined;
 
 async function handle(message: { id: number; command: string; renewalId?: string; target?: RemoteTarget; assets?: string; epoch?: number; hostOrigin?: unknown;
-  fileId?: string; text?: string; revision?: string; conversationId?: unknown; fileSession?: string }) {
+  fileId?: string; text?: string; revision?: string; conversationId?: unknown; directoryId?: unknown; fileSession?: string }) {
   try {
     if (closed) throw new Error('SHELL_CLOSED');
     let value: unknown;
@@ -35,7 +35,7 @@ async function handle(message: { id: number; command: string; renewalId?: string
       const abort = new AbortController(); activeFileRequest = { session: message.fileSession, abort };
       const files = new RemoteFileUpstream(upstream), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]);
       try {
-      if (message.command === 'files-browse') value = await files.browse(message.conversationId, signal);
+      if (message.command === 'files-browse') value = await files.browse(message.conversationId, signal, message.directoryId);
       else if (message.command === 'files-read' && typeof message.fileId === 'string') value = await files.read(message.fileId, signal);
       else if (message.command === 'files-put' && typeof message.fileId === 'string' && typeof message.text === 'string' && typeof message.revision === 'string') value = await files.put(message.fileId, message.text, message.revision, signal);
       else throw new Error('SHELL_COMMAND_DENIED');

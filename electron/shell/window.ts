@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
 import { BrowserWindow, session, type IpcMainInvokeEvent, type Session } from 'electron';
+import { z } from 'zod';
 import type { EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
@@ -53,10 +54,15 @@ export class RemoteShellWindow {
         put: (fileId, text, revision, signal) => request('files-put', { fileId, text, revision }, signal),
       } });
     if (action === 'browse') {
-      const value = await request('files-browse', { conversationId: input }, AbortSignal.timeout(10000));
+      const data = typeof input === 'string' ? { conversationId: z.uuid().parse(input) }
+        : z.strictObject({ conversationId: z.uuid(), directoryId: z.string().max(4161).optional() }).parse(input);
+      const value = await request('files-browse', data, AbortSignal.timeout(10000));
       if (!current()) throw new Error('STALE_CONNECTION_EPOCH'); return value;
     }
     if (action === 'list') return this.files.list();
+    if (action === 'archived') return this.files.archived();
+    if (action === 'archive') return this.files.archive(input);
+    if (action === 'restore') return this.files.restore(input);
     if (action === 'download') return this.files.download(input);
     if (action === 'get') return this.files.get(input);
     if (action === 'upload') return this.files.upload(input);

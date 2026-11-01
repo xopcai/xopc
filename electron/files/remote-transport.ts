@@ -12,12 +12,23 @@ const editable = (resource: FileResource) => resource.kind === 'file' && resourc
 /** Owner file API transport, confined to the already pinned Shell origin. No local path API is used. */
 export class RemoteFileUpstream implements RemoteFileTransport {
   constructor(private readonly upstream: ShellUpstream) {}
-  async browse(conversation: unknown, signal = AbortSignal.timeout(10000)) {
+  async browse(conversation: unknown, signal = AbortSignal.timeout(10000), directoryId?: unknown) {
     const id = z.uuid().parse(conversation);
     await this.upstream.verifyPinnedIdentity(signal);
     const context = z.object({ space: z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,160}$/) }) }).parse(unwrap(await this.upstream.json(`/api/files/contexts/session/${id}`, signal)));
-    const response = z.object({ items: z.array(FileResourceSchema).max(1000) }).parse(unwrap(await this.upstream.json(`/api/files/spaces/${context.space.id}/children`, signal)));
-    return response.items.filter(editable).slice(0, 100).map(resource => ({ id: resource.id, name: resource.name.slice(0, 255), revision: resource.revision, size: resource.size }));
+    let path = '';
+    if (directoryId !== undefined) {
+      const directory = idSchema.parse(directoryId);
+      const resource = z.object({ resource: FileResourceSchema }).parse(unwrap(await this.upstream.json(`/api/files/${directory}`, signal))).resource;
+      if (resource.id !== directory || resource.spaceId !== context.space.id || resource.kind !== 'directory'
+        || !resource.relativePath || resource.relativePath.length > 4096 || resource.relativePath.includes('\\') || resource.relativePath.includes('\0')
+        || resource.relativePath.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('REMOTE_FILE_DIRECTORY_INVALID');
+      path = resource.relativePath;
+    }
+    const response = z.object({ items: z.array(FileResourceSchema).max(1000) }).parse(unwrap(await this.upstream.json(`/api/files/spaces/${context.space.id}/children${path ? '?path=' + encodeURIComponent(path) : ''}`, signal)));
+    if (response.items.some(resource => resource.spaceId !== context.space.id || resource.parentPath !== path)) throw new Error('REMOTE_FILE_DIRECTORY_CHANGED');
+    return response.items.filter(resource => resource.kind === 'directory' || editable(resource)).slice(0, 100)
+      .map(resource => ({ id: resource.id, name: resource.name.slice(0, 255), revision: resource.revision, size: resource.size, kind: resource.kind }));
   }
   async read(input: string, signal: AbortSignal) {
     const id = idSchema.parse(input); await this.upstream.verifyPinnedIdentity(signal);
