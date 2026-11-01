@@ -12,7 +12,7 @@ if (process.platform !== 'darwin') {
   if (!existsSync(join(headers, 'node_api.h'))) throw new Error('Node N-API headers are required; provide --headers <include/node>');
   const directory = join(root, 'dist/electron/native'); mkdirSync(directory, { recursive: true });
   const output = join(directory, 'desktop-workspace.node');
-  const result = spawnSync('c++', ['-std=c++17', '-O2', '-DNAPI_VERSION=8', '-bundle', '-undefined', 'dynamic_lookup', '-I', headers,
+  const result = spawnSync('c++', ['-arch', 'x86_64', '-arch', 'arm64', '-std=c++17', '-O2', '-DNAPI_VERSION=8', '-bundle', '-undefined', 'dynamic_lookup', '-I', headers,
     join(root, 'electron/native/desktop-workspace-macos.cc'), '-o', output], { stdio: 'inherit' });
   if (result.status !== 0) throw new Error('Native desktop workspace build failed');
   console.log('[desktop-workspace] Built ' + output);
