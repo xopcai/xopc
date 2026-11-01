@@ -31,3 +31,5 @@ S5旧候选长测继续独立运行，不是本批Host/PTY长测。性能失败�
 新增尚未注册IPC/网络入口的`DesktopTerminalBroker`。完整绑定Gateway、设备、workspace、授权revision、session/generation/connectionInstance；每次远端stdin均调用本机确认钩子，输入不能携带`source=local-user`绕过。打开仅返回running/未停止；根journal和专用容器继续存活。停止使用原3秒预算并核实资源和根操作持久终态，失败阻断输入与接管。关闭后的broker不恢复，须建立新代次。
 
 复查修复等待打开批准时的迟到启动：停止即永久关闭当前broker并取消待批准请求，即使确认回调忽略signal后返回true也不会创建执行器。真实Docker测试已通过该broker和共享supervisor/journal、输入ledger、字节流及容器删除，仍是源代码夹具而非Native/网络接线验收。初次接线将带额外身份字段的scope传给strict resize binding导致拒绝，失败保留于`/tmp/xopc-p3c-terminal-broker-live-1.log`；修复只向worker传递精确binding。第2轮实际Docker通过；最终`/tmp/xopc-p3c-terminal-broker-live-3.log`14项/3文件通过，包含离线停止、迟到批准、3秒停止上限、未确认删除不可接管、实际PTY根操作和输入去重。Electron类型检查21轮通过。最新完整相关回归6轮为201项/29文件通过，未修改预算。
+
+后续专用通道契约已补充：Endpoint v2复用terminal.command/event及独立版本协商，普通/可靠旧控制器拒绝该控制，未接入专用服务的Gateway明确拒绝终端事件。opened/input-ack/stream-ended均不能伪造根停止证明。`/tmp/xopc-p3c-terminal-contract-regression-1.log`225项/36文件通过，覆盖协议、旧控制器、设备帧、真实Gateway和Docker；完整类型检查protocol第3轮通过。最大16KiB输出复用P-256签名帧，仍小于原Realtime帧预算，篡改/重放拒绝。该契约变更在第3版构建后加入，尚未打包，不能引用该包作为新终端协议的安装包验收；下一批仍须完成专用Gateway/Host/Agent/UI接线。

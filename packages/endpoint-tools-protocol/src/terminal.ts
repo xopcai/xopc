@@ -17,3 +17,20 @@ export type DesktopTerminalBinding = z.infer<typeof desktopTerminalBindingSchema
 export type DesktopTerminalOutput = z.infer<typeof desktopTerminalOutputSchema>;
 export type DesktopTerminalInput = z.infer<typeof desktopTerminalInputSchema>;
 export type DesktopTerminalDispatch = 'pending' | 'accepted' | 'notStarted' | 'unknown';
+
+export const desktopTerminalCommandSchema = z.discriminatedUnion('action', [
+  desktopTerminalInputSchema.extend({ action: z.literal('input') }),
+  desktopTerminalOutputAckSchema.extend({ action: z.literal('ack') }),
+  desktopTerminalBindingSchema.extend({ action: z.literal('resize'), columns: z.number().int().min(20).max(500), rows: z.number().int().min(2).max(500) }),
+  desktopTerminalBindingSchema.extend({ action: z.literal('close') }),
+]);
+export const desktopTerminalEventSchema = z.discriminatedUnion('event', [
+  desktopTerminalBindingSchema.extend({ event: z.literal('opened'), operationId: z.uuid(), state: z.literal('running'), executionStopped: z.literal(false) }),
+  desktopTerminalOutputSchema.extend({ event: z.literal('output') }),
+  desktopTerminalBindingSchema.extend({ event: z.literal('input-ack'), inputId: z.uuid(), sequence,
+    dispatch: z.enum(['accepted', 'notStarted', 'unknown']) }),
+  // A stream ending is observation, never executor-stop evidence. The root operation still needs its signed receipt.
+  desktopTerminalBindingSchema.extend({ event: z.literal('stream-ended'), reason: z.enum(['eof', 'disconnected', 'unknown']) }),
+]);
+export type DesktopTerminalCommand = z.infer<typeof desktopTerminalCommandSchema>;
+export type DesktopTerminalEvent = z.infer<typeof desktopTerminalEventSchema>;

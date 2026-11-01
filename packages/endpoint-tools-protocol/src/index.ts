@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 import { desktopOperationIntentSchema, desktopOperationReceiptSchema } from './execution.js';
+import { desktopTerminalCommandSchema, desktopTerminalEventSchema } from './terminal.js';
 export * from './execution.js';
 export { ENDPOINT_FILE_OUTPUT_SCHEMA, ENDPOINT_CONTACT_RECORD_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 
@@ -117,6 +118,11 @@ export const endpointHelloPayloadSchema = z.strictObject({
   tools: z.array(endpointToolDescriptorSchema).max(100),
   deviceFrames: z.strictObject({ version: z.literal(1), authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }).optional(),
   execution: z.strictObject({ version: z.literal(1), grantId: z.uuid(), authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), expiresAt: timestampSchema }).optional(),
+  terminal: z.strictObject({ version: z.literal(1) }).optional(),
+}).superRefine((hello, context) => {
+  if (hello.terminal && (hello.kind !== 'desktop' || !hello.execution || !hello.deviceFrames)) {
+    context.addIssue({ code: 'custom', path: ['terminal'], message: 'Terminal negotiation requires an independently authenticated durable desktop connection' });
+  }
 });
 
 export const toolInvokePayloadSchema = z.strictObject({
@@ -193,6 +199,7 @@ const envelope = <TType extends string, TPayload extends z.ZodType>(
 });
 
 export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
+  envelope('terminal.event', z.strictObject({ invocationId: z.uuid(), event: desktopTerminalEventSchema })),
   envelope('endpoint.availability_changed', z.strictObject({ availability: endpointAvailabilitySchema })),
   envelope('tool.received', invocationPayloadSchema),
   envelope('tool.progress', z.strictObject({
@@ -217,6 +224,7 @@ export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
 ]);
 
 export const serverEndpointMessageSchema = z.discriminatedUnion('type', [
+  envelope('terminal.command', z.strictObject({ invocationId: z.uuid(), command: desktopTerminalCommandSchema })),
   envelope('tool.invoke', toolInvokePayloadSchema),
   envelope('tool.cancel', toolCancelPayloadSchema),
 ]);

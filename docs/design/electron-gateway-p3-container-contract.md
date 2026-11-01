@@ -38,3 +38,5 @@ Main仅连接本机Unix socket，忽略DOCKER_HOST和远端上下文，要求Doc
 PTY打开回执只证明会话已建立。根操作在容器存在期间保持running，字节流、输入接收回执和WebSocket关闭均不能证明执行器停止。每次会话绑定sessionId、generation、connectionInstanceId；新连接不恢复旧会话，不重放stdin。输入先持久保存不含明文的身份/摘要，再写入socket；丢回执、部分写入或待确认记录均阻止自动重放。
 
 输出使用独立有序帧和累计ACK，最多16个未确认帧、每帧16KiB，暂停底层流处理背压。输入每帧最多4KiB、每会话最多1000个序号；这些是新增终端流限制，不放宽Endpoint原预算。超时、授权失效、传输断开或输出不确定时，独立销毁容器并核实；停止失败保留执行权阻断。完整Gateway/Host/Agent/UI接线与原生验收另行完成，不能以字节流核心测试代替。
+
+通道在Endpoint v2上以显式协商的`terminal.version=1`扩展复用签名设备连接：`terminal.command`承载input/ack/resize/close，`terminal.event`承载opened/output/input-ack/stream-ended。每个包保留根invocationId与完整会话三元组；不能使用tool.progress代替字节流。opened只能表示running/未停止，input-ack仅表示输入分派，stream-ended不能携带停止证明。根操作仍由原可靠tool回执核实停止。旧普通/可靠控制器明确拒绝terminal.command；Gateway在专用Broker未接线时拒绝terminal.event，不因schema认识字段就开放功能。Terminal hello仅允许独立durable desktop连接声明。
