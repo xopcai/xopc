@@ -1,0 +1,19 @@
+{
+  "passed": false,
+  "scope": "Installed Electron, actual native consent, independent device frames, real local Docker and same-host Gateway/Agent with synthetic inference. Private Docker fixtures only; not WAN, PTY or platform matrix acceptance.",
+  "checks": {},
+  "error": "Error: Container acceptance deadline exceeded\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-container.mjs:34:9)\n    at async native (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-container.mjs:108:43)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-container.mjs:111:11",
+  "startedAt": "2026-11-01T06:18:29.122Z",
+  "finishedAt": "2026-11-01T06:20:33.571Z",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "7a8b3b903237ae9c707795bce11a6439ac15d5b70ce27d257c61662a0623fc0c"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "7a8b3b903237ae9c707795bce11a6439ac15d5b70ce27d257c61662a0623fc0c"
+  },
+  "retainedFixtureWorkspaces": [],
+  "originalReport": "reports/p3c-native-container-1.json",
+  "originalSha256": "7a8c2c7d7c62d57eafc9f94b80294c190718b252fb9cd5c1bdc940c56bea4487"
+}

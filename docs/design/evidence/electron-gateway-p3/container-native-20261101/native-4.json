@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "scope": "Installed Electron, actual native consent, independent device frames, real local Docker and same-host Gateway/Agent with synthetic inference. Private Docker fixtures only; not WAN, PTY or platform matrix acceptance.",
+  "checks": {
+    "CANCEL": true,
+    "APPROVE": true,
+    "READ": true,
+    "NONZERO": true,
+    "LOST": true,
+    "AFTER_REVIEW": true,
+    "nativeUnknownReviewAndFreshGrant": true
+  },
+  "startedAt": "2026-11-01T06:57:43.930Z",
+  "finishedAt": "2026-11-01T07:03:10.541Z",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "b8599407e9ddf1b129efd1c3a7d6d8e6e04c93663287b4ea4d1bb3076e9d9ac9"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "b8599407e9ddf1b129efd1c3a7d6d8e6e04c93663287b4ea4d1bb3076e9d9ac9"
+  },
+  "dropped": {
+    "operationId": "484d43e9-e5c8-4d6e-b6d1-9877a600b8e7"
+  },
+  "originalReport": "reports/p3c-native-container-4.json",
+  "originalSha256": "e8abc9d7f216ccba908353df48112c784c9a3ac7abdd86fb2f51cb100c79ab79"
+}

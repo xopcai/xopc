@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { canonicalJson, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
+import { canonicalJson, type DesktopOperationIntent, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 import { desktopExecutionGrantSchema, type DesktopExecutionGrant } from '@xopcai/gateway-contract';
 import { RealtimeClient, RealtimeConnectionError, RealtimeFrameTooLargeError, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
@@ -37,7 +37,7 @@ export class DesktopExecutionHost {
     foreground(): boolean;
     confirm: ConstructorParameters<typeof DesktopExecutionSession>[0]['confirm'];
     confirmRead?(request: DesktopWorkspaceReadApproval, signal: AbortSignal): Promise<boolean>;
-    createWorker(tool: string): DesktopExecutionWorker;
+    createWorker(tool: string, intent?: DesktopOperationIntent): DesktopExecutionWorker;
     onState(state: State, error?: string): void;
   }) {
     this.grant = desktopExecutionGrantSchema.parse(JSON.parse(JSON.stringify(options.approved)));
@@ -94,11 +94,12 @@ export class DesktopExecutionHost {
       const active = () => !this.stopped && Date.now() < this.grant.expiresAt;
       const supervisor = new DesktopOperationSupervisor({ journal: this.options.journal,
         authority: tool => ({ gatewayId: binding.gatewayId, deviceId: binding.deviceId, authorizationRevision: this.options.authorizationRevision,
-          toolRevision: this.options.catalog.revision(tool) ?? '', expiresAt: this.grant.expiresAt, active: active(), ...(this.grant.workspaceId ? { workspaceId: this.grant.workspaceId } : {}) }),
+          toolRevision: this.options.catalog.revision(tool) ?? '', expiresAt: this.grant.expiresAt, active: active() && (tool !== 'desktop.command.run' || this.options.foreground()), ...(this.grant.workspaceId ? { workspaceId: this.grant.workspaceId } : {}) }),
         createWorker: this.options.createWorker, validateResult: this.options.catalog.validateResult });
       this.session = new DesktopExecutionSession({ binding: { ...binding, authorizationRevision: this.options.authorizationRevision }, supervisor, confirm: this.options.confirm });
-      if (this.grant.workspaceId && !this.options.confirmRead) throw new Error('DESKTOP_EXECUTION_DENIED');
-      const reads = this.grant.workspaceId && this.options.confirmRead ? new DesktopWorkspaceReadSession({
+      const hasFileReads = this.options.catalog.descriptors().some(tool => ['desktop.workspace.list', 'desktop.workspace.read'].includes(tool.name));
+      if (hasFileReads && !this.options.confirmRead) throw new Error('DESKTOP_EXECUTION_DENIED');
+      const reads = hasFileReads && this.grant.workspaceId && this.options.confirmRead ? new DesktopWorkspaceReadSession({
         gatewayId: binding.gatewayId, deviceId: binding.deviceId, workspaceId: this.grant.workspaceId, expiresAt: this.grant.expiresAt,
         catalog: this.options.catalog, foreground: () => active() && this.options.foreground(), confirm: this.options.confirmRead,
         createWorker: this.options.createWorker, onExecutorStopped: () => { void this.stop(); },

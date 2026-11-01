@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "9e8cd5e202785ef604068897e9da3953c150eb88112fb5f8cba306acad5d540b"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "9e8cd5e202785ef604068897e9da3953c150eb88112fb5f8cba306acad5d540b"
+  },
+  "startedAt": "2026-11-01T06:51:15.512Z",
+  "finishedAt": "2026-11-01T06:51:24.805Z",
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  }
+}

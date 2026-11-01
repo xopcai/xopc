@@ -13,7 +13,14 @@ const desktopMessages = {
   cancelled: '已取消登记。', error: '登记状态需要检查。',
 };
 const errors = {
-  DESKTOP_LOCAL_CONSENT_DENIED: '已取消登记。', DESKTOP_OPERATION_CANCELLED: '登记操作已取消。',
+  DESKTOP_LOCAL_CONSENT_DENIED: '已取消本机授权或操作。', DESKTOP_OPERATION_CANCELLED: '本机操作已取消。',
+  DESKTOP_CONTAINER_UNAVAILABLE: '本机Docker不可用，请先启动本机Docker服务。',
+  DESKTOP_CONTAINER_IMAGE_UNAVAILABLE: '本机尚未安装node:26.12.1-bookworm-slim镜像；请手动准备镜像后重试，不会自动拉取。',
+  DESKTOP_CONTAINER_NETWORK_FAILED: '本机Docker暂时未响应，请检查服务；执行停止未确认时不会接管。',
+  DESKTOP_CONTAINER_ENGINE_CHANGED: 'Docker Engine身份已变化，无法核实旧资源；请恢复原Engine后核实。',
+  DESKTOP_CONTAINER_UNSUPPORTED: '此客户端暂不支持本机Docker命令；聊天仍可使用。',
+  DESKTOP_CONTAINER_WORKSPACE_UNAVAILABLE: '原隔离卷未找到；旧记录保留，请核实原Docker Engine和数据。不会自动创建同名空卷。',
+  DESKTOP_CONTAINER_WORKSPACE_LIMIT: '本连接的保留工作区已达20个；请先核实并管理已有数据，不会自动删除。',
   DESKTOP_SELECT_GATEWAY_REQUIRED: '请先选择此Gateway配置。', DESKTOP_PINNED_GATEWAY_REQUIRED: '请先连接一次并核验Gateway身份。',
   DESKTOP_HOST_UNSUPPORTED: '此Gateway暂不支持电脑登记。', DESKTOP_HOST_SSH_UNSUPPORTED: '此Gateway暂不支持通过SSH登记电脑。',
   DESKTOP_LOCAL_UI_REQUIRED: '请在可见的连接窗口中登记电脑。', DESKTOP_OWNER_AUTH_REQUIRED: '管理登录已失效，请更新此连接的登录凭据。',
@@ -37,7 +44,7 @@ function render(value) {
   snapshot = value;
   const execution = value.execution;
   const executing = execution && !['stopped', 'error'].includes(execution.state);
-  const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: value.execution?.workspaceId ? '已授权逐次确认工作区访问，最长两分钟。' : '已授权逐次确认剪贴板写入，最长两分钟。',
+  const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: value.execution?.container ? '已授权逐次确认Docker命令，最长两分钟。' : value.execution?.workspaceId ? '已授权逐次确认工作区访问，最长两分钟。' : '已授权逐次确认剪贴板写入，最长两分钟。',
     'stop-requested': '已请求停止，正在核实。', stopped: execution?.remoteRevocationConfirmed ? '本机执行已停止，服务器撤销已确认。' : '本机执行已停止，服务器撤销尚未确认。',
     'stop-unconfirmed': '执行器停止尚未确认；禁止切换或启动新的执行。', error: '本机执行连接失败，请检查后重新授权。' };
   element('execution-status').textContent = execution ? executionLabels[execution.state] + (execution.resultUnknown ? ' 操作效果仍未知，核实后才能启动新写入。' : '') : '本机写入未授权。';
@@ -96,6 +103,12 @@ function render(value) {
     actionButton('选择截图来源并授权', api.startScreenObservation, selected && state === 'registered' && !observing && !executing, 'observe-screen');
     actionButton('授权逐次确认剪贴板写入', api.startExecution, selected && state === 'registered' && value.desktop?.[profile.id]?.reliableExecution === true && !observing && !executing, 'execute-clipboard');
     actionButton('选择并授权本机工作区', api.startWorkspace, selected && state === 'registered' && value.desktop?.[profile.id]?.workspaceExecution === true && !observing && !executing, 'execute-workspace');
+    actionButton('授权逐次确认Docker命令', api.startContainer, selected && state === 'registered' && value.desktop?.[profile.id]?.containerCommand === true && !observing && !executing, 'execute-container');
+    actionButton('查看保留的Docker工作区', api.listContainers, selected && state === 'registered' && value.desktop?.[profile.id]?.containerCommand === true, 'container-list');
+    if (selected && value.savedContainers?.profileId === profile.id) {
+      for (const item of value.savedContainers.items) actionButton(`重新授权：${item.label}`, (epoch, id) => api.startContainer(epoch, id, item.workspaceId), !observing && !executing, `container-${item.workspaceId}`);
+      if (!value.savedContainers.items.length) { const empty = document.createElement('p'); empty.textContent = '尚无保留的隔离工作区。'; group.append(empty); }
+    }
     actionButton('查看待核实操作', api.listOperations, selected && state === 'registered' && value.desktop?.[profile.id]?.operationReview === true, 'operation-list');
     row.append(group);
     element('profiles').append(row);

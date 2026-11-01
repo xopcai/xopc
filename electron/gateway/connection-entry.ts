@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { release } from 'node:os';
@@ -16,6 +16,11 @@ import { DesktopExecutionCatalog } from '../desktop/execution-catalog.js';
 import { DesktopWorkspaceHelper } from '../desktop/workspace-helper.js';
 import { DesktopWorkspaceSession } from '../desktop/workspace-session.js';
 import { DesktopWorkspaceRecoveryStore } from '../desktop/workspace-recovery.js';
+import { DesktopContainerEngine } from '../desktop/container-engine.js';
+import { DesktopContainerResources } from '../desktop/container-resources.js';
+import { DesktopContainerSession } from '../desktop/container-session.js';
+import { DesktopContainerWorkspaces } from '../desktop/container-workspaces.js';
+import { stopRecordedContainer } from '../desktop/container-worker.js';
 import { DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopClipboardWorker } from '../desktop/clipboard-tool.js';
 import { resolveStateDir } from '../../src/config/paths-state.js';
 import { DesktopObservationManager } from '../desktop/observation-manager.js';
@@ -92,16 +97,32 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     return visible() && window.isFocused() || Boolean(chat && chat.isVisible() && !chat.isMinimized() && chat.isFocused());
   };
   let workspace: DesktopWorkspaceSession | undefined;
+  let container: DesktopContainerSession | undefined;
+  const containerResources = new DesktopContainerResources(join(resolveStateDir(), 'desktop-execution-v1', 'container-resources'), encryption);
+  const containerWorkspaces = new DesktopContainerWorkspaces(join(resolveStateDir(), 'desktop-execution-v1', 'container-workspaces'), encryption);
+  let savedContainers: { epoch: number; profileId: string; items: Array<{ workspaceId: string; label: string; imageId: string }> } | undefined;
   const workspaceRecovery = new DesktopWorkspaceRecoveryStore(join(resolveStateDir(), 'desktop-execution-v1', 'workspace-recovery'), encryption);
   let nativeApprovalGeneration = 0;
   const execution = new DesktopExecutionManager({ manager, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'),
     appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopOperationStatusDescriptor()]), foreground,
-    createWorker: tool => {
+    createWorker: (tool, intent) => {
       if (tool === DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name) return desktopClipboardWorker(clipboard);
+      if (tool === 'desktop.command.run') {
+        if (!container || !intent) throw new Error('DESKTOP_CONTAINER_AUTHORITY_INVALID'); return container.worker(intent);
+      }
       if (!workspace) throw new Error('DESKTOP_EXECUTION_DENIED'); return workspace.worker(tool);
     },
     consent: async (binding, grant, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
+      if (grant.toolRevisions['desktop.command.run']) {
+        if (!container || container.workspaceId !== grant.workspaceId) return false;
+        const generation = nativeApprovalGeneration;
+        const result = await dialog.showMessageBox(window, { type: 'warning', title: '授权本机Docker命令', message: '允许此Gateway请求在独立Docker工作区运行命令？',
+          detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n镜像：${container.imageId}\n隔离工作区：${container.workspaceId}\n数据：${container.retainedData() ? '重新使用保留的隔离卷，旧授权不恢复' : '新建隔离卷'}\n\n授权最长两分钟，每个命令仍须逐次本机批准。容器无网络，以非root运行，不挂载本机目录或Docker socket，不传递主机凭据。命令仅修改本隔离卷，卷保留供核实；不会直接修改本机工作区。锁屏、断线或切换后需重新授权，停止未确认时不能接管。`,
+          buttons: ['取消', '允许逐次确认容器命令'], defaultId: 0, cancelId: 0, noLink: true, signal });
+        if (result.response !== 1 || signal.aborted || generation !== nativeApprovalGeneration || !foreground()) return false;
+        await container.authorizeWorkspace(signal); return !signal.aborted && generation === nativeApprovalGeneration && foreground();
+      }
       if (grant.workspaceId) {
         if (workspace?.workspaceId !== grant.workspaceId) return false;
         const result = await dialog.showMessageBox(window, { type: 'warning', title: '授权本机工作区',
@@ -120,6 +141,14 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId);
       const parent = shell?.captureWindow() ?? window;
       if (profile?.identity?.gatewayId !== request.execution.gatewayId || !foreground() || signal.aborted || parent.isDestroyed()) return false;
+      if (request.toolName === 'desktop.command.run') {
+        if (!container || request.execution.workspaceId !== container.workspaceId || request.arguments.workspaceId !== container.workspaceId) return false;
+        const generation = nativeApprovalGeneration;
+        const result = await dialog.showMessageBox(parent, { type: 'warning', title: '确认本次容器命令', message: '运行以下隔离容器命令？',
+          detail: `Gateway：${profile.origin}\n设备：${request.execution.deviceId}\n镜像：${container.imageId}\n隔离工作区：${container.workspaceId}\n操作：${request.execution.operationId}\n参数摘要：${request.execution.argumentHash}\n\n完整argv：\n${JSON.stringify(request.arguments.argv)}\n\n仅本次有效。容器无网络或本机目录挂载；专用卷内的修改可能在中断后保留。返回非零退出码不代表没有副作用；结果未知时不会重做。`,
+          buttons: ['取消', '运行本次容器命令'], defaultId: 0, cancelId: 0, noLink: true, signal });
+        return result.response === 1 && !signal.aborted && generation === nativeApprovalGeneration && foreground();
+      }
       if (request.toolName === 'desktop.workspace.write') {
         if (!workspace || request.execution.workspaceId !== workspace.workspaceId || request.arguments.workspaceId !== workspace.workspaceId) return false;
         const text = typeof request.arguments.text === 'string' ? request.arguments.text : '';
@@ -152,20 +181,31 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   });
   let localOperationReviews: Awaited<ReturnType<DesktopOperationReviewManager['listLocal']>> | undefined;
   let operationReviews: { profileId: string; epoch: number; items: Awaited<ReturnType<DesktopOperationReviewManager['list']>> } | undefined;
+  const proveContainerStopped = async (intent: Parameters<typeof stopRecordedContainer>[1]) => {
+    if (intent.tool !== 'desktop.command.run') return false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([stopRecordedContainer(containerResources, intent), new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), 3000); })]);
+    } catch { return false; } finally { clearTimeout(timer); }
+  };
   const reviews = new DesktopOperationReviewManager({ manager, execution, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'), visible,
+    proveStopped: proveContainerStopped,
     confirm: async (binding, intent, receipt, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
       const file = intent.tool === 'desktop.workspace.write' ? await workspaceRecovery.load(intent) : undefined;
+      const command = intent.tool === 'desktop.command.run' ? await containerResources.load(intent) : undefined;
+      if (command && command.phase !== 'stopped' && !await proveContainerStopped(intent)) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+      const commandDetail = command ? `\n镜像：${command.imageId}\n隔离工作区：${command.workspaceId}\nDocker卷：xopc-workspace-${command.ownerId}-${command.workspaceId}\n完整argv：${JSON.stringify(command.argv)}\n容器已核实删除，但隔离卷内的修改可能仍存在；不会自动删除卷或重做命令。` : '';
       if (signal.aborted || !visible() || !window.isFocused()) return false;
       const answer = await dialog.showMessageBox(window, { type: 'warning', title: '核实结果未知的操作',
         message: '检查实际效果后，仅允许后续的新操作？',
-        detail: `Gateway：${binding.origin}\n操作：${intent.operationId}\n工具：${intent.tool}\n本机记录：${receipt?.state ?? '未找到匹配记录'}${file ? `\n原本机目录：${JSON.stringify(file.root.path)}\n目录身份：${file.root.device}:${file.root.inode}\n相对路径：${JSON.stringify(file.relativePath)}\n原预期版本：${file.expectedVersion ?? '新建'}\n路径可能已被移动或替换，请核实原目录身份及部分写入效果。` : ''}\n\n请先检查实际效果；旧操作可能已经生效。此次确认不会将旧结果改成成功，也不会重做旧操作。执行器已停止，每个新写入仍需另行授权。${binding.offline ? '\n\n这是本机离线核实，原服务器尚未确认，旧任务结果仍保持未知。' : ''}`,
+        detail: `Gateway：${binding.origin}\n操作：${intent.operationId}\n工具：${intent.tool}\n本机记录：${receipt?.state ?? '未找到匹配记录'}${file ? `\n原本机目录：${JSON.stringify(file.root.path)}\n目录身份：${file.root.device}:${file.root.inode}\n相对路径：${JSON.stringify(file.relativePath)}\n原预期版本：${file.expectedVersion ?? '新建'}\n路径可能已被移动或替换，请核实原目录身份及部分写入效果。` : ''}${commandDetail}\n\n请先检查实际效果；旧操作可能已经生效。此次确认不会将旧结果改成成功，也不会重做旧操作。执行器已停止，每个新写入仍需另行授权。${binding.offline ? '\n\n这是本机离线核实，原服务器尚未确认，旧任务结果仍保持未知。' : ''}`,
         buttons: ['取消', '已检查，允许新意图'], defaultId: 0, cancelId: 0, noLink: true, signal });
       return answer.response === 1 && !signal.aborted && visible() && window.isFocused();
     } });
   const stopObservation = () => { observation.stop(); void shell?.setHostOrigin().catch(() => {}); };
   const stopCapabilities = () => { nativeApprovalGeneration += 1; shell?.stopFiles(); reviews.cancel(); stopObservation(); void execution.stop(); };
-  const cancelDesktop = () => { stopCapabilities(); desktop.cancel(); operationReviews = undefined; };
+  const cancelDesktop = () => { stopCapabilities(); desktop.cancel(); operationReviews = undefined; savedContainers = undefined; };
   const removeSessionBoundary = installDesktopSessionBoundary(powerMonitor, cancelDesktop);
   window.once('closed', removeSessionBoundary);
   const desktop = new DesktopEnrollmentManager({ manager, store: desktopStore, visible,
@@ -209,7 +249,9 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       return result.response === 1 && !signal.aborted && approval === nativeApprovalGeneration && !parent.isDestroyed() && parent.isFocused();
     },
   });
-  const snapshot = () => ({ ...manager.snapshot(), localCapabilities: Boolean(execution.origin() || observation.origin()), desktop: desktop.snapshot(), observation: observation.snapshot(), execution: execution.snapshot(), localOperationReviews, operationReviews: operationReviews?.epoch === manager.snapshot().epoch ? operationReviews : undefined, presentation: {
+  const snapshot = () => ({ ...manager.snapshot(), localCapabilities: Boolean(execution.origin() || observation.origin()), desktop: desktop.snapshot(), observation: observation.snapshot(), execution: execution.snapshot(), localOperationReviews,
+    savedContainers: savedContainers?.epoch === manager.snapshot().epoch && savedContainers.profileId === manager.snapshot().selectedId ? savedContainers : undefined,
+    operationReviews: operationReviews?.epoch === manager.snapshot().epoch ? operationReviews : undefined, presentation: {
     connectionVisible: window.isVisible(), connectionFocused: window.isFocused(), chat: shell!.presentationState(),
   } });
   let operations = Promise.resolve();
@@ -302,6 +344,30 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     return snapshot();
   })));
   ipcMain.handle('connections:execution-stop', () => reply(async () => { stopCapabilities(); await execution.stop(); return snapshot(); }));
+  ipcMain.handle('connections:container-list', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => {
+    const state = manager.snapshot(), profile = state.profiles.find(profile => profile.id === id);
+    if (id !== state.selectedId || !profile?.identity) throw new Error('STALE_CONNECTION_EPOCH');
+    if (!visible() || !window.isFocused()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
+    const items = await containerWorkspaces.list({ profileId: id, origin: profile.origin, ...profile.identity });
+    savedContainers = { epoch: state.epoch, profileId: id, items: items.map(item => ({ workspaceId: item.workspaceId, label: item.label, imageId: item.imageId })) }; return snapshot();
+  })));
+  ipcMain.handle('connections:container-start', (_event, epoch, id, workspaceId) => reply(() => atEpoch(epoch, async () => {
+    const state = manager.snapshot(), profile = state.profiles.find(profile => profile.id === id);
+    if (process.platform !== 'darwin') throw new Error('DESKTOP_CONTAINER_UNSUPPORTED');
+    if (id !== state.selectedId || !profile?.identity) throw new Error('STALE_CONNECTION_EPOCH');
+    stopObservation(); await observation.whenStopped(); await execution.requireStopped();
+    const generation = nativeApprovalGeneration;
+    const current = () => generation === nativeApprovalGeneration && manager.snapshot().epoch === epoch && manager.snapshot().selectedId === id;
+    if (!visible() || !window.isFocused()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
+    const binding = { profileId: id, origin: profile.origin, ...profile.identity };
+    const retained = workspaceId === undefined ? undefined : await containerWorkspaces.load(binding, workspaceId);
+    const engine = await DesktopContainerEngine.connect(retained?.socketPath, retained?.engineId), imageId = await engine.resolveInstalledImage(retained?.imageId ?? 'node:26.12.1-bookworm-slim');
+    if (!current() || !visible() || !window.isFocused()) throw new Error('DESKTOP_OPERATION_CANCELLED');
+    const identity = retained ? { workspaceId: retained.workspaceId, ownerId: retained.ownerId } : { workspaceId: randomUUID(), ownerId: randomUUID() };
+    container = new DesktopContainerSession(engine, imageId, containerResources, current, { ...identity, existing: Boolean(retained),
+      ...(!retained ? { persist: async () => { await containerWorkspaces.create(binding, { socketPath: engine.socketPath, engineId: engine.engineId, imageId, label: 'Docker工作区 ' + new Date().toLocaleString() }, identity); } } : {}) });
+    await container.activate(execution, epoch, id); return snapshot();
+  })));
   ipcMain.handle('connections:quit', () => { cancelDesktop(); app.quit(); });
   ipcMain.handle('connections:local', () => { cancelDesktop(); return reply(() => serialize(async () => {
     await execution.requireStopped();

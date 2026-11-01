@@ -10,6 +10,7 @@ import {
 } from '@xopcai/browser-control-contract';
 import {
   personalDescriptor,
+  desktopCommandDescriptor,
   PERSONAL_TOOL_NAMES,
   BRIDGE_LIST_OUTPUT_SCHEMA,
   BRIDGE_READ_OUTPUT_SCHEMA,
@@ -60,6 +61,10 @@ function contract(
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
+  'desktop.command.run': (() => {
+    const descriptor = desktopCommandDescriptor();
+    return contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema);
+  })(),
   ...Object.fromEntries(DESKTOP_WORKSPACE_ACTIONS.map(action => {
     const descriptor = desktopWorkspaceDescriptor(action);
     return [descriptor.name, contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema)];

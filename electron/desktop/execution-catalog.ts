@@ -1,6 +1,6 @@
 import Ajv2020, { type ValidateFunction } from 'ajv/dist/2020.js';
 import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
-import { durableEndpointResultSchema, endpointToolDescriptorSchema, type EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
+import { DESKTOP_COMMAND_ARGV_BYTES, durableEndpointResultSchema, endpointToolDescriptorSchema, type EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
 import { z } from 'zod';
 
 /** Trusted bundled descriptors, validated locally as well as at the Gateway. */
@@ -28,6 +28,8 @@ export class DesktopExecutionCatalog {
   descriptors(): EndpointToolDescriptor[] { return [...this.tools.values()].map(tool => structuredClone(tool.descriptor)); }
   validateArguments(tool: string, args: Record<string, unknown>): void {
     if (!this.tools.get(tool)?.input(args)) throw new Error('DESKTOP_EXECUTION_ARGUMENT_INVALID');
+    if (tool === 'desktop.command.run' && (!Array.isArray(args.argv) || !args.argv[0] || args.argv.some(value => typeof value !== 'string' || value.includes('\0'))
+      || Buffer.byteLength(JSON.stringify(args.argv)) > DESKTOP_COMMAND_ARGV_BYTES)) throw new Error('DESKTOP_EXECUTION_ARGUMENT_INVALID');
   }
   readonly validateResult = (result: unknown, tool: string): unknown => {
     const parsed = durableEndpointResultSchema.parse(result);

@@ -76,7 +76,7 @@ export function reviewDesktopOperation(operationId: string, deviceId: string, ga
     if (!intent || !row || row.state !== 'unknown' || row.generation !== review.expectedGeneration
       || review.intentFingerprint !== createHash('sha256').update(JSON.stringify(intent)).digest('hex')
       || review.receipt && review.receipt.operationId !== operationId
-      || review.localStatus === 'not-found' && !(intent.tool === 'desktop.clipboard.write' || intent.tool === 'desktop.workspace.write' && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
+      || review.localStatus === 'not-found' && !(intent.tool === 'desktop.clipboard.write' || ['desktop.workspace.write', 'desktop.command.run'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
     const json = canonicalJson(review), previous = db.prepare('SELECT review_id,observation_json FROM desktop_operation_reviews WHERE operation_id=?').get(operationId) as { review_id: string; observation_json: string } | undefined;
     if (previous) {
       if (previous.review_id !== review.reviewId || previous.observation_json !== json) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');

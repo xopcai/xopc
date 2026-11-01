@@ -83,3 +83,20 @@ it.skipIf(process.env.XOPC_CONTAINER_LIVE !== '1')('uses the real local Engine w
     execFileSync('docker', ['--host', `unix://${engine.socketPath}`, 'volume', 'rm', volume], { stdio: 'ignore' });
   }
 }, 30000);
+
+it.skipIf(process.env.XOPC_CONTAINER_LIVE !== '1')('attaches a real isolated TTY before start, transfers raw bytes and applies resize without treating disconnect as stop', async () => {
+  const engine = await DesktopContainerEngine.connect(), image = await engine.resolveInstalledImage('node:26.12.1-bookworm-slim');
+  const owner = { ownerId: randomUUID(), workspaceId: randomUUID(), operationId: randomUUID() }, volume = await engine.ensureWorkspace(owner.ownerId, owner.workspaceId);
+  const id = await engine.create({ ...owner, imageId: image, argv: ['/bin/sh'], tty: true });
+  let socket: Awaited<ReturnType<DesktopContainerEngine['attachTerminal']>> | undefined;
+  try {
+    socket = await engine.attachTerminal(id, owner); let output = '';
+    socket.on('error', () => {}); socket.on('data', bytes => { output = (output + bytes.toString()).slice(-16384); }); socket.resume();
+    await engine.start(id, owner); await engine.resizeTerminal(id, owner, 100, 30);
+    socket.write("printf 'TTY_%s\\n' READY\r");
+    await vi.waitFor(() => expect(output).toContain('TTY_READY'), { timeout: 5000 });
+    socket.write('stty size\r'); await vi.waitFor(() => expect(output).toContain('30 100'), { timeout: 5000 });
+    socket.destroy(); expect(await engine.inspect(id, owner)).toMatchObject({ Running: true });
+    expect(await engine.remove(id, owner)).toEqual({ confirmed: true }); expect(await engine.inspect(id, owner)).toBeUndefined();
+  } finally { socket?.destroy(); expect(await engine.remove(id, owner)).toEqual({ confirmed: true }); execFileSync('docker', ['--host', `unix://${engine.socketPath}`, 'volume', 'rm', volume], { stdio: 'ignore' }); }
+}, 30000);
