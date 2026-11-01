@@ -65,7 +65,7 @@ export interface UseComposerActionsOptions {
 
   onSend: ComposerSendHandler;
   onDispatched?: (receipt: ComposerDispatchReceipt, draft: ComposerDraft) => void;
-  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], interrupt?: boolean) => void | Promise<void>;
+  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], interrupt?: boolean, delivery?: 'next' | 'steer') => void | Promise<void>;
   onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
   onCommitEditFollowUp: (
     id: string,
@@ -87,7 +87,7 @@ export interface UseComposerActionsOptions {
 
 export interface UseComposerActionsReturn {
   send: () => void;
-  flushSteeringDraft: (interrupt?: boolean) => Promise<void>;
+  flushSteeringDraft: (interrupt?: boolean, delivery?: 'next' | 'steer') => Promise<void>;
   interruptDraft: () => void;
 }
 
@@ -196,7 +196,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getContextRefs,
   ]);
 
-  const flushSteeringDraft = useCallback(async (interrupt = options.personal ? true : undefined) => {
+  const flushSteeringDraft = useCallback(async (interrupt = options.personal ? true : undefined, delivery?: 'next' | 'steer') => {
     if (latestOptions.current.editingFollowUpId || latestOptions.current.editingUserTurnId) { send(); return; }
     if (!runBusy && pendingFollowUpsCount === 0) return;
     const draft = harvestDraft({
@@ -220,7 +220,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       const args: Parameters<NonNullable<typeof onAddPendingFollowUp>> = [draft.text,
         draft.attachments.length > 0 ? draft.attachments : undefined,
         draft.contextRefs.length > 0 ? draft.contextRefs : undefined];
-      if (interrupt !== undefined) args.push(interrupt);
+      if (interrupt !== undefined || delivery !== undefined) args.push(interrupt);
+      if (delivery !== undefined) args.push(delivery);
       await onAddPendingFollowUp(...args);
       onUserTextCommitted?.(draft.text);
       const latest = latestOptions.current;

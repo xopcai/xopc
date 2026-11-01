@@ -19,7 +19,7 @@ export async function submitQueuedInput(id: string, proposed: AppendCommand, isC
   };
   const pending = await readPendingSessionCommand(id);
   assertScope();
-  if (pending && (pending.kind !== 'append' || pending.execution || pending.delivery !== 'next'
+  if (pending && (pending.kind !== 'append' || pending.execution || pending.delivery !== proposed.delivery
     || canonicalSessionCommand(pending.input) !== canonicalSessionCommand(proposed.input)
     || Boolean(pending.interrupt) !== Boolean(proposed.interrupt))) {
     throw new Error('The previous input is awaiting confirmation');

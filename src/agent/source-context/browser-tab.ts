@@ -25,6 +25,7 @@ export function buildBrowserTabAgentContext(
     title: observation.title || observation.url,
     url: observation.url,
     documentId: observation.documentId,
+    capturedAt: Date.now(),
     text,
     truncated: text.length < snapshot.length,
   };
