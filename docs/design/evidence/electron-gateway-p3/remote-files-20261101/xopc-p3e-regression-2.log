@@ -1,0 +1,18 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T05:49:18.823Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T05:49:18.831Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T05:49:18.835Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T05:49:20.383Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-remote-files-http-2atmce/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-11-01T05:49:20.457Z","module":"Gateway:Auth","requestId":"9f96155d-03e2-44bb-aa32-f0ef98d306ce","path":"/api/files/K1NZTbof6fpnFHrT6QECq-s7.Zml4dHVyZS50eHQ","method":"GET","clientIp":"127.0.0.1","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"info","time":"2026-11-01T05:49:20.459Z","module":"Gateway:HTTP","requestId":"9f96155d-03e2-44bb-aa32-f0ef98d306ce","method":"GET","path":"/api/files/K1NZTbof6fpnFHrT6QECq-s7.Zml4dHVyZS50eHQ","status":401,"durationMs":3,"clientIp":"unknown","userAgent":"node","msg":"HTTP GET /api/files/K1NZTbof6fpnFHrT6QECq-s7.Zml4dHVyZS50eHQ → 401 (3ms)"}
+{"level":"info","time":"2026-11-01T05:49:20.565Z","module":"Gateway:HTTP","requestId":"0ce2554b-223c-4585-89d0-2feb8c6e60a8","method":"PUT","path":"/api/files/K1NZTbof6fpnFHrT6QECq-s7.Zml4dHVyZS50eHQ/content","status":409,"durationMs":1,"clientIp":"unknown","contentLength":100,"msg":"HTTP PUT /api/files/K1NZTbof6fpnFHrT6QECq-s7.Zml4dHVyZS50eHQ/content → 409 (1ms)"}
+{"level":"info","time":"2026-11-01T05:49:23.807Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-empty-local-0YCz4W/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T05:49:23.815Z","module":"WorkspaceSeed","profileDir":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-empty-local-0YCz4W/agents/main/profile","seeded":1,"msg":"Seeded profile Markdown files"}
+
+ Test Files  21 passed (21)
+      Tests  160 passed (160)
+   Start at  13:49:18
+   Duration  6.36s (transform 1.96s, setup 70ms, import 3.56s, tests 5.33s, environment 1ms)
+

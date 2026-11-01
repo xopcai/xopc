@@ -8,6 +8,8 @@ import type { GatewayConnectionPreview } from '../gateway/connection-manager.js'
 import { RemoteChatStateStore, type ChatNamespace } from '../chat/state.js';
 import { ShellController } from './controller.js';
 import { RemoteWindowPresentation } from '../gateway/window-presentation.js';
+import { RemoteFileSnapshots, type RemoteFileSnapshot } from '../files/remote-snapshots.js';
+import type { ConnectionEncryption } from '../gateway/credentials.js';
 
 export class RemoteShellWindow {
   private window?: BrowserWindow;
@@ -21,9 +23,46 @@ export class RemoteShellWindow {
   private namespace?: ChatNamespace;
   private renewalTimer?: ReturnType<typeof setTimeout>;
   private cookieWrite?: Promise<void>;
+  private files?: RemoteFileSnapshots;
+  private fileGeneration = 0;
+  private fileSession = randomUUID();
   constructor(private readonly mainDirectory: string, private readonly assets: string,
     private readonly manager: GatewayConnectionPreview, private readonly recover: () => void, private readonly state: RemoteChatStateStore,
-    private readonly presentation = new RemoteWindowPresentation()) {}
+    private readonly presentation = new RemoteWindowPresentation(), private readonly fileOptions?: {
+      root: string; encryption: ConnectionEncryption; confirm(snapshot: RemoteFileSnapshot, signal: AbortSignal): Promise<boolean>;
+    }) {}
+
+  stopFiles() {
+    if (this.worker) void this.worker.request('files-cancel', { fileSession: this.fileSession }).catch(() => {});
+    this.fileGeneration += 1; this.fileSession = randomUUID(); this.files = undefined;
+  }
+  async fileAction(action: unknown, input: unknown) {
+    const worker = this.worker, epoch = this.activeEpoch, namespace = this.namespace, generation = this.fileGeneration;
+    if (!worker || !namespace || !this.fileOptions || epoch !== this.manager.snapshot().epoch || !this.captureWindow()?.isFocused()) throw new Error('REMOTE_FILE_CONNECTION_REQUIRED');
+    const current = () => this.worker === worker && epoch === this.manager.snapshot().epoch && generation === this.fileGeneration;
+    const fileSession = this.fileSession;
+    const request = <T>(command: string, data: Record<string, unknown>, signal: AbortSignal) => {
+      signal.throwIfAborted();
+      const cancel = () => { if (current()) this.stopFiles(); };
+      signal.addEventListener('abort', cancel, { once: true });
+      return worker.request<T>(command, { ...data, epoch, fileSession }).finally(() => signal.removeEventListener('abort', cancel));
+    };
+    this.files ??= new RemoteFileSnapshots({ ...this.fileOptions, namespace, current,
+      transport: {
+        read: (fileId, signal) => request('files-read', { fileId }, signal),
+        put: (fileId, text, revision, signal) => request('files-put', { fileId, text, revision }, signal),
+      } });
+    if (action === 'browse') {
+      const value = await request('files-browse', { conversationId: input }, AbortSignal.timeout(10000));
+      if (!current()) throw new Error('STALE_CONNECTION_EPOCH'); return value;
+    }
+    if (action === 'list') return this.files.list();
+    if (action === 'download') return this.files.download(input);
+    if (action === 'get') return this.files.get(input);
+    if (action === 'upload') return this.files.upload(input);
+    if (action === 'edit' && input && typeof input === 'object' && 'id' in input && 'text' in input && Object.keys(input).length === 2) return this.files.edit(input.id, input.text);
+    throw new Error('REMOTE_FILE_ACTION_DENIED');
+  }
 
   presentationState() { return { visible: this.window?.isVisible() ?? false, focused: this.window?.isFocused() ?? false }; }
   captureWindow(): BrowserWindow | undefined {
@@ -36,7 +75,7 @@ export class RemoteShellWindow {
   }
 
   authorize(event: IpcMainInvokeEvent, channel: string) {
-    if (!['shell:bootstrap', 'shell:recover', 'shell:state-read', 'shell:state-write', 'shell:host-settings', 'shell:host-origin', 'shell:host-stop'].includes(channel)) throw new Error('REMOTE_CAPABILITY_DISABLED');
+    if (!['shell:bootstrap', 'shell:recover', 'shell:state-read', 'shell:state-write', 'shell:file-action', 'shell:host-settings', 'shell:host-origin', 'shell:host-stop'].includes(channel)) throw new Error('REMOTE_CAPABILITY_DISABLED');
     if (!this.window || this.window.isDestroyed() || event.sender !== this.window.webContents
       || event.senderFrame !== this.window.webContents.mainFrame || event.senderFrame?.url !== `${this.origin}/`
       || event.sender.getURL() !== `${this.origin}/` || this.activeEpoch !== this.manager.snapshot().epoch) throw new Error('UNTRUSTED_SHELL_WINDOW');
@@ -133,6 +172,7 @@ export class RemoteShellWindow {
   }
   close(): Promise<void> {
     if (this.closing) return this.closing;
+    this.stopFiles();
     clearTimeout(this.renewalTimer); this.renewalTimer = undefined;
     const worker = this.worker, partition = this.partition, window = this.window, cookieWrite = this.cookieWrite;
     this.worker = undefined; this.partition = undefined; this.window = undefined; this.origin = undefined; this.activeEpoch = undefined; this.namespace = undefined;

@@ -1,0 +1,80 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-remote-files.test.ts (4 tests | 4 failed) 9ms
+   × encrypts downloaded snapshots and drafts; sends only explicit confirmed versioned uploads and isolates Gateway identities 5ms
+   × preserves a draft on conflict and never retries an uncertain upload after restart 1ms
+   × rejects version changes, unsafe ids, oversize data and late approval after a connection switch 1ms
+   × durably marks an interrupted upload unknown before allowing restored cache access 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-remote-files.test.ts > encrypts downloaded snapshots and drafts; sends only explicit confirmed versioned uploads and isolates Gateway identities
+TypeError: The "path" argument must be of type string. Received undefined
+ ❯ electron/__tests__/gateway-connections-remote-files.test.ts:32:23
+     30|     const store = f.create(), doc = await store.download(f.resource.id…
+     31|     expect(doc.state).toBe('clean'); expect(f.transport.put).not.toHav…
+     32|     const directory = join(f.root, (await readdir(f.root))[0]);
+       |                       ^
+     33|     expect((await readFile(join(directory, doc.id + '.bin'))).includes…
+     34|     await store.edit(doc.id, 'edited text');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-remote-files.test.ts > preserves a draft on conflict and never retries an uncertain upload after restart
+Error: ENOENT: no such file or directory, open '/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-remote-snapshot-6J71f3/28b2e3f0405bcd07b760cb8086ffc8a97e52dd270b2f490b1c9c9ec7077af9d9/dd5c22e0-7614-45ab-9f32-937c9784a8e1.bin'
+ ❯ readBounded electron/gateway/profiles.ts:42:16
+     40|
+     41| export async function readBounded(path: string, maximum: number): Prom…
+     42|   const file = await open(path, 'r');
+       |                ^
+     43|   try {
+     44|     const buffer = Buffer.alloc(maximum + 1);
+ ❯ electron/files/remote-snapshots.ts:78:21
+ ❯ RemoteFileSnapshots.storage electron/files/remote-snapshots.ts:50:14
+ ❯ RemoteFileSnapshots.read electron/files/remote-snapshots.ts:76:20
+ ❯ electron/files/remote-snapshots.ts:111:56
+ ❯ electron/__tests__/gateway-connections-remote-files.test.ts:47:74
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-remote-files.test.ts > rejects version changes, unsafe ids, oversize data and late approval after a connection switch
+Error: ENOENT: no such file or directory, open '/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-remote-snapshot-UJeW2e/c57ea3bc4c119e94d6d4e3d418a2b17f6558bd7ab24cc8489b13ca3a6d6e9caf/375eb459-a62a-4564-a219-e417d876e4f7.bin'
+ ❯ readBounded electron/gateway/profiles.ts:42:16
+     40|
+     41| export async function readBounded(path: string, maximum: number): Prom…
+     42|   const file = await open(path, 'r');
+       |                ^
+     43|   try {
+     44|     const buffer = Buffer.alloc(maximum + 1);
+ ❯ electron/files/remote-snapshots.ts:78:21
+ ❯ RemoteFileSnapshots.storage electron/files/remote-snapshots.ts:50:14
+ ❯ RemoteFileSnapshots.read electron/files/remote-snapshots.ts:76:20
+ ❯ electron/files/remote-snapshots.ts:111:56
+ ❯ electron/__tests__/gateway-connections-remote-files.test.ts:67:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-remote-files.test.ts > durably marks an interrupted upload unknown before allowing restored cache access
+Error: ENOENT: no such file or directory, open '/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-remote-snapshot-pUx91J/7545e5dab699e534f0dba43930d75b83a75822ea120e913dc6bc896c5d44ab50/c3204dac-526e-4419-800a-0de42c0649e3.bin'
+ ❯ readBounded electron/gateway/profiles.ts:42:16
+     40|
+     41| export async function readBounded(path: string, maximum: number): Prom…
+     42|   const file = await open(path, 'r');
+       |                ^
+     43|   try {
+     44|     const buffer = Buffer.alloc(maximum + 1);
+ ❯ electron/files/remote-snapshots.ts:78:21
+ ❯ RemoteFileSnapshots.storage electron/files/remote-snapshots.ts:50:14
+ ❯ RemoteFileSnapshots.read electron/files/remote-snapshots.ts:76:20
+ ❯ electron/files/remote-snapshots.ts:111:56
+ ❯ electron/__tests__/gateway-connections-remote-files.test.ts:75:74
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  13:40:19
+   Duration  265ms (transform 113ms, setup 13ms, import 169ms, tests 9ms, environment 0ms)
+

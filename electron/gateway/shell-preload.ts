@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld('desktopShell', Object.freeze({
   hostSettings: () => ipcRenderer.invoke('shell:host-settings'),
   hostOrigin: () => ipcRenderer.invoke('shell:host-origin'),
   stopHost: () => ipcRenderer.invoke('shell:host-stop'),
+  fileAction: (action: unknown, input?: unknown) => ipcRenderer.invoke('shell:file-action', action, input),
 }));

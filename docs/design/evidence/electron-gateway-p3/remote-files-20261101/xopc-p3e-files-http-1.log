@@ -1,0 +1,16 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T05:44:25.695Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T05:44:25.711Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T05:44:25.716Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T05:44:27.980Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-remote-files-http-z0H8le/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-11-01T05:44:28.074Z","module":"Gateway:Auth","requestId":"4a753887-98cc-4d78-9da8-f3ccb6da024d","path":"/api/files/8_HmT1iQPSVYyiaLKcdecmco.Zml4dHVyZS50eHQ","method":"GET","clientIp":"127.0.0.1","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"info","time":"2026-11-01T05:44:28.075Z","module":"Gateway:HTTP","requestId":"4a753887-98cc-4d78-9da8-f3ccb6da024d","method":"GET","path":"/api/files/8_HmT1iQPSVYyiaLKcdecmco.Zml4dHVyZS50eHQ","status":401,"durationMs":3,"clientIp":"unknown","userAgent":"node","msg":"HTTP GET /api/files/8_HmT1iQPSVYyiaLKcdecmco.Zml4dHVyZS50eHQ → 401 (3ms)"}
+{"level":"info","time":"2026-11-01T05:44:28.197Z","module":"Gateway:HTTP","requestId":"bf7bcb9a-e207-4795-ae37-a5755d937623","method":"PUT","path":"/api/files/8_HmT1iQPSVYyiaLKcdecmco.Zml4dHVyZS50eHQ/content","status":409,"durationMs":1,"clientIp":"unknown","contentLength":100,"msg":"HTTP PUT /api/files/8_HmT1iQPSVYyiaLKcdecmco.Zml4dHVyZS50eHQ/content → 409 (1ms)"}
+
+ Test Files  2 passed (2)
+      Tests  5 passed (5)
+   Start at  13:44:24
+   Duration  4.26s (transform 2.23s, setup 18ms, import 3.61s, tests 481ms, environment 0ms)
+
