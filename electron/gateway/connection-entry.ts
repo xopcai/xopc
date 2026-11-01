@@ -217,6 +217,8 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       if (request.toolName === REMOTE_COMPUTER_CONTROL_TOOL) {
         const detail = JSON.stringify(request.arguments), generation = nativeApprovalGeneration;
         if (!computerPresence.visible() || Buffer.byteLength(detail) > 8192) return false;
+        // Releasing the already bound session cannot observe or perform input and must not wait behind an approval dialog.
+        if (request.arguments.op === 'release') return true;
         const result = await dialog.showMessageBox(parent, { type: 'warning', title: '确认本次电脑操作',
           message: request.arguments.op === 'observe' ? '截取已授权窗口并发送给此Gateway？' : request.arguments.op === 'discover' ? '将本机应用列表发送给此Gateway？' : '仅执行以下电脑控制请求？',
           detail: `Gateway：${profile.origin}\n设备：${request.execution.deviceId}\n操作：${request.execution.operationId}\n完整请求：${detail}\n\n每个输入还会核验目标并单独请求批准。结果未知时不会重做。`,

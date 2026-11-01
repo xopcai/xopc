@@ -30,10 +30,10 @@ function resultValue(value, depth = 0) {
   if (typeof value === 'string') { let parsed; try { parsed = JSON.parse(value); } catch { return; } return resultValue(parsed, depth + 1); }
   if (typeof value !== 'object') return;
   if (value.errorCode) throw new Error('Computer tool failed: ' + String(value.errorCode));
-  if (Array.isArray(value.apps) || ['ready', 'released', 'program_completed', 'program_error'].includes(value.status)) return value;
+  if (Array.isArray(value.apps) || ['ready', 'stopped', 'program_completed', 'program_error'].includes(value.status)) return value;
   for (const child of Object.values(value)) { const result = resultValue(child, depth + 1); if (result) return result; }
 }
-const program = "const s=await ui.observe({}); if(!s.elements?.some(e=>e.role==='AXButton'&&e.label==='Increment controlled counter')||s.truncated){text({fixtureAX:s.elements?.map(e=>({role:e.role,label:e.label})),truncated:s.truncated});}else{const b=await ui.resolve({snapshotId:s.snapshotId,role:'AXButton',label:'Increment controlled counter'}); const r=await ui.act({snapshotId:s.snapshotId,action:{kind:'activate',ref:b.ref}}); text({receipt:r.receipt});}";
+const program = "const s=await ui.observe({}); const matches=s.elements.filter(e=>e.role==='AXButton'&&e.label==='Increment controlled counter'); if(matches.length!==1)throw new Error('Isolated counter target is ambiguous'); const r=await ui.act({snapshotId:s.snapshotId,action:{kind:'activate',ref:matches[0].ref}}); text({receipt:r.receipt});";
 try {
   report.packageBefore = await installedAppFingerprint(target.application);
   const fixture = join(root, 'XopcCounter.app'), contents = join(fixture, 'Contents'), binary = join(contents, 'MacOS/Counter');
@@ -53,7 +53,7 @@ try {
       const last = messages.findLastIndex(message => message.role === 'user' && JSON.stringify(message.content).includes('COMPUTER_CASE:RUN'));
       const actual = last >= 0, results = messages.slice(last + 1).filter(message => message.role === 'tool'), values = results.map(value => resultValue(value)).filter(Boolean);
       let tool;
-      if (actual) {
+      if (actual && !report.checks.agentProgramAndClose) {
         const name = names.find(name => name === 'computer_use');
         if (!name) { assert(!results.length && names.includes('tool_search'), 'Computer tool unavailable'); tool = { name: 'tool_search', arguments: JSON.stringify({ query: 'computer_use', limit: 5 }) }; }
         else {
@@ -62,7 +62,7 @@ try {
           const apps = values.find(value => Array.isArray(value.apps))?.apps;
           assert(!values.some(value => value.status === 'program_error'), 'Native Computer program did not complete');
           const opened = values.some(value => value.status === 'ready' && !value.apps && value.sessionId);
-          const completed = values.some(value => value.status === 'program_completed'), released = values.some(value => value.status === 'released');
+          const completed = values.some(value => value.status === 'program_completed'), released = values.some(value => value.status === 'stopped');
           const args = !apps ? { op: 'discover', query: 'XOPC Native Counter' }
             : !opened ? { op: 'open', appRef: apps.find(value => value.name === 'XOPC Native Counter')?.appRef ?? apps[0]?.appRef, mode: 'control', prepare: false, planner: 'agent' }
             : !completed ? { op: 'exec', code: program, maxActions: 1, timeoutMs: 120000 }
