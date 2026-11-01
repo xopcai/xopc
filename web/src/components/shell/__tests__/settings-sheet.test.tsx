@@ -13,8 +13,21 @@ let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const layerNodes: HTMLElement[] = [];
 function Location() { return <output data-testid="route">{useLocation().pathname}</output>; }
-beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); container = document.createElement('div'); document.body.append(container); root = createRoot(container); media.portal = false; });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); layerNodes.splice(0).forEach(node => node.remove()); vi.restoreAllMocks(); });
+beforeEach(() => { vi.useFakeTimers(); Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); container = document.createElement('div'); document.body.append(container); root = createRoot(container); media.portal = false; });
+afterEach(async () => {
+  try {
+    await act(async () => {
+      root.unmount();
+      // Radix restores focus on a deferred timer; drain it before jsdom is torn down.
+      await vi.runOnlyPendingTimersAsync();
+    });
+  } finally {
+    container.remove();
+    layerNodes.splice(0).forEach(node => node.remove());
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  }
+});
 const escape = () => act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); });
 const route = () => document.querySelector('[data-testid="route"]')?.textContent;
 const render = (nested?: React.ReactNode) => act(async () => root.render(<MemoryRouter initialEntries={['/settings/capabilities/models']}><SettingsSheet><button>Service accounts</button></SettingsSheet>{nested}<Location /></MemoryRouter>));

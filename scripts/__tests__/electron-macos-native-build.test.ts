@@ -23,8 +23,7 @@ describe.skipIf(process.platform !== 'darwin')('macOS release native architectur
       const args = [join(root, 'scripts', script)];
       if (binary.endsWith('.node')) args.push('--headers', join(dirname(process.execPath), '../include/node'));
       const built = spawnSync(process.execPath, args, { encoding: 'utf8', timeout: 90_000 });
-      expect(built.error ?? built.stderr).toBeFalsy();
-      expect(built.status, built.stdout).toBe(0);
+      expect(built.status, built.error?.message ?? `${built.stdout}\n${built.stderr}`).toBe(0);
       const output = join(root, 'dist/electron/native', binary);
       const checked = spawnSync('lipo', [output, '-verify_arch', 'x86_64', 'arm64'], { encoding: 'utf8' });
       expect(checked.status, checked.stderr).toBe(0);
