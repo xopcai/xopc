@@ -108,3 +108,5 @@ P3d Browser专用契约/协调核心完成内部实现，旧browser.control/reco
 P3d Browser独立grant、协商和签名Host网络接线完成内部验证：真实HTTP/WSS正常与丢已签名结果均通过，本机结果保留、Gateway unknown、不重放；PNG/JPEG内存帧上传与跨Computer/Browser grant拒绝、撤销后拒绝通过。434项相关回归通过、6项条件跳过，440项packages及全类型检查通过（集合重叠），失败/原预算保留，见[网络证据](./evidence/electron-gateway-p3/browser-host-20261101/README.md)。尚未开放Main Browser窗口、Agent Browser设备路由和恢复元数据；继续实现，不能计作Browser原生E2E或P3d整体完成。
 
 Browser原生丢成功回执整轮第7轮通过，独立停止回执/加密补交、旧会话释放及schema269接线完成；本地新启动/旧v266复用、远端聊天恢复和相关回归通过。失败/原预算保留，见[停止与恢复证据](./evidence/electron-gateway-p3/execution-stop-20261101/README.md)。停止证明持久化前Main崩溃恢复、Computer故障矩阵、磁盘约束和P4等仍待实施，未合入main或交付最终包。
+
+授权前加密grant ledger及Main崩溃后的精确资源核实已接线，真实子进程SIGKILL/HTTP、未知状态保留和幂等补交通过；新版安装包严格串行本地/旧v266复用和远端聊天回归通过，见[授权恢复证据](./evidence/electron-gateway-p3/grant-recovery-20261101/README.md)。Computer取消输入原生两轮仍失败，已保留；原时限不变，不冒称完整故障矩阵完成。P4/容器总磁盘/最终main继续待办。

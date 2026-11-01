@@ -116,6 +116,23 @@ export class DesktopOperationJournal {
       return { operationId: row.operation_id, ...(intent ? { intent } : {}) };
     }));
   }
+  /** Includes successful operations: an idle private Browser/Computer process can outlive its last result. */
+  generationIntents(generation: string, scope: { gatewayId: string; deviceId: string; authorizationRevision: number }): DesktopOperationIntent[] {
+    if (!/^[a-f0-9-]{36}$/.test(generation)) throw new Error('DESKTOP_OPERATION_IDENTITY_MISMATCH');
+    return this.write(database => {
+      const rows = database.prepare(`SELECT o.operation_id,i.intent_json FROM operations o
+        LEFT JOIN operation_intents i ON i.operation_id=o.operation_id WHERE o.generation=? ORDER BY o.operation_id LIMIT 4097`)
+        .all(generation) as { operation_id: string; intent_json: string | null }[];
+      if (rows.length > 4096) throw new Error('DESKTOP_OPERATION_RECOVERY_LIMIT');
+      return rows.map(row => {
+        if (!row.intent_json) throw new Error('DESKTOP_OPERATION_IDENTITY_MISMATCH');
+        const intent = intentSchema.parse(JSON.parse(row.intent_json));
+        if (intent.operationId !== row.operation_id || intent.gatewayId !== scope.gatewayId || intent.deviceId !== scope.deviceId
+          || intent.authorizationRevision !== scope.authorizationRevision || !this.row(database, intent)) throw new Error('DESKTOP_OPERATION_IDENTITY_MISMATCH');
+        return intent;
+      });
+    });
+  }
   reviewed(input: DesktopOperationIntent): DesktopOperationReview | undefined {
     const intent = intentSchema.parse(input);
     return this.write(database => {

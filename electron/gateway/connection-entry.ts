@@ -30,6 +30,7 @@ import { createNativeBrowserSession } from '../desktop/browser-native-session.js
 import { DesktopBrowserResources } from '../desktop/browser-resources.js';
 import type { DesktopBrowserSession } from '../desktop/browser-session.js';
 import { DesktopExecutionStopOutbox } from '../desktop/execution-stop-outbox.js';
+import { DesktopExecutionGrantLedger } from '../desktop/execution-grant-ledger.js';
 import { computerHostBundleId } from '../desktop/computer-host-identity.js';
 import type { DesktopComputerSession } from '../desktop/computer-session.js';
 import { CuaComputerDriver } from '../computer/cua-driver.js';
@@ -142,7 +143,16 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     return outcome;
   };
   const execution = new DesktopExecutionManager({ manager, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'),
-    stopOutbox,
+    stopOutbox, grantLedger: new DesktopExecutionGrantLedger(join(resolveStateDir(), 'desktop-execution-v1', 'grant-ledger'), encryption),
+    recoverResource: async intent => {
+      if (intent.tool === REMOTE_BROWSER_CONTROL_TOOL || intent.tool === REMOTE_COMPUTER_CONTROL_TOOL) {
+        try { return await (intent.tool === REMOTE_BROWSER_CONTROL_TOOL ? browserResources : computerResources).recoverAfterParentExit(intent); }
+        catch (error) { return (error as NodeJS.ErrnoException).code === 'ENOENT'; }
+      }
+      if (['desktop.command.run', 'desktop.terminal.open'].includes(intent.tool)) return proveContainerStopped(intent);
+      // Clipboard runs in Main and workspace workers belong to Main; neither can survive the verified parent exit.
+      return ['desktop.clipboard.write', 'desktop.workspace.write'].includes(intent.tool);
+    },
     appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopOperationStatusDescriptor()]), foreground,
     createTerminal: (intent, binding, emit, lease) => {
       if (!container) throw new Error('DESKTOP_TERMINAL_AUTHORITY_INVALID'); return container.terminal(intent, binding, emit, lease);

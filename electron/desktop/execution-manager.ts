@@ -20,13 +20,14 @@ import { DesktopExecutionLease, DesktopOperationJournal } from './operation-jour
 import type { DesktopExecutionWorker } from './operation-supervisor.js';
 import type { DesktopWorkspaceReadApproval } from './workspace-read-session.js';
 import type { DesktopExecutionStopOutbox } from './execution-stop-outbox.js';
+import type { DesktopExecutionGrantLedger, DesktopExecutionGrantRecord } from './execution-grant-ledger.js';
 
 type Status = { profileId: string; state: 'authorizing' | 'connecting' | 'online' | 'stop-requested' | 'stopped' | 'stop-unconfirmed' | 'error';
   error?: string; remoteRevocationConfirmed?: boolean; stopReceiptConfirmed?: boolean; resultUnknown?: boolean };
 type Run = { binding: DesktopBinding; epoch: number; transport: 'ssh' | 'direct'; abort: AbortController; close(): void;
   deviceId?: string; proposed?: DesktopExecutionGrant; expectedRevision?: number; host?: DesktopExecutionHost;
   lease?: DesktopExecutionLease; journal?: DesktopOperationJournal; watchdog?: ReturnType<typeof setInterval>;
-  stopResources?: WorkspaceContext['stopResources']; resourceStop?: Promise<{ confirmed: boolean }>; stopProofSupported?: boolean; stopReceipt?: SignedDesktopExecutionStop };
+  stopResources?: WorkspaceContext['stopResources']; resourceStop?: Promise<{ confirmed: boolean }>; stopProofSupported?: boolean; stopReceipt?: SignedDesktopExecutionStop; grantRecord?: DesktopExecutionGrantRecord };
 type WorkspaceContext = { catalog: DesktopExecutionCatalog; stopResources(): Promise<{ confirmed: boolean }> } &
   ({ workspaceId: string; kind?: 'container' } | { kind: 'computer' | 'browser'; workspaceId?: never });
 
@@ -37,9 +38,13 @@ export class DesktopExecutionManager {
   private stoppingRun?: Run;
   private cleanup: Promise<void> = Promise.resolve();
   private deliveringStops = false;
+  private recoveringStops = false;
   constructor(private readonly options: {
     manager: GatewayConnectionPreview; store: DesktopIdentityStore; executorRoot: string; catalog: DesktopExecutionCatalog; appVersion: string;
     stopOutbox?: DesktopExecutionStopOutbox;
+    grantLedger?: DesktopExecutionGrantLedger;
+    recoverResource?(intent: DesktopOperationIntent): Promise<boolean>;
+    parentExists?(pid: number): boolean;
     foreground(): boolean;
     consent(binding: DesktopBinding, grant: DesktopExecutionGrant, signal: AbortSignal): Promise<boolean>;
     confirm: ConstructorParameters<typeof DesktopExecutionSession>[0]['confirm'];
@@ -101,6 +106,7 @@ export class DesktopExecutionManager {
             run.stopReceipt ??= await client.signExecutionStop({ version: 1, stopId: randomUUID(), gatewayId: run.binding.gatewayId, deviceId: run.deviceId,
               grantId: run.proposed.grantId, authorizationRevision: run.expectedRevision, leaseGeneration: run.lease.generation, executionStopped: true });
             await this.options.stopOutbox.save(run.binding, run.stopReceipt);
+            if (run.grantRecord) { await this.options.grantLedger!.close(run.grantRecord); run.grantRecord = undefined; }
           }
           catch { this.status = { profileId: run.binding.profileId, state: 'stop-unconfirmed', error: 'DESKTOP_STOP_RECEIPT_STORAGE_FAILED' }; return; }
           try {
@@ -133,12 +139,53 @@ export class DesktopExecutionManager {
   async requireStopped(): Promise<void> {
     await this.stop();
     if (this.active) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+    await this.recoverStoppedGrants();
+  }
+  private async recoverStoppedGrants(): Promise<void> {
+    if (!this.options.grantLedger) return;
+    if (!this.options.stopOutbox || this.active || this.recoveringStops) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+    this.recoveringStops = true;
+    let lease: DesktopExecutionLease | undefined, journal: DesktopOperationJournal | undefined;
+    try {
+      if (!(await this.options.grantLedger.pending()).length) return;
+      lease = new DesktopExecutionLease(this.options.executorRoot);
+      journal = new DesktopOperationJournal(lease);
+      const records = await this.options.grantLedger.pending();
+      for (const record of records) {
+        const exists = this.options.parentExists ?? ((pid: number) => { try { process.kill(pid, 0); return true; }
+          catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false; throw error; } });
+        if (exists(record.parentPid)) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+        const intents = journal.generationIntents(record.leaseGeneration, { gatewayId: record.binding.gatewayId,
+          deviceId: record.deviceId, authorizationRevision: record.authorizationRevision });
+        for (const intent of intents) {
+          if (record.grant.toolRevisions[intent.tool as keyof typeof record.grant.toolRevisions] !== intent.toolRevision
+            || intent.workspaceId !== record.grant.workspaceId) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+          let timeout: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const confirmed = await Promise.race([this.options.recoverResource?.(intent) ?? Promise.resolve(false),
+              new Promise<false>(resolve => { timeout = setTimeout(() => resolve(false), 3000); })]);
+            if (!confirmed) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+          } finally { clearTimeout(timeout); }
+          if (journal.inspect(intent)?.state === 'unknown') journal.confirmUnknownStopped(intent);
+        }
+        // Reuse an already committed proof if Main died between outbox fsync and ledger removal.
+        const pending = await this.options.stopOutbox.pending(record.binding);
+        const prior = pending.find(value => value.receipt.deviceId === record.deviceId && value.receipt.grantId === record.grant.grantId
+          && value.receipt.authorizationRevision === record.authorizationRevision && value.receipt.leaseGeneration === record.leaseGeneration);
+        const client = new DesktopDeviceAuth(record.binding, this.options.store, async () => { throw new Error('DESKTOP_RECOVERY_NETWORK_FORBIDDEN'); });
+        const signed = prior ?? await client.signExecutionStop({ version: 1, stopId: randomUUID(), gatewayId: record.binding.gatewayId,
+          deviceId: record.deviceId, grantId: record.grant.grantId, authorizationRevision: record.authorizationRevision,
+          leaseGeneration: record.leaseGeneration, executionStopped: true });
+        await this.options.stopOutbox.save(record.binding, signed);
+        await this.options.grantLedger.close(record);
+      }
+    } finally { journal?.close(); lease?.close(); this.recoveringStops = false; }
   }
   async flushStopReceipts(epoch: unknown, id: unknown): Promise<void> {
     if (!this.options.stopOutbox) return;
-    if (this.active || this.deliveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
+    if (this.active || this.deliveringStops || this.recoveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
     this.deliveringStops = true;
-    try { await this.deliverStopReceipts(epoch, id); }
+    try { await this.recoverStoppedGrants(); await this.deliverStopReceipts(epoch, id); }
     finally { this.deliveringStops = false; }
   }
   private async deliverStopReceipts(epoch: unknown, id: unknown): Promise<void> {
@@ -160,12 +207,13 @@ export class DesktopExecutionManager {
     } finally { channel.close(); }
   }
   async start(epoch: unknown, id: unknown, workspace?: WorkspaceContext): Promise<void> {
-    if (this.active || this.deliveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
+    if (this.active || this.deliveringStops || this.recoveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
     const snapshot = this.options.manager.snapshot();
     if (!isConnectionId(id) || epoch !== snapshot.epoch || id !== snapshot.selectedId) throw new Error('STALE_CONNECTION_EPOCH');
     if (!this.options.foreground()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
     await this.cleanup;
-    if (this.active || this.deliveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
+    await this.recoverStoppedGrants();
+    if (this.active || this.deliveringStops || this.recoveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
     if (epoch !== this.options.manager.snapshot().epoch) throw new Error('STALE_CONNECTION_EPOCH');
     const profile = snapshot.profiles.find(profile => profile.id === id);
     if (!profile?.identity) throw new Error('DESKTOP_PINNED_GATEWAY_REQUIRED');
@@ -205,6 +253,11 @@ export class DesktopExecutionManager {
       current(); if (!this.options.foreground()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
       // Record the expected revision before POST, so a lost acknowledgement can still be revoked by exact grant identity.
       run.proposed = grant; run.expectedRevision = previous.revision + 1;
+      if (this.options.grantLedger && run.stopProofSupported) {
+        const record: DesktopExecutionGrantRecord = { version: 1, binding, transport: run.transport, deviceId: run.deviceId,
+          grant, authorizationRevision: run.expectedRevision, leaseGeneration: run.lease.generation, parentPid: process.pid };
+        await this.options.grantLedger.save(record); run.grantRecord = record; current();
+      }
       const authorization = await client.endpointRequest('/api/desktop-host/execution', 'POST', { expectedRevision: previous.revision, grant }, run.deviceId); current();
       if (!authorization?.active || authorization.revision !== run.expectedRevision) throw new Error('DESKTOP_EXECUTION_DENIED');
       this.status = { profileId: id, state: 'connecting' };
