@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "checks": {
+    "nativeGrantCancelled": true,
+    "agentUnknownReported": true,
+    "actualBrowserSingleInput": true,
+    "unknownRetainedAfterReview": true,
+    "recoveredAfterReview": true,
+    "noReplayAfterRecovery": true,
+    "durableNativeResults": true
+  },
+  "scope": "Installed Electron with real native Browser approvals, private process group, public HTTPS isolated counter, signed device HTTP/WSS and bundled Gateway/Agent; synthetic model with same-host Gateway. Not physical WAN Gateway or platform matrix acceptance.",
+  "startedAt": "2026-11-01T13:09:01.087Z",
+  "finishedAt": "2026-11-01T13:12:20.106Z",
+  "packageBefore": {
+    "files": 1432,
+    "sha256": "ee5e1cab02d93280dfaec6a7808987ae0309d9eb04e624601b4959e418162fdb"
+  },
+  "packageAfter": {
+    "files": 1432,
+    "sha256": "ee5e1cab02d93280dfaec6a7808987ae0309d9eb04e624601b4959e418162fdb"
+  },
+  "dropped": {
+    "operationId": "901fb7d6-e7d2-4d80-8c60-a90ecf814e10"
+  }
+}

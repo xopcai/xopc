@@ -241,7 +241,7 @@ export class AgentToolsFactory {
   }
 
   private browserRuntime: BrowserRuntime | null = null;
-  private readonly deviceBrowserRuntimes = new Map<string, { owner: string; runtime: RemoteDeviceBrowserRuntime }>();
+  private readonly deviceBrowserRuntimes = new Map<string, { owner: string; runtime: RemoteDeviceBrowserRuntime; driver?: RemoteDeviceBrowserDriver }>();
   /** Cached readiness probe keyed by the active driver configuration. */
   private browserReadinessCache: {
     key: string;
@@ -361,14 +361,22 @@ export class AgentToolsFactory {
     const key = JSON.stringify([owner, endpointId]), existing = this.deviceBrowserRuntimes.get(key);
     if (existing) return existing.runtime;
     if (this.deviceBrowserRuntimes.size >= 20) throw new Error('BROWSER_REMOTE_SESSION_LIMIT');
+    const entry: { owner: string; runtime: RemoteDeviceBrowserRuntime; driver?: RemoteDeviceBrowserDriver } = { owner, runtime: undefined! };
     const runtime = new RemoteDeviceBrowserRuntime({
       getConfig: () => { const config = this.deps.getConfig?.(); if (!config) throw new Error('Browser configuration is unavailable'); return config.browser; },
-      createDriver: async () => new RemoteDeviceBrowserDriver(this.deps.endpointTools!, endpointId, owner),
+      createDriver: async () => { entry.driver = new RemoteDeviceBrowserDriver(this.deps.endpointTools!, endpointId, owner); return entry.driver; },
       resolveTarget: () => ({ kind: 'endpoint', endpointId }),
       allowedUploadRoots: [], emit: this.deps.emitBrowserEvent,
     }, () => { if (this.deviceBrowserRuntimes.get(key)?.runtime === runtime) this.deviceBrowserRuntimes.delete(key); });
-    this.deviceBrowserRuntimes.set(key, { owner, runtime });
+    entry.runtime = runtime; this.deviceBrowserRuntimes.set(key, entry);
     return runtime;
+  }
+  private async reconcileStoppedDeviceBrowsers(owner: string | undefined): Promise<void> {
+    if (!owner) return;
+    for (const [key, entry] of this.deviceBrowserRuntimes) {
+      if (entry.owner !== owner || entry.runtime.hasPendingCalls() || !entry.driver?.verifiedStopped()) continue;
+      await entry.runtime.shutdown(); this.deviceBrowserRuntimes.delete(key);
+    }
   }
   private async closeDeviceBrowserRuntimes(owner?: string): Promise<void> {
     const entries = [...this.deviceBrowserRuntimes].filter(([, entry]) => owner === undefined || entry.owner === owner);
@@ -816,7 +824,8 @@ export class AgentToolsFactory {
               getSetupService: () => this.deviceBrowserTarget(currentConversationId()) ? undefined : this.deps.getBrowserSetupService?.(),
               getAgentId: () => resolvedAgentId,
               getTaskId: () => options?.conversationId ?? this.deps.getCurrentContext()?.conversationId ?? 'default',
-              getReadiness: () => this.deviceBrowserTarget(currentConversationId()) ? Promise.resolve(null) : this.checkBrowserReadinessCached(),
+              getReadiness: async () => { await this.reconcileStoppedDeviceBrowsers(currentConversationId());
+                return this.deviceBrowserTarget(currentConversationId()) ? null : this.checkBrowserReadinessCached(); },
             }),
           ]
         : []),

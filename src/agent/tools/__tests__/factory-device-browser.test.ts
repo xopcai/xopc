@@ -9,11 +9,13 @@ import { createBrowserDriver } from '../../../browser/drivers/create-driver.js';
 import { invokeRemoteBrowserCommand } from '../../../browser/remote/endpoint-transport.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import { closeXopcDatabase } from '../../../storage/sqlite/connection.js';
+import { hasVerifiedDesktopExecutionStop } from '../../../storage/sqlite/desktop-execution-stop-repository.js';
 import { AgentToolsFactory } from '../factory.js';
 
 vi.mock('../../../browser/index.js', async original => ({ ...await original<object>(), checkBrowserReadiness: vi.fn() }));
 vi.mock('../../../browser/drivers/create-driver.js', () => ({ createBrowserDriver: vi.fn() }));
 vi.mock('../../../browser/remote/endpoint-transport.js', () => ({ invokeRemoteBrowserCommand: vi.fn() }));
+vi.mock('../../../storage/sqlite/desktop-execution-stop-repository.js', () => ({ hasVerifiedDesktopExecutionStop: vi.fn(() => false) }));
 beforeAll(() => initializeTestAgentCatalog());
 afterAll(() => closeXopcDatabase());
 it('routes the public browser_use tool to its explicit independent device without server readiness, setup or driver launch', async () => {
@@ -43,6 +45,12 @@ it('routes the public browser_use tool to its explicit independent device withou
   originEndpoint = randomUUID();
   await expect(tool.execute('other-device', { action: 'observe' })).rejects.toThrow('PREVIOUS_SESSION_UNRELEASED');
   expect(invokeRemoteBrowserCommand).toHaveBeenCalledTimes(before); expect(createBrowserDriver).not.toHaveBeenCalled();
+  vi.mocked(hasVerifiedDesktopExecutionStop).mockReturnValue(true);
+  endpoint.endpointId = originEndpoint; endpoint.connectionId = randomUUID(); endpoint.executionAuthority.grantId = randomUUID(); endpoint.executionAuthority.authorizationRevision++;
+  expect((await tool.execute('new-explicit-device', { action: 'observe' })).details).toMatchObject({ ok: true });
+  expect(invokeRemoteBrowserCommand).toHaveBeenCalledTimes(before + 1);
+  expect(vi.mocked(invokeRemoteBrowserCommand).mock.calls.at(-1)![1]).toBe(originEndpoint);
+  expect(createBrowserDriver).not.toHaveBeenCalled();
   await factory.closeBrowserPageForSession(owner);
   expect(factory.hasBrowserSessions()).toBe(false);
 });

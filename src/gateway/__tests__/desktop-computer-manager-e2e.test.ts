@@ -18,6 +18,8 @@ import { DesktopIdentityStore } from '../../../electron/desktop/device-identity.
 import { desktopAuthTransport } from '../../../electron/desktop/device-transport.js';
 import { DesktopExecutionCatalog } from '../../../electron/desktop/execution-catalog.js';
 import { DesktopExecutionManager } from '../../../electron/desktop/execution-manager.js';
+import { DesktopExecutionStopOutbox } from '../../../electron/desktop/execution-stop-outbox.js';
+import { hasVerifiedDesktopExecutionStop } from '../../storage/sqlite/desktop-execution-stop-repository.js';
 import { GatewayConnectionPreview } from '../../../electron/gateway/connection-manager.js';
 import { ConnectionProfileStore } from '../../../electron/gateway/profiles.js';
 import { ConnectionCredentialStore } from '../../../electron/gateway/credentials.js';
@@ -41,11 +43,11 @@ it.each(['computer', 'browser'] as const)('negotiates remote %s before native co
     getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token, isGatewayReady: () => true, getExtensionLoader: () => null,
     voiceRealtime: { disconnectPrincipal: vi.fn() }, phoneStreams: { disconnectPrincipal: vi.fn() }, emit: vi.fn(),
   } as unknown as GatewayService;
-  const app = createHonoApp({ service }); let supported = false;
+  const app = createHonoApp({ service }); let supported = false, stopSupported = true;
   const server = serve({ fetch: async request => {
     const response = await app.fetch(request);
-    if (!supported && new URL(request.url).pathname === '/api/desktop-host/compatibility' && response.ok) {
-      const value = await response.json(); delete value.payload.capabilities[capability];
+    if ((!supported || !stopSupported) && new URL(request.url).pathname === '/api/desktop-host/compatibility' && response.ok) {
+      const value = await response.json(); if (!supported) delete value.payload.capabilities[capability]; if (!stopSupported) delete value.payload.capabilities.executionStopVersion;
       return Response.json(value, { status: response.status, headers: response.headers });
     }
     return response;
@@ -90,12 +92,15 @@ it.each(['computer', 'browser'] as const)('negotiates remote %s before native co
       current: () => true, createBroker: () => ({ execute: browserExecute, dispose: browserStop }), uploadFrame,
     }));
     const createControl = kind === 'computer' ? createComputer : createBrowser;
-    execution = new DesktopExecutionManager({ manager, store, executorRoot: join(root, 'executor'), catalog, appVersion: 'fixture', foreground: () => true,
+    const stopOutbox = new DesktopExecutionStopOutbox(join(root, 'stop-outbox'), encryption);
+    execution = new DesktopExecutionManager({ manager, store, stopOutbox, executorRoot: join(root, 'executor'), catalog, appVersion: 'fixture', foreground: () => true,
       consent, confirm: async () => true, createWorker: () => { throw new Error('Generic executor is forbidden'); }, createComputer, createBrowser });
-    const stopResources = vi.fn(async () => ({ confirmed: true }));
+    let resourcesStopped = true;
+    const stopResources = vi.fn(async () => ({ confirmed: resourcesStopped }));
     const start = () => execution!.start(manager.snapshot().epoch, id, { kind, catalog, stopResources });
     await expect(start()).rejects.toThrow('UNSUPPORTED'); expect(consent).not.toHaveBeenCalled(); expect(createControl).not.toHaveBeenCalled();
     supported = true;
+    stopSupported = false; await expect(start()).rejects.toThrow('STOP_UNSUPPORTED'); expect(consent).not.toHaveBeenCalled(); expect(createControl).not.toHaveBeenCalled(); stopSupported = true;
     await expect(start()).rejects.toThrow('CONSENT_DENIED'); expect(createControl).not.toHaveBeenCalled();
     expect(getDevice(deviceId)?.scopes).not.toContain('desktop.execute');
     allow = true; await start();
@@ -112,8 +117,15 @@ it.each(['computer', 'browser'] as const)('negotiates remote %s before native co
       expect(browserExecute).toHaveBeenCalledOnce(); expect(createComputer).not.toHaveBeenCalled();
     }
     const before = stopResources.mock.calls.length;
+    const scope = { gatewayId: identity.gatewayId, deviceId, authorizationRevision: endpoints.registry.get(endpointId)!.executionAuthority!.authorizationRevision,
+      tool: descriptor.name, toolRevision: catalog.revision(descriptor.name)! };
+    resourcesStopped = false;
     await manager.select(manager.snapshot().epoch, id);
-    await vi.waitFor(() => expect(execution!.snapshot()).toMatchObject({ state: 'stopped', remoteRevocationConfirmed: true }));
+    await vi.waitFor(() => expect(execution!.snapshot()).toMatchObject({ state: 'stop-unconfirmed', remoteRevocationConfirmed: true }));
+    expect(hasVerifiedDesktopExecutionStop(scope)).toBe(false); expect(await stopOutbox.pending(binding)).toEqual([]);
+    await expect(start()).rejects.toThrow('BUSY'); resourcesStopped = true; await execution.requireStopped();
+    expect(execution!.snapshot()).toMatchObject({ state: 'stopped', remoteRevocationConfirmed: true, stopReceiptConfirmed: true });
+    expect(hasVerifiedDesktopExecutionStop(scope)).toBe(true); expect(await stopOutbox.pending(binding)).toEqual([]);
     expect(stopResources.mock.calls.length).toBeGreaterThan(before); if (kind === 'computer') expect(driver.stop).toHaveBeenCalled(); else expect(browserStop).toHaveBeenCalled();
     expect(execution.origin()).toBeUndefined(); expect(getDevice(deviceId)?.scopes).not.toContain('desktop.execute');
     expect(manager.snapshot().selectedId).toBe(id); passed = true;

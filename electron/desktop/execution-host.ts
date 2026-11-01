@@ -188,7 +188,11 @@ export class DesktopExecutionHost {
         if (!active() || ready.endpointId !== endpointId) { void this.stop(); return; }
         this.claim = { type: 'endpoint', endpointId, token: ready.turnToken };
         controller.connect(message => client.sendEndpointMessage(message));
-      }, onMessage: message => { if (active() && this.claim) void controller.handleMessage(message).catch(error => {
+      }, onMessage: message => { if (active() && this.claim) void controller.handleMessage(message).then(() => {
+        if (!this.stopped && (this.options.journal.hasUnknown() || this.options.journal.hasUnconfirmedStops())) {
+          this.options.onState('error', 'DESKTOP_OPERATION_RECONCILIATION_REQUIRED'); void this.stop();
+        }
+      }).catch(error => {
         log.warn({ err: error, phase: 'device_control_frame', frameType: message.type }, 'Device control frame failed; stopping the executor');
         void this.stop();
       }); },

@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { registerDesktopExecutionStopPublicRoutes } from './desktop-execution-stop.js';
 
 import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -56,7 +57,8 @@ const pairingSetupSchema = z.strictObject({
   targetKind: z.enum(['mobile', 'browser']),
 });
 
-export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPublicRouteOptions): void {
+export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPublicRouteOptions & { onDesktopExecutionStopped?(deviceId: string): void }): void {
+  registerDesktopExecutionStopPublicRoutes(app, { ...options, onStopped: options?.onDesktopExecutionStopped });
   app.post('/api/gateway-identity/challenge', publicDeviceRateLimit('challenge', options), bodyLimit({ maxSize: 512 }), async (c) => {
     const budget = buckets.identityChallenge().consume('gateway');
     if (!budget.allowed) {

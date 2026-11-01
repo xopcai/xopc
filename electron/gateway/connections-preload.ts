@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('gatewayConnections', Object.freeze({
   startWorkspace: (epoch: number, id: string) => ipcRenderer.invoke('connections:workspace-start', epoch, id),
   startComputer: (epoch: number, id: string) => ipcRenderer.invoke('connections:computer-start', epoch, id),
   startBrowser: (epoch: number, id: string) => ipcRenderer.invoke('connections:browser-start', epoch, id),
+  flushStopReceipts: (epoch: number, id: string) => ipcRenderer.invoke('connections:stop-receipts', epoch, id),
   startContainer: (epoch: number, id: string, workspaceId?: string) => ipcRenderer.invoke('connections:container-start', epoch, id, workspaceId),
   startTerminal: (epoch: number, id: string, workspaceId?: string) => ipcRenderer.invoke('connections:container-start', epoch, id, workspaceId, 'terminal'),
   listContainers: (epoch: number, id: string) => ipcRenderer.invoke('connections:container-list', epoch, id),

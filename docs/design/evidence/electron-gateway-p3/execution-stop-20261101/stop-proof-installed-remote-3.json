@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "startedAt": "2026-11-01T13:13:46.853Z",
+  "finishedAt": "2026-11-01T13:13:57.880Z",
+  "packageBefore": {
+    "files": 1432,
+    "sha256": "20e7c4ae6d794d1aade5c980a5fee4fe979980385fce53f46ecea55f5e129177"
+  },
+  "packageAfter": {
+    "files": 1432,
+    "sha256": "20e7c4ae6d794d1aade5c980a5fee4fe979980385fce53f46ecea55f5e129177"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  }
+}

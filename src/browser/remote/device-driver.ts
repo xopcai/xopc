@@ -5,6 +5,7 @@ import { REMOTE_BROWSER_CONTROL_TOOL, type RemoteBrowserCommand, type RemoteBrow
 import { z } from 'zod';
 
 import { hasReviewedDesktopExecutionStop } from '../../storage/sqlite/desktop-operation-repository.js';
+import { hasVerifiedDesktopExecutionStop } from '../../storage/sqlite/desktop-execution-stop-repository.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/runtime.js';
 import type { BrowserDriver, BrowserPrimitiveInput } from '../drivers/browser-driver.js';
 import { invokeRemoteBrowserCommand } from './endpoint-transport.js';
@@ -54,17 +55,21 @@ export class RemoteDeviceBrowserDriver implements BrowserDriver {
     this.session = sessionId;
   }
   async disconnect(): Promise<void> { if (this.session) await this.closeSession(this.session); }
+  verifiedStopped(): boolean {
+    const bound = this.bound; if (!bound) return false;
+    const scope = { gatewayId: bound.gatewayId, deviceId: bound.deviceId, authorizationRevision: bound.revision,
+      tool: REMOTE_BROWSER_CONTROL_TOOL as typeof REMOTE_BROWSER_CONTROL_TOOL, toolRevision: bound.toolRevision };
+    try { return hasVerifiedDesktopExecutionStop(scope) || hasReviewedDesktopExecutionStop(scope); } catch { return false; }
+  }
   async closeSession(sessionId: string, target?: BrowserTarget): Promise<void> {
     if (this.session !== sessionId) throw new Error('BROWSER_REMOTE_SESSION_MISMATCH');
     this.target(target);
-    if (this.used) {
+    if (this.used && !this.verifiedStopped()) {
       try {
         const result = await this.send(sessionId, { action: 'close' }, target);
         if ('error' in result || !result.receipt.verified) throw new Error('BROWSER_REMOTE_RELEASE_UNCONFIRMED');
       } catch (error) {
-        const bound = this.bound;
-        if (!bound || !hasReviewedDesktopExecutionStop({ gatewayId: bound.gatewayId, deviceId: bound.deviceId,
-          authorizationRevision: bound.revision, tool: REMOTE_BROWSER_CONTROL_TOOL, toolRevision: bound.toolRevision })) throw error;
+        if (!this.verifiedStopped()) throw error;
       }
     }
     this.session = undefined; this.used = false;
