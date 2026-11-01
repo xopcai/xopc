@@ -73,3 +73,15 @@ it('keeps lost durable completion unknown on recovery and refuses another start'
   expect(journal.inspect(operation)).toMatchObject({ state: 'unknown', invocationId, connectionInstanceId });
   expect(() => journal!.start(operation, { invocationId: randomUUID(), connectionInstanceId: randomUUID() })).toThrow('DESKTOP_OPERATION_STATE_INVALID');
 });
+
+it('reads a journal fingerprint written by the original v1 intent schema without reinterpreting its identity', () => {
+  lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
+  const operation: DesktopOperationIntent = { operationId: '00000000-0000-4000-8000-000000000001', gatewayId: '00000000-0000-4000-8000-000000000002',
+    deviceId: '00000000-0000-4000-8000-000000000003', workspaceId: '00000000-0000-4000-8000-000000000004', tool: 'fixture.write',
+    argumentHash: 'a'.repeat(64), toolRevision: 'b'.repeat(64), authorizationRevision: 3, expiresAt: 1800000000000 };
+  const fixture = new DatabaseSync(join(directory, 'operations.db'));
+  fixture.prepare('INSERT INTO operations(operation_id,fingerprint,generation,state,updated_at) VALUES (?,?,?,?,?)')
+    .run(operation.operationId, 'a450b44a1b01a48b3c81a656d179208de17ac0b7192851b2ce9862875dd00c13', randomUUID(), 'succeeded', Date.now());
+  fixture.close();
+  expect(journal.record(operation)).toMatchObject({ fresh: false, receipt: { state: 'succeeded', executionStopped: true } });
+});

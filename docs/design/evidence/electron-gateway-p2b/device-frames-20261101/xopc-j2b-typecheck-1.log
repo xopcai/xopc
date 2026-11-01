@@ -1,0 +1,6 @@
+$ tsc --noEmit -p tsconfig.json && pnpm run typecheck:electron
+$ tsc -p tsconfig.electron.json
+electron/desktop/operation-journal.ts(125,49): error TS2503: Cannot find namespace 'z'.
+electron/desktop/operation-journal.ts(135,160): error TS2503: Cannot find namespace 'z'.
+[ELIFECYCLE] Command failed with exit code 2.
+[ELIFECYCLE] Command failed with exit code 2.

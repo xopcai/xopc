@@ -1,5 +1,6 @@
 import {
   clientEndpointMessageSchema,
+  desktopDeviceFrameProofSchema,
   endpointHelloPayloadSchema,
   serverEndpointMessageSchema,
 } from '@xopcai/endpoint-tools-protocol';
@@ -10,7 +11,7 @@ export const REALTIME_MAX_CLIENT_FRAME_BYTES = 256 * 1024;
 export const REALTIME_HELLO_TIMEOUT_MS = 5_000;
 export const REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
 export const REALTIME_HEARTBEAT_TIMEOUT_MS = 45_000;
-export const REALTIME_CAPABILITIES = ['realtime.capability-negotiation.v1'] as const;
+export const REALTIME_CAPABILITIES = ['realtime.capability-negotiation.v1', 'desktop.device-frames.v1'] as const;
 export type RealtimeCapability = (typeof REALTIME_CAPABILITIES)[number];
 export const REALTIME_COMPATIBILITY_ERROR_CODES = [
   'CLIENT_UPDATE_REQUIRED',
@@ -76,6 +77,7 @@ export const clientRealtimeMessageSchema = z.discriminatedUnion('kind', [
   })),
   envelope('realtime.ping', z.object({})),
   envelope('endpoint.message', clientEndpointMessageSchema),
+  envelope('desktop.endpoint.message', z.strictObject({ message: clientEndpointMessageSchema, deviceProof: desktopDeviceFrameProofSchema })),
 ]);
 
 export const realtimeEventPayloadSchema = z.object({

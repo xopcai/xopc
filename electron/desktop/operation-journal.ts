@@ -3,22 +3,12 @@ import { chmodSync, mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
-import { z } from 'zod';
+import { desktopOperationAttemptSchema as attemptSchema, desktopOperationIntentSchema as intentSchema,
+  type DesktopOperationAttempt, type DesktopOperationIntent, type DesktopOperationState, type DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
 
 import { requireNodeSqlite } from '../../src/infra/node-sqlite.js';
 
-const attemptSchema = z.strictObject({ invocationId: z.uuid(), connectionInstanceId: z.uuid() });
-const intentSchema = z.strictObject({
-  operationId: z.uuid(), gatewayId: z.uuid(), deviceId: z.uuid(), workspaceId: z.uuid().optional(),
-  tool: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_.-]+$/), argumentHash: z.string().regex(/^[a-f0-9]{64}$/),
-  toolRevision: z.string().regex(/^[a-f0-9]{64}$/), authorizationRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-  expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-});
-export type DesktopOperationIntent = z.infer<typeof intentSchema>;
-export type DesktopOperationState = 'recorded' | 'running' | 'cancel-requested' | 'succeeded' | 'failed' | 'stopped' | 'unknown';
-export type DesktopOperationReceipt = {
-  operationId: string; state: DesktopOperationState; resultHash?: string; updatedAt: number; invocationId?: string; connectionInstanceId?: string; executionStopped: boolean;
-};
+export type { DesktopOperationIntent, DesktopOperationState, DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
 type Row = { stop_confirmed: number; invocation_id: string | null; connection_instance_id: string | null; fingerprint: string; state: DesktopOperationState; result_hash: string | null; updated_at: number };
 
 /** OS-released SQLite lock. Every executor must use the same trusted per-user root. */
@@ -132,7 +122,7 @@ export class DesktopOperationJournal {
       return { fresh: true, receipt: this.receipt(intent, this.row(database, intent)!) };
     });
   }
-  start(input: DesktopOperationIntent, attempt: z.infer<typeof attemptSchema>): DesktopOperationReceipt {
+  start(input: DesktopOperationIntent, attempt: DesktopOperationAttempt): DesktopOperationReceipt {
     return this.transition(input, ['recorded'], 'running', undefined, true, attemptSchema.parse(attempt));
   }
   requestStop(input: DesktopOperationIntent): DesktopOperationReceipt {
@@ -142,7 +132,7 @@ export class DesktopOperationJournal {
     if (resultHash !== undefined && !/^[a-f0-9]{64}$/.test(resultHash)) throw new Error('DESKTOP_OPERATION_RESULT_INVALID');
     return this.transition(input, ['running', 'cancel-requested'], state, resultHash);
   }
-  private transition(input: DesktopOperationIntent, from: DesktopOperationState[], state: DesktopOperationState, hash?: string, checkExpiry = false, attempt?: z.infer<typeof attemptSchema>): DesktopOperationReceipt {
+  private transition(input: DesktopOperationIntent, from: DesktopOperationState[], state: DesktopOperationState, hash?: string, checkExpiry = false, attempt?: DesktopOperationAttempt): DesktopOperationReceipt {
     const intent = intentSchema.parse(input);
     return this.write(database => {
       const previous = this.row(database, intent);

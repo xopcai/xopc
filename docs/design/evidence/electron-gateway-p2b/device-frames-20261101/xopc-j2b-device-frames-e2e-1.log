@@ -1,0 +1,52 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T00:54:56.797Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T00:54:56.805Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T00:54:56.809Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T00:54:57.332Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-Nh13FQ/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T00:54:57.473Z","module":"EndpointTools","endpointId":"5188ff18-b5fd-4ea3-b745-29c80f761a42:signed-state","connectionId":"a330bdf6-65e2-4bb3-96de-405e2b1d07dd","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T00:54:57.473Z","module":"Realtime","connectionId":"a330bdf6-65e2-4bb3-96de-405e2b1d07dd","principalId":"5188ff18-b5fd-4ea3-b745-29c80f761a42","clientId":"e0d2f816-6032-4ce0-b492-5a42551ad0e0","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T00:54:57.479Z","module":"Realtime","connectionId":"a330bdf6-65e2-4bb3-96de-405e2b1d07dd","code":1006,"msg":"Realtime client disconnected (1006)"}
+{"level":"info","time":"2026-11-01T00:54:57.506Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-nMDJmu/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T00:54:57.599Z","module":"EndpointTools","endpointId":"6d6178b9-774f-4718-a8eb-ccebfa2e8b79:signed-state","connectionId":"fbb501c9-201f-460f-9692-6144cde28df7","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T00:54:57.599Z","module":"Realtime","connectionId":"fbb501c9-201f-460f-9692-6144cde28df7","principalId":"6d6178b9-774f-4718-a8eb-ccebfa2e8b79","clientId":"c6fc378e-4911-4a49-b5bb-55c315dc71cd","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T00:54:57.604Z","module":"Realtime","connectionId":"fbb501c9-201f-460f-9692-6144cde28df7","code":1006,"msg":"Realtime client disconnected (1006)"}
+{"level":"info","time":"2026-11-01T00:54:57.631Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-mqUomn/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T00:54:57.710Z","module":"EndpointTools","endpointId":"c81d0c4b-c8e1-464b-b1f7-24dc8f98a419:signed-state","connectionId":"9b533197-fe1c-4a0f-9d04-9fb19ce98190","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T00:54:57.710Z","module":"Realtime","connectionId":"9b533197-fe1c-4a0f-9d04-9fb19ce98190","principalId":"c81d0c4b-c8e1-464b-b1f7-24dc8f98a419","clientId":"b7797d1c-d2c3-4b9a-a0a6-64d39982d479","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T00:54:57.715Z","module":"Realtime","connectionId":"9b533197-fe1c-4a0f-9d04-9fb19ce98190","code":1006,"msg":"Realtime client disconnected (1006)"}
+{"level":"info","time":"2026-11-01T00:54:57.741Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-xcAC0c/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T00:54:57.818Z","module":"EndpointTools","endpointId":"47093ef2-ac93-47d1-ab66-72c37e4e06fd:signed-state","connectionId":"b9ec0a10-d108-4f63-99de-181f5b3d9edd","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T00:54:57.818Z","module":"Realtime","connectionId":"b9ec0a10-d108-4f63-99de-181f5b3d9edd","principalId":"47093ef2-ac93-47d1-ab66-72c37e4e06fd","clientId":"f6173b22-1c95-4a78-ae59-183216bea113","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T00:54:57.822Z","module":"Realtime","connectionId":"b9ec0a10-d108-4f63-99de-181f5b3d9edd","code":1006,"msg":"Realtime client disconnected (1006)"}
+ ❯ |integration| src/gateway/__tests__/desktop-device-frames-e2e.test.ts (4 tests | 4 failed) 519ms
+   × negotiates independently signed device results through real authenticated Gateway routes and rejects unsigned frames 176ms
+   × negotiates independently signed device results through real authenticated Gateway routes and rejects replay frames 123ms
+   × negotiates independently signed device results through real authenticated Gateway routes and rejects tampered frames 111ms
+   × negotiates independently signed device results through real authenticated Gateway routes and rejects grant-revision frames 108ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |integration| src/gateway/__tests__/desktop-device-frames-e2e.test.ts > negotiates independently signed device results through real authenticated Gateway routes and rejects unsigned frames
+ FAIL  |integration| src/gateway/__tests__/desktop-device-frames-e2e.test.ts > negotiates independently signed device results through real authenticated Gateway routes and rejects replay frames
+ FAIL  |integration| src/gateway/__tests__/desktop-device-frames-e2e.test.ts > negotiates independently signed device results through real authenticated Gateway routes and rejects tampered frames
+ FAIL  |integration| src/gateway/__tests__/desktop-device-frames-e2e.test.ts > negotiates independently signed device results through real authenticated Gateway routes and rejects grant-revision frames
+Error: DESKTOP_GATEWAY_FRAME_INVALID
+ ❯ verifyDesktopGatewayFrame src/endpoint-tools/desktop-frame.ts:26:19
+     24|       || !['realtime.ready', 'endpoint.message'].includes(message.kind…
+     25|     return { sequence: proof.sequence, message };
+     26|   } catch { throw new Error('DESKTOP_GATEWAY_FRAME_INVALID'); }
+       |                   ^
+     27| }
+     28|
+ ❯ src/gateway/__tests__/desktop-device-frames-e2e.test.ts:73:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  08:54:54
+   Duration  3.11s (transform 1.53s, setup 11ms, import 2.52s, tests 519ms, environment 0ms)
+

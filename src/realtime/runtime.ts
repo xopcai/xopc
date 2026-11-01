@@ -26,7 +26,8 @@ import { EndpointToolPolicyError } from '../endpoint-tools/policy.js';
 import type { EndpointTransport } from '../endpoint-tools/registry.js';
 import { assertDesktopObservationHello } from '../endpoint-tools/desktop-observation.js';
 import { signDesktopGatewayFrame, type DesktopFrameBinding } from '../endpoint-tools/desktop-frame.js';
-import { getDevice } from '../storage/sqlite/device-access-repository.js';
+import { DesktopDeviceFrameVerifier } from '../endpoint-tools/desktop-device-frame.js';
+import { getDevice, getDesktopStateObservation } from '../storage/sqlite/device-access-repository.js';
 import { getEndpointPrincipal } from '../storage/sqlite/endpoint-principal-repository.js';
 import { getOrCreateGatewayIdentity, signGatewayPayload } from '../storage/sqlite/gateway-identity-repository.js';
 import { createLogger } from '../utils/logger.js';
@@ -167,6 +168,7 @@ export class RealtimeRuntime {
     let principalId: string | undefined;
     let grantedScopes: readonly GatewayScope[] = [];
     let desktopBinding: DesktopFrameBinding | undefined;
+    let desktopDeviceFrames: { verifier: DesktopDeviceFrameVerifier; authorizationRevision: number } | undefined;
     let desktopSequence = 0;
     let desktopReady = false;
     const pendingDesktopFrames: ServerRealtimeMessage[] = [];
@@ -305,7 +307,18 @@ export class RealtimeRuntime {
             assertDesktopObservationHello(device, message.payload.endpoint, getEndpointPrincipal(device.id)?.publicKey);
             desktopBinding = { gatewayId: getOrCreateGatewayIdentity().id, deviceId: device.id, clientId: claim.clientId,
               connectionInstanceId: message.payload.endpoint.connectionInstanceId };
+            const frames = message.payload.endpoint.deviceFrames;
+            if (frames) {
+              if (!message.payload.capabilities?.includes('desktop.device-frames.v1')
+                || getDesktopStateObservation(device.id)?.revision !== frames.authorizationRevision) throw new Error('DESKTOP_DEVICE_FRAME_INVALID');
+              desktopDeviceFrames = { authorizationRevision: frames.authorizationRevision,
+                verifier: new DesktopDeviceFrameVerifier({ ...desktopBinding, authorizationRevision: frames.authorizationRevision },
+                  crypto.createPublicKey({ key: device.publicKeyJwk, format: 'jwk' }).export({ type: 'spki', format: 'pem' }).toString()) };
+            }
           } catch { socket.close(4401, 'Desktop observation is not authorized'); return; }
+        }
+        if (message.payload.endpoint?.deviceFrames && !desktopDeviceFrames) {
+          socket.close(4401, 'Device frame proof requires an independently authenticated desktop'); return;
         }
         let endpointReady: { endpointId: string; turnToken: string } | undefined;
         if (message.payload.endpoint) {
@@ -387,7 +400,16 @@ export class RealtimeRuntime {
         sendError('ENDPOINT_NOT_REGISTERED', 'Endpoint messages require an endpoint identity');
       } else {
         try {
-          this.endpointTools.handleMessage(endpointId, connectionId, message.payload);
+          if (desktopDeviceFrames) {
+            const device = desktopBinding && getDevice(desktopBinding.deviceId);
+            if (message.kind !== 'desktop.endpoint.message' || !device || device.revokedAt !== undefined
+              || getDesktopStateObservation(device.id)?.revision !== desktopDeviceFrames.authorizationRevision) throw new Error('DESKTOP_DEVICE_FRAME_INVALID');
+            const verified = desktopDeviceFrames.verifier.verify(JSON.stringify(message.payload));
+            this.endpointTools.handleMessage(endpointId, connectionId, verified);
+          } else {
+            if (message.kind !== 'endpoint.message') throw new Error('DESKTOP_DEVICE_FRAME_NOT_NEGOTIATED');
+            this.endpointTools.handleMessage(endpointId, connectionId, message.payload);
+          }
         } catch (error) {
           log.warn({ err: error, endpointId, connectionId }, 'Realtime endpoint message failed');
           socket.close(4400, 'Invalid endpoint message');

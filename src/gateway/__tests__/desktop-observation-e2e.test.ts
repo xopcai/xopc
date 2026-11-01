@@ -31,7 +31,7 @@ async function until(probe: () => boolean | Promise<boolean>, timeout = 10000) {
   throw new Error('Desktop observation E2E condition timed out');
 }
 
-it('executes only explicitly approved state reads over authenticated HTTP and signed Endpoint realtime, then stops on forged commands and revocation', async () => {
+it.each([false, true])('executes only explicitly approved state reads with legacy device frames %s, then stops on forged commands and revocation', async legacyFrames => {
   const directory = await mkdtemp(join(tmpdir(), 'xopc-desktop-observation-'));
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'gateway.db') });
   const endpoints = new EndpointToolRuntime({ uploadRoot: join(directory, 'files') });
@@ -41,7 +41,14 @@ it('executes only explicitly approved state reads over authenticated HTTP and si
     getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token, isGatewayReady: () => true, getExtensionLoader: () => null,
     voiceRealtime: { disconnectPrincipal: vi.fn() }, phoneStreams: { disconnectPrincipal: vi.fn() }, emit: vi.fn(),
   } as unknown as GatewayService;
-  const app = createHonoApp({ service }), server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
+  const app = createHonoApp({ service }), server = serve({ fetch: async (request, ...args) => {
+    const response = await app.fetch(request, ...args);
+    if (legacyFrames && new URL(request.url).pathname === '/api/desktop-host/compatibility') {
+      const value = await response.json(); delete value.payload.capabilities.signedDeviceFrames;
+      return Response.json(value, { status: response.status, headers: response.headers });
+    }
+    return response;
+  }, hostname: '127.0.0.1', port: 0 });
   server.on('upgrade', (request, socket, head) => { if (!realtime.handleUpgrade(request, socket, head)) socket.destroy(); });
   let observer: DesktopObservationManager | undefined, channel: ReturnType<typeof desktopAuthTransport> | undefined;
   try {
@@ -78,10 +85,11 @@ it('executes only explicitly approved state reads over authenticated HTTP and si
     consent = true; revokeDuringConsent = true;
     await expect(observer.start(manager.snapshot().epoch, id)).rejects.toThrow('DESKTOP_OBSERVATION_REVISION_CHANGED');
     expect(getDevice(deviceId)?.scopes).not.toContain('desktop.observe.state'); expect(reads).toBe(0);
-    const instances: string[] = [];
+    const instances: string[] = [], clientFrames: string[] = [];
     (realtime as unknown as { wss: WebSocketServer }).wss.on('connection', socket => socket.on('message', data => {
       const message = JSON.parse(String(data));
       if (message.kind === 'realtime.hello' && message.payload.endpoint) instances.push(message.payload.endpoint.connectionInstanceId);
+      if (['endpoint.message', 'desktop.endpoint.message'].includes(message.kind)) clientFrames.push(message.kind);
     }));
     revokeDuringConsent = false;
     await observer.start(manager.snapshot().epoch, id); await until(() => Boolean(observer?.origin()));
@@ -106,6 +114,8 @@ it('executes only explicitly approved state reads over authenticated HTTP and si
     const resumedResult = await endpoints.invocations.invoke({ endpointId: resumed.endpointId, toolCallId: randomUUID(), toolName: 'desktop.device.get_state', arguments: {}, descriptorRevision: resumed.tools[0].revision });
     expect(resumedResult.content).toMatchObject([{ type: 'json', value: { platform: 'fixture' } }]);
     expect(reads).toBe(2);
+    expect(clientFrames.length).toBeGreaterThanOrEqual(4);
+    expect(clientFrames.every(kind => kind === (legacyFrames ? 'endpoint.message' : 'desktop.endpoint.message'))).toBe(true);
     await expect(endpoints.invocations.invoke({ endpointId: endpoint.endpointId, toolCallId: randomUUID(), toolName: 'desktop.file.save', arguments: {}, descriptorRevision: endpoint.tools[0].revision })).rejects.toMatchObject({ code: 'TOOL_NOT_FOUND' });
     const wrongKey = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).publicKey.export({ type: 'spki', format: 'der' }).toString('base64url');
     await expect(client.endpointRequest('/api/endpoint-tools/principals', 'POST', { principalId: deviceId, displayName: 'State-only desktop', kind: 'desktop', platform: 'desktop', publicKey: wrongKey })).rejects.toThrow('DESKTOP_OBSERVATION_DENIED');

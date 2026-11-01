@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-11-01T01:01:24.095Z",
+  "sources": {
+    "electron/desktop/device-auth.ts": "13149859a84e31557e183a4b8f1db703300291bc7373196eb5e6bbb8c3c42f97",
+    "electron/desktop/observation-host.ts": "474f9e5fe15b17d1c322b7a6d31740820501533727780b5e6ee29e2d7d0dd67e",
+    "electron/desktop/observation-manager.ts": "5c3387b61df8d557527e9814f559e0f390c97e8b70cce536824d015c11f30080",
+    "electron/desktop/execution-session.ts": "8a1e46656a8450f6c0928881fad764514bf4e65ac45379d63a3505b8d6c4d7da",
+    "electron/desktop/operation-journal.ts": "17fe25f3d09d56bccb337097b662cb95ef70471ed8c13d6cb38e4023e280574b",
+    "src/endpoint-tools/desktop-device-frame.ts": "97ceae37de3ebad3ca5d71e53eaa19fbe8e05ef37bb752756c3b6a1bed1bbb39",
+    "src/realtime/runtime.ts": "78f81d1eb888fa47e6e5579a8fcebc728fd4b9274902c3d15d6f623db1488d1d",
+    "packages/endpoint-tools-protocol/src/index.ts": "5c1d66b74e1341a12ab1c323cdcd7d2becf74808bcdfe57df8381fd90b3b2ec5",
+    "packages/endpoint-tools-protocol/src/execution.ts": "9ec5eabed091934c4fde7216e31b967edeb0992dad099eb850b9b2ede91ba543",
+    "packages/realtime-protocol/src/index.ts": "612ed8b35dce5ee2e763aa7bd0006be7eb916c240ec55dbc83d3819a19dfa9b7",
+    "packages/gateway-contract/src/desktop-host.ts": "39ede2872712fe3c292b97b26c42639e211be6e7070f73ebd5cee7fa592abfa0"
+  },
+  "unwiredAdapterNote": "execution-session.ts close persistence fix is tested source; the adapter is not imported by the packaged Host."
+}
