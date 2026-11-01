@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T13:44:32.532Z",
+  "finishedAt": "2026-11-01T13:45:02.067Z",
+  "scope": "Installed macOS app local spawn/reuse, real bundled Gateway/SQLite/IPC/PTY/browser with deterministic inference; not upgrade or S5 acceptance",
+  "packageBefore": {
+    "files": 1432,
+    "sha256": "46994c1895d19a3e0b2c4779535bd598c99f3498d8103566eed39872dede397e"
+  },
+  "packageAfter": {
+    "files": 1432,
+    "sha256": "46994c1895d19a3e0b2c4779535bd598c99f3498d8103566eed39872dede397e"
+  }
+}
