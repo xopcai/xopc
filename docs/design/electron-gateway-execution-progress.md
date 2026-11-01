@@ -80,3 +80,5 @@ P3c-3已实现Gateway/Host/Agent及原生授权入口的PTY专用接线，源代
 PTY原生第3轮已通过完整打开/取消输入/批准输入/输出/resize/关闭及一次真实写入。前两轮原生sheet接管焦点导致停止，失败保留；Main现在只对当前可信、可见、同代次、未取消确认框且应用仍活动的情况认可Native焦点，切到其他应用或锁屏仍失效。新版本地/旧266复用通过。目录浏览与可恢复同步缓存归档也完成实际安装包原生整轮、未知副本归档拒绝与A/B隔离，详见[文件管理证据](./evidence/electron-gateway-p3/file-management-20261101/README.md)。继续剩余功能；最终main合并/构建仍未进行。
 
 普通应用 File 菜单现在提供 Gateway 连接管理入口，通过现有退出确认及清理后重启；取消清除切换意图。新安装包新建/旧 Gateway 复用的实际菜单切换与原本地功能回归通过，1025 项相关回归通过、15 项已有条件跳过（集合重叠）。两个测试脚本观测失败已保留，未放宽预算，见[证据](./evidence/electron-gateway-p3/mode-entry-20261101/README.md)。仍需继续 P3d/P4、磁盘约束及最终 main 构建；未提前合入。
+
+P3d 前置的实际父进程 SIGKILL 私有 driver 清理验证通过（约37ms，原3秒预算不变），使用隔离开发 Electron 与包内SDK/driver，无截图或桌面动作；测试脚本失败及修复保留，见[证据](./evidence/electron-gateway-p3/computer-parent-liveness-20261101/README.md)。仅为清理前提，不宣称 Computer 远端能力或安装包完整验收。
