@@ -86,6 +86,7 @@ import {
 } from './auto-updater.js';
 import { getElectronMenuMessages, type ElectronUiLanguage } from './i18n.js';
 import { buildAppMenu, buildAppMenuModel, invokeAppMenuAction } from './menu.js';
+import { GatewayModeRelaunch } from './gateway/mode-relaunch.js';
 import {
   appQuitConfirmationGate,
   bypassNextAppQuitConfirmation,
@@ -149,7 +150,7 @@ function currentMenuMessages() {
 function refreshElectronMenus(language?: ElectronUiLanguage): void {
   const messages = getElectronMenuMessages(language ?? getElectronShellLanguage());
   if (mainWindow && !mainWindow.isDestroyed()) {
-    Menu.setApplicationMenu(buildAppMenu(mainWindow, messages));
+    Menu.setApplicationMenu(buildAppMenu(mainWindow, messages, { gatewayConnections: () => gatewayModeRelaunch.request() }));
     if (process.platform === 'win32') {
       mainWindow.setMenuBarVisibility(false);
     }
@@ -402,7 +403,10 @@ if (gotTheLock) {
 let appIsQuitting = false;
 let quitCleanupStarted = false;
 let quitCleanupComplete = false;
+let quitCleanupConfirmed = false;
 let quitCleanupPromise: Promise<void> | null = null;
+const gatewayModeRelaunch = new GatewayModeRelaunch({ quit: () => app.quit(), relaunch: args => app.relaunch({ args }),
+  ...(process.defaultApp ? { entry: process.argv[1] } : {}) });
 
 function approveAppQuit(): void {
   if (appQuitConfirmationGate.resolve(true)) app.quit();
@@ -442,8 +446,9 @@ async function evaluateAppQuit(): Promise<void> {
       ? await dialog.showMessageBox(owner, options)
       : await dialog.showMessageBox(options);
     if (result.response === 1) approveAppQuit();
-    else appQuitConfirmationGate.resolve(false);
+    else { gatewayModeRelaunch.cancel(); appQuitConfirmationGate.resolve(false); }
   } catch (error) {
+    gatewayModeRelaunch.cancel();
     appQuitConfirmationGate.resolve(false);
     const message = error instanceof Error ? error.message : String(error);
     appendElectronStartupLog(`quit confirmation failed: ${message}`);
@@ -893,7 +898,7 @@ function createWindow(): void {
   });
 
   const menuMessages = currentMenuMessages();
-  Menu.setApplicationMenu(buildAppMenu(win, menuMessages));
+  Menu.setApplicationMenu(buildAppMenu(win, menuMessages, { gatewayConnections: () => gatewayModeRelaunch.request() }));
   if (process.platform === 'win32') {
     win.setMenuBarVisibility(false);
   }
@@ -1347,7 +1352,7 @@ app.whenReady().then(async () => {
     if (!win || win.isDestroyed()) {
       return { ok: false as const, error: 'UNKNOWN_MENU_ACTION' as const };
     }
-    return invokeAppMenuAction(win, actionId);
+    return invokeAppMenuAction(win, actionId, { gatewayConnections: () => gatewayModeRelaunch.request() });
   });
 
   ipcMain.handle('window:fullscreen-enter', () => {
@@ -1478,11 +1483,15 @@ app.on('before-quit', (event) => {
     stopAutoUpdater();
   }
 
-  if (quitCleanupComplete) return;
+  if (quitCleanupComplete) {
+    if (quitCleanupConfirmed) gatewayModeRelaunch.finishCleanup();
+    else gatewayModeRelaunch.cancel();
+    return;
+  }
 
   event.preventDefault();
   if (!quitCleanupPromise) {
-    quitCleanupPromise = Promise.all([stopGatewayProcessAndWait(), desktopEndpointHost?.close()]).then(() => {}).finally(() => {
+    quitCleanupPromise = Promise.all([stopGatewayProcessAndWait(), desktopEndpointHost?.close()]).then(() => { quitCleanupConfirmed = true; }).finally(() => {
       quitCleanupComplete = true;
       app.quit();
     });

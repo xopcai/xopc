@@ -1,0 +1,101 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T08:22:05.875Z",
+  "scope": "Installed macOS app local spawn/reuse, real bundled Gateway/SQLite/IPC/PTY/browser with deterministic inference; not upgrade or S5 acceptance",
+  "samples": [
+    {
+      "mode": "spawn",
+      "passed": true,
+      "runtime": {
+        "executable": "/tmp/xopc-mode-entry-delivery-1/installed/xopc.app/Contents/MacOS/xopc",
+        "appAsar": "/tmp/xopc-mode-entry-delivery-1/installed/xopc.app/Contents/Resources/app.asar",
+        "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-local-JKzzz5",
+        "rendererCdpOnly": true,
+        "preserveBrowserDefaults": false,
+        "fuses": {
+          "0": 49,
+          "1": 49,
+          "2": 48,
+          "3": 48,
+          "4": 49,
+          "5": 49,
+          "6": 48,
+          "7": 48,
+          "8": 49,
+          "version": "1"
+        },
+        "pid": 16064
+      },
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "9a577183-6122-4ba2-a147-626ee0fa7a14"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "ownedRestartPreservesChat": true,
+      "connectionMenuRelaunchAfterCleanup": true
+    },
+    {
+      "mode": "reuse",
+      "passed": true,
+      "reusedDatabaseVersionBefore": "266",
+      "runtime": {
+        "executable": "/tmp/xopc-mode-entry-delivery-1/installed/xopc.app/Contents/MacOS/xopc",
+        "appAsar": "/tmp/xopc-mode-entry-delivery-1/installed/xopc.app/Contents/Resources/app.asar",
+        "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s4-local-N5fDFq",
+        "rendererCdpOnly": true,
+        "preserveBrowserDefaults": false,
+        "fuses": {
+          "0": 49,
+          "1": 49,
+          "2": 48,
+          "3": 48,
+          "4": 49,
+          "5": 49,
+          "6": 48,
+          "7": 48,
+          "8": 49,
+          "version": "1"
+        },
+        "pid": 16719
+      },
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "51f12be8-ffbc-40d7-86d5-7b9def887871"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "externalRestartDenied": true,
+      "reusedGatewaySurvivesExit": true,
+      "reusedDatabaseVersionAfter": "266",
+      "connectionMenuRelaunchAfterCleanup": true
+    }
+  ],
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "3438ac4dbebc8e7844edba6d2e2161de5ef6f96076e93a2aea15824f07d8a8d5"
+  },
+  "externalServerPackageBefore": {
+    "files": 1427,
+    "sha256": "9f6df4b411053af2153057659c262f44e77826ec05649dbe9e8c737da4c1d524"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "3438ac4dbebc8e7844edba6d2e2161de5ef6f96076e93a2aea15824f07d8a8d5"
+  },
+  "externalServerPackageAfter": {
+    "files": 1427,
+    "sha256": "9f6df4b411053af2153057659c262f44e77826ec05649dbe9e8c737da4c1d524"
+  },
+  "finishedAt": "2026-11-01T08:22:41.730Z"
+}

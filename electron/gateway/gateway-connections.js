@@ -158,7 +158,7 @@ async function perform(work) {
       if (!['DESKTOP_LOCAL_CONSENT_DENIED', 'DESKTOP_OPERATION_CANCELLED'].includes(result.error)) element('error').textContent = errors[result.error] ?? `操作未完成：${result.error}`;
     }
     return result;
-  } catch { element('error').textContent = '配置入口不可用，请退出预览后重试。'; }
+  } catch { element('error').textContent = '配置入口不可用，请退出应用后重试。'; }
   finally {
     busy = false; element('profiles').removeAttribute('aria-busy'); if (snapshot) render(snapshot);
     if (restore) document.querySelector(restore)?.focus();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>Gateway 连接预览</title>
+  <title>Gateway 连接管理</title>
   <style>
     :root { color-scheme: light dark; font: 15px system-ui; } body { margin: 32px auto; padding: 0 24px; max-width: 680px; }
     h1 { font-size: 24px; } p { line-height: 1.6; } label { display: block; margin-top: 16px; } input { box-sizing: border-box; width: 100%; padding: 9px; margin-top: 5px; }
@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-  <h1>Gateway 连接预览</h1>
+  <h1>Gateway 连接管理</h1>
   <p>选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力需要单独授权，不启动本地 Gateway。</p>
   <p id="status" role="status"></p><p id="error" role="alert"></p>
   <ul id="profiles"></ul>
@@ -38,7 +38,7 @@
   <p id="execution-status" role="status">本机写入未授权。</p><button id="execution-stop" type="button">立即停止本机执行</button>
   <button id="local-operation-list" type="button">停止并查看本机遗留操作</button><ul id="local-operation-reviews"></ul><p id="local-operation-note" role="status"></p>
   <section id="operation-review-panel" hidden><h2>待核实的本机操作</h2><p>原结果保持未知，旧操作不会重做。检查实际效果后，可独立批准新的意图。</p><ul id="operation-reviews"></ul><p id="operation-review-note" role="status"></p></section>
-  <button id="local">使用原本地模式（重启应用）</button><button id="quit">退出预览</button>
+  <button id="local">使用原本地模式（重启应用）</button><button id="quit">退出应用</button>
   <script src="./gateway-connections.js"></script>
 </body>
 </html>
