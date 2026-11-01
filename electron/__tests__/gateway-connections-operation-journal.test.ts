@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
+import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { DesktopExecutionLease, DesktopOperationJournal, type DesktopOperationIntent } from '../desktop/operation-journal.js';
@@ -100,14 +102,19 @@ it('requires independent stop confirmation for a human review and never rewrites
   journal.close(); lease.close(); lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
   expect(journal.hasUnknown()).toBe(false); expect(journal.record(operation).fresh).toBe(false);
 });
-it('makes a permanent unknown tombstone for an explicitly reviewed missing finite operation, rather than authorizing its replay', () => {
+it.each(['clipboard', 'computer'] as const)('makes a permanent unknown tombstone for an explicitly reviewed operation that never started: %s', kind => {
   lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
-  const operation = { ...intent(), tool: 'desktop.clipboard.write' };
+  const operation = { ...intent(), ...(kind === 'clipboard' ? { tool: 'desktop.clipboard.write' }
+    : { workspaceId: undefined, tool: REMOTE_COMPUTER_DESCRIPTOR.name, toolRevision: endpointToolRevision(REMOTE_COMPUTER_DESCRIPTOR as never) }) };
   const body = { reviewId: randomUUID(), expectedGeneration: 1, intentFingerprint: createHash('sha256').update(JSON.stringify(operation)).digest('hex'), executorStopped: true as const, localStatus: 'not-found' as const };
   expect(journal.inspect(operation)).toBeUndefined(); journal.review(operation, body); journal.review(operation, body);
   expect(journal.inspect(operation)).toMatchObject({ state: 'unknown', executionStopped: true }); expect(journal.hasUnknown()).toBe(false);
   expect(journal.record(operation).fresh).toBe(false);
   expect(() => journal!.record({ ...operation, deviceId: randomUUID() })).toThrow('IDENTITY_MISMATCH');
+  if (kind === 'computer') for (const patch of [{ toolRevision: 'b'.repeat(64) }, { workspaceId: randomUUID() }]) {
+    const invalid = { ...operation, operationId: randomUUID(), ...patch };
+    expect(() => journal!.review(invalid, { ...body, reviewId: randomUUID(), intentFingerprint: createHash('sha256').update(JSON.stringify(invalid)).digest('hex') })).toThrow('STOP_UNCONFIRMED');
+  }
   const unsafe = { ...intent(), tool: 'workspace.command' };
   expect(() => journal!.review(unsafe, { ...body, reviewId: randomUUID(), intentFingerprint: createHash('sha256').update(JSON.stringify(unsafe)).digest('hex') })).toThrow('STOP_UNCONFIRMED');
 });

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
 import { expect, it } from 'vitest';
 
@@ -51,10 +52,11 @@ it('recovers offline metadata without credentials, requires native consent and n
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-it('requires independent container stop proof before any native acknowledgement of a crashed command', async () => {
+it.each(['container', 'computer'] as const)('requires independent process stop proof before native acknowledgement of a recorded crashed operation: %s', async kind => {
   const root = mkdtempSync(join(tmpdir(), 'xopc-command-review-'));
-  const intent: DesktopOperationIntent = { operationId: randomUUID(), gatewayId: randomUUID(), deviceId: randomUUID(), workspaceId: randomUUID(),
-    tool: 'desktop.command.run', toolRevision: 'a'.repeat(64), argumentHash: 'b'.repeat(64), authorizationRevision: 1, expiresAt: Date.now() + 60000 };
+  const intent: DesktopOperationIntent = { operationId: randomUUID(), gatewayId: randomUUID(), deviceId: randomUUID(), ...(kind === 'container' ? { workspaceId: randomUUID() } : {}),
+    tool: kind === 'container' ? 'desktop.command.run' : REMOTE_COMPUTER_DESCRIPTOR.name,
+    toolRevision: kind === 'container' ? 'a'.repeat(64) : endpointToolRevision(REMOTE_COMPUTER_DESCRIPTOR as never), argumentHash: 'b'.repeat(64), authorizationRevision: 1, expiresAt: Date.now() + 60000 };
   let stopped = false, allowed = false, prompts = 0;
   try {
     const lease = new DesktopExecutionLease(root), journal = new DesktopOperationJournal(lease);
