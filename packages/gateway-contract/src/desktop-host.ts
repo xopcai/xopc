@@ -14,9 +14,16 @@ export const desktopPairingRouteSchema = z.union([
   devicePairingRouteSchema.refine(route => route.kind !== 'local-browser', 'Desktop pairing cannot use browser enrollment'),
   z.strictObject({ id: z.string().min(1).max(80), kind: z.literal('ssh-loopback'), url: desktopSshOriginSchema }),
 ]);
-export const DESKTOP_HOST_CAPABILITIES = Object.freeze({ sshPairing: true, deviceStateObservation: true, screenObservation: true, signedGatewayFrames: 1, signedDeviceFrames: 1 } as const);
+export const DESKTOP_HOST_CAPABILITIES = Object.freeze({ sshPairing: true, deviceStateObservation: true, screenObservation: true, signedGatewayFrames: 1, signedDeviceFrames: 1, observationRevocationVersion: 1 } as const);
 export const DESKTOP_STATE_OBSERVATION_TOOL = 'desktop.device.get_state' as const;
 export const DESKTOP_SCREEN_OBSERVATION_TOOL = 'desktop.screen.capture' as const;
+export const desktopExecutionGrantSchema = z.strictObject({
+  version: z.literal(1), grantId: z.uuid(), localApprovalId: z.uuid(),
+  toolRevisions: z.partialRecord(z.enum(['desktop.clipboard.write', 'desktop.operation.get_status']), z.string().regex(/^[a-f0-9]{64}$/))
+    .refine(value => Object.keys(value).length > 0),
+  expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+});
+export type DesktopExecutionGrant = z.infer<typeof desktopExecutionGrantSchema>;
 export const desktopPairingInvitationSchema = z.strictObject({
   version: z.literal(1), targetKind: z.literal('desktop'),
   pairingToken: z.string().regex(/^xopc_pair_[0-9a-f-]{36}_[A-Za-z0-9_-]{43}$/i),

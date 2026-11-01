@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
+import { desktopOperationIntentSchema, desktopOperationReceiptSchema } from './execution.js';
 export * from './execution.js';
 export { ENDPOINT_FILE_OUTPUT_SCHEMA, ENDPOINT_CONTACT_RECORD_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 
@@ -115,6 +116,7 @@ export const endpointHelloPayloadSchema = z.strictObject({
   signature: z.string().min(16).max(1_024),
   tools: z.array(endpointToolDescriptorSchema).max(100),
   deviceFrames: z.strictObject({ version: z.literal(1), authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }).optional(),
+  execution: z.strictObject({ version: z.literal(1), grantId: z.uuid(), authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), expiresAt: timestampSchema }).optional(),
 });
 
 export const toolInvokePayloadSchema = z.strictObject({
@@ -125,6 +127,7 @@ export const toolInvokePayloadSchema = z.strictObject({
   descriptorRevision: z.string().min(1).max(128),
   confirmationRequired: z.boolean(),
   deadlineAt: timestampSchema,
+  execution: desktopOperationIntentSchema.optional(),
   uploadGrant: z.strictObject({
     path: z.string().startsWith('/').max(500),
     token: identifierSchema,
@@ -154,6 +157,10 @@ export const endpointToolContentSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+export const durableEndpointResultSchema = z.strictObject({
+  content: z.array(endpointToolContentSchema).min(1).max(20), details: jsonObjectSchema.optional(),
+});
+
 export const endpointToolErrorCodeSchema = z.enum([
   'ENDPOINT_OFFLINE',
   'ENDPOINT_NOT_FOREGROUND',
@@ -168,6 +175,9 @@ export const endpointToolErrorCodeSchema = z.enum([
   'TOOL_CANCELLED',
   'RESULT_TOO_LARGE',
   'PROTOCOL_ERROR',
+  'OUTCOME_UNKNOWN',
+  'EXECUTION_STOP_UNCONFIRMED',
+  'TOOL_EXECUTION_FAILED',
 ]);
 
 const envelope = <TType extends string, TPayload extends z.ZodType>(
@@ -193,13 +203,16 @@ export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
     invocationId: z.uuid(),
     content: z.array(endpointToolContentSchema).min(1).max(20),
     details: jsonObjectSchema.optional(),
+    operationReceipt: desktopOperationReceiptSchema.optional(),
   })),
   envelope('tool.error', z.strictObject({
     invocationId: z.uuid(),
     code: endpointToolErrorCodeSchema,
     message: z.string().min(1).max(2_000),
+    operationReceipt: desktopOperationReceiptSchema.optional(),
+    operationResult: durableEndpointResultSchema.optional(),
   })),
-  envelope('tool.cancelled', invocationPayloadSchema),
+  envelope('tool.cancelled', invocationPayloadSchema.extend({ operationReceipt: desktopOperationReceiptSchema.optional() })),
 ]);
 
 export const serverEndpointMessageSchema = z.discriminatedUnion('type', [

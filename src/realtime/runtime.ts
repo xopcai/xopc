@@ -24,6 +24,9 @@ import type { RawData, WebSocket } from 'ws';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import { EndpointToolPolicyError } from '../endpoint-tools/policy.js';
 import type { EndpointTransport } from '../endpoint-tools/registry.js';
+import type { EndpointDesktopExecutionAuthority } from '@xopcai/endpoint-tools-protocol';
+import { assertDesktopExecutionHello } from '../endpoint-tools/desktop-execution.js';
+import { getDesktopExecutionGrant } from '../storage/sqlite/desktop-execution-repository.js';
 import { assertDesktopObservationHello } from '../endpoint-tools/desktop-observation.js';
 import { signDesktopGatewayFrame, type DesktopFrameBinding } from '../endpoint-tools/desktop-frame.js';
 import { DesktopDeviceFrameVerifier } from '../endpoint-tools/desktop-device-frame.js';
@@ -169,6 +172,12 @@ export class RealtimeRuntime {
     let grantedScopes: readonly GatewayScope[] = [];
     let desktopBinding: DesktopFrameBinding | undefined;
     let desktopDeviceFrames: { verifier: DesktopDeviceFrameVerifier; authorizationRevision: number } | undefined;
+    let executionAuthority: EndpointDesktopExecutionAuthority | undefined;
+    const executionActive = () => {
+      if (!executionAuthority) return true;
+      const grant = getDesktopExecutionGrant(executionAuthority.deviceId);
+      return grant?.active && grant.revision === executionAuthority.authorizationRevision && grant.grant?.grantId === executionAuthority.grantId;
+    };
     let desktopSequence = 0;
     let desktopReady = false;
     const pendingDesktopFrames: ServerRealtimeMessage[] = [];
@@ -198,7 +207,7 @@ export class RealtimeRuntime {
 
     const helloTimer = setTimeout(() => socket.close(4401, 'Realtime hello timeout'), REALTIME_HELLO_TIMEOUT_MS);
     const heartbeatTimer = setInterval(() => guardConnection('heartbeat', () => {
-      if (principalId && !this.isPrincipalActive(principalId)) { socket.terminate(); return; }
+      if (!executionActive() || principalId && !this.isPrincipalActive(principalId)) { socket.terminate(); return; }
       if (Date.now() - lastSeenAt > REALTIME_HEARTBEAT_TIMEOUT_MS) {
         socket.close(4408, 'Realtime heartbeat timeout');
       }
@@ -304,20 +313,24 @@ export class RealtimeRuntime {
         if (device?.platform === 'desktop') {
           try {
             if (claim.deviceId !== device.id || claim.clientKind !== 'desktop' || !message.payload.endpoint) throw new Error('DESKTOP_OBSERVATION_DENIED');
-            assertDesktopObservationHello(device, message.payload.endpoint, getEndpointPrincipal(device.id)?.publicKey);
+            if (message.payload.endpoint.execution) {
+              if (!claim.scopes.includes('desktop.execute')) throw new Error('DESKTOP_EXECUTION_DENIED');
+              executionAuthority = assertDesktopExecutionHello(device, message.payload.endpoint, getEndpointPrincipal(device.id)?.publicKey,
+                getOrCreateGatewayIdentity().id, claim.clientId, message.payload.capabilities ?? []);
+            } else assertDesktopObservationHello(device, message.payload.endpoint, getEndpointPrincipal(device.id)?.publicKey);
             desktopBinding = { gatewayId: getOrCreateGatewayIdentity().id, deviceId: device.id, clientId: claim.clientId,
               connectionInstanceId: message.payload.endpoint.connectionInstanceId };
             const frames = message.payload.endpoint.deviceFrames;
             if (frames) {
               if (!message.payload.capabilities?.includes('desktop.device-frames.v1')
-                || getDesktopStateObservation(device.id)?.revision !== frames.authorizationRevision) throw new Error('DESKTOP_DEVICE_FRAME_INVALID');
+                || (executionAuthority?.authorizationRevision ?? getDesktopStateObservation(device.id)?.revision) !== frames.authorizationRevision) throw new Error('DESKTOP_DEVICE_FRAME_INVALID');
               desktopDeviceFrames = { authorizationRevision: frames.authorizationRevision,
                 verifier: new DesktopDeviceFrameVerifier({ ...desktopBinding, authorizationRevision: frames.authorizationRevision },
                   crypto.createPublicKey({ key: device.publicKeyJwk, format: 'jwk' }).export({ type: 'spki', format: 'pem' }).toString()) };
             }
           } catch { socket.close(4401, 'Desktop observation is not authorized'); return; }
         }
-        if (message.payload.endpoint?.deviceFrames && !desktopDeviceFrames) {
+        if (message.payload.endpoint?.execution && !executionAuthority || message.payload.endpoint?.deviceFrames && !desktopDeviceFrames) {
           socket.close(4401, 'Device frame proof requires an independently authenticated desktop'); return;
         }
         let endpointReady: { endpointId: string; turnToken: string } | undefined;
@@ -348,6 +361,7 @@ export class RealtimeRuntime {
               message.payload.endpoint,
               connectionId,
               transport,
+              executionAuthority,
             );
             endpointId = message.payload.endpoint.endpointId;
             this.setupAuthorities.delete(endpointId);
@@ -393,6 +407,8 @@ export class RealtimeRuntime {
           subscriptions.get(topic)?.unsubscribe();
           subscriptions.delete(topic);
         }
+      } else if (!executionActive()) {
+        socket.close(4401, 'Desktop execution authorization expired');
       } else if (message.kind === 'realtime.ping') {
         if (endpointId && connectionId) this.endpointTools?.touch(endpointId, connectionId);
         writer.enqueue(serverMessage('realtime.pong', {}), 'critical');
@@ -403,7 +419,7 @@ export class RealtimeRuntime {
           if (desktopDeviceFrames) {
             const device = desktopBinding && getDevice(desktopBinding.deviceId);
             if (message.kind !== 'desktop.endpoint.message' || !device || device.revokedAt !== undefined
-              || getDesktopStateObservation(device.id)?.revision !== desktopDeviceFrames.authorizationRevision) throw new Error('DESKTOP_DEVICE_FRAME_INVALID');
+              || !executionActive() || (executionAuthority?.authorizationRevision ?? getDesktopStateObservation(device.id)?.revision) !== desktopDeviceFrames.authorizationRevision) throw new Error('DESKTOP_DEVICE_FRAME_INVALID');
             const verified = desktopDeviceFrames.verifier.verify(JSON.stringify(message.payload));
             this.endpointTools.handleMessage(endpointId, connectionId, verified);
           } else {

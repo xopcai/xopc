@@ -1,3 +1,4 @@
+import { getDesktopExecutionGrant } from '../../../storage/sqlite/desktop-execution-repository.js';
 import { createMiddleware } from 'hono/factory';
 import type { Context } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -300,11 +301,12 @@ export function auth(config?: AuthConfig) {
           }
         }
         if (device?.platform === 'desktop' && !(
-          c.req.method === 'GET' && ['/api/desktop-host/compatibility', '/api/devices/me'].includes(requestPath)
+          ['GET', 'POST', 'DELETE'].includes(c.req.method) && requestPath === '/api/desktop-host/execution'
+          || c.req.method === 'GET' && ['/api/desktop-host/compatibility', '/api/devices/me'].includes(requestPath)
           || c.req.method === 'DELETE' && requestPath === '/api/devices/me'
           || c.req.method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(requestPath)
           || device.scopes.includes('desktop.observe.screen') && c.req.method === 'POST' && /^\/api\/endpoint-tools\/invocations\/[0-9a-f-]{36}\/files$/.test(requestPath)
-          || (device.scopes.includes('desktop.observe.state') || device.scopes.includes('desktop.observe.screen')) && (
+          || (device.scopes.includes('desktop.observe.state') || device.scopes.includes('desktop.observe.screen') || device.scopes.includes('desktop.execute') && getDesktopExecutionGrant(device.id)?.active) && (
             c.req.method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(requestPath)
             || c.req.method === 'GET' && ['/api/endpoint-tools/compatibility', '/api/desktop-host/status'].includes(requestPath)
           )

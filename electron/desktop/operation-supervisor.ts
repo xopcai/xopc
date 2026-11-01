@@ -9,6 +9,7 @@ export interface DesktopExecutionAuthority {
   deviceId: string;
   authorizationRevision: number;
   toolRevision: string;
+  workspaceId?: string;
   expiresAt: number;
   active: boolean;
 }
@@ -34,6 +35,7 @@ export class DesktopOperationSupervisor {
     journal: DesktopOperationJournal;
     authority(tool: string): DesktopExecutionAuthority;
     createWorker(tool: string): DesktopExecutionWorker;
+    validateResult?(result: unknown, tool: string): unknown;
     stopTimeoutMs?: number;
   }) {
     options.journal.attachSupervisor();
@@ -53,6 +55,7 @@ export class DesktopOperationSupervisor {
     const authority = this.options.authority(intent.tool);
     if (!authority.active || authority.gatewayId !== intent.gatewayId || authority.deviceId !== intent.deviceId
       || authority.authorizationRevision !== intent.authorizationRevision || authority.toolRevision !== intent.toolRevision
+      || authority.workspaceId !== intent.workspaceId
       || Date.now() >= Math.min(authority.expiresAt, intent.expiresAt)
       || intent.expiresAt > authority.expiresAt || intent.expiresAt - Date.now() > 300000) throw new Error('DESKTOP_EXECUTION_AUTHORITY_INVALID');
   }
@@ -98,6 +101,7 @@ export class DesktopOperationSupervisor {
       let resultHash: string | undefined;
       if ('result' in outcome) {
         try {
+          if (this.options.validateResult) outcome.result = this.options.validateResult(outcome.result, run.intent.tool);
           const result = canonicalJson(outcome.result);
           if (Buffer.byteLength(result) > 65536) throw new Error('DESKTOP_EXECUTION_RESULT_LIMIT');
           resultHash = createHash('sha256').update(result).digest('hex');

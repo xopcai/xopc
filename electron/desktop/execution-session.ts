@@ -18,7 +18,7 @@ export class DesktopExecutionSession {
   }) {
     this.binding = desktopExecutionBindingSchema.parse(options.binding);
   }
-  invoke(input: unknown): Promise<ExecutionOutcome> {
+  invoke(input: unknown, options?: { beforeStart(): undefined }): Promise<ExecutionOutcome> {
     if (this.closed) return Promise.reject(new Error('DESKTOP_EXECUTION_SESSION_CLOSED'));
     let request: DesktopExecutionRequest;
     try {
@@ -32,10 +32,11 @@ export class DesktopExecutionSession {
       // A receipt query never starts a worker or renews an expired execution intent.
       const receipt = this.options.supervisor.inspect(request.execution);
       if (receipt) return Promise.resolve({ receipt, repeated: true });
+      if (this.options.supervisor.status().blocked) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
       if (this.pending) throw new Error('DESKTOP_EXECUTION_BUSY');
     } catch (error) { return Promise.reject(error); }
     const controller = new AbortController();
-    const outcome = Promise.resolve().then(() => this.run(request, controller));
+    const outcome = Promise.resolve().then(() => this.run(request, controller, options?.beforeStart));
     const pending = { request, controller, outcome };
     this.pending = pending;
     // Both handlers are installed immediately, including when callers abandon a disconnected request.
@@ -43,7 +44,7 @@ export class DesktopExecutionSession {
       () => { if (this.pending === pending) this.pending = undefined; });
     return outcome;
   }
-  private async run(request: DesktopExecutionRequest, controller: AbortController): Promise<ExecutionOutcome> {
+  private async run(request: DesktopExecutionRequest, controller: AbortController, beforeStart?: () => undefined): Promise<ExecutionOutcome> {
     let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
       controller.signal.throwIfAborted();
@@ -56,6 +57,7 @@ export class DesktopExecutionSession {
       controller.signal.throwIfAborted();
       if (!allowed) throw new Error('DESKTOP_EXECUTION_USER_DENIED');
       if (this.closed) throw new Error('DESKTOP_EXECUTION_SESSION_CLOSED');
+      beforeStart?.();
       return await this.options.supervisor.execute({ intent: request.execution, arguments: request.arguments,
         invocationId: request.invocationId, connectionInstanceId: this.binding.connectionInstanceId, signal: controller.signal });
     } finally { clearTimeout(deadline); }

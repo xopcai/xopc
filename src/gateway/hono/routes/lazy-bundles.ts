@@ -107,7 +107,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   {
     id: 'desktop-host',
     match: path => path === '/api/desktop-host/compatibility' || path === '/api/desktop-host/pairing-setups' || path === '/api/desktop-host/status'
-      || ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path) || /^\/api\/desktop-host\/devices\/[^/]+\/(?:observation|screen)$/.test(path),
+      || ['/api/desktop-host/observation', '/api/desktop-host/screen', '/api/desktop-host/execution'].includes(path) || /^\/api\/desktop-host\/devices\/[^/]+\/(?:observation|screen|execution)$/.test(path),
     load: async () => {
       const { registerDesktopHostRoutes } = await import('./desktop-host.js');
       return { register: registerDesktopHostRoutes };

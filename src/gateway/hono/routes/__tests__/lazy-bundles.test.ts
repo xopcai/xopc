@@ -7,6 +7,8 @@ import {
 
 describe('lazy route bundles', () => {
   it('maps independent desktop discovery and pairing without capturing chat or nearby routes', () => {
+    for (const path of ['/api/desktop-host/execution', '/api/desktop-host/devices/device-id/execution']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('desktop-host');
+    for (const path of ['/api/desktop-host/execution/extra', '/api/desktop-host/devices/device-id/execution/extra', '/api/desktop-host/execution-other']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
     for (const path of ['/api/desktop-host/compatibility', '/api/desktop-host/pairing-setups', '/api/desktop-host/observation', '/api/desktop-host/devices/device-id/observation', '/api/desktop-host/status', '/api/desktop-host/screen', '/api/desktop-host/devices/device-id/screen']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('desktop-host');
     for (const path of ['/api/desktop-chat/bootstrap', '/api/desktop-host/compatibility/extra', '/api/desktop-host-other/compatibility', '/api/device-pairing/setups', '/api/desktop-host/devices/device-id/observation/extra', '/api/desktop-host/devices/device-id/control']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
     for (const path of ['/api/desktop-host/status/extra', '/api/desktop-host/devices/device-id/screen/extra', '/api/desktop-host/screen-other']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');

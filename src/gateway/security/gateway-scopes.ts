@@ -36,6 +36,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/capabilities/operations' || path.startsWith('/api/capabilities/operations/')) return undefined;
   if (method === 'GET' && path === '/api/desktop-host/compatibility') return 'device.self';
   if (method === 'GET' && path === '/api/desktop-host/status') return 'device.self';
+  if (['GET', 'POST', 'DELETE'].includes(method) && path === '/api/desktop-host/execution') return 'device.self';
   if (method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path)) return 'device.self';
   if (method === 'GET' && path === '/api/mobile/privacy') return 'gateway.status';
   if (path === '/api/realtime/tickets' || path.startsWith('/api/status')) return 'gateway.status';

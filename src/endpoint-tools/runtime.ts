@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   type ClientEndpointMessage,
   type EndpointHelloPayload,
+  type EndpointDesktopExecutionAuthority,
 } from '@xopcai/endpoint-tools-protocol';
 
 import { recordDeviceGrantEvent } from '../storage/sqlite/device-grant-audit-repository.js';
@@ -88,12 +89,14 @@ export class EndpointToolRuntime {
     hello: EndpointHelloPayload,
     connectionId: string,
     transport: EndpointTransport,
+    executionAuthority?: EndpointDesktopExecutionAuthority,
   ): EndpointRegistration {
     if (this.closed) throw new Error('Endpoint runtime is closed');
     this.authenticator.authenticate(hello);
+    if (hello.execution && !executionAuthority) throw new Error('DESKTOP_EXECUTION_AUTHORITY_REQUIRED');
     const previous = this.registry.get(hello.endpointId);
     if (previous) { this.grants.revokeEndpoint(previous.endpointId, previous.principalId); this.invocations.failEndpoint(previous.endpointId); }
-    const registration = this.registry.register(hello, connectionId, transport);
+    const registration = this.registry.register(hello, connectionId, transport, Date.now(), executionAuthority);
     log.info({ endpointId: hello.endpointId, connectionId, kind: hello.kind }, 'Endpoint connected');
     return registration;
   }

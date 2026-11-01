@@ -14,6 +14,7 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { startEndpointToolInvocationAudit } from '../src/storage/sqlite/endpoint-tool-invocation-repository.js';
 import { createDevice, issueDeviceTokenPair } from '../src/storage/sqlite/device-access-repository.js';
 import { getOrCreateGatewayIdentity } from '../src/storage/sqlite/gateway-identity-repository.js';
+import { verifyDesktopAuthorityResponse } from '../src/endpoint-tools/desktop-authority-response.js';
 import { proofDigest, requestProofMessage } from '../src/gateway/security/device-request-proof.js';
 
 const index = process.argv.indexOf('--app'); assert(index >= 0 && process.argv[index + 1]);
@@ -34,7 +35,10 @@ try {
   await mkdir(workspace); await writeFile(config, JSON.stringify({ gateway: { mode: 'local', bind: 'loopback', port, auth: { mode: 'token', token } }, browser: { enabled: false } }));
   // Seed while no Gateway owns this isolated DB; the packaged process is its sole owner afterward.
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(state, 'xopc.db') });
-  const gatewayId = getOrCreateGatewayIdentity().id;
+  const identity = getOrCreateGatewayIdentity(), gatewayId = identity.id;
+  const executionDevice = process.argv.includes('--execution-grants') ? createDevice({ displayName: 'Execution grant fixture', platform: 'desktop',
+    publicKeyJwk: keys.publicKey.export({ format: 'jwk' }) as any, scopes: ['gateway.status', 'device.self'] }) : undefined;
+  const executionToken = executionDevice ? issueDeviceTokenPair(executionDevice.id).accessToken : undefined;
   createDevice({ id: ownId, displayName: 'Audit fixture', platform: 'android', publicKeyJwk: keys.publicKey.export({ format: 'jwk' }) as any, scopes: ['device.self'] });
   accessToken = issueDeviceTokenPair(ownId).accessToken;
   for (const n of [0, 1, 2]) startEndpointToolInvocationAudit({ id: randomUUID(), principalId: n < 2 ? ownId : otherId,
@@ -65,8 +69,11 @@ try {
     const message = requestProofMessage({ gatewayId, credential: accessToken, method, target: targetPath,
       headers: name => name === 'content-type' ? contentType : undefined, proof });
     const signature = sign('sha256', Buffer.from(message), { key: keys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
-    return fetch(origin + targetPath, { method, body: json, headers: { authorization: `Bearer ${accessToken}`,
+    const response = await fetch(origin + targetPath, { method, body: json, headers: { authorization: `Bearer ${accessToken}`,
       ...(contentType ? { 'content-type': contentType } : {}), 'X-Xopc-Proof': `${proof.timestamp}.${proof.nonce}.${proof.digest}.${signature}` } });
+    if (targetPath === '/api/desktop-host/execution' && response.ok) verifyDesktopAuthorityResponse({ status: response.status, body: await response.clone().json() },
+      { gatewayId, deviceId: executionDevice!.id, nonce: proof.nonce, method, target: targetPath }, identity.publicKey);
+    return response;
   };
   const own = await deviceRequest(route); assert.equal(own.status, 200); assert.equal((await own.json()).payload.total, 2); report.checks.ownDeviceRowsOnly = true;
   const other = await deviceRequest(route + '?operationId=' + otherOperationId); assert.equal(other.status, 200); assert.equal((await other.json()).payload.total, 0);
@@ -74,6 +81,25 @@ try {
   assert.equal((await deviceRequest('/api/endpoint-tools/devices/revoke', 'POST', { ids: [ownId] })).status, 403);
   assert.equal((await deviceRequest('/api/devices/me')).status, 200); report.checks.deviceSelfCannotRevoke = true;
   assert.equal((await fetch(origin + route + '?operationId=', { headers: { authorization: `Bearer ${token}` } })).status, 400); report.checks.invalidFilterDenied = true;
+  if (executionDevice && executionToken) {
+    accessToken = executionToken;
+    const route = '/api/desktop-host/execution';
+    assert.equal((await deviceRequest('/api/realtime/tickets', 'POST', { clientId: randomUUID(), clientKind: 'desktop', protocolVersion: 2 })).status, 403);
+    const empty = await deviceRequest(route); assert.equal(empty.status, 200); assert.equal((await empty.json()).payload.active, false);
+    const grant = { version: 1, grantId: randomUUID(), localApprovalId: randomUUID(), expiresAt: Date.now() + 60000, toolRevisions: { 'desktop.clipboard.write': 'a'.repeat(64) } };
+    assert.equal((await fetch(origin + route, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ expectedRevision: 0, grant }) })).status, 403);
+    const granted = await deviceRequest(route, 'POST', { expectedRevision: 0, grant }); assert.equal(granted.status, 200);
+    assert.equal((await granted.json()).payload.revision, 1);
+    assert.equal((await deviceRequest('/api/desktop-host/observation', 'DELETE')).status, 200);
+    const stillActive = await deviceRequest(route); assert.equal((await stillActive.json()).payload.active, true);
+    const revoked = await deviceRequest(route, 'DELETE', { grantId: grant.grantId, expectedRevision: 1 }); assert.equal(revoked.status, 200);
+    assert.equal((await revoked.json()).payload.revision, 2);
+    assert.equal((await deviceRequest(route, 'POST', { expectedRevision: 2, grant })).status, 409);
+    assert.equal((await deviceRequest('/api/realtime/tickets', 'POST', { clientId: randomUUID(), clientKind: 'desktop', protocolVersion: 2 })).status, 403);
+    report.checks.packagedExecutionGrantAuthAndSignature = true;
+    report.checks.packagedDeleteBodyAndRevocation = true;
+    report.checks.defaultDesktopCannotExecute = true;
+  }
   report.passed = true;
 } catch (error) { report.error = error instanceof Error ? error.message : String(error); report.logs = redact(logs); process.exitCode = 1; }
 finally {
