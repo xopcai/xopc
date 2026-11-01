@@ -94,6 +94,7 @@ it('stops pending approval and revokes the exact grant on epoch change without t
     pending = Promise.withResolvers<boolean>();
     const started = execution.start(manager.snapshot().epoch, id), rejected = expect(started).rejects.toThrow('CANCELLED');
     await vi.waitFor(() => expect(consentCount).toBe(count + 1));
+    const stop = execution.stop(); expect(execution.stop()).toBe(stop); await stop;
     await execution.requireStopped(); pending.resolve(true); await rejected; pending = undefined;
     expect(getDevice(deviceId)?.scopes).not.toContain('desktop.execute');
     allowed = true; await execution.start(manager.snapshot().epoch, id);

@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
-import { desktopOperationAttemptSchema as attemptSchema, desktopOperationIntentSchema as intentSchema,
+import { canonicalJson, desktopOperationReviewSchema, type DesktopOperationReview, desktopOperationAttemptSchema as attemptSchema, desktopOperationIntentSchema as intentSchema,
   type DesktopOperationAttempt, type DesktopOperationIntent, type DesktopOperationState, type DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
 
 import { requireNodeSqlite } from '../../src/infra/node-sqlite.js';
@@ -61,7 +61,9 @@ export class DesktopOperationJournal {
         operation_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, generation TEXT NOT NULL,
         state TEXT NOT NULL CHECK(state IN ('recorded','running','cancel-requested','succeeded','failed','stopped','unknown')),
         result_hash TEXT, updated_at INTEGER NOT NULL, invocation_id TEXT, connection_instance_id TEXT
-      ); CREATE TABLE IF NOT EXISTS stop_confirmations (operation_id TEXT PRIMARY KEY REFERENCES operations(operation_id), confirmed_at INTEGER NOT NULL);`);
+      ); CREATE TABLE IF NOT EXISTS stop_confirmations (operation_id TEXT PRIMARY KEY REFERENCES operations(operation_id), confirmed_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS operation_intents (operation_id TEXT PRIMARY KEY REFERENCES operations(operation_id), intent_json TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS operation_reviews (operation_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, review_id TEXT NOT NULL UNIQUE, review_json TEXT NOT NULL, reviewed_at INTEGER NOT NULL);`);
       // A crashed owner cannot prove whether an external side effect occurred.
       database.prepare("UPDATE operations SET state='unknown', updated_at=? WHERE state IN ('recorded','running','cancel-requested')")
         .run(Date.now());
@@ -96,7 +98,56 @@ export class DesktopOperationJournal {
     return this.write(database => { const row = this.row(database, intent); return row ? this.receipt(intent, row) : undefined; });
   }
   hasUnknown(): boolean {
-    return this.write(database => Boolean(database.prepare("SELECT 1 FROM operations WHERE state='unknown' LIMIT 1").get()));
+    return this.write(database => Boolean(database.prepare("SELECT 1 FROM operations WHERE state IN ('unknown','stopped') AND NOT EXISTS (SELECT 1 FROM operation_reviews r WHERE r.operation_id=operations.operation_id AND r.fingerprint=operations.fingerprint) LIMIT 1").get()));
+  }
+  hasUnconfirmedStops(): boolean {
+    return this.write(database => Boolean(database.prepare("SELECT 1 FROM operations WHERE state='unknown' AND NOT EXISTS (SELECT 1 FROM stop_confirmations s WHERE s.operation_id=operations.operation_id) LIMIT 1").get()));
+  }
+  unresolved(): Array<{ operationId: string; intent?: DesktopOperationIntent }> {
+    return this.write(database => (database.prepare(`SELECT o.operation_id,i.intent_json FROM operations o
+      LEFT JOIN operation_intents i ON i.operation_id=o.operation_id WHERE o.state IN ('unknown','stopped')
+      AND NOT EXISTS(SELECT 1 FROM operation_reviews r WHERE r.operation_id=o.operation_id AND r.fingerprint=o.fingerprint)
+      ORDER BY o.updated_at,o.operation_id LIMIT 8`).all() as { operation_id: string; intent_json: string | null }[]).map(row => {
+      const intent = row.intent_json ? intentSchema.parse(JSON.parse(row.intent_json)) : undefined;
+      if (intent && (intent.operationId !== row.operation_id || !this.row(database,intent))) throw new Error('DESKTOP_OPERATION_IDENTITY_MISMATCH');
+      return { operationId: row.operation_id, ...(intent ? { intent } : {}) };
+    }));
+  }
+  reviewed(input: DesktopOperationIntent): DesktopOperationReview | undefined {
+    const intent = intentSchema.parse(input);
+    return this.write(database => {
+      const row = database.prepare('SELECT fingerprint,review_json FROM operation_reviews WHERE operation_id=?').get(intent.operationId) as { fingerprint: string; review_json: string } | undefined;
+      if (row && row.fingerprint !== this.fingerprint(intent)) throw new Error('DESKTOP_OPERATION_IDENTITY_MISMATCH');
+      return row ? desktopOperationReviewSchema.parse(JSON.parse(row.review_json)) : undefined;
+    });
+  }
+  /** Main-process native human approval only. This preserves the outcome and permanently prevents replay of this identity. */
+  review(input: DesktopOperationIntent, value: DesktopOperationReview): void {
+    const intent = intentSchema.parse(input), review = desktopOperationReviewSchema.parse(value), fingerprint = this.fingerprint(intent), json = canonicalJson(review);
+    if (review.intentFingerprint !== fingerprint) throw new Error('DESKTOP_OPERATION_IDENTITY_MISMATCH');
+    this.write(database => {
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        const previous = database.prepare('SELECT fingerprint,review_json FROM operation_reviews WHERE operation_id=?').get(intent.operationId);
+        if (previous) {
+          if (previous.fingerprint !== fingerprint || previous.review_json !== json) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
+        } else {
+          if (database.prepare('SELECT 1 FROM operation_reviews WHERE review_id=?').get(review.reviewId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
+          const row = this.row(database, intent), receipt = row ? this.receipt(intent, row) : undefined;
+          if (receipt ? review.localStatus !== 'recorded' || !receipt.executionStopped || canonicalJson(receipt) !== canonicalJson(review.receipt)
+            : review.localStatus !== 'not-found' || intent.tool !== 'desktop.clipboard.write') throw new Error('DESKTOP_OPERATION_STOP_UNCONFIRMED');
+          if (!row) {
+            if ((database.prepare('SELECT count(*) AS count FROM operations').get()!.count as number) >= 100000) throw new Error('DESKTOP_OPERATION_HISTORY_FULL');
+            // A missing receipt is not permission to execute the old intent later.
+            database.prepare("INSERT INTO operations VALUES (?,?,?,'unknown',NULL,?,NULL,NULL)").run(intent.operationId,fingerprint,this.lease.generation,Date.now());
+            database.prepare('INSERT INTO stop_confirmations VALUES (?,?)').run(intent.operationId,Date.now());
+          }
+          database.prepare('INSERT INTO operation_intents VALUES (?,?) ON CONFLICT(operation_id) DO NOTHING').run(intent.operationId,JSON.stringify(intent));
+          database.prepare('INSERT INTO operation_reviews VALUES (?,?,?,?,?)').run(intent.operationId,fingerprint,review.reviewId,json,Date.now());
+        }
+        database.exec('COMMIT');
+      } catch (error) { database.exec('ROLLBACK'); throw error; }
+    });
   }
   attachSupervisor(): void {
     if (this.supervisorAttached) throw new Error('DESKTOP_SUPERVISOR_ALREADY_ATTACHED');
@@ -118,7 +169,12 @@ export class DesktopOperationJournal {
       if (intent.expiresAt <= Date.now()) throw new Error('DESKTOP_OPERATION_EXPIRED');
       // Never evict deduplication history automatically to admit a new side effect.
       if ((database.prepare('SELECT count(*) AS count FROM operations').get()!.count as number) >= 100000) throw new Error('DESKTOP_OPERATION_HISTORY_FULL');
-      database.prepare("INSERT INTO operations VALUES (?,?,?,'recorded',NULL,?,NULL,NULL)").run(intent.operationId, this.fingerprint(intent), this.lease.generation, Date.now());
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        database.prepare("INSERT INTO operations VALUES (?,?,?,'recorded',NULL,?,NULL,NULL)").run(intent.operationId, this.fingerprint(intent), this.lease.generation, Date.now());
+        database.prepare('INSERT INTO operation_intents VALUES (?,?)').run(intent.operationId,JSON.stringify(intent));
+        database.exec('COMMIT');
+      } catch (error) { database.exec('ROLLBACK'); throw error; }
       return { fresh: true, receipt: this.receipt(intent, this.row(database, intent)!) };
     });
   }

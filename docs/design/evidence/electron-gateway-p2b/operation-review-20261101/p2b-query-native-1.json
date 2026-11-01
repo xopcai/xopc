@@ -1,0 +1,44 @@
+{
+  "passed": false,
+  "startedAt": "2026-11-01T03:41:45.598Z",
+  "checks": {},
+  "scope": "Installed Electron 45 native execution acceptance with in-memory clipboard preservation; actual system write and restored formats require successful final checks. SSH-loopback fixture, no physical WAN/files/commands claim",
+  "interactions": [
+    {
+      "label": "cancel first enrollment",
+      "startedAt": "2026-11-01T03:41:49.153Z",
+      "status": "waiting-for-native-click",
+      "pid": 36933
+    }
+  ],
+  "nativeCancelCovered": true,
+  "packageBefore": {
+    "files": 1429,
+    "sha256": "159b0decc77fd4ef456b9068be8aa177bf26051ceaf1434241ed9b7d494ea75e"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-j2b-query-delivery-2/native/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-j2b-query-delivery-2/native/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-yiyFvi",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 36933
+  },
+  "error": "Error: Acceptance condition deadline exceeded\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-execution.mjs:46:9)\n    at async action (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-execution.mjs:202:5)\n    at async native (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-execution.mjs:208:5)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-execution.mjs:211:5",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 64708\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=36861, lockPath=/Users/micjoyce/.xopc/locks/gateway.60617a21.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:64708...\n✅ Gateway started\n   URL: http://127.0.0.1:64708\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:64708\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:64746/devtools/browser/56818a52-5655-4cba-abe6-c12c8812ed44\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-yiyFvi",
+  "finishedAt": "2026-11-01T03:43:49.688Z"
+}

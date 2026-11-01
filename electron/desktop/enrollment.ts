@@ -10,7 +10,7 @@ import { isConnectionId } from '../gateway/profiles.js';
 
 export type DesktopEnrollmentAction = 'enroll' | 'check' | 'disable' | 'reenroll';
 type EnrollmentState = 'registered' | 'unregistered' | 'pending' | 'disabled-confirmed' | 'disabled-unconfirmed' | 'cancelled' | 'error';
-type EnrollmentStatus = { state: EnrollmentState; deviceId?: string; localCapabilities: false; reliableExecution?: true };
+type EnrollmentStatus = { state: EnrollmentState; deviceId?: string; localCapabilities: false; reliableExecution?: true; operationReview?: true };
 
 /** Optional device identity operations never start an executor or depend on the chat connection. */
 export class DesktopEnrollmentManager {
@@ -44,9 +44,9 @@ export class DesktopEnrollmentManager {
     const current = () => {
       if (controller.signal.aborted || epoch !== this.options.manager.snapshot().epoch) throw new Error('DESKTOP_OPERATION_CANCELLED');
     };
-    let reliableExecution = false;
+    let reliableExecution = false, operationReview = false;
     const set = (state: EnrollmentState, deviceId?: string) => {
-      current(); this.statuses.set(id, { binding: this.bindingKey(binding), status: { state, ...(deviceId ? { deviceId } : {}), ...(state === 'registered' && reliableExecution ? { reliableExecution: true as const } : {}), localCapabilities: false } });
+      current(); this.statuses.set(id, { binding: this.bindingKey(binding), status: { state, ...(deviceId ? { deviceId } : {}), ...(state === 'registered' && operationReview ? { operationReview: true as const } : {}), ...(state === 'registered' && reliableExecution ? { reliableExecution: true as const } : {}), localCapabilities: false } });
     };
     const channel = desktopAuthTransport(binding, profile.transport, controller.signal);
     const client = new DesktopDeviceAuth(binding, this.options.store, channel.request);
@@ -61,6 +61,7 @@ export class DesktopEnrollmentManager {
         const result = await client.readSelf();
         const compatibility = await client.endpointRequest('/api/desktop-host/compatibility', 'GET', undefined, result.deviceId); current();
         reliableExecution = compatibility?.gatewayId === binding.gatewayId && compatibility.publicKey === binding.publicKey && compatibility.capabilities?.reliableExecutionVersion === 1;
+        operationReview = compatibility?.gatewayId === binding.gatewayId && compatibility.publicKey === binding.publicKey && compatibility.capabilities?.operationReviewVersion === 1;
         set('registered', result.deviceId); return;
       }
       if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
@@ -90,6 +91,7 @@ export class DesktopEnrollmentManager {
         || compatibility.payload.manifest.credentialOnly !== true) throw new Error('DESKTOP_HOST_UNSUPPORTED');
       if (profile.transport === 'ssh' && compatibility.payload.capabilities?.sshPairing !== true) throw new Error('DESKTOP_HOST_SSH_UNSUPPORTED');
       reliableExecution = compatibility.payload.capabilities?.reliableExecutionVersion === 1;
+      operationReview = compatibility.payload.capabilities?.operationReviewVersion === 1;
       const result = await client.enroll({ displayName: `xopc Desktop (${process.platform})`,
         consent: async () => {
           current(); if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');

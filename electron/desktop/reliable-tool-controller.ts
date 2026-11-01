@@ -34,6 +34,22 @@ export class DesktopReliableToolController {
       // The invocation handler emits its one durable outcome; cancel itself never asserts completion.
       return;
     }
+    if (message.payload.toolName === 'desktop.operation.get_status') {
+      try {
+        const payload = message.payload;
+        if (!this.options.catalog.revision(payload.toolName) || payload.descriptorRevision !== this.options.catalog.revision(payload.toolName)
+          || payload.execution || payload.uploadGrant || payload.confirmationRequired || !payload.operationQuery
+          || payload.operationQuery.operationId !== payload.arguments.operationId || this.options.availability() !== 'foreground'
+          || !this.options.catalog.deadlineAllowed(payload.toolName, payload.deadlineAt)) throw new Error('DESKTOP_OPERATION_QUERY_INVALID');
+        this.options.catalog.validateArguments(payload.toolName, payload.arguments);
+        this.send('tool.received', { invocationId });
+        const receipt = this.options.session.inspect(payload.operationQuery);
+        this.send('tool.result', { invocationId, content: [{ type: 'json', value: { operationId: payload.operationQuery.operationId,
+          status: receipt ? 'recorded' : 'not-found', ...(receipt ? { receipt } : {}) } }] });
+      } catch { this.error(invocationId, 'PROTOCOL_ERROR', 'Operation status could not be verified'); }
+      return;
+    }
+    if (message.payload.operationQuery) { this.error(invocationId, 'PROTOCOL_ERROR', 'Operation metadata is only accepted by the status tool'); return; }
     if (this.active) { this.error(invocationId, 'TOOL_BUSY', 'A durable operation is already pending'); return; }
     const revision = this.options.catalog.revision(message.payload.toolName);
     if (!revision) { this.error(invocationId, 'TOOL_NOT_FOUND', 'Durable tool is not registered'); return; }

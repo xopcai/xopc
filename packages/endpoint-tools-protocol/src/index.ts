@@ -128,6 +128,7 @@ export const toolInvokePayloadSchema = z.strictObject({
   confirmationRequired: z.boolean(),
   deadlineAt: timestampSchema,
   execution: desktopOperationIntentSchema.optional(),
+  operationQuery: desktopOperationIntentSchema.optional(),
   uploadGrant: z.strictObject({
     path: z.string().startsWith('/').max(500),
     token: identifierSchema,
@@ -328,3 +329,5 @@ export { personalDescriptor, PERSONAL_TOOL_NAMES, CONTACT_PICK_INPUT_SCHEMA, CAL
 export * from './context.js';
 export * from './location-sharing.js';
 export * from './screen.js';
+
+export * from './operation-status.js';

@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import http from 'node:http';
+import { DatabaseSync } from 'node:sqlite';
+import { WebSocket, WebSocketServer } from 'ws';
 import { connect as tcpConnect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -16,6 +18,9 @@ import { installedAppFingerprint, killAcceptanceApplication, launchInstalledAppl
 const root = resolve(import.meta.dirname, '..'), index = process.argv.indexOf('--app');
 assert(index >= 0, 'An installed --app is required');
 const target = await macPackagedTarget(process.argv[index + 1]);
+const lostResultReview = process.argv.includes('--lost-result-review');
+const wsPeers = new Set();
+let droppedResult, dropNextResult = false;
 const approvalOnly = process.argv.includes('--approval-only');
 const screen = false;
 const observation = true;
@@ -65,7 +70,11 @@ try {
           else if (results.length < 2) {
             const name = names.find(name => name?.startsWith('device__desktop_clipboard_write_'));
             assert(name, 'Explicit desktop clipboard tool was not discovered'); tool = { name, arguments: JSON.stringify({ text: expectedText }) };
-          } else if (!prompt.includes('cancel clipboard')) { assert(JSON.stringify(results).includes('Clipboard text written.')); stateReadSeen = true; }
+          } else if (!prompt.includes('cancel clipboard')) {
+            if (!lostResultReview || prompt.includes('after review')) assert(JSON.stringify(results).includes('Clipboard text written.'));
+            else assert(droppedResult, 'A real signed completion must be dropped before accepting an unknown result');
+            stateReadSeen = true;
+          }
         } else if (prompt.includes('Retained while desktop offline')) assert(!names.some(name => name?.startsWith('device__')), 'A stopped desktop tool remained declared for the server-only turn');
         res.writeHead(200, { 'Content-Type': 'text/event-stream' });
         res.end(chunk({ role: 'assistant' }) + (tool ? chunk({ tool_calls: [{ index: 0, id: `d3-${randomUUID()}`, type: 'function', function: tool }] }) + chunk({}, 'tool_calls')
@@ -124,7 +133,27 @@ try {
     const upstream = http.request({ host: '127.0.0.1', port: serverPort, path: req.url, method: req.method, headers: req.headers }, response => { res.writeHead(response.statusCode, response.headers); response.pipe(res); });
     upstream.on('error', () => res.destroy()); req.pipe(upstream);
   }).listen(0, '127.0.0.1'); await once(proxy, 'listening');
+  const relay = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
   proxy.on('upgrade', (request, socket, head) => {
+    if (lostResultReview) {
+      if (offline) { socket.destroy(); return; }
+      const remote = new WebSocket(`ws://127.0.0.1:${serverPort}${request.url}`, { ...(request.headers.origin ? { origin: request.headers.origin } : {}), followRedirects: false, maxPayload: 768 * 1024 });
+      wsPeers.add(remote); remote.once('close', () => wsPeers.delete(remote));
+      remote.on('error', () => socket.destroy()); socket.once('error', () => remote.terminate());
+      remote.once('open', () => relay.handleUpgrade(request, socket, head, local => {
+        wsPeers.add(local); local.once('close', () => { wsPeers.delete(local); remote.terminate(); }); local.on('error', () => remote.terminate());
+        local.on('message', bytes => {
+          const message = JSON.parse(bytes.toString());
+          if (dropNextResult && message.kind === 'desktop.endpoint.message' && message.payload?.message?.type === 'tool.result' && message.payload.message.payload.operationReceipt?.state === 'succeeded') {
+            droppedResult = { operationId: message.payload.message.payload.operationReceipt.operationId }; dropNextResult = false; local.close(1011, 'Fixture dropped persisted completion'); remote.terminate(); return;
+          }
+          if (remote.readyState === WebSocket.OPEN) remote.send(bytes.toString());
+        });
+        remote.on('message', bytes => { if (local.readyState === WebSocket.OPEN) local.send(bytes.toString()); });
+        remote.once('close', () => local.terminate());
+      }));
+      return;
+    }
     if (offline) { socket.destroy(); return; }
     const upstream = tcpConnect(serverPort, '127.0.0.1', () => {
       const headers = [];
@@ -211,7 +240,7 @@ try {
     await until(async () => (await snapshot()).execution?.state === 'online');
     assert.equal((await snapshot()).localCapabilities, true);
     const registered = (await owner('/api/endpoint-tools/devices')).find(device => device.id === firstId);
-    assert.equal(registered.endpoints.length, 1); assert.deepEqual(registered.endpoints[0].tools.map(tool => tool.descriptor.name), [observationTool]);
+    assert.equal(registered.endpoints.length, 1); assert.deepEqual(registered.endpoints[0].tools.map(tool => tool.descriptor.name).sort(), [observationTool, 'desktop.operation.get_status'].sort());
     assert(registered.access.scopes.includes(observationScope));
     await chat.bringToFront();
     let hostOrigin;
@@ -231,12 +260,13 @@ try {
       report.checks.nativeCancelHasNoClipboardEffect = true;
     }
     const assistantsBefore = await chat.locator('#messages article[data-role="assistant"]').count();
+    dropNextResult = lostResultReview;
     await send('Synthetic explicit desktop origin approve clipboard');
     console.log('NATIVE CONSENT write this clipboard text once; choose actual native Write');
     await until(async () => (screen ? imageSeen : stateReadSeen) && await chat.locator('#messages article[data-role="assistant"]').count() > assistantsBefore, 120000);
     assert(screen ? imageSeen : stateReadSeen, 'The model did not receive the actual Electron observation result');
     const audit = await owner(`/api/endpoint-tools/invocations?principalId=${firstId}`);
-    assert.equal(audit.items.filter(item => item.status === 'succeeded').length, 1);
+    assert.equal(audit.items.filter(item => item.status === 'succeeded').length, lostResultReview ? 0 : 1);
     await until(() => guardObserved); report.checks.actualNativeClipboardWriteAndDurableAgentResult = true;
     assert.equal(lastInputOrigin.endpointId, hostOrigin.endpointId); report.checks.explicitDesktopOriginAcceptedThroughShellAndGateway = true;
     await page.locator('#execution-stop').evaluate(button => button.click());
@@ -244,6 +274,35 @@ try {
     await until(async () => (await snapshot()).execution?.remoteRevocationConfirmed === true);
     assert.equal((await snapshot()).localCapabilities, false);
     await until(async () => !(await owner('/api/endpoint-tools/devices')).find(device => device.id === firstId).endpoints.length);
+    if (lostResultReview) {
+      assert(droppedResult); report.droppedResult = droppedResult;
+      const operationState = () => { const db = new DatabaseSync(join(serverState, 'xopc.db'), { readOnly: true }); try { return db.prepare('SELECT state FROM capability_operations WHERE operation_id=?').get(droppedResult.operationId)?.state; } finally { db.close(); } };
+      assert.equal(operationState(), 'unknown');
+      await chat.locator('#host-settings').click();
+      await action('operation-list');
+      assert((await snapshot()).operationReviews.items.some(item => item.intent.operationId === droppedResult.operationId));
+      const requestReview = async label => {
+        await page.locator(`[data-operation-review="${droppedResult.operationId}"]`).evaluate(button => button.click());
+        console.log(`NATIVE CONSENT ${label}; choose actual native dialog button`);
+        await until(async () => await page.locator('#profiles').getAttribute('aria-busy') !== 'true', 120000);
+      };
+      await requestReview('cancel operation outcome review');
+      assert((await snapshot()).operationReviews.items.some(item => item.intent.operationId === droppedResult.operationId)); assert.equal(operationState(), 'unknown');
+      await requestReview('approve review and permit new intents');
+      assert.equal((await snapshot()).operationReviews.items.length, 0); assert.equal(operationState(), 'unknown');
+      report.checks.nativeHumanReviewKeepsUnknownOutcome = true;
+      await native('execute-clipboard', 'approve fresh grant after review');
+      await until(async () => (await snapshot()).execution?.state === 'online');
+      stateReadSeen = false; await send('Synthetic explicit desktop origin after review clipboard');
+      console.log('NATIVE CONSENT approve a new clipboard intent after review; choose actual native Write');
+      await until(() => stateReadSeen, 120000);
+      assert.equal(operationState(), 'unknown');
+      const laterAudit = await owner(`/api/endpoint-tools/invocations?principalId=${firstId}`);
+      assert.equal(laterAudit.items.filter(item => item.status === 'succeeded' && item.effect === 'write').length, 1);
+      report.checks.newIntentRequiresFreshGrantAndPerCallConsent = true;
+      await page.locator('#execution-stop').evaluate(button => button.click());
+      await until(async () => (await snapshot()).execution?.state === 'stopped');
+    }
     const before = inputPosts; await chat.locator('#input').fill('Retained while desktop offline'); await chat.locator('#send').click();
     await until(async () => await chat.locator('#notice').textContent().then(value => value.includes('本机能力尚未连接')));
     assert.equal(inputPosts, before); assert.equal(await chat.locator('#input').inputValue(), 'Retained while desktop offline');
@@ -304,6 +363,7 @@ finally {
     if (!guardRestored) { report.passed = false; report.clipboardCleanupFailure = true; process.exitCode = 1; }
   }
   if (application) { try { await application.close(); } catch { killAcceptanceApplication(application); } }
+  for (const peer of wsPeers) peer.terminate();
   proxy?.closeAllConnections(); if (proxy) await new Promise(resolve => proxy.close(resolve));
   inference?.closeAllConnections(); if (inference) await new Promise(resolve => inference.close(resolve));
   if (gateway?.exitCode === null) {

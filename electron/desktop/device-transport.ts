@@ -14,6 +14,7 @@ export function desktopAuthTransport(binding: DesktopBinding, transport: 'direct
       || ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path) && method === 'POST'
       || ['/api/endpoint-tools/compatibility', '/api/desktop-host/status', '/api/desktop-host/compatibility'].includes(path) && method === 'GET'
       || ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path) && method === 'DELETE'
+      || method === 'GET' && (path === '/api/desktop-host/operations' || /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}$/.test(path)) || method === 'POST' && /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}\/review$/.test(path)
       || path === '/api/desktop-host/execution' && ['GET', 'POST', 'DELETE'].includes(method)
       || upload
       || path === '/api/devices/me' && ['GET', 'DELETE'].includes(method))) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');

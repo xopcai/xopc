@@ -23,6 +23,7 @@ type Run = { binding: DesktopBinding; epoch: number; transport: 'ssh' | 'direct'
 export class DesktopExecutionManager {
   private active?: Run;
   private status?: Status;
+  private stoppingRun?: Run;
   private cleanup: Promise<void> = Promise.resolve();
   constructor(private readonly options: {
     manager: GatewayConnectionPreview; store: DesktopIdentityStore; executorRoot: string; catalog: DesktopExecutionCatalog; appVersion: string;
@@ -43,7 +44,8 @@ export class DesktopExecutionManager {
   }
   stop(): Promise<void> {
     const run = this.active;
-    if (!run) return this.cleanup;
+    if (!run || this.stoppingRun === run) return this.cleanup;
+    this.stoppingRun = run;
     run.abort.abort(); clearInterval(run.watchdog);
     void run.host?.stop().catch(() => {});
     this.status = { profileId: run.binding.profileId, state: 'stop-requested' };
@@ -72,7 +74,9 @@ export class DesktopExecutionManager {
       catch { this.status = { profileId: run.binding.profileId, state: 'stop-unconfirmed', remoteRevocationConfirmed: confirmed }; return; }
       this.active = undefined;
       this.status = { profileId: run.binding.profileId, state: 'stopped', remoteRevocationConfirmed: confirmed, ...(outcome.resultUnknown ? { resultUnknown: true } : {}) };
-    });
+    }).catch(() => {
+      this.status = { profileId: run.binding.profileId, state: 'stop-unconfirmed', resultUnknown: true };
+    }).finally(() => { if (this.stoppingRun === run) this.stoppingRun = undefined; });
     return this.cleanup;
   }
   async requireStopped(): Promise<void> {
@@ -104,10 +108,15 @@ export class DesktopExecutionManager {
       run.deviceId = (await client.readSelf()).deviceId; current();
       const compatibility = await client.endpointRequest('/api/desktop-host/compatibility', 'GET', undefined, run.deviceId); current();
       if (compatibility?.gatewayId !== binding.gatewayId || compatibility.publicKey !== binding.publicKey || compatibility.capabilities?.reliableExecutionVersion !== 1) throw new Error('DESKTOP_EXECUTION_UNSUPPORTED');
+      if (compatibility.capabilities?.operationReviewVersion === 1) {
+        const pending = await client.endpointRequest('/api/desktop-host/operations', 'GET', undefined, run.deviceId); current();
+        if (!Array.isArray(pending?.items) || pending.items.length) throw new Error('DESKTOP_OPERATION_RECONCILIATION_REQUIRED');
+      }
+      const catalog = new DesktopExecutionCatalog(this.options.catalog.descriptors().filter(tool => tool.name !== 'desktop.operation.get_status' || compatibility.capabilities?.operationStatusVersion === 1));
       const previous = await client.endpointRequest('/api/desktop-host/execution', 'GET', undefined, run.deviceId); current();
       if (previous?.deviceId !== run.deviceId || !Number.isSafeInteger(previous.revision)) throw new Error('DESKTOP_EXECUTION_DENIED');
       const grant: DesktopExecutionGrant = { version: 1, grantId: randomUUID(), localApprovalId: randomUUID(), expiresAt: Date.now() + 120000,
-        toolRevisions: Object.fromEntries(this.options.catalog.descriptors().map(tool => [tool.name, this.options.catalog.revision(tool.name)!])) };
+        toolRevisions: Object.fromEntries(catalog.descriptors().map(tool => [tool.name, catalog.revision(tool.name)!])) };
       if (!await this.options.consent(binding, structuredClone(grant), abort.signal)) throw new Error('DESKTOP_LOCAL_CONSENT_DENIED');
       current(); if (!this.options.foreground()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
       // Record the expected revision before POST, so a lost acknowledgement can still be revoked by exact grant identity.
@@ -116,7 +125,7 @@ export class DesktopExecutionManager {
       if (!authorization?.active || authorization.revision !== run.expectedRevision) throw new Error('DESKTOP_EXECUTION_DENIED');
       this.status = { profileId: id, state: 'connecting' };
       run.host = new DesktopExecutionHost({ binding, auth: client, appVersion: this.options.appVersion, approved: grant,
-        authorizationRevision: authorization.revision, catalog: this.options.catalog, journal: run.journal, foreground: this.options.foreground,
+        authorizationRevision: authorization.revision, catalog, journal: run.journal, foreground: this.options.foreground,
         confirm: this.options.confirm, createWorker: this.options.createWorker,
         onState: (state, error) => {
           if (this.active !== run || abort.signal.aborted) return;

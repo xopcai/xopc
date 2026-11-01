@@ -16,7 +16,7 @@ const argument = (name: string) => { const index = process.argv.indexOf(name); a
 const target = await macPackagedTarget(argument('--app')), previous = await macPackagedTarget(argument('--from-app'));
 const schemaArg = process.argv.indexOf('--to-schema');
 const toSchema = schemaArg < 0 ? 266 : Number(process.argv[schemaArg + 1]);
-assert(Number.isSafeInteger(toSchema) && toSchema >= 266 && toSchema <= 267, 'Unsupported audit upgrade target');
+assert(Number.isSafeInteger(toSchema) && toSchema >= 266 && toSchema <= 268, 'Unsupported audit upgrade target');
 const output = await createAcceptanceOutput(join(process.cwd(), 'reports/endpoint-audit-upgrade-installed.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-audit-upgrade-')), token = randomUUID(), auditId = randomUUID();
 const report: any = { passed: false, scope: `Actual packaged v265 Gateway creates the isolated DB, then the candidate performs the offline v${toSchema} upgrade, backup and authenticated audit read. Synthetic historical metadata only.`, checks: {}, startedAt: new Date().toISOString() };
@@ -74,6 +74,7 @@ try {
       assert(current.prepare('PRAGMA table_info(capability_operations)').all().some(column => column.name === 'desktop_intent_json'));
       report.checks.reliableExecutionSchema = true;
     }
+    if (toSchema >= 268) assert.equal(current.prepare('SELECT count(*) AS count FROM desktop_operation_reviews').get()?.count, 0);
     assert.equal(current.prepare('PRAGMA integrity_check').get()?.integrity_check, 'ok'); assert.deepEqual(current.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { current.close(); }
   report.checks.newSchemaIntegrity = true;

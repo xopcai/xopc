@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { serve } from '@hono/node-server';
-import { canonicalJson, endpointHelloSigningPayload, ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointToolDescriptor, type ClientEndpointMessage } from '@xopcai/endpoint-tools-protocol';
+import { canonicalJson, desktopOperationStatusDescriptor, endpointHelloSigningPayload, ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointToolDescriptor, type ClientEndpointMessage } from '@xopcai/endpoint-tools-protocol';
 import { expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 
@@ -66,14 +66,15 @@ it.each(['success', 'denied', 'lost-connection'] as const)('runs the separate ex
     const descriptor: EndpointToolDescriptor = { name: 'desktop.clipboard.write', title: 'Fixture', description: 'Fixture only', inputSchema: { type: 'object' }, outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
       policyId: 'user.foreground-write', sensitivity: 'personal', effect: 'write', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['clipboard-write'], timeoutMs: 10000, maxConcurrency: 1, supportsCancellation: true, idempotent: false, resultKinds: ['text'] };
+    const statusDescriptor = desktopOperationStatusDescriptor();
     const revision = endpointToolRevision(descriptor), expiresAt = Date.now() + 60000;
     const grant = await auth.endpointRequest('/api/desktop-host/execution', 'POST', { expectedRevision: 0, grant: {
-      version: 1, grantId: randomUUID(), localApprovalId: randomUUID(), toolRevisions: { 'desktop.clipboard.write': revision }, expiresAt } });
+      version: 1, grantId: randomUUID(), localApprovalId: randomUUID(), toolRevisions: { 'desktop.clipboard.write': revision, 'desktop.operation.get_status': endpointToolRevision(statusDescriptor) }, expiresAt } });
     lease = new DesktopExecutionLease(join(directory, 'journal')); journal = new DesktopOperationJournal(lease);
     let effects = 0, approvals = 0, stopped = 0, allowStop = false;
     const began = Promise.withResolvers<void>(), completion = Promise.withResolvers<{ status: 'succeeded'; result: { content: { type: 'text'; text: string }[] } }>();
     host = new DesktopExecutionHost({ binding, auth, appVersion: 'fixture', approved: grant.grant, authorizationRevision: grant.revision,
-      catalog: new DesktopExecutionCatalog([descriptor]), journal, foreground: () => true, onState: () => {},
+      catalog: new DesktopExecutionCatalog([descriptor, statusDescriptor]), journal, foreground: () => true, onState: () => {},
       confirm: async () => { approvals += 1; return scenario !== 'denied'; },
       createWorker: () => ({ run: async () => { effects += 1; began.resolve();
         return scenario === 'lost-connection' ? completion.promise : { status: 'succeeded', result: { content: [{ type: 'text', text: 'host result' }] } }; },
@@ -102,6 +103,18 @@ it.each(['success', 'denied', 'lost-connection'] as const)('runs the separate ex
       await expect(result).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' }); expect(effects).toBe(0); expect(approvals).toBe(1);
     } else {
       await expect(result).resolves.toMatchObject({ content: [{ text: 'host result' }] }); await invoke(); expect(effects).toBe(1); expect(approvals).toBe(1);
+      const record = getSqliteDatabase().prepare('SELECT desktop_intent_json FROM capability_operations').get()!;
+      const intent = JSON.parse(String(record.desktop_intent_json));
+      const query = (operationId: string) => endpoints.invocations.invoke({ endpointId, toolCallId: 'status', toolName: statusDescriptor.name,
+        descriptorRevision: endpointToolRevision(statusDescriptor), arguments: { operationId } });
+      await expect(query(randomUUID())).rejects.toMatchObject({ code: 'TOOL_NOT_FOUND' });
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(intent.expiresAt + 1);
+      try {
+        await expect(query(intent.operationId)).resolves.toMatchObject({ content: [{ type: 'json', value: {
+          operationId: intent.operationId, status: 'recorded', receipt: { state: 'succeeded', executionStopped: true } } }] });
+      } finally { clock.mockRestore(); }
+      expect(effects).toBe(1); expect(approvals).toBe(1);
+
     }
     expect((await host.stop()).state).not.toBe('unknown'); expect(host.origin()).toBeUndefined();
     await expect(host.start()).rejects.toThrow('NOT_STARTABLE');

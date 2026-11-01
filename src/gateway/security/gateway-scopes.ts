@@ -35,6 +35,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   // Authentication admits this surface; the dispatcher checks each capability's scopes.
   if (path === '/api/capabilities/operations' || path.startsWith('/api/capabilities/operations/')) return undefined;
   if (method === 'GET' && path === '/api/desktop-host/compatibility') return 'device.self';
+  if (method === 'GET' && (path === '/api/desktop-host/operations' || /^\/api\/desktop-host\/operations\/[^/]+$/.test(path)) || method === 'POST' && /^\/api\/desktop-host\/operations\/[^/]+\/review$/.test(path)) return 'device.self';
   if (method === 'GET' && path === '/api/desktop-host/status') return 'device.self';
   if (['GET', 'POST', 'DELETE'].includes(method) && path === '/api/desktop-host/execution') return 'device.self';
   if (method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path)) return 'device.self';

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -84,4 +84,30 @@ it('reads a journal fingerprint written by the original v1 intent schema without
     .run(operation.operationId, 'a450b44a1b01a48b3c81a656d179208de17ac0b7192851b2ce9862875dd00c13', randomUUID(), 'succeeded', Date.now());
   fixture.close();
   expect(journal.record(operation)).toMatchObject({ fresh: false, receipt: { state: 'succeeded', executionStopped: true } });
+});
+
+it('requires independent stop confirmation for a human review and never rewrites or replays the unknown outcome', () => {
+  lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
+  const operation = intent(); journal.record(operation); journal.start(operation, { invocationId: randomUUID(), connectionInstanceId: randomUUID() });
+  journal.finish(operation, 'unknown');
+  const body = { reviewId: randomUUID(), expectedGeneration: 1, intentFingerprint: createHash('sha256').update(JSON.stringify(operation)).digest('hex'), executorStopped: true as const, localStatus: 'recorded' as const, receipt: journal.inspect(operation)! };
+  expect(() => journal!.review(operation, body)).toThrow(); expect(journal.hasUnknown()).toBe(true);
+  body.receipt = journal.confirmUnknownStopped(operation); journal.review(operation, body);
+  expect(journal.hasUnknown()).toBe(false); expect(journal.inspect(operation)).toMatchObject({ state: 'unknown', executionStopped: true });
+  expect(journal.record(operation).fresh).toBe(false); journal.review(operation, body); expect(journal.reviewed(operation)).toEqual(body);
+  expect(() => journal!.review(operation, { ...body, reviewId: randomUUID() })).toThrow('REVIEW_CONFLICT');
+  expect(() => journal!.record({ ...operation, expiresAt: operation.expiresAt + 1 })).toThrow('IDENTITY_MISMATCH');
+  journal.close(); lease.close(); lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
+  expect(journal.hasUnknown()).toBe(false); expect(journal.record(operation).fresh).toBe(false);
+});
+it('makes a permanent unknown tombstone for an explicitly reviewed missing finite operation, rather than authorizing its replay', () => {
+  lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
+  const operation = { ...intent(), tool: 'desktop.clipboard.write' };
+  const body = { reviewId: randomUUID(), expectedGeneration: 1, intentFingerprint: createHash('sha256').update(JSON.stringify(operation)).digest('hex'), executorStopped: true as const, localStatus: 'not-found' as const };
+  expect(journal.inspect(operation)).toBeUndefined(); journal.review(operation, body); journal.review(operation, body);
+  expect(journal.inspect(operation)).toMatchObject({ state: 'unknown', executionStopped: true }); expect(journal.hasUnknown()).toBe(false);
+  expect(journal.record(operation).fresh).toBe(false);
+  expect(() => journal!.record({ ...operation, deviceId: randomUUID() })).toThrow('IDENTITY_MISMATCH');
+  const unsafe = { ...intent(), tool: 'workspace.command' };
+  expect(() => journal!.review(unsafe, { ...body, reviewId: randomUUID(), intentFingerprint: createHash('sha256').update(JSON.stringify(unsafe)).digest('hex') })).toThrow('STOP_UNCONFIRMED');
 });

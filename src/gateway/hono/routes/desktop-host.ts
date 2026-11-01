@@ -1,3 +1,5 @@
+import { desktopOperationReviewSchema } from '@xopcai/endpoint-tools-protocol';
+import { listDesktopOperationsForReview, reviewDesktopOperation, getDesktopOperationForReview } from '../../../storage/sqlite/desktop-operation-repository.js';
 import { DESKTOP_HOST_MANIFEST, desktopPairingInvitationSchema, desktopSshOriginSchema, DESKTOP_HOST_CAPABILITIES, desktopExecutionGrantSchema } from '@xopcai/gateway-contract';
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
@@ -83,6 +85,29 @@ export function registerDesktopHostRoutes(app: Hono, { service }: AuthenticatedR
       const payload = revokeDesktopExecutionGrant(id.data, input.data.grantId, input.data.expectedRevision);
       if (payload.revision !== previousRevision) service.realtime.disconnectPrincipal(id.data); return c.json({ ok: true, payload });
     } catch (error) { const failure = executionError(error); return c.json({ ok: false, error: { code: failure.code } }, failure.status); }
+  });
+  app.get('/api/desktop-host/operations', c => {
+    c.header('Cache-Control', 'no-store');
+    const id = ownExecutionDevice(getGatewayPrincipal(c));
+    if (!id) return c.json({ ok: false, error: { code: 'DESKTOP_DEVICE_REQUIRED' } }, 403);
+    return executionReply(c, id, { items: listDesktopOperationsForReview(id, getOrCreateGatewayIdentity().id) });
+  });
+  app.get('/api/desktop-host/operations/:operationId', c => {
+    c.header('Cache-Control', 'no-store');
+    const id = ownExecutionDevice(getGatewayPrincipal(c)), operationId = z.uuid().safeParse(c.req.param('operationId'));
+    if (!id) return c.json({ ok: false, error: { code: 'DESKTOP_DEVICE_REQUIRED' } }, 403);
+    if (!operationId.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST' } }, 400);
+    const payload = getDesktopOperationForReview(operationId.data, id, getOrCreateGatewayIdentity().id);
+    return payload ? executionReply(c, id, payload) : c.json({ ok: false, error: { code: 'NOT_FOUND' } }, 404);
+  });
+  app.post('/api/desktop-host/operations/:operationId/review', async c => {
+    c.header('Cache-Control', 'no-store');
+    const id = ownExecutionDevice(getGatewayPrincipal(c));
+    if (!id) return c.json({ ok: false, error: { code: 'DESKTOP_DEVICE_REQUIRED' } }, 403);
+    const operationId = z.uuid().safeParse(c.req.param('operationId')), input = desktopOperationReviewSchema.safeParse(await c.req.json().catch(() => null));
+    if (!operationId.success || !input.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST' } }, 400);
+    try { return executionReply(c, id, reviewDesktopOperation(operationId.data, id, getOrCreateGatewayIdentity().id, input.data)); }
+    catch (error) { if (error instanceof Error && error.message === 'DESKTOP_OPERATION_REVIEW_CONFLICT') return c.json({ ok: false, error: { code: error.message } }, 409); throw error; }
   });
   app.get('/api/desktop-host/status', c => {
     c.header('Cache-Control', 'no-store');
