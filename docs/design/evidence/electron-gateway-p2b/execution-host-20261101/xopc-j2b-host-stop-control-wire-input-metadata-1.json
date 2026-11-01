@@ -1,0 +1,26 @@
+{
+  "scope": "Read-only metadata from previous accepted wire package using original runner",
+  "rows": [
+    {
+      "id": "2803c487-146c-4c6d-9a24-7681ff6a523c",
+      "run_id": "37e34a60-f433-4db7-901c-92ce2a6180fe",
+      "status": "completed",
+      "created_at_ms": 1793501240040,
+      "updated_at_ms": 1793501240276
+    },
+    {
+      "id": "c337bd9a-12ab-482d-869f-3f793561e088",
+      "run_id": "a825da5e-55f5-4ba1-a933-ca970af1ee46",
+      "status": "completed",
+      "created_at_ms": 1793501240324,
+      "updated_at_ms": 1793501240429
+    },
+    {
+      "id": "372f1e96-c948-48d1-9ff3-0e74c6fa8562",
+      "run_id": "09b458a6-928e-41fe-a50e-3a4ae430a27b",
+      "status": "completed",
+      "created_at_ms": 1793501240445,
+      "updated_at_ms": 1793501270549
+    }
+  ]
+}

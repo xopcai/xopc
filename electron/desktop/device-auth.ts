@@ -1,8 +1,8 @@
 import { createHash, createPublicKey, generateKeyPairSync, randomBytes, randomUUID, sign, verify } from 'node:crypto';
 
-import { buildDevicePairingProof, desktopPairingInvitationSchema, type DevicePairingAction } from '@xopcai/gateway-contract';
+import { buildDevicePairingProof, desktopPairingInvitationSchema, desktopExecutionGrantSchema, type DesktopExecutionGrant, type DevicePairingAction } from '@xopcai/gateway-contract';
 import { endpointHelloSigningPayload, endpointToolContentSchema, SCREEN_CAPTURE_MAX_BYTES, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
-import type { EndpointToolFile, EndpointToolUploadGrant } from '@xopcai/endpoint-tools-client';
+import { endpointToolRevision, type EndpointToolFile, type EndpointToolUploadGrant } from '@xopcai/endpoint-tools-client';
 
 import { DesktopIdentityStore, type DesktopBinding, type DesktopIdentity } from './device-identity.js';
 import { DesktopDeviceFrameSigner } from '../../src/endpoint-tools/desktop-device-frame.js';
@@ -121,7 +121,7 @@ export class DesktopDeviceAuth {
       signal?.throwIfAborted();
       if (!(method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path)
         || path === '/api/desktop-host/execution' && ['GET', 'POST', 'DELETE'].includes(method)
-        || method === 'GET' && ['/api/endpoint-tools/compatibility', '/api/desktop-host/status'].includes(path)
+        || method === 'GET' && ['/api/endpoint-tools/compatibility', '/api/desktop-host/status', '/api/desktop-host/compatibility'].includes(path)
         || method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path))) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
       const record = await this.enrolled();
       if (expectedDeviceId && record.deviceId !== expectedDeviceId) throw new Error('DESKTOP_DEVICE_IDENTITY_MISMATCH');
@@ -148,6 +148,23 @@ export class DesktopDeviceAuth {
         || hello.deviceFrames?.version !== 1) throw new Error('DESKTOP_OBSERVATION_DENIED');
       const signer = new DesktopDeviceFrameSigner({ gatewayId: this.binding.gatewayId, deviceId: record.deviceId!, clientId,
         connectionInstanceId: hello.connectionInstanceId, authorizationRevision: hello.deviceFrames.authorizationRevision }, record.privateKey);
+      try { return { hello: { ...hello, signature: signature(record, endpointHelloSigningPayload(hello)) }, signer }; }
+      catch (error) { signer.close(); throw error; }
+    });
+  }
+  /** The main-process caller must supply its locally approved, immutable grant, never renderer input. */
+  prepareExecutionEndpoint(hello: EndpointHelloPayload, clientId: string, approved: DesktopExecutionGrant): Promise<{ hello: EndpointHelloPayload; signer: DesktopDeviceFrameSigner }> {
+    const grant = desktopExecutionGrantSchema.parse(JSON.parse(JSON.stringify(approved)));
+    return this.serial(async () => {
+      const record = await this.enrolled(), execution = hello.execution;
+      if (hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
+        || hello.deviceFrames?.version !== 1 || !execution || execution.version !== 1
+        || execution.authorizationRevision !== hello.deviceFrames.authorizationRevision || execution.grantId !== grant.grantId
+        || execution.expiresAt !== grant.expiresAt || execution.expiresAt <= Date.now()
+        || hello.tools.length !== Object.keys(grant.toolRevisions).length || new Set(hello.tools.map(tool => tool.name)).size !== hello.tools.length
+        || hello.tools.some(tool => grant.toolRevisions[tool.name as keyof typeof grant.toolRevisions] !== endpointToolRevision(tool))) throw new Error('DESKTOP_EXECUTION_DENIED');
+      const signer = new DesktopDeviceFrameSigner({ gatewayId: this.binding.gatewayId, deviceId: record.deviceId!, clientId,
+        connectionInstanceId: hello.connectionInstanceId, authorizationRevision: execution.authorizationRevision }, record.privateKey);
       try { return { hello: { ...hello, signature: signature(record, endpointHelloSigningPayload(hello)) }, signer }; }
       catch (error) { signer.close(); throw error; }
     });

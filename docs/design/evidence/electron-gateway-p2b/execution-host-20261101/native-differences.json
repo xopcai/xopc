@@ -1,0 +1,7 @@
+{
+  "bundleId": "ai.xopc.desktop-observation.acceptance",
+  "changedFiles": [
+    "Contents/Info.plist",
+    "Contents/MacOS/xopc"
+  ]
+}

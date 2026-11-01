@@ -1,0 +1,18 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T02:26:16.555Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T02:26:16.563Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T02:26:16.567Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T02:26:17.073Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-observation-WHKjkj/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T02:26:17.214Z","module":"Gateway:HTTP","requestId":"878d1c94-acd2-46c3-9f70-4910add2c933","method":"POST","path":"/api/realtime/tickets","status":403,"durationMs":1,"clientIp":"unknown","contentLength":94,"msg":"HTTP POST /api/realtime/tickets → 403 (1ms)"}
+{"level":"info","time":"2026-11-01T02:26:17.331Z","module":"EndpointTools","endpointId":"bcee3bc7-1886-404b-b83f-0c938d7c0e6d:43ce88b9-5607-4db2-957c-a2a62674b0fd","connectionId":"f2dbb5b6-0193-4939-a0d4-557e444ce635","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T02:26:17.331Z","module":"Realtime","connectionId":"f2dbb5b6-0193-4939-a0d4-557e444ce635","principalId":"bcee3bc7-1886-404b-b83f-0c938d7c0e6d","clientId":"bb1ed744-a51e-4ade-9f37-4bce16606894","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T02:26:17.567Z","module":"EndpointTools","endpointId":"bcee3bc7-1886-404b-b83f-0c938d7c0e6d:43ce88b9-5607-4db2-957c-a2a62674b0fd","connectionId":"f2dbb5b6-0193-4939-a0d4-557e444ce635","msg":"Endpoint disconnected"}
+{"level":"info","time":"2026-11-01T02:26:17.567Z","module":"Realtime","connectionId":"f2dbb5b6-0193-4939-a0d4-557e444ce635","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  10:26:14
+   Duration  2.98s (transform 1.45s, setup 10ms, import 2.31s, tests 601ms, environment 0ms)
+

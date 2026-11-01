@@ -232,7 +232,7 @@ try {
     assert.equal((await snapshot()).localCapabilities, false);
     await until(async () => !(await owner('/api/endpoint-tools/devices')).find(device => device.id === firstId).endpoints.length);
     const before = inputPosts; await chat.locator('#input').fill('Retained while desktop offline'); await chat.locator('#send').click();
-    await until(async () => await chat.locator('#notice').textContent().then(value => value.includes('本机只读能力尚未连接')));
+    await until(async () => await chat.locator('#notice').textContent().then(value => value.includes('本机能力尚未连接')));
     assert.equal(inputPosts, before); assert.equal(await chat.locator('#input').inputValue(), 'Retained while desktop offline');
     await chat.locator('#use-host').uncheck(); await chat.locator('#send').click();
     await until(() => inputPosts > before && lastInputOrigin?.type === 'system');

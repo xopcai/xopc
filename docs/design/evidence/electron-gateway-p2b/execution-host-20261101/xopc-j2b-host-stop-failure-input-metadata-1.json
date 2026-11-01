@@ -1,0 +1,26 @@
+{
+  "scope": "Read-only metadata from retained failed fixture; no private user database",
+  "rows": [
+    {
+      "id": "9227cd8a-c6f1-47ad-9e49-0af0a7f2fb56",
+      "run_id": "e79ee1a1-41c9-4e5d-b9df-b33845b4bddf",
+      "status": "completed",
+      "created_at_ms": 1793500914115,
+      "updated_at_ms": 1793500914345
+    },
+    {
+      "id": "7525fa43-6db9-4161-a96c-9106d9c44807",
+      "run_id": "28e47144-c780-491b-b15e-b8b897089e88",
+      "status": "cancelled",
+      "created_at_ms": 1793500914406,
+      "updated_at_ms": 1793500914519
+    },
+    {
+      "id": "c6fc260a-6642-4978-a977-7af8ae14cfb7",
+      "run_id": "6838f175-56b6-46c1-b455-50f6264f5f28",
+      "status": "completed",
+      "created_at_ms": 1793500914523,
+      "updated_at_ms": 1793500944604
+    }
+  ]
+}
