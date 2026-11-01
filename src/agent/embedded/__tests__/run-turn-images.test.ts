@@ -147,6 +147,9 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(JSON.stringify(outgoing).match(/Repeated complete file contents/g)).toHaveLength(200);
     expect(JSON.stringify(outgoing)).toContain('same request and response');
     expect(outgoing.filter((message: any) => message.role === 'toolResult')).toHaveLength(2);
+    const reads = outgoing.filter((message: any) => message.role === 'toolResult');
+    expect(reads[0].content[0].text).toContain(JSON.stringify(reads[1].toolCallId));
+    expect(reads.every((message: any) => Object.getOwnPropertySymbols(message).length === 0)).toBe(true);
     expect(messages).toEqual(original);
   });
 

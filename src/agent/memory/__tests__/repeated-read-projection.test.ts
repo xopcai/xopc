@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { projectRepeatedReadResults } from '../repeated-read-projection.js';
 import { buildSessionContextForLlm } from '../../../session/session-context-for-llm.js';
+import { assessContext } from '../context-recovery.js';
 
 const body = 'Stable factual source line\n'.repeat(200);
 function read(id: string, toolName = 'read_file', text = body): AgentMessage[] {
@@ -29,7 +30,7 @@ describe('repeated complete read projection', () => {
     expect(JSON.stringify(result).length).toBeLessThan(JSON.stringify(rows).length - 4000);
     expect(rows).toEqual(original);
     expect(projectRepeatedReadResults(result)).toEqual(result);
-    expect(JSON.stringify(buildSessionContextForLlm(rows)[2])).not.toContain(body);
+    expect((buildSessionContextForLlm(rows)[2] as any).content[0].text).toBe(body);
   });
 
   it('preserves different requests, different responses, unpaired results and command outputs', () => {
@@ -54,8 +55,19 @@ describe('repeated complete read projection', () => {
     expect(projectRepeatedReadResults(rows)).toEqual(rows);
   });
 
-  it('does not reference a body outside the recent history protected from normal budget pruning', () => {
+  it('can share an older retained complete body after budget pruning has finished', () => {
     const old = [...read('first'), ...read('second'), user(), user(), user(), user()];
-    expect(projectRepeatedReadResults(old)).toEqual(old);
+    expect((projectRepeatedReadResults(old)[1] as any).content[0].text).toContain('"second"');
+  });
+
+  it('does not turn budget-truncated reads into references to supposedly complete bodies', () => {
+    const rows = [user(), ...read('first', 'read_file', body.repeat(4)), ...read('second', 'read_file', body.repeat(4))];
+    const before = structuredClone(rows);
+    const result = assessContext({ messages: rows, contextWindow: 3_000, reserveTokens: 512, minToolResultKeepChars: 1_000 },
+      1_000_000, projectRepeatedReadResults);
+    expect(result.prunedToolResults).toBeGreaterThan(0);
+    expect(JSON.stringify(result.messages)).toContain('more characters truncated');
+    expect(JSON.stringify(result.messages)).not.toContain('same request and response');
+    expect(rows).toEqual(before);
   });
 });

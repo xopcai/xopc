@@ -21,13 +21,19 @@ export class ContextRecoveryError extends Error {
 }
 
 /** Projection is ephemeral; the transcript remains the authoritative record. */
-export function assessContext(input: ContextBudgetInput, maxBytes: number) {
+export function assessContext(input: ContextBudgetInput, maxBytes: number,
+  projectFinalMessages?: (messages: AgentMessage[]) => AgentMessage[]) {
   const projection = projectContextForModel({ ...input, reason: 'normal' });
-  const bytes = Buffer.byteLength(stringifyMessagesForBudget(projection.messages), 'utf8');
+  // Final references must target bodies and IDs that survived provider hygiene and budget pruning.
+  const messages = projectFinalMessages?.(projection.messages) ?? projection.messages;
+  const evaluation = projectFinalMessages ? evaluateContextBudget({ ...input, messages }) : projection.evaluation;
+  const bytes = Buffer.byteLength(stringifyMessagesForBudget(messages), 'utf8');
   return {
     ...projection,
+    messages,
+    evaluation,
     bytes,
-    fits: projection.evaluation.estimatedTokens <= projection.evaluation.hardLimitTokens && bytes <= maxBytes,
+    fits: evaluation.estimatedTokens <= evaluation.hardLimitTokens && bytes <= maxBytes,
   };
 }
 

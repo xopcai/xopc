@@ -29,11 +29,13 @@ can still recover the original snapshots from their `transcriptRows` field.
 - `projectRepeatedReadResults` shares exact successful, complete `read_file` and
   `web_fetch` responses, including across user turns. Both the original request
   arguments and response details/content must match. Every receipt, tool-call ID,
-  timestamp, and error status is retained. A retained full body must be in the last
-  three user turns, which normal budget pruning protects. Failures, missing
+  timestamp, and error status is retained. Sharing runs after provider ID hygiene
+  and budget pruning, using the final IDs and surviving complete bodies. History
+  loading keeps read bodies intact; budget-truncated responses cannot become retained
+  full-body references. Failures, missing
   completeness metadata, excerpts, mixed media, commands, and arbitrary MCP/action
-  results keep their existing semantics. This projection runs on loaded history
-  and every provider request, independently of coding verification settings.
+  results keep their existing semantics. This projection runs at the final provider
+  request boundary, independently of coding verification settings.
 - Earlier browser screenshots continue to use the existing visual projection.
   Source boundaries and user text are preserved. Ambiguous envelopes containing
   literal prompt delimiters in a quoted source are left intact.

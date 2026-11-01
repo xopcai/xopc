@@ -9,7 +9,6 @@ import { PERSONAL_PROACTIVE_MESSAGE_TYPE, parsePersonalProactiveMessage } from '
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { projectSourceContextsForLlm } from '../agent/source-context/source-context-projection.js';
-import { projectRepeatedReadResults } from '../agent/memory/repeated-read-projection.js';
 import { TASK_RESULT_DELIVERY_TYPE, parseTaskResultDelivery } from '@xopcai/gateway-contract';
 import { isRoutineTaskAllocationStatus } from './task-allocation-status.js';
 import { VOICE_CALL_TYPE, VOICE_TRANSCRIPT_TYPE, voiceTranscriptMessage } from './voice-transcript.js';
@@ -602,7 +601,7 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       out.push(r);
     }
   }
-  return projectRepeatedReadResults(projectSourceContextsForLlm(projectBrowserVisualContext(sanitizeToolPairs(out))));
+  return projectSourceContextsForLlm(projectBrowserVisualContext(sanitizeToolPairs(out)));
 }
 
 /** Visible chat messages only - no LLM-only audit/context expansion. */
