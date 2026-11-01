@@ -64,7 +64,7 @@ export function assertBrowserUrlAllowed(
 export function isAlwaysBlockedUrl(raw: string): boolean {
   try {
     const url = new URL(raw.trim());
-    const host = url.hostname.toLowerCase();
+    const host = normalizeHostname(url.hostname);
     if (ALWAYS_BLOCKED_HOSTNAMES.has(host)) return true;
     if (ALWAYS_BLOCKED_IPV4.has(host)) return true;
     if (isIPv4(host) && isLinkLocal(host)) return true;
@@ -105,7 +105,7 @@ export function checkPostRedirectUrl(
 
   try {
     const url = new URL(finalUrl.trim());
-    const host = url.hostname.toLowerCase();
+    const host = normalizeHostname(url.hostname);
 
     if (host === 'localhost' || host.endsWith('.localhost')) {
       return 'Blocked: redirect landed on localhost';
@@ -158,8 +158,17 @@ function assertNotApiKeyExfiltration(raw: string): void {
   }
 }
 
+/** URL.hostname retains IPv6 brackets and canonicalizes mapped IPv4 into two hex groups. */
+function normalizeHostname(hostname: string): string {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const mapped = /^::ffff:([a-f0-9]{1,4}):([a-f0-9]{1,4})$/.exec(host);
+  if (!mapped) return host;
+  const high = Number.parseInt(mapped[1], 16), low = Number.parseInt(mapped[2], 16);
+  return [high >>> 8, high & 255, low >>> 8, low & 255].join('.');
+}
+
 function assertNotAlwaysBlocked(hostname: string): void {
-  const host = hostname.toLowerCase();
+  const host = normalizeHostname(hostname);
   if (ALWAYS_BLOCKED_HOSTNAMES.has(host)) {
     throw new Error('Blocked: cloud metadata endpoint');
   }
@@ -172,7 +181,7 @@ function assertNotAlwaysBlocked(hostname: string): void {
 }
 
 function assertNotPrivate(hostname: string, allowPrivate: boolean): void {
-  const host = hostname.toLowerCase();
+  const host = normalizeHostname(hostname);
   if (allowPrivate) return;
 
   if (host === 'localhost' || host.endsWith('.localhost')) {
@@ -222,8 +231,8 @@ function isBlockedIPv4(host: string): boolean {
 
 function isBlockedIPv6(host: string): boolean {
   const h = host.toLowerCase().replace(/^\[|\]$/g, '');
-  if (h === '::1') return true;
-  if (h.startsWith('fe80:')) return true; // link-local
+  if (h === '::' || h === '::1') return true;
+  if (/^fe[89ab][0-9a-f]:/.test(h)) return true; // link-local fe80::/10
   if (h.startsWith('fc') || h.startsWith('fd')) return true; // ULA fc00::/7
   return false;
 }

@@ -172,6 +172,14 @@ export class CuaComputerDriver implements ComputerDriver {
   private preparingSince?: number;
   getPreparationState() { return this.preparingSince === undefined ? undefined : { startedAt: this.preparingSince }; }
   getCaptureStats() { return { ...this.captureStats }; }
+  /** Main-owned recovery metadata only; never expose private endpoints or SDK environment to a renderer. */
+  ownedProcessIdentity(): { driverPid: number; generation: string } | undefined {
+    if (!this.client || !this.host || this.starting || this.stopping || this.cleanupUnconfirmed) return;
+    const connection = this.host.connection();
+    if (!connection || !Number.isSafeInteger(connection.pid) || connection.pid <= 1 || connection.pid === process.pid
+      || !/^[A-Za-z0-9:_-]{1,256}$/.test(connection.generation)) return;
+    return { driverPid: connection.pid, generation: connection.generation };
+  }
   async validatePreviewTarget(target: ComputerTarget, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
     if (!this.client || await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');

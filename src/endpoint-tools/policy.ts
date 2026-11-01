@@ -1,5 +1,6 @@
 import Ajv2020 from 'ajv/dist/2020.js';
-import { COMPUTER_INPUT_SCHEMA, COMPUTER_OUTPUT_SCHEMA } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR, REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
+import { COMPUTER_INPUT_SCHEMA, COMPUTER_OUTPUT_SCHEMA, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import {
   BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
@@ -10,6 +11,8 @@ import {
 } from '@xopcai/browser-control-contract';
 import {
   personalDescriptor,
+  desktopCommandDescriptor,
+  desktopTerminalDescriptors,
   PERSONAL_TOOL_NAMES,
   BRIDGE_LIST_OUTPUT_SCHEMA,
   BRIDGE_READ_OUTPUT_SCHEMA,
@@ -24,6 +27,11 @@ import {
   ENDPOINT_FILE_OUTPUT_SCHEMA,
   ENDPOINT_TEXT_OUTPUT_SCHEMA,
   canonicalJson,
+  DESKTOP_OPERATION_STATUS_INPUT_SCHEMA,
+  DESKTOP_OPERATION_STATUS_OUTPUT_SCHEMA,
+  DESKTOP_WORKSPACE_ACTIONS,
+  desktopWorkspaceDescriptor,
+  SCREEN_CAPTURE_OUTPUT_SCHEMA,
   type EndpointResultKind,
   type EndpointAvailability,
   type EndpointKind,
@@ -55,6 +63,17 @@ function contract(
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
+  [REMOTE_BROWSER_CONTROL_TOOL]: contract(REMOTE_BROWSER_DESCRIPTOR.policyId, REMOTE_BROWSER_DESCRIPTOR.outputSchema, ['json', 'file'], ['browser-control'], REMOTE_BROWSER_DESCRIPTOR.inputSchema),
+  ...Object.fromEntries(desktopTerminalDescriptors().map(descriptor => [descriptor.name,
+    contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema)])),
+  'desktop.command.run': (() => {
+    const descriptor = desktopCommandDescriptor();
+    return contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema);
+  })(),
+  ...Object.fromEntries(DESKTOP_WORKSPACE_ACTIONS.map(action => {
+    const descriptor = desktopWorkspaceDescriptor(action);
+    return [descriptor.name, contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema)];
+  })),
   ...Object.fromEntries(['mobile', 'desktop', 'web', 'browser'].flatMap(kind => [
     [`${kind}.device.get_state`, contract('public.background-read', DEVICE_STATE_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA)],
     [`${kind}.device.get_power`, contract('public.background-read', DEVICE_POWER_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA)],
@@ -64,12 +83,15 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   'desktop.bridge.list_resources': contract('public.background-read', BRIDGE_LIST_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA),
   'desktop.bridge.read_sensor': contract('public.background-read', BRIDGE_READ_OUTPUT_SCHEMA, ['json'], [], BRIDGE_READ_INPUT_SCHEMA),
   'desktop.computer.control': contract('computer.session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
+  [REMOTE_COMPUTER_CONTROL_TOOL]: contract('computer.remote-session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
   'web.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
   'web.file.download': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['file-download']),
   'web.page.get_selection': contract('public.foreground-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], []),
   'web.clipboard.write': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-write']),
   'web.page.navigate': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['navigation']),
+  'desktop.operation.get_status': contract('public.foreground-read', DESKTOP_OPERATION_STATUS_OUTPUT_SCHEMA, ['json'], [], DESKTOP_OPERATION_STATUS_INPUT_SCHEMA),
   'desktop.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
+  'desktop.screen.capture': contract('personal.foreground-read', SCREEN_CAPTURE_OUTPUT_SCHEMA, ['file'], ['screen-read-once'], DEVICE_EMPTY_INPUT_SCHEMA),
   'desktop.file.save': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['file-write']),
   'desktop.notification.show': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['notifications']),
   'desktop.clipboard.read': contract('personal.foreground-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-read']),
@@ -190,8 +212,16 @@ export class EndpointToolPolicy {
           throw new EndpointToolPolicyError(`Browser tool ${descriptor.name} violates its trusted policy`);
         }
         return;
+      case 'desktop.terminal-scoped':
+        this.assertFields(descriptor, 'write', 'never', true, 'personal');
+        if (descriptor.timeoutMs !== 60000 || descriptor.maxConcurrency !== 1 || !descriptor.supportsCancellation || descriptor.idempotent) {
+          throw new EndpointToolPolicyError('Terminal transport violates its trusted policy');
+        }
+        return;
+      case 'browser.remote-session-scoped':
+      case 'computer.remote-session-scoped':
       case 'computer.session-scoped':
-        this.assertFields(descriptor, 'write', 'never', false, 'personal');
+        this.assertFields(descriptor, 'write', descriptor.policyId !== 'computer.session-scoped' ? 'always' : 'never', descriptor.policyId !== 'computer.session-scoped', 'personal');
         if (descriptor.timeoutMs !== 30_000 || descriptor.maxConcurrency !== 1
           || !descriptor.supportsCancellation || descriptor.idempotent) {
           throw new EndpointToolPolicyError('Computer transport violates its trusted policy');

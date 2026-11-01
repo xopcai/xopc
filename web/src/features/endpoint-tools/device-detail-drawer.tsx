@@ -92,7 +92,7 @@ export function DeviceDetailDrawer({
                 </div>
               </section>
 
-              {device.access && !device.access.revokedAt && device.platform !== 'chrome' ? <DevicePhoneAccess key={device.id} device={device} zh={language === 'zh'} /> : null}
+              {device.access && !device.access.revokedAt && ['ios', 'android', 'harmonyos'].includes(device.platform ?? '') ? <DevicePhoneAccess key={device.id} device={device} zh={language === 'zh'} /> : null}
               <section>
                 <h3 className="text-sm font-semibold text-fg">{copy.endpointsTitle}</h3>
                 <div className="mt-2 space-y-2">

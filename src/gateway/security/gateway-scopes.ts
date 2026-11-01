@@ -34,10 +34,16 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (/^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations)?$/.test(path)) return undefined;
   // Authentication admits this surface; the dispatcher checks each capability's scopes.
   if (path === '/api/capabilities/operations' || path.startsWith('/api/capabilities/operations/')) return undefined;
+  if (method === 'GET' && path === '/api/desktop-host/compatibility') return 'device.self';
+  if (method === 'GET' && (path === '/api/desktop-host/operations' || /^\/api\/desktop-host\/operations\/[^/]+$/.test(path)) || method === 'POST' && /^\/api\/desktop-host\/operations\/[^/]+\/review$/.test(path)) return 'device.self';
+  if (method === 'GET' && path === '/api/desktop-host/status') return 'device.self';
+  if (['GET', 'POST', 'DELETE'].includes(method) && path === '/api/desktop-host/execution') return 'device.self';
+  if (method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path)) return 'device.self';
   if (method === 'GET' && path === '/api/mobile/privacy') return 'gateway.status';
   if (path === '/api/realtime/tickets' || path.startsWith('/api/status')) return 'gateway.status';
   if (path === '/api/device-auth/refresh' || path === '/api/devices/me') return 'device.self';
   if (path.startsWith('/api/devices/me/push')) return 'notifications.self';
+  if (method === 'POST' && path === '/api/endpoint-tools/devices/revoke') return 'gateway.admin';
   if (/^\/api\/phone\/conversations\/[^/]+\/summary$/.test(path) && method === 'GET') return 'sessions.read';
   if (/^\/api\/phone\/conversations\/[^/]+$/.test(path) && method === 'GET') return 'phone.view';
   if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/frame$/.test(path) && method === 'GET') return 'phone.view';

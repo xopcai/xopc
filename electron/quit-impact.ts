@@ -1,4 +1,5 @@
 import { getGatewayConnection } from './gateway-process.js';
+import { localGatewayOrigin } from './gateway/local-connection.js';
 
 export type AppQuitImpact = {
   shouldConfirm: boolean;
@@ -12,7 +13,7 @@ export async function getAppQuitImpact(): Promise<AppQuitImpact> {
   const connection = getGatewayConnection();
   if (!connection) return { shouldConfirm: false, blockingCount: 0 };
 
-  const response = await fetch(`http://127.0.0.1:${connection.port}/api/runtime/quit-impact`, {
+  const response = await fetch(`${localGatewayOrigin(connection)}/api/runtime/quit-impact`, {
     headers: { Authorization: `Bearer ${connection.token}` },
     signal: AbortSignal.timeout(QUIT_IMPACT_TIMEOUT_MS),
   });

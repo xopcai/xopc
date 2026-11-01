@@ -8,6 +8,7 @@ import { AutomationRunMutationOutputSchema } from '@xopcai/gateway-contract';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
+import { createAutomationDispatcher } from '../api/dispatcher.js';
 import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
 import { AutomationService } from '../service/automation-service.js';
 import { getAutomationRunRequest, saveAutomationRun, markAutomationRunRead } from '../storage/index.js';
@@ -33,6 +34,22 @@ afterEach(async () => {
   resetXopcDatabaseSingletonForTest();
   rmSync(directory, { recursive: true, force: true });
 });
+it('keeps automation HTTP contracts and permissions identical without unrelated capabilities', async () => {
+  const narrow = createAutomationDispatcher(service);
+  const full = createProductDispatcher(undefined, { getAutomations: () => service });
+  for (const surface of ['http', 'cli', 'agent'] as const) {
+    for (const scopes of [['gateway.admin'], ['automations.read'], ['automations.write'], []] as const) {
+      const context = { ...caller, surface, scopes };
+      expect(narrow.list(context)).toEqual(full.list(context).filter(c => c.id.startsWith('xopc.automations.')));
+    }
+  }
+  await expect(narrow.call('xopc.automations.product_events', { eventType: 'unknown' },
+    { ...caller, scopes: ['automations.read'] })).resolves.toMatchObject({ ok: true, items: [] });
+  await expect(narrow.call('xopc.automations.product_events', { eventType: 'unknown' },
+    { ...caller, scopes: [] })).rejects.toThrow('Capability not available');
+  await expect(narrow.call('xopc.automations.product_events', { limit: -1 },
+    { ...caller, scopes: ['automations.read'] })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+});
 async function fixture() {
   const automation = await service.create({ name: 'Safe fixture', trigger: { kind: 'manual' },
     action: { kind: 'agent', instruction: 'Inspect the task result'}, safety: { mode: 'suggest_only' },
@@ -52,6 +69,18 @@ async function completed(runId: string) {
   }
   throw new Error('Run did not complete');
 }
+
+it('replays a previously committed product-dispatcher receipt through the scoped HTTP dispatcher', async () => {
+  const { automation, invoke } = await fixture();
+  const receipt = await invoke(automation.id, 'http-dispatcher-compatible-receipt');
+  const queue = vi.spyOn(service, 'queueRunAtomically');
+  const narrow = createAutomationDispatcher(service);
+  const operation = 'xopc.automations.run';
+  expect(await narrow.call(operation, { id: automation.id }, caller, {
+    ...narrow.describe(operation, caller), idempotencyKey: 'http-dispatcher-compatible-receipt',
+  })).toEqual(receipt);
+  expect(queue).not.toHaveBeenCalled();
+});
 
 describe('automation execution capabilities', () => {
   it('reads current run state and events after cancellation, including after automation deletion', async () => {

@@ -190,6 +190,10 @@ describe('endpoint tool principal routes', () => {
       finishEndpointToolInvocationAudit({ id: `invocation-${index}`, status });
     }
     const app = new Hono();
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, { kind: 'owner', principalId: 'local-owner', scopes: ['gateway.admin'] });
+      await next();
+    });
     registerEndpointToolRoutes(app, { service: {} } as AuthenticatedRouteDeps);
 
     const response = await app.request('/api/endpoint-tools/invocations?page=1&pageSize=1&status=failed');

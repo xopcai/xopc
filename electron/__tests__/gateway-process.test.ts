@@ -15,7 +15,11 @@ vi.mock('electron', () => ({
 import {
   getGatewayConnection,
   getGatewayCredential,
+  getGatewayConnectionDescriptor,
+  isEmbeddedGatewayRegistered,
+  registerEmbeddedGatewayRuntime,
   registerGatewayConnection,
+  restartEmbeddedGatewayFromSavedConfig,
   resolveGatewayStartupMode,
   waitForGatewayReady,
 } from '../gateway-process.js';
@@ -128,11 +132,103 @@ describe('resolveGatewayStartupMode', () => {
   });
 });
 
+it('reports authenticated readiness promptly without skipping compatibility checks', async () => {
+  vi.useFakeTimers();
+  let available = false;
+  let ready: number | undefined;
+  const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+    expect(options?.headers).toEqual({ Authorization: 'Bearer readiness-test' });
+    if (url.endsWith('/api/config')) return new Response('{}', { status: available ? 200 : 503 });
+    expect(url).toContain('/api/endpoint-tools/compatibility');
+    return Response.json({ ok: true, payload: { realtimeProtocolVersion: REALTIME_PROTOCOL_VERSION,
+      computerFrameUploadMaxBytes: COMPUTER_FRAME_MAX_BYTES, endpointProtocolVersion: ENDPOINT_PROTOCOL_VERSION,
+      computerControl: COMPUTER_DESCRIPTOR } });
+  });
+  vi.stubGlobal('fetch', fetch);
+  const pending = waitForGatewayReady(12345, 'readiness-test', { exitCode: null, signalCode: null } as any, 2000)
+    .then(port => { ready = port; });
+  try {
+    await vi.advanceTimersByTimeAsync(1);
+    expect(ready).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    available = true;
+    await vi.advanceTimersByTimeAsync(149);
+    expect(ready).toBe(12345);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  } finally {
+    available = true;
+    await vi.advanceTimersByTimeAsync(2000);
+    await pending;
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
+
 describe('gateway connection', () => {
+  const runtime = { port: 18790, authToken: 'owned', bind: 'loopback' as const,
+    configPath: '/tmp/isolated/xopc.json', workspacePath: '/tmp/isolated/workspace' };
+
+  it('rejects concurrent restarts and a connection replacement while credentials are resolving', async () => {
+    registerEmbeddedGatewayRuntime(runtime);
+    let release!: (value: { port: number; token: string; bind: 'loopback'; bindHost: string }) => void;
+    const pending = new Promise<{ port: number; token: string; bind: 'loopback'; bindHost: string }>(resolve => { release = resolve; });
+    const resolveCredentials = vi.fn(() => pending);
+    const params = { configPath: runtime.configPath, workspacePath: runtime.workspacePath, resolveCredentials };
+    const first = restartEmbeddedGatewayFromSavedConfig(params);
+    await vi.waitFor(() => expect(resolveCredentials).toHaveBeenCalledTimes(1));
+    await expect(restartEmbeddedGatewayFromSavedConfig(params)).rejects.toThrow('already in progress');
+    registerGatewayConnection({ port: 18791, token: 'external' });
+    const rejected = expect(first).rejects.toThrow('connection changed');
+    release({ port: 18790, token: 'owned', bind: 'loopback', bindHost: '127.0.0.1' });
+    await rejected;
+    expect(getGatewayConnection()).toEqual({ port: 18791, token: 'external' });
+    expect(isEmbeddedGatewayRegistered()).toBe(false);
+    // A failed attempt releases the restart lock as well as preserving the successor.
+    registerEmbeddedGatewayRuntime(runtime);
+    await expect(restartEmbeddedGatewayFromSavedConfig({ ...params,
+      resolveCredentials: async () => { throw new Error('credential fixture'); } })).rejects.toThrow('credential fixture');
+    registerGatewayConnection({ port: 18791, token: 'external' });
+  });
+
+  it('reuses a compatible service at the saved port without claiming its process', async () => {
+    const token = 'existing-service';
+    const server = createServer((request, response) => {
+      if (request.headers.authorization !== `Bearer ${token}`) { response.writeHead(401).end(); return; }
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify(request.url === '/api/config' ? {} : { ok: true, payload: {
+        realtimeProtocolVersion: REALTIME_PROTOCOL_VERSION, endpointProtocolVersion: ENDPOINT_PROTOCOL_VERSION,
+        computerFrameUploadMaxBytes: COMPUTER_FRAME_MAX_BYTES, computerControl: COMPUTER_DESCRIPTOR,
+      } }));
+    });
+    const port = await listen(server);
+    registerEmbeddedGatewayRuntime(runtime);
+    await expect(restartEmbeddedGatewayFromSavedConfig({ configPath: runtime.configPath,
+      workspacePath: runtime.workspacePath, resolveCredentials: async () => ({
+        port, token, bind: 'loopback', bindHost: '127.0.0.1',
+      }) })).resolves.toEqual({ port, token });
+    expect(server.listening).toBe(true);
+    expect(getGatewayConnectionDescriptor()).toMatchObject({ ownership: 'external-local', port });
+    expect(isEmbeddedGatewayRegistered()).toBe(false);
+  });
+
   it('stores connection details independently from gateway process ownership', () => {
     registerGatewayConnection({ port: 18790, token: 'dev-token' });
 
     expect(getGatewayConnection()).toEqual({ port: 18790, token: 'dev-token' });
     expect(getGatewayCredential()).toBe('dev-token');
+  });
+
+  it('does not leave embedded restart authority attached to a reused external connection', async () => {
+    registerEmbeddedGatewayRuntime({ port: 18790, authToken: 'owned', bind: 'loopback',
+      configPath: '/tmp/isolated/xopc.json', workspacePath: '/tmp/isolated/workspace' });
+    expect(isEmbeddedGatewayRegistered()).toBe(true);
+    expect(getGatewayConnectionDescriptor()).toMatchObject({ ownership: 'embedded', mode: 'local' });
+    registerGatewayConnection({ port: 18791, token: 'external' });
+    expect(isEmbeddedGatewayRegistered()).toBe(false);
+    expect(getGatewayConnectionDescriptor()).toMatchObject({ ownership: 'external-local', port: 18791 });
+    const resolveCredentials = vi.fn();
+    await expect(restartEmbeddedGatewayFromSavedConfig({ configPath: '/tmp/isolated/xopc.json',
+      workspacePath: '/tmp/isolated/workspace', resolveCredentials })).rejects.toThrow('not registered');
+    expect(resolveCredentials).not.toHaveBeenCalled();
   });
 });

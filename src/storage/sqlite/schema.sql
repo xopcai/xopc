@@ -814,7 +814,8 @@ CREATE TABLE endpoint_tool_invocations (
   error_code            TEXT,
   error_message         TEXT,
   started_at            INTEGER NOT NULL,
-  completed_at          INTEGER
+  completed_at          INTEGER,
+  operation_id          TEXT
 );
 
 CREATE TABLE collaboration_rule_revisions (
@@ -823,6 +824,31 @@ CREATE TABLE collaboration_rule_revisions (
   statement TEXT NOT NULL,
   created_by TEXT NOT NULL CHECK (created_by = 'user'),
   created_at INTEGER NOT NULL
+);
+
+CREATE TABLE desktop_execution_grants (
+  device_id TEXT PRIMARY KEY REFERENCES devices(device_id) ON DELETE CASCADE,
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  grant_id TEXT NOT NULL, approval_id TEXT NOT NULL, grant_json TEXT NOT NULL CHECK (json_valid(grant_json)),
+  active INTEGER NOT NULL CHECK (active IN (0, 1)), updated_at INTEGER NOT NULL
+);
+CREATE TABLE desktop_execution_grant_events (
+  event_id TEXT PRIMARY KEY, device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+  revision INTEGER NOT NULL, grant_id TEXT NOT NULL, approval_id TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('granted', 'revoked')), grant_json TEXT NOT NULL CHECK (json_valid(grant_json)), created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_desktop_execution_approval ON desktop_execution_grant_events(device_id, approval_id) WHERE action = 'granted';
+CREATE UNIQUE INDEX idx_desktop_execution_grant ON desktop_execution_grant_events(device_id, grant_id) WHERE action = 'granted';
+
+CREATE TABLE desktop_execution_stops (
+  device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+  grant_id TEXT NOT NULL,
+  authorization_revision INTEGER NOT NULL CHECK (authorization_revision > 0),
+  stop_id TEXT NOT NULL UNIQUE,
+  receipt_json TEXT NOT NULL CHECK (json_valid(receipt_json)),
+  grant_digest TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (device_id, grant_id, authorization_revision)
 );
 
 CREATE TABLE context_evidence (
@@ -1430,7 +1456,7 @@ CREATE TABLE device_pairing_sessions (
   enrollment_extension_id TEXT,
   enrollment_public_key_thumbprint TEXT,
   enrollment_nonce TEXT,
-  target_kind TEXT NOT NULL CHECK (target_kind IN ('mobile', 'browser'))
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('mobile', 'browser', 'desktop'))
 );
 
 CREATE TABLE device_pairing_requests (
@@ -1526,7 +1552,7 @@ CREATE VIRTUAL TABLE "transcript_fts" USING fts5(
 CREATE TABLE "devices" (
   device_id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL,
-  platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'harmonyos', 'chrome')),
+  platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'harmonyos', 'chrome', 'desktop')),
   extension_id TEXT CHECK (extension_id IS NULL OR length(extension_id) = 32),
   public_key_jwk TEXT NOT NULL,
   scopes_json TEXT NOT NULL,
@@ -1548,6 +1574,12 @@ CREATE TABLE "device_push_endpoints" (
   lease_expires_at INTEGER NOT NULL,
   last_seen_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE desktop_observation_grants (
+  device_id TEXT PRIMARY KEY REFERENCES devices(device_id) ON DELETE CASCADE,
+  revision INTEGER NOT NULL CHECK (revision > 0),
   updated_at INTEGER NOT NULL
 );
 
@@ -1642,6 +1674,8 @@ CREATE TABLE capability_operations (
   created_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'succeeded'
   CHECK (state IN ('running', 'succeeded', 'failed', 'unknown')), generation INTEGER NOT NULL DEFAULT 1, recovery_mode TEXT NOT NULL DEFAULT 'atomic'
   CHECK (recovery_mode IN ('atomic', 'manual', 'provider-idempotent')), lease_expires_at INTEGER, evidence_json TEXT CHECK (evidence_json IS NULL OR json_valid(evidence_json)),
+  desktop_intent_json TEXT CHECK (desktop_intent_json IS NULL OR json_valid(desktop_intent_json)),
+  desktop_receipt_json TEXT CHECK (desktop_receipt_json IS NULL OR json_valid(desktop_receipt_json)),
   UNIQUE(principal_id, capability_id, idempotency_key)
 );
 
@@ -3100,6 +3134,8 @@ CREATE INDEX idx_connector_learning_jobs_account
 
 CREATE INDEX idx_endpoint_tool_invocations_endpoint_started
   ON endpoint_tool_invocations(endpoint_id, started_at DESC);
+CREATE INDEX idx_endpoint_tool_invocations_operation
+  ON endpoint_tool_invocations(operation_id) WHERE operation_id IS NOT NULL;
 
 CREATE UNIQUE INDEX idx_context_evidence_source
   ON context_evidence(principal_id, source_type, COALESCE(source_instance_id, ''), source_ref);
@@ -3657,4 +3693,13 @@ CREATE TABLE session_input_control_operations (
   request_json TEXT NOT NULL,
   run_id TEXT,
   PRIMARY KEY (conversation_id, operation_id)
+);
+CREATE TABLE desktop_operation_reviews (
+  operation_id TEXT PRIMARY KEY REFERENCES capability_operations(operation_id) ON DELETE CASCADE,
+  device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+  review_id TEXT NOT NULL UNIQUE,
+  generation INTEGER NOT NULL CHECK (generation > 0),
+  intent_fingerprint TEXT NOT NULL,
+  observation_json TEXT NOT NULL CHECK (json_valid(observation_json)),
+  created_at INTEGER NOT NULL
 );

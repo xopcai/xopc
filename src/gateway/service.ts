@@ -1840,6 +1840,7 @@ export class GatewayService {
     this.readiness.markStarting();
     await this.endpointTools.locations.close();
     this.endpointTools.close();
+    await this.endpointTools.terminals.whenStopped();
     await this.sideChats.disposeAll();
     this.homeIntelligenceHost?.stop();
     this.homeIntelligenceHost = null;

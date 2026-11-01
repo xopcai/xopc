@@ -3,9 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import {
-  COMPUTER_CONTROL_TOOL, computerActionInputCount, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
+  COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL, computerActionInputCount, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
   type ActionEnvelope, type ComputerCommand, type ComputerModelBinding,
 } from '@xopcai/computer-control-contract';
+import { hasReviewedDesktopExecutionStop, type ReviewedDesktopExecutionScope } from '../storage/sqlite/desktop-operation-repository.js';
+import { hasVerifiedDesktopExecutionStop } from '../storage/sqlite/desktop-execution-stop-repository.js';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForSession } from '../config/agent-profile.js';
@@ -21,6 +23,7 @@ import { executeComputerProgram, type ComputerProgramHost } from './program-runt
 import { executeComputerBatch } from './batch.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
 import { ComputerStabilityTracker } from './stability-diagnostics.js';
+import { invokeComputerCommand } from './endpoint-transport.js';
 import { createLogger } from '../utils/logger.js';
 import { ComputerExpectationSchema, ComputerTaskState, verifyComputerExpectation,
   type ComputerExpectation, type ComputerVerification } from './task-state.js';
@@ -48,6 +51,7 @@ type Session = {
   task: ComputerTaskState;
   flowCapture: ComputerFlowCapture; flowScope: string; flowPrincipalId?: string; lastFlowId?: string;
   diagnostics: ComputerSessionDiagnostics;
+  executionScope?: ReviewedDesktopExecutionScope;
   pendingContext?: { goal: string; before: z.infer<typeof ComputerObservationSchema>; expectation?: ComputerExpectation; flowId?: string };
   serviceLimits?: ComputerServiceLimits;
 };
@@ -100,6 +104,8 @@ export class ComputerRuntime {
   async execute(owner: string, input: ComputerUseInput, signal?: AbortSignal, execution?: { toolCallId: string }): Promise<ComputerPublicResult> {
     input = ComputerUseInputSchema.parse(input);
     if (!owner) throw new Error('COMPUTER_CONVERSATION_REQUIRED');
+    const stale = this.sessions.get(owner);
+    if (stale && !this.operations.has(owner) && this.verifiedRemoteStop(stale)) this.forget(stale);
     if (input.op === 'flows' || input.op === 'forget_flow') {
       signal?.throwIfAborted();
       const scope = this.flowScope(owner);
@@ -385,6 +391,9 @@ export class ComputerRuntime {
       signal.throwIfAborted();
       s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, adapter,
         binding,
+        ...(endpoint.executionAuthority ? { executionScope: { gatewayId: endpoint.executionAuthority.gatewayId, deviceId: endpoint.executionAuthority.deviceId,
+          authorizationRevision: endpoint.executionAuthority.authorizationRevision, tool: REMOTE_COMPUTER_CONTROL_TOOL,
+          toolRevision: endpoint.tools.find(tool => tool.descriptor.name === REMOTE_COMPUTER_CONTROL_TOOL)?.revision ?? '' } } : {}),
         createdAt: Date.now(), actions: 0, modelRequests: 0, rescues: 0, rescueLimit: config.computer.maxRescuesPerSession,
         controller: new AbortController(), task: new ComputerTaskState(),
         flowCapture: new ComputerFlowCapture(), flowPrincipalId: endpoint.principalId, flowScope: JSON.stringify([effective.id, effective.workspace]),
@@ -649,14 +658,12 @@ export class ComputerRuntime {
     const endpoint = explicitBinding ? this.endpoints.bindings.resolve(owner)
       : turnEndpoint ? this.endpoints.registry.get(turnEndpoint) : this.endpoints.bindings.resolve(owner);
     if (!endpoint || endpoint.kind !== 'desktop') throw new Error('COMPUTER_DESKTOP_BINDING_REQUIRED');
+    if (!this.endpoints.registry.getTool(endpoint.endpointId, endpoint.executionAuthority ? REMOTE_COMPUTER_CONTROL_TOOL : COMPUTER_CONTROL_TOOL)) throw new Error('COMPUTER_DESKTOP_UPGRADE_REQUIRED');
     return endpoint;
   }
   private async send(s: Pick<Session, 'endpointId' | 'id'> & Partial<Pick<Session, 'diagnostics'>>, command: ComputerCommand, signal?: AbortSignal) {
     signal?.throwIfAborted();
-    const tool = this.endpoints.registry.getTool(s.endpointId, COMPUTER_CONTROL_TOOL);
-    if (!tool) throw new Error('COMPUTER_DESKTOP_UPGRADE_REQUIRED');
-    const invoke = () => this.endpoints.invocations.invoke({ endpointId: s.endpointId, toolCallId: randomUUID(),
-      toolName: COMPUTER_CONTROL_TOOL, arguments: command, descriptorRevision: tool.revision, signal });
+    const invoke = () => invokeComputerCommand(this.endpoints, s.endpointId, command, signal);
     const phase = command.op === 'open' ? 'open' : command.op === 'act' ? 'dispatch' : command.op === 'observe' ? 'observe' : command.op === 'release' ? 'release' : undefined;
     if (command.op === 'observe') s.diagnostics?.count('observations');
     const startedAt = performance.now();
@@ -690,6 +697,7 @@ export class ComputerRuntime {
     this.operations.get(owner)?.abort();
     clearComputerFrames(owner);
     const s = this.sessions.get(owner); if (!s) return true;
+    if (this.verifiedRemoteStop(s)) { this.forget(s); return true; }
     s.programStore = undefined;
     s.task.clear(); s.pendingContext = undefined;
     s.controller.abort();
@@ -698,11 +706,18 @@ export class ComputerRuntime {
       if (reply.value.status === 'stopped') { this.forget(s); return true; }
     } catch (error) {
       if (error instanceof Error && error.message === 'COMPUTER_SESSION_NOT_FOUND') { this.forget(s); return true; }
+      // Only independently recorded native stop review can release stale remote admission metadata.
+      if (this.verifiedRemoteStop(s)) { this.forget(s); return true; }
       // Retain the admission gate until desktop revocation is confirmed.
     }
     s.diagnostics.fail(new Error('COMPUTER_RELEASE_UNCONFIRMED'), 'release', 'unknown');
     s.diagnostics.finish(false);
     return false;
+  }
+  private verifiedRemoteStop(session: Session): boolean {
+    if (!session.executionScope) return false;
+    try { return hasVerifiedDesktopExecutionStop(session.executionScope) || hasReviewedDesktopExecutionStop(session.executionScope); }
+    catch { return false; }
   }
   getReport(owner: string): ComputerSessionReport | undefined {
     this.pruneReports();

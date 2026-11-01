@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path';
 
 import { getGatewayConnection } from '../gateway-process.js';
+import { localGatewayOrigin } from '../gateway/local-connection.js';
 
 export type ResolvedFileResourcePath =
   | { ok: true; path: string }
@@ -16,7 +17,7 @@ export async function resolveFileResourceHostPath(fileResourceId: unknown): Prom
   }
   try {
     const response = await fetch(
-      `http://127.0.0.1:${connection.port}/api/files/${encodeURIComponent(fileResourceId)}/host-path`,
+      `${localGatewayOrigin(connection)}/api/files/${encodeURIComponent(fileResourceId)}/host-path`,
       {
         headers: { Authorization: `Bearer ${connection.token}` },
         signal: AbortSignal.timeout(5_000),
