@@ -619,7 +619,7 @@
     "voiceMicUnavailable": "麦克风不可用或正被其他应用占用。",
     "voiceRecorderFailed": "语音录制组件启动失败，请重启应用后重试。",
     "voicePlaybackSpeed": "播放速度",
-    "inputPlaceholderSteering": "输入后续问题，按 Enter 加入队列；点击队列项可编辑。",
+    "inputPlaceholderSteering": "Enter 发送后续消息，Alt+Enter 引导当前回复；Shift+Enter 换行。",
     "inputPlaceholderSteeringEdit": "正在编辑队列中的后续问题 — Enter 保存，Esc 放弃修改",
     "followUpQueueAdd": "加入后续问题队列",
     "steeringInterruptSend": "停止当前回复并立即发送（⌘↵ 或 Ctrl+↵）",

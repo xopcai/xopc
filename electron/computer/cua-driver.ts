@@ -114,10 +114,19 @@ export function summarizeWindowAccessibility(elements: Array<Record<string, unkn
   const summary = { ...(platform ? { platform } : {}), text, ...(!elements.length ? { notice: 'Accessibility content is unavailable, not an empty page. Use observe with a visual question. Do not guess controls or claim text was read.' } : {}),
     truncated, elements: [] as Array<Record<string, unknown>> };
   while (JSON.stringify(summary.text).length > 6000) { summary.text = summary.text.slice(0, Math.floor(summary.text.length / 2)); summary.truncated = true; }
-  for (const { element_token: _token, ...item } of elements) {
+  // History and container rows must not consume the budget before input targets.
+  const priority = (item: Record<string, unknown>) => item.role === 'AXWindow' ? 0
+    : item.keyboardFocused === true && item.inputAllowed === true ? 1
+    : item.inputAllowed === true ? 2
+    : Array.isArray(item.semanticActions) && item.semanticActions.length ? 3 : 4;
+  const candidates = elements.map((item, index) => ({ item, index }))
+    .sort((a, b) => priority(a.item) - priority(b.item) || a.index - b.index);
+  const order = new Map(elements.map((item, index) => [String(item.element_index), index]));
+  for (const { item: { element_token: _token, ...item } } of candidates) {
     summary.elements.push({ ...item, ref: `e${item.element_index}` });
     if (JSON.stringify(summary).length > 12_000) { summary.elements.pop(); summary.truncated = true; }
   }
+  summary.elements.sort((a, b) => order.get(String(a.element_index))! - order.get(String(b.element_index))!);
   return JSON.stringify(summary);
 }
 
@@ -312,7 +321,7 @@ export class CuaComputerDriver implements ComputerDriver {
       if (!app.bundleId && app.pid > 0 && !/^ApplicationFrameHost\.exe$/i.test(app.name)
         && (query != null && app.name.toLocaleLowerCase().includes(query.normalize('NFKC').toLocaleLowerCase())
           || [...this.windowsApps.values()].some(known => known.pid === app.pid))) {
-        const native = await readWindowsComputerIdentity(app.pid, undefined, signal).catch(() => undefined);
+        const native = await readWindowsComputerIdentity(app.pid, undefined, signal, false, this).catch(() => undefined);
         signal?.throwIfAborted();
         if (native) app = { ...app, bundleId: native.executable };
       }
@@ -327,7 +336,7 @@ export class CuaComputerDriver implements ComputerDriver {
     const packaged = [...this.windowsApps.entries()].filter(([, app]) => windowsAppIdentity(app)?.packaged);
     for (const host of result.apps.filter(app => app.pid > 0 && /^ApplicationFrameHost\.exe$/i.test(app.name))) {
       for (const window of await this.listWindows(host.pid, signal)) {
-        const identity = await readWindowsComputerIdentity(host.pid, window.windowId.toString(), signal).catch(() => undefined);
+        const identity = await readWindowsComputerIdentity(host.pid, window.windowId.toString(), signal, false, this).catch(() => undefined);
         signal?.throwIfAborted();
         if (!identity) continue;
         for (const [appId, app] of packaged) if (windowsAppMatches(app, identity)) {
@@ -381,7 +390,7 @@ export class CuaComputerDriver implements ComputerDriver {
   }
   private async processIdentity(pid: number): Promise<string> {
     return this.measurePreparation('processIdentity', async () => {
-      if (this.platform === 'win32') return (await readWindowsComputerIdentity(pid)).processIdentity;
+      if (this.platform === 'win32') return (await readWindowsComputerIdentity(pid, undefined, undefined, false, this)).processIdentity;
       if (this.kernelProcessIdentity) {
         let result: Awaited<ReturnType<CuaComputerDriver['callUntyped']>>;
         try { result = await this.callUntyped('list_apps', { process_identity_pid: pid }); }
@@ -396,11 +405,11 @@ export class CuaComputerDriver implements ComputerDriver {
   private async assertWindowApp(target: Pick<ComputerTarget, 'appId' | 'pid' | 'windowId'> & Partial<Pick<ComputerTarget, 'processIdentity'>>, signal: AbortSignal, includeInput = false) {
     if (this.platform !== 'win32') return;
     const app = this.windowsApps.get(target.appId);
-    const native = await readWindowsComputerIdentity(target.pid, target.windowId, signal, includeInput).catch(async error => {
+    const native = await readWindowsComputerIdentity(target.pid, target.windowId, signal, includeInput, this).catch(async error => {
       signal.throwIfAborted();
       if (!includeInput) throw error;
       // Input metadata is optional for observation; identity is never optional.
-      return readWindowsComputerIdentity(target.pid, target.windowId, signal);
+      return readWindowsComputerIdentity(target.pid, target.windowId, signal, false, this);
     });
     if (!app || !windowsAppMatches(app, native)) throw new Error('COMPUTER_WINDOW_APP_CHANGED');
     if (target.processIdentity && native.processIdentity !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
@@ -682,7 +691,7 @@ export class CuaComputerDriver implements ComputerDriver {
           if (pendingCapture) pendingCapture.state.images.length = 0;
           pendingCapture = undefined;
           this.captureStats.attempts++;
-          state = await this.getWindowState(pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+          state = await this.getWindowState(pid, windowId, { includeScreenshot: true, maxElements: this.platform === 'win32' ? 1024 : 180, maxDepth: 12, maxDimension: 1600 }, signal);
           capturedAt = performance.now();
         }
         if (state.pid !== pid || state.windowId !== windowId) throw new Error('COMPUTER_CAPTURE_TARGET_MISMATCH');
@@ -776,7 +785,7 @@ export class CuaComputerDriver implements ComputerDriver {
         if (this.preparationTiming) this.preparationTiming.reusedPreparedFrame = true;
       } else {
         this.captureStats.attempts++;
-        state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+        state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: this.platform === 'win32' ? 1024 : 180, maxDepth: 12, maxDimension: 1600 }, signal);
       }
       signal.throwIfAborted();
       // A resize/render transition can invalidate the optional pixel frame while
@@ -1159,6 +1168,7 @@ export class CuaComputerDriver implements ComputerDriver {
     return this.stopping;
   }
   private async cleanup(): Promise<void> {
+    if (this.platform === 'win32') readWindowsComputerIdentity.close?.(this);
     this.preparedFrame = undefined;
     this.elements = []; this.frame = undefined; this.observedTarget = undefined; this.windowsInput = undefined;
     const client = this.client; this.client = undefined;

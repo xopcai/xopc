@@ -680,6 +680,26 @@ describe('private native driver admission', () => {
       expect(parsed.elements.slice(1).every((e: any) => e.value.length === 500)).toBe(true);
     }
   });
+  it('retains certified input and native controls after a long chat history within the summary budget', () => {
+    const history = Array.from({ length: 178 }, (_, i) => ({ element_index: i + 1,
+      role: 'UIADataItem', label: `Historical message ${i}`, value: 'Old history '.repeat(20) }));
+    const elements = [{ element_index: 0, role: 'AXWindow' }, ...history,
+      { element_index: 179, role: 'AXTextField', label: 'Message', inputAllowed: true,
+        keyboardFocused: true, bounds: { x: 350, y: 820, width: 700, height: 40 },
+        semanticActions: ['setValue'], element_token: 'private-token' },
+      { element_index: 180, role: 'AXButton', label: 'Send', semanticActions: ['activate'] }];
+    const summary = summarizeWindowAccessibility(elements, 'Old history '.repeat(500), false, 'win32');
+    const parsed = JSON.parse(summary);
+    expect(summary.length).toBeLessThanOrEqual(12_000);
+    expect(summary).not.toContain('private-token');
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.elements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ref: 'e179', inputAllowed: true, keyboardFocused: true }),
+      expect.objectContaining({ ref: 'e180', semanticActions: ['activate'] }),
+    ]));
+    expect(parsed.elements.map((item: any) => item.element_index)).toEqual(
+      parsed.elements.map((item: any) => item.element_index).sort((a: number, b: number) => a - b));
+  });
   it.each([false, true])('grounds typing with Retina coordinates and uses the appropriate native/web route (web=%s)', async web => {
     const f = native([]);
     (f.driver as any).frame = { bounds: { x: 100, y: 50, width: 800, height: 600 }, width: 1600, height: 1200 };

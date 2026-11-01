@@ -25,6 +25,7 @@ export interface ComposerKbdContext {
   pendingFollowUpsCount: number;
   flushSteeringDraft?: () => void | Promise<void>;
   interruptDraft?: () => void;
+  steerDraft?: () => void | Promise<void>;
   editingFollowUpId: string | null;
   editingUserTurnId?: string | null;
   onCancelUserMessageEdit?: () => void;
@@ -210,11 +211,15 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           typeof KeyboardEvent !== 'undefined' &&
           e.nativeEvent instanceof KeyboardEvent &&
           e.nativeEvent.isComposing;
-        if (e.key === 'Enter' && !e.shiftKey && !k.isComposing && !nativeComposing) {
+        if (e.key === 'Enter' && !e.shiftKey && !k.isComposing && !isComposingRef.current && !nativeComposing && !disabled && !hidden) {
           e.preventDefault();
           const hasDraft = Boolean(
             k.valueRef.current.trim() || k.attachmentsLen > 0 || k.contextRefsLen > 0,
           );
+          if (e.altKey && !e.metaKey && !e.ctrlKey && hasDraft && k.runBusy && !k.editingUserTurnId && !k.editingFollowUpId) {
+            void k.steerDraft?.();
+            return;
+          }
           if ((e.metaKey || e.ctrlKey) && hasDraft && !k.editingUserTurnId && !k.editingFollowUpId) {
             k.interruptDraft?.();
             return;

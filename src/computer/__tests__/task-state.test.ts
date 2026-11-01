@@ -57,4 +57,17 @@ describe('bounded desktop task state', () => {
     state.clear(); state.record('Unknown', action, obs, { ...receipt, dispatch: 'unknown' }, obs);
     expect(state.history).toHaveLength(0);
   });
+  it('verifies a Windows field only with a complete native label certificate, even in a clipped public tree', () => {
+    const condition = { kind: 'field', label: 'Message', value: 'hello' } as const;
+    const field = { role: 'AXTextField', label: 'Message', value: 'hello', inputAllowed: true, fieldLabelUnique: true };
+    const observation = (extra = {}, fields = [field]) => ({ summary: JSON.stringify({ platform: 'win32', truncated: true,
+      elements: [{ role: 'AXWindow' }, ...fields], ...extra }) } as any);
+    expect(verifyComputerExpectation(condition, observation())?.status).toBe('satisfied');
+    expect(verifyComputerExpectation({ ...condition, value: 'different' }, observation())?.status).toBe('not_met');
+    for (const override of [{ fieldLabelUnique: false }, { inputAllowed: false }, { enabled: false }, { in_web_content: true }]) {
+      expect(verifyComputerExpectation(condition, observation({}, [{ ...field, ...override }]))?.status).toBe('unavailable');
+    }
+    expect(verifyComputerExpectation(condition, observation({ platform: 'darwin' }))?.status).toBe('unavailable');
+    expect(verifyComputerExpectation(condition, observation({}, [field, field]))?.status).toBe('unavailable');
+  });
 });

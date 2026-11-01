@@ -30,6 +30,8 @@ import {
 
 import { createLogger } from '../../utils/logger.js';
 import { acquireEmbeddedRunLease, EmbeddedRunConflictError } from './runs.js';
+import { projectSourceContextsForLlm } from '../source-context/source-context-projection.js';
+import { projectRepeatedReadResults, retainReadProjectionDetails } from '../memory/repeated-read-projection.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import {
@@ -576,7 +578,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             [key, projectSuppressedMemoryBlocks(value, historyContext)])) } : {}),
         });
       // Project using host tool-call ids before provider hygiene rewrites them.
-      const computerMessages = sourceMessages.map(message => {
+      const computerMessages = retainReadProjectionDetails(projectSourceContextsForLlm(sourceMessages)).map(message => {
         if (message.role !== 'toolResult' || message.toolName !== 'computer_use') return message;
         const images = computerImagesForRequest(conversationId, runId, message.toolCallId);
         return images.length ? { ...message, content: [...message.content, ...images] } : message;
@@ -639,7 +641,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         systemPrompt: effectiveSystemPrompt, tools: effectiveTools,
         reserveTokens: compactionPolicy.reserveTokens,
         minToolResultKeepChars: compactionPolicy.minToolResultKeepChars,
-      }, compactionPolicy.maxActiveTranscriptBytes);
+      }, compactionPolicy.maxActiveTranscriptBytes, projectRepeatedReadResults);
       if (!assessed.fits) {
         const errorMessage = `Context budget exceeded before provider request (${assessed.evaluation.estimatedTokens}/${assessed.evaluation.hardLimitTokens} tokens)`;
         log.error({ conversationId, runId, phase: 'provider_preflight',

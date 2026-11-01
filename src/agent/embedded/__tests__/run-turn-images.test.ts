@@ -121,8 +121,99 @@ vi.mock('../xopc-stream-bridge.js', () => ({
 
 import { runXopcEmbeddedTurn } from '../run-turn.js';
 import { EmbeddedRunConflictError } from '../runs.js';
+import { injectSourceContextsIntoUserMessage } from '../../source-context/injector.js';
+import { browserPageContextToAgentContext } from '../../source-context/browser-page.js';
+import { HISTORICAL_SOURCE_CONTEXT_TTL_MS } from '../../source-context/source-context-projection.js';
 
 describe('runXopcEmbeddedTurn image input', () => {
+  it('shares repeated complete reads at the provider boundary without enabling coding verification', async () => {
+    const model = { id: 'test', provider: 'test', contextWindow: 128_000 } as any;
+    await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'read-context',
+      userMessage: { role: 'user', content: 'hello', timestamp: 1 }, model, modelRef: 'test/test',
+      tools: [], systemPrompt: 'system', workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    mocks.baseStreamFn.mockClear();
+    const body = 'Repeated complete file contents\n'.repeat(200);
+    const messages = ['first-read', 'second-read'].flatMap(id => [
+      { role: 'assistant', content: [{ type: 'toolCall', id, name: 'read_file', arguments: { path: '/work/a' } }],
+        model: 'test', provider: 'test', api: 'openai-completions', timestamp: 1 },
+      { role: 'toolResult', toolCallId: id, toolName: 'read_file', isError: false, timestamp: 2,
+        content: [{ type: 'text', text: body }], details: { path: '/work/a', offset: 1, totalLines: 200, truncated: false } },
+    ]);
+    const original = structuredClone(messages);
+    mocks.session.agent.streamFunction(model, { systemPrompt: 'system', messages, tools: [] }, {});
+    const outgoing = mocks.baseStreamFn.mock.calls[0]?.[1].messages;
+    expect(JSON.stringify(outgoing).match(/Repeated complete file contents/g)).toHaveLength(200);
+    expect(JSON.stringify(outgoing)).toContain('same request and response');
+    expect(outgoing.filter((message: any) => message.role === 'toolResult')).toHaveLength(2);
+    const reads = outgoing.filter((message: any) => message.role === 'toolResult');
+    expect(reads[0].content[0].text).toContain(JSON.stringify(reads[1].toolCallId));
+    expect(reads.every((message: any) => Object.getOwnPropertySymbols(message).length === 0)).toBe(true);
+    expect(messages).toEqual(original);
+  });
+
+  it('deduplicates page captures and expires historical bodies at the provider boundary', async () => {
+    const model = { id: 'test', provider: 'test', contextWindow: 128_000 } as any;
+    await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'page-context',
+      userMessage: { role: 'user', content: 'hello', timestamp: 1 }, model, modelRef: 'test/test',
+      tools: [], systemPrompt: 'system', workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    mocks.baseStreamFn.mockClear();
+    const now = Date.now();
+    const messages: AgentMessage[] = ['capture-a', 'capture-b'].map(sourceId => injectSourceContextsIntoUserMessage(
+      { role: 'user', content: 'Analyze the page', timestamp: now }, [browserPageContextToAgentContext({
+        kind: 'browser_page', sourceId, version: '0'.repeat(64), title: 'Page', url: 'https://example.com',
+        capturedAt: now, documentId: sourceId, text: 'Page snapshot body', truncated: false,
+      })],
+    ));
+    const before = structuredClone(messages);
+    const request = () => mocks.session.agent.streamFunction(model, { systemPrompt: 'system', messages, tools: [] }, {});
+    request();
+    const first = JSON.stringify(mocks.baseStreamFn.mock.calls[0]?.[1].messages);
+    expect(first.match(/Page snapshot body/g)).toHaveLength(1);
+    expect(first).toContain('duplicate');
+    const later = now + HISTORICAL_SOURCE_CONTEXT_TTL_MS + 1;
+    messages.push({ role: 'user', content: 'A new topic', timestamp: later });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(later);
+    try {
+      request();
+      const second = JSON.stringify(mocks.baseStreamFn.mock.calls[1]?.[1].messages);
+      expect(second).not.toContain('Page snapshot body');
+      expect(second).toContain('expired');
+      expect(messages.slice(0, 2)).toEqual(before);
+    } finally { clock.mockRestore(); }
+  });
+
+  it('deduplicates and expires device snapshots at every provider request without changing live history', async () => {
+    const model = { id: 'test', provider: 'test', contextWindow: 128_000 } as any;
+    await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'device-context',
+      userMessage: { role: 'user', content: 'hello', timestamp: 1 }, model, modelRef: 'test/test',
+      tools: [], systemPrompt: 'system', workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    mocks.baseStreamFn.mockClear();
+    const now = Date.now();
+    const messages = ['First', 'Second'].map(content => injectSourceContextsIntoUserMessage({ role: 'user', content, timestamp: now }, [{
+      kind: 'device_context', sourceId: 'phone', version: 'v1', title: 'Phone',
+      text: JSON.stringify({ endpointId: 'phone', environment: { capturedAt: now, timezone: 'Asia/Shanghai', locale: 'zh-CN' } }),
+    }]));
+    const before = structuredClone(messages);
+    const request = () => mocks.session.agent.streamFunction(model, { systemPrompt: 'system', messages, tools: [] }, {});
+    request();
+    const first = JSON.stringify(mocks.baseStreamFn.mock.calls[0]?.[1].messages);
+    expect(first.match(/frozen source device/g)).toHaveLength(1);
+    expect(first).toContain('<source_device');
+    expect(first).toContain('Asia/Shanghai');
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 301_000);
+    try {
+      request();
+      expect(JSON.stringify(mocks.baseStreamFn.mock.calls[1]?.[1].messages)).not.toContain('Asia/Shanghai');
+      expect(messages).toEqual(before);
+    } finally { clock.mockRestore(); }
+  });
+
   it('projects computer pixels only into the provider request, leaving transcript and debug payload text-only', async () => {
     const owner = '259a62b5-df35-4b40-88ae-275ddf5f1ba0';
     const model = { id: 'visual-main', provider: 'test', api: 'openai-completions',

@@ -1382,8 +1382,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 editingUserTurnId={editingUserTurn?.turnId}
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
                 onAbort={() => void stream.abort().catch(() => {})}
-                onAddPendingFollowUp={async (text, atts, contextRefs, interrupt) => {
-                  await followUp.addPendingFollowUp(text, atts, contextRefs, pageContextDraft?.envelope, interrupt);
+                onAddPendingFollowUp={async (text, atts, contextRefs, interrupt, delivery) => {
+                  await followUp.addPendingFollowUp(text, atts, contextRefs, pageContextDraft?.envelope, interrupt, delivery);
                   if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
                 }}
                 onSteeringInterrupt={pageContextDraft ? undefined : (text, atts, contextRefs) => void stream.interruptAndSend(text, atts, undefined, contextRefs)}

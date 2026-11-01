@@ -29,14 +29,18 @@ export function verifyComputerExpectation(expectation: ComputerExpectation | und
       if (verification.status === 'satisfied' && before && verifyComputerExpectation(expectation, before)?.status === 'satisfied') verification.preexisting = true;
       return verification;
     }
-    if (data.truncated === true) return result('unavailable');
     if (expectation.kind === 'selected') {
+      if (data.truncated === true) return result('unavailable');
       const candidates = data.elements.filter((e: Record<string, unknown>) => e.label === expectation.label && typeof e.selected === 'boolean');
       if (candidates.length !== 1) return result('unavailable');
       return result(candidates[0].selected ? 'satisfied' : 'not_met');
     }
     const fields = data.elements.filter((e: Record<string, unknown>) => ['AXTextField', 'AXTextArea'].includes(String(e.role)) && e.label === expectation.label);
     if (fields.length !== 1 || typeof fields[0].value !== 'string' || fields[0].in_web_content === true) return result('unavailable');
+    // A full Windows native walk can certify label uniqueness before the public
+    // summary is clipped. Never infer uniqueness from the clipped rows alone.
+    if (data.truncated === true && !(data.platform === 'win32' && fields[0].inputAllowed === true && fields[0].fieldLabelUnique === true)) return result('unavailable');
+    if (fields[0].inputAllowed === false || fields[0].enabled === false) return result('unavailable');
     return result(fields[0].value === expectation.value ? 'satisfied' : 'not_met');
   } catch { return result('unavailable'); }
 }

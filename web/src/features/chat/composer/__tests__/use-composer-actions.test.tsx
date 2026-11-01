@@ -44,6 +44,15 @@ describe('composer acceptance preserves drafts', () => {
     expect(onAddPendingFollowUp).toHaveBeenLastCalledWith('Original', undefined, undefined, false);
   });
 
+  it('requests cooperative steering without interrupting a personal reply', async () => {
+    const onAddPendingFollowUp = vi.fn(async () => {});
+    options = { ...options, personal: true, runBusy: true, onAddPendingFollowUp };
+    await render();
+    await act(async () => actions.flushSteeringDraft(false, 'steer'));
+    expect(onAddPendingFollowUp).toHaveBeenCalledWith('Original', undefined, undefined, false, 'steer');
+    expect(options.resetEditor).toHaveBeenCalledOnce();
+  });
+
   it('clears an unchanged draft only after acceptance', async () => {
     actions.send();
     expect(options.resetEditor).not.toHaveBeenCalled();

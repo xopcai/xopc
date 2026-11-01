@@ -162,6 +162,35 @@ describe('durable session input control', () => {
     expect(getSessionInputState(id).inputs.filter(input => input.id === row.id)).toMatchObject([{ status: 'injecting', targetRunId: 'active-run' }]);
   });
 
+  it('steers text carrying automatic device context from the active endpoint', async () => {
+    enqueue('active'); claimNextSessionInput(id, 'active-run');
+    const context = { kind: 'device_context' as const, sourceId: 'device', version: '1', title: 'Device', text: 'Desktop context' };
+    const row = insertSessionInput({ id: 'guide', conversationId: id, clientMessageId: 'guide', status: 'queued',
+      content: 'Change course', requestedDelivery: 'next', effectiveDelivery: 'next', origin,
+      contextRefs: [{ ...context }], contextSnapshots: [context] });
+    const steer = vi.fn(async (_id: string, _text: string, _runId?: string) => true);
+    await coordinator({ steer }).control(id, { ...command('steer'), inputId: row.id, inputVersion: row.version });
+    expect(steer).toHaveBeenCalledOnce();
+    expect(steer.mock.calls[0]?.[0]).toBe(id);
+    expect(getSessionInputState(id).inputs.find(input => input.id === row.id)?.status).toBe('injecting');
+  });
+
+  it.each(['note', 'other-endpoint'])('rejects steering with %s context', async kind => {
+    enqueue('active'); claimNextSessionInput(id, 'active-run');
+    const context = { kind: kind === 'note' ? 'note' as const : 'device_context' as const,
+      sourceId: 'source', version: '1', title: 'Source', text: 'Context' };
+    const row = insertSessionInput({ id: 'guide', conversationId: id, clientMessageId: 'guide', status: 'queued',
+      content: 'Change course', requestedDelivery: 'next', effectiveDelivery: 'next',
+      origin: kind === 'other-endpoint' ? { type: 'endpoint', endpointId: 'other' } : origin,
+      contextRefs: [context], contextSnapshots: [context] });
+    const steer = vi.fn(async () => true);
+    await expect(coordinator({ steer }).control(id, {
+      ...command('steer'), inputId: row.id, inputVersion: row.version,
+    })).rejects.toThrow('This input cannot steer');
+    expect(steer).not.toHaveBeenCalled();
+    expect(getSessionInputState(id).inputs.find(input => input.id === row.id)?.status).toBe('queued');
+  });
+
   it('retains ambiguous steering without automatically replaying it', async () => {
     enqueue('active'); claimNextSessionInput(id, 'active-run');
     const row = enqueue('steer');

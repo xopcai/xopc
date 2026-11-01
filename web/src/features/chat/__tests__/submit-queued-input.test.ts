@@ -23,6 +23,26 @@ const accepted = (transcriptId = 'transcript') => ({ payload: {
 beforeEach(() => { vi.resetAllMocks(); });
 
 describe('durable follow-up submission', () => {
+  it.each(['accepted', 'not-received'])('recovers a steer submission after a lost reply (%s)', async state => {
+    const steer = { ...command, delivery: 'steer' as const, interrupt: false };
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error('Connection lost'));
+    await expect(submitQueuedInput('conversation', steer, () => true)).rejects.toThrow('Connection lost');
+    const frozen = vi.mocked(savePendingSessionCommand).mock.calls[0][1];
+    vi.mocked(readPendingSessionCommand).mockResolvedValue(frozen);
+    if (state === 'not-received') vi.mocked(apiFetch).mockResolvedValueOnce(Response.json({ error: { code: 'NOT_RECEIVED' } }, { status: 404 }));
+    vi.mocked(apiFetch).mockResolvedValueOnce(Response.json(accepted()));
+    expect(await submitQueuedInput('conversation', { ...steer, clientMessageId: 'new' }, () => true)).toEqual({ revision: 10 });
+    if (state === 'not-received') expect(JSON.parse(vi.mocked(apiFetch).mock.calls[2][1]!.body as string)).toEqual(steer);
+    expect(clearPendingSessionCommand).toHaveBeenCalledWith('conversation', 'original');
+  });
+
+  it.each(['next', 'steer'] as const)('rejects changing unresolved %s delivery semantics', async delivery => {
+    vi.mocked(readPendingSessionCommand).mockResolvedValue({ ...durable(), delivery });
+    await expect(submitQueuedInput('conversation', { ...command, delivery: delivery === 'next' ? 'steer' : 'next' }, () => true))
+      .rejects.toThrow('awaiting confirmation');
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
   it('persists the command before posting and retains it after a lost reply', async () => {
     vi.mocked(apiFetch).mockRejectedValue(new Error('Connection lost'));
     await expect(submitQueuedInput('conversation', command, () => true)).rejects.toThrow('Connection lost');
