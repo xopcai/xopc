@@ -1,4 +1,5 @@
 import Ajv2020 from 'ajv/dist/2020.js';
+import { REMOTE_BROWSER_DESCRIPTOR, REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
 import { COMPUTER_INPUT_SCHEMA, COMPUTER_OUTPUT_SCHEMA, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import {
@@ -62,6 +63,7 @@ function contract(
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
+  [REMOTE_BROWSER_CONTROL_TOOL]: contract(REMOTE_BROWSER_DESCRIPTOR.policyId, REMOTE_BROWSER_DESCRIPTOR.outputSchema, ['json', 'file'], ['browser-control'], REMOTE_BROWSER_DESCRIPTOR.inputSchema),
   ...Object.fromEntries(desktopTerminalDescriptors().map(descriptor => [descriptor.name,
     contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema)])),
   'desktop.command.run': (() => {
@@ -216,9 +218,10 @@ export class EndpointToolPolicy {
           throw new EndpointToolPolicyError('Terminal transport violates its trusted policy');
         }
         return;
+      case 'browser.remote-session-scoped':
       case 'computer.remote-session-scoped':
       case 'computer.session-scoped':
-        this.assertFields(descriptor, 'write', descriptor.policyId === 'computer.remote-session-scoped' ? 'always' : 'never', descriptor.policyId === 'computer.remote-session-scoped', 'personal');
+        this.assertFields(descriptor, 'write', descriptor.policyId !== 'computer.session-scoped' ? 'always' : 'never', descriptor.policyId !== 'computer.session-scoped', 'personal');
         if (descriptor.timeoutMs !== 30_000 || descriptor.maxConcurrency !== 1
           || !descriptor.supportsCancellation || descriptor.idempotent) {
           throw new EndpointToolPolicyError('Computer transport violates its trusted policy');

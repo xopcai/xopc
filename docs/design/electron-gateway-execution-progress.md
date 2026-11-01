@@ -100,3 +100,7 @@ P3d Main 原生入口已接入独立设备能力协商和逐次授权；真实�
 P3d批准前断线恢复缺口已修复（`462f2b547`）：精确契约、无本机journal的请求在固定lease和原生人工核实后持久unknown tombstone；已有Computer记录仍须停止证据。18项专项和含该修复的968项当前回归通过、15条件跳过，全类型检查通过。独立Manager真实认证HTTP/WSS验证旧版本批准前拒绝、取消不扩scope、epoch切换停止私有资源并撤销精确grant；其首轮CORS夹具失败保留。第四版安装包本地/远端回归进行中，Native按钮匹配及完整后续能力仍待完成。
 
 第四版安装包本地新建/旧v266复用、实际菜单切换及远端聊天/故障恢复回归通过，包摘要`7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db`，见[本批安装验证](./evidence/electron-gateway-p3/computer-native-20261101/installed.json)。旧验收脚本标题等待失败已保留并修正精确新旧标题匹配；30秒预算不变。TLS不可信证书在发送凭据前拒绝通过；自签CA正向夹具失败保留，未放宽信任，新包公共证书正向仍待补齐。Native输入仍因锁屏等待，Browser/P4/磁盘约束及最终main交付未完成。
+
+P3d Computer第14轮真实原生整轮通过：独立登记、取消/重授权、逐次批准、真实AX观察及计数器一次输入、持久回执和释放控制。修复release不应等待批准框，保留原5秒释放预算；夹具改用真实已观察ref及stopped终态，不放宽生产树完整性检查。失败10–13保留；第五版实际包本地新建/旧v266复用和远端聊天回归通过，963项相关测试、15项条件跳过及Electron类型检查通过。详见[原生记录](./evidence/electron-gateway-p3/computer-native-20261101/README.md)。Computer原生故障矩阵、Browser/P4/磁盘约束及最终main仍待完成。
+
+P3d Browser专用契约/协调核心完成内部实现，旧browser.control/recording策略保留。新协议只接收绑定设备会话的单动作，拒绝host-path/raw script/endpoint替换；Supervisor journal之后才创建Broker，未知/迟到/停止未确认保持隔离，内存帧清零。64项新旧Browser/策略/Agent回归和全类型检查通过，失败夹具与预算保留，见[核心证据](./evidence/electron-gateway-p3/browser-core-20261101/README.md)。尚未接入grant、Host或Main Browser入口，不标记网络/安装包Browser E2E通过。

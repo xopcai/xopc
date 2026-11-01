@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { canonicalJson, ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointHelloPayload, type EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
+import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
 import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -22,12 +23,12 @@ let root: string;
 let service: EndpointInvocationService | undefined;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'xopc-execution-gateway-')); resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(root, 'gateway.db') }); });
 afterEach(() => { service?.close(); service = undefined; vi.useRealTimers(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(root, { recursive: true, force: true }); });
-it('rejects remote Computer calls from a legacy owner endpoint without independent device execution authority', async () => {
+it.each([REMOTE_COMPUTER_DESCRIPTOR, REMOTE_BROWSER_DESCRIPTOR])('rejects $name from a legacy owner endpoint without independent device execution authority', async descriptor => {
   const registry = new EndpointRegistry(), send = vi.fn();
   registry.register({ principalId: 'owner', endpointId: 'owner-desktop', connectionInstanceId: randomUUID(), displayName: 'Legacy owner', kind: 'desktop', platform: 'desktop',
-    appVersion: 'fixture', availability: 'foreground', nonce: 'fixture', signedAt: Date.now(), signature: 'fixture', tools: [REMOTE_COMPUTER_DESCRIPTOR as never] }, randomUUID(), { readyState: 1, send, close: vi.fn() });
+    appVersion: 'fixture', availability: 'foreground', nonce: 'fixture', signedAt: Date.now(), signature: 'fixture', tools: [descriptor as never] }, randomUUID(), { readyState: 1, send, close: vi.fn() });
   service = new EndpointInvocationService(registry);
-  await expect(service.invoke({ endpointId: 'owner-desktop', toolName: REMOTE_COMPUTER_DESCRIPTOR.name, toolCallId: 'fixture', descriptorRevision: endpointToolRevision(REMOTE_COMPUTER_DESCRIPTOR as never),
+  await expect(service.invoke({ endpointId: 'owner-desktop', toolName: descriptor.name, toolCallId: 'fixture', descriptorRevision: endpointToolRevision(descriptor as never),
     operationId: randomUUID(), arguments: { op: 'observe', owner: 'conversation', sessionId: 'session' } })).rejects.toMatchObject({ code: 'PERMISSION_DENIED', confirmedNoEffect: true });
   expect(send).not.toHaveBeenCalled();
 });
