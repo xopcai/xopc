@@ -24,6 +24,7 @@ export type CommandValidationResult = {
 /** Aggregated result from the exec policy layer. */
 export type ExecPolicyResult = {
   allowed: boolean;
+  blockedBy?: 'command' | 'cwd';
   reason?: string;
   sanitizedEnv: Record<string, string>;
   effectiveCwd: string;

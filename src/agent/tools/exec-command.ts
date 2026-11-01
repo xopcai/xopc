@@ -215,7 +215,10 @@ export function createExecCommandTool(
         allowedEnvVars: passthroughNames,
       });
       if (!policy.allowed) {
-        const text = `Sandbox blocked command: ${policy.reason}\nNothing was executed. Remove destructive cleanup and use a fresh output directory with mkdir -p, or narrow the operation. Do not repeat unchanged or rephrase the blocked operation to bypass policy.`;
+        const recovery = policy.blockedBy === 'cwd'
+          ? `Current session workspace: ${workspaceCwd}\nUse this workspace: omit cwd or choose a directory inside it. The source checkout and other sessions' worktrees may be outside this session's scope.`
+          : 'Remove destructive cleanup and use a fresh output directory with mkdir -p, or narrow the operation.';
+        const text = `Sandbox blocked command: ${policy.reason}\nNothing was executed. ${recovery}\nDo not repeat unchanged or rephrase the blocked operation to bypass policy.`;
         return {
           content: [{ type: 'text', text }],
           details: {
@@ -232,7 +235,9 @@ export function createExecCommandTool(
             stdout: '',
             stderr: text,
             aggregatedOutput: text,
-            failureHint: 'Use a narrower workspace-safe command or inspect files with read/search tools instead.',
+            failureHint: policy.blockedBy === 'cwd'
+              ? recovery
+              : 'Use a narrower workspace-safe command or inspect files with read/search tools instead.',
           },
         };
       }
