@@ -25,3 +25,9 @@
 PTY字节流与独立根操作生命周期核心已实现但尚未暴露。`/tmp/xopc-p3c-terminal-worker-2.log`相关14项通过：真实TTY/有序背压ACK/持久输入去重、元数据Owner SIGKILL不重放、根操作打开后保持running、撤销后独立销毁、创建中取消与删除失败重试。该生命周期及资源中允许terminal.open的扩展在第3版构建后加入，不能以该包宣称PTY已打包或验收；Gateway/Host/Agent/UI专用Broker继续实施。
 
 S5旧候选长测继续独立运行，不是本批Host/PTY长测。性能失败保持待办；S0原预算文件SHA256仍为`e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746`。尚未push或合入main；最终完成全部功能后线性合并并从main重新构建。
+
+## PTY Main内部控制边界补充
+
+新增尚未注册IPC/网络入口的`DesktopTerminalBroker`。完整绑定Gateway、设备、workspace、授权revision、session/generation/connectionInstance；每次远端stdin均调用本机确认钩子，输入不能携带`source=local-user`绕过。打开仅返回running/未停止；根journal和专用容器继续存活。停止使用原3秒预算并核实资源和根操作持久终态，失败阻断输入与接管。关闭后的broker不恢复，须建立新代次。
+
+复查修复等待打开批准时的迟到启动：停止即永久关闭当前broker并取消待批准请求，即使确认回调忽略signal后返回true也不会创建执行器。真实Docker测试已通过该broker和共享supervisor/journal、输入ledger、字节流及容器删除，仍是源代码夹具而非Native/网络接线验收。初次接线将带额外身份字段的scope传给strict resize binding导致拒绝，失败保留于`/tmp/xopc-p3c-terminal-broker-live-1.log`；修复只向worker传递精确binding。第2轮实际Docker通过；最终`/tmp/xopc-p3c-terminal-broker-live-3.log`14项/3文件通过，包含离线停止、迟到批准、3秒停止上限、未确认删除不可接管、实际PTY根操作和输入去重。Electron类型检查21轮通过。最新完整相关回归6轮为201项/29文件通过，未修改预算。
