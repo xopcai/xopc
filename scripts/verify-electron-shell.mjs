@@ -89,7 +89,7 @@ try {
   const clientEnv = localConnectionEnvironment(process.env, root, clientState, localConfig, join(clientState, 'workspace'));
   if (tls && !untrusted) clientEnv.NODE_EXTRA_CA_CERTS = tlsConfig.certPath;
   app = await _electron.launch({ args: [join(root, 'out/main/index.js'), '--gateway-connections'], cwd: root, env: clientEnv, timeout: 30_000 });
-  const setup = await app.firstWindow(); await setup.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+  const setup = await app.firstWindow(); await setup.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor();
   const saved = await setup.evaluate(({ origin, token }) => window.gatewayConnections.save(0, { name: 'Independent Gateway', origin, transport: origin.startsWith('https:') ? 'direct' : 'ssh', credential: token }), { origin, token });
   assert(saved.ok);
   const connected = await setup.evaluate(({ epoch, id }) => window.gatewayConnections.connect(epoch, id), { epoch: saved.snapshot.epoch, id: saved.snapshot.profiles[0].id });
@@ -204,7 +204,7 @@ try {
     process.kill(worker.pid, 'SIGKILL');
   });
   await closedOnCrash;
-  assert.equal(await setup.getByRole('heading', { name: 'Gateway 连接预览' }).isVisible(), true);
+  assert.equal(await setup.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).isVisible(), true);
   report.checks.shellCrashKeepsIndependentRecovery = true;
   await stopGateway();
   const database = new DatabaseSync(join(gatewayState, 'xopc.db'));

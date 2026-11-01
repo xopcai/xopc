@@ -51,7 +51,7 @@ async function launch() {
   browser = await chromium.connectOverCDP(version.webSocketDebuggerUrl);
   const page = browser.contexts()[0].pages()[0];
   page.setDefaultTimeout(20_000);
-  await page.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+  await page.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor();
   return page;
 }
 
