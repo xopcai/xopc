@@ -1,0 +1,19 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T01:14:37.283Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T01:14:37.308Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T01:14:37.318Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T01:14:38.882Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-operation-audit-http-Qan6qe/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"warn","time":"2026-11-01T01:14:39.064Z","module":"Gateway:Auth","requestId":"d7c3e92e-7a42-41a9-8c41-707500c212dd","path":"/api/endpoint-tools/invocations","method":"GET","clientIp":"127.0.0.1","reason":"missing_credential","phase":"gateway.http.auth","msg":"HTTP auth rejected: no Authorization credential"}
+{"level":"info","time":"2026-11-01T01:14:39.067Z","module":"Gateway:HTTP","requestId":"d7c3e92e-7a42-41a9-8c41-707500c212dd","method":"GET","path":"/api/endpoint-tools/invocations","status":401,"durationMs":6,"clientIp":"unknown","userAgent":"node","msg":"HTTP GET /api/endpoint-tools/invocations → 401 (6ms)"}
+{"level":"info","time":"2026-11-01T01:14:39.087Z","module":"Gateway:HTTP","requestId":"c23b7d3d-d083-425c-81c3-c305295d1b28","method":"GET","path":"/api/endpoint-tools/invocations","status":400,"durationMs":1,"clientIp":"unknown","userAgent":"node","msg":"HTTP GET /api/endpoint-tools/invocations → 400 (1ms)"}
+{"level":"info","time":"2026-11-01T01:14:39.089Z","module":"Gateway:HTTP","requestId":"f5f026dc-2eb3-402b-8a88-280f0b2d1c1d","method":"GET","path":"/api/endpoint-tools/invocations","status":400,"durationMs":0,"clientIp":"unknown","userAgent":"node","msg":"HTTP GET /api/endpoint-tools/invocations → 400 (0ms)"}
+{"level":"info","time":"2026-11-01T01:14:39.092Z","module":"Gateway:HTTP","requestId":"0de3e47c-a48e-4e57-a9f2-8feacdbd6798","method":"GET","path":"/api/endpoint-tools/invocations","status":400,"durationMs":1,"clientIp":"unknown","userAgent":"node","msg":"HTTP GET /api/endpoint-tools/invocations → 400 (1ms)"}
+{"level":"info","time":"2026-11-01T01:14:39.113Z","module":"Gateway:HTTP","requestId":"0d74b21e-3478-49b2-a49c-d06e6f6e56dc","method":"GET","path":"/api/endpoint-tools/invocations","status":403,"durationMs":2,"clientIp":"unknown","userAgent":"node","msg":"HTTP GET /api/endpoint-tools/invocations → 403 (2ms)"}
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:14:32
+   Duration  6.73s (transform 4.20s, setup 18ms, import 6.30s, tests 324ms, environment 0ms)
+

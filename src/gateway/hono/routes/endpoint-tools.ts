@@ -190,9 +190,15 @@ export function registerEndpointToolRoutes(
     const pageSize = Number(c.req.query('pageSize') ?? 20);
     const status = c.req.query('status');
     const effect = c.req.query('effect');
+    const operationId = c.req.query('operationId');
+    const actor = getGatewayPrincipal(c), requestedPrincipalId = c.req.query('principalId');
+    if (actor.kind === 'device' && (!actor.deviceId || requestedPrincipalId !== undefined && requestedPrincipalId !== actor.deviceId)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Device audit belongs to another principal' } }, 403);
+    }
     if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100
       || (status && !['running', 'succeeded', 'failed'].includes(status))
-      || (effect && !['read', 'write', 'destructive'].includes(effect))) {
+      || (effect && !['read', 'write', 'destructive'].includes(effect))
+      || (operationId !== undefined && !z.uuid().safeParse(operationId).success)) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid invocation filters' } }, 400);
     }
     return c.json({
@@ -201,7 +207,8 @@ export function registerEndpointToolRoutes(
         page,
         pageSize,
         query: c.req.query('query'),
-        principalId: c.req.query('principalId'),
+        principalId: actor.kind === 'device' ? actor.deviceId : requestedPrincipalId,
+        operationId,
         status: status as 'running' | 'succeeded' | 'failed' | undefined,
         effect: effect as 'read' | 'write' | 'destructive' | undefined,
       }),

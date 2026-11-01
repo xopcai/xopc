@@ -50,3 +50,5 @@ D3a已完成独立签名的设备状态只读Host与逐项原生同意，实际A
 解锁后已继续完成新包聊天窗口截图的原生整轮取消/批准、实际模型图像及撤销恢复验证；补齐锁屏/suspend取消授权，115项Electron、9项集成及采集中断专项通过。原生第12轮通过，早期安全存储、错误焦点、模型夹具重复tool-call id和交互不符等失败全部保留，详见[本轮证据](./evidence/electron-gateway-p2a2/observation-screen-20261101/resumed/README.md)。新包本地及SSH-loopback远端回归通过。显示器/平台/WAN/Host长测缺口继续列出；J2b及后续功能继续推进，最终合并条件不变。
 
 已继续完成J2b-1共享操作/停止回执契约、可取消批准的执行会话适配、独立设备结果帧签名协商及只读Host接线，修复迟到握手和旧socket跨代干扰。277项相关回归、13项主要集成、类型检查、新DMG包内校验、本地新启动/复用、远端恢复/兼容及包内实际Agent图像HTTP验证通过；初次类型和夹具失败保留，原预算不变。见[本批证据](./evidence/electron-gateway-p2b/device-frames-20261101/README.md)。J2b审计/核实与写授权接线、J3/P3/P4继续推进；未提前合入main。
+
+后续J2b-2已将Agent稳定operationId关联到Endpoint审计并提供筛选，修复设备调用审计归属和批量撤销权限边界。schema266完整升级链/历史保留、247项存储、286项连接/协议/Provider、58项认证观察、类型检查以及新DMG本地/旧265 Gateway复用、真实跨包升级/备份、包内认证审计HTTP和远端恢复验证均通过；历史夹具的首次失败已保留，见[审计证据](./evidence/electron-gateway-p2b/operation-audit-20261101/README.md)。继续执行授权与回执接线，仍未开放远端写工具、未完成J3/P3/P4，也未提前合入main。

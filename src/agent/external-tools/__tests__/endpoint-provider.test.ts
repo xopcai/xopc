@@ -141,6 +141,12 @@ describe('EndpointToolProvider', () => {
       descriptorRevision: 'catalog-revision',
       arguments: { text: 'hello' },
     }));
+    const operationId = vi.mocked(endpointRuntime.invocations.invoke).mock.calls[0][0].operationId;
+    expect(operationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(requireXopcDatabase().db.prepare('SELECT operation_id,state FROM capability_operations WHERE operation_id = ?').get(operationId!))
+      .toMatchObject({ operation_id: operationId, state: 'succeeded' });
+    await provider.execute('endpoint:principal-1%3Atab-1:web.clipboard.write', { text: 'hello' }, undefined, { toolCallId: 'call-1' });
+    expect(endpointRuntime.invocations.invoke).toHaveBeenCalledTimes(1);
   });
   it.each(['text/plain', 'image/jpeg'])('delivers selected %s content to the model, instead of filename-only metadata', async mimeType => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-personal-provider-'));

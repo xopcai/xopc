@@ -238,7 +238,7 @@ describe('lazy route bundles', () => {
   });
   it('maps the compatibility preflight without intercepting endpoint core routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/compatibility')?.id).toBe('endpoint-compatibility');
-    for (const path of ['/api/endpoint-tools/principals', '/api/endpoint-tools/compatibility-other']) {
+    for (const path of ['/api/endpoint-tools/principals', '/api/endpoint-tools/invocations', '/api/endpoint-tools/compatibility-other']) {
       expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }
   });

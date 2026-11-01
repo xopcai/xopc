@@ -85,7 +85,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     if (!resolved) throw new Error(`Endpoint tool is unavailable for this turn: ${toolRef}`);
     const revision = context.contractRevision ?? resolved.contractRevision;
     let grantLease: ReturnType<NonNullable<EndpointToolRuntime['grants']>['reserve']> | undefined;
-    const invoke = () => {
+    const invoke = (operationId?: string) => {
       context.signal?.throwIfAborted();
       if (this.resolve(toolRef)?.contractRevision !== revision) {
         throw new ExternalEffectNotAppliedError('Endpoint connection, binding or tool contract changed');
@@ -100,6 +100,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
       toolName: resolved.tool.descriptor.name,
       arguments: args,
       descriptorRevision: resolved.tool.revision,
+      ...(operationId ? { operationId } : {}),
       signal,
       onProgress: (progress) => {
         context.onUpdate?.({

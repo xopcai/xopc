@@ -50,6 +50,7 @@ export interface EndpointInvocationAuditSink {
     effect: 'read' | 'write' | 'destructive';
     confirmationRequired: boolean;
     argumentsSha256: string;
+    operationId?: string;
     startedAt: number;
   }): void;
   finished(params: {
@@ -103,9 +104,13 @@ export class EndpointInvocationService {
     toolName: string;
     arguments: Record<string, unknown>;
     descriptorRevision: string;
+    operationId?: string;
     signal?: AbortSignal;
     onProgress?: (progress: { message?: string; percent?: number }) => void;
   }): Promise<EndpointInvocationResult> {
+    if (params.operationId !== undefined && !z.uuid().safeParse(params.operationId).success) {
+      return Promise.reject(this.error('INVALID_ARGUMENTS', 'Invalid stable operation identity'));
+    }
     const endpoint = this.registry.get(params.endpointId);
     if (!endpoint) return Promise.reject(this.error('ENDPOINT_OFFLINE', 'Endpoint is offline'));
     const tool = this.registry.getTool(params.endpointId, params.toolName);
@@ -162,6 +167,7 @@ export class EndpointInvocationService {
         effect: tool.descriptor.effect,
         confirmationRequired,
         argumentsSha256: crypto.createHash('sha256').update(canonicalJson(params.arguments)).digest('hex'),
+        ...(params.operationId ? { operationId: params.operationId } : {}),
         startedAt,
       });
     } catch (error) {

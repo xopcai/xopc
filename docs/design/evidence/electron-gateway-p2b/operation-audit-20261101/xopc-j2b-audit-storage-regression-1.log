@@ -1,0 +1,280 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T01:15:35.026Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-sqlite-hqrBmR/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.260Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-sqlite-pU6gk4/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.412Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-sqlite-pU6gk4/second.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.542Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-ai-usage-5DJ1M9/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.607Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-sqlite-R14hn2/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.679Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-sqlite-R14hn2/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.784Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-ai-usage-fzJDsK/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.823Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-sqlite-4RpZi2/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.926Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-ai-usage-aSRSZ7/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:35.949Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.039Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-sqlite-NPjErn/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.124Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-ai-usage-qBuPrz/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.346Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-ai-usage-JKDC7F/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.492Z","module":"Sqlite:Upgrade","fromVersion":265,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.522Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-ai-usage-MMOTmD/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.630Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-clarification-T8LLVq/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.639Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-N8nklv/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.683Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-9J5GoM/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.724Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-dgQf4W/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.788Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-clarification-lMYSKb/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.789Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-YX2bdK/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.849Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-sRuKNN/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.917Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-7SVApj/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.929Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-clarification-lBcNN0/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:36.950Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-uM1Zz8/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.001Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-6ECKZw/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.042Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-3xUb8P/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.046Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-clarification-0D1bHH/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.086Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-HZZvVt/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.126Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-K3wxhs/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.163Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-kpYAaM/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.179Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-clarification-nBMBNE/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.215Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-iQlPQ2/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.246Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-kmOMta/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.283Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-IJpInC/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.318Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-clarification-dV9jHk/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.322Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-wfqyVz/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.351Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-7n382X/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.364Z","module":"Sqlite:Upgrade","fromVersion":262,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.389Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-jHEZSA/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.424Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-OyuArF/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.451Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-clarification-gV6bkC/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.466Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-b5kDhE/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.496Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-lwiKzi/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.530Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-IuqMZy/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.537Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-mPBNCo/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.562Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-LCs7rz/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.583Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-access-AYdiD7/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.591Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-mPBNCo/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.602Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-rxUTGT/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.639Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-CyUYg5/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.674Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-GiXNt9/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.708Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-msAFAx/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.718Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-repo-pIQA2H/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.722Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-access-pcczte/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.838Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-eixV86/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.858Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-access-s6cSh5/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.902Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-eixV86/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:37.984Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-access-0Jl2yO/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.014Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-ejHAf6/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.133Z","module":"Sqlite:Upgrade","fromVersion":202,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.238Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-ZNeAEC/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.279Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-ZNeAEC/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.383Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-XZBibt/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.425Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.509Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.512Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-5stF4k/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"error","time":"2026-11-01T01:15:38.514Z","module":"AgentInbox","err":{"type":"Object","message":"retry","stack":"Error: retry\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/src/storage/sqlite/__tests__/durable-application-state.test.ts:103:56\n    at AgentInbox.processPending (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/src/agent/ipc/inbox.ts:59:17)\n    at poll (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/src/agent/ipc/inbox.ts:28:29)\n    at AgentInbox.watch (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/src/agent/ipc/inbox.ts:31:11)\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/src/storage/sqlite/__tests__/durable-application-state.test.ts:103:30\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)","name":"Error"},"messageId":"message","msg":"IPC handler failed; message remains pending"}
+{"level":"info","time":"2026-11-01T01:15:38.581Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.655Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.697Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-durable-IugmD1/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.712Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.761Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.770Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-hmtZOn/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.821Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.877Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.917Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-cglfTp/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.922Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-Vel3vp/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.925Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.935Z","module":"Sqlite:Upgrade","fromVersion":203,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.969Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-cglfTp/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:38.988Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.039Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-bkQ4W3/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.065Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.074Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-Sa1wwW/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.110Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.153Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.190Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-3sS2RW/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.198Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-y3QfYx/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.322Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-QtaznZ/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.430Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-Er7dlE/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.530Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-ZRA76l/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.606Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-knowledge-grEWD6/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.643Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-ZQxdzM/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.724Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-knowledge-fMS82y/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.752Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-aFjmJw/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.768Z","module":"Sqlite:Upgrade","fromVersion":204,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.900Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-knowledge-5YsA27/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:39.921Z","module":"Sqlite:Upgrade","path":"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-3sS2RW/xopc.db","backupPath":"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-3sS2RW/xopc.db.pre-upgrade-v260-b0e0bf0a-d0ac-4691-b880-37fbd81cc3cf.bak","fromVersion":260,"targetVersion":266,"msg":"Created pre-upgrade SQLite backup"}
+{"level":"info","time":"2026-11-01T01:15:39.958Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-sPPZ3V/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.066Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-knowledge-bJEl7a/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.133Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/research-checkpoint-pTyviN/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.206Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-S2N5I9/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.208Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-AfhVPA/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.273Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/research-checkpoint-pTyviN/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.343Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-knowledge-M55Hvq/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.442Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-bil3Ue/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.448Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/research-checkpoint-UrlGtJ/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.450Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-creation-Fp2SWs/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.500Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/research-checkpoint-UrlGtJ/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.562Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-UNP0EU/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.615Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/research-checkpoint-sQzxJx/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.696Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-il9d8P/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.711Z","module":"Sqlite:Upgrade","fromVersion":205,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.734Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/research-checkpoint-DzSv5y/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:40.845Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-input-V46OLy/xopc.db","msg":"Opened xopc SQLite database"}
+ ❯ |component| src/storage/sqlite/__tests__/session-input-repository.test.ts (9 tests | 1 failed) 2300ms
+     × upgrades retired task origins before recovering persisted inputs 934ms
+{"level":"info","time":"2026-11-01T01:15:40.938Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/research-checkpoint-IdFsvZ/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.094Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/research-checkpoint-js8ZhA/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.498Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-discovery-6a0cnk/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.527Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-principal-sD7WuT/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.573Z","module":"Sqlite:Upgrade","fromVersion":206,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.656Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-principal-DBnCIk/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.698Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-discovery-mxIkIr/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.771Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-principal-7I0eiI/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.856Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-discovery-8xSUqP/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.893Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-turn-replace-n4VMch/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:41.902Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-principal-uDhdsm/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.010Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-principal-scuRJU/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.030Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-turn-replace-izjxeR/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.127Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-principal-5auHC1/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.164Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-turn-replace-fuQZ7t/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.311Z","module":"Sqlite:Upgrade","fromVersion":207,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.320Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-turn-replace-a6DXb1/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.522Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-discovery-2SyBcD/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.788Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/notes-home-VYFD7L/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.821Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-z9rA6M/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.870Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-z9rA6M/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.902Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/notes-home-QKmd3D/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:42.987Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-AJCf0f/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.042Z","module":"Sqlite:Upgrade","fromVersion":208,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.045Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/notes-home-9F1uNG/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.110Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-7nXn4f/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.238Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-audit-JAGsDZ/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.276Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-grants-mFS5rD/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.400Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-audit-Sd2Gzq/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.497Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-connector-learning-rMtKci/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.554Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-endpoint-audit-hzNyv5/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.709Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-connector-learning-1sjkYA/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:43.955Z","module":"Sqlite:Upgrade","fromVersion":209,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.264Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-composer-history-tiQqns/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.310Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-commit-effects-aV7Cgx/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.392Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-composer-history-ebUrWG/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.471Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-commit-effects-OKtlzn/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.630Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-composer-history-byVqda/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.704Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-commit-effects-yvnLAt/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.765Z","module":"Sqlite:Upgrade","fromVersion":210,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.775Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-connector-account-rpLyGP/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.849Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-task-plan-AtjzGT/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.861Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-commit-effects-WMh2hL/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.885Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-composer-history-NRadg4/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:44.923Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-task-plan-AtjzGT/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.023Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-task-plan-z8RRlg/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.141Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-task-plan-Rl82SI/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.294Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-fixture-check-U3Be3c/nested/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.339Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-fixture-check-MjnjZF/nested/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.447Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.492Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.534Z","module":"Sqlite:Upgrade","fromVersion":211,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.598Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:45.652Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.023Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-E7E9Wr/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.119Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-jvsuyP/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.177Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-interaction-state-RHEtqh/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.194Z","module":"Sqlite:Upgrade","fromVersion":212,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.221Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-pairing-0WM9Ey/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.269Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.315Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.431Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-notes-ColgXP/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.688Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-home-attention-hKuJpr/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.856Z","module":"Sqlite:Upgrade","fromVersion":213,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:46.913Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-session-origin-CJOsIi/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:47.007Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-user-trust-lqpsB3/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:47.137Z","module":"Sqlite:Connection","path":":memory:","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:47.507Z","module":"Sqlite:Upgrade","fromVersion":214,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:48.108Z","module":"Sqlite:Upgrade","fromVersion":215,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:48.646Z","module":"Sqlite:Upgrade","fromVersion":216,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:49.147Z","module":"Sqlite:Upgrade","fromVersion":217,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:49.610Z","module":"Sqlite:Upgrade","fromVersion":218,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:50.054Z","module":"Sqlite:Upgrade","fromVersion":219,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:50.467Z","module":"Sqlite:Upgrade","fromVersion":220,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:50.842Z","module":"Sqlite:Upgrade","fromVersion":221,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:51.253Z","module":"Sqlite:Upgrade","fromVersion":222,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:51.662Z","module":"Sqlite:Upgrade","fromVersion":223,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:52.052Z","module":"Sqlite:Upgrade","fromVersion":224,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:52.412Z","module":"Sqlite:Upgrade","fromVersion":225,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:52.814Z","module":"Sqlite:Upgrade","fromVersion":226,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:53.214Z","module":"Sqlite:Upgrade","fromVersion":227,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:53.632Z","module":"Sqlite:Upgrade","fromVersion":228,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:54.046Z","module":"Sqlite:Upgrade","fromVersion":229,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:54.484Z","module":"Sqlite:Upgrade","fromVersion":230,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:54.921Z","module":"Sqlite:Upgrade","fromVersion":231,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:55.343Z","module":"Sqlite:Upgrade","fromVersion":232,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:55.748Z","module":"Sqlite:Upgrade","fromVersion":233,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:56.161Z","module":"Sqlite:Upgrade","fromVersion":234,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:56.530Z","module":"Sqlite:Upgrade","fromVersion":235,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:56.898Z","module":"Sqlite:Upgrade","fromVersion":236,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:57.268Z","module":"Sqlite:Upgrade","fromVersion":237,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:57.644Z","module":"Sqlite:Upgrade","fromVersion":238,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:57.971Z","module":"Sqlite:Upgrade","fromVersion":239,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:58.269Z","module":"Sqlite:Upgrade","fromVersion":240,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:58.545Z","module":"Sqlite:Upgrade","fromVersion":241,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:58.797Z","module":"Sqlite:Upgrade","fromVersion":242,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:59.036Z","module":"Sqlite:Upgrade","fromVersion":243,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:59.278Z","module":"Sqlite:Upgrade","fromVersion":244,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:59.521Z","module":"Sqlite:Upgrade","fromVersion":245,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:59.757Z","module":"Sqlite:Upgrade","fromVersion":246,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:15:59.996Z","module":"Sqlite:Upgrade","fromVersion":247,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:00.236Z","module":"Sqlite:Upgrade","fromVersion":248,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:00.478Z","module":"Sqlite:Upgrade","fromVersion":249,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:00.721Z","module":"Sqlite:Upgrade","fromVersion":250,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:00.965Z","module":"Sqlite:Upgrade","fromVersion":251,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:01.206Z","module":"Sqlite:Upgrade","fromVersion":252,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:01.449Z","module":"Sqlite:Upgrade","fromVersion":253,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:01.691Z","module":"Sqlite:Upgrade","fromVersion":254,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:01.935Z","module":"Sqlite:Upgrade","fromVersion":255,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:02.175Z","module":"Sqlite:Upgrade","fromVersion":256,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:02.414Z","module":"Sqlite:Upgrade","fromVersion":257,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:02.654Z","module":"Sqlite:Upgrade","fromVersion":258,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:02.893Z","module":"Sqlite:Upgrade","fromVersion":259,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:03.131Z","module":"Sqlite:Upgrade","fromVersion":260,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:03.375Z","module":"Sqlite:Upgrade","fromVersion":261,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:03.612Z","module":"Sqlite:Upgrade","fromVersion":262,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:03.851Z","module":"Sqlite:Upgrade","fromVersion":263,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:04.090Z","module":"Sqlite:Upgrade","fromVersion":264,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:04.335Z","module":"Sqlite:Upgrade","fromVersion":265,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:04.466Z","module":"Sqlite:Upgrade","fromVersion":217,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:04.615Z","module":"Sqlite:Upgrade","fromVersion":257,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:04.764Z","module":"Sqlite:Upgrade","fromVersion":258,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:04.912Z","module":"Sqlite:Upgrade","fromVersion":259,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:05.058Z","module":"Sqlite:Upgrade","fromVersion":260,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:05.548Z","module":"Sqlite:Upgrade","path":"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-upgrade-SBfXr9/xopc.db","backupPath":"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-upgrade-SBfXr9/xopc.db.pre-upgrade-v257-fcea00d7-3cef-4836-8917-f1c8d2e9f7a2.bak","fromVersion":257,"targetVersion":266,"msg":"Created pre-upgrade SQLite backup"}
+{"level":"info","time":"2026-11-01T01:16:05.567Z","module":"Sqlite:Upgrade","fromVersion":257,"targetVersion":266,"backupPath":"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-upgrade-SBfXr9/xopc.db.pre-upgrade-v257-fcea00d7-3cef-4836-8917-f1c8d2e9f7a2.bak","msg":"Upgraded xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:05.567Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-upgrade-SBfXr9/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:05.579Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-upgrade-SBfXr9/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T01:16:05.713Z","module":"Sqlite:Upgrade","fromVersion":257,"targetVersion":266,"msg":"Upgraded xopc SQLite database"}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |component| src/storage/sqlite/__tests__/session-input-repository.test.ts > session input repository > upgrades retired task origins before recovering persisted inputs
+DatabaseSchemaMigrationFailedError: SQLite database upgrade from v260 to v266 failed; the upgrade was rolled back. table desktop_observation_grants already exists
+ ❯ upgradeXopcDatabase src/storage/sqlite/schema-upgrade.ts:61:11
+     59|   } catch (error) {
+     60|     if (transactionStarted) db.exec('ROLLBACK');
+     61|     throw new DatabaseSchemaMigrationFailedError(fromVersion, targetVe…
+       |           ^
+     62|   } finally {
+     63|     if (foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
+ ❯ ensureXopcDatabaseSchema src/storage/sqlite/schema.ts:27:5
+ ❯ src/storage/sqlite/__tests__/session-input-repository.test.ts:125:5
+
+Caused by: Error: table desktop_observation_grants already exists
+ ❯ upgradeXopcDatabase src/storage/sqlite/schema-upgrade.ts:52:38
+ ❯ ensureXopcDatabaseSchema src/storage/sqlite/schema.ts:27:5
+ ❯ src/storage/sqlite/__tests__/session-input-repository.test.ts:125:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_SQLITE_ERROR', errcode: 1, errstr: 'SQL logic error' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 39 passed (40)
+      Tests  1 failed | 246 passed (247)
+   Start at  09:15:33
+   Duration  32.15s (transform 6.07s, setup 428ms, import 23.25s, tests 53.16s, environment 4ms)
+
