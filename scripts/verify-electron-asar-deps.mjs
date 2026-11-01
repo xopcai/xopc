@@ -114,10 +114,12 @@ function main() {
     }
     verifyUnpackedRuntimeDeps(asarPath);
     verifyUnpackedAppLayout(asarPath);
-    const manifest = verifyDesktopPackageLayout(path => asar.extractFile(asarPath, path), supportedUpgradeFiles(root));
-    verifyCanonicalSqlBytes(path => asar.extractFile(asarPath, path), root);
+    // ASAR extraction uses host separators; logical manifest paths remain portable.
+    const read = path => readFileSync(join(tmp, path));
+    const manifest = verifyDesktopPackageLayout(read, supportedUpgradeFiles(root));
+    verifyCanonicalSqlBytes(read, root);
     console.log(`[verify-electron-asar-deps] OK — ${Object.keys(manifest.files).length} desktop UI, Shell, Gateway and SQL resources`);
-    const artifacts = verifyDesktopArtifactBytes(path => asar.extractFile(asarPath, path), root);
+    const artifacts = verifyDesktopArtifactBytes(read, root);
     console.log(`[verify-electron-asar-deps] OK — ${Object.keys(artifacts.files).length} packaged files match built runtime bytes`);
     if (process.platform === 'darwin' && asarPath.includes('Contents/Resources/')) {
       const native = join(dirname(asarPath), 'bin/desktop-workspace.node'), worker = join(dirname(asarPath), 'bin/workspace-worker.cjs');

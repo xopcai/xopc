@@ -18,13 +18,21 @@ function run(command, args) {
 if (process.platform === 'darwin') {
   const output = join(outputDir, 'voice-hotkey-helper');
   rmSync(output, { force: true });
-  run('swiftc', [
-    join(root, 'electron/native/voice-hotkey-macos.swift'),
-    '-framework', 'AppKit',
-    '-framework', 'ApplicationServices',
-    '-O',
-    '-o', output,
-  ]);
+  const slices = [];
+  for (const arch of ['x86_64', 'arm64']) {
+    const slice = `${output}-${arch}`;
+    slices.push(slice);
+    run('swiftc', [
+      '-target', `${arch}-apple-macosx11.0`,
+      join(root, 'electron/native/voice-hotkey-macos.swift'),
+      '-framework', 'AppKit',
+      '-framework', 'ApplicationServices',
+      '-O',
+      '-o', slice,
+    ]);
+  }
+  run('lipo', ['-create', ...slices, '-output', output]);
+  for (const slice of slices) rmSync(slice, { force: true });
   console.log(`[build-voice-hotkey-helper] Built ${output}`);
 } else if (process.platform === 'win32') {
   const output = join(outputDir, 'voice-hotkey-helper.exe');
