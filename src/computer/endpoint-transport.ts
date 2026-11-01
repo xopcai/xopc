@@ -25,7 +25,7 @@ export async function invokeComputerCommand(endpoints: EndpointToolRuntime, endp
   const identity = command.op === 'act' ? command.envelope.actionId : command.op === 'open' ? 'open' : randomUUID();
   return executeExternalOperation({ principalId: authority.deviceId, capabilityId: `desktop-computer:${authority.deviceId}`,
     idempotencyKey: hash([command.owner, command.sessionId, command.op, identity]), requestDigest: hash(command),
-    descriptorDigest: tool.revision, surface: 'desktop-computer', recovery: 'manual', leaseMs: 30000 }, async operationId => {
+    descriptorDigest: tool.revision, surface: 'desktop-computer', recovery: 'manual' }, async operationId => {
     const current = endpoints.registry.get(endpointId);
     if (signal?.aborted || !current || current.connectionId !== endpoint.connectionId || current.availability !== 'foreground'
       || current.executionAuthority?.connectionInstanceId !== authority.connectionInstanceId
