@@ -1,0 +1,174 @@
+{
+  "passed": false,
+  "startedAt": "2026-11-01T04:13:47.190Z",
+  "checks": {
+    "nativeCancelCreatesNoDevice": true,
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "cancelledObservationExposesNoEndpoint": true
+  },
+  "scope": "Installed Electron 45 native execution acceptance with in-memory clipboard preservation; actual system write and restored formats require successful final checks. SSH-loopback fixture, no physical WAN/files/commands claim",
+  "interactions": [
+    {
+      "label": "cancel first enrollment",
+      "startedAt": "2026-11-01T04:13:49.563Z",
+      "status": "native-dialog-returned",
+      "pid": 78062,
+      "finishedAt": "2026-11-01T04:14:41.950Z"
+    },
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-11-01T04:14:41.956Z",
+      "status": "native-dialog-returned",
+      "pid": 78062,
+      "finishedAt": "2026-11-01T04:14:54.452Z"
+    },
+    {
+      "label": "cancel temporary clipboard grant",
+      "startedAt": "2026-11-01T04:14:54.998Z",
+      "status": "native-dialog-returned",
+      "pid": 78062,
+      "finishedAt": "2026-11-01T04:15:09.683Z"
+    },
+    {
+      "label": "approve temporary clipboard grant",
+      "startedAt": "2026-11-01T04:15:09.686Z",
+      "status": "native-dialog-returned",
+      "pid": 78062,
+      "finishedAt": "2026-11-01T04:15:33.094Z"
+    }
+  ],
+  "nativeCancelCovered": true,
+  "packageBefore": {
+    "files": 1429,
+    "sha256": "159b0decc77fd4ef456b9068be8aa177bf26051ceaf1434241ed9b7d494ea75e"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-j2b-query-delivery-2/native/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-j2b-query-delivery-2/native/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-LOcW9K",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 78062
+  },
+  "inferenceRequests": [
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_53f3f6c2ebd1",
+        "device__desktop_operation_get_status_b9cf594c71c3"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_53f3f6c2ebd1",
+        "device__desktop_operation_get_status_b9cf594c71c3"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    }
+  ],
+  "error": "AssertionError [ERR_ASSERTION]: Native cancellation must return USER_DENIED; a timeout or foreground refusal is not a native cancel\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-execution.mjs:266:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 57042\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=77964, lockPath=/Users/micjoyce/.xopc/locks/gateway.163b13ca.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:57042...\n✅ Gateway started\n   URL: http://127.0.0.1:57042\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:57042\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:57080/devtools/browser/130177ea-19ff-4a29-9ff8-b589c243c459\n[78062:1101/121509.680885:ERROR:electron/shell/browser/ui/message_box_mac.mm:217] CloseMessageBox called with nonexistent ID\n",
+  "clipboard": {
+    "preservedInMemory": true,
+    "expectedTestTextObserved": false,
+    "restored": true
+  },
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-LOcW9K",
+  "finishedAt": "2026-11-01T04:16:42.489Z"
+}
