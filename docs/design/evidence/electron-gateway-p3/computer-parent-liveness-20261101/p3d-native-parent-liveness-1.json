@@ -1,0 +1,16 @@
+{
+  "passed": false,
+  "startedAt": "2026-11-01T08:18:32.736Z",
+  "scope": "Private Computer daemon parent SIGKILL precondition only; no remote Computer capability or UI actions",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "af6a3e9f0eded13f97eba6c942209274c7981b4ac5be340a81aa613135d69193"
+  },
+  "error": "TypeError: app.evaluate is not a function",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-computer-parent-z8CInq",
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "af6a3e9f0eded13f97eba6c942209274c7981b4ac5be340a81aa613135d69193"
+  },
+  "finishedAt": "2026-11-01T08:18:34.014Z"
+}

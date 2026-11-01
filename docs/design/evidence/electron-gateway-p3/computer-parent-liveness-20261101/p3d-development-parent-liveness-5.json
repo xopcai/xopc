@@ -1,0 +1,16 @@
+{
+  "passed": false,
+  "startedAt": "2026-11-01T08:22:40.941Z",
+  "scope": "Development Electron host with packaged Computer SDK/driver: parent SIGKILL precondition only; not installed-app or remote Computer acceptance",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "af6a3e9f0eded13f97eba6c942209274c7981b4ac5be340a81aa613135d69193"
+  },
+  "error": "electronApplication.evaluate: TypeError: A dynamic import callback was not specified.",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-computer-parent-LYn0S0",
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "af6a3e9f0eded13f97eba6c942209274c7981b4ac5be340a81aa613135d69193"
+  },
+  "finishedAt": "2026-11-01T08:22:42.262Z"
+}

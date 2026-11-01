@@ -1,0 +1,16 @@
+{
+  "passed": false,
+  "startedAt": "2026-11-01T08:24:00.440Z",
+  "scope": "Development Electron host with packaged Computer SDK/driver: parent SIGKILL precondition only; not installed-app or remote Computer acceptance",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "af6a3e9f0eded13f97eba6c942209274c7981b4ac5be340a81aa613135d69193"
+  },
+  "error": "Error: Acceptance layout is locked: /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/out/local-connection-acceptance.lock",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-computer-parent-2ed0GE",
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "af6a3e9f0eded13f97eba6c942209274c7981b4ac5be340a81aa613135d69193"
+  },
+  "finishedAt": "2026-11-01T08:24:00.939Z"
+}

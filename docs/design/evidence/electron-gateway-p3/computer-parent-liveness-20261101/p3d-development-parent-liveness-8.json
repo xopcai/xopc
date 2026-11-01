@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T08:24:32.629Z",
+  "scope": "Development Electron host with packaged Computer SDK/driver: parent SIGKILL precondition only; not installed-app or remote Computer acceptance",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "af6a3e9f0eded13f97eba6c942209274c7981b4ac5be340a81aa613135d69193"
+  },
+  "parentKilled": true,
+  "daemonExited": true,
+  "stopElapsedMs": 36.76441599999998,
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "af6a3e9f0eded13f97eba6c942209274c7981b4ac5be340a81aa613135d69193"
+  },
+  "finishedAt": "2026-11-01T08:24:33.603Z"
+}
