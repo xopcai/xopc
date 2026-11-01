@@ -45,6 +45,19 @@ it('commits a remote intent before invocation and returns cached metadata instea
   expect(f.invoke).toHaveBeenCalledWith(expect.objectContaining({ toolName: REMOTE_COMPUTER_CONTROL_TOOL, operationId: expect.any(String) }));
   expect(await f.call()).toEqual(first); expect(f.invoke).toHaveBeenCalledOnce();
 });
+it('uses the existing external-operation lease without shortening the thirty-second native call after dispatch overhead', async () => {
+  const epoch = Date.now(); let ticks = 0;
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => epoch + ticks++);
+  try {
+    const f = fixture();
+    f.invoke.mockImplementationOnce(async input => {
+      const row = getSqliteDatabase().prepare('SELECT lease_expires_at FROM capability_operations WHERE operation_id=?').get(input.operationId) as { lease_expires_at: number };
+      expect(row.lease_expires_at).toBeGreaterThan(Date.now() + REMOTE_COMPUTER_DESCRIPTOR.timeoutMs);
+      return { content: [{ type: 'json', value: { fixture: 'completed' } }] };
+    });
+    await f.call(); expect(REMOTE_COMPUTER_DESCRIPTOR.timeoutMs).toBe(30000);
+  } finally { clock.mockRestore(); }
+});
 it('never replays an unknown action and rejects changed arguments for the same action identity', async () => {
   const f = fixture();
   f.invoke.mockRejectedValueOnce(new Error('fixture lost signed result'));
