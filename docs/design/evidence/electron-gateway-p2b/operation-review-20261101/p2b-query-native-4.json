@@ -1,0 +1,339 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T04:17:28.989Z",
+  "checks": {
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "actualNativeClipboardWriteAndDurableAgentResult": true,
+    "explicitDesktopOriginAcceptedThroughShellAndGateway": true,
+    "nativeHumanReviewKeepsUnknownOutcome": true,
+    "newIntentRequiresFreshGrantAndPerCallConsent": true,
+    "localStopRetainsDraftWithoutImplicitServerFallback": true,
+    "osSafeStorageSurvivesRestart": true,
+    "deviceCheckIndependentOfOwnerCredential": true,
+    "offlineLocalDisableAndOnlineConfirmation": true,
+    "replacementRequiresFreshNativeConsent": true,
+    "externalRevocationNeverAutoReenrolls": true,
+    "encryptedIdentityAndNoLocalGatewayDatabase": true,
+    "afterRevocationNoEndpointOrExecutionScope": true
+  },
+  "scope": "Installed Electron 45, actual OS safeStorage and native grant/per-operation consent, real system clipboard write with in-memory format preservation guard, durable execution Host and Agent over authenticated Gateway HTTP/signed WS. SSH-loopback fixture; not physical WAN or commands/files acceptance",
+  "interactions": [
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-11-01T04:17:31.039Z",
+      "status": "native-dialog-returned",
+      "pid": 90153,
+      "finishedAt": "2026-11-01T04:18:04.482Z"
+    },
+    {
+      "label": "approve temporary clipboard grant",
+      "startedAt": "2026-11-01T04:18:05.019Z",
+      "status": "native-dialog-returned",
+      "pid": 90153,
+      "finishedAt": "2026-11-01T04:18:15.763Z"
+    },
+    {
+      "label": "approve fresh grant after review",
+      "startedAt": "2026-11-01T04:19:46.581Z",
+      "status": "native-dialog-returned",
+      "pid": 90153,
+      "finishedAt": "2026-11-01T04:19:57.896Z"
+    },
+    {
+      "label": "approve replacement enrollment",
+      "startedAt": "2026-11-01T04:20:45.043Z",
+      "status": "native-dialog-returned",
+      "pid": 93886,
+      "finishedAt": "2026-11-01T04:21:19.257Z"
+    }
+  ],
+  "nativeCancelCovered": false,
+  "packageBefore": {
+    "files": 1429,
+    "sha256": "159b0decc77fd4ef456b9068be8aa177bf26051ceaf1434241ed9b7d494ea75e"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-j2b-query-delivery-2/native/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-j2b-query-delivery-2/native/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-CiUtNT",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 93886
+  },
+  "inferenceRequests": [
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_c24716f9eeb3",
+        "device__desktop_operation_get_status_fdf00d960edb"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_c24716f9eeb3",
+        "device__desktop_operation_get_status_fdf00d960edb"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_9c364b8a5578",
+        "device__desktop_operation_get_status_a9daeeaa3617"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_9c364b8a5578",
+        "device__desktop_operation_get_status_a9daeeaa3617"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": false
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    }
+  ],
+  "droppedResult": {
+    "operationId": "5a9c86c4-5900-4a22-a2fe-7eea707889e4"
+  },
+  "packageAfter": {
+    "files": 1429,
+    "sha256": "159b0decc77fd4ef456b9068be8aa177bf26051ceaf1434241ed9b7d494ea75e"
+  },
+  "clipboard": {
+    "preservedInMemory": true,
+    "expectedTestTextObserved": true,
+    "restored": true
+  },
+  "finishedAt": "2026-11-01T04:21:20.147Z"
+}

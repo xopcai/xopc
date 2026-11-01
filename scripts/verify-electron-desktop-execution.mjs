@@ -246,10 +246,16 @@ try {
     let hostOrigin;
     if (observation) {
       console.log('NATIVE PREPARATION focus the actual remote chat window; OS foreground is required before obtaining an execution origin');
-      await until(async () => { hostOrigin = await chat.evaluate(() => window.desktopShell.hostOrigin()); return hostOrigin?.type === 'endpoint'; }, 120000);
+      await until(async () => {
+        if (!(await snapshot()).presentation?.chat?.focused) return false;
+        hostOrigin = await chat.evaluate(() => window.desktopShell.hostOrigin()); return hostOrigin?.type === 'endpoint';
+      }, 120000);
     } else hostOrigin = await chat.evaluate(() => window.desktopShell.hostOrigin());
     assert.equal(hostOrigin.type, 'endpoint'); assert.equal(hostOrigin.endpointId, registered.endpoints[0].endpointId);
-    const send = async text => { await chat.bringToFront(); await chat.locator('#use-host').check(); await chat.locator('#input').fill(text); await chat.locator('#send').click(); };
+    const send = async text => {
+      await chat.bringToFront(); await until(async () => (await snapshot()).presentation?.chat?.focused === true);
+      await chat.locator('#use-host').check(); await chat.locator('#input').fill(text); await chat.locator('#send').click();
+    };
     if (!approvalOnly) {
       await send('Synthetic explicit desktop origin cancel clipboard');
       console.log('NATIVE CONSENT cancel this clipboard operation; choose actual native Cancel');
@@ -257,6 +263,7 @@ try {
       assert(!guardObserved, 'Cancelled operation changed system clipboard');
       const audit = await owner(`/api/endpoint-tools/invocations?principalId=${firstId}`);
       assert.equal(audit.items.filter(item => item.status === 'succeeded').length, 0);
+      assert(audit.items.some(item => item.errorCode === 'USER_DENIED'), 'Native cancellation must return USER_DENIED; a timeout or foreground refusal is not a native cancel');
       report.checks.nativeCancelHasNoClipboardEffect = true;
     }
     const assistantsBefore = await chat.locator('#messages article[data-role="assistant"]').count();
