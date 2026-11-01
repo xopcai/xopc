@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { release } from 'node:os';
@@ -163,7 +164,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       return answer.response === 1 && !signal.aborted && visible() && window.isFocused();
     } });
   const stopObservation = () => { observation.stop(); void shell?.setHostOrigin().catch(() => {}); };
-  const stopCapabilities = () => { nativeApprovalGeneration += 1; reviews.cancel(); stopObservation(); void execution.stop(); };
+  const stopCapabilities = () => { nativeApprovalGeneration += 1; shell?.stopFiles(); reviews.cancel(); stopObservation(); void execution.stop(); };
   const cancelDesktop = () => { stopCapabilities(); desktop.cancel(); operationReviews = undefined; };
   const removeSessionBoundary = installDesktopSessionBoundary(powerMonitor, cancelDesktop);
   window.once('closed', removeSessionBoundary);
@@ -196,7 +197,18 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   window.webContents.on('render-process-gone', () => { cancelDesktop(); policy.revoke(); });
   window.on('closed', () => { cancelDesktop(); policy.revoke(); void shell?.close().then(() => app.quit(), () => app.quit()); });
   app.on('second-instance', () => presentation.reveal(window, true));
-  shell = new RemoteShellWindow(dirname(fileURLToPath(entryUrl)), assetRoot, manager, () => { stopCapabilities(); presentation.reveal(window); }, chatState, presentation);
+  shell = new RemoteShellWindow(dirname(fileURLToPath(entryUrl)), assetRoot, manager, () => { stopCapabilities(); presentation.reveal(window); }, chatState, presentation, {
+    root: join(root, 'remote-file-snapshots'), encryption,
+    confirm: async (snapshot, signal) => {
+      const parent = shell?.captureWindow(), approval = nativeApprovalGeneration;
+      const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId);
+      if (!parent?.isFocused() || !profile?.identity || signal.aborted) return false;
+      const result = await dialog.showMessageBox(parent, { type: 'warning', title: '回传远端文件编辑', message: '将此缓存副本回传到Gateway？',
+        detail: `Gateway：${profile.origin}\n文件：${JSON.stringify(snapshot.resource.name)}\n资源：${snapshot.resource.id}\n原版本：${snapshot.resource.revision}\n正文摘要：${createHash('sha256').update(snapshot.text).digest('hex')}\n大小：${Buffer.byteLength(snapshot.text)}字节\n\n仅此次显式回传。服务器版本冲突时拒绝，不自动覆盖；断网或超时后可能已生效，将保留未知状态且不重发。此操作不会写入本机工作区。`,
+        buttons: ['取消', '回传本次编辑'], defaultId: 0, cancelId: 0, noLink: true, signal });
+      return result.response === 1 && !signal.aborted && approval === nativeApprovalGeneration && !parent.isDestroyed() && parent.isFocused();
+    },
+  });
   const snapshot = () => ({ ...manager.snapshot(), localCapabilities: Boolean(execution.origin() || observation.origin()), desktop: desktop.snapshot(), observation: observation.snapshot(), execution: execution.snapshot(), localOperationReviews, operationReviews: operationReviews?.epoch === manager.snapshot().epoch ? operationReviews : undefined, presentation: {
     connectionVisible: window.isVisible(), connectionFocused: window.isFocused(), chat: shell!.presentationState(),
   } });
@@ -232,6 +244,12 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   });
   ipcMain.handle('shell:host-stop', event => { shell!.authorize(event, 'shell:host-stop'); stopCapabilities(); return { ok: true }; });
   ipcMain.handle('shell:state-read', event => serialize(() => { shell!.authorize(event, 'shell:state-read'); return shell!.readState(); }));
+  ipcMain.handle('shell:file-action', async (event, action, input) => {
+    shell!.authorize(event, 'shell:file-action');
+    if (Buffer.byteLength(JSON.stringify(input) ?? '') > 256 * 1024) return { ok: false, error: 'REMOTE_FILE_REQUEST_TOO_LARGE' };
+    try { return { ok: true, value: await shell!.fileAction(action, input) }; }
+    catch (error) { return { ok: false, error: error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'REMOTE_FILE_REQUEST_FAILED' }; }
+  });
   ipcMain.handle('shell:state-write', (event, value) => {
     if (Buffer.byteLength(JSON.stringify(value) ?? '') > 256 * 1024) throw new Error('CHAT_STATE_TOO_LARGE');
     return serialize(() => { shell!.authorize(event, 'shell:state-write'); return shell!.writeState(value); });

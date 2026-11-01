@@ -1,0 +1,69 @@
+{
+  "passed": true,
+  "tls": false,
+  "startedAt": "2026-11-01T05:51:31.463Z",
+  "checks": {
+    "nativeRemoteFileSnapshotsConflictAndUnknown": true,
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "background": false,
+  "fixtureLifetimeSeconds": 86400,
+  "application": "/tmp/xopc-p3e-delivery-2/native/xopc.app",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "a4e2e9cdaf1354f68be4d1b4e695d7428ef19d7c8308303421e18c7f74e4b4e2"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p3e-delivery-2/native/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p3e-delivery-2/native/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-VfEsDL",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 63120
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 322
+    },
+    {
+      "input": 2,
+      "durationMs": 229
+    }
+  ],
+  "inputIntervalMs": 0,
+  "stopTarget": {
+    "expectedRunId": "680d5edd-17c5-413c-a69a-4ef8538b099c",
+    "actualRunId": "680d5edd-17c5-413c-a69a-4ef8538b099c",
+    "passed": true
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "a4e2e9cdaf1354f68be4d1b4e695d7428ef19d7c8308303421e18c7f74e4b4e2"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-11-01T05:52:52.152Z"
+}

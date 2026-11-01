@@ -1,19 +1,23 @@
 import { RemoteChatModel, ChatApiError, ChatOriginUnavailable, type RemoteChatOrigin, type ChatView, type ChatApi } from './model.js';
 import type { ChatState } from './state.js';
+import { installRemoteFiles } from './files-view.js';
 
 declare global {
   interface Window { desktopShell: { bootstrap(): Promise<{ ok: boolean }>; recover(): Promise<unknown>; readState(): Promise<ChatState>; writeState(value: ChatState): Promise<unknown>;
-    hostSettings(): Promise<unknown>; hostOrigin(): Promise<RemoteChatOrigin | undefined>; stopHost(): Promise<unknown> } }
+    hostSettings(): Promise<unknown>; hostOrigin(): Promise<RemoteChatOrigin | undefined>; stopHost(): Promise<unknown>;
+    fileAction(action: string, input?: unknown): Promise<{ ok: boolean; value?: unknown; error?: string }> } }
 }
 const element = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 let model: RemoteChatModel | undefined;
 let closed = false;
+let selectedConversation: string | undefined;
 const phases = { connecting: '连接中', syncing: '正在同步服务器状态', ready: '就绪', retrying: '离线，正在重连', recovery: '需恢复连接', unknown: '输入待核实' };
 function button(text: string, action: () => void, selected = false) {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.onclick = action;
   node.setAttribute('aria-pressed', String(selected)); return node;
 }
 function render(view: ChatView) {
+  selectedConversation = view.selected;
   element<HTMLButtonElement>('new').disabled = ['connecting', 'syncing', 'recovery'].includes(view.phase);
   element('status').textContent = phases[view.phase]; element('notice').textContent = view.notice;
   element('skeleton').hidden = !['connecting', 'syncing'].includes(view.phase) || view.messages.length > 0;
@@ -86,4 +90,5 @@ element('recover').onclick = async () => {
 element('logout').onclick = async () => { model?.dispose(); await window.desktopShell.stopHost().catch(() => {}); await fetch('/api/browser-session', { method: 'DELETE' }).catch(() => {}); element('status').textContent = '会话已退出，请返回配置恢复。'; };
 window.addEventListener('beforeunload', () => { closed = true; model?.dispose(); });
 document.addEventListener('dragover', event => event.preventDefault()); document.addEventListener('drop', event => event.preventDefault());
+installRemoteFiles((action, input) => window.desktopShell.fileAction(action, input), () => selectedConversation);
 void start();
