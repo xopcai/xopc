@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { REMOTE_COMPUTER_DESCRIPTOR, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR, REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
 
 import { canonicalJson, desktopOperationReviewSchema, type DesktopOperationReview, desktopOperationAttemptSchema as attemptSchema, desktopOperationIntentSchema as intentSchema,
   type DesktopOperationAttempt, type DesktopOperationIntent, type DesktopOperationState, type DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
@@ -138,7 +139,9 @@ export class DesktopOperationJournal {
           const row = this.row(database, intent), receipt = row ? this.receipt(intent, row) : undefined;
           if (receipt ? review.localStatus !== 'recorded' || !receipt.executionStopped || canonicalJson(receipt) !== canonicalJson(review.receipt)
             : review.localStatus !== 'not-found' || !(intent.tool === 'desktop.clipboard.write' || intent.tool === REMOTE_COMPUTER_CONTROL_TOOL && !intent.workspaceId
-              && intent.toolRevision === createHash('sha256').update(canonicalJson(REMOTE_COMPUTER_DESCRIPTOR)).digest('hex') || ['desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_STOP_UNCONFIRMED');
+              && intent.toolRevision === createHash('sha256').update(canonicalJson(REMOTE_COMPUTER_DESCRIPTOR)).digest('hex')
+              || intent.tool === REMOTE_BROWSER_CONTROL_TOOL && !intent.workspaceId && intent.toolRevision === createHash('sha256').update(canonicalJson(REMOTE_BROWSER_DESCRIPTOR)).digest('hex')
+              || ['desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_STOP_UNCONFIRMED');
           if (!row) {
             if ((database.prepare('SELECT count(*) AS count FROM operations').get()!.count as number) >= 100000) throw new Error('DESKTOP_OPERATION_HISTORY_FULL');
             // A missing receipt is not permission to execute the old intent later.

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
 import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
 import { expect, it } from 'vitest';
 
@@ -52,11 +53,11 @@ it('recovers offline metadata without credentials, requires native consent and n
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-it.each(['container', 'computer'] as const)('requires independent process stop proof before native acknowledgement of a recorded crashed operation: %s', async kind => {
+it.each(['container', 'computer', 'browser'] as const)('requires independent process stop proof before native acknowledgement of a recorded crashed operation: %s', async kind => {
   const root = mkdtempSync(join(tmpdir(), 'xopc-command-review-'));
   const intent: DesktopOperationIntent = { operationId: randomUUID(), gatewayId: randomUUID(), deviceId: randomUUID(), ...(kind === 'container' ? { workspaceId: randomUUID() } : {}),
-    tool: kind === 'container' ? 'desktop.command.run' : REMOTE_COMPUTER_DESCRIPTOR.name,
-    toolRevision: kind === 'container' ? 'a'.repeat(64) : endpointToolRevision(REMOTE_COMPUTER_DESCRIPTOR as never), argumentHash: 'b'.repeat(64), authorizationRevision: 1, expiresAt: Date.now() + 60000 };
+    tool: kind === 'container' ? 'desktop.command.run' : kind === 'browser' ? REMOTE_BROWSER_DESCRIPTOR.name : REMOTE_COMPUTER_DESCRIPTOR.name,
+    toolRevision: kind === 'container' ? 'a'.repeat(64) : endpointToolRevision((kind === 'browser' ? REMOTE_BROWSER_DESCRIPTOR : REMOTE_COMPUTER_DESCRIPTOR) as never), argumentHash: 'b'.repeat(64), authorizationRevision: 1, expiresAt: Date.now() + 60000 };
   let stopped = false, allowed = false, prompts = 0;
   try {
     const lease = new DesktopExecutionLease(root), journal = new DesktopOperationJournal(lease);

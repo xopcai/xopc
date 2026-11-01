@@ -23,6 +23,7 @@ it('routes the public browser_use tool to its explicit independent device withou
       connectionInstanceId: randomUUID(), expiresAt: Date.now() + 60000 } };
   const endpoints = { registry: { get: () => endpoint, getTool: () => ({ descriptor: REMOTE_BROWSER_DESCRIPTOR, revision: 'a'.repeat(64) }) } };
   const setup = vi.fn();
+  let originEndpoint = endpointId;
   vi.mocked(invokeRemoteBrowserCommand).mockImplementation(async (_runtime, _id, command) => ({ content: [{ type: 'json', value: {
     version: 1, dispatch: 'completed', result: { ok: true, receipt: { action: command.input.action, risk: 'read', durationMs: 0, verified: true,
       ...(command.input.action === 'close' ? {} : { observation: { sessionId: command.sessionId, tabId: 'tab', revision: 1,
@@ -30,7 +31,7 @@ it('routes the public browser_use tool to its explicit independent device withou
     } },
   } }] }));
   const factory = new AgentToolsFactory({ workspace: '/tmp/xopc-device-browser-factory', bus: {} as never, endpointTools: endpoints as never,
-    getCurrentContext: () => ({ conversationId: owner, origin: { type: 'endpoint', endpointId } }) as never,
+    getCurrentContext: () => ({ conversationId: owner, origin: { type: 'endpoint', endpointId: originEndpoint } }) as never,
     getConfig: () => ConfigSchema.parse({ browser: { enabled: true } }), getBrowserSetupService: setup });
   const tool = factory.createCoreTools({ conversationId: owner }).find(tool => tool.name === 'browser_use')!;
   const result = await tool.execute('observe', { action: 'observe', visual: 'never' });
@@ -38,6 +39,10 @@ it('routes the public browser_use tool to its explicit independent device withou
   expect(invokeRemoteBrowserCommand).toHaveBeenCalledWith(endpoints, endpointId, expect.objectContaining({ owner }), undefined);
   expect(createBrowserDriver).not.toHaveBeenCalled(); expect(checkBrowserReadiness).not.toHaveBeenCalled(); expect(setup).not.toHaveBeenCalled();
   expect(factory.hasBrowserSessions()).toBe(true);
+  const before = vi.mocked(invokeRemoteBrowserCommand).mock.calls.length;
+  originEndpoint = randomUUID();
+  await expect(tool.execute('other-device', { action: 'observe' })).rejects.toThrow('PREVIOUS_SESSION_UNRELEASED');
+  expect(invokeRemoteBrowserCommand).toHaveBeenCalledTimes(before); expect(createBrowserDriver).not.toHaveBeenCalled();
   await factory.closeBrowserPageForSession(owner);
   expect(factory.hasBrowserSessions()).toBe(false);
 });

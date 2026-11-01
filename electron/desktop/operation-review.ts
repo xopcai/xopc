@@ -4,6 +4,7 @@ import { canonicalJson, desktopWorkspaceDescriptor, desktopOperationIntentSchema
   type DesktopOperationIntent, type DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
 import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
 import { REMOTE_COMPUTER_DESCRIPTOR, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR, REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
 import { z } from 'zod';
 
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
@@ -114,9 +115,10 @@ export class DesktopOperationReviewManager {
         if (!review) {
           let receipt = journal.inspect(intent);
           // The exclusive lease fences the old Host. This exact adapter cannot create its private driver before journal.start.
-          const neverStartedComputer = !receipt && !intent.workspaceId && intent.tool === REMOTE_COMPUTER_CONTROL_TOOL
-            && intent.toolRevision === endpointToolRevision(REMOTE_COMPUTER_DESCRIPTOR as never);
-          const finiteExecutor = neverStartedComputer || finiteOperation(intent) || ((!receipt || !receipt.executionStopped) && await this.options.proveStopped?.(intent));
+          const neverStartedControl = !receipt && !intent.workspaceId && (intent.tool === REMOTE_COMPUTER_CONTROL_TOOL
+            && intent.toolRevision === endpointToolRevision(REMOTE_COMPUTER_DESCRIPTOR as never)
+            || intent.tool === REMOTE_BROWSER_CONTROL_TOOL && intent.toolRevision === endpointToolRevision(REMOTE_BROWSER_DESCRIPTOR as never));
+          const finiteExecutor = neverStartedControl || finiteOperation(intent) || ((!receipt || !receipt.executionStopped) && await this.options.proveStopped?.(intent));
           current();
           if ((!receipt || !receipt.executionStopped) && !finiteExecutor) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
           // Independent evidence comes from the fixed-root lease and adapter barriers or explicit process-stop proof; a human click never proves stop.

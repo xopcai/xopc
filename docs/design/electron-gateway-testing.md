@@ -92,3 +92,9 @@ node scripts/verify-electron-desktop-enrollment.mjs \
 报告路径须使用新名称，避免覆盖失败证据。完整功能交付前还需 J2 协议/执行权接线、J3 故障验收、P3 授权工作区与工具、P4 后台任务的专项测试。长测和性能按用户要求并行保留，不放宽原预算，不冒称已通过。
 
 最终合并采用 rebase 到最新 origin/main 后 fast-forward，或等价的线性 PR 合并；不创建 merge commit，不强推已发布的 main。合并前检查所有门槛与 CI；主工作区的未跟踪文件先原样备份，不能覆盖或丢弃。最终 Electron 包必须在实际合并后的提交上重新构建，并附提交号、文件摘要、平台与上述测试报告。
+# 专用 Browser 原生验证增量（2026-11-01）
+
+本轮候选包 `/tmp/xopc-p3d-browser-delivery-1/installed/xopc.app` 完成本地新启动和旧 v266 Gateway 复用回归；对应 Native 验收副本完成独立设备登记、取消/重新授权、公共 HTTPS 隔离页面导航、逐次观察/截图批准、一次实际点击及关闭。详见 [Browser 证据](./evidence/electron-gateway-p3/browser-native-20261101/README.md)。仅为阶段候选包，尚未合入 main、未公证，也不包含后续源码的焦点和会话保留修订；不是最终交付包。
+
+原生脚本为 `scripts/verify-electron-desktop-browser.mjs --app <独立Native验收副本> --fixture-url <全新隔离HTTPS计数器地址> --output <新的报告路径>`。每次使用新计数器，失败后保留原计数和报告；不得清零重做旧操作。生产安装包不自动批准原生窗口。完整交付仍须补齐故障恢复、P4 与最终 main 构建回归。
+

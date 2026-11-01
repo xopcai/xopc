@@ -350,7 +350,10 @@ export class AgentToolsFactory {
       if ([...this.deviceBrowserRuntimes.values()].some(entry => entry.owner === owner)) throw new Error('BROWSER_REMOTE_CONTEXT_CHANGED');
       return undefined;
     }
-    return remoteBrowserEndpoint(endpoints, owner, context.origin);
+    const selected = remoteBrowserEndpoint(endpoints, owner, context.origin);
+    if ([...this.deviceBrowserRuntimes].some(([key, entry]) => entry.owner === owner && entry.runtime.hasSessions()
+      && key !== JSON.stringify([owner, selected]))) throw new Error('BROWSER_REMOTE_PREVIOUS_SESSION_UNRELEASED');
+    return selected;
   }
   private browserRuntimeForTurn(owner: string | undefined): BrowserRuntime {
     const endpointId = this.deviceBrowserTarget(owner);

@@ -1,7 +1,7 @@
 import type { IpcMain, IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron';
 
 export const CONNECTION_CHANNELS = ['connections:snapshot', 'connections:save', 'connections:select', 'connections:remove',
-  'connections:local', 'connections:quit', 'connections:connect', 'connections:workspace-start', 'connections:container-start', 'connections:container-list', 'connections:computer-start',
+  'connections:local', 'connections:quit', 'connections:connect', 'connections:workspace-start', 'connections:container-start', 'connections:container-list', 'connections:computer-start', 'connections:browser-start',
   'connections:desktop-enroll', 'connections:desktop-check', 'connections:desktop-disable', 'connections:desktop-reenroll',
   'connections:local-operations', 'connections:local-operation-review', 'connections:operation-list', 'connections:operation-review', 'connections:execution-start', 'connections:execution-stop', 'connections:observation-start', 'connections:observation-stop', 'connections:screen-start'] as const;
 
