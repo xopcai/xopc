@@ -88,7 +88,7 @@ jobs:
           (needs.preflight.outputs.exists == 'true' ||
            (needs.tests.result == 'success' && needs.build.result == 'success')) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -118,6 +118,13 @@ jobs:
         env:
           VERSION: ${{ needs.preflight.outputs.version }}
         run: npm view "@xopcai/xopc@${VERSION}" version dist.tarball
+
+      - name: Verify public npm availability and tarball bytes
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          NPM_TAG: ${{ needs.preflight.outputs.tag }}
+          PACKAGE_SHA256: ${{ needs.build.outputs.sha256 }}
+        run: node scripts/verify-npm-publication.mjs
 
   docker:
     name: Docker (${{ matrix.arch }})
