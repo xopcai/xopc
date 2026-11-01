@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   type ClientEndpointMessage,
   type EndpointHelloPayload,
+  type EndpointDesktopExecutionAuthority,
 } from '@xopcai/endpoint-tools-protocol';
 
 import { recordDeviceGrantEvent } from '../storage/sqlite/device-grant-audit-repository.js';
@@ -35,6 +36,7 @@ import {
 import { EndpointUploadService } from './upload-service.js';
 import { EndpointContextStore } from './context-store.js';
 import { LocationSharingService } from './location-sharing.js';
+import { DesktopTerminalGatewayBroker } from './terminal-broker.js';
 
 const log = createLogger('EndpointTools');
 const MAX_MESSAGE_CLOCK_SKEW_MS = 60_000;
@@ -47,6 +49,7 @@ export class EndpointToolRuntime {
   readonly invocations: EndpointInvocationService;
   readonly uploads: EndpointUploadService;
   readonly bindings: EndpointBindingService;
+  readonly terminals: DesktopTerminalGatewayBroker;
 
   private readonly authenticator: EndpointAuthenticator;
   private closed = false;
@@ -82,18 +85,21 @@ export class EndpointToolRuntime {
       uploads: this.uploads,
       policy,
     });
+    this.terminals = new DesktopTerminalGatewayBroker(this.registry, this.invocations);
   }
 
   connect(
     hello: EndpointHelloPayload,
     connectionId: string,
     transport: EndpointTransport,
+    executionAuthority?: EndpointDesktopExecutionAuthority,
   ): EndpointRegistration {
     if (this.closed) throw new Error('Endpoint runtime is closed');
     this.authenticator.authenticate(hello);
+    if (hello.execution && !executionAuthority) throw new Error('DESKTOP_EXECUTION_AUTHORITY_REQUIRED');
     const previous = this.registry.get(hello.endpointId);
     if (previous) { this.grants.revokeEndpoint(previous.endpointId, previous.principalId); this.invocations.failEndpoint(previous.endpointId); }
-    const registration = this.registry.register(hello, connectionId, transport);
+    const registration = this.registry.register(hello, connectionId, transport, Date.now(), executionAuthority);
     log.info({ endpointId: hello.endpointId, connectionId, kind: hello.kind }, 'Endpoint connected');
     return registration;
   }
@@ -109,6 +115,7 @@ export class EndpointToolRuntime {
       this.registry.heartbeat(endpointId, connectionId, message.payload.availability);
       return;
     }
+    if (message.type === 'terminal.event' && this.registry.get(endpointId)?.terminalVersion !== 1) throw new Error('DESKTOP_TERMINAL_NOT_NEGOTIATED');
     this.invocations.handleMessage(endpointId, message);
   }
 
@@ -136,6 +143,7 @@ export class EndpointToolRuntime {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.terminals.close();
     this.grants.close();
     this.invocations.close();
     this.uploads.close();

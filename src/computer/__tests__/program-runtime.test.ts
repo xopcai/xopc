@@ -58,4 +58,16 @@ describe('UI-only QuickJS runtime', () => {
     expect(settled).toBe(true);
     expect(result.status).toBe('program_error');
   });
+  it('preserves a real timeout while an awaited UI call is cancelled and waits for its cleanup', async () => {
+    let settled = false;
+    const store = { value: 'original' };
+    const result = await executeComputerProgram(`store('value', 'changed'); await ui.observe({});`, async (_method, _args, signal) => {
+      await new Promise<void>(resolve => { if (signal.aborted) resolve(); else signal.addEventListener('abort', () => resolve(), { once: true }); });
+      settled = true; return {};
+    }, store, new AbortController().signal, 500);
+    expect(settled).toBe(true);
+    expect(result).toMatchObject({ status: 'program_error', errorCode: 'COMPUTER_PROGRAM_FAILED', scriptError: 'timeout' });
+    expect(store.value).toBe('original');
+  });
+
 });

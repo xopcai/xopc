@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /** Verify the packaged Electron app contains only the minimal runtime layout. */
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ELECTRON_PACKAGED_DEPENDENCIES } from './electron-runtime-externals.mjs';
+import { supportedUpgradeFiles, verifyCanonicalSqlBytes, verifyDesktopArtifactBytes, verifyDesktopPackageLayout } from './electron-package-layout.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const requireRoot = createRequire(join(root, 'package.json'));
@@ -62,6 +63,14 @@ function verifyUnpackedRuntimeDeps(asarPath) {
 function verifyUnpackedAppLayout(asarPath) {
   const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
   const required = [
+    'out/preload/connections.cjs',
+    'out/preload/shell.cjs',
+    'out/preload/gateway-connections.html',
+    'out/preload/gateway-connections.js',
+    'out/preload/remote-shell.html',
+    'out/preload/remote-shell.js',
+    'out/preload/remote-shell.css',
+    'out/preload/screen-capture.html',
     'out/server/index.js',
     'out/server/codemode-worker.js',
     'node_modules/quickjs-wasi/quickjs.wasm',
@@ -105,6 +114,17 @@ function main() {
     }
     verifyUnpackedRuntimeDeps(asarPath);
     verifyUnpackedAppLayout(asarPath);
+    const manifest = verifyDesktopPackageLayout(path => asar.extractFile(asarPath, path), supportedUpgradeFiles(root));
+    verifyCanonicalSqlBytes(path => asar.extractFile(asarPath, path), root);
+    console.log(`[verify-electron-asar-deps] OK — ${Object.keys(manifest.files).length} desktop UI, Shell, Gateway and SQL resources`);
+    const artifacts = verifyDesktopArtifactBytes(path => asar.extractFile(asarPath, path), root);
+    console.log(`[verify-electron-asar-deps] OK — ${Object.keys(artifacts.files).length} packaged files match built runtime bytes`);
+    if (process.platform === 'darwin' && asarPath.includes('Contents/Resources/')) {
+      const native = join(dirname(asarPath), 'bin/desktop-workspace.node'), worker = join(dirname(asarPath), 'bin/workspace-worker.cjs');
+      if (!existsSync(native) || statSync(native).size < 4096) throw new Error('Native workspace adapter is missing or empty');
+      if (!readFileSync(worker).equals(readFileSync(join(root, 'electron/desktop/workspace-worker.cjs')))) throw new Error('Workspace worker does not match its trusted source');
+      console.log('[verify-electron-asar-deps] OK — native workspace adapter present and worker bytes verified');
+    }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

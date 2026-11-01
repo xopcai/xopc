@@ -8,6 +8,8 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 
 import { personalDescriptor, ENDPOINT_TEXT_OUTPUT_SCHEMA } from '@xopcai/endpoint-tools-protocol';
+import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
+import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 
 import { EndpointToolRuntime } from '../../../endpoint-tools/index.js';
 import { EndpointToolProvider } from '../endpoint-provider.js';
@@ -64,6 +66,18 @@ function runtime(bound = false) {
 
 describe('EndpointToolProvider', () => {
   beforeEach(() => { requireXopcDatabase(); });
+  it.each([REMOTE_COMPUTER_DESCRIPTOR, REMOTE_BROWSER_DESCRIPTOR])('keeps dedicated $name out of generic discovery and raw execution', async descriptor => {
+    const selected = runtime();
+    const original = selected.registry.get(endpointId)!;
+    const tool = { descriptor, revision: 'a'.repeat(64) };
+    vi.mocked(selected.registry.get).mockReturnValue({ ...original, tools: [tool] } as never);
+    vi.mocked(selected.registry.getTool).mockReturnValue(tool as never);
+    const provider = new EndpointToolProvider({ runtime: selected, getCurrentContext: () => ({ channel: 'webchat', chatId: 'chat-1', conversationId: 'session-1', origin: { type: 'endpoint', endpointId } }) });
+    await expect(provider.search('control')).resolves.toEqual([]);
+    await expect(provider.describe(`endpoint:principal-1%3Atab-1:${descriptor.name}`)).resolves.toBeUndefined();
+    await expect(provider.execute(`endpoint:principal-1%3Atab-1:${descriptor.name}`, {}, undefined, { toolCallId: 'raw' })).rejects.toThrow();
+    expect(selected.invocations.invoke).not.toHaveBeenCalled();
+  });
   it('only exposes tools from the endpoint that originated the turn', async () => {
     const provider = new EndpointToolProvider({
       runtime: runtime(),
@@ -141,6 +155,12 @@ describe('EndpointToolProvider', () => {
       descriptorRevision: 'catalog-revision',
       arguments: { text: 'hello' },
     }));
+    const operationId = vi.mocked(endpointRuntime.invocations.invoke).mock.calls[0][0].operationId;
+    expect(operationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(requireXopcDatabase().db.prepare('SELECT operation_id,state FROM capability_operations WHERE operation_id = ?').get(operationId!))
+      .toMatchObject({ operation_id: operationId, state: 'succeeded' });
+    await provider.execute('endpoint:principal-1%3Atab-1:web.clipboard.write', { text: 'hello' }, undefined, { toolCallId: 'call-1' });
+    expect(endpointRuntime.invocations.invoke).toHaveBeenCalledTimes(1);
   });
   it.each(['text/plain', 'image/jpeg'])('delivers selected %s content to the model, instead of filename-only metadata', async mimeType => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-personal-provider-'));

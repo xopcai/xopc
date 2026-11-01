@@ -2,6 +2,17 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { CuaComputerDriver } from '../cua-driver.js';
 
 afterEach(() => vi.useRealTimers());
+it('exposes only a ready owned PID and generation, never private daemon connection data or a stopping identity', async () => {
+  const driver = new CuaComputerDriver('fixture', 'host');
+  expect(driver.ownedProcessIdentity()).toBeUndefined();
+  const identity = { pid: process.pid + 10000, generation: 'fixture-generation-1', socketPath: '/private/fixture.sock', mcp: { environment: { SECRET: 'fixture-secret' } } };
+  const host = { connection: () => identity, stop: vi.fn(async () => {}) };
+  Object.assign(driver, { host, client: { shutdown: async () => {} } });
+  expect(driver.ownedProcessIdentity()).toEqual({ driverPid: identity.pid, generation: identity.generation });
+  const stopping = driver.stop();
+  expect(driver.ownedProcessIdentity()).toBeUndefined();
+  await stopping; expect(driver.ownedProcessIdentity()).toBeUndefined();
+});
 it('stops the owned daemon even when its RPC shutdown never replies', async () => {
   vi.useFakeTimers();
   const driver = new CuaComputerDriver('fixture', 'host');

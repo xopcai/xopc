@@ -100,15 +100,19 @@ describe('EndpointInvocationService', () => {
   });
 
   it('completes a received endpoint invocation', async () => {
-    const { sent, descriptor, service } = fixture();
+    const started = vi.fn(), operationId = crypto.randomUUID();
+    const { sent, descriptor, service } = fixture({ audit: { started, finished: vi.fn() } });
     const promise = service.invoke({
       endpointId: 'endpoint-1',
       toolCallId: 'tool-call-1',
       toolName: descriptor.name,
       arguments: { text: 'hello' },
       descriptorRevision: endpointToolRevision(descriptor),
+      operationId,
     });
     const invoke = JSON.parse(sent[0]!) as { payload: { invocationId: string } };
+    expect(started).toHaveBeenCalledWith(expect.objectContaining({ id: invoke.payload.invocationId, operationId }));
+    expect(invoke.payload).not.toHaveProperty('operationId');
 
     service.handleMessage('endpoint-1', {
       protocolVersion: ENDPOINT_PROTOCOL_VERSION,
@@ -129,6 +133,13 @@ describe('EndpointInvocationService', () => {
     });
 
     await expect(promise).resolves.toEqual({ content: [{ type: 'text', text: 'written' }] });
+  });
+
+  it('rejects an invalid stable operation identity before recording or sending an invocation', async () => {
+    const started = vi.fn(), { sent, service, descriptor } = fixture({ audit: { started, finished: vi.fn() } });
+    await expect(service.invoke({ endpointId: 'endpoint-1', toolCallId: 'call', toolName: descriptor.name, arguments: {},
+      descriptorRevision: endpointToolRevision(descriptor), operationId: 'attempt-is-not-a-stable-operation' })).rejects.toMatchObject({ code: 'INVALID_ARGUMENTS' });
+    expect(started).not.toHaveBeenCalled(); expect(sent).toHaveLength(0);
   });
 
   it('rejects endpoint output that violates the registered result contract', async () => {

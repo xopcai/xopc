@@ -13,6 +13,9 @@ export const GATEWAY_SCOPES = [
   'automations.write',
   'notifications.self',
   'device.self',
+  'desktop.observe.state',
+  'desktop.observe.screen',
+  'desktop.execute',
   'phone.view',
   'phone.control',
   'gateway.admin',
@@ -55,3 +58,6 @@ export const DEFAULT_BROWSER_EXTENSION_SCOPES = [
 export function isGatewayScope(value: unknown): value is GatewayScope {
   return typeof value === 'string' && KNOWN_GATEWAY_SCOPES.has(value);
 }
+
+/** Credential bootstrap only; observing or controlling the computer requires separate grants. */
+export const DEFAULT_DESKTOP_SCOPES = ['gateway.status', 'device.self'] as const satisfies readonly GatewayScope[];

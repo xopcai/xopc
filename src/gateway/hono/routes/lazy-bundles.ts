@@ -24,6 +24,14 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'desktop-chat',
+    match: path => path === '/api/desktop-chat/bootstrap',
+    load: async () => {
+      const { registerDesktopChatRoutes } = await import('./desktop-chat.js');
+      return { register: registerDesktopChatRoutes };
+    },
+  },
+  {
     id: 'location-sharing',
     match: path => /^\/api\/user-context\/environment\/location-shares(?:\/[^/]+(?:\/samples)?)?$/.test(path),
     load: async () => {
@@ -94,6 +102,15 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     load: async () => {
       const { registerCapabilityOperationRoutes } = await import('./capability-operations.js');
       return { register: registerCapabilityOperationRoutes };
+    },
+  },
+  {
+    id: 'desktop-host',
+    match: path => path === '/api/desktop-host/compatibility' || path === '/api/desktop-host/pairing-setups' || path === '/api/desktop-host/status'
+      || ['/api/desktop-host/observation', '/api/desktop-host/screen', '/api/desktop-host/execution', '/api/desktop-host/operations'].includes(path) || /^\/api\/desktop-host\/operations\/[^/]+(?:\/review)?$/.test(path) || /^\/api\/desktop-host\/devices\/[^/]+\/(?:observation|screen|execution)$/.test(path),
+    load: async () => {
+      const { registerDesktopHostRoutes } = await import('./desktop-host.js');
+      return { register: registerDesktopHostRoutes };
     },
   },
   {

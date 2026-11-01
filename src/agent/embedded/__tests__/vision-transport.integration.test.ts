@@ -1,10 +1,11 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import sharp from 'sharp';
+import { Type } from '@sinclair/typebox';
 import { expect, it, vi } from 'vitest';
 
 vi.mock('../model-runtime.js', async () => {
@@ -29,6 +30,45 @@ import { onSessionTranscriptUpdate } from '../../../session/transcript-events.js
 import { ConfigSchema } from '../../../config/schema.js';
 import { clearPendingTranscriptUserMessage, setPendingTranscriptUserMessage } from '../../inbound/attachment-pipeline.js';
 import { persistInboundAttachments } from '../../../channels/attachments/inbound-persist.js';
+
+it.each([false, true])('delivers a tool-produced image through AgentSession to HTTP (persistent=%s)', async persistent => {
+  const directory = await mkdtemp(join(tmpdir(), 'xopc-tool-image-wire-'));
+  initializeTestAgentCatalog();
+  const conversationId = createConversation({ agentId: 'main' }).key;
+  const image = await sharp(randomBytes(256 * 256 * 3), { raw: { width: 256, height: 256, channels: 3 } }).png().toBuffer();
+  const store = new SessionStore({ config: ConfigSchema.parse({ userContext: { enabled: false } }) });
+  const unsubscribe = onSessionTranscriptUpdate(update => { void store.syncEmbeddedTranscriptUpdate(update); });
+  let receivedImage = false, calls = 0;
+  const server = createServer((request, response) => {
+    const chunks: Buffer[] = []; request.on('data', chunk => chunks.push(Buffer.from(chunk)));
+    request.on('end', () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString()); calls++;
+      receivedImage ||= (body.messages ?? []).some((message: any) => Array.isArray(message.content) && message.content.some((part: any) => part.type === 'image_url'));
+      const delta = calls === 1 ? { role: 'assistant', tool_calls: [{ index: 0, id: 'fixture-call', type: 'function', function: { name: 'fixture_screenshot', arguments: '{}' } }] }
+        : { role: 'assistant', content: 'Image inspected.' };
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.end(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: 'deepseek-flash', choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`
+        + `data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: calls === 1 ? 'tool_calls' : 'stop' }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const result = await runXopcEmbeddedTurn({ conversationId, runId: randomUUID(), workspaceDir: directory,
+      transcriptRuntime: persistent ? await createSqliteTranscriptRuntime({ conversationId, sessionStore: store }) : new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: directory }),
+      userMessage: { role: 'user', content: 'Capture the fixture image and inspect it.', timestamp: Date.now() },
+      systemPrompt: 'Use the fixture screenshot tool once.', thinkingLevel: 'off', timeoutMs: 10000,
+      modelRef: 'deepseek/deepseek-flash', model: { id: 'deepseek-flash', name: 'Fixture', provider: 'deepseek', api: 'openai-completions',
+        baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`, input: ['text', 'image'], reasoning: false,
+        contextWindow: 128000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      tools: [{ name: 'fixture_screenshot', label: 'Fixture screenshot', description: 'Return a synthetic image.', parameters: Type.Object({}),
+        execute: async () => ({ content: [{ type: 'image' as const, data: image.toString('base64'), mimeType: 'image/png' }], details: {} }) }],
+    });
+    expect(result, result.errorMessage).toMatchObject({ ok: true }); expect(calls).toBe(2); expect(receivedImage).toBe(true);
+  } finally {
+    unsubscribe(); evictEmbeddedSessionRunner(conversationId); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
+    closeXopcDatabase(); await rm(directory, { recursive: true, force: true });
+  }
+});
 
 it.each([false, true])('preserves alternating image bytes through the real AgentSession and HTTP adapter (persistent=%s)', async persistent => {
   const directory = await mkdtemp(join(tmpdir(), 'xopc-vision-wire-'));
