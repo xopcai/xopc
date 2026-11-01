@@ -23,6 +23,8 @@ import type { WebSocket as WebSocketType } from 'ws';
 import { RealtimeRuntime } from '../../realtime/runtime.js';
 import { EndpointToolRuntime } from '../runtime.js';
 import { openXopcDatabase, closeXopcDatabase } from '../../storage/sqlite/connection.js';
+import { listEndpointToolInvocationAuditPage } from '../../storage/sqlite/endpoint-tool-invocation-repository.js';
+import { executeExternalOperation } from '../../capabilities/runtime/external-operations.js';
 
 const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
 
@@ -33,7 +35,8 @@ describe('endpoint tools over realtime', () => {
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
   });
 
-  it.each([false, true])('completes a tool and isolates disconnect cleanup errors (failure: %s)', async (failCleanup) => {
+  it.each([{ failCleanup: false, effect: 'read' }, { failCleanup: true, effect: 'read' },
+    { failCleanup: false, effect: 'write' }, { failCleanup: true, effect: 'write' }] as const)('completes a $effect tool and isolates cleanup errors ($failCleanup)', async ({ failCleanup, effect }) => {
     const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const encodedPublicKey = publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
     const root = mkdtempSync(join(tmpdir(), 'xopc-endpoint-e2e-'));
@@ -49,7 +52,6 @@ describe('endpoint tools over realtime', () => {
         bindEndpoint: vi.fn(() => true),
         touchPrincipal: vi.fn(),
       },
-      audit: { started: vi.fn(), finished: vi.fn() },
     });
     const runtime = new RealtimeRuntime(endpoints);
     const server = createServer();
@@ -61,11 +63,11 @@ describe('endpoint tools over realtime', () => {
     if (!address || typeof address === 'string') throw new Error('Missing server address');
 
     const descriptor = {
-      name: 'web.page.get_selection', title: 'Echo', description: 'Echo text.',
-      inputSchema: { type: 'object' }, effect: 'read' as const, confirmation: 'never' as const,
+      name: effect === 'read' ? 'web.page.get_selection' : 'web.clipboard.write', title: 'Echo', description: 'Echo text.',
+      inputSchema: { type: 'object' }, effect, confirmation: effect === 'read' ? 'never' as const : 'always' as const,
       outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
-      policyId: 'public.foreground-read', sensitivity: 'public' as const,
-      requiresForeground: true, requiredPermissions: [], timeoutMs: 10_000,
+      policyId: effect === 'read' ? 'public.foreground-read' : 'user.foreground-write', sensitivity: effect === 'read' ? 'public' as const : 'personal' as const,
+      requiresForeground: true, requiredPermissions: effect === 'read' ? [] : ['clipboard-write'], timeoutMs: 10_000,
       maxConcurrency: 1, supportsCancellation: false, idempotent: true,
       resultKinds: ['text' as const],
     };
@@ -87,11 +89,14 @@ describe('endpoint tools over realtime', () => {
     });
 
     let readyTurnToken = '';
+    let calls = 0;
     socket.on('message', (raw) => {
       const outer = parseServerRealtimeMessage(JSON.parse(raw.toString()));
       if (outer.kind === 'realtime.ready') {
         readyTurnToken = outer.payload.endpoint?.turnToken ?? '';
       } else if (outer.kind === 'endpoint.message' && outer.payload.type === 'tool.invoke') {
+        calls++;
+        expect(listEndpointToolInvocationAuditPage().items.find(item => item.id === outer.payload.payload.invocationId)?.status).toBe('running');
         const send = (type: ClientEndpointMessage['type'], payload: Record<string, unknown>) => {
           const endpointMessage = {
             protocolVersion: ENDPOINT_PROTOCOL_VERSION,
@@ -123,11 +128,21 @@ describe('endpoint tools over realtime', () => {
     await vi.waitFor(() => expect(readyTurnToken).not.toBe(''));
     const endpoint = endpoints.registry.get('endpoint-1');
     expect(endpoints.registry.verifyTurnClaim('endpoint-1', readyTurnToken)).toBe(true);
-    const result = await endpoints.invocations.invoke({
+    let operationId: string | undefined;
+    const invoke = (id?: string) => { operationId = id; return endpoints.invocations.invoke({
       endpointId: 'endpoint-1', toolCallId: 'tool-call-1', toolName: descriptor.name,
       arguments: { text: 'round trip' }, descriptorRevision: endpoint!.tools[0]!.revision,
-    });
+      ...(id ? { operationId: id } : {}),
+    }); };
+    const operation = { principalId: 'principal-1', capabilityId: descriptor.name, idempotencyKey: 'one-intent',
+      requestDigest: 'a'.repeat(64), descriptorDigest: endpoint!.tools[0]!.revision, surface: 'fixture', recovery: 'manual' as const };
+    const result = effect === 'read' ? await invoke() : await executeExternalOperation(operation, invoke);
     expect(result.content).toEqual([{ type: 'text', text: 'round trip' }]);
+    if (effect === 'write') {
+      expect(operationId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(listEndpointToolInvocationAuditPage().items[0]).toMatchObject({ operationId, status: 'succeeded' });
+      expect(await executeExternalOperation(operation, invoke)).toEqual(result); expect(calls).toBe(1);
+    } else expect(listEndpointToolInvocationAuditPage().items[0]).not.toHaveProperty('operationId');
 
     if (failCleanup) {
       vi.spyOn(endpoints, 'remove').mockImplementation(() => { throw new Error('disconnect cleanup database failure'); });

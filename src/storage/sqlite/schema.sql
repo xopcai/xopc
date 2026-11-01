@@ -814,7 +814,8 @@ CREATE TABLE endpoint_tool_invocations (
   error_code            TEXT,
   error_message         TEXT,
   started_at            INTEGER NOT NULL,
-  completed_at          INTEGER
+  completed_at          INTEGER,
+  operation_id          TEXT
 );
 
 CREATE TABLE collaboration_rule_revisions (
@@ -3106,6 +3107,8 @@ CREATE INDEX idx_connector_learning_jobs_account
 
 CREATE INDEX idx_endpoint_tool_invocations_endpoint_started
   ON endpoint_tool_invocations(endpoint_id, started_at DESC);
+CREATE INDEX idx_endpoint_tool_invocations_operation
+  ON endpoint_tool_invocations(operation_id) WHERE operation_id IS NOT NULL;
 
 CREATE UNIQUE INDEX idx_context_evidence_source
   ON context_evidence(principal_id, source_type, COALESCE(source_instance_id, ''), source_ref);

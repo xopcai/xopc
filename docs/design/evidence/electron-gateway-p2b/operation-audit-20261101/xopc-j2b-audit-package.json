@@ -1,0 +1,8 @@
+{
+  "application": "/tmp/xopc-j2b-audit-delivery-2/installed/xopc.app",
+  "fingerprint": {
+    "files": 1427,
+    "sha256": "9f6df4b411053af2153057659c262f44e77826ec05649dbe9e8c737da4c1d524"
+  },
+  "dmgSha256": "b25170890bf6d3bfa7870441905399abf9170b37f1f041fba1955fa95b3876fa"
+}

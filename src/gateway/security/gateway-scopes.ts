@@ -41,6 +41,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/realtime/tickets' || path.startsWith('/api/status')) return 'gateway.status';
   if (path === '/api/device-auth/refresh' || path === '/api/devices/me') return 'device.self';
   if (path.startsWith('/api/devices/me/push')) return 'notifications.self';
+  if (method === 'POST' && path === '/api/endpoint-tools/devices/revoke') return 'gateway.admin';
   if (/^\/api\/phone\/conversations\/[^/]+\/summary$/.test(path) && method === 'GET') return 'sessions.read';
   if (/^\/api\/phone\/conversations\/[^/]+$/.test(path) && method === 'GET') return 'phone.view';
   if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/frame$/.test(path) && method === 'GET') return 'phone.view';

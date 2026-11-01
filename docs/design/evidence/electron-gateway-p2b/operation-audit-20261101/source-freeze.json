@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-11-01T01:19:53.360Z",
+  "sources": {
+    "src/agent/external-tools/endpoint-provider.ts": "55b12f91ee3115a7cd3a5adf8d8b8f24895c257f1d8e559b4836793b526d4cfc",
+    "src/endpoint-tools/invocation-service.ts": "13ebb8d06e55581a6bfd1984b9912672c49ad493181e96adef2310e2c9bf3855",
+    "src/storage/sqlite/endpoint-tool-invocation-repository.ts": "05e38c8162570020e2633de918aaf09c9e9e302eb85297cdf37f2af985b39296",
+    "src/storage/sqlite/schema.ts": "529cc4ca4d6d70ca45b22d8aa606c136a31b2608286455c3f0830697b12e06ec",
+    "src/storage/sqlite/schema.sql": "2b3ed7637c934ea8178c5dc7ab0d597ef01db2047599d7ecf4641058bf603497",
+    "src/storage/sqlite/upgrades/266_endpoint_operation_audit.sql": "825bd7392745080f0b9188df49b583b031b9213b7c2dd3c3c75a8e4d4d176be7",
+    "src/gateway/hono/routes/endpoint-tools.ts": "ca08e045cef9bb51fdc65c4bd544c13c22fcffb2bc0886f86001b8fb9390060d",
+    "src/gateway/security/gateway-scopes.ts": "86a02634f8ee3678bbe598ba2fcfcf90199b2d8faef8b06bf5df04fabada675a",
+    "scripts/verify-electron-operation-audit.mts": "ca9fbd37b10b600d2f0cf80215480d11a8ce5d27e2b2991a3fc8325a649a38dc",
+    "scripts/verify-electron-audit-upgrade.mts": "f586b4162f73633e7747d4ba2a4218f18afa937e602bad9a9ff41f5a6750509f"
+  }
+}

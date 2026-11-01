@@ -73,6 +73,18 @@ function expectPreserved(db: DatabaseSync): void {
 }
 
 describe('supported installed database upgrades', () => {
+  it('preserves installed v265 invocation history when adding optional stable operation audit identity', () => {
+    const db = historicalDatabase(265);
+    try {
+      db.exec(`INSERT INTO endpoint_tool_invocations(id,principal_id,endpoint_id,tool_call_id,tool_name,effect,
+        confirmation_required,arguments_sha256,status,started_at,completed_at)
+        VALUES ('keep-invocation','keep-device','keep-endpoint','keep-call','desktop.file.save','write',1,'hash','succeeded',10,20)`);
+      const before = db.prepare('SELECT * FROM endpoint_tool_invocations').all();
+      ensureXopcDatabaseSchema(db);
+      expect(db.prepare('SELECT * FROM endpoint_tool_invocations').all()).toEqual(before.map(row => ({ ...row, operation_id: null })));
+      expect(db.prepare('PRAGMA integrity_check').get()?.integrity_check).toBe('ok');
+    } finally { db.close(); }
+  });
   it('preserves device credentials, pending approval and foreign-key dependents upgrading v262', () => {
     const db = historicalDatabase(262);
     try {

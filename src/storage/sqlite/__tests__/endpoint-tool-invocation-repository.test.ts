@@ -57,4 +57,16 @@ describe('endpoint tool invocation audit repository', () => {
     expect(listEndpointToolInvocationAuditPage({ effect: 'write' }).items.map((item) => item.id)).toEqual(['invocation-1']);
     expect(listEndpointToolInvocationAuditPage({ query: '%' }).items).toEqual([]);
   });
+
+  it('preserves a stable operation identity across distinct transport attempts without storing argument bodies', () => {
+    const operationId = '00000000-0000-4000-8000-000000000001';
+    for (const id of ['attempt-1', 'attempt-2']) startEndpointToolInvocationAudit({
+      id, operationId, principalId: 'device', endpointId: 'desktop', toolCallId: 'call', toolName: 'desktop.file.save',
+      effect: 'write', confirmationRequired: true, argumentsSha256: 'b'.repeat(64), startedAt: Date.now(),
+    });
+    const page = listEndpointToolInvocationAuditPage({ principalId: 'device' });
+    expect(page.items).toHaveLength(2);
+    expect(page.items.every(row => row.operationId === operationId && row.argumentsSha256 === 'b'.repeat(64))).toBe(true);
+    expect(page.items.every(row => !('arguments' in row))).toBe(true);
+  });
 });
