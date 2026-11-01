@@ -175,7 +175,8 @@ export class SessionInputCoordinator {
       if (!target.ok) throw new SessionInputControlConflict('Only the latest user turn can be edited');
     }
     const row = command.inputId ? getSessionInputById(conversationId, command.inputId) : undefined;
-    if (!replay && command.action === 'steer' && (!row || row.attachments?.length || row.contextRefs?.length
+    if (!replay && command.action === 'steer' && (!row || row.attachments?.length
+      || row.contextRefs?.some(ref => ref.kind !== 'device_context')
       || !canSteerContexts(this.snapshot(conversationId), row.origin, row.contextSnapshots))) {
       throw new SessionInputControlConflict('This input cannot steer the active reply');
     }

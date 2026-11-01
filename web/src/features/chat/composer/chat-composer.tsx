@@ -177,7 +177,7 @@ export const ChatComposer = memo(function ChatComposer({
   onSend: ComposerSendHandler;
   onPersonalSendDispatched?: (receipt: ComposerDispatchReceipt, source: DOMRect, draft: ComposerDraft) => void;
   onAbort: () => void;
-  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], interrupt?: boolean) => void | Promise<void>;
+  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], interrupt?: boolean, delivery?: 'next' | 'steer') => void | Promise<void>;
   onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
   pendingFollowUps: PendingFollowUp[];
   editingFollowUpId: string | null;
@@ -674,6 +674,7 @@ export const ChatComposer = memo(function ChatComposer({
     runBusy,
     pendingFollowUpsCount: pendingFollowUps.length,
     flushSteeringDraft: submitFollowUp,
+    steerDraft: () => actions.flushSteeringDraft(false, 'steer'),
     interruptDraft: actions.interruptDraft,
     editingFollowUpId,
     editingUserTurnId, onCancelUserMessageEdit,

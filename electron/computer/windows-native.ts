@@ -1,10 +1,7 @@
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { join, win32 } from 'node:path';
-import { promisify } from 'node:util';
+import { win32 } from 'node:path';
 import { z } from 'zod';
-
-const exec = promisify(execFile);
+import { WindowsNativeReader } from './windows-reader.js';
 
 // Read native identity and input safety only; never return field values.
 const declarations = `
@@ -44,6 +41,8 @@ using System.Runtime.InteropServices;
 using System.Windows.Automation;
 public class XopcInputField {
   public string runtimeId;
+  public string parentRuntimeId;
+  public string label;
   public string role;
   public bool? password;
   public bool enabled;
@@ -75,7 +74,10 @@ public class XopcComputerInput {
       object readOnly = ((TextPattern)pattern).DocumentRange.GetAttributeValue(TextPattern.IsReadOnlyAttribute);
       writable = readOnly is bool && !(bool)readOnly;
     }
+    var parent = TreeWalker.RawViewWalker.GetParent(e);
     return new XopcInputField { runtimeId = String.Join(",", e.GetRuntimeId()),
+      parentRuntimeId = parent == null ? null : String.Join(",", parent.GetRuntimeId()),
+      label = c.Name,
       role = c.ControlType.ProgrammaticName, password = password is bool ? (bool?)password : null,
       enabled = c.IsEnabled, writable = writable, offscreen = c.IsOffscreen,
       x = rect.X, y = rect.Y, w = rect.Width, h = rect.Height };
@@ -109,39 +111,53 @@ public class XopcComputerInput {
 
 export interface WindowsInputField {
   runtimeId: string; role: string; password: boolean | null; enabled: boolean; writable: boolean; offscreen: boolean;
+  parentRuntimeId?: string | null;
+  label?: string;
   x: number; y: number; w: number; h: number;
 }
 export interface WindowsInputState { fields: WindowsInputField[]; focused: WindowsInputField | null }
 const InputField = z.object({ runtimeId: z.string().min(1).max(512), role: z.string().min(1).max(80),
+  parentRuntimeId: z.string().min(1).max(512).nullish(),
+  label: z.string().max(16384).optional(),
   password: z.boolean().nullable(), enabled: z.boolean(), writable: z.boolean(), offscreen: z.boolean(),
   x: z.number().finite(), y: z.number().finite(), w: z.number().finite().nonnegative(), h: z.number().finite().nonnegative() });
 const InputState = z.object({ fields: z.array(InputField).max(180), focused: InputField.nullable() });
 
 export interface WindowsComputerIdentity { processIdentity: string; executable: string; appIds: string[]; sessionId: number; input?: WindowsInputState }
 
-export async function readWindowsComputerIdentity(pid: number, windowId?: string, signal?: AbortSignal, includeInput = false): Promise<WindowsComputerIdentity> {
-  if (!Number.isSafeInteger(pid) || pid <= 0 || (windowId != null && !/^\d{1,19}$/.test(windowId))) throw new Error('COMPUTER_INVALID_NATIVE_TARGET');
-  const script = `$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.Encoding]::UTF8;
-$p=Get-Process -Id ${pid}; $current=Get-Process -Id $PID;
-if ($p.SessionId -eq 0 -or $p.SessionId -ne $current.SessionId) { throw 'interactive session required' };
-$appIds=@(); $inputState=$null;
-${windowId == null ? '' : `Add-Type -TypeDefinition @'
+const readerScript = `$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.Encoding]::UTF8;
+Add-Type -TypeDefinition @'
 ${declarations}
 '@;
-$owner=[uint32]0; $hwnd=[IntPtr]::new([long]${windowId});
-[void][XopcComputerIdentity]::GetWindowThreadProcessId($hwnd,[ref]$owner);
-if ($owner -ne ${pid}) { throw 'window owner changed' };
-$appIds=@([XopcComputerIdentity]::AppIds($hwnd));`}
-${includeInput && windowId ? `Add-Type -ReferencedAssemblies UIAutomationClient,UIAutomationTypes,WindowsBase -TypeDefinition @'
+Add-Type -ReferencedAssemblies UIAutomationClient,UIAutomationTypes,WindowsBase -TypeDefinition @'
 ${inputDeclarations}
 '@;
-$inputState=[XopcComputerInput]::ReadWindow($hwnd);` : ''}
-@{start=$p.StartTime.ToUniversalTime().Ticks.ToString(); executable=$p.Path; appIds=$appIds; sessionId=$p.SessionId; input=$inputState} | ConvertTo-Json -Depth 6 -Compress`;
+while ($null -ne ($line=[Console]::ReadLine())) {
   try {
-    const { stdout } = await exec(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-      ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
-      { windowsHide: true, timeout: 8000, maxBuffer: 64 * 1024, signal });
-    const data = JSON.parse(stdout.replace(/^\uFEFF/, '').trim());
+    $request=ConvertFrom-Json $line;
+    $p=Get-Process -Id $request.pid; $current=Get-Process -Id $PID;
+    if ($p.SessionId -eq 0 -or $p.SessionId -ne $current.SessionId) { throw 'interactive session required' };
+    $appIds=@(); $inputState=$null;
+    if ($request.windowId) {
+      $owner=[uint32]0; $hwnd=[IntPtr]::new([long]$request.windowId);
+      [void][XopcComputerIdentity]::GetWindowThreadProcessId($hwnd,[ref]$owner);
+      if ($owner -ne $request.pid) { throw 'window owner changed' };
+      $appIds=@([XopcComputerIdentity]::AppIds($hwnd));
+      if ($request.includeInput) { $inputState=[XopcComputerInput]::ReadWindow($hwnd); };
+    };
+    $result=@{start=$p.StartTime.ToUniversalTime().Ticks.ToString(); executable=$p.Path; appIds=$appIds; sessionId=$p.SessionId; input=$inputState};
+    [Console]::WriteLine(($result | ConvertTo-Json -Depth 6 -Compress));
+  } catch { [Console]::WriteLine('{"error":true}'); }
+}`;
+const defaultOwner = {};
+const readers = new WeakMap<object, WindowsNativeReader>();
+async function readIdentity(pid: number, windowId?: string, signal?: AbortSignal, includeInput = false, owner: object = defaultOwner): Promise<WindowsComputerIdentity> {
+  if (!Number.isSafeInteger(pid) || pid <= 0 || (windowId != null && !/^\d{1,19}$/.test(windowId))) throw new Error('COMPUTER_INVALID_NATIVE_TARGET');
+  try {
+    let reader = readers.get(owner);
+    if (!reader) { reader = new WindowsNativeReader(readerScript); readers.set(owner, reader); }
+    const data = await reader.read({ pid, windowId, includeInput }, signal) as Record<string, any>;
+    signal?.throwIfAborted();
     if (!/^\d+$/.test(data.start) || typeof data.executable !== 'string' || !win32.isAbsolute(data.executable)
       || !Number.isInteger(data.sessionId) || !Array.isArray(data.appIds) || !data.appIds.every((id: unknown) => typeof id === 'string')) throw new Error();
     return { processIdentity: `${pid}:${createHash('sha256').update(`${data.start}:${data.executable.toLowerCase()}`).digest('hex')}`,
@@ -152,3 +168,6 @@ $inputState=[XopcComputerInput]::ReadWindow($hwnd);` : ''}
     throw new Error('COMPUTER_NATIVE_IDENTITY_UNAVAILABLE', { cause: error });
   }
 }
+export const readWindowsComputerIdentity = Object.assign(readIdentity, {
+  close(owner: object = defaultOwner) { readers.get(owner)?.dispose(); readers.delete(owner); },
+});

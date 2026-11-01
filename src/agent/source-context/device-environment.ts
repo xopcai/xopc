@@ -20,7 +20,10 @@ export function deviceEnvironmentText(context: AgentSourceContext, now = Date.no
       });
     } else delete data.locationShares;
     if (data.taskContext) {
-      const view = projectEndpointContextView(data.taskContext, context.sourceId, now);
+      const snapshot = { ...data.taskContext };
+      // Projection adds this diagnostic timestamp; it is not part of the ingestion schema.
+      delete snapshot.evaluatedAt;
+      const view = projectEndpointContextView(snapshot, context.sourceId, now);
       if (view) data.taskContext = { ...view, evaluatedAt: now };
       else delete data.taskContext;
     }

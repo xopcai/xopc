@@ -12,6 +12,16 @@ const row = { element_index: '0', element_token: 'private-token', role: 'Edit', 
 beforeEach(() => native.read.mockReset());
 
 describe('native Windows input certification', () => {
+  it('certifies field label uniqueness only from a complete native walk and counts refused duplicate labels', () => {
+    const named = { ...field, label: 'Message' };
+    expect(enrichWindowsInput([row], { fields: [named], focused: null })[0].fieldLabelUnique).toBe(true);
+    expect(enrichWindowsInput([row], { fields: [field], focused: null })[0].fieldLabelUnique).toBeUndefined();
+    const duplicate = { ...row, element_index: '3', frame: { ...row.frame, x: 400 } };
+    expect(enrichWindowsInput([row, duplicate], { fields: [named, { ...named, x: 400, runtimeId: '42,3', writable: false }], focused: null })[0].fieldLabelUnique).toBeUndefined();
+    const parent = { ...named, runtimeId: '42,parent', x: 90, w: 300 };
+    const child = { ...named, parentRuntimeId: parent.runtimeId };
+    expect(enrichWindowsInput([row], { fields: [parent, child], focused: null })[0].fieldLabelUnique).toBeUndefined();
+  });
   it.each([{ password: true }, { password: null }, { enabled: false }, { writable: false }, { offscreen: true }])(
     'refuses unsafe or unknown native input metadata: %j', override => {
       const unsafe = { ...field, ...override };
@@ -29,6 +39,25 @@ describe('native Windows input certification', () => {
     const [element] = enrichWindowsInput([row], { fields: [{ ...field, role: 'ControlType.Document' }],
       focused: { ...field, role: 'ControlType.Document' } });
     expect(element).toMatchObject({ inputAllowed: true, keyboardFocused: true });
+  });
+  it('certifies only the inner Qt editor when both native trees prove an identical-bounds parent/child pair', () => {
+    const outer = { ...row, element_index: '1' };
+    const inner = { ...row, element_index: '2', parent_index: '1' };
+    const child = { ...field, runtimeId: '42,2', parentRuntimeId: field.runtimeId };
+    const result = enrichWindowsInput([outer, inner], { fields: [field, child], focused: child });
+    expect(result[0]).toMatchObject({ role: 'UnverifiedEdit', inputAllowed: false });
+    expect(result[0].keyboardFocused).toBeUndefined();
+    expect(result[1]).toMatchObject({ role: 'Edit', inputAllowed: true, keyboardFocused: true,
+      windows_runtime_id: child.runtimeId, windows_focus_id: child.runtimeId });
+  });
+  it.each(['native-parent', 'row-parent', 'protected-parent', 'third-overlap'])('rejects an unproven Qt input pair: %s', condition => {
+    const outer = { ...row, element_index: '1' };
+    const inner = { ...row, element_index: '2', parent_index: condition === 'row-parent' ? '9' : '1' };
+    const parent = { ...field, password: condition === 'protected-parent' };
+    const child = { ...field, runtimeId: '42,2', parentRuntimeId: condition === 'native-parent' ? '42,9' : field.runtimeId };
+    const fields = condition === 'third-overlap' ? [parent, child, { ...field, runtimeId: '42,3' }] : [parent, child];
+    const result = enrichWindowsInput([outer, inner], { fields, focused: child });
+    expect(result.every(element => element.inputAllowed === false && !element.keyboardFocused)).toBe(true);
   });
 });
 
@@ -54,6 +83,8 @@ describe('Windows input dispatch', () => {
   it('types only into a certified field by its private Cua token', async () => {
     const f = fixture();
     const observed = await f.driver.observe(f.target, f.signal);
+    expect((f.driver as any).getWindowState).toHaveBeenCalledWith(42, 9n,
+      expect.objectContaining({ maxElements: 1024 }), f.signal);
     const context = JSON.parse(observed.summary);
     expect(context.platform).toBe('win32');
     expect(observed.summary).not.toMatch(/private-token|42,1|windows_runtime_id|windows_focus_id/);
@@ -70,6 +101,26 @@ describe('Windows input dispatch', () => {
     await f.driver.perform(f.target, { kind: 'pressKeys', keys: ['ctrl', 'a'] }, f.signal);
     expect(f.call).toHaveBeenCalledWith('hotkey', expect.objectContaining({
       pid: 42, window_id: 9, element_token: 'private-token', delivery_mode: 'background', keys: ['ctrl', 'a'] }), f.signal);
+  });
+  it('dispatches typing and keys to the certified inner Qt editor after a large history', async () => {
+    const f = fixture();
+    const child = { ...field, runtimeId: '42,2', parentRuntimeId: field.runtimeId };
+    native.read.mockResolvedValue({ ...f.identity, input: { fields: [field, child], focused: child } });
+    const state = await (f.driver as any).getWindowState();
+    state.elements = [
+      ...Array.from({ length: 200 }, (_, i) => ({ elementIndex: BigInt(i + 3), role: 'DataItem', depth: 1,
+        label: `Historical message ${i}`, value: 'Old history '.repeat(20) })),
+      { ...state.elements[0], elementIndex: 1n, elementToken: 'outer-token' },
+      { ...state.elements[0], elementIndex: 2n, parentIndex: 1n, depth: 2 },
+    ];
+    const observed = await f.driver.observe(f.target, f.signal);
+    expect(observed.focusedEditableRef).toBe('e2');
+    expect(JSON.parse(observed.summary).elements).toContainEqual(expect.objectContaining({
+      ref: 'e2', inputAllowed: true, keyboardFocused: true }));
+    await f.driver.perform(f.target, { kind: 'typeText', point: { x: 150, y: 130 }, text: '中文 hello' }, f.signal);
+    expect(f.call).toHaveBeenCalledWith('type_text', expect.objectContaining({ element_token: 'private-token', text: '中文 hello' }), f.signal);
+    await f.driver.perform(f.target, { kind: 'pressKeys', keys: ['end'] }, f.signal);
+    expect(f.call).toHaveBeenCalledWith('press_key', expect.objectContaining({ element_token: 'private-token', key: 'end' }), f.signal);
   });
   it('refuses changed secure state before any native input, without fallback', async () => {
     const f = fixture(); await f.driver.observe(f.target, f.signal);

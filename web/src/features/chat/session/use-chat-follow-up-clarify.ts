@@ -55,6 +55,7 @@ export type ChatFollowUpClarifyApi = {
     contextRefs?: ComposerContextRef[],
     appContext?: AppContextEnvelope,
     interrupt?: boolean,
+    delivery?: 'next' | 'steer',
   ) => Promise<void>;
   beginEditFollowUp: (id: string) => Promise<boolean>;
   cancelEditFollowUp: () => void;
@@ -337,6 +338,7 @@ export function useChatFollowUpClarify(options: {
       contextRefs?: ComposerContextRef[],
       appContext?: AppContextEnvelope,
       interrupt?: boolean,
+      delivery?: 'next' | 'steer',
     ) => {
       const trimmed = content.trim();
       if (!trimmed && !attachments?.length && !contextRefs?.length) return;
@@ -353,7 +355,7 @@ export function useChatFollowUpClarify(options: {
       if (configVersion === undefined) throw new Error('Reload the conversation before sending');
       const state = await submitQueuedInput(key, {
         kind: 'append', expectedTranscriptId, configVersion,
-        clientMessageId: crypto.randomUUID(), delivery: 'next', interrupt,
+        clientMessageId: crypto.randomUUID(), delivery: delivery ?? 'next', interrupt,
         controlVersion: controlAtSubmit.version,
         input: { content: trimmed || content, attachments: attachments?.length ? attachments : undefined,
           contextRefs: contextRefs?.map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
@@ -387,6 +389,11 @@ export function useChatFollowUpClarify(options: {
       const result = await requestInputControl(key, command);
       assertScope();
       applyState(result);
+      if (action === 'steer') {
+        const input = (result as { inputs?: Array<{ id: string; status: string; error?: string }> })
+          .inputs?.find(row => row.id === target?.inputId);
+        if (input?.status === 'interrupted') throw new Error(input.error ?? 'Current reply ended before steering');
+      }
       if (action === 'stop') {
         const deadline = Date.now() + 15_000;
         while (readInputControl(key).phase === 'stopping') {

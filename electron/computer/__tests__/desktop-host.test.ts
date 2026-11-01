@@ -66,7 +66,7 @@ describe('computer driver paths', () => {
       mainDir: '/Applications/xopc.app/Contents/Resources/app.asar/out/main' }))
       .toBe(join('/Applications/xopc.app/Contents/Resources', 'bin/cua-driver'));
     expect(resolveComputerDriverPath({ packaged: true, resourcesPath: '/release', mainDir: '/unused', platform: 'darwin', useLocalBuild: true }))
-      .toBe('/release/bin/cua-driver');
+      .toBe(join('/release', 'bin/cua-driver'));
   });
 
   it('loads the packaged SDK from its real unpacked path so its dylib can be opened', () => {
