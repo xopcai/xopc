@@ -65,8 +65,8 @@ export class DesktopEnrollmentManager {
         workspaceExecution = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.workspaceExecutionVersion === 1;
         containerCommand = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.containerCommandVersion === 1;
         containerTerminal = containerCommand && compatibility.capabilities?.containerTerminalVersion === 1;
-        remoteComputer = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.remoteComputerVersion === 1;
-        remoteBrowser = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.remoteBrowserVersion === 1;
+        remoteComputer = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.remoteComputerVersion === 1 && compatibility.capabilities?.executionStopVersion === 1;
+        remoteBrowser = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.remoteBrowserVersion === 1 && compatibility.capabilities?.executionStopVersion === 1;
         set('registered', result.deviceId); return;
       }
       if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
@@ -100,8 +100,8 @@ export class DesktopEnrollmentManager {
       workspaceExecution = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.workspaceExecutionVersion === 1;
       containerCommand = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.containerCommandVersion === 1;
       containerTerminal = containerCommand && compatibility.payload.capabilities?.containerTerminalVersion === 1;
-      remoteComputer = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.remoteComputerVersion === 1;
-      remoteBrowser = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.remoteBrowserVersion === 1;
+      remoteComputer = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.remoteComputerVersion === 1 && compatibility.payload.capabilities?.executionStopVersion === 1;
+      remoteBrowser = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.remoteBrowserVersion === 1 && compatibility.payload.capabilities?.executionStopVersion === 1;
       const result = await client.enroll({ displayName: `xopc Desktop (${process.platform})`,
         consent: async () => {
           current(); if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');

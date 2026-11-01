@@ -840,6 +840,17 @@ CREATE TABLE desktop_execution_grant_events (
 CREATE UNIQUE INDEX idx_desktop_execution_approval ON desktop_execution_grant_events(device_id, approval_id) WHERE action = 'granted';
 CREATE UNIQUE INDEX idx_desktop_execution_grant ON desktop_execution_grant_events(device_id, grant_id) WHERE action = 'granted';
 
+CREATE TABLE desktop_execution_stops (
+  device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+  grant_id TEXT NOT NULL,
+  authorization_revision INTEGER NOT NULL CHECK (authorization_revision > 0),
+  stop_id TEXT NOT NULL UNIQUE,
+  receipt_json TEXT NOT NULL CHECK (json_valid(receipt_json)),
+  grant_digest TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (device_id, grant_id, authorization_revision)
+);
+
 CREATE TABLE context_evidence (
   evidence_id TEXT PRIMARY KEY,
   principal_id TEXT NOT NULL,

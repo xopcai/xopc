@@ -7,6 +7,7 @@ import {
   type ActionEnvelope, type ComputerCommand, type ComputerModelBinding,
 } from '@xopcai/computer-control-contract';
 import { hasReviewedDesktopExecutionStop, type ReviewedDesktopExecutionScope } from '../storage/sqlite/desktop-operation-repository.js';
+import { hasVerifiedDesktopExecutionStop } from '../storage/sqlite/desktop-execution-stop-repository.js';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForSession } from '../config/agent-profile.js';
@@ -103,6 +104,8 @@ export class ComputerRuntime {
   async execute(owner: string, input: ComputerUseInput, signal?: AbortSignal, execution?: { toolCallId: string }): Promise<ComputerPublicResult> {
     input = ComputerUseInputSchema.parse(input);
     if (!owner) throw new Error('COMPUTER_CONVERSATION_REQUIRED');
+    const stale = this.sessions.get(owner);
+    if (stale && !this.operations.has(owner) && this.verifiedRemoteStop(stale)) this.forget(stale);
     if (input.op === 'flows' || input.op === 'forget_flow') {
       signal?.throwIfAborted();
       const scope = this.flowScope(owner);
@@ -694,6 +697,7 @@ export class ComputerRuntime {
     this.operations.get(owner)?.abort();
     clearComputerFrames(owner);
     const s = this.sessions.get(owner); if (!s) return true;
+    if (this.verifiedRemoteStop(s)) { this.forget(s); return true; }
     s.programStore = undefined;
     s.task.clear(); s.pendingContext = undefined;
     s.controller.abort();
@@ -703,12 +707,17 @@ export class ComputerRuntime {
     } catch (error) {
       if (error instanceof Error && error.message === 'COMPUTER_SESSION_NOT_FOUND') { this.forget(s); return true; }
       // Only independently recorded native stop review can release stale remote admission metadata.
-      try { if (s.executionScope && hasReviewedDesktopExecutionStop(s.executionScope)) { this.forget(s); return true; } } catch { /* Unavailable proof keeps the session quarantined. */ }
+      if (this.verifiedRemoteStop(s)) { this.forget(s); return true; }
       // Retain the admission gate until desktop revocation is confirmed.
     }
     s.diagnostics.fail(new Error('COMPUTER_RELEASE_UNCONFIRMED'), 'release', 'unknown');
     s.diagnostics.finish(false);
     return false;
+  }
+  private verifiedRemoteStop(session: Session): boolean {
+    if (!session.executionScope) return false;
+    try { return hasVerifiedDesktopExecutionStop(session.executionScope) || hasReviewedDesktopExecutionStop(session.executionScope); }
+    catch { return false; }
   }
   getReport(owner: string): ComputerSessionReport | undefined {
     this.pruneReports();

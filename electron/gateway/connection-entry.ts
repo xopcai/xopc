@@ -29,6 +29,7 @@ import { createNativeComputerSession } from '../desktop/computer-native-session.
 import { createNativeBrowserSession } from '../desktop/browser-native-session.js';
 import { DesktopBrowserResources } from '../desktop/browser-resources.js';
 import type { DesktopBrowserSession } from '../desktop/browser-session.js';
+import { DesktopExecutionStopOutbox } from '../desktop/execution-stop-outbox.js';
 import { computerHostBundleId } from '../desktop/computer-host-identity.js';
 import type { DesktopComputerSession } from '../desktop/computer-session.js';
 import { CuaComputerDriver } from '../computer/cua-driver.js';
@@ -126,6 +127,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   const workspaceRecovery = new DesktopWorkspaceRecoveryStore(join(resolveStateDir(), 'desktop-execution-v1', 'workspace-recovery'), encryption);
   const computerResources = new DesktopComputerResources(join(resolveStateDir(), 'desktop-execution-v1', 'computer-resources'), encryption);
   const browserResources = new DesktopBrowserResources(join(resolveStateDir(), 'desktop-execution-v1', 'browser-resources'), encryption);
+  const stopOutbox = new DesktopExecutionStopOutbox(join(resolveStateDir(), 'desktop-execution-v1', 'stop-outbox'), encryption);
   const stopBrowser = async () => {
     computerPresence.close(); browserContext = undefined; await computerPresence.whenStopped();
     const previous = browser, outcome = await previous?.stop() ?? { confirmed: true };
@@ -140,6 +142,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     return outcome;
   };
   const execution = new DesktopExecutionManager({ manager, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'),
+    stopOutbox,
     appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopOperationStatusDescriptor()]), foreground,
     createTerminal: (intent, binding, emit, lease) => {
       if (!container) throw new Error('DESKTOP_TERMINAL_AUTHORITY_INVALID'); return container.terminal(intent, binding, emit, lease);
@@ -477,6 +480,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     return snapshot();
   })));
   ipcMain.handle('connections:execution-stop', () => reply(async () => { stopCapabilities(); await execution.stop(); return snapshot(); }));
+  ipcMain.handle('connections:stop-receipts', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { await execution.flushStopReceipts(epoch, id); return snapshot(); })));
   ipcMain.handle('connections:computer-start', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => {
     if (process.platform !== 'darwin') throw new Error('DESKTOP_COMPUTER_UNSUPPORTED');
     const state = manager.snapshot(), profile = state.profiles.find(item => item.id === id);

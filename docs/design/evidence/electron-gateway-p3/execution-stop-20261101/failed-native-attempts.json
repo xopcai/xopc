@@ -1,0 +1,58 @@
+[
+  {
+    "report": "reports/stop-proof-native-browser-fault-1.json",
+    "sha256": "c873c1beb5c56ef194a9ff321094140bc8a4a319b1e9d2d4f5a09450d26d2c0a",
+    "passed": false,
+    "checks": {
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: AssertionError [ERR_ASSERTION]: Browser action failed: \"[DRIVER_UNAVAILABLE] External outcome is unknown; do not resend with a new key without verification\"\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:27:34)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:144:3"
+  },
+  {
+    "report": "reports/stop-proof-native-browser-fault-2.json",
+    "sha256": "08f230786423a03ec93002d8fd29414bbd43676c94febb4a0125e49084b21909",
+    "passed": false,
+    "checks": {
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: AssertionError [ERR_ASSERTION]: Browser tool unavailable\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:27:34)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:144:3"
+  },
+  {
+    "report": "reports/stop-proof-native-browser-fault-3.json",
+    "sha256": "9440570a9cfdfaa0ff597318fb6c2c6d67d70ec232e4c7aecaab25fca96121bf",
+    "passed": false,
+    "checks": {
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: AssertionError [ERR_ASSERTION]: Browser action failed: \"[DRIVER_UNAVAILABLE] External outcome is unknown; do not resend with a new key without verification\"\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:27:34)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:156:3"
+  },
+  {
+    "report": "reports/stop-proof-native-browser-fault-4.json",
+    "sha256": "3cd3b0ce6dd22dd47ba77e54a94b1830e2cc629e3e474a93b7903f06610b9ae9",
+    "passed": false,
+    "checks": {
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: AssertionError [ERR_ASSERTION]: Browser tool unavailable\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:40:34)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:170:3"
+  },
+  {
+    "report": "reports/stop-proof-native-browser-fault-5.json",
+    "sha256": "5ecb718f95c125319b2b865a7f280d6f30a3fb25bf3e8522b24ee4ce00852260",
+    "passed": false,
+    "checks": {
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: Error: Synthetic operator coordination timed out before dispatch\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:40:34)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:174:3"
+  },
+  {
+    "report": "reports/stop-proof-native-browser-fault-6.json",
+    "sha256": "19d6ccf96f1cc463fd61c84d5d61dc46199ad2ca0a38b2d3a73beb1d3a252b56",
+    "passed": false,
+    "checks": {
+      "nativeGrantCancelled": true,
+      "agentUnknownReported": true,
+      "actualBrowserSingleInput": true
+    },
+    "error": "AssertionError [ERR_ASSERTION]: DESKTOP_LOCAL_CONSENT_DENIED\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-browser.mjs:191:69"
+  }
+]

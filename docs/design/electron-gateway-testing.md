@@ -98,3 +98,6 @@ node scripts/verify-electron-desktop-enrollment.mjs \
 
 原生脚本为 `scripts/verify-electron-desktop-browser.mjs --app <独立Native验收副本> --fixture-url <全新隔离HTTPS计数器地址> --output <新的报告路径>`。每次使用新计数器，失败后保留原计数和报告；不得清零重做旧操作。生产安装包不自动批准原生窗口。完整交付仍须补齐故障恢复、P4 与最终 main 构建回归。
 
+## Browser未知结果恢复验证增量
+
+可在上面的原生脚本添加 `--lost-result-review`，必须使用全新隔离计数器。预期点击一次后成功回执丢失；检查实际计数仍为1，先取消人工核实，再确认核实、重新授权。恢复仅导航/观察/关闭，旧结果保持unknown且计数不再增加。第7轮已通过，见[停止与恢复证据](./evidence/electron-gateway-p3/execution-stop-20261101/README.md)。本机提供“补交已确认的停止回执”，只补交已持久化证明，不重做操作或消除unknown；Main在证明持久化之前崩溃的恢复仍待实现。

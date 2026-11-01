@@ -31,7 +31,7 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
-it.each(['success', 'denied', 'lost-connection'] as const)('runs the separate execution Host against authenticated Gateway HTTP/WS: %s', async scenario => {
+it.each(['success', 'denied', 'lost-connection', 'worker-unknown'] as const)('runs the separate execution Host against authenticated Gateway HTTP/WS: %s', async scenario => {
   const directory = await mkdtemp(join(tmpdir(), 'xopc-device-frame-e2e-'));
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'gateway.db') });
   const endpoints = new EndpointToolRuntime({ uploadRoot: join(directory, 'files') });
@@ -73,12 +73,14 @@ it.each(['success', 'denied', 'lost-connection'] as const)('runs the separate ex
     lease = new DesktopExecutionLease(join(directory, 'journal')); journal = new DesktopOperationJournal(lease);
     let effects = 0, approvals = 0, stopped = 0, allowStop = false;
     const began = Promise.withResolvers<void>(), completion = Promise.withResolvers<{ status: 'succeeded'; result: { content: { type: 'text'; text: string }[] } }>();
+    const states: string[] = [];
     host = new DesktopExecutionHost({ binding, auth, appVersion: 'fixture', approved: grant.grant, authorizationRevision: grant.revision,
-      catalog: new DesktopExecutionCatalog([descriptor, statusDescriptor]), journal, foreground: () => true, onState: () => {},
+      catalog: new DesktopExecutionCatalog([descriptor, statusDescriptor]), journal, foreground: () => true, onState: (state, error) => { states.push(error ?? state); },
       confirm: async () => { approvals += 1; return scenario !== 'denied'; },
       createWorker: () => ({ run: async () => { effects += 1; began.resolve();
+        if (scenario === 'worker-unknown') throw new Error('Fixture loses executor completion');
         return scenario === 'lost-connection' ? completion.promise : { status: 'succeeded', result: { content: [{ type: 'text', text: 'host result' }] } }; },
-        stop: async () => { stopped += 1; return { confirmed: scenario !== 'lost-connection' || allowStop }; } }),
+        stop: async () => { stopped += 1; return { confirmed: !['lost-connection', 'worker-unknown'].includes(scenario) || allowStop }; } }),
     });
     await host.start(); await vi.waitFor(() => expect(host!.origin()).toBeDefined());
     const endpointId = host.origin()!.endpointId;
@@ -98,6 +100,12 @@ it.each(['success', 'denied', 'lost-connection'] as const)('runs the separate ex
       expect(await host.verifyStopped()).toEqual({ state: 'stopped', resultUnknown: true });
       expect(journal.hasUnknown()).toBe(true);
       completion.resolve({ status: 'succeeded', result: { content: [{ type: 'text', text: 'late completion' }] } });
+      await expect(invoke()).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' }); expect(effects).toBe(1);
+    } else if (scenario === 'worker-unknown') {
+      await expect(result).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+      await vi.waitFor(() => expect(states).toContain('DESKTOP_OPERATION_RECONCILIATION_REQUIRED'));
+      expect(host.origin()).toBeUndefined(); expect(journal.hasUnknown()).toBe(true); expect((await host.stop()).state).toBe('unknown');
+      allowStop = true; expect(await host.verifyStopped()).toEqual({ state: 'stopped', resultUnknown: true });
       await expect(invoke()).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' }); expect(effects).toBe(1);
     } else if (scenario === 'denied') {
       await expect(result).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' }); expect(effects).toBe(0); expect(approvals).toBe(1);

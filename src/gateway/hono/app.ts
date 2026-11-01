@@ -304,6 +304,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   registerPublicGatewayRoutes(app, service);
   registerPublicHtmlPreviewRoute(app);
   registerDeviceAuthPublicRoutes(app, {
+    onDesktopExecutionStopped: deviceId => service.realtime.disconnectPrincipal(deviceId),
     getTrustedProxyContext: () => ({
       trustedProxies: service.currentConfig.gateway?.trustedProxies,
       allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,

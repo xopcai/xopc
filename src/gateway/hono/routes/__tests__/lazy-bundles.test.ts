@@ -455,3 +455,8 @@ it('maps mobile phone workspace and permission routes without neighboring prefix
   expect(findAuthenticatedLazyRouteBundle('/api/phone-other/conversations/id/summary')).toBeUndefined();
   expect(findAuthenticatedLazyRouteBundle('/api/phone/device-access/id')?.id).toBe('phone');
 });
+it('keeps purpose-authenticated stop receipts outside owner/device-token lazy routes', () => {
+  expect(findAuthenticatedLazyRouteBundle('/api/device-auth/execution-stops')).toBeUndefined();
+  expect(findAuthenticatedLazyRouteBundle('/api/device-auth/execution-stops/extra')).toBeUndefined();
+  expect(findAuthenticatedLazyRouteBundle('/api/desktop-host/execution')?.id).toBe('desktop-host');
+});

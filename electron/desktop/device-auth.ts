@@ -1,6 +1,8 @@
 import { createHash, createPublicKey, generateKeyPairSync, randomBytes, randomUUID, sign, verify } from 'node:crypto';
 
 import { buildDevicePairingProof, desktopPairingInvitationSchema, desktopExecutionGrantSchema, type DesktopExecutionGrant, type DevicePairingAction } from '@xopcai/gateway-contract';
+import { desktopExecutionStopSchema, desktopExecutionStopSigningPayload, signedDesktopExecutionStopSchema,
+  type DesktopExecutionStop, type SignedDesktopExecutionStop } from '@xopcai/gateway-contract';
 import { endpointHelloSigningPayload, endpointToolContentSchema, SCREEN_CAPTURE_MAX_BYTES, desktopOperationIntentSchema, toolInvokePayloadSchema,
   type EndpointHelloPayload, type DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
 import { endpointToolRevision, type EndpointToolFile, type EndpointToolUploadGrant } from '@xopcai/endpoint-tools-client';
@@ -26,6 +28,27 @@ export class DesktopDeviceAuth {
   private access?: { token: string; expiresAt: number };
   private queue = Promise.resolve();
   constructor(private readonly binding: DesktopBinding, private readonly store: DesktopIdentityStore, private readonly transport: DesktopAuthTransport) {}
+  signExecutionStop(input: DesktopExecutionStop): Promise<SignedDesktopExecutionStop> {
+    const receipt = desktopExecutionStopSchema.parse(input);
+    return this.serial(async () => {
+      // A revoked identity can only attest termination of its own old grant. No refresh/access credential is used.
+      const record = await this.store.load(this.binding);
+      if (!record?.deviceId || record.deviceId !== receipt.deviceId || receipt.gatewayId !== this.binding.gatewayId) throw new Error('DESKTOP_DEVICE_IDENTITY_MISMATCH');
+      return signedDesktopExecutionStopSchema.parse({ receipt, signature: signature(record, desktopExecutionStopSigningPayload(receipt)) });
+    });
+  }
+  submitExecutionStop(input: SignedDesktopExecutionStop, signal?: AbortSignal): Promise<void> {
+    const signed = signedDesktopExecutionStopSchema.parse(input);
+    if (signed.receipt.gatewayId !== this.binding.gatewayId) return Promise.reject(new Error('DESKTOP_DEVICE_IDENTITY_MISMATCH'));
+    return this.serial(async () => {
+      signal?.throwIfAborted();
+      const nonce = randomBytes(24).toString('base64url');
+      const body = this.signedResponse(await this.transport('/api/device-auth/execution-stops', 'POST', { signed, nonce }, undefined, signal), nonce);
+      const receipt = signed.receipt;
+      if (body.purpose !== 'desktop-execution-stop-v1' || body.stopped !== true || body.stopId !== receipt.stopId || body.deviceId !== receipt.deviceId
+        || body.grantId !== receipt.grantId || body.authorizationRevision !== receipt.authorizationRevision) throw new Error('DESKTOP_STOP_RESPONSE_INVALID');
+    });
+  }
   private serial<T>(work: () => Promise<T>): Promise<T> {
     const next = this.queue.then(() => this.store.serialize(this.binding, work)); this.queue = next.then(() => {}, () => {}); return next;
   }

@@ -62,3 +62,4 @@ export * from './phone-workspace.js';
 
 export * from './desktop-chat.js';
 export * from './desktop-host.js';
+export * from './desktop-execution-stop.js';

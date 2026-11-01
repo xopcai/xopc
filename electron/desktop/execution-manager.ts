@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { DesktopExecutionGrant } from '@xopcai/gateway-contract';
+import type { DesktopExecutionGrant, SignedDesktopExecutionStop } from '@xopcai/gateway-contract';
 import type { DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
 import type { DesktopTerminalHostController } from './terminal-host-controller.js';
 import type { DesktopComputerHostController } from './computer-host-controller.js';
@@ -19,13 +19,14 @@ import { DesktopExecutionSession } from './execution-session.js';
 import { DesktopExecutionLease, DesktopOperationJournal } from './operation-journal.js';
 import type { DesktopExecutionWorker } from './operation-supervisor.js';
 import type { DesktopWorkspaceReadApproval } from './workspace-read-session.js';
+import type { DesktopExecutionStopOutbox } from './execution-stop-outbox.js';
 
 type Status = { profileId: string; state: 'authorizing' | 'connecting' | 'online' | 'stop-requested' | 'stopped' | 'stop-unconfirmed' | 'error';
-  error?: string; remoteRevocationConfirmed?: boolean; resultUnknown?: boolean };
+  error?: string; remoteRevocationConfirmed?: boolean; stopReceiptConfirmed?: boolean; resultUnknown?: boolean };
 type Run = { binding: DesktopBinding; epoch: number; transport: 'ssh' | 'direct'; abort: AbortController; close(): void;
   deviceId?: string; proposed?: DesktopExecutionGrant; expectedRevision?: number; host?: DesktopExecutionHost;
   lease?: DesktopExecutionLease; journal?: DesktopOperationJournal; watchdog?: ReturnType<typeof setInterval>;
-  stopResources?: WorkspaceContext['stopResources']; resourceStop?: Promise<{ confirmed: boolean }> };
+  stopResources?: WorkspaceContext['stopResources']; resourceStop?: Promise<{ confirmed: boolean }>; stopProofSupported?: boolean; stopReceipt?: SignedDesktopExecutionStop };
 type WorkspaceContext = { catalog: DesktopExecutionCatalog; stopResources(): Promise<{ confirmed: boolean }> } &
   ({ workspaceId: string; kind?: 'container' } | { kind: 'computer' | 'browser'; workspaceId?: never });
 
@@ -35,8 +36,10 @@ export class DesktopExecutionManager {
   private status?: Status;
   private stoppingRun?: Run;
   private cleanup: Promise<void> = Promise.resolve();
+  private deliveringStops = false;
   constructor(private readonly options: {
     manager: GatewayConnectionPreview; store: DesktopIdentityStore; executorRoot: string; catalog: DesktopExecutionCatalog; appVersion: string;
+    stopOutbox?: DesktopExecutionStopOutbox;
     foreground(): boolean;
     consent(binding: DesktopBinding, grant: DesktopExecutionGrant, signal: AbortSignal): Promise<boolean>;
     confirm: ConstructorParameters<typeof DesktopExecutionSession>[0]['confirm'];
@@ -88,11 +91,24 @@ export class DesktopExecutionManager {
         [outcome, resourcesStopped] = await Promise.all([run.host?.verifyStopped() ?? Promise.resolve({ state: 'idle' as const }), this.verifyResources(run)]);
       }
       catch { outcome = { state: 'unknown' as const }; }
-      let confirmed = false;
+      let confirmed = false, stopReceiptConfirmed = false;
       // Revocation uses a fresh transport: the execution lifetime has already been aborted locally.
       const channel = desktopAuthTransport(run.binding, run.transport), client = new DesktopDeviceAuth(run.binding, this.options.store, channel.request);
       try {
-        if (run.deviceId && run.proposed && run.expectedRevision !== undefined) {
+        if (run.stopProofSupported && this.options.stopOutbox && run.deviceId && run.proposed && run.expectedRevision !== undefined && run.lease
+          && outcome.state !== 'unknown' && resourcesStopped) {
+          try {
+            run.stopReceipt ??= await client.signExecutionStop({ version: 1, stopId: randomUUID(), gatewayId: run.binding.gatewayId, deviceId: run.deviceId,
+              grantId: run.proposed.grantId, authorizationRevision: run.expectedRevision, leaseGeneration: run.lease.generation, executionStopped: true });
+            await this.options.stopOutbox.save(run.binding, run.stopReceipt);
+          }
+          catch { this.status = { profileId: run.binding.profileId, state: 'stop-unconfirmed', error: 'DESKTOP_STOP_RECEIPT_STORAGE_FAILED' }; return; }
+          try {
+            await client.submitExecutionStop(run.stopReceipt, AbortSignal.timeout(5000));
+            stopReceiptConfirmed = true; confirmed = true; await this.options.stopOutbox.confirm(run.stopReceipt);
+          } catch { /* Durable stop-only receipt can be submitted later; no operation is replayed. */ }
+        }
+        if (!confirmed && run.deviceId && run.proposed && run.expectedRevision !== undefined) {
           const response = await client.endpointRequest('/api/desktop-host/execution', 'DELETE',
             { grantId: run.proposed.grantId, expectedRevision: run.expectedRevision }, run.deviceId);
           confirmed = response?.active === false && response?.enabled === false;
@@ -107,7 +123,8 @@ export class DesktopExecutionManager {
       try { run.journal?.close(); run.lease?.close(); }
       catch { this.status = { profileId: run.binding.profileId, state: 'stop-unconfirmed', remoteRevocationConfirmed: confirmed }; return; }
       this.active = undefined;
-      this.status = { profileId: run.binding.profileId, state: 'stopped', remoteRevocationConfirmed: confirmed, ...(outcome.resultUnknown ? { resultUnknown: true } : {}) };
+      this.status = { profileId: run.binding.profileId, state: 'stopped', remoteRevocationConfirmed: confirmed,
+        ...(run.stopReceipt ? { stopReceiptConfirmed } : {}), ...(outcome.resultUnknown ? { resultUnknown: true } : {}) };
     }).catch(() => {
       this.status = { profileId: run.binding.profileId, state: 'stop-unconfirmed', resultUnknown: true };
     }).finally(() => { if (this.stoppingRun === run) this.stoppingRun = undefined; });
@@ -117,13 +134,38 @@ export class DesktopExecutionManager {
     await this.stop();
     if (this.active) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
   }
-  async start(epoch: unknown, id: unknown, workspace?: WorkspaceContext): Promise<void> {
+  async flushStopReceipts(epoch: unknown, id: unknown): Promise<void> {
+    if (!this.options.stopOutbox) return;
+    if (this.active || this.deliveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
+    this.deliveringStops = true;
+    try { await this.deliverStopReceipts(epoch, id); }
+    finally { this.deliveringStops = false; }
+  }
+  private async deliverStopReceipts(epoch: unknown, id: unknown): Promise<void> {
+    if (!this.options.stopOutbox) return;
+    await this.cleanup;
     if (this.active) throw new Error('DESKTOP_OPERATION_BUSY');
+    const snapshot = this.options.manager.snapshot(), profile = snapshot.profiles.find(profile => profile.id === id);
+    if (!isConnectionId(id) || epoch !== snapshot.epoch || id !== snapshot.selectedId || !profile?.identity) throw new Error('STALE_CONNECTION_EPOCH');
+    const binding = { profileId: id, origin: profile.origin, ...profile.identity };
+    const channel = desktopAuthTransport(binding, profile.transport), client = new DesktopDeviceAuth(binding, this.options.store, channel.request);
+    try {
+      const result = await this.options.stopOutbox.flush(binding, client);
+      const current = this.options.manager.snapshot();
+      if (epoch !== current.epoch || id !== current.selectedId) throw new Error('STALE_CONNECTION_EPOCH');
+      if (this.status?.profileId === id && this.status.state === 'stopped' && this.status.stopReceiptConfirmed !== undefined) {
+        this.status.stopReceiptConfirmed = result.pending === 0;
+        if (!result.pending) this.status.remoteRevocationConfirmed = true;
+      }
+    } finally { channel.close(); }
+  }
+  async start(epoch: unknown, id: unknown, workspace?: WorkspaceContext): Promise<void> {
+    if (this.active || this.deliveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
     const snapshot = this.options.manager.snapshot();
     if (!isConnectionId(id) || epoch !== snapshot.epoch || id !== snapshot.selectedId) throw new Error('STALE_CONNECTION_EPOCH');
     if (!this.options.foreground()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
     await this.cleanup;
-    if (this.active) throw new Error('DESKTOP_OPERATION_BUSY');
+    if (this.active || this.deliveringStops) throw new Error('DESKTOP_OPERATION_BUSY');
     if (epoch !== this.options.manager.snapshot().epoch) throw new Error('STALE_CONNECTION_EPOCH');
     const profile = snapshot.profiles.find(profile => profile.id === id);
     if (!profile?.identity) throw new Error('DESKTOP_PINNED_GATEWAY_REQUIRED');
@@ -139,9 +181,12 @@ export class DesktopExecutionManager {
       run.lease = new DesktopExecutionLease(this.options.executorRoot); run.journal = new DesktopOperationJournal(run.lease);
       if (run.journal.hasUnknown()) throw new Error('DESKTOP_OPERATION_RECONCILIATION_REQUIRED');
       const client = new DesktopDeviceAuth(binding, this.options.store, channel.request);
+      if (this.options.stopOutbox) { await this.options.stopOutbox.flush(binding, client); current(); }
       run.deviceId = (await client.readSelf()).deviceId; current();
       const compatibility = await client.endpointRequest('/api/desktop-host/compatibility', 'GET', undefined, run.deviceId); current();
       if (compatibility?.gatewayId !== binding.gatewayId || compatibility.publicKey !== binding.publicKey || compatibility.capabilities?.reliableExecutionVersion !== 1) throw new Error('DESKTOP_EXECUTION_UNSUPPORTED');
+      run.stopProofSupported = compatibility.capabilities?.executionStopVersion === 1;
+      if (this.options.stopOutbox && (workspace?.kind === 'computer' || workspace?.kind === 'browser') && !run.stopProofSupported) throw new Error('DESKTOP_EXECUTION_STOP_UNSUPPORTED');
       if (workspace && (workspace.kind === 'browser' ? compatibility.capabilities?.remoteBrowserVersion !== 1 : workspace.kind === 'computer' ? compatibility.capabilities?.remoteComputerVersion !== 1
         : workspace.kind === 'container' ? compatibility.capabilities?.containerCommandVersion !== 1 : compatibility.capabilities?.workspaceExecutionVersion !== 1)) throw new Error('DESKTOP_WORKSPACE_UNSUPPORTED');
       if (workspace?.kind === 'computer' && !workspace.catalog.revision(REMOTE_COMPUTER_CONTROL_TOOL)) throw new Error('DESKTOP_COMPUTER_UNSUPPORTED');

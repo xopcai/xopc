@@ -30,7 +30,7 @@ import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
-it.each(['success', 'lost-result', 'driver-recovery'] as const)('runs durable Browser commands through signed HTTP/WSS with injected browser Broker and native approval: %s', async scenario => {
+it.each(['success', 'lost-result', 'driver-recovery', 'idle-stop'] as const)('runs durable Browser commands through signed HTTP/WSS with injected browser Broker and native approval: %s', async scenario => {
   const root = await mkdtemp(join(tmpdir(), 'xopc-browser-host-'));
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(root, 'gateway.db') });
   const endpoints = new EndpointToolRuntime({ uploadRoot: join(root, 'frames') }), realtime = new RealtimeRuntime(endpoints, id => getDevice(id)?.revokedAt === undefined);
@@ -99,6 +99,19 @@ it.each(['success', 'lost-result', 'driver-recovery'] as const)('runs durable Br
     allow = true;
     expect(metadata(await invoke(make({ action: 'navigate', url: 'https://fixture.invalid/' })))).toMatchObject({ result: { ok: true } });
     expect(metadata(await invoke(make({ action: 'observe', visual: 'always' })))).toMatchObject({ dispatch: 'completed' });
+    if (scenario === 'idle-stop') {
+      const driver = new RemoteDeviceBrowserDriver(endpoints, endpointId, ownerId);
+      await driver.connect(); await driver.createSession(sessionId); await driver.observe(sessionId, { action: 'observe' });
+      expect(driver.verifiedStopped()).toBe(false);
+      expect(await host.verifyStopped()).not.toMatchObject({ state: 'unknown' });
+      const signed = await auth.signExecutionStop({ version: 1, stopId: randomUUID(), gatewayId: identity.gatewayId, deviceId,
+        grantId: approved.grantId, authorizationRevision: authorization.revision, leaseGeneration: lease.generation, executionStopped: true });
+      await auth.submitExecutionStop(signed); expect(driver.verifiedStopped()).toBe(true);
+      const calls = broker.execute.mock.calls.length; await driver.closeSession(sessionId); await driver.disconnect();
+      expect(broker.execute).toHaveBeenCalledTimes(calls); expect(effects).toBe(0);
+      expect(getSqliteDatabase().prepare("SELECT count(*) AS count FROM capability_operations WHERE state='unknown'").get()?.count).toBe(0);
+      passed = true; return;
+    }
     const action = make({ action: 'click', revision: 2, ref: 'e1' });
     if (scenario !== 'success') {
       const driver = new RemoteDeviceBrowserDriver(endpoints, endpointId, ownerId);
