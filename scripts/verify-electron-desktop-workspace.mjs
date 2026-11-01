@@ -119,7 +119,7 @@ try {
   applicationEnv.XOPC_LOG_CONSOLE = 'true';
   app = await launchInstalledApplication(target, ['--gateway-connections'], applicationEnv, root);
   report.runtime = app.metadata; const page = await app.firstWindow(); page.setDefaultTimeout(30000);
-  await page.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+  await page.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor();
   const saved = await page.evaluate(async ({ origin, token }) => {
     const api = window.gatewayConnections, state = await api.snapshot(); let result = await api.save(state.epoch, { name: 'Native workspace fixture', origin, transport: 'ssh', credential: token });
     if (!result.ok) return result; const id = result.snapshot.profiles[0].id;

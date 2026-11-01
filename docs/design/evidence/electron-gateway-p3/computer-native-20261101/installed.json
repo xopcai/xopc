@@ -1,0 +1,100 @@
+[
+  {
+    "report": "p3d-computer-installed-local-4",
+    "passed": true,
+    "startedAt": "2026-11-01T10:34:01.544Z",
+    "finishedAt": "2026-11-01T10:34:29.300Z",
+    "checks": null,
+    "error": null,
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "samples": [
+      {
+        "mode": "spawn",
+        "passed": true,
+        "functions": {
+          "chatRendered": true,
+          "cookieApi": true,
+          "realtimeSessionEvent": true,
+          "nativeFileReadWrite": true,
+          "nativeFileBoundary": true,
+          "nativePty": true,
+          "embeddedBrowserLoaded": true,
+          "conversationId": "505c2465-d215-4244-bb67-541125ff2423"
+        },
+        "reusedDatabaseVersionBefore": null,
+        "reusedDatabaseVersionAfter": null,
+        "externalRestartDenied": null,
+        "reusedGatewaySurvivesExit": null,
+        "connectionMenuRelaunchAfterCleanup": true
+      },
+      {
+        "mode": "reuse",
+        "passed": true,
+        "functions": {
+          "chatRendered": true,
+          "cookieApi": true,
+          "realtimeSessionEvent": true,
+          "nativeFileReadWrite": true,
+          "nativeFileBoundary": true,
+          "nativePty": true,
+          "embeddedBrowserLoaded": true,
+          "conversationId": "9911c74f-5b8c-4f65-9475-788b5080ec15"
+        },
+        "reusedDatabaseVersionBefore": "266",
+        "reusedDatabaseVersionAfter": "266",
+        "externalRestartDenied": true,
+        "reusedGatewaySurvivesExit": true,
+        "connectionMenuRelaunchAfterCleanup": true
+      }
+    ]
+  },
+  {
+    "report": "p3d-computer-installed-remote-4",
+    "passed": false,
+    "startedAt": "2026-11-01T10:34:59.943Z",
+    "finishedAt": "2026-11-01T10:35:32.839Z",
+    "checks": {},
+    "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('heading', { name: 'Gateway 连接预览' }) to be visible\u001b[22m\n\n    at /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:210:132",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "samples": []
+  },
+  {
+    "report": "p3d-computer-installed-remote-5",
+    "passed": true,
+    "startedAt": "2026-11-01T10:36:04.912Z",
+    "finishedAt": "2026-11-01T10:36:14.111Z",
+    "checks": {
+      "actualRemoteStartAppendHistory": true,
+      "serverStopVerified": true,
+      "networkAndGapRecoveryWithoutResubmission": true,
+      "processRestartAndWorkerCrashPreserveUnknownInput": true,
+      "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+      "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+      "actualPackagedLocalRelaunch": true
+    },
+    "error": null,
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "samples": []
+  }
+]

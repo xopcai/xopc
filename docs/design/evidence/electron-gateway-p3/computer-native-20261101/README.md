@@ -32,3 +32,5 @@
 包含该修复后的当前相关回归为968项通过、15项条件跳过、101文件通过、1文件跳过，日志 `/tmp/xopc-p3d-current-regression-3.log`；全类型检查 `/tmp/xopc-p3d-current-typecheck-3.log` 通过。第四版安装包完成374资源/669构建文件布局门禁，正在执行真实安装包本地和远端回归；仍非最终main构建。
 
 第四版安装包本地新建及旧v266 Gateway复用回归通过，含真实菜单切换、聊天/流式事件、文件边界、PTY、内置浏览器、拥有进程重启与外部进程保护。`reports/p3d-computer-installed-local-4.json` 及 `/tmp/xopc-p3d-computer-installed-local-4.log`。安装副本1431文件摘要 `7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db`；Native副本摘要 `841bd10dab0e1cdfda6633491faf3afc392a53606b7005d75d27c01152be48ae`，仅允许身份/签名差异。
+
+第四版远端聊天与恢复回归第5轮通过：实际start/append/history、停止、网络/事件缺口恢复不重提、进程/worker崩溃保留unknown、丢回执查询、Gateway草稿隔离、加密恢复提示、无本机Agent/会话DB/默认Host及原本地重启均通过。首轮 `p3d-computer-installed-remote-4.json` 因旧测试标题等待失败，保留原30秒预算；仅在测试中精确兼容旧“连接预览”与当前“连接管理”标题，第5轮使用同一不可变安装包。见 installed.json，原始日志 `/tmp/xopc-p3d-computer-installed-remote-5.log`。TLS变体继续验证；真实Computer输入仍未通过。

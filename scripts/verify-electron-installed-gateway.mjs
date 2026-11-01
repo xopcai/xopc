@@ -40,7 +40,7 @@ try {
   app = await launchInstalledApplication(target, ['--gateway-connections'], env, state);
   report.runtime = app.metadata; assert.equal(report.runtime.cwd, state);
   const setup = await app.firstWindow(); setup.setDefaultTimeout(30_000);
-  await setup.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+  await setup.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor();
   const connected = await setup.evaluate(async ({ origin, transport, token }) => {
     let snapshot = await window.gatewayConnections.snapshot();
     const saved = await window.gatewayConnections.save(snapshot.epoch, { name: 'S4 independent server', origin, transport, credential: token });

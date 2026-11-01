@@ -31,7 +31,7 @@ async function launch() {
   application = await _electron.launch({ args: [join(root, 'out/main/index.js'), '--gateway-connections'], cwd: root, env, timeout: 30_000 });
   const page = await application.firstWindow();
   page.setDefaultTimeout(10_000);
-  await page.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor({ timeout: 20_000 });
+  await page.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor({ timeout: 20_000 });
   return page;
 }
 async function files(directory) {

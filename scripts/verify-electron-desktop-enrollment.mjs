@@ -138,7 +138,7 @@ try {
   const launch = async () => {
     application = await launchInstalledApplication(target, ['--gateway-connections'], env, state);
     report.runtime = application.metadata; const page = await application.firstWindow(); page.setDefaultTimeout(30000);
-    await page.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor(); return page;
+    await page.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor(); return page;
   };
   let page = await launch();
   if (process.argv.includes('--pause-before-save')) {

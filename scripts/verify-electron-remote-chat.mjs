@@ -207,7 +207,7 @@ try {
   if (packaged) {
     report.runtime = app.metadata; assert.equal(report.runtime.cwd, state);
   }
-  let setup = await app.firstWindow(); setup.setDefaultTimeout(30_000); await setup.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+  let setup = await app.firstWindow(); setup.setDefaultTimeout(30_000); await setup.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor();
   await assertBackgroundWindows(setup);
   async function save(target, name) {
     return setup.evaluate(async ({ target, name }) => { const snapshot = await window.gatewayConnections.snapshot(); const result = await window.gatewayConnections.save(snapshot.epoch, { name, origin: target.origin, transport: target.origin.startsWith('https:') ? 'direct' : 'ssh', credential: target.token }); if (!result.ok) throw new Error(result.error); return result.snapshot.profiles.find(profile => profile.name === name).id; }, { target: { origin: target.origin, token: target.token }, name });
@@ -381,7 +381,7 @@ try {
   console.log('Verifying pending input after process restart and worker crash');
   await app.close();
   app = await launch(launchArgs, env);
-  setup = await app.firstWindow(); setup.setDefaultTimeout(30_000); await setup.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+  setup = await app.firstWindow(); setup.setDefaultTimeout(30_000); await setup.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor();
   page = await open(idA);
   assert.equal((await page.evaluate(async () => (await window.desktopShell.readState()).pending)).clientMessageId, pending.clientMessageId);
   assert.equal(faults.posts, before + 1);
@@ -453,7 +453,7 @@ try {
     },
     restart: async () => {
       await app.close(); app = await launch(launchArgs, env); setup = await app.firstWindow();
-      setup.setDefaultTimeout(30_000); await setup.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor();
+      setup.setDefaultTimeout(30_000); await setup.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).waitFor();
       return open(idA);
     },
   });
