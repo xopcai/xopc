@@ -19,6 +19,9 @@ const errors = {
   DESKTOP_CONTAINER_NETWORK_FAILED: '本机Docker暂时未响应，请检查服务；执行停止未确认时不会接管。',
   DESKTOP_CONTAINER_ENGINE_CHANGED: 'Docker Engine身份已变化，无法核实旧资源；请恢复原Engine后核实。',
   DESKTOP_CONTAINER_UNSUPPORTED: '此客户端暂不支持本机Docker命令；聊天仍可使用。',
+  DESKTOP_COMPUTER_UNSUPPORTED: '此客户端或Gateway暂不支持独立电脑控制；聊天仍可使用。',
+  DESKTOP_COMPUTER_PERMISSIONS_REQUIRED: '请先在macOS系统设置的隐私与安全性中，为此应用开启辅助功能和屏幕录制，再重新授权电脑控制。',
+  DESKTOP_COMPUTER_HOST_IDENTITY_UNAVAILABLE: '无法核实当前安装包的电脑控制身份，请检查安装包后重试。',
   DESKTOP_CONTAINER_WORKSPACE_UNAVAILABLE: '原隔离卷未找到；旧记录保留，请核实原Docker Engine和数据。不会自动创建同名空卷。',
   DESKTOP_CONTAINER_WORKSPACE_LIMIT: '本连接的保留工作区已达20个；请先核实并管理已有数据，不会自动删除。',
   DESKTOP_SELECT_GATEWAY_REQUIRED: '请先选择此Gateway配置。', DESKTOP_PINNED_GATEWAY_REQUIRED: '请先连接一次并核验Gateway身份。',
@@ -44,7 +47,7 @@ function render(value) {
   snapshot = value;
   const execution = value.execution;
   const executing = execution && !['stopped', 'error'].includes(execution.state);
-  const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: value.execution?.terminal ? '已授权Docker终端，每次输入须确认，最长两分钟。' : value.execution?.container ? '已授权逐次确认Docker命令，最长两分钟。' : value.execution?.workspaceId ? '已授权逐次确认工作区访问，最长两分钟。' : '已授权逐次确认剪贴板写入，最长两分钟。',
+  const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: value.execution?.computer ? '已授权逐次确认电脑控制，最长两分钟。停止窗口保持可见。' : value.execution?.terminal ? '已授权Docker终端，每次输入须确认，最长两分钟。' : value.execution?.container ? '已授权逐次确认Docker命令，最长两分钟。' : value.execution?.workspaceId ? '已授权逐次确认工作区访问，最长两分钟。' : '已授权逐次确认剪贴板写入，最长两分钟。',
     'stop-requested': '已请求停止，正在核实。', stopped: execution?.remoteRevocationConfirmed ? '本机执行已停止，服务器撤销已确认。' : '本机执行已停止，服务器撤销尚未确认。',
     'stop-unconfirmed': '执行器停止尚未确认；禁止切换或启动新的执行。', error: '本机执行连接失败，请检查后重新授权。' };
   element('execution-status').textContent = execution ? executionLabels[execution.state] + (execution.resultUnknown ? ' 操作效果仍未知，核实后才能启动新写入。' : '') : '本机写入未授权。';
@@ -105,6 +108,7 @@ function render(value) {
     actionButton('选择并授权本机工作区', api.startWorkspace, selected && state === 'registered' && value.desktop?.[profile.id]?.workspaceExecution === true && !observing && !executing, 'execute-workspace');
     actionButton('授权逐次确认Docker命令', api.startContainer, selected && state === 'registered' && value.desktop?.[profile.id]?.containerCommand === true && !observing && !executing, 'execute-container');
     actionButton('授权逐次确认Docker终端', api.startTerminal, selected && state === 'registered' && value.desktop?.[profile.id]?.containerTerminal === true && !observing && !executing, 'execute-terminal');
+    actionButton('授权逐次确认电脑控制', api.startComputer, selected && state === 'registered' && value.desktop?.[profile.id]?.remoteComputer === true && !observing && !executing, 'execute-computer');
     actionButton('查看保留的Docker工作区', api.listContainers, selected && state === 'registered' && value.desktop?.[profile.id]?.containerCommand === true, 'container-list');
     if (selected && value.savedContainers?.profileId === profile.id) {
       for (const item of value.savedContainers.items) actionButton(`重新授权：${item.label}`, (epoch, id) => api.startContainer(epoch, id, item.workspaceId), !observing && !executing, `container-${item.workspaceId}`);

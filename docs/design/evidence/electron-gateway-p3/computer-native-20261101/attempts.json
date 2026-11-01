@@ -1,0 +1,204 @@
+[
+  {
+    "attempt": 1,
+    "passed": false,
+    "startedAt": "2026-11-01T09:33:41.143Z",
+    "finishedAt": "2026-11-01T09:37:42.547Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: Computer acceptance deadline exceeded",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "cbfa4aa4b0d6e8a380f906d24a5d60bb8305649f472fff10079fcbab19bf28fd"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "cbfa4aa4b0d6e8a380f906d24a5d60bb8305649f472fff10079fcbab19bf28fd"
+    },
+    "executionAtFailure": null
+  },
+  {
+    "attempt": 2,
+    "passed": false,
+    "startedAt": "2026-11-01T09:39:38.046Z",
+    "finishedAt": "2026-11-01T09:40:55.833Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: Computer Host stopped before online: {\"profileId\":\"54dc5714-6445-4fc3-8837-613281578b3e\",\"state\":\"stopped\",\"remoteRevocationConfirmed\":true}",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "cbfa4aa4b0d6e8a380f906d24a5d60bb8305649f472fff10079fcbab19bf28fd"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "cbfa4aa4b0d6e8a380f906d24a5d60bb8305649f472fff10079fcbab19bf28fd"
+    },
+    "executionAtFailure": {
+      "profileId": "54dc5714-6445-4fc3-8837-613281578b3e",
+      "state": "stopped",
+      "remoteRevocationConfirmed": true
+    }
+  },
+  {
+    "attempt": 3,
+    "passed": false,
+    "startedAt": "2026-11-01T09:48:12.802Z",
+    "finishedAt": "2026-11-01T09:49:35.034Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: Computer Host stopped before online: {\"profileId\":\"1abfc9c7-4570-46b8-9326-228b99e8224f\",\"state\":\"stopped\",\"remoteRevocationConfirmed\":true}",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "011e6a144e3f081366d5cd8758d660768aaa3cf40332dc555c41c1d1f21423af"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "011e6a144e3f081366d5cd8758d660768aaa3cf40332dc555c41c1d1f21423af"
+    },
+    "executionAtFailure": {
+      "profileId": "1abfc9c7-4570-46b8-9326-228b99e8224f",
+      "state": "stopped",
+      "remoteRevocationConfirmed": true
+    }
+  },
+  {
+    "attempt": 4,
+    "passed": false,
+    "startedAt": "2026-11-01T09:53:56.450Z",
+    "finishedAt": "2026-11-01T09:57:18.798Z",
+    "checks": {
+      "isolatedNativeFixture": true
+    },
+    "error": "Error: Computer acceptance deadline exceeded",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "executionAtFailure": null
+  },
+  {
+    "attempt": 5,
+    "passed": false,
+    "startedAt": "2026-11-01T09:59:14.692Z",
+    "finishedAt": "2026-11-01T10:03:01.150Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: AssertionError [ERR_ASSERTION]: Computer tool unavailable",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "executionAtFailure": {
+      "profileId": "9c344454-462a-4e5b-8065-2464b3c88543",
+      "state": "online",
+      "computer": true
+    }
+  },
+  {
+    "attempt": 6,
+    "passed": false,
+    "startedAt": "2026-11-01T10:07:02.307Z",
+    "finishedAt": "2026-11-01T10:09:14.680Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: AssertionError [ERR_ASSERTION]: Computer tool unavailable",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "executionAtFailure": {
+      "profileId": "46662acd-c93a-4225-ab1b-24d12dbc3e97",
+      "state": "online",
+      "computer": true
+    }
+  },
+  {
+    "attempt": 7,
+    "passed": false,
+    "startedAt": "2026-11-01T10:10:13.061Z",
+    "finishedAt": "2026-11-01T10:11:54.402Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: Error: Computer tool failed: COMPUTER_OBSERVE_FAILED",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "executionAtFailure": {
+      "profileId": "31d5c5da-0c9f-4f75-a5ae-14532e70ea11",
+      "state": "online",
+      "computer": true
+    }
+  },
+  {
+    "attempt": 8,
+    "passed": false,
+    "startedAt": "2026-11-01T10:12:42.770Z",
+    "finishedAt": "2026-11-01T10:14:09.509Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: Error: Computer tool failed: COMPUTER_ELEMENT_REF_REQUIRED",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "executionAtFailure": {
+      "profileId": "ca5103a8-7b1a-4839-b23d-f865862e5cff",
+      "state": "online",
+      "computer": true
+    }
+  },
+  {
+    "attempt": 9,
+    "passed": false,
+    "startedAt": "2026-11-01T10:15:28.781Z",
+    "finishedAt": "2026-11-01T10:17:32.786Z",
+    "checks": {
+      "isolatedNativeFixture": true
+    },
+    "error": "Error: Computer acceptance deadline exceeded",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
+    },
+    "executionAtFailure": null
+  }
+]

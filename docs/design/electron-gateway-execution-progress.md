@@ -94,3 +94,7 @@ P3d Gateway发送适配完成内部接线：原本地Computer沿用旧工具名�
 P3d独立Computer grant/协商capability与设备HTTP上传边界完成：不同于截图scope，固定observation PNG/JPEG路径，单文件5MiB，不接受任意URL/路径；设备证明绑定请求体及upload token，副本清零，服务端内存帧不可普通下载，撤销后拒绝。真实认证HTTP第4轮、75项相关回归、439项包测试与全类型检查通过，失败1/2/3及原预算保留，见[证据](./evidence/electron-gateway-p3/computer-upload-20261101/README.md)。尚未开放Main/远端Host原生Computer入口，完整Realtime及Native安装包验收继续待办。
 
 P3d真实HTTP/WSS独立Host整链路已验证正常调用和已签名结果丢失：本机持久结果/停止证据保留、Gateway unknown、不重放。同批既有实际Docker终端与执行Host、专用传输租约共12项及全类型检查通过。首轮记录租约与30秒调用同长导致派发前失败，已恢复复用既有external-operation默认租约，原30秒调用/3秒停止预算不变，失败夹具与日志保留，见[证据](./evidence/electron-gateway-p3/computer-host-20261101/README.md)。Native驱动/确认在该网络测试中注入；继续Electron Main原生入口和安装包验收。
+
+P3d Main 原生入口已接入独立设备能力协商和逐次授权；真实安装包完成登记/取消重授权、应用发现、计数器目标授权及窗口观察，输入在元素匹配失败时被拒绝。迟到 hide 通知误撤销已修复；首个模型错误保留、原时限不变。960项当前回归通过、15项条件跳过及全类型检查通过。原生第9轮锁屏，等待解锁后继续，尚不能标记真实输入 E2E 或 P3d 完成，见[原生证据](./evidence/electron-gateway-p3/computer-native-20261101/README.md)。Browser、磁盘限制/卷管理、P4 和最终 main 合并构建继续待办。
+
+P3d批准前断线恢复缺口已修复（`462f2b547`）：精确契约、无本机journal的请求在固定lease和原生人工核实后持久unknown tombstone；已有Computer记录仍须停止证据。18项专项和含该修复的968项当前回归通过、15条件跳过，全类型检查通过。独立Manager真实认证HTTP/WSS验证旧版本批准前拒绝、取消不扩scope、epoch切换停止私有资源并撤销精确grant；其首轮CORS夹具失败保留。第四版安装包本地/远端回归进行中，Native按钮匹配及完整后续能力仍待完成。
