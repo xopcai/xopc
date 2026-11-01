@@ -1,0 +1,254 @@
+{
+  "passed": true,
+  "scope": "Actual bundled Gateway/Agent/HTTP/Endpoint pipeline. Node execution Host uses fixture clipboard, native approval and encryption injections; no actual system clipboard, native consent or safeStorage claim.",
+  "requests": [
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "resultCount": 0,
+      "effects": 0
+    },
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_941f1e75b4c2",
+        "text_to_speech"
+      ],
+      "resultCount": 1,
+      "effects": 0
+    },
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_941f1e75b4c2",
+        "text_to_speech"
+      ],
+      "resultCount": 2,
+      "effects": 0
+    },
+    {
+      "model": "chat",
+      "tools": [],
+      "resultCount": 0,
+      "effects": 0
+    },
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_941f1e75b4c2",
+        "text_to_speech"
+      ],
+      "resultCount": 0,
+      "effects": 0
+    },
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_941f1e75b4c2",
+        "text_to_speech",
+        "knowledge_write",
+        "browser_use"
+      ],
+      "resultCount": 1,
+      "effects": 0
+    },
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_941f1e75b4c2",
+        "text_to_speech",
+        "knowledge_write",
+        "browser_use"
+      ],
+      "resultCount": 2,
+      "effects": 1
+    }
+  ],
+  "shapes": [
+    {
+      "modelRef": "fixture/chat",
+      "images": 0,
+      "roles": [
+        "user",
+        "user"
+      ]
+    },
+    {
+      "modelRef": "fixture/chat",
+      "images": 0,
+      "roles": [
+        "user",
+        "user",
+        "assistant",
+        "toolResult"
+      ]
+    },
+    {
+      "modelRef": "fixture/chat",
+      "images": 0,
+      "roles": [
+        "user",
+        "user",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "toolResult"
+      ]
+    },
+    {
+      "modelRef": "fixture/chat",
+      "images": 0,
+      "roles": [
+        "user",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "user"
+      ]
+    },
+    {
+      "modelRef": "fixture/chat",
+      "images": 0,
+      "roles": [
+        "user",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "user",
+        "assistant",
+        "toolResult"
+      ]
+    },
+    {
+      "modelRef": "fixture/chat",
+      "images": 0,
+      "roles": [
+        "user",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "user",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "toolResult"
+      ]
+    }
+  ],
+  "effects": 1
+}

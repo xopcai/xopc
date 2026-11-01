@@ -1,0 +1,396 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T02:51:03.017Z",
+  "checks": {
+    "nativeCancelCreatesNoDevice": true,
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "cancelledObservationExposesNoEndpoint": true,
+    "nativeCancelHasNoClipboardEffect": true,
+    "actualNativeClipboardWriteAndDurableAgentResult": true,
+    "explicitDesktopOriginAcceptedThroughShellAndGateway": true,
+    "localStopRetainsDraftWithoutImplicitServerFallback": true,
+    "osSafeStorageSurvivesRestart": true,
+    "deviceCheckIndependentOfOwnerCredential": true,
+    "offlineLocalDisableAndOnlineConfirmation": true,
+    "replacementRequiresFreshNativeConsent": true,
+    "externalRevocationNeverAutoReenrolls": true,
+    "encryptedIdentityAndNoLocalGatewayDatabase": true,
+    "noWriteToolsAndOnlyExplicitObservationEndpoint": true
+  },
+  "scope": "Installed Electron 45, actual OS safeStorage and native grant/per-operation consent, real system clipboard write with in-memory format preservation guard, durable execution Host and Agent over authenticated Gateway HTTP/signed WS. SSH-loopback fixture; not physical WAN or commands/files acceptance",
+  "interactions": [
+    {
+      "label": "cancel first enrollment",
+      "startedAt": "2026-11-01T02:52:41.152Z",
+      "status": "native-dialog-returned",
+      "pid": 50810,
+      "finishedAt": "2026-11-01T02:53:20.927Z"
+    },
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-11-01T02:53:20.935Z",
+      "status": "native-dialog-returned",
+      "pid": 50810,
+      "finishedAt": "2026-11-01T02:54:10.879Z"
+    },
+    {
+      "label": "cancel observation source",
+      "startedAt": "2026-11-01T02:54:11.403Z",
+      "status": "native-dialog-returned",
+      "pid": 50810,
+      "finishedAt": "2026-11-01T02:54:27.131Z"
+    },
+    {
+      "label": "approve temporary clipboard grant",
+      "startedAt": "2026-11-01T02:54:27.134Z",
+      "status": "native-dialog-returned",
+      "pid": 50810,
+      "finishedAt": "2026-11-01T02:54:44.463Z"
+    },
+    {
+      "label": "cancel replacement enrollment",
+      "startedAt": "2026-11-01T02:56:26.973Z",
+      "status": "native-dialog-returned",
+      "pid": 56885,
+      "finishedAt": "2026-11-01T02:57:27.213Z"
+    },
+    {
+      "label": "approve replacement enrollment",
+      "startedAt": "2026-11-01T02:57:27.215Z",
+      "status": "native-dialog-returned",
+      "pid": 56885,
+      "finishedAt": "2026-11-01T02:57:58.014Z"
+    }
+  ],
+  "nativeCancelCovered": true,
+  "packageBefore": {
+    "files": 1428,
+    "sha256": "a9df38e39f1a455e8c63e928699e05be2654880e673dccab65827af35a2c4f9a"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-j2b-host-delivery-2/native/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-j2b-host-delivery-2/native/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-tRqj8E",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 56885
+  },
+  "inferenceRequests": [
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_f3b0e15689fa",
+        "text_to_speech"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_f3b0e15689fa",
+        "text_to_speech"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_f3b0e15689fa",
+        "text_to_speech"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_f3b0e15689fa",
+        "text_to_speech",
+        "knowledge_write",
+        "browser_use"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_clipboard_write_f3b0e15689fa",
+        "text_to_speech",
+        "knowledge_write",
+        "browser_use"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "browser_use",
+        "knowledge_write",
+        "text_to_speech",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": false
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": false
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": false
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    }
+  ],
+  "packageAfter": {
+    "files": 1428,
+    "sha256": "a9df38e39f1a455e8c63e928699e05be2654880e673dccab65827af35a2c4f9a"
+  },
+  "clipboard": {
+    "preservedInMemory": true,
+    "expectedTestTextObserved": true,
+    "restored": true
+  },
+  "finishedAt": "2026-11-01T02:57:58.894Z"
+}

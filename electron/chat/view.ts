@@ -66,7 +66,7 @@ async function start() {
       url => new WebSocket(url), location.origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws', state.chatEnabled, async () => {
         if (!element<HTMLInputElement>('use-host').checked) return;
         const origin = await window.desktopShell.hostOrigin().catch(() => undefined);
-        if (!origin) throw new ChatOriginUnavailable('本机只读能力尚未连接或不在前台。本次输入未发送；可检查本机只读设置，或取消勾选后发送给服务器。');
+        if (!origin) throw new ChatOriginUnavailable('本机能力尚未连接或不在前台。本次输入未发送；可检查本机能力设置，或取消勾选后发送给服务器。');
         return origin;
       });
     await model.initialize();

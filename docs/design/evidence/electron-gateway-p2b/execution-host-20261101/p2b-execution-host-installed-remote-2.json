@@ -1,0 +1,89 @@
+{
+  "passed": true,
+  "tls": false,
+  "startedAt": "2026-11-01T02:48:15.174Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "background": true,
+  "fixtureLifetimeSeconds": 86400,
+  "application": "/tmp/xopc-j2b-host-delivery-2/installed/xopc.app",
+  "packageBefore": {
+    "files": 1428,
+    "sha256": "42d559e4c4afe50a980a44355704de22ca918530f8bbff2f9ec645536e7b3714"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-j2b-host-delivery-2/installed/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-j2b-host-delivery-2/installed/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-4k4tMz",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": true,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 46429
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 301
+    },
+    {
+      "input": 2,
+      "durationMs": 109
+    }
+  ],
+  "inputIntervalMs": 0,
+  "stopTarget": {
+    "expectedRunId": "4e493944-f21d-455e-b94d-3cd525e6383b",
+    "actualRunId": "4e493944-f21d-455e-b94d-3cd525e6383b",
+    "passed": true
+  },
+  "compatibilityMatrix": {
+    "cases": [
+      {
+        "expected": "GATEWAY_AUTH_FAILED",
+        "observed": "GATEWAY_AUTH_FAILED",
+        "durationMs": 71.70958400000018
+      },
+      {
+        "expected": "GATEWAY_CHAT_INCOMPATIBLE",
+        "observed": "GATEWAY_CHAT_INCOMPATIBLE",
+        "durationMs": 60.1557499999999
+      },
+      {
+        "expected": "GATEWAY_IDENTITY_PROOF_FAILED",
+        "observed": "GATEWAY_IDENTITY_PROOF_FAILED",
+        "durationMs": 57.412500000000364
+      }
+    ],
+    "passed": true,
+    "identityCredentialLeaks": 0
+  },
+  "packageAfter": {
+    "files": 1428,
+    "sha256": "42d559e4c4afe50a980a44355704de22ca918530f8bbff2f9ec645536e7b3714"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-11-01T02:48:24.825Z"
+}

@@ -12,7 +12,7 @@ export function desktopAuthTransport(binding: DesktopBinding, transport: 'direct
     if (!(/^\/api\/device-pairing\/requests(?:\/[0-9a-f-]{36}\/(?:status|complete|cancel))?$/.test(path) && method === 'POST'
       || path === '/api/device-auth/refresh' && method === 'POST'
       || ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path) && method === 'POST'
-      || ['/api/endpoint-tools/compatibility', '/api/desktop-host/status'].includes(path) && method === 'GET'
+      || ['/api/endpoint-tools/compatibility', '/api/desktop-host/status', '/api/desktop-host/compatibility'].includes(path) && method === 'GET'
       || ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path) && method === 'DELETE'
       || path === '/api/desktop-host/execution' && ['GET', 'POST', 'DELETE'].includes(method)
       || upload

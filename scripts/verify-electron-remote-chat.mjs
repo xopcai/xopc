@@ -261,8 +261,20 @@ try {
   if (!background) await page.screenshot({ path: output.replace(/\.json$/, '.png') });
   report.checks.actualRemoteStartAppendHistory = true;
   console.log('Verifying server stop');
-  await send('SLOW_REMOTE'); await page.locator('#stop').waitFor(); await until(() => page.locator('#stop').isEnabled());
-  await activate(page, 'stop'); await until(() => page.locator('#stop-state').textContent().then(value => value.includes('已确认')));
+  const stopDeadline = Date.now() + 30_000;
+  const stopRemaining = () => Math.max(1, stopDeadline - Date.now());
+  // Rendered text can precede run completion. Do not cancel a previous input while the new POST is still being persisted.
+  await until(async () => { const current = await a.api(`/api/sessions/${conversationA}/input-state`); return !current.activeRunId && current.control?.phase === 'idle'; }, stopRemaining());
+  await until(() => page.locator('#stop').isDisabled(), stopRemaining());
+  await send('SLOW_REMOTE'); await until(() => page.locator('#stop').isEnabled(), stopRemaining());
+  const expectedStopRunId = (await a.api(`/api/sessions/${conversationA}/input-state`)).activeRunId;
+  assert(expectedStopRunId, 'Slow invocation must be active before stopping');
+  const abortRequest = page.waitForRequest(request => request.method() === 'POST' && new URL(request.url()).pathname === '/api/agent/abort', { timeout: stopRemaining() });
+  await activate(page, 'stop');
+  const actualStopRunId = (await abortRequest).postDataJSON().runId;
+  assert.equal(actualStopRunId, expectedStopRunId, 'Stop must target the slow invocation rather than an older run');
+  await until(() => page.locator('#stop-state').textContent().then(value => value.includes('已确认')), stopRemaining());
+  report.stopTarget = { expectedRunId: expectedStopRunId, actualRunId: actualStopRunId, passed: true };
   report.checks.serverStopVerified = true;
   console.log('Verifying network recovery');
   faults.offline = true; faults.injectGap = true; for (const socket of sockets) socket.destroy();

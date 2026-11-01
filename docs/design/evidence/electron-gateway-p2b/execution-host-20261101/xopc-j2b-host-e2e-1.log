@@ -1,0 +1,25 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T02:22:22.412Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T02:22:22.422Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T02:22:22.425Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T02:22:22.909Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-SLcq47/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T02:22:23.075Z","module":"EndpointTools","endpointId":"15019c8a-110e-48c4-b2ba-541646ac4fe6:be89e459-d9fa-4f1b-9c67-95112ea16e6b","connectionId":"bc9ae060-1fcf-4c7d-9bb1-ddb575620125","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T02:22:23.076Z","module":"Realtime","connectionId":"bc9ae060-1fcf-4c7d-9bb1-ddb575620125","principalId":"15019c8a-110e-48c4-b2ba-541646ac4fe6","clientId":"bc7c0143-b0d8-4abf-8a62-0f26423c2260","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T02:22:23.135Z","module":"Realtime","connectionId":"bc9ae060-1fcf-4c7d-9bb1-ddb575620125","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+{"level":"info","time":"2026-11-01T02:22:23.164Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-puIuoo/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T02:22:23.272Z","module":"EndpointTools","endpointId":"9bec8d6c-3549-4740-8943-4bb70aded37d:df8e33d8-1265-4401-96d9-0e0a948860e2","connectionId":"a0362cb7-de6d-4d06-a0be-b559e1cc9486","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T02:22:23.273Z","module":"Realtime","connectionId":"a0362cb7-de6d-4d06-a0be-b559e1cc9486","principalId":"9bec8d6c-3549-4740-8943-4bb70aded37d","clientId":"206d57e5-46ec-416e-84d3-9c1ca12f2bda","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T02:22:23.336Z","module":"Realtime","connectionId":"a0362cb7-de6d-4d06-a0be-b559e1cc9486","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+{"level":"info","time":"2026-11-01T02:22:23.366Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-0hI8zL/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T02:22:23.464Z","module":"EndpointTools","endpointId":"ba1dd64a-d77a-41c7-9854-92598b69f78c:ef7a071e-fe27-4c13-9a62-68f49912e637","connectionId":"32eef11e-fa0c-4c71-bb31-15b0c39f2f7a","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T02:22:23.464Z","module":"Realtime","connectionId":"32eef11e-fa0c-4c71-bb31-15b0c39f2f7a","principalId":"ba1dd64a-d77a-41c7-9854-92598b69f78c","clientId":"c25bc232-93be-482a-9dda-21cba9006cbd","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T02:22:23.515Z","module":"EndpointTools","endpointId":"ba1dd64a-d77a-41c7-9854-92598b69f78c:ef7a071e-fe27-4c13-9a62-68f49912e637","connectionId":"32eef11e-fa0c-4c71-bb31-15b0c39f2f7a","msg":"Endpoint disconnected"}
+{"level":"info","time":"2026-11-01T02:22:23.515Z","module":"Realtime","connectionId":"32eef11e-fa0c-4c71-bb31-15b0c39f2f7a","code":1006,"msg":"Realtime client disconnected (1006)"}
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  10:22:20
+   Duration  3.15s (transform 1.47s, setup 11ms, import 2.39s, tests 694ms, environment 0ms)
+
