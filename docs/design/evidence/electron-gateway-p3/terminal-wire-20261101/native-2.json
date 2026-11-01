@@ -1,0 +1,23 @@
+{
+  "passed": false,
+  "checks": {
+    "OPEN": true
+  },
+  "scope": "Installed Electron, actual native consent, independent device frames, real local Docker and same-host Gateway/Agent with synthetic inference. Private Docker fixtures only; not WAN or platform matrix acceptance. Terminal Native approval and actual PTY are required.",
+  "error": "Error: AssertionError [ERR_ASSERTION]: Native cancelled stdin must be recorded as not dispatched\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-terminal.mjs:33:34)\n    at async send (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-terminal.mjs:125:5)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-terminal.mjs:128:78",
+  "startedAt": "2026-11-01T07:47:49.408Z",
+  "finishedAt": "2026-11-01T07:49:21.836Z",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "f77921b714fc85c4263f1d93a5171164e8578860bbab695160614593018ed84c"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "f77921b714fc85c4263f1d93a5171164e8578860bbab695160614593018ed84c"
+  },
+  "retainedFixtureWorkspaces": [
+    "59c8a660-6db6-44ce-a242-15edc186fa9c"
+  ],
+  "originalReport": "reports/p3c-native-terminal-2.json",
+  "originalSha256": "021ac5b044ada1b1dbb8f57613a116f2c3bc54c7b9283b375607e183057b8e54"
+}

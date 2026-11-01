@@ -96,7 +96,7 @@ try {
     }));
   });
   const origin = `http://127.0.0.1:${proxy.address().port}`, client = join(root, 'client'); await mkdir(client); const clientConfig = join(client, 'xopc.json'); await writeFile(clientConfig, '{invalid-local-config');
-  app = await launchInstalledApplication(target, ['--gateway-connections'], packagedAcceptanceEnvironment(localConnectionEnvironment(process.env, process.cwd(), client, clientConfig, join(client, 'workspace'))), root);
+  app = await launchInstalledApplication(target, ['--gateway-connections'], { ...packagedAcceptanceEnvironment(localConnectionEnvironment(process.env, process.cwd(), client, clientConfig, join(client, 'workspace'))), XOPC_LOG_CONSOLE: 'true', XOPC_LOG_LEVEL: 'warn' }, root);
   report.runtime = app.metadata; const page = await app.firstWindow();
   const saved = await page.evaluate(async ({ origin, token }) => { const api = window.gatewayConnections; let result = await api.save((await api.snapshot()).epoch, { name: 'Native terminal fixture', origin, transport: 'ssh', credential: token }); if (!result.ok) return result; const id = result.snapshot.profiles[0].id; result = await api.select(result.snapshot.epoch, id); return result.ok ? api.connect(result.snapshot.epoch, id) : result; }, { origin, token }); assert(saved.ok, saved.error);
   const id = saved.snapshot.selectedId, chat = app.windows().find(window => window !== page), snapshot = () => page.evaluate(() => window.gatewayConnections.snapshot()); assert(chat);

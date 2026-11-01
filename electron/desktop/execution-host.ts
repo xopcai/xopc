@@ -17,6 +17,8 @@ import { DesktopOperationJournal } from './operation-journal.js';
 import { DesktopOperationSupervisor, type DesktopExecutionWorker } from './operation-supervisor.js';
 import { DesktopReliableToolController } from './reliable-tool-controller.js';
 import { DesktopTerminalHostController } from './terminal-host-controller.js';
+import { createLogger } from '../../src/utils/logger.js';
+const log = createLogger('DesktopExecution');
 
 type State = 'connecting' | 'online' | 'stopped' | 'error';
 /** One explicitly approved connection. Network loss stops execution and never renews or replays a grant. */
@@ -157,7 +159,10 @@ export class DesktopExecutionHost {
         if (!active() || ready.endpointId !== endpointId) { void this.stop(); return; }
         this.claim = { type: 'endpoint', endpointId, token: ready.turnToken };
         controller.connect(message => client.sendEndpointMessage(message));
-      }, onMessage: message => { if (active() && this.claim) void controller.handleMessage(message).catch(() => { void this.stop(); }); },
+      }, onMessage: message => { if (active() && this.claim) void controller.handleMessage(message).catch(error => {
+        log.warn({ err: error, phase: 'device_control_frame', frameType: message.type }, 'Device control frame failed; stopping the executor');
+        void this.stop();
+      }); },
       onDisconnected: () => { if (!this.stopped) void this.stop(); } });
       this.expiry = setTimeout(() => { void this.stop(); }, Math.max(1, this.grant.expiresAt - Date.now()));
       if (!active()) throw new Error('DESKTOP_EXECUTION_DENIED');
