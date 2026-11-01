@@ -1,0 +1,39 @@
+[
+  {
+    "report": "p3d-computer-installed-remote-tls-1",
+    "passed": false,
+    "tls": true,
+    "checks": {},
+    "errorCode": "GATEWAY_TLS_FAILED",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "startedAt": "2026-11-01T10:36:43.810Z",
+    "finishedAt": "2026-11-01T10:36:46.749Z"
+  },
+  {
+    "report": "p3d-computer-installed-tls-rejection-1",
+    "passed": true,
+    "tls": true,
+    "checks": {
+      "untrustedCertificateRejectedBeforeHttp": true,
+      "noLocalGatewayHostOrWorkspace": true
+    },
+    "errorCode": null,
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
+    },
+    "startedAt": "2026-11-01T10:38:32.205Z",
+    "finishedAt": "2026-11-01T10:38:35.431Z"
+  }
+]
