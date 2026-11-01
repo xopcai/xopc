@@ -1,0 +1,7 @@
+$ tsc --noEmit -p tsconfig.json && pnpm run typecheck:electron
+$ tsc -p tsconfig.electron.json
+electron/desktop/reliable-tool-controller.ts(98,34): error TS2339: Property 'error' does not exist on type 'unknown'.
+electron/desktop/reliable-tool-controller.ts(98,100): error TS2339: Property 'error' does not exist on type 'unknown'.
+electron/desktop/reliable-tool-controller.ts(98,121): error TS2339: Property 'error' does not exist on type 'unknown'.
+[ELIFECYCLE] Command failed with exit code 2.
+[ELIFECYCLE] Command failed with exit code 2.

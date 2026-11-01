@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "scope": "Actual packaged v265 Gateway creates the isolated DB, then the candidate performs the offline v268 upgrade, backup and authenticated audit read. Synthetic historical metadata only.",
+  "checks": {
+    "realPreviousSchema": true,
+    "historyPreservedOverHttp": true,
+    "reliableExecutionSchema": true,
+    "newSchemaIntegrity": true,
+    "offlineBackupPreserved": true
+  },
+  "startedAt": "2026-11-01T05:16:05.827Z",
+  "previousBefore": {
+    "files": 1426,
+    "sha256": "47de1d73b8db151b7f4e27a6076a2621cbff151829f069564140b00a47b780a5"
+  },
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "1bb6255355c6b0e54f8d102eacd5288a1ce52959e29bd66136bf4dad0908dae1"
+  },
+  "previousAfter": {
+    "files": 1426,
+    "sha256": "47de1d73b8db151b7f4e27a6076a2621cbff151829f069564140b00a47b780a5"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "1bb6255355c6b0e54f8d102eacd5288a1ce52959e29bd66136bf4dad0908dae1"
+  },
+  "finishedAt": "2026-11-01T05:16:10.866Z"
+}

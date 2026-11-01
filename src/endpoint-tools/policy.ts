@@ -26,6 +26,8 @@ import {
   canonicalJson,
   DESKTOP_OPERATION_STATUS_INPUT_SCHEMA,
   DESKTOP_OPERATION_STATUS_OUTPUT_SCHEMA,
+  DESKTOP_WORKSPACE_ACTIONS,
+  desktopWorkspaceDescriptor,
   SCREEN_CAPTURE_OUTPUT_SCHEMA,
   type EndpointResultKind,
   type EndpointAvailability,
@@ -58,6 +60,10 @@ function contract(
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
+  ...Object.fromEntries(DESKTOP_WORKSPACE_ACTIONS.map(action => {
+    const descriptor = desktopWorkspaceDescriptor(action);
+    return [descriptor.name, contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema)];
+  })),
   ...Object.fromEntries(['mobile', 'desktop', 'web', 'browser'].flatMap(kind => [
     [`${kind}.device.get_state`, contract('public.background-read', DEVICE_STATE_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA)],
     [`${kind}.device.get_power`, contract('public.background-read', DEVICE_POWER_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA)],

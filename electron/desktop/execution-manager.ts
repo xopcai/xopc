@@ -12,12 +12,15 @@ import { DesktopExecutionHost } from './execution-host.js';
 import { DesktopExecutionSession } from './execution-session.js';
 import { DesktopExecutionLease, DesktopOperationJournal } from './operation-journal.js';
 import type { DesktopExecutionWorker } from './operation-supervisor.js';
+import type { DesktopWorkspaceReadApproval } from './workspace-read-session.js';
 
 type Status = { profileId: string; state: 'authorizing' | 'connecting' | 'online' | 'stop-requested' | 'stopped' | 'stop-unconfirmed' | 'error';
   error?: string; remoteRevocationConfirmed?: boolean; resultUnknown?: boolean };
 type Run = { binding: DesktopBinding; epoch: number; transport: 'ssh' | 'direct'; abort: AbortController; close(): void;
   deviceId?: string; proposed?: DesktopExecutionGrant; expectedRevision?: number; host?: DesktopExecutionHost;
-  lease?: DesktopExecutionLease; journal?: DesktopOperationJournal; watchdog?: ReturnType<typeof setInterval> };
+  lease?: DesktopExecutionLease; journal?: DesktopOperationJournal; watchdog?: ReturnType<typeof setInterval>;
+  stopResources?: WorkspaceContext['stopResources']; resourceStop?: Promise<{ confirmed: boolean }> };
+type WorkspaceContext = { workspaceId: string; catalog: DesktopExecutionCatalog; stopResources(): Promise<{ confirmed: boolean }> };
 
 /** Remote-only coordinator. The executor root must be the fixed per-user state root, never a profile or userData directory. */
 export class DesktopExecutionManager {
@@ -30,9 +33,10 @@ export class DesktopExecutionManager {
     foreground(): boolean;
     consent(binding: DesktopBinding, grant: DesktopExecutionGrant, signal: AbortSignal): Promise<boolean>;
     confirm: ConstructorParameters<typeof DesktopExecutionSession>[0]['confirm'];
+    confirmRead?(request: DesktopWorkspaceReadApproval, signal: AbortSignal): Promise<boolean>;
     createWorker(tool: string): DesktopExecutionWorker;
   }) {}
-  snapshot(): Status | undefined { return this.status ? { ...this.status } : undefined; }
+  snapshot(): (Status & { workspaceId?: string }) | undefined { return this.status ? { ...this.status, ...(this.active?.proposed?.workspaceId ? { workspaceId: this.active.proposed.workspaceId } : {}) } : undefined; }
   origin() {
     const run = this.active, current = this.options.manager.snapshot();
     return run && !run.abort.signal.aborted && current.epoch === run.epoch && current.selectedId === run.binding.profileId ? run.host?.origin() : undefined;
@@ -41,6 +45,17 @@ export class DesktopExecutionManager {
     const run = this.active; if (!run || !this.origin()) return;
     const origin = await run.host?.readyOrigin();
     return this.active === run && this.origin()?.endpointId === origin?.endpointId ? origin : undefined;
+  }
+  private async verifyResources(run: Run): Promise<boolean> {
+    if (!run.stopResources) return true;
+    run.resourceStop ??= Promise.resolve().then(run.stopResources).catch(() => ({ confirmed: false })).then(result => {
+      if (!result.confirmed) run.resourceStop = undefined;
+      return result;
+    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return (await Promise.race([run.resourceStop, new Promise<{ confirmed: boolean }>(resolve => { timeout = setTimeout(() => resolve({ confirmed: false }), 3000); })])).confirmed;
+    } finally { clearTimeout(timeout); }
   }
   stop(): Promise<void> {
     const run = this.active;
@@ -52,7 +67,10 @@ export class DesktopExecutionManager {
     this.cleanup = this.cleanup.catch(() => {}).then(async () => {
       if (this.active !== run) return;
       let outcome;
-      try { outcome = await run.host?.verifyStopped() ?? { state: 'idle' as const }; }
+      let resourcesStopped = false;
+      try {
+        [outcome, resourcesStopped] = await Promise.all([run.host?.verifyStopped() ?? Promise.resolve({ state: 'idle' as const }), this.verifyResources(run)]);
+      }
       catch { outcome = { state: 'unknown' as const }; }
       let confirmed = false;
       // Revocation uses a fresh transport: the execution lifetime has already been aborted locally.
@@ -65,7 +83,7 @@ export class DesktopExecutionManager {
         }
       } catch { /* Local stop remains authoritative; remote revocation is explicitly unconfirmed. */ }
       finally { channel.close(); run.close(); }
-      if (outcome.state === 'unknown') {
+      if (outcome.state === 'unknown' || !resourcesStopped) {
         this.status = { profileId: run.binding.profileId, state: 'stop-unconfirmed', remoteRevocationConfirmed: confirmed, resultUnknown: true };
         // Keep the journal and OS lease while an executor could still be running.
         return;
@@ -83,7 +101,7 @@ export class DesktopExecutionManager {
     await this.stop();
     if (this.active) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
   }
-  async start(epoch: unknown, id: unknown): Promise<void> {
+  async start(epoch: unknown, id: unknown, workspace?: WorkspaceContext): Promise<void> {
     if (this.active) throw new Error('DESKTOP_OPERATION_BUSY');
     const snapshot = this.options.manager.snapshot();
     if (!isConnectionId(id) || epoch !== snapshot.epoch || id !== snapshot.selectedId) throw new Error('STALE_CONNECTION_EPOCH');
@@ -95,7 +113,7 @@ export class DesktopExecutionManager {
     if (!profile?.identity) throw new Error('DESKTOP_PINNED_GATEWAY_REQUIRED');
     const binding = { profileId: id, origin: profile.origin, ...profile.identity }, abort = new AbortController();
     const channel = desktopAuthTransport(binding, profile.transport, abort.signal);
-    const run: Run = { binding, epoch: epoch as number, transport: profile.transport, abort, close: channel.close };
+    const run: Run = { binding, epoch: epoch as number, transport: profile.transport, abort, close: channel.close, ...(workspace ? { stopResources: workspace.stopResources } : {}) };
     this.active = run; this.status = { profileId: id, state: 'authorizing' };
     const current = () => {
       const snapshot = this.options.manager.snapshot();
@@ -108,15 +126,16 @@ export class DesktopExecutionManager {
       run.deviceId = (await client.readSelf()).deviceId; current();
       const compatibility = await client.endpointRequest('/api/desktop-host/compatibility', 'GET', undefined, run.deviceId); current();
       if (compatibility?.gatewayId !== binding.gatewayId || compatibility.publicKey !== binding.publicKey || compatibility.capabilities?.reliableExecutionVersion !== 1) throw new Error('DESKTOP_EXECUTION_UNSUPPORTED');
+      if (workspace && compatibility.capabilities?.workspaceExecutionVersion !== 1) throw new Error('DESKTOP_WORKSPACE_UNSUPPORTED');
       if (compatibility.capabilities?.operationReviewVersion === 1) {
         const pending = await client.endpointRequest('/api/desktop-host/operations', 'GET', undefined, run.deviceId); current();
         if (!Array.isArray(pending?.items) || pending.items.length) throw new Error('DESKTOP_OPERATION_RECONCILIATION_REQUIRED');
       }
-      const catalog = new DesktopExecutionCatalog(this.options.catalog.descriptors().filter(tool => tool.name !== 'desktop.operation.get_status' || compatibility.capabilities?.operationStatusVersion === 1));
+      const catalog = new DesktopExecutionCatalog((workspace?.catalog ?? this.options.catalog).descriptors().filter(tool => tool.name !== 'desktop.operation.get_status' || compatibility.capabilities?.operationStatusVersion === 1));
       const previous = await client.endpointRequest('/api/desktop-host/execution', 'GET', undefined, run.deviceId); current();
       if (previous?.deviceId !== run.deviceId || !Number.isSafeInteger(previous.revision)) throw new Error('DESKTOP_EXECUTION_DENIED');
       const grant: DesktopExecutionGrant = { version: 1, grantId: randomUUID(), localApprovalId: randomUUID(), expiresAt: Date.now() + 120000,
-        toolRevisions: Object.fromEntries(catalog.descriptors().map(tool => [tool.name, catalog.revision(tool.name)!])) };
+        toolRevisions: Object.fromEntries(catalog.descriptors().map(tool => [tool.name, catalog.revision(tool.name)!])), ...(workspace ? { workspaceId: workspace.workspaceId } : {}) };
       if (!await this.options.consent(binding, structuredClone(grant), abort.signal)) throw new Error('DESKTOP_LOCAL_CONSENT_DENIED');
       current(); if (!this.options.foreground()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
       // Record the expected revision before POST, so a lost acknowledgement can still be revoked by exact grant identity.
@@ -126,7 +145,7 @@ export class DesktopExecutionManager {
       this.status = { profileId: id, state: 'connecting' };
       run.host = new DesktopExecutionHost({ binding, auth: client, appVersion: this.options.appVersion, approved: grant,
         authorizationRevision: authorization.revision, catalog, journal: run.journal, foreground: this.options.foreground,
-        confirm: this.options.confirm, createWorker: this.options.createWorker,
+        confirm: this.options.confirm, confirmRead: this.options.confirmRead, createWorker: this.options.createWorker,
         onState: (state, error) => {
           if (this.active !== run || abort.signal.aborted) return;
           this.status = { profileId: id, state: state === 'stopped' ? 'stop-requested' : state, ...(error ? { error } : {}) };

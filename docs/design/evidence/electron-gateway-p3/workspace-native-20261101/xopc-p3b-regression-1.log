@@ -1,0 +1,46 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T03:58:41.036Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-operation-review-Nh0am8/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:41.071Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-operation-review-edOY2X/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:41.100Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-operation-review-xhlfQq/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:43.038Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T03:58:43.038Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T03:58:43.046Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T03:58:43.047Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T03:58:43.050Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T03:58:43.051Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T03:58:43.535Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-IVv5ci/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:43.540Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-observation-tGZB48/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:43.681Z","module":"Gateway:HTTP","requestId":"4351764c-31d4-4986-a78e-0eb407bc1130","method":"POST","path":"/api/realtime/tickets","status":403,"durationMs":1,"clientIp":"unknown","contentLength":94,"msg":"HTTP POST /api/realtime/tickets → 403 (1ms)"}
+{"level":"info","time":"2026-11-01T03:58:43.706Z","module":"EndpointTools","endpointId":"d54e45d8-c0c2-41ad-a0ae-b644234600ab:fc0f96bc-3ec8-4c4f-a746-9994d734a498","connectionId":"15db1252-14be-49ff-9e36-b9b07e173f44","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T03:58:43.707Z","module":"Realtime","connectionId":"15db1252-14be-49ff-9e36-b9b07e173f44","principalId":"d54e45d8-c0c2-41ad-a0ae-b644234600ab","clientId":"871a8230-2e6c-46b8-936f-55e66ce17b61","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T03:58:43.763Z","module":"Realtime","connectionId":"15db1252-14be-49ff-9e36-b9b07e173f44","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+{"level":"info","time":"2026-11-01T03:58:43.798Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-K58qe7/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:43.817Z","module":"EndpointTools","endpointId":"f750deea-53c3-4d54-9c13-eed6f470387d:e30e7d95-c0d1-47db-afa2-f6dbab039829","connectionId":"67936218-f48a-42b4-8bdc-ca58547c4b2a","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T03:58:43.818Z","module":"Realtime","connectionId":"67936218-f48a-42b4-8bdc-ca58547c4b2a","principalId":"f750deea-53c3-4d54-9c13-eed6f470387d","clientId":"117b0ab2-8186-448c-b221-68e86aec700f","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T03:58:43.890Z","module":"EndpointTools","endpointId":"fb7b09ee-cb98-4001-844a-1880aa044783:49616d74-a96c-4d1f-9188-0a5f9bb410f5","connectionId":"a1380ef4-4a1d-471d-8fc9-57cf00ef6a6f","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T03:58:43.891Z","module":"Realtime","connectionId":"a1380ef4-4a1d-471d-8fc9-57cf00ef6a6f","principalId":"fb7b09ee-cb98-4001-844a-1880aa044783","clientId":"a5be5a9c-cd34-47ca-996c-7f19c390d9dc","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T03:58:43.945Z","module":"Realtime","connectionId":"a1380ef4-4a1d-471d-8fc9-57cf00ef6a6f","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+{"level":"info","time":"2026-11-01T03:58:43.973Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-device-frame-e2e-2vchTE/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:44.054Z","module":"EndpointTools","endpointId":"f750deea-53c3-4d54-9c13-eed6f470387d:e30e7d95-c0d1-47db-afa2-f6dbab039829","connectionId":"67936218-f48a-42b4-8bdc-ca58547c4b2a","msg":"Endpoint disconnected"}
+{"level":"info","time":"2026-11-01T03:58:44.054Z","module":"Realtime","connectionId":"67936218-f48a-42b4-8bdc-ca58547c4b2a","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+{"level":"info","time":"2026-11-01T03:58:44.056Z","module":"EndpointTools","endpointId":"4edebaee-c651-4c71-89d6-3ee08452855d:df165673-f4a6-4378-a864-0692b139ae9f","connectionId":"05bd47c9-cd96-400f-82b9-c16a2b94e53c","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T03:58:44.057Z","module":"Realtime","connectionId":"05bd47c9-cd96-400f-82b9-c16a2b94e53c","principalId":"4edebaee-c651-4c71-89d6-3ee08452855d","clientId":"026061ad-9a14-4d73-aab0-e1e1616c860c","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T03:58:44.106Z","module":"EndpointTools","endpointId":"4edebaee-c651-4c71-89d6-3ee08452855d:df165673-f4a6-4378-a864-0692b139ae9f","connectionId":"05bd47c9-cd96-400f-82b9-c16a2b94e53c","msg":"Endpoint disconnected"}
+{"level":"info","time":"2026-11-01T03:58:44.106Z","module":"Realtime","connectionId":"05bd47c9-cd96-400f-82b9-c16a2b94e53c","code":1006,"msg":"Realtime client disconnected (1006)"}
+{"level":"info","time":"2026-11-01T03:58:44.661Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T03:58:44.663Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T03:58:44.664Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T03:58:44.749Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-grant-http-PUtwYQ/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:44.861Z","module":"Gateway:HTTP","requestId":"0cccb0f5-b27d-4cf1-8424-e6f2c9dd40b5","method":"POST","path":"/api/desktop-host/execution","status":403,"durationMs":1,"clientIp":"unknown","userAgent":"node","contentLength":287,"msg":"HTTP POST /api/desktop-host/execution → 403 (1ms)"}
+{"level":"info","time":"2026-11-01T03:58:44.875Z","module":"Gateway:HTTP","requestId":"f1643070-5229-4888-a26c-c31acb2b68d7","method":"DELETE","path":"/api/desktop-host/observation","status":409,"durationMs":1,"clientIp":"unknown","contentLength":22,"msg":"HTTP DELETE /api/desktop-host/observation → 409 (1ms)"}
+{"level":"info","time":"2026-11-01T03:58:44.879Z","module":"Gateway:HTTP","requestId":"ca643e9d-588c-4316-80be-52d865bed501","method":"DELETE","path":"/api/desktop-host/execution","status":409,"durationMs":1,"clientIp":"unknown","contentLength":71,"msg":"HTTP DELETE /api/desktop-host/execution → 409 (1ms)"}
+{"level":"info","time":"2026-11-01T03:58:47.964Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-empty-local-gAYYXV/xopc.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T03:58:47.972Z","module":"WorkspaceSeed","profileDir":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-empty-local-gAYYXV/agents/main/profile","seeded":1,"msg":"Seeded profile Markdown files"}
+
+ Test Files  24 passed (24)
+      Tests  167 passed (167)
+   Start at  11:58:40
+   Duration  7.64s (transform 3.25s, setup 69ms, import 6.70s, tests 6.21s, environment 1ms)
+

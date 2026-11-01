@@ -1,0 +1,28 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T04:23:44.589Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-HJtNJL/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:44.644Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-631IOT/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:44.692Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-pQPHqD/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:44.739Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-hLjgEc/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:44.783Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-rz2F0N/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:44.835Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-Uo3WDV/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:44.879Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-vmqiy1/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:44.919Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-AzAqrh/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:44.961Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-PwjSvK/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:45.007Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-gateway-3jDAB6/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:47.660Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T04:23:47.669Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T04:23:47.673Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T04:23:48.228Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-observation-m37YTe/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:23:48.388Z","module":"Gateway:HTTP","requestId":"ba9756b2-e8ed-4593-989d-5f4de2f8d758","method":"POST","path":"/api/realtime/tickets","status":403,"durationMs":2,"clientIp":"unknown","contentLength":94,"msg":"HTTP POST /api/realtime/tickets → 403 (2ms)"}
+{"level":"info","time":"2026-11-01T04:23:49.239Z","module":"EndpointTools","endpointId":"c660b0ab-45b6-4d85-a128-194579af445e:2352b331-96ba-42b6-abc9-7b81b672883e","connectionId":"49f5b1a3-1de4-48b9-b7a4-2fd8c4739950","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T04:23:49.240Z","module":"Realtime","connectionId":"49f5b1a3-1de4-48b9-b7a4-2fd8c4739950","principalId":"c660b0ab-45b6-4d85-a128-194579af445e","clientId":"91889355-dfd8-4556-8d50-d3fa8c034685","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"info","time":"2026-11-01T04:23:49.461Z","module":"EndpointTools","endpointId":"c660b0ab-45b6-4d85-a128-194579af445e:2352b331-96ba-42b6-abc9-7b81b672883e","connectionId":"49f5b1a3-1de4-48b9-b7a4-2fd8c4739950","msg":"Endpoint disconnected"}
+{"level":"info","time":"2026-11-01T04:23:49.462Z","module":"Realtime","connectionId":"49f5b1a3-1de4-48b9-b7a4-2fd8c4739950","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+
+ Test Files  3 passed (3)
+      Tests  15 passed (15)
+   Start at  12:23:44
+   Duration  5.72s (transform 2.34s, setup 22ms, import 3.70s, tests 1.82s, environment 0ms)
+

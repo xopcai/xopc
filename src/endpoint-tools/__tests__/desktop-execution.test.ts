@@ -84,6 +84,14 @@ it.each(['missing', 'hash', 'attempt', 'connection'])('treats %s evidence as unk
   await expect(f.invoke(undefined, id)).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
   await expect(f.invoke()).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' }); expect(f.sent).toHaveLength(1);
 });
+it('rejects a hash-matching failed receipt whose result violates the registered output contract', async () => {
+  const f = fixture(), promise = f.invoke(); f.message('tool.received', {});
+  const result = { content: [{ type: 'json', value: { ok: false, error: 'WORKSPACE_VERSION_CONFLICT' } }] };
+  f.message('tool.error', { code: 'TOOL_EXECUTION_FAILED', message: 'Untrusted failure', operationResult: result,
+    operationReceipt: f.receipt('failed', { resultHash: createHash('sha256').update(canonicalJson(result)).digest('hex') }) });
+  await expect(promise).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+  expect(getSqliteDatabase().prepare('SELECT desktop_receipt_json FROM capability_operations').get()?.desktop_receipt_json).toBeNull();
+});
 it('waits for confirmed executor stop instead of treating cancel transmission as completion', async () => {
   const f = fixture(), controller = new AbortController(), promise = f.invoke(controller.signal); f.message('tool.received', {});
   let settled = false; void promise.then(() => { settled = true; }, () => { settled = true; });

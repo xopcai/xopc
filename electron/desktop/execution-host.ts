@@ -12,6 +12,7 @@ import type { DesktopDeviceAuth } from './device-auth.js';
 import type { DesktopBinding } from './device-identity.js';
 import { DesktopExecutionCatalog } from './execution-catalog.js';
 import { DesktopExecutionSession } from './execution-session.js';
+import { DesktopWorkspaceReadSession, type DesktopWorkspaceReadApproval } from './workspace-read-session.js';
 import { DesktopOperationJournal } from './operation-journal.js';
 import { DesktopOperationSupervisor, type DesktopExecutionWorker } from './operation-supervisor.js';
 import { DesktopReliableToolController } from './reliable-tool-controller.js';
@@ -35,6 +36,7 @@ export class DesktopExecutionHost {
     approved: DesktopExecutionGrant; authorizationRevision: number; catalog: DesktopExecutionCatalog; journal: DesktopOperationJournal;
     foreground(): boolean;
     confirm: ConstructorParameters<typeof DesktopExecutionSession>[0]['confirm'];
+    confirmRead?(request: DesktopWorkspaceReadApproval, signal: AbortSignal): Promise<boolean>;
     createWorker(tool: string): DesktopExecutionWorker;
     onState(state: State, error?: string): void;
   }) {
@@ -64,7 +66,7 @@ export class DesktopExecutionHost {
   async verifyStopped(): Promise<Awaited<ReturnType<DesktopExecutionSession['close']>>> {
     const previous = await this.stop();
     if (previous.state !== 'unknown') return previous;
-    const outcome = await this.session?.close() ?? { state: 'idle' as const };
+    const outcome = await (this.controller?.disconnect() ?? this.session?.close()) ?? { state: 'idle' as const };
     if (outcome.state !== 'unknown') this.stopping = Promise.resolve(outcome);
     return outcome;
   }
@@ -92,10 +94,17 @@ export class DesktopExecutionHost {
       const active = () => !this.stopped && Date.now() < this.grant.expiresAt;
       const supervisor = new DesktopOperationSupervisor({ journal: this.options.journal,
         authority: tool => ({ gatewayId: binding.gatewayId, deviceId: binding.deviceId, authorizationRevision: this.options.authorizationRevision,
-          toolRevision: this.options.catalog.revision(tool) ?? '', expiresAt: this.grant.expiresAt, active: active() }),
+          toolRevision: this.options.catalog.revision(tool) ?? '', expiresAt: this.grant.expiresAt, active: active(), ...(this.grant.workspaceId ? { workspaceId: this.grant.workspaceId } : {}) }),
         createWorker: this.options.createWorker, validateResult: this.options.catalog.validateResult });
       this.session = new DesktopExecutionSession({ binding: { ...binding, authorizationRevision: this.options.authorizationRevision }, supervisor, confirm: this.options.confirm });
+      if (this.grant.workspaceId && !this.options.confirmRead) throw new Error('DESKTOP_EXECUTION_DENIED');
+      const reads = this.grant.workspaceId && this.options.confirmRead ? new DesktopWorkspaceReadSession({
+        gatewayId: binding.gatewayId, deviceId: binding.deviceId, workspaceId: this.grant.workspaceId, expiresAt: this.grant.expiresAt,
+        catalog: this.options.catalog, foreground: () => active() && this.options.foreground(), confirm: this.options.confirmRead,
+        createWorker: this.options.createWorker, onExecutorStopped: () => { void this.stop(); },
+      }) : undefined;
       const controller = new DesktopReliableToolController({ catalog: this.options.catalog, session: this.session,
+        ...(reads ? { reads } : {}),
         availability: () => this.options.foreground() && active() ? 'foreground' : 'background', onTransportFailure: () => { void this.stop(); } });
       this.controller = controller;
       let helloCreated = false;

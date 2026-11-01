@@ -14,6 +14,7 @@ import { DeviceTargetResolver } from '../../endpoint-tools/target-resolver.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import { EndpointToolExecutionError } from '../../endpoint-tools/invocation-service.js';
 import { executeExternalOperation, ExternalEffectNotAppliedError } from '../../capabilities/runtime/external-operations.js';
+import { CapabilityError } from '../../capabilities/runtime/errors.js';
 import { canonicalCapabilityJson } from '../../capabilities/runtime/dispatcher.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
@@ -112,6 +113,9 @@ export class EndpointToolProvider implements ExternalToolProvider {
         });
       },
       }).catch(error => {
+        if (error instanceof EndpointToolExecutionError && error.confirmedNoEffect) {
+          throw new ExternalEffectNotAppliedError(error.message, { cause: new CapabilityError('UNAVAILABLE', error.message) });
+        }
         if (resolved.tool.descriptor.confirmation === 'always'
           && error instanceof EndpointToolExecutionError && error.code === 'USER_DENIED') {
           throw new ExternalEffectNotAppliedError(error.message, { cause: error });

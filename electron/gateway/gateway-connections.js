@@ -37,7 +37,7 @@ function render(value) {
   snapshot = value;
   const execution = value.execution;
   const executing = execution && !['stopped', 'error'].includes(execution.state);
-  const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: '已授权逐次确认剪贴板写入，最长两分钟。',
+  const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: value.execution?.workspaceId ? '已授权逐次确认工作区访问，最长两分钟。' : '已授权逐次确认剪贴板写入，最长两分钟。',
     'stop-requested': '已请求停止，正在核实。', stopped: execution?.remoteRevocationConfirmed ? '本机执行已停止，服务器撤销已确认。' : '本机执行已停止，服务器撤销尚未确认。',
     'stop-unconfirmed': '执行器停止尚未确认；禁止切换或启动新的执行。', error: '本机执行连接失败，请检查后重新授权。' };
   element('execution-status').textContent = execution ? executionLabels[execution.state] + (execution.resultUnknown ? ' 操作效果仍未知，核实后才能启动新写入。' : '') : '本机写入未授权。';
@@ -74,7 +74,7 @@ function render(value) {
     const remove = document.createElement('button');
     remove.textContent = '移除配置';
     remove.disabled = busy;
-    remove.onclick = () => { if (window.confirm('移除配置会删除此连接的本机草稿和待核实记录，不会停止服务器任务。是否继续？')) void perform(() => api.remove(snapshot.epoch, profile.id)); };
+    remove.onclick = () => { if (window.confirm('移除配置会删除此连接的本机聊天草稿与消息核实状态；执行操作记录仍保留，不会停止服务器任务。是否继续？')) void perform(() => api.remove(snapshot.epoch, profile.id)); };
     row.append(remove);
     const group = document.createElement('div'); group.className = 'desktop-actions';
     const state = value.desktop?.[profile.id]?.state;
@@ -95,6 +95,7 @@ function render(value) {
     actionButton('授权读取设备状态', api.startObservation, selected && state === 'registered' && !observing && !executing, 'observe-state');
     actionButton('选择截图来源并授权', api.startScreenObservation, selected && state === 'registered' && !observing && !executing, 'observe-screen');
     actionButton('授权逐次确认剪贴板写入', api.startExecution, selected && state === 'registered' && value.desktop?.[profile.id]?.reliableExecution === true && !observing && !executing, 'execute-clipboard');
+    actionButton('选择并授权本机工作区', api.startWorkspace, selected && state === 'registered' && value.desktop?.[profile.id]?.workspaceExecution === true && !observing && !executing, 'execute-workspace');
     actionButton('查看待核实操作', api.listOperations, selected && state === 'registered' && value.desktop?.[profile.id]?.operationReview === true, 'operation-list');
     row.append(group);
     element('profiles').append(row);

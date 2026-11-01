@@ -1,0 +1,9 @@
+Preparing actual Gateway fixtures
+Connecting remote chat
+Verifying initial text input
+Verifying server stop
+Verifying network recovery
+Verifying dropped reply and A/B isolation
+Verifying pending input after process restart and worker crash
+Verifying explicit return to local
+{"passed":true,"tls":false,"startedAt":"2026-11-01T05:16:30.357Z","checks":{"actualRemoteStartAppendHistory":true,"serverStopVerified":true,"networkAndGapRecoveryWithoutResubmission":true,"processRestartAndWorkerCrashPreserveUnknownInput":true,"lostReplyReceiptRecoveryAndGatewayDraftIsolation":true,"encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace":true,"actualPackagedLocalRelaunch":true},"scope":"Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance","background":false,"fixtureLifetimeSeconds":86400,"application":"/tmp/xopc-p3b-delivery-6/installed/xopc.app","packageBefore":{"files":1431,"sha256":"1bb6255355c6b0e54f8d102eacd5288a1ce52959e29bd66136bf4dad0908dae1"},"runtime":{"executable":"/tmp/xopc-p3b-delivery-6/installed/xopc.app/Contents/MacOS/xopc","appAsar":"/tmp/xopc-p3b-delivery-6/installed/xopc.app/Contents/Resources/app.asar","cwd":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-peNpCc","rendererCdpOnly":true,"preserveBrowserDefaults":false,"fuses":{"0":49,"1":49,"2":48,"3":48,"4":49,"5":49,"6":48,"7":48,"8":49,"version":"1"},"pid":95181},"normalInputs":2,"normalSamples":[{"input":1,"durationMs":320},{"input":2,"durationMs":229}],"inputIntervalMs":0,"stopTarget":{"expectedRunId":"95350434-179f-408a-a5ba-76a685ae4504","actualRunId":"95350434-179f-408a-a5ba-76a685ae4504","passed":true},"packageAfter":{"files":1431,"sha256":"1bb6255355c6b0e54f8d102eacd5288a1ce52959e29bd66136bf4dad0908dae1"},"cleanup":{"confirmed":true,"failures":[]},"finishedAt":"2026-11-01T05:16:40.283Z"}

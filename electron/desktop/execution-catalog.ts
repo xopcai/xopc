@@ -13,7 +13,9 @@ export class DesktopExecutionCatalog {
     for (const input of descriptors) {
       const descriptor = endpointToolDescriptorSchema.parse(JSON.parse(JSON.stringify(input)));
       const query = descriptor.name === 'desktop.operation.get_status' && descriptor.effect === 'read' && descriptor.confirmation === 'never';
-      if (this.tools.has(descriptor.name) || !query && (descriptor.effect === 'read' || descriptor.confirmation !== 'always')
+      const workspaceRead = ['desktop.workspace.read', 'desktop.workspace.list'].includes(descriptor.name) && descriptor.effect === 'read'
+        && descriptor.sensitivity === 'personal' && descriptor.confirmation === 'always';
+      if (this.tools.has(descriptor.name) || !query && ((!workspaceRead && descriptor.effect === 'read') || descriptor.confirmation !== 'always')
         || !descriptor.requiresForeground || descriptor.maxConcurrency !== 1 || !descriptor.supportsCancellation) throw new Error('DESKTOP_RELIABLE_DESCRIPTOR_INVALID');
       this.tools.set(descriptor.name, { descriptor, revision: endpointToolRevision(descriptor), input: ajv.compile(descriptor.inputSchema), output: ajv.compile(descriptor.outputSchema) });
     }

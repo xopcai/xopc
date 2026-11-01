@@ -17,6 +17,7 @@ export function recordDesktopOperationIntent(input: DesktopOperationIntent, gran
       } | undefined;
     if (!grant?.active || grant.grant?.grantId !== grantId || grant.revision !== intent.authorizationRevision
       || grant.grant.expiresAt < intent.expiresAt || intent.expiresAt <= now
+      || grant.grant.workspaceId !== intent.workspaceId
       || !row || row.principal_id !== intent.deviceId || row.request_digest !== intent.argumentHash || row.descriptor_digest !== intent.toolRevision
       || row.generation !== 1 || row.recovery_mode !== 'manual' || row.state !== 'running' || (row.lease_expires_at ?? 0) <= now || (row.lease_expires_at ?? 0) < intent.expiresAt
       || row.desktop_intent_json !== null && row.desktop_intent_json !== json) throw new Error('DESKTOP_OPERATION_INTENT_INVALID');
@@ -75,7 +76,7 @@ export function reviewDesktopOperation(operationId: string, deviceId: string, ga
     if (!intent || !row || row.state !== 'unknown' || row.generation !== review.expectedGeneration
       || review.intentFingerprint !== createHash('sha256').update(JSON.stringify(intent)).digest('hex')
       || review.receipt && review.receipt.operationId !== operationId
-      || review.localStatus === 'not-found' && intent.tool !== 'desktop.clipboard.write') throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
+      || review.localStatus === 'not-found' && !(intent.tool === 'desktop.clipboard.write' || intent.tool === 'desktop.workspace.write' && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
     const json = canonicalJson(review), previous = db.prepare('SELECT review_id,observation_json FROM desktop_operation_reviews WHERE operation_id=?').get(operationId) as { review_id: string; observation_json: string } | undefined;
     if (previous) {
       if (previous.review_id !== review.reviewId || previous.observation_json !== json) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');

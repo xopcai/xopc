@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Verify the packaged Electron app contains only the minimal runtime layout. */
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -119,6 +119,12 @@ function main() {
     console.log(`[verify-electron-asar-deps] OK — ${Object.keys(manifest.files).length} desktop UI, Shell, Gateway and SQL resources`);
     const artifacts = verifyDesktopArtifactBytes(path => asar.extractFile(asarPath, path), root);
     console.log(`[verify-electron-asar-deps] OK — ${Object.keys(artifacts.files).length} packaged files match built runtime bytes`);
+    if (process.platform === 'darwin' && asarPath.includes('Contents/Resources/')) {
+      const native = join(dirname(asarPath), 'bin/desktop-workspace.node'), worker = join(dirname(asarPath), 'bin/workspace-worker.cjs');
+      if (!existsSync(native) || statSync(native).size < 4096) throw new Error('Native workspace adapter is missing or empty');
+      if (!readFileSync(worker).equals(readFileSync(join(root, 'electron/desktop/workspace-worker.cjs')))) throw new Error('Workspace worker does not match its trusted source');
+      console.log('[verify-electron-asar-deps] OK — native workspace adapter present and worker bytes verified');
+    }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
