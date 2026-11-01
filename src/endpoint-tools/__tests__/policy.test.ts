@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BROWSER_CONTROL_ENDPOINT_DESCRIPTOR, BROWSER_RECORDING_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
+import { COMPUTER_DESCRIPTOR, REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 
 import {
   ENDPOINT_CONTACT_OUTPUT_SCHEMA,
@@ -13,6 +14,17 @@ import { EndpointRegistry } from '../registry.js';
 const policy = new EndpointToolPolicy();
 
 describe('EndpointToolPolicy', () => {
+  it('preserves the local Computer contract and requires separate native confirmation for the remote transport', () => {
+    expect(() => policy.validateDescriptor('desktop', COMPUTER_DESCRIPTOR as never)).not.toThrow();
+    expect(() => policy.validateDescriptor('desktop', REMOTE_COMPUTER_DESCRIPTOR as never)).not.toThrow();
+    expect(policy.evaluate(REMOTE_COMPUTER_DESCRIPTOR as never, 'foreground')).toEqual({ confirmationRequired: true });
+    expect(() => policy.evaluate(REMOTE_COMPUTER_DESCRIPTOR as never, 'background')).toThrow('not in the foreground');
+    for (const patch of [{ confirmation: 'never' }, { requiresForeground: false }, { timeoutMs: 60000 }, { maxConcurrency: 2 }, { policyId: 'computer.session-scoped' }]) {
+      expect(() => policy.validateDescriptor('desktop', { ...REMOTE_COMPUTER_DESCRIPTOR, ...patch } as never)).toThrow();
+    }
+    expect(COMPUTER_DESCRIPTOR.confirmation).toBe('never');
+    expect(COMPUTER_DESCRIPTOR.requiresForeground).toBe(false);
+  });
   it('registers the real browser control and recording catalog with their individual concurrency limits', () => {
     const registry = new EndpointRegistry();
     const hello = endpointHelloPayloadSchema.parse({

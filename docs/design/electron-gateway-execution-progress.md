@@ -82,3 +82,5 @@ PTY原生第3轮已通过完整打开/取消输入/批准输入/输出/resize/�
 普通应用 File 菜单现在提供 Gateway 连接管理入口，通过现有退出确认及清理后重启；取消清除切换意图。新安装包新建/旧 Gateway 复用的实际菜单切换与原本地功能回归通过，1025 项相关回归通过、15 项已有条件跳过（集合重叠）。两个测试脚本观测失败已保留，未放宽预算，见[证据](./evidence/electron-gateway-p3/mode-entry-20261101/README.md)。仍需继续 P3d/P4、磁盘约束及最终 main 构建；未提前合入。
 
 P3d 前置的实际父进程 SIGKILL 私有 driver 清理验证通过（约37ms，原3秒预算不变），使用隔离开发 Electron 与包内SDK/driver，无截图或桌面动作；测试脚本失败及修复保留，见[证据](./evidence/electron-gateway-p3/computer-parent-liveness-20261101/README.md)。仅为清理前提，不宣称 Computer 远端能力或安装包完整验收。
+
+P3d-1内部Computer协调与独立远端契约已实现：保留原本地Computer descriptor/策略，远端使用单独名称和逐次Native确认策略；通用Agent工具发现/原始执行显式排除该专用传输。协调器仅在操作journal提交后创建Broker，绑定单一conversation owner；截图缓冲区清零，动作后上传丢回执为unknown且阻断重做；取消等待批准和迟到批准、停止未确认重试均通过。75项相关核心/既有Broker/策略/Agent回归与全类型检查通过（集合重叠），日志 `/tmp/xopc-p3d-computer-core-tests-3.log`、`/tmp/xopc-p3d-computer-core-typecheck-3.log`。当前尚未加入Host能力声明、设备grant或网络/原生入口，不能据此计作P3d网络/安装包E2E通过；下一步专用调用/上传/恢复接线。
