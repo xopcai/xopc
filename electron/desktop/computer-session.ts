@@ -49,6 +49,7 @@ export class DesktopComputerSession {
           frame = result.frame;
           signal.throwIfAborted();
           if (this.closed || !this.options.current()) throw new Error('DESKTOP_COMPUTER_AUTHORITY_INVALID');
+          if (result.sessionId !== command.sessionId || frame && !['observe', 'act'].includes(command.op)) throw new Error('DESKTOP_COMPUTER_RESULT_MISMATCH');
           if (!['ready', 'stopped'].includes(result.status)
             || result.receipt && !['completed', 'notStarted'].includes(result.receipt.dispatch)) {
             throw new Error('DESKTOP_COMPUTER_OUTCOME_UNKNOWN');

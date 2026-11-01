@@ -84,3 +84,5 @@ PTY原生第3轮已通过完整打开/取消输入/批准输入/输出/resize/�
 P3d 前置的实际父进程 SIGKILL 私有 driver 清理验证通过（约37ms，原3秒预算不变），使用隔离开发 Electron 与包内SDK/driver，无截图或桌面动作；测试脚本失败及修复保留，见[证据](./evidence/electron-gateway-p3/computer-parent-liveness-20261101/README.md)。仅为清理前提，不宣称 Computer 远端能力或安装包完整验收。
 
 P3d-1内部Computer协调与独立远端契约已实现：保留原本地Computer descriptor/策略，远端使用单独名称和逐次Native确认策略；通用Agent工具发现/原始执行显式排除该专用传输。协调器仅在操作journal提交后创建Broker，绑定单一conversation owner；截图缓冲区清零，动作后上传丢回执为unknown且阻断重做；取消等待批准和迟到批准、停止未确认重试均通过。75项相关核心/既有Broker/策略/Agent回归与全类型检查通过（集合重叠），日志 `/tmp/xopc-p3d-computer-core-tests-3.log`、`/tmp/xopc-p3d-computer-core-typecheck-3.log`。当前尚未加入Host能力声明、设备grant或网络/原生入口，不能据此计作P3d网络/安装包E2E通过；下一步专用调用/上传/恢复接线。
+
+P3d专用调用/截图上传内部适配已接入可靠v2控制器的可选分支，默认旧能力不经过此分支。只接受同一持久操作/调用授予的固定上传路径、5MiB内单文件额度；缺失/跨调用grant在批准前拒绝。实际journal/监督器/批准会话/v2控制器夹具完成调用和重复操作拒绝；截图清零、上传撤销unknown及独立停止核实通过。24项核心与既有可靠工具/终端回归、Electron类型检查通过，日志 `/tmp/xopc-p3d-computer-controller-tests-6.log`、`/tmp/xopc-p3d-computer-controller-typecheck-4.log`。早期测试clientId缺失、初始unknown回执误当停止已确认及夹具revision不匹配失败日志1/2/5保留；修正采样/夹具，未改变生产停止或未知语义。尚未接入Main/设备grant/真实Gateway上传，网络及Native E2E待下一步。
