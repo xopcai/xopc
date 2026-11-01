@@ -2,7 +2,7 @@ import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { createHash } from 'node:crypto';
 import type { EndpointToolContent } from '@xopcai/endpoint-tools-protocol';
 import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
-import { COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
+import { COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import { extractDocumentText } from '../../document-understanding/extract.js';
 import { prepareImageForModel } from '../image/prepare-image-for-model.js';
@@ -45,7 +45,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const context = this.deps.getCurrentContext();
     if (!context) return [];
     const resolver = this.targetResolver();
-    return resolver.candidates(context.conversationId, context.origin).flatMap(endpoint => endpoint.tools.filter(({ descriptor }) => ![BROWSER_CONTROL_ENDPOINT_TOOL_NAME, COMPUTER_CONTROL_TOOL].includes(descriptor.name)
+    return resolver.candidates(context.conversationId, context.origin).flatMap(endpoint => endpoint.tools.filter(({ descriptor }) => ![BROWSER_CONTROL_ENDPOINT_TOOL_NAME, COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL].includes(descriptor.name)
       && resolver.resolve(context.conversationId, context.origin, endpoint.endpointId, descriptor.name)).map(({ descriptor }) => ({
       toolRef: externalToolRef(this.source, endpoint.endpointId, descriptor.name),
       source: this.source,
@@ -220,7 +220,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const endpoint = this.targetResolver().resolve(context.conversationId, context.origin, parsed.namespace, parsed.toolName);
     if (!endpoint || endpoint.endpointId !== parsed.namespace) return undefined;
     const tool = this.deps.runtime.registry.getTool(endpoint.endpointId, parsed.toolName);
-    if (tool && [BROWSER_CONTROL_ENDPOINT_TOOL_NAME, COMPUTER_CONTROL_TOOL].includes(tool.descriptor.name)) return undefined;
+    if (tool && [BROWSER_CONTROL_ENDPOINT_TOOL_NAME, COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL].includes(tool.descriptor.name)) return undefined;
     return tool ? { approvedArguments: this.deps.runtime.grants.find(context.conversationId, context.origin, endpoint.endpointId, parsed.toolName)?.arguments, connectionId: endpoint.connectionId, endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName, tool,
       contractRevision: createHash('sha256').update(JSON.stringify([endpoint.principalId, endpoint.connectionId, tool.revision,
         this.deps.runtime.bindings.get(this.deps.getCurrentContext()!.conversationId)?.boundAt ?? null,

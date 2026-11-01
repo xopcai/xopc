@@ -1,5 +1,5 @@
 import Ajv2020 from 'ajv/dist/2020.js';
-import { COMPUTER_INPUT_SCHEMA, COMPUTER_OUTPUT_SCHEMA } from '@xopcai/computer-control-contract';
+import { COMPUTER_INPUT_SCHEMA, COMPUTER_OUTPUT_SCHEMA, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import {
   BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
@@ -81,6 +81,7 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   'desktop.bridge.list_resources': contract('public.background-read', BRIDGE_LIST_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA),
   'desktop.bridge.read_sensor': contract('public.background-read', BRIDGE_READ_OUTPUT_SCHEMA, ['json'], [], BRIDGE_READ_INPUT_SCHEMA),
   'desktop.computer.control': contract('computer.session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
+  [REMOTE_COMPUTER_CONTROL_TOOL]: contract('computer.remote-session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
   'web.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
   'web.file.download': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['file-download']),
   'web.page.get_selection': contract('public.foreground-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], []),
@@ -215,8 +216,9 @@ export class EndpointToolPolicy {
           throw new EndpointToolPolicyError('Terminal transport violates its trusted policy');
         }
         return;
+      case 'computer.remote-session-scoped':
       case 'computer.session-scoped':
-        this.assertFields(descriptor, 'write', 'never', false, 'personal');
+        this.assertFields(descriptor, 'write', descriptor.policyId === 'computer.remote-session-scoped' ? 'always' : 'never', descriptor.policyId === 'computer.remote-session-scoped', 'personal');
         if (descriptor.timeoutMs !== 30_000 || descriptor.maxConcurrency !== 1
           || !descriptor.supportsCancellation || descriptor.idempotent) {
           throw new EndpointToolPolicyError('Computer transport violates its trusted policy');
