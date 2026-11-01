@@ -68,3 +68,5 @@ P3b已接入独立工作区授权、逐次读写确认、受控FD文件工具和
 P3b第7版新增真实文件成功回执丢失的原生核实用例通过；取消与批准均保持旧unknown且不重放，窗口包含加密本机记录恢复的原目录身份和相对路径。新包本地/旧266复用及远端恢复回归通过，相关184项回归、9项恢复/接线及类型通过（集合重叠）。继续P3c/P3d/P3e/P4和专项故障验收；性能、S5长测及最终main交付状态不变。
 
 P3e有界文本快照与显式回传已实现，实际安装包原生取消/批准、版本冲突、丢回执unknown不重试、加密缓存及Gateway隔离通过；正式包本地/旧266复用回归通过。首次存储测试失败保留，见[证据](./evidence/electron-gateway-p3/remote-files-20261101/README.md)。当前根目录/32KiB文本范围，后续目录浏览、缓存管理与大文件继续待办。用户已明确接受P3c本机Docker隔离命令/PTY后端，按[容器契约](./electron-gateway-p3-container-contract.md)继续；尚未开放远端命令。
+
+P3c-1本机Docker监督核心完成：真实Engine隔离/专用卷、先CID持久化后start、核实容器删除后终态、Node父进程SIGKILL恢复unknown和阻断新意图，最终6项实际Docker/核心测试及Electron类型检查通过。首轮日志驱动拒绝已保留，未增加预算；见[证据](./evidence/electron-gateway-p3/container-core-20261101/README.md)。尚未接入Native/Host/Agent或PTY；继续P3c-2接线。

@@ -1,0 +1,31 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+stdout | electron/__tests__/gateway-connections-container-engine.test.ts > uses the real local Engine with a writable owned volume and destroys an entire detached-child container
+Private Docker fixture start rejection 500 {"message":"failed to create task for container: failed to initialize logging driver: compression cannot be enabled when max file count is 1"}
+
+
+ ❯ |computer-desktop| electron/__tests__/gateway-connections-container-engine.test.ts (2 tests | 1 failed) 257ms
+   × uses the real local Engine with a writable owned volume and destroys an entire detached-child container 240ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-connections-container-engine.test.ts > uses the real local Engine with a writable owned volume and destroys an entire detached-child container
+Error: DESKTOP_CONTAINER_START_UNKNOWN
+ ❯ DesktopContainerEngine.start electron/desktop/container-engine.ts:77:40
+     75|     if (!await this.inspect(id, owner)) throw new Error('DESKTOP_CONTA…
+     76|     const response = await this.request('POST', `/containers/${contain…
+     77|     if (response.status !== 204) throw new Error('DESKTOP_CONTAINER_ST…
+       |                                        ^
+     78|   }
+     79|   async remove(id: string, owner: DesktopContainerOwnership): Promise<…
+ ❯ electron/__tests__/gateway-connections-container-engine.test.ts:65:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  13:51:48
+   Duration  383ms (transform 19ms, setup 13ms, import 46ms, tests 257ms, environment 0ms)
+
