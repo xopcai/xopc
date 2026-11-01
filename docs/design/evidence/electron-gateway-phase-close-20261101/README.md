@@ -1,0 +1,29 @@
+# 阶段收尾与主线交付（2026-11-01）
+
+用户要求本阶段收尾、commit/push并合入main；另明确要求把main全部历史线性化，并接受改写/强推。该指令取代“完整方案全部完成后才合并”的旧条件；本次是阶段合入，不表示P4或全部稳定性验收完成。
+
+## 本阶段范围
+
+已完成S4/S5功能恢复、独立设备登记/只读观察、可靠执行/未知结果核实、授权工作区、Docker命令/PTY、Computer/专用Browser，以及独立停止回执和崩溃授权恢复。各批通过范围及限制以相应证据为准，不把核心/注入回调测试等同于所有平台原生验收。最近Browser未知结果恢复、Computer原生取消输入和丢回执恢复、实际安装包本地/旧v266复用及远端聊天恢复通过，见[P3当前恢复证据](../electron-gateway-p3/computer-recovery-20261101/README.md)。
+
+原S0性能预算摘要 `e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746` 不变，失败证据保留，性能专项不在本阶段承诺通过。旧S5聊天长测独立运行，不替代新增Host、Computer或PTY长测。
+
+## 暂停并保存的工作
+
+P4目录分页只有未完成草稿，类型检查发现FileServiceError状态码约束错误，尚未测试/E2E，未合入。草稿保存在stash对象 `e77bac1d488ae653e9eb54f7aa1ad1009062feac`，以及本worktree `reports/p4-directory-wip-20261101.patch`，补丁SHA256 `c7a3ec65ac9e9e726a1a2fd5d846868b0a5ee179c13b2e0194213fef85860e59`。后续恢复前先核对当前工作区，不自动pop其他stash。
+
+仍待：P4等待设备/有效期/取消/新授权检查、大文件/二进制续传和分页；容器总磁盘硬约束/保留卷管理；新增Host独立服务器实际模型、多平台、Main/资源完整故障矩阵与长测；性能优化。后续开发按用户要求暂停。
+
+## 历史与恢复
+
+旧远端main为 `c8da81aa0280a3a45041bfbfa39c2f389d98b965`，本阶段原提交为 `ef07079141cd25d9a2f3c060a3d54b19043c4101`。两个远端backup tag保留完整旧历史，见history-plan.json。3929个原主线提交逐一保留文件树、作者、提交者和说明，22个多父节点改为单父链；旧合并侧支的独立提交仍在backup tag可追溯，不逐一重放其内容。父哈希变更使4个旧签名/merge-tag头不再适用，转换时移除，原始签名仍在备份历史中。最终树与原阶段提交逐字节相同；本收尾文档是其后的正常线性提交。
+
+只在明确旧远端SHA未变化时使用force-with-lease替换main，不改写其他分支或旧版本标签，不删除备份。其他已有克隆须先保留本地改动，再按新main重新同步；依赖旧历史的分支需人工核对后重放，避免合回旧历史产生新的合并节点。
+
+主工作区原未跟踪方案文件已原样保存至 `/Users/micjoyce/.codex/backups/xopc-main-linearize-20261101/electron-local-remote-gateway-plan.md`，SHA256 `77d0f17bc68692394b280f1bc1de8c65f7b7a14573112cc78f1d9e9d0b250bba`；最终切换前再次核对，不覆盖未备份内容。
+
+## 验证与构建
+
+收尾前类型、lint（0错误/49警告）、依赖架构、CLI导入检查通过。全量测试首次发现调用审计夹具漏注入owner，修复后5项单独复验通过，原失败日志 `/tmp/xopc-phase-close-test-all-1.log` 保留；全量最终结果及远端CI以实际报告为准，不把单独复验写成全量通过。
+
+最近已通过的阶段DMG在 `/tmp/xopc-computer-recovery-delivery-1/xopc-preview-arm64.dmg`，摘要 `56141e726246eca87efacc314855bfa69a9c7a93b72af81997580b99ad0fe5d7`；它是改写/合入前的验证候选，未公证。最终main交付必须从实际main提交重新构建并记录摘要，不能把旧候选改名冒充。

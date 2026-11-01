@@ -1,0 +1,13 @@
+{
+  "originalHead": "ef07079141cd25d9a2f3c060a3d54b19043c4101",
+  "originalRemoteMain": "c8da81aa0280a3a45041bfbfa39c2f389d98b965",
+  "newHead": "0d620df20fe603c5e42a590cd780ad04c06f340e",
+  "tree": "3ccd37a3adb77e661186a7318843ccfb1e4bde8d",
+  "mainlineCommits": 3929,
+  "removedMergeParents": 22,
+  "removedInvalidSignatureHeaders": 4,
+  "allMainlineTreesPreserved": true,
+  "originalMainBackupTag": "backup/main-before-linearize-20261101-c8da81aa0",
+  "originalStageBackupTag": "backup/gateway-before-linearize-20261101",
+  "method": "Preserve each first-parent tree, author, committer and message; replace merge parents with one verified parent. Original side ancestry remains available through backup tags."
+}
