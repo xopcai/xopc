@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
 import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -102,10 +103,11 @@ it('requires independent stop confirmation for a human review and never rewrites
   journal.close(); lease.close(); lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
   expect(journal.hasUnknown()).toBe(false); expect(journal.record(operation).fresh).toBe(false);
 });
-it.each(['clipboard', 'computer'] as const)('makes a permanent unknown tombstone for an explicitly reviewed operation that never started: %s', kind => {
+it.each(['clipboard', 'computer', 'browser'] as const)('makes a permanent unknown tombstone for an explicitly reviewed operation that never started: %s', kind => {
   lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
   const operation = { ...intent(), ...(kind === 'clipboard' ? { tool: 'desktop.clipboard.write' }
-    : { workspaceId: undefined, tool: REMOTE_COMPUTER_DESCRIPTOR.name, toolRevision: endpointToolRevision(REMOTE_COMPUTER_DESCRIPTOR as never) }) };
+    : { workspaceId: undefined, tool: kind === 'browser' ? REMOTE_BROWSER_DESCRIPTOR.name : REMOTE_COMPUTER_DESCRIPTOR.name,
+      toolRevision: endpointToolRevision((kind === 'browser' ? REMOTE_BROWSER_DESCRIPTOR : REMOTE_COMPUTER_DESCRIPTOR) as never) }) };
   const body = { reviewId: randomUUID(), expectedGeneration: 1, intentFingerprint: createHash('sha256').update(JSON.stringify(operation)).digest('hex'), executorStopped: true as const, localStatus: 'not-found' as const };
   expect(journal.inspect(operation)).toBeUndefined(); journal.review(operation, body); journal.review(operation, body);
   expect(journal.inspect(operation)).toMatchObject({ state: 'unknown', executionStopped: true }); expect(journal.hasUnknown()).toBe(false);

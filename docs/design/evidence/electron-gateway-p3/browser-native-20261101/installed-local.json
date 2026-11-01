@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T11:57:13.768Z",
+  "scope": "Installed macOS app local spawn/reuse, real bundled Gateway/SQLite/IPC/PTY/browser with deterministic inference; not upgrade or S5 acceptance",
+  "samples": [
+    {
+      "mode": "spawn",
+      "passed": true,
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "b22b780a-6bc4-46cc-9669-bae9082d1b48"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "ownedRestartPreservesChat": true,
+      "connectionMenuRelaunchAfterCleanup": true
+    },
+    {
+      "mode": "reuse",
+      "passed": true,
+      "reusedDatabaseVersionBefore": "266",
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "52304f3b-689d-4cbe-9f94-8d590861478d"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "externalRestartDenied": true,
+      "reusedGatewaySurvivesExit": true,
+      "reusedDatabaseVersionAfter": "266",
+      "connectionMenuRelaunchAfterCleanup": true
+    }
+  ],
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "3cde51740a8f0d823ac74c764aa427614b0ad97a2ba6249e28b293a636df7169"
+  },
+  "externalServerPackageBefore": {
+    "files": 1427,
+    "sha256": "9f6df4b411053af2153057659c262f44e77826ec05649dbe9e8c737da4c1d524"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "3cde51740a8f0d823ac74c764aa427614b0ad97a2ba6249e28b293a636df7169"
+  },
+  "externalServerPackageAfter": {
+    "files": 1427,
+    "sha256": "9f6df4b411053af2153057659c262f44e77826ec05649dbe9e8c737da4c1d524"
+  },
+  "finishedAt": "2026-11-01T11:57:51.078Z"
+}

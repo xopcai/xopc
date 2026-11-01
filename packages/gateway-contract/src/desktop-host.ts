@@ -14,7 +14,7 @@ export const desktopPairingRouteSchema = z.union([
   devicePairingRouteSchema.refine(route => route.kind !== 'local-browser', 'Desktop pairing cannot use browser enrollment'),
   z.strictObject({ id: z.string().min(1).max(80), kind: z.literal('ssh-loopback'), url: desktopSshOriginSchema }),
 ]);
-export const DESKTOP_HOST_CAPABILITIES = Object.freeze({ sshPairing: true, deviceStateObservation: true, screenObservation: true, signedGatewayFrames: 1, signedDeviceFrames: 1, observationRevocationVersion: 1, reliableExecutionVersion: 1, operationStatusVersion: 1, operationReviewVersion: 1, workspaceExecutionVersion: 1, containerCommandVersion: 1, containerTerminalVersion: 1, remoteComputerVersion: 1 } as const);
+export const DESKTOP_HOST_CAPABILITIES = Object.freeze({ sshPairing: true, deviceStateObservation: true, screenObservation: true, signedGatewayFrames: 1, signedDeviceFrames: 1, observationRevocationVersion: 1, reliableExecutionVersion: 1, operationStatusVersion: 1, operationReviewVersion: 1, workspaceExecutionVersion: 1, containerCommandVersion: 1, containerTerminalVersion: 1, remoteComputerVersion: 1, remoteBrowserVersion: 1 } as const);
 export const DESKTOP_STATE_OBSERVATION_TOOL = 'desktop.device.get_state' as const;
 export const DESKTOP_SCREEN_OBSERVATION_TOOL = 'desktop.screen.capture' as const;
 export const desktopExecutionGrantSchema = z.strictObject({

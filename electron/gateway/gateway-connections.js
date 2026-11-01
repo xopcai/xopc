@@ -47,7 +47,7 @@ function render(value) {
   snapshot = value;
   const execution = value.execution;
   const executing = execution && !['stopped', 'error'].includes(execution.state);
-  const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: value.execution?.computer ? '已授权逐次确认电脑控制，最长两分钟。停止窗口保持可见。' : value.execution?.terminal ? '已授权Docker终端，每次输入须确认，最长两分钟。' : value.execution?.container ? '已授权逐次确认Docker命令，最长两分钟。' : value.execution?.workspaceId ? '已授权逐次确认工作区访问，最长两分钟。' : '已授权逐次确认剪贴板写入，最长两分钟。',
+  const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: value.execution?.browser ? '已授权逐次确认专用浏览器，最长两分钟。停止窗口保持可见。' : value.execution?.computer ? '已授权逐次确认电脑控制，最长两分钟。停止窗口保持可见。' : value.execution?.terminal ? '已授权Docker终端，每次输入须确认，最长两分钟。' : value.execution?.container ? '已授权逐次确认Docker命令，最长两分钟。' : value.execution?.workspaceId ? '已授权逐次确认工作区访问，最长两分钟。' : '已授权逐次确认剪贴板写入，最长两分钟。',
     'stop-requested': '已请求停止，正在核实。', stopped: execution?.remoteRevocationConfirmed ? '本机执行已停止，服务器撤销已确认。' : '本机执行已停止，服务器撤销尚未确认。',
     'stop-unconfirmed': '执行器停止尚未确认；禁止切换或启动新的执行。', error: '本机执行连接失败，请检查后重新授权。' };
   element('execution-status').textContent = execution ? executionLabels[execution.state] + (execution.resultUnknown ? ' 操作效果仍未知，核实后才能启动新写入。' : '') : '本机写入未授权。';
@@ -109,6 +109,7 @@ function render(value) {
     actionButton('授权逐次确认Docker命令', api.startContainer, selected && state === 'registered' && value.desktop?.[profile.id]?.containerCommand === true && !observing && !executing, 'execute-container');
     actionButton('授权逐次确认Docker终端', api.startTerminal, selected && state === 'registered' && value.desktop?.[profile.id]?.containerTerminal === true && !observing && !executing, 'execute-terminal');
     actionButton('授权逐次确认电脑控制', api.startComputer, selected && state === 'registered' && value.desktop?.[profile.id]?.remoteComputer === true && !observing && !executing, 'execute-computer');
+    actionButton('授权逐次确认专用浏览器', api.startBrowser, selected && state === 'registered' && value.desktop?.[profile.id]?.remoteBrowser === true && !observing && !executing, 'execute-browser');
     actionButton('查看保留的Docker工作区', api.listContainers, selected && state === 'registered' && value.desktop?.[profile.id]?.containerCommand === true, 'container-list');
     if (selected && value.savedContainers?.profileId === profile.id) {
       for (const item of value.savedContainers.items) actionButton(`重新授权：${item.label}`, (epoch, id) => api.startContainer(epoch, id, item.workspaceId), !observing && !executing, `container-${item.workspaceId}`);

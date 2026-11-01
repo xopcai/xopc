@@ -10,7 +10,7 @@ import { isConnectionId } from '../gateway/profiles.js';
 
 export type DesktopEnrollmentAction = 'enroll' | 'check' | 'disable' | 'reenroll';
 type EnrollmentState = 'registered' | 'unregistered' | 'pending' | 'disabled-confirmed' | 'disabled-unconfirmed' | 'cancelled' | 'error';
-type EnrollmentStatus = { state: EnrollmentState; deviceId?: string; localCapabilities: false; reliableExecution?: true; operationReview?: true; workspaceExecution?: true; containerCommand?: true; containerTerminal?: true; remoteComputer?: true };
+type EnrollmentStatus = { state: EnrollmentState; deviceId?: string; localCapabilities: false; reliableExecution?: true; operationReview?: true; workspaceExecution?: true; containerCommand?: true; containerTerminal?: true; remoteComputer?: true; remoteBrowser?: true };
 
 /** Optional device identity operations never start an executor or depend on the chat connection. */
 export class DesktopEnrollmentManager {
@@ -44,9 +44,9 @@ export class DesktopEnrollmentManager {
     const current = () => {
       if (controller.signal.aborted || epoch !== this.options.manager.snapshot().epoch) throw new Error('DESKTOP_OPERATION_CANCELLED');
     };
-    let reliableExecution = false, operationReview = false, workspaceExecution = false, containerCommand = false, containerTerminal = false, remoteComputer = false;
+    let reliableExecution = false, operationReview = false, workspaceExecution = false, containerCommand = false, containerTerminal = false, remoteComputer = false, remoteBrowser = false;
     const set = (state: EnrollmentState, deviceId?: string) => {
-      current(); this.statuses.set(id, { binding: this.bindingKey(binding), status: { state, ...(deviceId ? { deviceId } : {}), ...(state === 'registered' && remoteComputer ? { remoteComputer: true as const } : {}), ...(state === 'registered' && containerTerminal ? { containerTerminal: true as const } : {}), ...(state === 'registered' && containerCommand ? { containerCommand: true as const } : {}), ...(state === 'registered' && workspaceExecution ? { workspaceExecution: true as const } : {}), ...(state === 'registered' && operationReview ? { operationReview: true as const } : {}), ...(state === 'registered' && reliableExecution ? { reliableExecution: true as const } : {}), localCapabilities: false } });
+      current(); this.statuses.set(id, { binding: this.bindingKey(binding), status: { state, ...(deviceId ? { deviceId } : {}), ...(state === 'registered' && remoteBrowser ? { remoteBrowser: true as const } : {}), ...(state === 'registered' && remoteComputer ? { remoteComputer: true as const } : {}), ...(state === 'registered' && containerTerminal ? { containerTerminal: true as const } : {}), ...(state === 'registered' && containerCommand ? { containerCommand: true as const } : {}), ...(state === 'registered' && workspaceExecution ? { workspaceExecution: true as const } : {}), ...(state === 'registered' && operationReview ? { operationReview: true as const } : {}), ...(state === 'registered' && reliableExecution ? { reliableExecution: true as const } : {}), localCapabilities: false } });
     };
     const channel = desktopAuthTransport(binding, profile.transport, controller.signal);
     const client = new DesktopDeviceAuth(binding, this.options.store, channel.request);
@@ -66,6 +66,7 @@ export class DesktopEnrollmentManager {
         containerCommand = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.containerCommandVersion === 1;
         containerTerminal = containerCommand && compatibility.capabilities?.containerTerminalVersion === 1;
         remoteComputer = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.remoteComputerVersion === 1;
+        remoteBrowser = process.platform === 'darwin' && reliableExecution && compatibility.capabilities?.remoteBrowserVersion === 1;
         set('registered', result.deviceId); return;
       }
       if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
@@ -100,6 +101,7 @@ export class DesktopEnrollmentManager {
       containerCommand = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.containerCommandVersion === 1;
       containerTerminal = containerCommand && compatibility.payload.capabilities?.containerTerminalVersion === 1;
       remoteComputer = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.remoteComputerVersion === 1;
+      remoteBrowser = process.platform === 'darwin' && reliableExecution && compatibility.payload.capabilities?.remoteBrowserVersion === 1;
       const result = await client.enroll({ displayName: `xopc Desktop (${process.platform})`,
         consent: async () => {
           current(); if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');

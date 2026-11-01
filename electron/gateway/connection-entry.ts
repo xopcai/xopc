@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, safeStorage, session, systemPreferences } from 'electron';
 import { REMOTE_COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_CONTROL_TOOL, REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
 
 import { DesktopEnrollmentManager, type DesktopEnrollmentAction } from '../desktop/enrollment.js';
 import { DesktopIdentityStore } from '../desktop/device-identity.js';
@@ -25,6 +26,9 @@ import { DesktopNativeApprovalFocus } from '../desktop/native-approval-focus.js'
 import { DesktopComputerPresence } from '../desktop/computer-presence.js';
 import { DesktopComputerResources } from '../desktop/computer-resources.js';
 import { createNativeComputerSession } from '../desktop/computer-native-session.js';
+import { createNativeBrowserSession } from '../desktop/browser-native-session.js';
+import { DesktopBrowserResources } from '../desktop/browser-resources.js';
+import type { DesktopBrowserSession } from '../desktop/browser-session.js';
 import { computerHostBundleId } from '../desktop/computer-host-identity.js';
 import type { DesktopComputerSession } from '../desktop/computer-session.js';
 import { CuaComputerDriver } from '../computer/cua-driver.js';
@@ -103,9 +107,11 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   });
   let nativeApprovalGeneration = 0;
   const nativeApprovalFocus = new DesktopNativeApprovalFocus();
-  const computerPresence = new DesktopComputerPresence(() => { computerContext = undefined; void execution.stop(); });
+  const computerPresence = new DesktopComputerPresence(() => { computerContext = undefined; browserContext = undefined; void execution.stop(); });
   let computer: DesktopComputerSession | undefined, computerBundleId: string | undefined;
   let computerContext: { parent: BrowserWindow; generation: number } | undefined;
+  let browser: DesktopBrowserSession | undefined;
+  let browserContext: { parent: BrowserWindow; generation: number; expiresAt: number } | undefined;
   const foreground = () => {
     const chat = shell?.captureWindow();
     return visible() && window.isFocused() || Boolean(chat && chat.isVisible() && !chat.isMinimized() && chat.isFocused())
@@ -119,6 +125,13 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   let savedContainers: { epoch: number; profileId: string; items: Array<{ workspaceId: string; label: string; imageId: string }> } | undefined;
   const workspaceRecovery = new DesktopWorkspaceRecoveryStore(join(resolveStateDir(), 'desktop-execution-v1', 'workspace-recovery'), encryption);
   const computerResources = new DesktopComputerResources(join(resolveStateDir(), 'desktop-execution-v1', 'computer-resources'), encryption);
+  const browserResources = new DesktopBrowserResources(join(resolveStateDir(), 'desktop-execution-v1', 'browser-resources'), encryption);
+  const stopBrowser = async () => {
+    computerPresence.close(); browserContext = undefined; await computerPresence.whenStopped();
+    const previous = browser, outcome = await previous?.stop() ?? { confirmed: true };
+    if (outcome.confirmed && browser === previous) browser = undefined;
+    return outcome;
+  };
   const stopComputer = async () => {
     computerPresence.close(); computerContext = undefined;
     await computerPresence.whenStopped();
@@ -150,6 +163,24 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
         } });
       return computer;
     },
+    createBrowser: uploadFrame => {
+      const context = browserContext;
+      if (!context || !computerPresence.visible()) throw new Error('DESKTOP_BROWSER_AUTHORITY_INVALID');
+      const current = () => browserContext === context && context.generation === nativeApprovalGeneration && Date.now() < context.expiresAt && computerPresence.visible();
+      browser = createNativeBrowserSession({ executable: process.execPath, ...(app.isPackaged ? {} : { appPath: fileURLToPath(entryUrl) }),
+        resources: browserResources, current, uploadFrame, expiresAt: context.expiresAt,
+        approve: async (command, tabs, signal) => {
+          const detail = JSON.stringify({ command, tabs });
+          if (!current() || signal.aborted || Buffer.byteLength(detail) > 24000 || context.parent.isDestroyed()) return false;
+          const profile = manager.snapshot().profiles.find(item => item.id === manager.snapshot().selectedId);
+          const result = await dialog.showMessageBox(context.parent, { type: 'warning', title: '确认本次浏览器操作',
+            message: command.input.action === 'observe' ? '观察专用浏览器并将页面信息发送给此Gateway？' : '仅在专用浏览器执行以下请求？',
+            detail: `Gateway：${profile?.origin}\n完整请求与专用标签页：${detail}\n\n页面标题和内容可能不可信。仅本次有效；输入可能保存、发送或删除数据，结果未知时不会自动重做。不能访问个人浏览器、上传本机路径或执行远端脚本。`,
+            buttons: ['取消', '允许本次浏览器操作'], defaultId: 0, cancelId: 0, noLink: true, signal });
+          return result.response === 1 && !signal.aborted && current();
+        } });
+      return browser;
+    },
     confirmTerminalInput: async (scope, input, signal) => {
       const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId), parent = shell?.captureWindow() ?? window;
       if (profile?.identity?.gatewayId !== scope.gatewayId || container?.workspaceId !== scope.workspaceId || !foreground() || signal.aborted || parent.isDestroyed()) return false;
@@ -172,6 +203,21 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     },
     consent: async (binding, grant, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
+      if (grant.toolRevisions[REMOTE_BROWSER_CONTROL_TOOL]) {
+        const generation = nativeApprovalGeneration, epoch = manager.snapshot().epoch, parent = shell?.captureWindow() ?? window;
+        const result = await dialog.showMessageBox(window, { type: 'warning', title: '授权本机专用浏览器', message: '允许此Gateway逐次请求操作独立浏览器？',
+          detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n\n授权最长两分钟，每次观察、页面操作与标签页操作仍须本机确认。专用浏览器使用独立临时会话；页面信息与经批准的截图会发送给此Gateway。输入可能产生实际效果；不继承个人浏览器Cookie，不接受服务器文件路径或脚本。停止窗口保持可见；锁屏、最小化、断线、切换后须重新授权，结果未知不会重做。`,
+          buttons: ['取消', '允许逐次确认浏览器操作'], defaultId: 0, cancelId: 0, noLink: true, signal });
+        if (result.response !== 1 || signal.aborted || generation !== nativeApprovalGeneration || !foreground()) return false;
+        const context = { parent, generation, expiresAt: grant.expiresAt }; browserContext = context;
+        await computerPresence.begin(parent, () => {
+          const state = manager.snapshot(), profile = state.profiles.find(item => item.id === binding.profileId);
+          return browserContext === context && generation === nativeApprovalGeneration && state.epoch === epoch && state.selectedId === binding.profileId
+            && profile?.identity?.gatewayId === binding.gatewayId && profile.identity.publicKey === binding.publicKey
+            && (parent === window ? !window.isDestroyed() && window.webContents.getURL() === documentUrl && window.webContents.mainFrame.url === documentUrl : shell?.captureWindow() === parent);
+        }, signal);
+        return !signal.aborted && computerPresence.visible();
+      }
       if (grant.toolRevisions[REMOTE_COMPUTER_CONTROL_TOOL]) {
         const generation = nativeApprovalGeneration, epoch = manager.snapshot().epoch, parent = shell?.captureWindow() ?? window;
         const result = await dialog.showMessageBox(window, { type: 'warning', title: '授权本机电脑控制', message: '允许此Gateway逐次请求观察与控制本机应用？',
@@ -214,6 +260,8 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId);
       const parent = shell?.captureWindow() ?? window;
       if (profile?.identity?.gatewayId !== request.execution.gatewayId || !foreground() || signal.aborted || parent.isDestroyed()) return false;
+      // The dedicated Broker requests native consent with locally observed tab metadata after its durable barrier.
+      if (request.toolName === REMOTE_BROWSER_CONTROL_TOOL) return Boolean(browserContext && computerPresence.visible());
       if (request.toolName === REMOTE_COMPUTER_CONTROL_TOOL) {
         const detail = JSON.stringify(request.arguments), generation = nativeApprovalGeneration;
         if (!computerPresence.visible() || Buffer.byteLength(detail) > 8192) return false;
@@ -273,7 +321,8 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     } catch { return false; } finally { clearTimeout(timer); }
   };
   const reviews = new DesktopOperationReviewManager({ manager, execution, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'), visible,
-    proveStopped: intent => intent.tool === REMOTE_COMPUTER_CONTROL_TOOL ? computerResources.recoverAfterParentExit(intent).catch(() => false) : proveContainerStopped(intent),
+    proveStopped: intent => intent.tool === REMOTE_BROWSER_CONTROL_TOOL ? browserResources.recoverAfterParentExit(intent).catch(() => false)
+      : intent.tool === REMOTE_COMPUTER_CONTROL_TOOL ? computerResources.recoverAfterParentExit(intent).catch(() => false) : proveContainerStopped(intent),
     confirm: async (binding, intent, receipt, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
       const file = intent.tool === 'desktop.workspace.write' ? await workspaceRecovery.load(intent) : undefined;
@@ -288,7 +337,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       return answer.response === 1 && !signal.aborted && visible() && window.isFocused();
     } });
   const stopObservation = () => { observation.stop(); void shell?.setHostOrigin().catch(() => {}); };
-  const stopCapabilities = () => { nativeApprovalGeneration += 1; computerPresence.close(); computerContext = undefined; shell?.stopFiles(); reviews.cancel(); stopObservation(); void execution.stop(); };
+  const stopCapabilities = () => { nativeApprovalGeneration += 1; computerPresence.close(); computerContext = undefined; browserContext = undefined; shell?.stopFiles(); reviews.cancel(); stopObservation(); void execution.stop(); };
   const cancelDesktop = () => { stopCapabilities(); desktop.cancel(); operationReviews = undefined; savedContainers = undefined; };
   const removeSessionBoundary = installDesktopSessionBoundary(powerMonitor, cancelDesktop);
   window.once('closed', removeSessionBoundary);
@@ -439,6 +488,15 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     computerBundleId = await computerHostBundleId({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
     if (generation !== nativeApprovalGeneration || !foreground() || manager.snapshot().epoch !== epoch) throw new Error('DESKTOP_OPERATION_CANCELLED');
     await execution.start(epoch, id, { kind: 'computer', catalog: new DesktopExecutionCatalog([REMOTE_COMPUTER_DESCRIPTOR as never, desktopOperationStatusDescriptor()]), stopResources: stopComputer });
+    return snapshot();
+  })));
+  ipcMain.handle('connections:browser-start', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => {
+    if (process.platform !== 'darwin') throw new Error('DESKTOP_BROWSER_UNSUPPORTED');
+    const state = manager.snapshot(), profile = state.profiles.find(item => item.id === id);
+    if (id !== state.selectedId || !profile?.identity) throw new Error('STALE_CONNECTION_EPOCH');
+    if (!visible() || !window.isFocused()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
+    stopObservation(); await observation.whenStopped(); await execution.requireStopped();
+    await execution.start(epoch, id, { kind: 'browser', catalog: new DesktopExecutionCatalog([REMOTE_BROWSER_DESCRIPTOR as never, desktopOperationStatusDescriptor()]), stopResources: stopBrowser });
     return snapshot();
   })));
   ipcMain.handle('connections:container-list', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => {

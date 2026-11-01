@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
 import { serve } from '@hono/node-server';
 import { canonicalJson, endpointHelloSigningPayload, ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointToolDescriptor, type ClientEndpointMessage } from '@xopcai/endpoint-tools-protocol';
 import { expect, it, vi } from 'vitest';
@@ -39,7 +40,7 @@ import { ConnectionCredentialStore } from '../../../electron/gateway/credentials
 import { DesktopOperationReviewManager } from '../../../electron/desktop/operation-review.js';
 import { DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR } from '../../../electron/desktop/clipboard-tool.js';
 import { recordDesktopOperationIntent } from '../../storage/sqlite/desktop-operation-repository.js';
-it.each(['clipboard', 'computer-not-started'] as const)('requires native human review, restores a lost acknowledgement and never replays the old intent: %s', async scenario => {
+it.each(['clipboard', 'computer-not-started', 'browser-not-started'] as const)('requires native human review, restores a lost acknowledgement and never replays the old intent: %s', async scenario => {
   const legacyFrames = false; let loseReviewAck = false, tamperList = false;
   const directory = await mkdtemp(join(tmpdir(), 'xopc-desktop-observation-'));
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'gateway.db') });
@@ -86,7 +87,7 @@ it.each(['clipboard', 'computer-not-started'] as const)('requires native human r
       approve: async (requestId, revision) => { await owner(`/api/device-pairing/requests/${requestId}/decision`, 'POST', { decision: 'approve', expectedRevision: revision }); },
     });
     await expect(client.endpointRequest('/api/realtime/tickets', 'POST', { clientId: randomUUID(), clientKind: 'desktop', protocolVersion: 2 })).rejects.toThrow('DESKTOP_OBSERVATION_DENIED');
-    const descriptor = scenario === 'clipboard' ? DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR : REMOTE_COMPUTER_DESCRIPTOR, revision = endpointToolRevision(descriptor), args = { text: 'fixture only' };
+    const descriptor = scenario === 'clipboard' ? DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR : scenario === 'browser-not-started' ? REMOTE_BROWSER_DESCRIPTOR : REMOTE_COMPUTER_DESCRIPTOR, revision = endpointToolRevision(descriptor), args = { text: 'fixture only' };
     const approved = await client.endpointRequest('/api/desktop-host/execution', 'POST', { expectedRevision: 0, grant: { version: 1, grantId: randomUUID(), localApprovalId: randomUUID(),
       toolRevisions: { [descriptor.name]: revision }, expiresAt: Date.now() + 60000 } });
     const executorRoot = join(directory, 'executor'), lease = new DesktopExecutionLease(executorRoot), journal = new DesktopOperationJournal(lease);

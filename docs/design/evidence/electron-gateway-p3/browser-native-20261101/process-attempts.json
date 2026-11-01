@@ -1,0 +1,104 @@
+[
+  {
+    "attempt": 1,
+    "passed": false,
+    "error": "Error: Private Browser worker response timeout\n    at Timeout.<anonymous> (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-local-connection-support.mjs:73:39)\n    at listOnTimeout (node:internal/timers:685:17)\n    at process.processTimers (node:internal/timers:618:7)",
+    "scope": "Development private Electron Browser worker: blank-page isolation and process-group stop only; not native approval or installed-app acceptance",
+    "groupsStillPresent": 0,
+    "finishedAt": "2026-11-01T11:42:57.970Z",
+    "cases": []
+  },
+  {
+    "attempt": 2,
+    "passed": false,
+    "error": "Error: Private Browser worker response timeout\n    at Timeout.<anonymous> (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-local-connection-support.mjs:73:39)\n    at listOnTimeout (node:internal/timers:685:17)\n    at process.processTimers (node:internal/timers:618:7)",
+    "scope": "Development private Electron Browser worker: blank-page isolation and process-group stop only; not native approval or installed-app acceptance",
+    "groupsStillPresent": 0,
+    "finishedAt": "2026-11-01T11:43:25.973Z",
+    "cases": []
+  },
+  {
+    "attempt": 3,
+    "passed": false,
+    "error": "Error: Private Browser worker response timeout\n    at Timeout.<anonymous> (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-local-connection-support.mjs:73:39)\n    at listOnTimeout (node:internal/timers:685:17)\n    at process.processTimers (node:internal/timers:618:7)",
+    "scope": "Development private Electron Browser worker: blank-page isolation and process-group stop only; not native approval or installed-app acceptance",
+    "groupsStillPresent": 0,
+    "finishedAt": "2026-11-01T11:43:56.291Z",
+    "cases": []
+  },
+  {
+    "attempt": 4,
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: DESKTOP_BROWSER_WORKER_FAILED\n\nfalse !== true\n\n    at rpc (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-browser-process.mjs:41:73)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-browser-process.mjs:45:20",
+    "scope": "Development private Electron Browser worker: blank-page isolation and process-group stop only; not native approval or installed-app acceptance",
+    "groupsStillPresent": 1,
+    "finishedAt": "2026-11-01T11:45:05.852Z",
+    "cases": []
+  },
+  {
+    "attempt": 5,
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: DESKTOP_BROWSER_WORKER_FAILED\n[DesktopBrowser] { name: 'Error', frames: [] }\n\n\nfalse !== true\n\n    at rpc (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-browser-process.mjs:41:73)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-browser-process.mjs:45:20",
+    "scope": "Development private Electron Browser worker: blank-page isolation and process-group stop only; not native approval or installed-app acceptance",
+    "groupsStillPresent": 1,
+    "finishedAt": "2026-11-01T11:45:37.860Z",
+    "cases": []
+  },
+  {
+    "attempt": 6,
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: DESKTOP_BROWSER_WORKER_FAILED\n[DesktopBrowser] { name: 'Error', frames: [] }\nError: Script failed to execute, this normally means an error was thrown. Check the renderer console for the error.\n\n\nfalse !== true\n\n    at rpc (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-browser-process.mjs:41:73)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-browser-process.mjs:45:20",
+    "scope": "Development private Electron Browser worker: blank-page isolation and process-group stop only; not native approval or installed-app acceptance",
+    "groupsStillPresent": 1,
+    "finishedAt": "2026-11-01T11:46:13.565Z",
+    "cases": []
+  },
+  {
+    "attempt": 7,
+    "passed": false,
+    "error": "Acceptance cleanup liveness probe returned EPERM; raw log retained. Not counted as a pass.",
+    "cases": []
+  },
+  {
+    "attempt": 8,
+    "passed": true,
+    "scope": "Development private Electron Browser worker: blank-page isolation and process-group stop only; not native approval or installed-app acceptance",
+    "groupsStillPresent": 0,
+    "finishedAt": "2026-11-01T11:47:27.033Z",
+    "cases": [
+      {
+        "scenario": "stop",
+        "groupIsolationVerified": true,
+        "stopped": true,
+        "stopElapsedMs": 21.256541000000027
+      },
+      {
+        "scenario": "parent-death",
+        "groupIsolationVerified": true,
+        "stopped": true,
+        "stopElapsedMs": 22.351749999999925
+      }
+    ]
+  },
+  {
+    "attempt": 9,
+    "passed": true,
+    "scope": "Development private Electron Browser worker: blank-page isolation and process-group stop only; not native approval or installed-app acceptance",
+    "groupsStillPresent": 0,
+    "finishedAt": "2026-11-01T11:53:43.394Z",
+    "cases": [
+      {
+        "scenario": "stop",
+        "groupIsolationVerified": true,
+        "stopped": true,
+        "stopElapsedMs": 40.841792000000055
+      },
+      {
+        "scenario": "parent-death",
+        "groupIsolationVerified": true,
+        "stopped": true,
+        "stopElapsedMs": 21.380666999999903
+      }
+    ]
+  }
+]

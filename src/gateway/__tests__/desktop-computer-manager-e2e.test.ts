@@ -6,6 +6,9 @@ import { join } from 'node:path';
 
 import { serve } from '@hono/node-server';
 import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
+import { DesktopBrowserSession } from '../../../electron/desktop/browser-session.js';
+import { invokeRemoteBrowserCommand } from '../../browser/remote/endpoint-transport.js';
 import { expect, it, vi } from 'vitest';
 
 import { createNativeComputerSession } from '../../../electron/desktop/computer-native-session.js';
@@ -27,7 +30,9 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
-it('negotiates remote Computer before native consent and revokes its independent execution grant on an epoch change', async () => {
+it.each(['computer', 'browser'] as const)('negotiates remote %s before native consent and revokes its independent execution grant on an epoch change', async kind => {
+  const descriptor = kind === 'computer' ? REMOTE_COMPUTER_DESCRIPTOR : REMOTE_BROWSER_DESCRIPTOR;
+  const capability = kind === 'computer' ? 'remoteComputerVersion' : 'remoteBrowserVersion';
   const root = await mkdtemp(join(tmpdir(), 'xopc-computer-manager-'));
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(root, 'gateway.db') });
   const endpoints = new EndpointToolRuntime({ uploadRoot: join(root, 'frames') }), realtime = new RealtimeRuntime(endpoints, id => getDevice(id)?.revokedAt === undefined);
@@ -40,7 +45,7 @@ it('negotiates remote Computer before native consent and revokes its independent
   const server = serve({ fetch: async request => {
     const response = await app.fetch(request);
     if (!supported && new URL(request.url).pathname === '/api/desktop-host/compatibility' && response.ok) {
-      const value = await response.json(); delete value.payload.capabilities.remoteComputerVersion;
+      const value = await response.json(); delete value.payload.capabilities[capability];
       return Response.json(value, { status: response.status, headers: response.headers });
     }
     return response;
@@ -68,35 +73,48 @@ it('negotiates remote Computer before native consent and revokes its independent
     const { deviceId } = await auth.enroll({ displayName: 'Computer manager fixture', consent: async () => true,
       setup: async () => (await owner('/api/desktop-host/pairing-setups', 'POST', { sshOrigin: origin })).payload.invitation,
       approve: async (requestId, revision) => { await owner(`/api/device-pairing/requests/${requestId}/decision`, 'POST', { decision: 'approve', expectedRevision: revision }); } });
-    const catalog = new DesktopExecutionCatalog([REMOTE_COMPUTER_DESCRIPTOR as never]);
+    const catalog = new DesktopExecutionCatalog([descriptor as never]);
     const resources = new DesktopComputerResources(join(root, 'resources'), encryption);
     const driver = { warmup: vi.fn(async () => {}), ownedProcessIdentity: () => ({ driverPid: process.pid + 10000, generation: randomUUID() }),
       discover: vi.fn(async () => [{ appId: 'fixture', name: 'Fixture', running: true }]),
       resolveTarget: vi.fn(), observe: vi.fn(), perform: vi.fn(), stop: vi.fn(async () => {}), validateAction: vi.fn() };
     let allow = false;
     const consent = vi.fn<ConstructorParameters<typeof DesktopExecutionManager>[0]['consent']>(async (_binding, grant) => {
-      expect(grant.workspaceId).toBeUndefined(); expect(Object.keys(grant.toolRevisions)).toEqual([REMOTE_COMPUTER_DESCRIPTOR.name]); return allow;
+      expect(grant.workspaceId).toBeUndefined(); expect(Object.keys(grant.toolRevisions)).toEqual([descriptor.name]); return allow;
     });
     const createComputer = vi.fn<NonNullable<ConstructorParameters<typeof DesktopExecutionManager>[0]['createComputer']>>((uploadFrame) => createNativeComputerSession({ driver, resources, current: () => true, requestApproval: async () => true, uploadFrame }));
+    const browserExecute = vi.fn(async () => ({ dispatch: 'completed' as const, result: { ok: true as const,
+      receipt: { action: 'tabs' as const, risk: 'read' as const, durationMs: 0, verified: true, tabs: [] } } }));
+    const browserStop = vi.fn(async () => ({ confirmed: true }));
+    const createBrowser = vi.fn<NonNullable<ConstructorParameters<typeof DesktopExecutionManager>[0]['createBrowser']>>(uploadFrame => new DesktopBrowserSession({
+      current: () => true, createBroker: () => ({ execute: browserExecute, dispose: browserStop }), uploadFrame,
+    }));
+    const createControl = kind === 'computer' ? createComputer : createBrowser;
     execution = new DesktopExecutionManager({ manager, store, executorRoot: join(root, 'executor'), catalog, appVersion: 'fixture', foreground: () => true,
-      consent, confirm: async () => true, createWorker: () => { throw new Error('Generic executor is forbidden'); }, createComputer });
+      consent, confirm: async () => true, createWorker: () => { throw new Error('Generic executor is forbidden'); }, createComputer, createBrowser });
     const stopResources = vi.fn(async () => ({ confirmed: true }));
-    const start = () => execution!.start(manager.snapshot().epoch, id, { kind: 'computer', catalog, stopResources });
-    await expect(start()).rejects.toThrow('UNSUPPORTED'); expect(consent).not.toHaveBeenCalled(); expect(createComputer).not.toHaveBeenCalled();
+    const start = () => execution!.start(manager.snapshot().epoch, id, { kind, catalog, stopResources });
+    await expect(start()).rejects.toThrow('UNSUPPORTED'); expect(consent).not.toHaveBeenCalled(); expect(createControl).not.toHaveBeenCalled();
     supported = true;
-    await expect(start()).rejects.toThrow('CONSENT_DENIED'); expect(createComputer).not.toHaveBeenCalled();
+    await expect(start()).rejects.toThrow('CONSENT_DENIED'); expect(createControl).not.toHaveBeenCalled();
     expect(getDevice(deviceId)?.scopes).not.toContain('desktop.execute');
     allow = true; await start();
-    await vi.waitFor(() => expect(execution!.snapshot()).toMatchObject({ state: 'online', computer: true }));
-    expect(createComputer).toHaveBeenCalledOnce(); expect(driver.warmup).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(execution!.snapshot()).toMatchObject({ state: 'online', [kind]: true }));
+    expect(createControl).toHaveBeenCalledOnce(); expect(driver.warmup).not.toHaveBeenCalled();
     const endpointId = execution.origin()!.endpointId;
-    const result = await invokeComputerCommand(endpoints, endpointId, { op: 'discover', owner: 'conversation', sessionId: 'discovery', query: 'Fixture' });
-    expect(result.content).toMatchObject([{ type: 'json', value: { status: 'ready', apps: [{ name: 'Fixture' }] } }]);
-    expect(driver.discover).toHaveBeenCalledOnce(); expect(driver.perform).not.toHaveBeenCalled();
+    if (kind === 'computer') {
+      const result = await invokeComputerCommand(endpoints, endpointId, { op: 'discover', owner: 'conversation', sessionId: 'discovery', query: 'Fixture' });
+      expect(result.content).toMatchObject([{ type: 'json', value: { status: 'ready', apps: [{ name: 'Fixture' }] } }]);
+      expect(driver.discover).toHaveBeenCalledOnce(); expect(driver.perform).not.toHaveBeenCalled(); expect(createBrowser).not.toHaveBeenCalled();
+    } else {
+      const result = await invokeRemoteBrowserCommand(endpoints, endpointId, { version: 1, owner: 'conversation', sessionId: 'browser-session', actionId: randomUUID(), input: { action: 'tabs', operation: 'list' } });
+      expect(result.content).toMatchObject([{ type: 'json', value: { dispatch: 'completed', result: { ok: true, receipt: { action: 'tabs' } } } }]);
+      expect(browserExecute).toHaveBeenCalledOnce(); expect(createComputer).not.toHaveBeenCalled();
+    }
     const before = stopResources.mock.calls.length;
     await manager.select(manager.snapshot().epoch, id);
     await vi.waitFor(() => expect(execution!.snapshot()).toMatchObject({ state: 'stopped', remoteRevocationConfirmed: true }));
-    expect(stopResources.mock.calls.length).toBeGreaterThan(before); expect(driver.stop).toHaveBeenCalled();
+    expect(stopResources.mock.calls.length).toBeGreaterThan(before); if (kind === 'computer') expect(driver.stop).toHaveBeenCalled(); else expect(browserStop).toHaveBeenCalled();
     expect(execution.origin()).toBeUndefined(); expect(getDevice(deviceId)?.scopes).not.toContain('desktop.execute');
     expect(manager.snapshot().selectedId).toBe(id); passed = true;
   } finally {
