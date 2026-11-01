@@ -2,43 +2,57 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Gateway 连接管理</title>
   <style>
-    :root { color-scheme: light dark; font: 15px system-ui; } body { margin: 32px auto; padding: 0 24px; max-width: 680px; }
-    h1 { font-size: 24px; } p { line-height: 1.6; } label { display: block; margin-top: 16px; } input { box-sizing: border-box; width: 100%; padding: 9px; margin-top: 5px; }
-    button { padding: 9px 14px; margin: 12px 8px 0 0; cursor: pointer; } li { margin: 12px 0; overflow-wrap: anywhere; } #error { color: #e75454; } small { opacity: .75; }
-    button:focus-visible, input:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
-    .desktop-actions { margin: 12px 0; padding: 12px; border: 1px solid GrayText; border-radius: 8px; }
-    .desktop-actions p { margin: 0 0 8px; } .desktop-actions button { min-height: 44px; margin-top: 0; }
-    button:disabled { cursor: default; opacity: .55; }
+    :root { color-scheme: light dark; --panel:light-dark(#fff,#1b1f26); --base:light-dark(#f7f8fa,#14171c); --inset:light-dark(#f1f3f6,#20252d); --hover:light-dark(#e9edf3,#2a313d); --fg:light-dark(#202631,#edf0f6); --muted:light-dark(#667180,#a5afbe); --edge:light-dark(#e3e7ed,#333b48); --blue:light-dark(#3a6bff,#87a5ff); --blue-soft:light-dark(#edf2ff,#28374f); --on-blue:light-dark(#fff,#15213b); --danger:light-dark(#ac343d,#ffa0a8); font:14px/1.5 system-ui,sans-serif; color:var(--fg); background:var(--panel); }
+    * { box-sizing:border-box; } [hidden] { display:none!important; } body { margin:0; } button,input { font:inherit; color:inherit; } button,summary { cursor:pointer; } button:disabled { opacity:.5; cursor:default; } button:focus-visible,input:focus-visible,summary:focus-visible { outline:2px solid var(--blue); outline-offset:3px; }
+    button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:36px; padding:8px 13px; border:1px solid var(--edge); border-radius:8px; background:var(--panel); font-size:13px; } button:hover:not(:disabled) { background:var(--inset); } .primary { background:var(--blue); border-color:var(--blue); color:var(--on-blue); } .primary:hover:not(:disabled) { background:var(--blue); filter:brightness(.95); }
+    .page { height:100vh; min-height:0; display:flex; flex-direction:column; } main { width:100%; max-width:800px; margin:0 auto; padding:30px 32px 22px; flex:1; min-height:0; overflow-y:auto; } h1 { font-size:24px; font-weight:500; letter-spacing:-.035em; margin:0; line-height:1.4; } h2 { font-size:20px; font-weight:500; margin:0; } h3 { font-size:14px; font-weight:500; margin:0; } p { margin:8px 0; } .muted { color:var(--muted); font-size:12px; } .heading { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; margin-bottom:30px; } .subtitle { font-size:13px; color:var(--muted); margin:8px 0 0; } .section-label { font-size:12px; color:var(--muted); margin-bottom:10px; }
+    .connections { padding:0; margin:0; list-style:none; border:1px solid var(--edge); border-radius:10px; } .connection { padding:20px 17px; display:flex; gap:13px; align-items:center; position:relative; } .connections>.connection+.connection { border-top:1px solid var(--edge); } .symbol { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--edge); border-radius:9px; background:var(--inset); color:var(--muted); flex:none; } .symbol svg { width:18px; height:18px; } .copy { flex:1; min-width:0; overflow-wrap:anywhere; } .copy strong { font-weight:500; } .copy small { display:block; font-size:12px; color:var(--muted); margin-top:4px; overflow-wrap:anywhere; } .row-actions { display:flex; align-items:center; gap:8px; flex:none; } .text-button { border:0; background:transparent; color:var(--muted); font-size:12px; padding:6px 3px; } .badge { display:inline-block; margin-left:8px; font-size:11px; padding:2px 6px; border-radius:5px; background:var(--blue-soft); color:var(--blue); } .help { margin-top:16px; color:var(--muted); font-size:12px; }
+    details>summary { list-style:none; display:flex; gap:7px; align-items:center; min-height:32px; } summary::-webkit-details-marker { display:none; } details>summary::before { content:'›'; color:var(--muted); font-size:17px; display:inline-block; } details[open]>summary::before { transform:rotate(90deg); } .profile-menu { position:relative; } .profile-menu summary { justify-content:center; width:30px; border-radius:6px; color:var(--muted); } .profile-menu summary::before { display:none; } .profile-menu>div { position:absolute; z-index:4; right:0; top:38px; min-width:172px; padding:5px; background:var(--panel); border:1px solid var(--edge); border-radius:9px; box-shadow:0 8px 24px light-dark(#1e2b4320,#0006); } .profile-menu button { display:block; text-align:left; border:0; width:100%; } .danger { color:var(--danger); }
+    .back { margin-bottom:18px; padding-left:0; } .detail-heading { display:flex; gap:13px; align-items:center; margin-bottom:22px; } .detail-heading strong { font-size:21px; } .detail-section { border-top:1px solid var(--edge); padding:20px 0; } .section-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; } .section-heading>div { flex:1; } .definition { display:grid; grid-template-columns:100px minmax(0,1fr); gap:10px 14px; font-size:12px; margin:16px 0 0; } dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; } dd button { min-height:24px; padding:0; }
+    .desktop-registration { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:14px 0; } .capabilities { border:1px solid var(--edge); border-radius:10px; } .capabilities>details+details { border-top:1px solid var(--edge); } .cap-group>summary { padding:13px 15px; font-size:13px; } .cap-actions { padding:0 14px 10px 30px; display:flex; flex-direction:column; align-items:stretch; gap:7px; } .cap-actions button { justify-content:flex-start; text-align:left; white-space:normal; min-height:40px; }
+    .activity-stack { position:sticky; top:0; z-index:5; background:var(--panel); }
+    .advanced { margin-top:28px; border-top:1px solid var(--edge); padding:15px 0 0; font-size:12px; color:var(--muted); } .advanced-actions { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; } .review-list { list-style:none; padding:0; color:var(--fg); } .review-list li { border-top:1px solid var(--edge); padding:12px 0; overflow-wrap:anywhere; } .review-list p { font-size:12px; } .activity { margin-bottom:20px; padding:13px 15px; border:1px solid var(--edge); border-radius:9px; background:var(--blue-soft); } .activity>div { display:flex; align-items:center; justify-content:space-between; gap:13px; } .activity p { flex:1; font-size:12px; margin:0; } .activity button { flex:none; } .activity.warning { background:var(--inset); border-color:var(--danger); } #error,.form-error { color:var(--danger); padding:12px 14px; border:1px solid var(--danger); border-radius:8px; font-size:12px; margin-bottom:16px; overflow-wrap:anywhere; } #status { color:var(--muted); font-size:12px; } #error:empty,.form-error:empty,#status:empty { display:none; }
+    footer { border-top:1px solid var(--edge); background:var(--base); padding:14px 25px; display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--muted); font-size:12px; } footer button { padding:0; min-height:30px; border:0; background:transparent; color:var(--muted); }
+    footer>div { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+    dialog { width:min(430px,calc(100% - 32px)); max-height:calc(100vh - 40px); padding:25px; border:1px solid var(--edge); border-radius:14px; background:var(--panel); color:var(--fg); box-shadow:0 20px 60px light-dark(#1e2b4326,#0006); overflow-y:auto; } dialog::backdrop { background:light-dark(#26344d35,#0009); } .dialog-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; } .dialog-heading button { border:0; min-height:30px; padding:3px 8px; color:var(--muted); } label { display:block; margin-top:18px; font-size:12px; } input { display:block; margin-top:7px; width:100%; padding:10px 11px; border:1px solid var(--edge); border-radius:8px; background:var(--panel); } .transport { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; } .transport button { font-size:12px; } .transport [aria-pressed=true] { background:var(--blue-soft); color:var(--blue); border-color:var(--blue); } .dialog-actions { margin-top:24px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; } .form-options { margin-top:18px; font-size:12px; color:var(--muted); }
+    @media(max-width:600px) { main { padding:24px 20px; } h1 { font-size:22px; } .heading { flex-wrap:wrap; margin-bottom:24px; } .connection { padding:16px 13px; gap:10px; flex-wrap:wrap; } .row-actions { margin-left:auto; } .detail-heading { flex-wrap:wrap; } footer { padding:12px 20px; } }
   </style>
 </head>
 <body>
-  <h1>Gateway 连接管理</h1>
-  <p>选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力需要单独授权，不启动本地 Gateway。</p>
-  <p id="status" role="status"></p><p id="error" role="alert"></p>
-  <ul id="profiles"></ul>
-  <form id="login-update" hidden>
-    <h2>更新登录凭据</h2><p id="login-target"></p>
-    <p>更新聊天和管理登录，保留已有电脑登记。</p>
-    <label>新的管理凭据<input id="login-credential" type="password" maxlength="8192" required autocomplete="new-password"></label>
-    <button type="submit">保存登录凭据</button><button type="button" id="login-cancel">取消</button>
+<div class="page">
+  <main>
+    <p id="status" role="status"></p><p id="error" role="alert"></p>
+    <div class="activity-stack"><section id="observation-section" class="activity" hidden aria-label="本机只读访问状态"><div><p id="observation-status" role="status"></p><button id="observation-stop" type="button">立即停止本机只读能力</button></div></section>
+    <section id="execution-section" class="activity" hidden aria-label="本机执行状态"><div><p id="execution-status" role="status"></p><button id="execution-stop" type="button">立即停止本机执行</button></div></section>
+    </div>
+    <section id="connection-list">
+      <div class="heading"><div><h1>Gateway 连接管理</h1><p class="subtitle">选择运行位置，连接已有服务器。</p></div><button id="add-server" class="primary" type="button">＋ 添加服务器</button></div>
+      <p class="section-label">运行位置</p><ul id="profiles" class="connections"></ul>
+      <p class="help">连接服务器不会自动开放本机能力。</p>
+    </section>
+    <section id="connection-detail" hidden>
+      <button id="back" type="button" class="text-button back">‹ 所有连接</button>
+      <div class="detail-heading"><span id="detail-symbol" class="symbol" aria-hidden="true"></span><div class="copy"><strong id="detail-name"></strong><small id="detail-origin"></small></div><button id="detail-connect" type="button">连接并打开聊天</button></div>
+      <section class="detail-section"><div class="section-heading"><h3>连接信息</h3><span id="detail-state" class="muted"></span></div><dl class="definition"><dt>连接方式</dt><dd id="detail-transport"></dd><dt>服务器身份</dt><dd id="detail-identity"></dd><dt>登录凭据</dt><dd><button id="detail-login" class="text-button" type="button"></button></dd></dl></section>
+      <section class="detail-section"><h3>此电脑</h3><div id="desktop-actions"></div></section>
+    </section>
+    <details id="recovery" class="advanced"><summary>高级与恢复</summary><div class="advanced-actions"><button id="local-operation-list" type="button">停止并查看本机遗留操作</button><div id="profile-recovery" class="advanced-actions"></div></div><ul id="local-operation-reviews" class="review-list"></ul><p id="local-operation-note"></p><section id="operation-review-panel" hidden><h3>待核实的本机操作</h3><p>原结果保持未知，旧操作不会重做。检查实际效果后，可独立批准新的意图。</p><ul id="operation-reviews" class="review-list"></ul><p id="operation-review-note"></p></section></details>
+  </main>
+  <footer><span id="selection-status">尚未选择远端 Gateway</span><div><button id="local" type="button">使用原本地模式（重启应用）</button><button id="quit" type="button">退出应用</button></div></footer>
+</div>
+<dialog id="profile-dialog" aria-labelledby="profile-title">
+  <form id="profile-form"><div class="dialog-heading"><h2 id="profile-title">添加服务器</h2><button id="profile-close" type="button" aria-label="关闭添加服务器">×</button></div><p class="muted">填写地址和访问令牌，验证后即可连接。</p>
+    <label>服务器地址<input id="origin" maxlength="2048" placeholder="https://gateway.example.com" required autocomplete="off"></label>
+    <label>访问令牌<input id="credential" type="password" maxlength="8192" autocomplete="new-password"></label><p class="muted">凭据仅在这台电脑上加密保存。</p>
+    <details class="form-options"><summary>更多选项</summary><label>连接名称<input id="name" maxlength="80" autocomplete="off" placeholder="可选，例如：开发服务器"></label><label>传输方式</label><div class="transport"><button type="button" id="direct" aria-pressed="true">HTTPS</button><button type="button" id="ssh" aria-pressed="false">已有 SSH loopback 转发</button></div><p>先建立 SSH 隧道，再填写本机转发地址；此连接仍属于远端模式。</p><button type="submit" name="action" value="save">仅保存连接</button></details>
+    <p id="profile-error" class="form-error" role="alert"></p><div class="dialog-actions"><button id="profile-cancel" type="button">取消</button><button class="primary" type="submit" name="action" value="connect">保存并连接</button></div>
   </form>
-  <form id="profile-form">
-    <label>连接名称<input id="name" maxlength="80" required autocomplete="off"></label>
-    <label>Gateway origin<input id="origin" maxlength="2048" placeholder="https://gateway.example.com" required autocomplete="off"></label>
-    <label>传输方式</label>
-    <button type="button" id="direct" aria-pressed="true">HTTPS</button><button type="button" id="ssh" aria-pressed="false">已有 SSH loopback 转发</button>
-    <label>管理凭据（可留空；仅加密保存）<input id="credential" type="password" maxlength="8192" autocomplete="new-password"></label>
-    <button type="submit">保存连接配置</button>
-  </form>
-  <p><small>SSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。</small></p>
-  <p id="observation-status" role="status">本机只读能力未授权。</p><button id="observation-stop" type="button">立即停止本机只读能力</button>
-  <p id="execution-status" role="status">本机写入未授权。</p><button id="execution-stop" type="button">立即停止本机执行</button>
-  <button id="local-operation-list" type="button">停止并查看本机遗留操作</button><ul id="local-operation-reviews"></ul><p id="local-operation-note" role="status"></p>
-  <section id="operation-review-panel" hidden><h2>待核实的本机操作</h2><p>原结果保持未知，旧操作不会重做。检查实际效果后，可独立批准新的意图。</p><ul id="operation-reviews"></ul><p id="operation-review-note" role="status"></p></section>
-  <button id="local">使用原本地模式（重启应用）</button><button id="quit">退出应用</button>
-  <script src="./gateway-connections.js"></script>
+</dialog>
+<dialog id="login-dialog" aria-labelledby="login-title"><form id="login-update"><div class="dialog-heading"><h2 id="login-title">更新登录凭据</h2><button id="login-close" type="button" aria-label="关闭登录凭据">×</button></div><p id="login-target" class="muted"></p><p class="muted">更新聊天和管理登录，保留已有电脑登记。</p><label>新的管理凭据<input id="login-credential" type="password" maxlength="8192" required autocomplete="new-password"></label><p id="login-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" id="login-cancel">取消</button><button type="submit" class="primary">保存登录凭据</button></div></form></dialog>
+<script src="./gateway-connections.js"></script>
 </body>
 </html>
