@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -32,6 +32,28 @@ describe('exec_command tool', () => {
       expect(JSON.stringify(result.content)).toContain('Do not repeat unchanged');
       await expect(access(join(workspace, 'out'))).rejects.toThrow();
     } finally { await rm(workspace, { recursive: true, force: true }); }
+  });
+  it('guides a rejected source checkout back to the assigned worktree without relaxing isolation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'xopc-exec-worktree-'));
+    const source = join(root, 'source');
+    const workspace = join(root, 'worktree');
+    try {
+      await mkdir(source);
+      execFileSync('git', ['init', '-b', 'main'], { cwd: source });
+      execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@xopc.local', 'commit', '--allow-empty', '-m', 'initial'], { cwd: source });
+      execFileSync('git', ['worktree', 'add', '--detach', workspace], { cwd: source });
+      const tool = createExecCommandTool(workspace);
+      const blocked = await tool.execute('outside-worktree', { cmd: 'git status --short', cwd: source });
+      expect(blocked.details.status).toBe('blocked');
+      expect(blocked.details.durationMs).toBe(0);
+      expect(blocked.details.failureHint).toContain(workspace);
+      expect(JSON.stringify(blocked.content)).toContain('omit cwd');
+      expect(JSON.stringify(blocked.content)).not.toContain('Remove destructive cleanup');
+
+      const allowed = await tool.execute('inside-worktree', { cmd: 'git rev-parse --show-toplevel' });
+      expect(allowed.details.status).toBe('success');
+      expect(allowed.details.stdout.trim()).toBe(await realpath(workspace));
+    } finally { await rm(root, { recursive: true, force: true }); }
   });
   it('streams output deltas and returns structured command details', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));

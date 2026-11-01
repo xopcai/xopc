@@ -1,4 +1,5 @@
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
+import { getExecutionEnvironmentForSession } from '../../execution-environments/subject.js';
 
 import { LocalAppStore } from '../../local-apps/store.js';
 import {
@@ -72,12 +73,14 @@ export function buildActiveProjectContextForPrompt(
 ): string | undefined {
   const project = getProjectForSession(conversationId);
   if (!project) return undefined;
+  const environment = getExecutionEnvironmentForSession(conversationId);
   const localAppStore = new LocalAppStore();
   const localApp = localAppStore.findByProjectId(project.id);
   const latestAcceptance = localApp ? localAppStore.listAcceptanceRuns(localApp.id, 1)[0] : undefined;
   return formatActiveProjectContextForPrompt({
     project,
-    workspacePath: getProjectWorkspacePathForSession(conversationId) ?? project.workspaceRoot,
+    workspacePath: environment?.rootPath ?? getProjectWorkspacePathForSession(conversationId) ?? project.workspaceRoot,
+    sourceRepositoryPath: environment?.kind === 'managed_worktree' ? environment.repositoryRoot : undefined,
     activeTasks: new TaskRepository().listByProject(project.id, MAX_TASKS)
       .filter((task) => task.phase !== 'closed')
       .map((task) => ({
@@ -127,6 +130,7 @@ export function buildActiveProjectContextForPrompt(
 export function formatActiveProjectContextForPrompt(input: {
   project: Project;
   workspacePath?: string;
+  sourceRepositoryPath?: string;
   activeTasks: ProjectTaskContext[];
   recentSessions: Array<{ key: string; name?: string; updatedAt: string; agentId: string }>;
   knowledgeItems?: Array<{ kind: string; content: string; updatedAt: number; canonicalKey?: string }>;
@@ -155,7 +159,11 @@ export function formatActiveProjectContextForPrompt(input: {
   const workspace = input.workspacePath?.trim();
   if (workspace) {
     lines.push(`Workspace root: ${sanitizeForPromptLiteral(workspace)}`);
-    lines.push('This project session uses the project workspace. Do not switch working directories unless the user moves the session to another project.');
+    lines.push('Run commands and file operations in this session workspace. Omit cwd to use it, or use paths relative to it.');
+    if (input.sourceRepositoryPath && input.sourceRepositoryPath !== workspace) {
+      lines.push(`Source repository (reference only): ${sanitizeForPromptLiteral(input.sourceRepositoryPath)}`);
+      lines.push('This session uses an isolated worktree. Keep execution in the session workspace; the source repository is not its working directory.');
+    }
   }
 
   const brief = truncateText(input.project.brief ?? input.project.description);
