@@ -1,0 +1,70 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T23:57:51.906Z",
+  "checks": {
+    "nativeCancelCreatesNoDevice": true,
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "cancelledObservationExposesNoEndpoint": true
+  },
+  "scope": "Installed macOS runtime, actual native source selection and per-capture consent, signed single-use image upload and actual Agent image projection; own chat window only, no display permission, input control or physical WAN claim",
+  "interactions": [
+    {
+      "label": "cancel first enrollment",
+      "startedAt": "2026-10-31T23:58:15.795Z",
+      "status": "native-dialog-returned",
+      "pid": 54615,
+      "finishedAt": "2026-10-31T23:58:35.690Z"
+    },
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-10-31T23:58:35.695Z",
+      "status": "native-dialog-returned",
+      "pid": 54615,
+      "finishedAt": "2026-10-31T23:58:48.476Z"
+    },
+    {
+      "label": "cancel observation source",
+      "startedAt": "2026-10-31T23:58:48.883Z",
+      "status": "native-dialog-returned",
+      "pid": 54615,
+      "finishedAt": "2026-10-31T23:58:53.607Z"
+    },
+    {
+      "label": "choose current remote chat window",
+      "startedAt": "2026-10-31T23:58:53.609Z",
+      "status": "native-dialog-returned",
+      "pid": 54615,
+      "finishedAt": "2026-10-31T23:59:05.947Z"
+    }
+  ],
+  "nativeCancelCovered": true,
+  "packageBefore": {
+    "files": 1426,
+    "sha256": "fe5faf78537a65fe850e5e3601f4271e4bbd957da34b4faeaf1c703c481591b0"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p2a2-d3b-delivery/native-compatible/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p2a2-d3b-delivery/native-compatible/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-gcJEUz",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 54615
+  },
+  "error": "TypeError: Cannot read properties of undefined (reading 'type')\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:179:29",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 50972\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=54523, lockPath=/Users/micjoyce/.xopc/locks/gateway.d7080176.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:50972...\n✅ Gateway started\n   URL: http://127.0.0.1:50972\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:50972\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:51027/devtools/browser/75742b89-d2bb-4236-8309-71b859f611cb\n[54615:1101/075853.605785:ERROR:electron/shell/browser/ui/message_box_mac.mm:217] CloseMessageBox called with nonexistent ID\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-gcJEUz",
+  "finishedAt": "2026-10-31T23:59:06.273Z"
+}

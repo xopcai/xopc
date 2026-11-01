@@ -1,0 +1,785 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T00:32:02.756Z",
+  "checks": {
+    "nativeCancelCreatesNoDevice": true,
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "cancelledObservationExposesNoEndpoint": true,
+    "perCaptureNativeCancelSendsNoImage": true,
+    "actualNativeCaptureSignedUploadAndAgentImage": true,
+    "explicitDesktopOriginAcceptedThroughShellAndGateway": true,
+    "localStopRetainsDraftWithoutImplicitServerFallback": true,
+    "osSafeStorageSurvivesRestart": true,
+    "deviceCheckIndependentOfOwnerCredential": true,
+    "offlineLocalDisableAndOnlineConfirmation": true,
+    "replacementRequiresFreshNativeConsent": true,
+    "externalRevocationNeverAutoReenrolls": true,
+    "encryptedIdentityAndNoLocalGatewayDatabase": true,
+    "noWriteToolsAndOnlyExplicitObservationEndpoint": true
+  },
+  "scope": "Installed macOS runtime, actual native source selection and per-capture consent, signed single-use image upload and actual Agent image projection; own chat window only, no display permission, input control or physical WAN claim",
+  "interactions": [
+    {
+      "label": "cancel first enrollment",
+      "startedAt": "2026-11-01T00:32:04.876Z",
+      "status": "native-dialog-returned",
+      "pid": 7154,
+      "finishedAt": "2026-11-01T00:32:59.670Z"
+    },
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-11-01T00:32:59.675Z",
+      "status": "native-dialog-returned",
+      "pid": 7154,
+      "finishedAt": "2026-11-01T00:33:09.957Z"
+    },
+    {
+      "label": "cancel observation source",
+      "startedAt": "2026-11-01T00:33:10.318Z",
+      "status": "native-dialog-returned",
+      "pid": 7154,
+      "finishedAt": "2026-11-01T00:33:22.468Z"
+    },
+    {
+      "label": "choose current remote chat window",
+      "startedAt": "2026-11-01T00:33:22.471Z",
+      "status": "native-dialog-returned",
+      "pid": 7154,
+      "finishedAt": "2026-11-01T00:33:32.444Z"
+    },
+    {
+      "label": "cancel replacement enrollment",
+      "startedAt": "2026-11-01T00:34:12.641Z",
+      "status": "native-dialog-returned",
+      "pid": 9605,
+      "finishedAt": "2026-11-01T00:34:31.919Z"
+    },
+    {
+      "label": "approve replacement enrollment",
+      "startedAt": "2026-11-01T00:34:31.937Z",
+      "status": "native-dialog-returned",
+      "pid": 9605,
+      "finishedAt": "2026-11-01T00:34:49.696Z"
+    }
+  ],
+  "nativeCancelCovered": true,
+  "packageBefore": {
+    "files": 1426,
+    "sha256": "bb0696930ba2cae39929847996543d77b9d61e8a5317e19339c06e4a9bed82fe"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-d3b-lock-delivery/native/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-d3b-lock-delivery/native/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-hr8N9K",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 9605
+  },
+  "modelShapes": [
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_db396b084914",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_db396b084914",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_db396b084914",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_db396b084914",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_db396b084914",
+          "contentTypes": [
+            "text",
+            "image"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_db396b084914",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_db396b084914",
+          "contentTypes": [
+            "text",
+            "image"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    }
+  ],
+  "inferenceRequests": [
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_db396b084914",
+        "phone_use"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_db396b084914",
+        "phone_use"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_db396b084914",
+        "phone_use"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_db396b084914",
+        "phone_use",
+        "browser_use"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_db396b084914",
+        "phone_use",
+        "browser_use"
+      ],
+      "toolResults": 2,
+      "imageParts": [
+        {
+          "mimeType": "image/png",
+          "encodedBytes": 227682
+        }
+      ],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "browser_use",
+        "phone_use",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [
+        {
+          "mimeType": "image/png",
+          "encodedBytes": 227682
+        }
+      ],
+      "explicitDesktopTurn": false
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    }
+  ],
+  "packageAfter": {
+    "files": 1426,
+    "sha256": "bb0696930ba2cae39929847996543d77b9d61e8a5317e19339c06e4a9bed82fe"
+  },
+  "finishedAt": "2026-11-01T00:34:50.525Z"
+}

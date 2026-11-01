@@ -63,3 +63,9 @@ D3a设备状态只读Host已通过实际认证/签名协议及安装包原生逐
 - 传输缓存使用短期内存帧，经授权Agent单次消费后清零；不能通过通用附件接口下载，不创建持久截图文件。模型图像结果仍受既有会话存储策略管理，不声称对话中没有图像副本。授权/连接/前台状态变化或取消时不上传迟到截图，已发送的内容不能被追溯收回。
 - Electron 45的屏幕获取使用独立的 `display-capture` 权限，不能借此开放摄像头/麦克风；元数据枚举设置零尺寸缩略图。接口依据[官方desktopCapturer文档](https://www.electronjs.org/docs/latest/api/desktop-capturer)及[45版变化](https://www.electronjs.org/docs/latest/breaking-changes)核对，原聊天session仍拒绝媒体权限。
 - 复用持久授权revision，并为新scope升级应用数据schema到v265，使旧程序不会读取不认识的权限；全部既有升级链保留。验收包含本机拒绝/逐次确认、只捕获已选源、真实Agent图像结果、越权/上传故障/取消/撤销以及正式包本地和远端回归。长测、性能和其他平台缺口单列，不等待24小时后才继续开发。
+
+### D3b本批结果
+
+聊天窗口截图已通过新包原生整轮验收：登记、来源和逐次发送的取消/批准、实际Agent图像、停止/草稿、重启、撤销及重新登记。锁屏/suspend新增立即停止Host及取消待批准登记，unlock不恢复授权；注入锁屏事件的真实HTTP/WS采集中断及迟到图像清零通过。正式包本地及SSH-loopback远端回归通过，见[继续验收证据](./evidence/electron-gateway-p2a2/observation-screen-20261101/resumed/README.md)。
+
+显示器录制权限、其他平台、Host专项长测及新增能力WAN验证单列；新测试bundle id安全存储初始化超时和正式包自签TLS夹具失败保留，不借用S5聊天长测证明Host通过。功能开发按用户指令继续，不把这些缺口改写成成功或放宽原预算。

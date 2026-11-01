@@ -1,0 +1,471 @@
+[
+  {
+    "modelRef": "d3-fixture/chat",
+    "messages": [
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      }
+    ]
+  },
+  {
+    "modelRef": "d3-fixture/chat",
+    "messages": [
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      }
+    ]
+  },
+  {
+    "modelRef": "d3-fixture/chat",
+    "messages": [
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "device__desktop_screen_capture_febafe2d295c",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      }
+    ]
+  },
+  {
+    "modelRef": "d3-fixture/chat",
+    "messages": [
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "device__desktop_screen_capture_febafe2d295c",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      }
+    ]
+  },
+  {
+    "modelRef": "d3-fixture/chat",
+    "messages": [
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "device__desktop_screen_capture_febafe2d295c",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      }
+    ]
+  },
+  {
+    "modelRef": "d3-fixture/chat",
+    "messages": [
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "device__desktop_screen_capture_febafe2d295c",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "device__desktop_screen_capture_febafe2d295c",
+        "contentTypes": [
+          "text",
+          "image"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      }
+    ]
+  },
+  {
+    "modelRef": "d3-fixture/chat",
+    "messages": [
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "device__desktop_screen_capture_febafe2d295c",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "tool_search",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "toolCall"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "toolResult",
+        "toolName": "device__desktop_screen_capture_febafe2d295c",
+        "contentTypes": [
+          "text",
+          "image"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "assistant",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      },
+      {
+        "role": "user",
+        "contentTypes": [
+          "text"
+        ],
+        "imageDisabled": false,
+        "imageOmitted": false
+      }
+    ]
+  }
+]

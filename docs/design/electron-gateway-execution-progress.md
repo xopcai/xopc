@@ -46,3 +46,5 @@ D3a已完成独立签名的设备状态只读Host与逐项原生同意，实际A
 用户要求全部开发完成后线性合入main并构建Electron。已确认当前分支在origin/main之上，最终采用rebase/fast-forward，不强推main或创建merge commit；原main工作区有未跟踪方案文档，保持原样，最终合并前须备份避免覆盖。
 
 已继续完成J2a执行监督核心及隔离启动/测试说明：114项相关Electron测试、5项集成E2E、类型检查和新内部预览DMG实际本地回归通过，见[证据](./evidence/electron-gateway-p2b/supervisor-20261101/README.md)。原生截图仍待手动解锁验收，J2b/J3/P3/P4未完成，因此没有提前合入main，也没有将预览包当作最终交付。最终合并后须从实际main提交重新构建并更新[测试说明](./electron-gateway-testing.md)。
+
+解锁后已继续完成新包聊天窗口截图的原生整轮取消/批准、实际模型图像及撤销恢复验证；补齐锁屏/suspend取消授权，115项Electron、9项集成及采集中断专项通过。原生第12轮通过，早期安全存储、错误焦点、模型夹具重复tool-call id和交互不符等失败全部保留，详见[本轮证据](./evidence/electron-gateway-p2a2/observation-screen-20261101/resumed/README.md)。新包本地及SSH-loopback远端回归通过。显示器/平台/WAN/Host长测缺口继续列出；J2b及后续功能继续推进，最终合并条件不变。

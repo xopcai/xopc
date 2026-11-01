@@ -1,0 +1,85 @@
+{
+  "passed": true,
+  "tls": false,
+  "startedAt": "2026-11-01T00:38:16.873Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "halfOpenRealtimeDetectedWithinOriginalBudget": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "background": false,
+  "fixtureLifetimeSeconds": 86400,
+  "application": "/tmp/xopc-d3b-lock-delivery/installed/xopc.app",
+  "packageBefore": {
+    "files": 1426,
+    "sha256": "8630225aa778288202abbe9c74c1421a21a8c8d5d06c38c7829657d0a59af229"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-d3b-lock-delivery/installed/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-d3b-lock-delivery/installed/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-UeIW7A",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 15701
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 313
+    },
+    {
+      "input": 2,
+      "durationMs": 230
+    }
+  ],
+  "inputIntervalMs": 0,
+  "compatibilityMatrix": {
+    "cases": [
+      {
+        "expected": "GATEWAY_AUTH_FAILED",
+        "observed": "GATEWAY_AUTH_FAILED",
+        "durationMs": 55.79158300000563
+      },
+      {
+        "expected": "GATEWAY_CHAT_INCOMPATIBLE",
+        "observed": "GATEWAY_CHAT_INCOMPATIBLE",
+        "durationMs": 61.6872499999954
+      },
+      {
+        "expected": "GATEWAY_IDENTITY_PROOF_FAILED",
+        "observed": "GATEWAY_IDENTITY_PROOF_FAILED",
+        "durationMs": 59.33412500000122
+      }
+    ],
+    "passed": true,
+    "identityCredentialLeaks": 0
+  },
+  "packageAfter": {
+    "files": 1426,
+    "sha256": "8630225aa778288202abbe9c74c1421a21a8c8d5d06c38c7829657d0a59af229"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-11-01T00:39:23.340Z"
+}

@@ -1,0 +1,774 @@
+{
+  "passed": false,
+  "startedAt": "2026-11-01T00:23:17.823Z",
+  "checks": {
+    "nativeCancelCreatesNoDevice": true,
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "cancelledObservationExposesNoEndpoint": true,
+    "perCaptureNativeCancelSendsNoImage": true,
+    "actualNativeCaptureSignedUploadAndAgentImage": true,
+    "explicitDesktopOriginAcceptedThroughShellAndGateway": true,
+    "localStopRetainsDraftWithoutImplicitServerFallback": true,
+    "osSafeStorageSurvivesRestart": true,
+    "deviceCheckIndependentOfOwnerCredential": true,
+    "offlineLocalDisableAndOnlineConfirmation": true
+  },
+  "scope": "Installed macOS runtime, actual native source selection and per-capture consent, signed single-use image upload and actual Agent image projection; own chat window only, no display permission, input control or physical WAN claim",
+  "interactions": [
+    {
+      "label": "cancel first enrollment",
+      "startedAt": "2026-11-01T00:23:20.738Z",
+      "status": "native-dialog-returned",
+      "pid": 86312,
+      "finishedAt": "2026-11-01T00:23:46.939Z"
+    },
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-11-01T00:23:46.946Z",
+      "status": "native-dialog-returned",
+      "pid": 86312,
+      "finishedAt": "2026-11-01T00:23:56.872Z"
+    },
+    {
+      "label": "cancel observation source",
+      "startedAt": "2026-11-01T00:23:57.408Z",
+      "status": "native-dialog-returned",
+      "pid": 86312,
+      "finishedAt": "2026-11-01T00:24:41.512Z"
+    },
+    {
+      "label": "choose current remote chat window",
+      "startedAt": "2026-11-01T00:24:41.515Z",
+      "status": "native-dialog-returned",
+      "pid": 86312,
+      "finishedAt": "2026-11-01T00:24:57.395Z"
+    },
+    {
+      "label": "cancel replacement enrollment",
+      "startedAt": "2026-11-01T00:26:39.453Z",
+      "status": "native-dialog-returned",
+      "pid": 99689,
+      "finishedAt": "2026-11-01T00:26:41.832Z"
+    }
+  ],
+  "nativeCancelCovered": true,
+  "packageBefore": {
+    "files": 1426,
+    "sha256": "fe5faf78537a65fe850e5e3601f4271e4bbd957da34b4faeaf1c703c481591b0"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p2a2-d3b-delivery/native-compatible/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p2a2-d3b-delivery/native-compatible/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-pgPTbK",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 99689
+  },
+  "modelShapes": [
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_febafe2d295c",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_febafe2d295c",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_febafe2d295c",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_febafe2d295c",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_febafe2d295c",
+          "contentTypes": [
+            "text",
+            "image"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    },
+    {
+      "modelRef": "d3-fixture/chat",
+      "messages": [
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_febafe2d295c",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "tool_search",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "toolCall"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "toolResult",
+          "toolName": "device__desktop_screen_capture_febafe2d295c",
+          "contentTypes": [
+            "text",
+            "image"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "assistant",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        },
+        {
+          "role": "user",
+          "contentTypes": [
+            "text"
+          ],
+          "imageDisabled": false,
+          "imageOmitted": false
+        }
+      ]
+    }
+  ],
+  "inferenceRequests": [
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_febafe2d295c",
+        "phone_use"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_febafe2d295c",
+        "phone_use"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_febafe2d295c",
+        "phone_use"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_febafe2d295c",
+        "phone_use",
+        "browser_use"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_febafe2d295c",
+        "phone_use",
+        "browser_use"
+      ],
+      "toolResults": 2,
+      "imageParts": [
+        {
+          "mimeType": "image/png",
+          "encodedBytes": 228518
+        }
+      ],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "browser_use",
+        "phone_use",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [
+        {
+          "mimeType": "image/png",
+          "encodedBytes": 228518
+        }
+      ],
+      "explicitDesktopTurn": false
+    }
+  ],
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'registered'\n- 'disabled-confirmed'\n\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:256:88",
+  "logs": "i/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/endpoint-tools/invocations/1b738942-5bf9-40dc-95ed-83932f6a07ad/files → 201 (13ms)\"}\n{\"module\":\"TimeoutWrapper\",\"msg\":\"Tool execution completed within timeout\"}\n{\"module\":\"ToolExecutor\",\"msg\":\"Tool execution completed\"}\n{\"module\":\"lifecycle-manager\",\"msg\":\"No handlers registered for event\"}\n{\"module\":\"ToolChainTracker\",\"msg\":\"Recorded tool result\"}\n{\"module\":\"ToolChainTracker\",\"msg\":\"Tool chain ended\"}\n{\"module\":\"ToolChainTracker\",\"msg\":\"Started new tool chain\"}\n{\"module\":\"EmbeddedRun\",\"msg\":\"Sending messages to AI\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"EmbeddedRun\",\"msg\":\"Embedded first response text ready\",\"phase\":\"first_model_text\"}\n{\"module\":\"Gateway:Service\",\"msg\":\"Gateway first response text ready\",\"phase\":\"first_response_text\"}\n{\"module\":\"AgentEventHandler\",\"msg\":\"Assistant response complete\"}\n{\"module\":\"lifecycle-manager\",\"msg\":\"No handlers registered for event\"}\n{\"module\":\"AgentService\",\"msg\":\"Assistant response language check passed\",\"phase\":\"response_language_check\"}\n{\"module\":\"ToolChainTracker\",\"msg\":\"Tool chain ended\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (0ms)\"}\n{\"module\":\"EmbeddedTurnForSession\",\"msg\":\"Agent run completed\",\"phase\":\"agent_run_end\"}\n{\"module\":\"TTS:Factory\",\"msg\":\"Provider \\\"openai\\\" reports not configured; skipping\"}\n{\"module\":\"TTS:Factory\",\"msg\":\"Provider \\\"alibaba\\\" reports not configured; skipping\"}\n{\"module\":\"TTS:Factory\",\"msg\":\"Provider \\\"minimax\\\" reports not configured; skipping\"}\n{\"module\":\"TTS:Factory\",\"msg\":\"TTS provider chain resolved\"}\n{\"module\":\"ContextMiddleware\",\"msg\":\"Request context ended\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/endpoint-tools/invocations → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"EmbeddedSessionRunner\",\"msg\":\"Embedded session runner evicted\"}\n{\"module\":\"EndpointTools\",\"msg\":\"Endpoint disconnected\"}\n{\"module\":\"Realtime\",\"msg\":\"Realtime client disconnected (1000: Client disconnected)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/device-auth/refresh → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP DELETE /api/desktop-host/screen → 200 (2ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/endpoint-tools/devices → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/agent-config → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"ContextMiddleware\",\"msg\":\"Request context started\"}\n{\"module\":\"SystemPromptBuilder\",\"msg\":\"System prompt built\"}\n{\"module\":\"AgentManager\",\"msg\":\"Dynamic agent context changed; system prompt refreshed\"}\n{\"module\":\"AgentManager\",\"msg\":\"Reusing existing agent instance\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/inputs → 202 (11ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"AgentManager\",\"msg\":\"Set thinking level for agent\"}\n{\"module\":\"AgentManager\",\"msg\":\"Reusing existing agent instance\"}\n{\"module\":\"AgentManager\",\"msg\":\"Reusing existing agent instance\"}\n{\"module\":\"SystemPromptBuilder\",\"msg\":\"System prompt built\"}\n{\"module\":\"AgentManager\",\"msg\":\"Model set for session\"}\n{\"module\":\"EmbeddedTurnForSession\",\"msg\":\"Agent model fallback candidates resolved\"}\n{\"module\":\"SystemPromptBuilder\",\"msg\":\"System prompt built\"}\n{\"module\":\"AgentManager\",\"msg\":\"Model set for session\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-receipts/7b4aff3f-e762-4834-8952-28adb752c3c8 → 200 (2ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-receipts/7b4aff3f-e762-4834-8952-28adb752c3c8 → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (1ms)\"}\n{\"module\":\"EmbeddedSessionRunner\",\"msg\":\"Created embedded session runner\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (0ms)\"}\n{\"module\":\"lifecycle-manager\",\"msg\":\"No handlers registered for event\"}\n{\"module\":\"ToolChainTracker\",\"msg\":\"Started new tool chain\"}\n{\"module\":\"EmbeddedRun\",\"msg\":\"Sending messages to AI\"}\n{\"module\":\"EmbeddedRun\",\"msg\":\"Embedded first model request ready\",\"phase\":\"first_model_request\"}\n{\"module\":\"EmbeddedRun\",\"msg\":\"Embedded first response text ready\",\"phase\":\"first_model_text\"}\n{\"module\":\"Gateway:Service\",\"msg\":\"Gateway first response text ready\",\"phase\":\"first_response_text\"}\n{\"module\":\"AgentEventHandler\",\"msg\":\"Assistant response complete\"}\n{\"module\":\"lifecycle-manager\",\"msg\":\"No handlers registered for event\"}\n{\"module\":\"AgentService\",\"msg\":\"Assistant response language check passed\",\"phase\":\"response_language_check\"}\n{\"module\":\"RequestLimiter\",\"msg\":\"Request limiter reset\"}\n{\"module\":\"ToolChainTracker\",\"msg\":\"Tool chain ended\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-chat/bootstrap → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/messages → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/sessions/c9d16eef-452d-462f-9f90-9bf59c2f89cd/input-state → 200 (1ms)\"}\n{\"module\":\"Realtime\",\"msg\":\"Realtime client disconnected (1006)\"}\n{\"module\":\"EmbeddedTurnForSession\",\"msg\":\"Agent run completed\",\"phase\":\"agent_run_end\"}\n{\"module\":\"TTS:Factory\",\"msg\":\"Provider \\\"openai\\\" reports not configured; skipping\"}\n{\"module\":\"TTS:Factory\",\"msg\":\"Provider \\\"alibaba\\\" reports not configured; skipping\"}\n{\"module\":\"TTS:Factory\",\"msg\":\"Provider \\\"minimax\\\" reports not configured; skipping\"}\n{\"module\":\"TTS:Factory\",\"msg\":\"TTS provider chain resolved\"}\n{\"module\":\"ContextMiddleware\",\"msg\":\"Request context ended\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/device-auth/refresh → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/devices/me → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/device-auth/refresh → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/devices/me → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/device-auth/refresh → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP DELETE /api/devices/me → 200 (2ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/desktop-host/compatibility → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/desktop-host/pairing-setups → 201 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/device-pairing/requests → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/device-pairing/requests/8c71cc34-b7ed-4e12-9f93-6e04e220e147/decision → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/device-pairing/requests/8c71cc34-b7ed-4e12-9f93-6e04e220e147/complete → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/device-auth/refresh → 200 (1ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP POST /api/gateway-identity/challenge → 200 (0ms)\"}\n{\"module\":\"Gateway:HTTP\",\"msg\":\"HTTP GET /api/devices/me → 200 (0ms)\"}\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:59518/devtools/browser/709dee8f-a7c7-4dbb-82ed-902802d391e1\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-pgPTbK",
+  "finishedAt": "2026-11-01T00:26:41.963Z"
+}

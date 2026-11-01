@@ -1,0 +1,23 @@
+{
+  "production": {
+    "files": 1426,
+    "sha256": "8630225aa778288202abbe9c74c1421a21a8c8d5d06c38c7829657d0a59af229"
+  },
+  "native": {
+    "files": 1426,
+    "sha256": "bb0696930ba2cae39929847996543d77b9d61e8a5317e19339c06e4a9bed82fe"
+  },
+  "nativeBundleId": "ai.xopc.desktop-observation.acceptance",
+  "differences": [
+    "Contents/Info.plist",
+    "Contents/MacOS/xopc"
+  ],
+  "budgetSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "dmgSha256": "bb15eb26f2d44ae253bcc39ad0f679134ecc1ce5c29252f9ef051a128a0ba1b8",
+  "sourceHashes": {
+    "electron/gateway/connection-entry.ts": "27e98d90e687e958b6080fb73cd87420735c820994ad4012d19df71c5eddfec8",
+    "electron/desktop/session-boundary.ts": "05243d6034106a00df8ba04eb82bf03c2e0ac783c28baa3740512d4fa97ae6cd",
+    "scripts/verify-electron-desktop-enrollment.mjs": "d5ed7a91beadc49e6fc8148b3b55248e003f2db072d6e51de8e708e4339dd8cb",
+    "scripts/verify-desktop-screen-agent.mts": "a513b16c3226b514ca238a7608b7e4cc93ffea4616bb07baab6cf5c5cb3ab6b9"
+  }
+}

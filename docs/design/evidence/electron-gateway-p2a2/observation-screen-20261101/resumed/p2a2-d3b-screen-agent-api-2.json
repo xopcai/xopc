@@ -1,0 +1,132 @@
+{
+  "passed": true,
+  "scope": "Actual bundled Gateway/Agent/HTTP/Endpoint pipeline. Node Host uses injected synthetic capture and test-only encryption; no native consent or safeStorage claim.",
+  "requests": [
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "resultCount": 0,
+      "images": 0,
+      "disabled": false,
+      "attached": false
+    },
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_fea78d03a9f1",
+        "phone_use"
+      ],
+      "resultCount": 1,
+      "images": 0,
+      "disabled": false,
+      "attached": false
+    },
+    {
+      "model": "chat",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_fea78d03a9f1",
+        "phone_use"
+      ],
+      "resultCount": 2,
+      "images": 1,
+      "disabled": false,
+      "attached": false
+    },
+    {
+      "model": "chat",
+      "tools": [],
+      "resultCount": 0,
+      "images": 0,
+      "disabled": false,
+      "attached": false
+    }
+  ],
+  "shapes": [
+    {
+      "modelRef": "fixture/chat",
+      "images": 0,
+      "roles": [
+        "user",
+        "user"
+      ]
+    },
+    {
+      "modelRef": "fixture/chat",
+      "images": 0,
+      "roles": [
+        "user",
+        "user",
+        "assistant",
+        "toolResult"
+      ]
+    },
+    {
+      "modelRef": "fixture/chat",
+      "images": 1,
+      "roles": [
+        "user",
+        "user",
+        "assistant",
+        "toolResult",
+        "assistant",
+        "toolResult"
+      ]
+    }
+  ],
+  "imageBytes": 197301
+}

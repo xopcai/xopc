@@ -1,0 +1,289 @@
+{
+  "passed": false,
+  "startedAt": "2026-11-01T00:05:13.987Z",
+  "checks": {
+    "nativeCancelCreatesNoDevice": true,
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "cancelledObservationExposesNoEndpoint": true,
+    "perCaptureNativeCancelSendsNoImage": true
+  },
+  "scope": "Installed macOS runtime, actual native source selection and per-capture consent, signed single-use image upload and actual Agent image projection; own chat window only, no display permission, input control or physical WAN claim",
+  "interactions": [
+    {
+      "label": "cancel first enrollment",
+      "startedAt": "2026-11-01T00:05:33.038Z",
+      "status": "native-dialog-returned",
+      "pid": 63314,
+      "finishedAt": "2026-11-01T00:05:45.099Z"
+    },
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-11-01T00:05:45.104Z",
+      "status": "native-dialog-returned",
+      "pid": 63314,
+      "finishedAt": "2026-11-01T00:05:51.619Z"
+    },
+    {
+      "label": "cancel observation source",
+      "startedAt": "2026-11-01T00:05:52.013Z",
+      "status": "native-dialog-returned",
+      "pid": 63314,
+      "finishedAt": "2026-11-01T00:06:03.374Z"
+    },
+    {
+      "label": "choose current remote chat window",
+      "startedAt": "2026-11-01T00:06:03.376Z",
+      "status": "native-dialog-returned",
+      "pid": 63314,
+      "finishedAt": "2026-11-01T00:06:11.536Z"
+    }
+  ],
+  "nativeCancelCovered": true,
+  "packageBefore": {
+    "files": 1426,
+    "sha256": "fe5faf78537a65fe850e5e3601f4271e4bbd957da34b4faeaf1c703c481591b0"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p2a2-d3b-delivery/native-compatible/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p2a2-d3b-delivery/native-compatible/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-AX6Aqu",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 63314
+  },
+  "inferenceRequests": [
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_edd555e08d66",
+        "phone_use"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_edd555e08d66",
+        "phone_use"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_edd555e08d66",
+        "phone_use"
+      ],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_edd555e08d66",
+        "phone_use",
+        "browser_use"
+      ],
+      "toolResults": 1,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_screen_capture_edd555e08d66",
+        "phone_use",
+        "browser_use"
+      ],
+      "toolResults": 2,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "imageParts": [],
+      "explicitDesktopTurn": true
+    }
+  ],
+  "error": "Error: Acceptance condition deadline exceeded\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:36:9)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:198:5",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 53222\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=63248, lockPath=/Users/micjoyce/.xopc/locks/gateway.bf14cb89.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:53222...\n✅ Gateway started\n   URL: http://127.0.0.1:53222\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:53222\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:53241/devtools/browser/dbaa2c21-26d3-4d96-86c9-54ad2168aeca\n[63314:1101/080603.371831:ERROR:electron/shell/browser/ui/message_box_mac.mm:217] CloseMessageBox called with nonexistent ID\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-AX6Aqu",
+  "finishedAt": "2026-11-01T00:08:33.415Z"
+}

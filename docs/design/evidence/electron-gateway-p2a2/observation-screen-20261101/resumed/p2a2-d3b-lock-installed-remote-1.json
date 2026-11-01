@@ -1,0 +1,53 @@
+{
+  "passed": false,
+  "tls": true,
+  "startedAt": "2026-11-01T00:36:16.676Z",
+  "checks": {},
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "background": false,
+  "fixtureLifetimeSeconds": 86400,
+  "application": "/tmp/xopc-d3b-lock-delivery/installed/xopc.app",
+  "packageBefore": {
+    "files": 1426,
+    "sha256": "8630225aa778288202abbe9c74c1421a21a8c8d5d06c38c7829657d0a59af229"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-d3b-lock-delivery/installed/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-d3b-lock-delivery/installed/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-uJHjuO",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 13287
+  },
+  "error": "AssertionError [ERR_ASSERTION]: {\"ok\":false,\"error\":\"GATEWAY_TLS_FAILED\",\"snapshot\":{\"stage\":\"S1\",\"epoch\":3,\"mode\":\"remote\",\"status\":\"remote-chat-unavailable\",\"reason\":\"REMOTE_CHAT_NOT_IMPLEMENTED\",\"selectedId\":\"7d84300e-319a-4d4f-b749-eaab74e6ce39\",\"localCapabilities\":false,\"profiles\":[{\"id\":\"7d84300e-319a-4d4f-b749-eaab74e6ce39\",\"name\":\"A\",\"mode\":\"remote\",\"origin\":\"https://127.0.0.1:62768\",\"transport\":\"direct\",\"hasCredential\":true},{\"id\":\"f21dae50-05be-4c83-9eec-ddcf179d7687\",\"name\":\"B\",\"mode\":\"remote\",\"origin\":\"http://127.0.0.1:62803\",\"transport\":\"ssh\",\"hasCredential\":true}],\"desktop\":{},\"presentation\":{\"connectionVisible\":true,\"connectionFocused\":true,\"chat\":{\"visible\":false,\"focused\":false}}}}\n    at open (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:211:5)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-remote-chat.mjs:227:14",
+  "serverLogs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 62767\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=13150, lockPath=/Users/micjoyce/.xopc/locks/gateway.0ad12fe2.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:62767...\n✅ Gateway started\n   URL: http://127.0.0.1:62767\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:62767\n🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 62802\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=13212, lockPath=/Users/micjoyce/.xopc/locks/gateway.3ffd0e1d.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:62802...\n✅ Gateway started\n   URL: http://127.0.0.1:62802\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:62802\n",
+  "applicationLogs": "\nDevTools listening on ws://127.0.0.1:62825/devtools/browser/d680d5ed-8664-4111-8425-957abb427835\n",
+  "windows": [
+    {
+      "url": "file:///private/tmp/xopc-d3b-lock-delivery/installed/xopc.app/Contents/Resources/app.asar.unpacked/out/preload/gateway-connections.html",
+      "text": "Gateway 连接预览\n\n选择配置不发起网络请求。显式连接后核验身份并打开远端聊天。本机能力需要单独授权，不启动本地 Gateway。\n\n请选择或保存连接配置。本机能力保持禁用。\n\n连接名称\nGateway origin\n传输方式\nHTTPS已有 SSH loopback 转发\n管理凭据（可留空；仅加密保存）\n保存连接配置\n\nSSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。\n\n本机只读能力未授权。\n\n立即停止本机只读能力 使用原本地模式（重启应用）退出预览"
+    }
+  ],
+  "packageAfter": {
+    "files": 1426,
+    "sha256": "8630225aa778288202abbe9c74c1421a21a8c8d5d06c38c7829657d0a59af229"
+  },
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-uJHjuO",
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-11-01T00:36:20.085Z"
+}
