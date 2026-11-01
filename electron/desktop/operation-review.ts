@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { canonicalJson, desktopOperationIntentSchema, desktopOperationReceiptSchema, desktopOperationReviewSchema,
+import { canonicalJson, desktopWorkspaceDescriptor, desktopOperationIntentSchema, desktopOperationReceiptSchema, desktopOperationReviewSchema,
   type DesktopOperationIntent, type DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
 import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
 import { z } from 'zod';
@@ -17,6 +17,8 @@ import { DesktopExecutionLease, DesktopOperationJournal } from './operation-jour
 const generation = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const pendingSchema = z.strictObject({ intent: desktopOperationIntentSchema, generation, receipt: desktopOperationReceiptSchema.optional() });
 const recordSchema = z.strictObject({ intent: desktopOperationIntentSchema, generation, state: z.enum(['running', 'unknown', 'failed', 'succeeded']), review: desktopOperationReviewSchema.optional() });
+const finiteOperation = (intent: DesktopOperationIntent) => intent.tool === DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name && intent.toolRevision === endpointToolRevision(DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR)
+  || intent.tool === 'desktop.workspace.write' && Boolean(intent.workspaceId) && intent.toolRevision === endpointToolRevision(desktopWorkspaceDescriptor('write', intent.workspaceId));
 
 /** Only the trusted connection window can request a native human review; Agent tools cannot acknowledge unknown outcomes. */
 export class DesktopOperationReviewManager {
@@ -65,7 +67,7 @@ export class DesktopOperationReviewManager {
       if (!intent) throw new Error('DESKTOP_OPERATION_CONTEXT_UNAVAILABLE');
       let receipt = journal.inspect(intent);
       if (!receipt) throw new Error('DESKTOP_OPERATION_CONTEXT_UNAVAILABLE');
-      const finite = intent.tool === DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name && intent.toolRevision === endpointToolRevision(DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR);
+      const finite = finiteOperation(intent);
       if (!receipt.executionStopped) {
         if (!finite) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
         receipt = journal.confirmUnknownStopped(intent);
@@ -109,7 +111,7 @@ export class DesktopOperationReviewManager {
         if (record.state !== 'unknown' || previous && previous.expectedGeneration !== record.generation) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
         if (!review) {
           let receipt = journal.inspect(intent);
-          const finiteExecutor = intent.tool === DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name && intent.toolRevision === endpointToolRevision(DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR);
+          const finiteExecutor = finiteOperation(intent);
           if ((!receipt || !receipt.executionStopped) && !finiteExecutor) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
           // Independent stop evidence: the fixed-root lease and this known no-child-process adapter; a human click never proves stop.
           if (receipt && !receipt.executionStopped) receipt = journal.confirmUnknownStopped(intent);

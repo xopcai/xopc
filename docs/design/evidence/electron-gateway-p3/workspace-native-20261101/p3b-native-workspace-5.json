@@ -1,0 +1,40 @@
+{
+  "passed": false,
+  "startedAt": "2026-11-01T04:54:48.358Z",
+  "scope": "Installed Electron, actual native folder/grant/per-call consent, same-host bundled Gateway, real filesystem and synthetic Agent inference. Private fixture only; no physical WAN/platform matrix claim.",
+  "checks": {},
+  "folderCancellationCovered": false,
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "e192c8130c54e5e1841d03df6d96ed205b2ba0e626e92d3db0f6d3fc88f66349"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p3b-delivery-6/native/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p3b-delivery-6/native/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-workspace-4YNgIS",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 69019
+  },
+  "error": "Error: Native workspace action deadline exceeded\n    at Timeout.<anonymous> (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-local-connection-support.mjs:73:39)\n    at listOnTimeout (node:internal/timers:685:17)\n    at process.processTimers (node:internal/timers:618:7)",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 52504\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=68956, lockPath=/Users/micjoyce/.xopc/locks/gateway.099a88d1.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:52504...\n✅ Gateway started\n   URL: http://127.0.0.1:52504\n   Token: c6dc5742...24c48066\n\n[GatewayServer] Gateway server running at http://127.0.0.1:52504\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:52551/devtools/browser/02a9eb87-8c8b-4d5f-b835-615171334c9d\n",
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "e192c8130c54e5e1841d03df6d96ed205b2ba0e626e92d3db0f6d3fc88f66349"
+  },
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-workspace-4YNgIS",
+  "finishedAt": "2026-11-01T04:57:31.758Z"
+}

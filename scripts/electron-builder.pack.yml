@@ -50,6 +50,11 @@ extraMetadata:
   main: out/main/index.js
 
 extraResources:
+  - from: _pack-resources/desktop-workspace
+    to: bin
+    filter:
+      - desktop-workspace.node
+      - workspace-worker.cjs
   - from: _pack-resources/computer-driver
     to: bin
     filter:

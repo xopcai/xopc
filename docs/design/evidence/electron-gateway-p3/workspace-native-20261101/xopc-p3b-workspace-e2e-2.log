@@ -1,0 +1,31 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T04:05:17.381Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T04:05:17.390Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T04:05:17.394Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T04:05:17.843Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-observation-UHUGee/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:05:17.976Z","module":"Gateway:HTTP","requestId":"859ce2d8-9f63-49c7-9c35-18fec306d913","method":"POST","path":"/api/realtime/tickets","status":403,"durationMs":3,"clientIp":"unknown","contentLength":94,"msg":"HTTP POST /api/realtime/tickets → 403 (3ms)"}
+ ❯ |integration| src/gateway/__tests__/desktop-workspace-e2e.test.ts (1 test | 1 failed) 1039ms
+   × executes native workspace reads and durable writes through authenticated Gateway and enforces device/workspace, version and lifetime boundaries 1039ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |integration| src/gateway/__tests__/desktop-workspace-e2e.test.ts > executes native workspace reads and durable writes through authenticated Gateway and enforces device/workspace, version and lifetime boundaries
+TypeError: Cannot read properties of undefined (reading 'endpointId')
+ ❯ src/gateway/__tests__/desktop-workspace-e2e.test.ts:84:42
+     82|       confirmRead: async () => { reads += 1; return allowRead; }, crea…
+     83|     await execution.start(epoch, id, { workspaceId: workspace.workspac…
+     84|     const endpointId = execution.origin()!.endpointId;
+       |                                          ^
+     85|     const args = { workspaceId: workspace.workspaceId, relativePath: '…
+     86|     const read = (input = args) => endpoints.invocations.invoke({ endp…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  12:05:15
+   Duration  3.40s (transform 1.39s, setup 11ms, import 2.29s, tests 1.04s, environment 0ms)
+

@@ -22,5 +22,6 @@ export function assertDesktopExecutionHello(device: DeviceRecord, hello: Endpoin
     throw new Error('DESKTOP_EXECUTION_DENIED');
   }
   return endpointDesktopExecutionAuthoritySchema.parse({ gatewayId, deviceId: device.id, clientId,
-    connectionInstanceId: hello.connectionInstanceId, authorizationRevision: snapshot.revision, grantId: grant.grantId, expiresAt: grant.expiresAt, ...(capabilities.includes('desktop.operation-status.v1') ? { operationStatus: true } : {}) });
+    connectionInstanceId: hello.connectionInstanceId, authorizationRevision: snapshot.revision, grantId: grant.grantId, expiresAt: grant.expiresAt,
+    ...(grant.workspaceId ? { workspaceId: grant.workspaceId } : {}), ...(capabilities.includes('desktop.operation-status.v1') ? { operationStatus: true } : {}) });
 }

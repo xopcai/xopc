@@ -1,0 +1,19 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T04:51:24.109Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T04:51:24.120Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T04:51:24.126Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T04:51:24.783Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-desktop-observation-1mEUt6/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T04:51:24.935Z","module":"Gateway:HTTP","requestId":"e6b186d0-0641-4f2a-a0cd-2356996a688e","method":"POST","path":"/api/realtime/tickets","status":403,"durationMs":1,"clientIp":"unknown","contentLength":94,"msg":"HTTP POST /api/realtime/tickets → 403 (1ms)"}
+{"level":"info","time":"2026-11-01T04:51:26.074Z","module":"EndpointTools","endpointId":"0ab77958-e287-4aee-a1b9-63ddf141cdbe:61b55bf7-9853-4c77-9102-316a37021932","connectionId":"74f8d831-04e5-48de-82b5-108bb3f69176","kind":"desktop","msg":"Endpoint connected"}
+{"level":"info","time":"2026-11-01T04:51:26.074Z","module":"Realtime","connectionId":"74f8d831-04e5-48de-82b5-108bb3f69176","principalId":"0ab77958-e287-4aee-a1b9-63ddf141cdbe","clientId":"b9a73719-480a-4fea-b701-986f57f807c3","clientKind":"desktop","msg":"Realtime client connected"}
+{"level":"warn","time":"2026-11-01T04:51:26.114Z","module":"DesktopWorkspace","err":{"type":"Object","message":"WORKSPACE_READ_USER_DENIED","stack":"Error: WORKSPACE_READ_USER_DENIED\n    at DesktopWorkspaceReadSession.invoke (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/electron/desktop/workspace-read-session.ts:42:58)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at DesktopReliableToolController.handleMessage (/Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/electron/desktop/reliable-tool-controller.ts:68:24)","name":"Error"},"toolName":"desktop.workspace.read","phase":"native_workspace_read","msg":"Native workspace read did not complete"}
+{"level":"info","time":"2026-11-01T04:51:26.306Z","module":"EndpointTools","endpointId":"0ab77958-e287-4aee-a1b9-63ddf141cdbe:61b55bf7-9853-4c77-9102-316a37021932","connectionId":"74f8d831-04e5-48de-82b5-108bb3f69176","msg":"Endpoint disconnected"}
+{"level":"info","time":"2026-11-01T04:51:26.307Z","module":"Realtime","connectionId":"74f8d831-04e5-48de-82b5-108bb3f69176","code":1000,"reason":"Client disconnected","msg":"Realtime client disconnected (1000: Client disconnected)"}
+
+ Test Files  3 passed (3)
+      Tests  12 passed (12)
+   Start at  12:51:21
+   Duration  7.08s (transform 2.27s, setup 27ms, import 3.53s, tests 3.66s, environment 0ms)
+

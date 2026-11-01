@@ -1,0 +1,26 @@
+$ pnpm run assets:brand && node scripts/electron-builder.mjs
+$ node scripts/generate-brand-assets.mjs
+Brand assets generated from assets/brand/xopc-mark.svg (0 written, 39 unchanged).
+[electron-compatibility] PASS: built desktop + built Gateway, authenticated preflight, >1MB upload admission, isolated clean state
+Progress: resolved 1, reused 0, downloaded 0, added 0
+
+devDependencies: skipped
+
+Packages: +20
+++++++++++++++++++++
+Progress: resolved 80, reused 20, downloaded 0, added 20, done
+Done in 369ms using pnpm v11.9.0
+file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/prepare-electron-pack-dir.mjs:120
+  if (checked.status !== 0) throw new Error('[prepare-electron-pack-dir] Workspace adapter does not match the target architecture');
+                                  ^
+
+Error: [prepare-electron-pack-dir] Workspace adapter does not match the target architecture
+    at stageWorkspaceExecutor (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/prepare-electron-pack-dir.mjs:120:35)
+    at prepareElectronPackDir (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/prepare-electron-pack-dir.mjs:189:3)
+    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/electron-builder.mjs:77:17
+    at ModuleJob.run (node:internal/modules/esm/module_job:569:25)
+    at async node:internal/modules/esm/loader:650:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:105:5)
+
+Node.js v26.12.1
+[ELIFECYCLE] Command failed with exit code 1.

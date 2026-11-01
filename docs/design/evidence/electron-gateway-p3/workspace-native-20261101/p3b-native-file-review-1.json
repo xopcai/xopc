@@ -1,0 +1,147 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T05:32:07.353Z",
+  "scope": "Installed Electron, actual native folder/grant/per-call consent, same-host bundled Gateway, real filesystem and synthetic Agent inference. Private fixture only; no physical WAN/platform matrix claim.",
+  "checks": {
+    "nativeFolderGrantAndRemotePathIsolation": true,
+    "WRITE_APPROVE": true,
+    "encryptedRecoveryLocationPersisted": true,
+    "nativeFileReviewKeepsUnknownWithoutReplay": true,
+    "stopRevokesNativeWorkspace": true
+  },
+  "folderCancellationCovered": false,
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "c29e36df53c14b45d52421a96159aff459b2c71a92558eb29ed5130db420fa75"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p3b-delivery-7/native/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p3b-delivery-7/native/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-workspace-fLRE2i",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 22771
+  },
+  "nativeWorkspaces": [
+    "0d7d4472-3146-465c-96f9-4d787ce64313"
+  ],
+  "inferenceRequests": [
+    {
+      "step": "WRITE_APPROVE",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "results": 0,
+      "agentRequest": true
+    },
+    {
+      "step": "WRITE_APPROVE",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_workspace_write_6018a36548b5",
+        "device__desktop_workspace_list_8f91a2bbe6c5"
+      ],
+      "results": 1,
+      "agentRequest": true
+    },
+    {
+      "step": "WRITE_APPROVE",
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_workspace_write_6018a36548b5",
+        "device__desktop_workspace_list_8f91a2bbe6c5"
+      ],
+      "results": 2,
+      "agentRequest": true
+    },
+    {
+      "step": "WRITE_APPROVE",
+      "tools": [],
+      "results": 0,
+      "agentRequest": false
+    },
+    {
+      "step": "WRITE_APPROVE",
+      "tools": [],
+      "results": 0,
+      "agentRequest": false
+    },
+    {
+      "step": "WRITE_APPROVE",
+      "tools": [],
+      "results": 0,
+      "agentRequest": false
+    }
+  ],
+  "droppedResult": {
+    "operationId": "58faa468-e243-4845-8455-b9515d552b3a"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "c29e36df53c14b45d52421a96159aff459b2c71a92558eb29ed5130db420fa75"
+  },
+  "finishedAt": "2026-11-01T05:34:53.359Z"
+}

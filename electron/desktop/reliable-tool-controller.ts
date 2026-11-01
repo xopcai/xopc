@@ -5,6 +5,10 @@ import { durableEndpointResultSchema, desktopOperationReceiptSchema, serverEndpo
 
 import { DesktopExecutionSession } from './execution-session.js';
 import { DesktopExecutionCatalog } from './execution-catalog.js';
+import type { DesktopWorkspaceReadSession } from './workspace-read-session.js';
+import { createLogger } from '../../src/utils/logger.js';
+
+const log = createLogger('DesktopWorkspace');
 
 /** Connection-scoped writes only. Registration, signed transport and native grants remain mandatory outside this adapter. */
 export class DesktopReliableToolController {
@@ -15,6 +19,7 @@ export class DesktopReliableToolController {
   constructor(private readonly options: {
     catalog: DesktopExecutionCatalog;
     session: DesktopExecutionSession;
+    reads?: DesktopWorkspaceReadSession;
     availability(): EndpointAvailability;
     onTransportFailure?(): void;
   }) {}
@@ -24,13 +29,15 @@ export class DesktopReliableToolController {
   }
   async disconnect() {
     this.closed = true; this.sendMessage = undefined;
-    return this.options.session.close();
+    const read = await this.options.reads?.close();
+    const write = await this.options.session.close();
+    return read?.state === 'unknown' ? { state: 'unknown' as const } : write;
   }
   async handleMessage(input: unknown): Promise<void> {
     if (this.closed || !this.sendMessage) return;
     const message = serverEndpointMessageSchema.parse(input), { invocationId } = message.payload;
     if (message.type === 'tool.cancel') {
-      if (this.active === invocationId) { this.cancelRequested = true; await this.options.session.cancel(invocationId).catch(() => {}); }
+      if (this.active === invocationId) { this.cancelRequested = true; await this.options.reads?.cancel(invocationId).catch(() => {}); await this.options.session.cancel(invocationId).catch(() => {}); }
       // The invocation handler emits its one durable outcome; cancel itself never asserts completion.
       return;
     }
@@ -51,6 +58,22 @@ export class DesktopReliableToolController {
     }
     if (message.payload.operationQuery) { this.error(invocationId, 'PROTOCOL_ERROR', 'Operation metadata is only accepted by the status tool'); return; }
     if (this.active) { this.error(invocationId, 'TOOL_BUSY', 'A durable operation is already pending'); return; }
+    if (['desktop.workspace.read', 'desktop.workspace.list'].includes(message.payload.toolName)) {
+      if (!this.options.reads || message.payload.execution || message.payload.uploadGrant || !message.payload.confirmationRequired) {
+        this.error(invocationId, 'PROTOCOL_ERROR', 'Native workspace read authority is required'); return;
+      }
+      this.active = invocationId;
+      try {
+        this.send('tool.received', { invocationId });
+        const result = await this.options.reads.invoke(message.payload);
+        this.send('tool.result', { invocationId, ...result });
+      } catch (error) {
+        log.warn({ err: error, toolName: message.payload.toolName, phase: 'native_workspace_read' }, 'Native workspace read did not complete');
+        const denied = error instanceof Error && error.message === 'WORKSPACE_READ_USER_DENIED';
+        this.error(invocationId, denied ? 'USER_DENIED' : 'TOOL_EXECUTION_FAILED', 'Workspace read did not complete under its native approval');
+      } finally { if (this.active === invocationId) this.active = undefined; }
+      return;
+    }
     const revision = this.options.catalog.revision(message.payload.toolName);
     if (!revision) { this.error(invocationId, 'TOOL_NOT_FOUND', 'Durable tool is not registered'); return; }
     if (revision !== message.payload.descriptorRevision) { this.error(invocationId, 'TOOL_REVISION_MISMATCH', 'Durable tool contract changed'); return; }
@@ -74,8 +97,12 @@ export class DesktopReliableToolController {
         const result = durableEndpointResultSchema.parse(outcome.result);
         this.send('tool.result', { invocationId, ...result, operationReceipt: receipt });
       } else if (receipt.state === 'failed' && !outcome.repeated) {
-        this.send('tool.error', { invocationId, code: 'TOOL_EXECUTION_FAILED', message: 'Executor reported a completed failure',
-          operationReceipt: receipt, operationResult: durableEndpointResultSchema.parse(outcome.result) });
+        const result = durableEndpointResultSchema.parse(outcome.result), first = result.content[0];
+        const value = first?.type === 'json' && first.value && typeof first.value === 'object' ? first.value as Record<string, unknown> : undefined;
+        const workspaceError = message.payload.toolName.startsWith('desktop.workspace.') && first?.type === 'json'
+          && typeof value?.error === 'string' && /^WORKSPACE_[A-Z_]{1,80}$/.test(value.error) ? value.error : undefined;
+        this.send('tool.error', { invocationId, code: 'TOOL_EXECUTION_FAILED', message: workspaceError ? `Workspace request failed: ${workspaceError}` : 'Executor reported a completed failure',
+          operationReceipt: receipt, operationResult: result });
       } else if (receipt.state === 'stopped') this.send('tool.cancelled', { invocationId, operationReceipt: receipt });
       else this.send('tool.error', { invocationId, code: 'OUTCOME_UNKNOWN',
         message: outcome.repeated ? 'Existing operation receipt requires explicit verification; no action was repeated' : 'Operation outcome requires verification', operationReceipt: receipt });

@@ -1,0 +1,88 @@
+$ pnpm run electron:native:build && pnpm run electron:vite:build:package && pnpm run electron:server:build && pnpm run electron:extensions:build
+$ node scripts/build-voice-hotkey-helper.mjs && node scripts/setup-computer-driver.mjs && node scripts/build-desktop-workspace.mjs
+[build-voice-hotkey-helper] Built /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/electron/native/voice-hotkey-helper
+Verified cached Cua Driver 0.36.0
+[desktop-workspace] Built /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/dist/electron/native/desktop-workspace.node
+$ cross-env ELECTRON_ENTRY=out/main/index.js ELECTRON_VITE_SKIP_RENDERER=1 electron-vite build
+(!) renderer config is missing
+
+vite v8.1.6 building ssr environment for production...
+(node:16601) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[2K
+transforming...✓ 1795 modules transformed.
+rendering chunks...
+out/main/chunks/node-BxZjBG1W.js                      0.18 kB
+out/main/chunks/clear-user-data-DSOEqCNN.js           0.18 kB
+out/main/compatibility.js                             0.25 kB
+out/main/chunks/node-M38OMdRF.js                      0.34 kB
+out/main/chunks/provider-env-CJypxlDu.js              0.58 kB
+out/main/chunks/constants-1sAUWXPo.js                 0.69 kB
+out/main/index.js                                     0.76 kB
+out/main/chunks/startup-recovery-y_g0Xp7j.js          0.90 kB
+out/main/chunks/get-uninstall-info-C73BBGo4.js        0.99 kB
+out/main/chunks/rolldown-runtime-BYo2W52V.js          1.05 kB
+out/main/chunks/clear-user-data-B3ca9CQo.js           1.14 kB
+out/main/chunks/paths-BXN1-0U-.js                     1.28 kB
+out/main/chunks/dir-size-DZMbfYmG.js                  1.45 kB
+out/main/chunks/error-body-BrILUwPw.js                1.53 kB
+out/main/chunks/gateway-compatibility-djlHLwD8.js     1.88 kB
+out/main/chunks/uninstall-BqCV7y3O.js                 2.04 kB
+out/main/chunks/paths-state-DijSJeBG.js               2.13 kB
+out/main/chunks/provider-retry-DFQBJFqN.js            3.01 kB
+out/main/chunks/src-BW7Z_T0k.js                       4.22 kB
+out/main/chunks/systemd-C7Pngl-r.js                   4.97 kB
+out/main/chunks/openai-decisions-BDFyrR49.js          5.07 kB
+out/main/chunks/launchd-Cr6R-fKw.js                   5.80 kB
+out/main/chunks/promise-Cq6YLqHD.js                   6.15 kB
+out/main/chunks/schtasks-DtFKp392.js                  6.85 kB
+out/main/chunks/models-BaFl4e45.js                    7.03 kB
+out/main/chunks/upstream-DDRmMDna.js                  7.64 kB
+out/main/chunks/src-B6A1-jBK.js                       8.06 kB
+out/main/chunks/src-CdaTmmda.js                       9.20 kB
+out/main/chunks/src-3wKCo4sM.js                      11.55 kB
+out/main/chunks/transform-messages-DAKaNQFP.js       17.18 kB
+out/main/chunks/openai-responses-8rQhWezp.js         20.41 kB
+out/main/remote-shell-worker.js                      21.06 kB
+out/main/chunks/openai-completions-CsiqKRus.js       23.42 kB
+out/main/chunks/tunnel-main-CzFqde9m.js              37.26 kB
+out/main/chunks/node-DbSYO428.js                     39.29 kB
+out/main/chunks/paths-DFxQU5bq.js                    40.71 kB
+out/main/chunks/wrapper-9yOi7IEm.js                  47.62 kB
+out/main/chunks/logger-Yp5xbmEg.js                   85.08 kB
+out/main/chunks/schemas-D8WznJ2q.js                  98.76 kB
+out/main/chunks/discriminator-CAKrO1ZP.js           117.27 kB
+out/main/chunks/connection-entry-Bgode-uN.js        151.59 kB
+out/main/chunks/anthropic-messages-zSSpe6Du.js      208.09 kB
+out/main/chunks/collect-support-report-C7AZIqgJ.js  225.50 kB
+out/main/chunks/openai-prompt-cache-CoaA28ML.js     276.13 kB
+out/main/chunks/auto-updater-Cv0PJGnQ.js            299.88 kB
+out/main/main.js                                    486.64 kB
+out/main/chunks/resolve-route-CZWY-3EA.js           963.98 kB
+
+✓ built in 259ms
+vite v8.1.6 building ssr environment for production...
+[2K
+transforming...✓ 5 modules transformed.
+rendering chunks...
+out/preload/computer-preview.html       0.16 kB
+out/preload/screen-capture.html         0.30 kB
+out/preload/remote-shell.html           2.11 kB
+out/preload/gateway-connections.html    3.62 kB
+out/preload/gateway-connections.js     15.05 kB
+out/preload/remote-shell.js           500.37 kB
+out/preload/remote-shell.css            2.46 kB
+out/preload/shell.cjs                   0.48 kB
+out/preload/connections.cjs             1.60 kB
+out/preload/computer-preview.cjs        2.06 kB
+out/preload/index.cjs                  11.59 kB
+
+✓ built in 26ms
+$ node scripts/build-electron-server.mjs
+[build-electron-server] Wrote /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/out/server/index.js (minified)
+[build-electron-server] Copied workspace templates to /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/out/server/workspace-templates
+$ node scripts/build-electron-extensions.mjs
+[build-electron-extensions] Bundled demo-memory
+[build-electron-extensions] Bundled feishu-tools
+[build-electron-extensions] Bundled telegram
+[build-electron-extensions] Bundled weixin

@@ -86,6 +86,7 @@ export class EndpointToolExecutionError extends Error {
   constructor(
     readonly code: EndpointToolErrorCode,
     message: string,
+    readonly confirmedNoEffect = false,
   ) {
     super(message);
     this.name = 'EndpointToolExecutionError';
@@ -164,13 +165,17 @@ export class EndpointInvocationService {
     const startedAt = Date.now();
     let execution: PendingInvocation['execution'];
     const deadlineAt = Math.min(startedAt + tool.descriptor.timeoutMs, endpoint.executionAuthority?.expiresAt ?? Infinity);
+    if (params.toolName.startsWith('desktop.workspace.') && (!endpoint.executionAuthority?.workspaceId
+      || params.arguments.workspaceId !== endpoint.executionAuthority.workspaceId)) {
+      return Promise.reject(this.error('PROTOCOL_ERROR', 'The selected workspace is not authorized for this device connection'));
+    }
     if (endpoint.executionAuthority && tool.descriptor.effect !== 'read') {
       try {
         const authority = endpoint.executionAuthority, grant = getDesktopExecutionGrant(authority.deviceId, startedAt);
         if (!params.operationId || !confirmationRequired || !grant?.active || grant.revision !== authority.authorizationRevision
           || grant.grant?.grantId !== authority.grantId || getOrCreateGatewayIdentity().id !== authority.gatewayId) throw new Error('Desktop execution authority is no longer active');
         execution = { intent: recordDesktopOperationIntent({ operationId: params.operationId, gatewayId: authority.gatewayId,
-          deviceId: authority.deviceId, tool: params.toolName, argumentHash: crypto.createHash('sha256').update(canonicalJson(params.arguments)).digest('hex'),
+          deviceId: authority.deviceId, tool: params.toolName, ...(authority.workspaceId ? { workspaceId: authority.workspaceId } : {}), argumentHash: crypto.createHash('sha256').update(canonicalJson(params.arguments)).digest('hex'),
           toolRevision: tool.revision, authorizationRevision: authority.authorizationRevision, expiresAt: deadlineAt }, authority.grantId, startedAt),
           connectionInstanceId: authority.connectionInstanceId };
       } catch { return Promise.reject(this.error('PROTOCOL_ERROR', 'Durable desktop intent could not be recorded')); }
@@ -313,9 +318,15 @@ export class EndpointInvocationService {
           ...(message.payload.details === undefined || (pending.descriptor.sensitivity === 'personal' && pending.descriptor.effect === 'read') ? {} : { details: message.payload.details }),
         });
         return;
-      case 'tool.error':
-        this.fail(invocationId, this.error(message.payload.code, (pending.descriptor.sensitivity === 'personal' && pending.descriptor.effect === 'read') ? `Personal device request failed: ${message.payload.code}` : message.payload.message));
+      case 'tool.error': {
+        const content = message.payload.operationResult?.content[0], value = content?.type === 'json' && content.value && typeof content.value === 'object'
+          ? content.value as Record<string, unknown> : undefined;
+        const noEffect = pending.toolName === 'desktop.workspace.write' && Boolean(pending.execution)
+          && message.payload.operationReceipt?.state === 'failed' && typeof value?.error === 'string'
+          && ['WORKSPACE_PATH_INVALID', 'WORKSPACE_PATH_DENIED', 'WORKSPACE_ARGUMENT_INVALID', 'WORKSPACE_FILE_DENIED', 'WORKSPACE_FILE_TOO_LARGE', 'WORKSPACE_VERSION_CONFLICT', 'WORKSPACE_FILE_BUSY'].includes(value.error);
+        this.fail(invocationId, new EndpointToolExecutionError(message.payload.code, (pending.descriptor.sensitivity === 'personal' && pending.descriptor.effect === 'read') ? `Personal device request failed: ${message.payload.code}` : message.payload.message, noEffect));
         return;
+      }
       case 'tool.cancelled':
         this.fail(invocationId, this.error('TOOL_CANCELLED', 'Endpoint cancelled the tool call'));
     }
@@ -374,6 +385,7 @@ export class EndpointInvocationService {
       const expectedState = message.type === 'tool.result' ? 'succeeded' : 'failed';
       if (!result || parsed.state !== expectedState || !parsed.executionStopped
         || parsed.resultHash !== crypto.createHash('sha256').update(canonicalJson(result)).digest('hex')) throw new Error('Operation result hash mismatch');
+      if (!this.ajv.compile(pending.descriptor.outputSchema)(result.content)) throw new Error('Operation result contract mismatch');
     } else if (message.type === 'tool.cancelled') {
       if (parsed.state !== 'stopped' || !parsed.executionStopped) throw new Error('Executor has not stopped');
     } else if (message.payload.code !== 'OUTCOME_UNKNOWN' || parsed.state !== 'unknown') throw new Error('Unexpected operation outcome');

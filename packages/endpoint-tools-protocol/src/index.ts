@@ -331,3 +331,4 @@ export * from './location-sharing.js';
 export * from './screen.js';
 
 export * from './operation-status.js';
+export * from './workspace.js';

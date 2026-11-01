@@ -41,7 +41,7 @@ export const desktopExecutionBindingSchema = z.strictObject({
   gatewayId: z.uuid(), deviceId: z.uuid(), clientId: z.string().min(1).max(160), connectionInstanceId: z.uuid(),
   authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
 });
-export const endpointDesktopExecutionAuthoritySchema = desktopExecutionBindingSchema.extend({ grantId: z.uuid(), expiresAt: timestamp, operationStatus: z.literal(true).optional() });
+export const endpointDesktopExecutionAuthoritySchema = desktopExecutionBindingSchema.extend({ grantId: z.uuid(), expiresAt: timestamp, operationStatus: z.literal(true).optional(), workspaceId: z.uuid().optional() });
 export type EndpointDesktopExecutionAuthority = z.infer<typeof endpointDesktopExecutionAuthoritySchema>;
 export const desktopDeviceFrameProofSchema = z.strictObject({
   signedPayload: z.string().min(1).max(512 * 1024).regex(/^[A-Za-z0-9_-]+$/),

@@ -1,4 +1,5 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { release } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,6 +12,9 @@ import { desktopOperationStatusDescriptor } from '@xopcai/endpoint-tools-protoco
 import { DesktopOperationReviewManager } from '../desktop/operation-review.js';
 import { DesktopExecutionManager } from '../desktop/execution-manager.js';
 import { DesktopExecutionCatalog } from '../desktop/execution-catalog.js';
+import { DesktopWorkspaceHelper } from '../desktop/workspace-helper.js';
+import { DesktopWorkspaceSession } from '../desktop/workspace-session.js';
+import { DesktopWorkspaceRecoveryStore } from '../desktop/workspace-recovery.js';
 import { DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopClipboardWorker } from '../desktop/clipboard-tool.js';
 import { resolveStateDir } from '../../src/config/paths-state.js';
 import { DesktopObservationManager } from '../desktop/observation-manager.js';
@@ -86,11 +90,25 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     const chat = shell?.captureWindow();
     return visible() && window.isFocused() || Boolean(chat && chat.isVisible() && !chat.isMinimized() && chat.isFocused());
   };
+  let workspace: DesktopWorkspaceSession | undefined;
+  const workspaceRecovery = new DesktopWorkspaceRecoveryStore(join(resolveStateDir(), 'desktop-execution-v1', 'workspace-recovery'), encryption);
+  let nativeApprovalGeneration = 0;
   const execution = new DesktopExecutionManager({ manager, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'),
     appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopOperationStatusDescriptor()]), foreground,
-    createWorker: tool => { if (tool !== DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name) throw new Error('DESKTOP_EXECUTION_DENIED'); return desktopClipboardWorker(clipboard); },
-    consent: async (binding, _grant, signal) => {
+    createWorker: tool => {
+      if (tool === DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name) return desktopClipboardWorker(clipboard);
+      if (!workspace) throw new Error('DESKTOP_EXECUTION_DENIED'); return workspace.worker(tool);
+    },
+    consent: async (binding, grant, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
+      if (grant.workspaceId) {
+        if (workspace?.workspaceId !== grant.workspaceId) return false;
+        const result = await dialog.showMessageBox(window, { type: 'warning', title: '授权本机工作区',
+          message: '允许此 Gateway 请求访问所选本机目录？',
+          detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n本机目录：${JSON.stringify(workspace.identity().path)}\n工作区：${grant.workspaceId}\n\n授权最长两分钟。目录列表、文本读取和写入每次均需本机批准；读取内容会发送给此Gateway。写入须核对内容版本，可能与外部编辑冲突，取消或崩溃后可能需要核实部分效果。不会执行命令、控制浏览器或访问目录以外的路径。断线、锁屏、切换后不会自动恢复。`,
+          buttons: ['取消', '允许逐次确认目录访问'], defaultId: 0, cancelId: 0, noLink: true, signal });
+        return result.response === 1 && !signal.aborted && visible();
+      }
       const result = await dialog.showMessageBox(window, { type: 'question', title: '授权本机剪贴板写入',
         message: '允许此 Gateway 请求写入本机剪贴板？',
         detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n\n授权最长两分钟，仅允许写入不超过4000字符的文本；每次仍需本机确认。可查询本机操作元数据，但不包含参数正文。不会读取现有剪贴板、文件或执行命令。断线、锁屏、切换连接后需重新授权。`,
@@ -101,11 +119,34 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId);
       const parent = shell?.captureWindow() ?? window;
       if (profile?.identity?.gatewayId !== request.execution.gatewayId || !foreground() || signal.aborted || parent.isDestroyed()) return false;
+      if (request.toolName === 'desktop.workspace.write') {
+        if (!workspace || request.execution.workspaceId !== workspace.workspaceId || request.arguments.workspaceId !== workspace.workspaceId) return false;
+        const text = typeof request.arguments.text === 'string' ? request.arguments.text : '';
+        const result = await dialog.showMessageBox(parent, { type: 'warning', title: '确认本次工作区写入',
+          message: '写入以下本机工作区文件？',
+          detail: `Gateway：${profile.origin}\n设备：${request.execution.deviceId}\n本机目录：${JSON.stringify(workspace.identity().path)}\n相对路径：${JSON.stringify(request.arguments.relativePath)}\n操作：${request.execution.operationId}\n预期版本：${request.arguments.expectedVersion === null ? '新建，要求文件不存在' : request.arguments.expectedVersion}\n参数摘要：${request.execution.argumentHash}\n\n共${Buffer.byteLength(text, 'utf8')}字节，预览前2000字符：\n${JSON.stringify(text.slice(0, 2000))}\n\n批准完整参数对应的本次写入。版本冲突时拒绝；不保证与外部编辑器的全局原子互斥。中断可能留下部分效果，旧操作不会自动重做。`,
+          buttons: ['取消', '写入本次文件'], defaultId: 0, cancelId: 0, noLink: true, signal });
+        if (result.response !== 1 || signal.aborted || !foreground()) return false;
+        await workspaceRecovery.save(request.execution, request.arguments, workspace.identity());
+        return !signal.aborted && foreground();
+      }
       const result = await dialog.showMessageBox(parent, { type: 'question', title: '确认本次剪贴板写入',
         message: '将以下文本写入本机剪贴板？',
         detail: `Gateway：${profile.origin}\n设备：${request.execution.deviceId}\n操作：${request.execution.operationId}\n\n${JSON.stringify(request.arguments.text)}\n\n仅本次有效。现有剪贴板内容将被替换。`,
         buttons: ['取消', '写入本次文本'], defaultId: 0, cancelId: 0, noLink: true, signal });
       return result.response === 1 && !signal.aborted && foreground();
+    },
+    confirmRead: async (request, signal) => {
+      const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId), parent = shell?.captureWindow() ?? window;
+      if (!workspace || request.workspaceId !== workspace.workspaceId || profile?.identity?.gatewayId !== request.gatewayId || !foreground() || signal.aborted || parent.isDestroyed()) throw new Error('WORKSPACE_READ_AUTHORITY_INVALID');
+      const result = await dialog.showMessageBox(parent, { type: 'question', title: '确认本次工作区读取',
+        message: request.toolName === 'desktop.workspace.list' ? '将本机目录列表发送给此Gateway？' : '将本机文件文本发送给此Gateway？',
+        detail: `Gateway：${profile.origin}\n设备：${request.deviceId}\n本机目录：${JSON.stringify(workspace.identity().path)}\n相对路径：${JSON.stringify(request.arguments.relativePath)}\n\n仅本次有效。文本最多32768 UTF-8字节，目录最多100项；不会修改文件，不访问符号链接或目录外路径。`,
+        buttons: ['取消', '允许本次读取'], defaultId: 0, cancelId: 0, noLink: true, signal });
+      if (signal.aborted) throw new Error('WORKSPACE_READ_CANCELLED');
+      if (result.response !== 1) return false;
+      if (!foreground()) throw new Error('WORKSPACE_READ_AUTHORITY_INVALID');
+      return true;
     },
   });
   let localOperationReviews: Awaited<ReturnType<DesktopOperationReviewManager['listLocal']>> | undefined;
@@ -113,14 +154,16 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   const reviews = new DesktopOperationReviewManager({ manager, execution, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'), visible,
     confirm: async (binding, intent, receipt, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
+      const file = intent.tool === 'desktop.workspace.write' ? await workspaceRecovery.load(intent) : undefined;
+      if (signal.aborted || !visible() || !window.isFocused()) return false;
       const answer = await dialog.showMessageBox(window, { type: 'warning', title: '核实结果未知的操作',
         message: '检查实际效果后，仅允许后续的新操作？',
-        detail: `Gateway：${binding.origin}\n操作：${intent.operationId}\n工具：${intent.tool}\n本机记录：${receipt?.state ?? '未找到匹配记录'}\n\n请先检查实际效果；旧操作可能已经生效。此次确认不会将旧结果改成成功，也不会重做旧操作。执行器已停止，每个新写入仍需另行授权。${binding.offline ? '\n\n这是本机离线核实，原服务器尚未确认，旧任务结果仍保持未知。' : ''}`,
+        detail: `Gateway：${binding.origin}\n操作：${intent.operationId}\n工具：${intent.tool}\n本机记录：${receipt?.state ?? '未找到匹配记录'}${file ? `\n原本机目录：${JSON.stringify(file.root.path)}\n目录身份：${file.root.device}:${file.root.inode}\n相对路径：${JSON.stringify(file.relativePath)}\n原预期版本：${file.expectedVersion ?? '新建'}\n路径可能已被移动或替换，请核实原目录身份及部分写入效果。` : ''}\n\n请先检查实际效果；旧操作可能已经生效。此次确认不会将旧结果改成成功，也不会重做旧操作。执行器已停止，每个新写入仍需另行授权。${binding.offline ? '\n\n这是本机离线核实，原服务器尚未确认，旧任务结果仍保持未知。' : ''}`,
         buttons: ['取消', '已检查，允许新意图'], defaultId: 0, cancelId: 0, noLink: true, signal });
       return answer.response === 1 && !signal.aborted && visible() && window.isFocused();
     } });
   const stopObservation = () => { observation.stop(); void shell?.setHostOrigin().catch(() => {}); };
-  const stopCapabilities = () => { reviews.cancel(); stopObservation(); void execution.stop(); };
+  const stopCapabilities = () => { nativeApprovalGeneration += 1; reviews.cancel(); stopObservation(); void execution.stop(); };
   const cancelDesktop = () => { stopCapabilities(); desktop.cancel(); operationReviews = undefined; };
   const removeSessionBoundary = installDesktopSessionBoundary(powerMonitor, cancelDesktop);
   window.once('closed', removeSessionBoundary);
@@ -219,7 +262,28 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     const items = await reviews.list(epoch, id); operationReviews = { epoch: epoch as number, profileId: id as string, items }; return snapshot();
   })));
   ipcMain.handle('connections:execution-start', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { if (id !== manager.snapshot().selectedId) throw new Error('STALE_CONNECTION_EPOCH'); stopObservation(); await observation.whenStopped(); await execution.start(epoch, id); return snapshot(); })));
-  ipcMain.handle('connections:execution-stop', () => reply(async () => { await execution.stop(); return snapshot(); }));
+  ipcMain.handle('connections:workspace-start', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => {
+    const state = manager.snapshot(), profile = state.profiles.find(profile => profile.id === id);
+    if (id !== state.selectedId || !profile?.identity) throw new Error('STALE_CONNECTION_EPOCH');
+    if (process.platform !== 'darwin') throw new Error('DESKTOP_WORKSPACE_UNSUPPORTED');
+    const addon = app.isPackaged ? join(process.resourcesPath, 'bin/desktop-workspace.node') : join(app.getAppPath(), 'dist/electron/native/desktop-workspace.node');
+    const worker = app.isPackaged ? join(process.resourcesPath, 'bin/workspace-worker.cjs') : join(app.getAppPath(), 'electron/desktop/workspace-worker.cjs');
+    if (!existsSync(addon) || !existsSync(worker)) throw new Error('DESKTOP_WORKSPACE_UNAVAILABLE');
+    stopObservation(); await observation.whenStopped(); await execution.requireStopped();
+    const generation = nativeApprovalGeneration;
+    const current = () => generation === nativeApprovalGeneration && manager.snapshot().epoch === epoch && manager.snapshot().selectedId === id
+      && manager.snapshot().profiles.find(item => item.id === id)?.identity?.gatewayId === profile.identity!.gatewayId;
+    if (!visible() || !window.isFocused()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
+    const choice = await dialog.showOpenDialog(window, { title: '选择允许逐次确认访问的本机工作区', properties: ['openDirectory', 'dontAddToRecent'] });
+    if (!current() || !visible() || !window.isFocused()) throw new Error('DESKTOP_OPERATION_CANCELLED');
+    if (choice.canceled || choice.filePaths.length !== 1) throw new Error('DESKTOP_LOCAL_CONSENT_DENIED');
+    const helper = await DesktopWorkspaceHelper.open(addon, await realpath(choice.filePaths[0]), worker);
+    const selected = new DesktopWorkspaceSession({ helper, current }); workspace = selected;
+    if (!current() || !foreground()) { await selected.stop(); throw new Error('DESKTOP_OPERATION_CANCELLED'); }
+    await selected.activate(execution, epoch, id);
+    return snapshot();
+  })));
+  ipcMain.handle('connections:execution-stop', () => reply(async () => { stopCapabilities(); await execution.stop(); return snapshot(); }));
   ipcMain.handle('connections:quit', () => { cancelDesktop(); app.quit(); });
   ipcMain.handle('connections:local', () => { cancelDesktop(); return reply(() => serialize(async () => {
     await execution.requireStopped();
