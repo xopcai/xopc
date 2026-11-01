@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BROWSER_CONTROL_ENDPOINT_DESCRIPTOR, BROWSER_RECORDING_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
 import { COMPUTER_DESCRIPTOR, REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 
 import {
@@ -24,6 +25,16 @@ describe('EndpointToolPolicy', () => {
     }
     expect(COMPUTER_DESCRIPTOR.confirmation).toBe('never');
     expect(COMPUTER_DESCRIPTOR.requiresForeground).toBe(false);
+  });
+  it('keeps remote Browser independent from the existing browser extension policy', () => {
+    expect(() => policy.validateDescriptor('desktop', REMOTE_BROWSER_DESCRIPTOR as never)).not.toThrow();
+    expect(policy.evaluate(REMOTE_BROWSER_DESCRIPTOR as never, 'foreground')).toEqual({ confirmationRequired: true });
+    expect(() => policy.evaluate(REMOTE_BROWSER_DESCRIPTOR as never, 'background')).toThrow('not in the foreground');
+    for (const patch of [{ confirmation: 'never' }, { requiresForeground: false }, { timeoutMs: 60000 }, { maxConcurrency: 4 }, { policyId: 'browser.control' }]) {
+      expect(() => policy.validateDescriptor('desktop', { ...REMOTE_BROWSER_DESCRIPTOR, ...patch } as never)).toThrow();
+    }
+    expect(BROWSER_CONTROL_ENDPOINT_DESCRIPTOR.confirmation).toBe('never');
+    expect(BROWSER_CONTROL_ENDPOINT_DESCRIPTOR.maxConcurrency).toBe(4);
   });
   it('registers the real browser control and recording catalog with their individual concurrency limits', () => {
     const registry = new EndpointRegistry();

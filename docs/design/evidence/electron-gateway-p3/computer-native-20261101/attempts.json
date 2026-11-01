@@ -200,5 +200,124 @@
       "sha256": "d203088128a5d337f39e4b6a0b9309763c2cfb68206af58e4dce3a5bb3f1e19d"
     },
     "executionAtFailure": null
+  },
+  {
+    "attempt": 10,
+    "passed": false,
+    "startedAt": "2026-11-01T10:40:34.069Z",
+    "finishedAt": "2026-11-01T10:42:07.679Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: Error: Computer tool failed: COMPUTER_OBSERVE_FAILED",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "841bd10dab0e1cdfda6633491faf3afc392a53606b7005d75d27c01152be48ae"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "841bd10dab0e1cdfda6633491faf3afc392a53606b7005d75d27c01152be48ae"
+    },
+    "executionAtFailure": {
+      "profileId": "477bc5de-fd7c-403f-a765-df9a8852d334",
+      "state": "online",
+      "computer": true
+    }
+  },
+  {
+    "attempt": 11,
+    "passed": false,
+    "startedAt": "2026-11-01T10:43:37.555Z",
+    "finishedAt": "2026-11-01T10:43:48.025Z",
+    "checks": {
+      "isolatedNativeFixture": true
+    },
+    "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "841bd10dab0e1cdfda6633491faf3afc392a53606b7005d75d27c01152be48ae"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "841bd10dab0e1cdfda6633491faf3afc392a53606b7005d75d27c01152be48ae"
+    },
+    "executionAtFailure": {
+      "profileId": "0bb7874b-8d83-4b55-b6a5-5c876bb8e78e",
+      "state": "connecting",
+      "computer": true
+    }
+  },
+  {
+    "attempt": 12,
+    "passed": false,
+    "startedAt": "2026-11-01T10:44:28.970Z",
+    "finishedAt": "2026-11-01T10:45:43.790Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "error": "Error: Error: Computer tool failed: COMPUTER_RELEASE_UNCONFIRMED",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "841bd10dab0e1cdfda6633491faf3afc392a53606b7005d75d27c01152be48ae"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "841bd10dab0e1cdfda6633491faf3afc392a53606b7005d75d27c01152be48ae"
+    },
+    "executionAtFailure": {
+      "profileId": "1be8894e-e4f2-45df-ae27-a7647511df1a",
+      "state": "online",
+      "computer": true
+    }
+  },
+  {
+    "attempt": 13,
+    "passed": false,
+    "startedAt": "2026-11-01T10:50:57.796Z",
+    "finishedAt": "2026-11-01T10:52:06.378Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true,
+      "agentProgramAndClose": true
+    },
+    "error": "Error: AssertionError [ERR_ASSERTION]: Computer tool unavailable",
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "bf1e192b442f2e37d628953d0197341af1cf9a6c9a4d21097b725da51e1be065"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "bf1e192b442f2e37d628953d0197341af1cf9a6c9a4d21097b725da51e1be065"
+    },
+    "executionAtFailure": {
+      "profileId": "bf25591a-4e5c-4954-bc11-fbe1982ba9fd",
+      "state": "online",
+      "computer": true
+    }
+  },
+  {
+    "attempt": 14,
+    "passed": true,
+    "startedAt": "2026-11-01T10:52:36.575Z",
+    "finishedAt": "2026-11-01T10:53:55.050Z",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true,
+      "agentProgramAndClose": true,
+      "actualNativeSingleInput": true,
+      "durableNativeResults": true
+    },
+    "error": null,
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "bf1e192b442f2e37d628953d0197341af1cf9a6c9a4d21097b725da51e1be065"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "bf1e192b442f2e37d628953d0197341af1cf9a6c9a4d21097b725da51e1be065"
+    },
+    "executionAtFailure": null
   }
 ]

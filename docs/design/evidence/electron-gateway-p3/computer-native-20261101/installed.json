@@ -96,5 +96,54 @@
       "sha256": "7ec4492bb03830106b9c1b27b8daf8d041cdfcc8bba7865241a665c4983311db"
     },
     "samples": []
+  },
+  {
+    "report": "p3d-computer-installed-local-5",
+    "passed": true,
+    "checks": null,
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "1f4059c6e483847cb656afbb2389a5b7c4cfd67599e06b2cbc5170ca4949ed3a"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "1f4059c6e483847cb656afbb2389a5b7c4cfd67599e06b2cbc5170ca4949ed3a"
+    },
+    "startedAt": "2026-11-01T10:54:09.246Z",
+    "finishedAt": "2026-11-01T10:54:42.294Z",
+    "modes": [
+      {
+        "mode": "spawn",
+        "passed": true
+      },
+      {
+        "mode": "reuse",
+        "passed": true
+      }
+    ]
+  },
+  {
+    "report": "p3d-computer-installed-remote-6",
+    "passed": true,
+    "checks": {
+      "actualRemoteStartAppendHistory": true,
+      "serverStopVerified": true,
+      "networkAndGapRecoveryWithoutResubmission": true,
+      "processRestartAndWorkerCrashPreserveUnknownInput": true,
+      "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+      "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+      "actualPackagedLocalRelaunch": true
+    },
+    "packageBefore": {
+      "files": 1431,
+      "sha256": "1f4059c6e483847cb656afbb2389a5b7c4cfd67599e06b2cbc5170ca4949ed3a"
+    },
+    "packageAfter": {
+      "files": 1431,
+      "sha256": "1f4059c6e483847cb656afbb2389a5b7c4cfd67599e06b2cbc5170ca4949ed3a"
+    },
+    "startedAt": "2026-11-01T10:54:42.491Z",
+    "finishedAt": "2026-11-01T10:54:52.249Z",
+    "modes": []
   }
 ]
