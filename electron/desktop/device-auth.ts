@@ -1,8 +1,11 @@
 import { createHash, createPublicKey, generateKeyPairSync, randomBytes, randomUUID, sign, verify } from 'node:crypto';
 
 import { buildDevicePairingProof, desktopPairingInvitationSchema, desktopExecutionGrantSchema, type DesktopExecutionGrant, type DevicePairingAction } from '@xopcai/gateway-contract';
-import { endpointHelloSigningPayload, endpointToolContentSchema, SCREEN_CAPTURE_MAX_BYTES, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import { endpointHelloSigningPayload, endpointToolContentSchema, SCREEN_CAPTURE_MAX_BYTES, desktopOperationIntentSchema, toolInvokePayloadSchema,
+  type EndpointHelloPayload, type DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
 import { endpointToolRevision, type EndpointToolFile, type EndpointToolUploadGrant } from '@xopcai/endpoint-tools-client';
+import { COMPUTER_FRAME_MAX_BYTES, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
+import { z } from 'zod';
 
 import { DesktopIdentityStore, type DesktopBinding, type DesktopIdentity } from './device-identity.js';
 import { DesktopDeviceFrameSigner } from '../../src/endpoint-tools/desktop-device-frame.js';
@@ -192,6 +195,49 @@ export class DesktopDeviceAuth {
         return parsed.data;
       } finally { bytes.fill(0); }
     });
+  }
+  async uploadComputerFrame(options: { endpointId: string; deviceId: string; invocationId: string; grant: EndpointToolUploadGrant;
+    approved: DesktopExecutionGrant; authorizationRevision: number; intent: DesktopOperationIntent; file: EndpointToolFile; signal: AbortSignal }) {
+    const approved = desktopExecutionGrantSchema.parse(structuredClone(options.approved));
+    const intent = desktopOperationIntentSchema.parse(structuredClone(options.intent));
+    const grant = toolInvokePayloadSchema.shape.uploadGrant.parse(structuredClone(options.grant));
+    const { endpointId, deviceId, invocationId, signal, authorizationRevision } = options;
+    const { name, mimeType } = options.file, source = options.file.bytes;
+    const png = name === 'observation.png' && mimeType === 'image/png'
+      && Buffer.from(source.subarray(0, 8)).equals(Buffer.from('89504e470d0a1a0a', 'hex'));
+    const jpeg = name === 'observation.jpg' && mimeType === 'image/jpeg' && source.length >= 4
+      && source[0] === 255 && source[1] === 216 && source[2] === 255 && source.at(-2) === 255 && source.at(-1) === 217;
+    if (!grant || !z.uuid().safeParse(invocationId).success || !endpointId.startsWith(deviceId + ':')
+      || !z.uuid().safeParse(endpointId.slice(deviceId.length + 1)).success
+      || grant.path !== `/api/endpoint-tools/invocations/${invocationId}/files` || grant.maxFiles !== 1
+      || grant.maxBytes > COMPUTER_FRAME_MAX_BYTES || source.byteLength > Math.min(grant.maxBytes, COMPUTER_FRAME_MAX_BYTES)
+      || !(png || jpeg) || intent.gatewayId !== this.binding.gatewayId || intent.deviceId !== deviceId
+      || intent.tool !== REMOTE_COMPUTER_CONTROL_TOOL || intent.workspaceId || intent.authorizationRevision !== authorizationRevision
+      || approved.toolRevisions[REMOTE_COMPUTER_CONTROL_TOOL] !== intent.toolRevision
+      || intent.expiresAt > approved.expiresAt) throw new Error('DESKTOP_COMPUTER_UPLOAD_DENIED');
+    const bytes = Buffer.from(source);
+    const valid = () => {
+      signal.throwIfAborted();
+      if (Math.min(grant.expiresAt, intent.expiresAt, approved.expiresAt) <= Date.now()) throw new Error('DESKTOP_COMPUTER_UPLOAD_DENIED');
+    };
+    try {
+      return await this.serial(async () => {
+        valid();
+        const record = await this.enrolled();
+        if (record.deviceId !== deviceId) throw new Error('DESKTOP_DEVICE_IDENTITY_MISMATCH');
+        valid();
+        const response = await this.deviceRequest(record, 'POST', `${grant.path}?name=${name}`, bytes,
+          { 'content-type': mimeType, 'content-length': String(bytes.length), 'x-endpoint-id': endpointId, 'x-endpoint-upload-token': grant.token }, signal);
+        if (response.status === 401) { this.access = undefined; record.phase = 'revoked'; await this.store.save(record); throw new Error('DESKTOP_AUTH_REVOKED'); }
+        if (response.status === 403) throw new Error('DESKTOP_COMPUTER_UPLOAD_DENIED');
+        valid();
+        const parsed = endpointToolContentSchema.safeParse(response.body?.payload);
+        if (response.status !== 201 || response.body?.ok !== true || !parsed.success || parsed.data.type !== 'file'
+          || parsed.data.mimeType !== mimeType || parsed.data.name !== name || parsed.data.size !== bytes.length
+          || parsed.data.sha256 !== digest(bytes)) throw new Error('DESKTOP_COMPUTER_UPLOAD_FAILED');
+        return parsed.data;
+      });
+    } finally { bytes.fill(0); }
   }
   connectionProof(ticket: string): Promise<string> {
     return this.serial(async () => {
