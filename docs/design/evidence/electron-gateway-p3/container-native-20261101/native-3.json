@@ -1,0 +1,25 @@
+{
+  "passed": false,
+  "scope": "Installed Electron, actual native consent, independent device frames, real local Docker and same-host Gateway/Agent with synthetic inference. Private Docker fixtures only; not WAN, PTY or platform matrix acceptance.",
+  "checks": {
+    "CANCEL": true,
+    "APPROVE": true,
+    "READ": true
+  },
+  "error": "Error: AssertionError [ERR_ASSERTION]: Actual Docker output must reach the Agent: NONZERO\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-container.mjs:33:34)\n    at async send (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-container.mjs:128:5)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-container.mjs:132:112",
+  "startedAt": "2026-11-01T06:53:52.185Z",
+  "finishedAt": "2026-11-01T06:56:24.048Z",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "b8599407e9ddf1b129efd1c3a7d6d8e6e04c93663287b4ea4d1bb3076e9d9ac9"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "b8599407e9ddf1b129efd1c3a7d6d8e6e04c93663287b4ea4d1bb3076e9d9ac9"
+  },
+  "retainedFixtureWorkspaces": [
+    "78bf276f-b309-464d-ad69-9eaa5cd0784d"
+  ],
+  "originalReport": "reports/p3c-native-container-3.json",
+  "originalSha256": "70c8cfb7dfd1d08818fb995fd05d1e5f6f1c18ff1d5496b319b924ea5444c000"
+}

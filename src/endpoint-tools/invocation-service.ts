@@ -7,6 +7,7 @@ import {
   ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS,
   ENDPOINT_MAX_CONCURRENT_INVOCATIONS,
   canonicalJson,
+  DESKTOP_COMMAND_ARGV_BYTES,
   desktopOperationReceiptSchema,
   type DesktopOperationIntent,
   type ClientEndpointMessage,
@@ -129,7 +130,7 @@ export class EndpointInvocationService {
     }
     {
       const validateInput = this.ajv.compile(tool.descriptor.inputSchema);
-      if (!validateInput(params.arguments)) return Promise.reject(this.error('INVALID_ARGUMENTS', 'Invalid endpoint tool arguments'));
+      if (!validateInput(params.arguments)) return Promise.reject(new EndpointToolExecutionError('INVALID_ARGUMENTS', 'Invalid endpoint tool arguments', params.toolName === 'desktop.command.run'));
     }
     if (params.toolName.startsWith('mobile.calendar.')) {
       const { startAt, endAt } = params.arguments;
@@ -137,6 +138,9 @@ export class EndpointInvocationService {
         return Promise.reject(this.error('INVALID_ARGUMENTS', 'Calendar range must be positive and at most seven days'));
       }
     }
+    if (params.toolName === 'desktop.command.run' && (!Array.isArray(params.arguments.argv) || !params.arguments.argv[0]
+      || params.arguments.argv.some(value => typeof value !== 'string' || value.includes('\0'))
+      || Buffer.byteLength(JSON.stringify(params.arguments.argv)) > DESKTOP_COMMAND_ARGV_BYTES)) return Promise.reject(new EndpointToolExecutionError('INVALID_ARGUMENTS', 'Container argv exceeds its bounded contract', true));
     let confirmationRequired: boolean;
     try {
       confirmationRequired = this.policy.evaluate(tool.descriptor, endpoint.availability).confirmationRequired;
@@ -165,9 +169,9 @@ export class EndpointInvocationService {
     const startedAt = Date.now();
     let execution: PendingInvocation['execution'];
     const deadlineAt = Math.min(startedAt + tool.descriptor.timeoutMs, endpoint.executionAuthority?.expiresAt ?? Infinity);
-    if (params.toolName.startsWith('desktop.workspace.') && (!endpoint.executionAuthority?.workspaceId
+    if ((params.toolName.startsWith('desktop.workspace.') || params.toolName === 'desktop.command.run') && (!endpoint.executionAuthority?.workspaceId
       || params.arguments.workspaceId !== endpoint.executionAuthority.workspaceId)) {
-      return Promise.reject(this.error('PROTOCOL_ERROR', 'The selected workspace is not authorized for this device connection'));
+      return Promise.reject(new EndpointToolExecutionError('PROTOCOL_ERROR', 'The selected workspace is not authorized for this device connection', true));
     }
     if (endpoint.executionAuthority && tool.descriptor.effect !== 'read') {
       try {

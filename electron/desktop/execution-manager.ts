@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { DesktopExecutionGrant } from '@xopcai/gateway-contract';
+import type { DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
 
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
 import { isConnectionId } from '../gateway/profiles.js';
@@ -20,7 +21,7 @@ type Run = { binding: DesktopBinding; epoch: number; transport: 'ssh' | 'direct'
   deviceId?: string; proposed?: DesktopExecutionGrant; expectedRevision?: number; host?: DesktopExecutionHost;
   lease?: DesktopExecutionLease; journal?: DesktopOperationJournal; watchdog?: ReturnType<typeof setInterval>;
   stopResources?: WorkspaceContext['stopResources']; resourceStop?: Promise<{ confirmed: boolean }> };
-type WorkspaceContext = { workspaceId: string; catalog: DesktopExecutionCatalog; stopResources(): Promise<{ confirmed: boolean }> };
+type WorkspaceContext = { workspaceId: string; kind?: 'container'; catalog: DesktopExecutionCatalog; stopResources(): Promise<{ confirmed: boolean }> };
 
 /** Remote-only coordinator. The executor root must be the fixed per-user state root, never a profile or userData directory. */
 export class DesktopExecutionManager {
@@ -34,9 +35,11 @@ export class DesktopExecutionManager {
     consent(binding: DesktopBinding, grant: DesktopExecutionGrant, signal: AbortSignal): Promise<boolean>;
     confirm: ConstructorParameters<typeof DesktopExecutionSession>[0]['confirm'];
     confirmRead?(request: DesktopWorkspaceReadApproval, signal: AbortSignal): Promise<boolean>;
-    createWorker(tool: string): DesktopExecutionWorker;
+    createWorker(tool: string, intent?: DesktopOperationIntent): DesktopExecutionWorker;
   }) {}
-  snapshot(): (Status & { workspaceId?: string }) | undefined { return this.status ? { ...this.status, ...(this.active?.proposed?.workspaceId ? { workspaceId: this.active.proposed.workspaceId } : {}) } : undefined; }
+  snapshot(): (Status & { workspaceId?: string; container?: true }) | undefined { return this.status ? { ...this.status,
+    ...(this.active?.proposed?.workspaceId ? { workspaceId: this.active.proposed.workspaceId } : {}),
+    ...(this.active?.proposed?.toolRevisions['desktop.command.run'] ? { container: true } : {}) } : undefined; }
   origin() {
     const run = this.active, current = this.options.manager.snapshot();
     return run && !run.abort.signal.aborted && current.epoch === run.epoch && current.selectedId === run.binding.profileId ? run.host?.origin() : undefined;
@@ -126,7 +129,7 @@ export class DesktopExecutionManager {
       run.deviceId = (await client.readSelf()).deviceId; current();
       const compatibility = await client.endpointRequest('/api/desktop-host/compatibility', 'GET', undefined, run.deviceId); current();
       if (compatibility?.gatewayId !== binding.gatewayId || compatibility.publicKey !== binding.publicKey || compatibility.capabilities?.reliableExecutionVersion !== 1) throw new Error('DESKTOP_EXECUTION_UNSUPPORTED');
-      if (workspace && compatibility.capabilities?.workspaceExecutionVersion !== 1) throw new Error('DESKTOP_WORKSPACE_UNSUPPORTED');
+      if (workspace && (workspace.kind === 'container' ? compatibility.capabilities?.containerCommandVersion !== 1 : compatibility.capabilities?.workspaceExecutionVersion !== 1)) throw new Error('DESKTOP_WORKSPACE_UNSUPPORTED');
       if (compatibility.capabilities?.operationReviewVersion === 1) {
         const pending = await client.endpointRequest('/api/desktop-host/operations', 'GET', undefined, run.deviceId); current();
         if (!Array.isArray(pending?.items) || pending.items.length) throw new Error('DESKTOP_OPERATION_RECONCILIATION_REQUIRED');

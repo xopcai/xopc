@@ -1,0 +1,19 @@
+{
+  "passed": false,
+  "scope": "Installed Electron, actual native consent, independent device frames, real local Docker and same-host Gateway/Agent with synthetic inference. Private Docker fixtures only; not WAN, PTY or platform matrix acceptance.",
+  "checks": {},
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ undefined\n- 'DESKTOP_LOCAL_CONSENT_DENIED'\n\n    at file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-container.mjs:113:10",
+  "startedAt": "2026-11-01T06:52:29.214Z",
+  "finishedAt": "2026-11-01T06:52:45.084Z",
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "b8599407e9ddf1b129efd1c3a7d6d8e6e04c93663287b4ea4d1bb3076e9d9ac9"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "b8599407e9ddf1b129efd1c3a7d6d8e6e04c93663287b4ea4d1bb3076e9d9ac9"
+  },
+  "retainedFixtureWorkspaces": [],
+  "originalReport": "reports/p3c-native-container-2.json",
+  "originalSha256": "06ffb91a9868691e25ac7aa71544c5d14d2077cf25f7b404d32b512eb3f33a58"
+}

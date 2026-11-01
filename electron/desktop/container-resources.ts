@@ -15,7 +15,7 @@ const recordSchema = z.strictObject({
   ownerId: z.uuid(), workspaceId: z.uuid(), argv: z.array(z.string().max(8192).refine(value => !value.includes('\0'))).min(1).max(128),
   phase: z.enum(['prepared', 'created', 'stopped']), containerId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).superRefine((record, context) => {
-  if (record.intent.tool !== 'desktop.command.run' || record.intent.workspaceId !== record.workspaceId || record.intentFingerprint !== hash(record.intent)
+  if (!['desktop.command.run', 'desktop.terminal.open'].includes(record.intent.tool) || record.intent.workspaceId !== record.workspaceId || record.intentFingerprint !== hash(record.intent)
     || !record.argv[0] || Buffer.byteLength(JSON.stringify(record.argv)) > 32768 || record.phase === 'created' && !record.containerId
     || hash({ workspaceId: record.workspaceId, argv: record.argv }) !== record.intent.argumentHash) context.addIssue({ code: 'custom', message: 'Container operation binding is invalid' });
 });

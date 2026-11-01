@@ -34,7 +34,7 @@ export class DesktopOperationSupervisor {
   constructor(private readonly options: {
     journal: DesktopOperationJournal;
     authority(tool: string): DesktopExecutionAuthority;
-    createWorker(tool: string): DesktopExecutionWorker;
+    createWorker(tool: string, intent?: DesktopOperationIntent): DesktopExecutionWorker;
     validateResult?(result: unknown, tool: string): unknown;
     stopTimeoutMs?: number;
   }) {
@@ -72,7 +72,7 @@ export class DesktopOperationSupervisor {
     if (this.blocked) throw new Error(this.status().stopUnconfirmed ? 'DESKTOP_EXECUTION_STOP_UNCONFIRMED' : 'DESKTOP_OPERATION_RECONCILIATION_REQUIRED');
     if (this.active) throw new Error('DESKTOP_EXECUTION_BUSY');
     // Worker construction must have no external side effect. Execution begins only after start commits.
-    const worker = this.options.createWorker(input.intent.tool);
+    const worker = this.options.createWorker(input.intent.tool, structuredClone(input.intent));
     let resolveStop!: (outcome: Outcome) => void;
     const stop = new Promise<Outcome>(resolve => { resolveStop = resolve; });
     const run: Active = { operationId: input.intent.operationId, intent: { ...input.intent }, controller: new AbortController(),

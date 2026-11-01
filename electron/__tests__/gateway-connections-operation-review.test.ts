@@ -50,3 +50,25 @@ it('recovers offline metadata without credentials, requires native consent and n
     await expect(review.listLocal(6)).rejects.toThrow('STALE_CONNECTION_EPOCH');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+it('requires independent container stop proof before any native acknowledgement of a crashed command', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'xopc-command-review-'));
+  const intent: DesktopOperationIntent = { operationId: randomUUID(), gatewayId: randomUUID(), deviceId: randomUUID(), workspaceId: randomUUID(),
+    tool: 'desktop.command.run', toolRevision: 'a'.repeat(64), argumentHash: 'b'.repeat(64), authorizationRevision: 1, expiresAt: Date.now() + 60000 };
+  let stopped = false, allowed = false, prompts = 0;
+  try {
+    const lease = new DesktopExecutionLease(root), journal = new DesktopOperationJournal(lease);
+    journal.record(intent); journal.start(intent, { invocationId: randomUUID(), connectionInstanceId: randomUUID() }); journal.close(); lease.close();
+    const review = new DesktopOperationReviewManager({ executorRoot: root, manager: { snapshot: () => ({ epoch: 1, profiles: [] }) } as any,
+      execution: { requireStopped: async () => {} } as any, store: {} as any, visible: () => true,
+      proveStopped: async candidate => { expect(candidate).toEqual(intent); return stopped; },
+      confirm: async () => { prompts += 1; return allowed; } });
+    await expect(review.reviewLocal(1, intent.operationId)).rejects.toThrow('STOP_UNCONFIRMED'); expect(prompts).toBe(0);
+    stopped = true; await expect(review.reviewLocal(1, intent.operationId)).rejects.toThrow('CONSENT_DENIED'); expect(prompts).toBe(1);
+    allowed = true; expect(await review.reviewLocal(1, intent.operationId)).toMatchObject({ locallyReviewed: true, serverConfirmed: false, outcome: 'unknown' });
+    const recoveredLease = new DesktopExecutionLease(root), recovered = new DesktopOperationJournal(recoveredLease);
+    expect(recovered.inspect(intent)).toMatchObject({ state: 'unknown', executionStopped: true });
+    expect(() => recovered.start(intent, { invocationId: randomUUID(), connectionInstanceId: randomUUID() })).toThrow('STATE_INVALID');
+    recovered.close(); recoveredLease.close();
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

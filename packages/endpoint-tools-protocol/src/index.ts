@@ -332,3 +332,5 @@ export * from './screen.js';
 
 export * from './operation-status.js';
 export * from './workspace.js';
+export * from './command.js';
+export * from './terminal.js';

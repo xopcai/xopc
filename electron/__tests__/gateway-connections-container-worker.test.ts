@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
 
-import { canonicalJson, type DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
+import { canonicalJson, desktopCommandDescriptor, desktopWorkspaceDescriptor, type DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
+import { desktopExecutionGrantSchema } from '@xopcai/gateway-contract';
 import { expect, it, vi } from 'vitest';
 
 import { DesktopContainerEngine } from '../desktop/container-engine.js';
@@ -14,6 +15,8 @@ import { DesktopContainerResources } from '../desktop/container-resources.js';
 import { DesktopContainerWorker, stopRecordedContainer } from '../desktop/container-worker.js';
 import { DesktopExecutionLease, DesktopOperationJournal } from '../desktop/operation-journal.js';
 import { DesktopOperationSupervisor } from '../desktop/operation-supervisor.js';
+import { DesktopExecutionCatalog } from '../desktop/execution-catalog.js';
+import { EndpointToolPolicy } from '../../src/endpoint-tools/policy.js';
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'xopc-container-worker-')), key = randomBytes(32), workspaceId = randomUUID();
@@ -31,6 +34,20 @@ async function fixture() {
   const options = { resources, engine: engine as unknown as DesktopContainerEngine, intent, workspaceId, ownerId: randomUUID(), imageId: 'sha256:' + 'b'.repeat(64) };
   return { root, key, resources, engine, intent, args, options, cleanup: () => rm(root, { recursive: true, force: true }) };
 }
+it('pins the container policy and keeps its authorization separate from clipboard and native filesystem capabilities', () => {
+  const workspaceId = randomUUID(), descriptor = desktopCommandDescriptor(workspaceId, 'sha256:' + 'a'.repeat(64)), catalog = new DesktopExecutionCatalog([descriptor]);
+  expect(() => new EndpointToolPolicy().validateDescriptor('desktop', descriptor)).not.toThrow();
+  expect(() => catalog.validateArguments(descriptor.name, { workspaceId, argv: ['node', ''] })).not.toThrow();
+  for (const argv of [[], [''], ['node', '\0'], ['node', '界'.repeat(2000)]]) expect(() => catalog.validateArguments(descriptor.name, { workspaceId, argv })).toThrow('ARGUMENT_INVALID');
+  const grant = { version: 1, grantId: randomUUID(), localApprovalId: randomUUID(), expiresAt: Date.now() + 60000,
+    workspaceId, toolRevisions: { 'desktop.command.run': catalog.revision(descriptor.name)! } };
+  expect(desktopExecutionGrantSchema.safeParse(grant).success).toBe(true);
+  expect(desktopExecutionGrantSchema.safeParse({ ...grant, workspaceId: undefined }).success).toBe(false);
+  expect(desktopExecutionGrantSchema.safeParse({ ...grant, toolRevisions: { ...grant.toolRevisions, 'desktop.clipboard.write': 'b'.repeat(64) } }).success).toBe(false);
+  expect(desktopExecutionGrantSchema.safeParse({ ...grant, toolRevisions: { ...grant.toolRevisions, 'desktop.workspace.write': 'b'.repeat(64) } }).success).toBe(false);
+  expect(catalog.revision(descriptor.name)).not.toBe(new DesktopExecutionCatalog([desktopCommandDescriptor(randomUUID(), 'sha256:' + 'a'.repeat(64))]).revision(descriptor.name));
+  expect(desktopWorkspaceDescriptor('write', workspaceId).name).not.toBe(descriptor.name);
+});
 it('persists encrypted resources and CID before start, removes before result and never starts on late cancellation', async () => {
   const f = await fixture();
   try {

@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('gatewayConnections', Object.freeze({
   reviewOperation: (epoch: number, id: string, operationId: string) => ipcRenderer.invoke('connections:operation-review', epoch, id, operationId),
   startExecution: (epoch: number, id: string) => ipcRenderer.invoke('connections:execution-start', epoch, id),
   startWorkspace: (epoch: number, id: string) => ipcRenderer.invoke('connections:workspace-start', epoch, id),
+  startContainer: (epoch: number, id: string, workspaceId?: string) => ipcRenderer.invoke('connections:container-start', epoch, id, workspaceId),
+  listContainers: (epoch: number, id: string) => ipcRenderer.invoke('connections:container-list', epoch, id),
   stopExecution: () => ipcRenderer.invoke('connections:execution-stop'),
   stopObservation: () => ipcRenderer.invoke('connections:observation-stop'),
   useLocal: () => ipcRenderer.invoke('connections:local'),

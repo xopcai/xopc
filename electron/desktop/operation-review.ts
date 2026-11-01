@@ -26,6 +26,7 @@ export class DesktopOperationReviewManager {
   constructor(private readonly options: {
     manager: GatewayConnectionPreview; execution: DesktopExecutionManager; store: DesktopIdentityStore; executorRoot: string;
     visible(): boolean;
+    proveStopped?(intent: DesktopOperationIntent): Promise<boolean>;
     confirm(binding: Pick<DesktopBinding, 'gatewayId' | 'origin'> & { offline?: true }, intent: DesktopOperationIntent, receipt: DesktopOperationReceipt | undefined, signal: AbortSignal): Promise<boolean>;
   }) {}
   cancel(): void { this.active?.abort(); }
@@ -67,9 +68,9 @@ export class DesktopOperationReviewManager {
       if (!intent) throw new Error('DESKTOP_OPERATION_CONTEXT_UNAVAILABLE');
       let receipt = journal.inspect(intent);
       if (!receipt) throw new Error('DESKTOP_OPERATION_CONTEXT_UNAVAILABLE');
-      const finite = finiteOperation(intent);
       if (!receipt.executionStopped) {
-        if (!finite) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+        if (!finiteOperation(intent) && !await this.options.proveStopped?.(intent)) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+        current();
         receipt = journal.confirmUnknownStopped(intent);
       }
       const profile = this.options.manager.snapshot().profiles.find(profile => profile.identity?.gatewayId === intent.gatewayId);
@@ -111,7 +112,8 @@ export class DesktopOperationReviewManager {
         if (record.state !== 'unknown' || previous && previous.expectedGeneration !== record.generation) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
         if (!review) {
           let receipt = journal.inspect(intent);
-          const finiteExecutor = finiteOperation(intent);
+          const finiteExecutor = finiteOperation(intent) || ((!receipt || !receipt.executionStopped) && await this.options.proveStopped?.(intent));
+          current();
           if ((!receipt || !receipt.executionStopped) && !finiteExecutor) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
           // Independent stop evidence: the fixed-root lease and this known no-child-process adapter; a human click never proves stop.
           if (receipt && !receipt.executionStopped) receipt = journal.confirmUnknownStopped(intent);
