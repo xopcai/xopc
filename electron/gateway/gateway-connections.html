@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Gateway 连接预览</title>
+  <style>
+    :root { color-scheme: light dark; font: 15px system-ui; } body { margin: 32px auto; padding: 0 24px; max-width: 680px; }
+    h1 { font-size: 24px; } p { line-height: 1.6; } label { display: block; margin-top: 16px; } input { box-sizing: border-box; width: 100%; padding: 9px; margin-top: 5px; }
+    button { padding: 9px 14px; margin: 12px 8px 0 0; cursor: pointer; } li { margin: 12px 0; overflow-wrap: anywhere; } #error { color: #e75454; } small { opacity: .75; }
+  </style>
+</head>
+<body>
+  <h1>Gateway 连接预览</h1>
+  <p>当前仅可配置远端地址。聊天链路尚未接入，本机能力已禁用；不会连接服务器或启动本地 Gateway。</p>
+  <p id="status" role="status"></p><p id="error" role="alert"></p>
+  <ul id="profiles"></ul>
+  <form id="profile-form">
+    <label>连接名称<input id="name" maxlength="80" required autocomplete="off"></label>
+    <label>Gateway origin<input id="origin" maxlength="2048" placeholder="https://gateway.example.com" required autocomplete="off"></label>
+    <label>传输方式</label>
+    <button type="button" id="direct" aria-pressed="true">HTTPS</button><button type="button" id="ssh" aria-pressed="false">已有 SSH loopback 转发</button>
+    <label>管理凭据（可留空；仅加密保存）<input id="credential" type="password" maxlength="8192" autocomplete="new-password"></label>
+    <button type="submit">保存连接配置</button>
+  </form>
+  <p><small>SSH 转发仍属于远端模式。选择配置不代表服务器身份、凭据或协议已通过验证。</small></p>
+  <button id="local">使用原本地模式（重启应用）</button><button id="quit">退出预览</button>
+  <script src="./gateway-connections.js"></script>
+</body>
+</html>
