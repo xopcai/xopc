@@ -104,3 +104,5 @@ P3d批准前断线恢复缺口已修复（`462f2b547`）：精确契约、无本
 P3d Computer第14轮真实原生整轮通过：独立登记、取消/重授权、逐次批准、真实AX观察及计数器一次输入、持久回执和释放控制。修复release不应等待批准框，保留原5秒释放预算；夹具改用真实已观察ref及stopped终态，不放宽生产树完整性检查。失败10–13保留；第五版实际包本地新建/旧v266复用和远端聊天回归通过，963项相关测试、15项条件跳过及Electron类型检查通过。详见[原生记录](./evidence/electron-gateway-p3/computer-native-20261101/README.md)。Computer原生故障矩阵、Browser/P4/磁盘约束及最终main仍待完成。
 
 P3d Browser专用契约/协调核心完成内部实现，旧browser.control/recording策略保留。新协议只接收绑定设备会话的单动作，拒绝host-path/raw script/endpoint替换；Supervisor journal之后才创建Broker，未知/迟到/停止未确认保持隔离，内存帧清零。64项新旧Browser/策略/Agent回归和全类型检查通过，失败夹具与预算保留，见[核心证据](./evidence/electron-gateway-p3/browser-core-20261101/README.md)。尚未接入grant、Host或Main Browser入口，不标记网络/安装包Browser E2E通过。
+
+P3d Browser独立grant、协商和签名Host网络接线完成内部验证：真实HTTP/WSS正常与丢已签名结果均通过，本机结果保留、Gateway unknown、不重放；PNG/JPEG内存帧上传与跨Computer/Browser grant拒绝、撤销后拒绝通过。434项相关回归通过、6项条件跳过，440项packages及全类型检查通过（集合重叠），失败/原预算保留，见[网络证据](./evidence/electron-gateway-p3/browser-host-20261101/README.md)。尚未开放Main Browser窗口、Agent Browser设备路由和恢复元数据；继续实现，不能计作Browser原生E2E或P3d整体完成。

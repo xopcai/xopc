@@ -19,14 +19,15 @@ export const DESKTOP_STATE_OBSERVATION_TOOL = 'desktop.device.get_state' as cons
 export const DESKTOP_SCREEN_OBSERVATION_TOOL = 'desktop.screen.capture' as const;
 export const desktopExecutionGrantSchema = z.strictObject({
   version: z.literal(1), grantId: z.uuid(), localApprovalId: z.uuid(),
-  toolRevisions: z.partialRecord(z.enum(['desktop.clipboard.write', 'desktop.operation.get_status', 'desktop.workspace.list', 'desktop.workspace.read', 'desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open', 'desktop.terminal.control', 'desktop.computer.remote_control']), z.string().regex(/^[a-f0-9]{64}$/))
+  toolRevisions: z.partialRecord(z.enum(['desktop.clipboard.write', 'desktop.operation.get_status', 'desktop.workspace.list', 'desktop.workspace.read', 'desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open', 'desktop.terminal.control', 'desktop.computer.remote_control', 'desktop.browser.control']), z.string().regex(/^[a-f0-9]{64}$/))
     .refine(value => Object.keys(value).length > 0),
   workspaceId: z.uuid().optional(),
   expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 }).refine(value => {
   const tools = Object.keys(value.toolRevisions), workspace = tools.some(name => name.startsWith('desktop.workspace.')), container = tools.includes('desktop.command.run') || tools.some(name => name.startsWith('desktop.terminal.'));
-  const computer = tools.includes('desktop.computer.remote_control');
+  const computer = tools.includes('desktop.computer.remote_control'), browser = tools.includes('desktop.browser.control');
   return !(workspace && container) && (workspace || container) === Boolean(value.workspaceId)
+    && (!browser || tools.every(name => name === 'desktop.browser.control' || name === 'desktop.operation.get_status'))
     && (!computer || tools.every(name => name === 'desktop.computer.remote_control' || name === 'desktop.operation.get_status'))
     && (!(workspace || container) || tools.every(name => name === 'desktop.operation.get_status' || (container ? name === 'desktop.command.run' || name.startsWith('desktop.terminal.') : name.startsWith('desktop.workspace.'))))
     && Boolean(value.toolRevisions['desktop.terminal.open']) === Boolean(value.toolRevisions['desktop.terminal.control']);

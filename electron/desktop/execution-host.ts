@@ -4,6 +4,8 @@ import { canonicalJson, type DesktopOperationIntent, type EndpointHelloPayload, 
 import { desktopExecutionGrantSchema, type DesktopExecutionGrant } from '@xopcai/gateway-contract';
 import { RealtimeClient, RealtimeConnectionError, RealtimeFrameTooLargeError, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
+import { REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
+import { DesktopBrowserHostController } from './browser-host-controller.js';
 import { REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 import WebSocket from 'ws';
 
@@ -44,6 +46,7 @@ export class DesktopExecutionHost {
     confirmRead?(request: DesktopWorkspaceReadApproval, signal: AbortSignal): Promise<boolean>;
     createWorker(tool: string, intent?: DesktopOperationIntent): DesktopExecutionWorker;
     createTerminal?: ConstructorParameters<typeof DesktopTerminalHostController>[0]['createWorker'];
+    createBrowser?: ConstructorParameters<typeof DesktopBrowserHostController>[0]['createSession'];
     createComputer?: ConstructorParameters<typeof DesktopComputerHostController>[0]['createSession'];
     confirmTerminalInput?: ConstructorParameters<typeof DesktopTerminalHostController>[0]['confirmInput'];
     onState(state: State, error?: string): void;
@@ -102,18 +105,27 @@ export class DesktopExecutionHost {
       const active = () => !this.stopped && Date.now() < this.grant.expiresAt;
       let terminal: DesktopTerminalHostController | undefined;
       let computer: DesktopComputerHostController | undefined;
+      let browser: DesktopBrowserHostController | undefined;
+      const browserEnabled = Boolean(this.grant.toolRevisions[REMOTE_BROWSER_CONTROL_TOOL]);
+      if (browserEnabled && !this.options.createBrowser) throw new Error('DESKTOP_BROWSER_UNSUPPORTED');
       const terminalEnabled = Boolean(this.grant.toolRevisions['desktop.terminal.open']);
       const computerEnabled = Boolean(this.grant.toolRevisions[REMOTE_COMPUTER_CONTROL_TOOL]);
       if (terminalEnabled && (!this.options.createTerminal || !this.options.confirmTerminalInput)) throw new Error('DESKTOP_TERMINAL_UNSUPPORTED');
       if (computerEnabled && !this.options.createComputer) throw new Error('DESKTOP_COMPUTER_UNSUPPORTED');
       const supervisor = new DesktopOperationSupervisor({ journal: this.options.journal,
         authority: tool => ({ gatewayId: binding.gatewayId, deviceId: binding.deviceId, authorizationRevision: this.options.authorizationRevision,
-          toolRevision: this.options.catalog.revision(tool) ?? '', expiresAt: this.grant.expiresAt, active: active() && (!['desktop.command.run', 'desktop.terminal.open', REMOTE_COMPUTER_CONTROL_TOOL].includes(tool) || this.options.foreground()), ...(this.grant.workspaceId ? { workspaceId: this.grant.workspaceId } : {}) }),
+          toolRevision: this.options.catalog.revision(tool) ?? '', expiresAt: this.grant.expiresAt, active: active() && (!['desktop.command.run', 'desktop.terminal.open', REMOTE_COMPUTER_CONTROL_TOOL, REMOTE_BROWSER_CONTROL_TOOL].includes(tool) || this.options.foreground()), ...(this.grant.workspaceId ? { workspaceId: this.grant.workspaceId } : {}) }),
         createWorker: (tool, intent) => tool === 'desktop.terminal.open' ? terminal!.workerFor(intent)
-          : tool === REMOTE_COMPUTER_CONTROL_TOOL ? computer!.workerFor(intent) : this.options.createWorker(tool, intent), validateResult: this.options.catalog.validateResult });
+          : tool === REMOTE_COMPUTER_CONTROL_TOOL ? computer!.workerFor(intent) : tool === REMOTE_BROWSER_CONTROL_TOOL ? browser!.workerFor(intent) : this.options.createWorker(tool, intent), validateResult: this.options.catalog.validateResult });
       this.session = new DesktopExecutionSession({ binding: { ...binding, authorizationRevision: this.options.authorizationRevision }, supervisor, confirm: this.options.confirm });
       if (computerEnabled) computer = new DesktopComputerHostController({ current: () => active() && this.options.foreground(), execution: this.session,
         createSession: this.options.createComputer!, uploadFrame: (request, grant, frame, signal) => this.options.auth.uploadComputerFrame({
+          endpointId, deviceId: identity.deviceId, invocationId: request.invocationId, grant, approved: this.grant,
+          authorizationRevision: this.options.authorizationRevision, intent: request.execution,
+          file: { name: frame.mimeType === 'image/jpeg' ? 'observation.jpg' : 'observation.png', mimeType: frame.mimeType, bytes: frame.bytes }, signal,
+        }) });
+      if (browserEnabled) browser = new DesktopBrowserHostController({ current: () => active() && this.options.foreground(), execution: this.session,
+        createSession: this.options.createBrowser!, uploadFrame: (request, grant, frame, signal) => this.options.auth.uploadBrowserFrame({
           endpointId, deviceId: identity.deviceId, invocationId: request.invocationId, grant, approved: this.grant,
           authorizationRevision: this.options.authorizationRevision, intent: request.execution,
           file: { name: frame.mimeType === 'image/jpeg' ? 'observation.jpg' : 'observation.png', mimeType: frame.mimeType, bytes: frame.bytes }, signal,
@@ -132,6 +144,7 @@ export class DesktopExecutionHost {
         emit: (invocationId, event) => client.sendEndpointMessage({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), type: 'terminal.event', payload: { invocationId, event } }) });
       controller = new DesktopReliableToolController({ catalog: this.options.catalog, session: this.session,
         ...(computer ? { computer } : {}),
+        ...(browser ? { browser } : {}),
         ...(terminal ? { terminal } : {}),
         ...(reads ? { reads } : {}),
         availability: () => this.options.foreground() && active() ? 'foreground' : 'background', onTransportFailure: () => { void this.stop(); } });
@@ -145,6 +158,7 @@ export class DesktopExecutionHost {
           const ticket = await this.options.auth.endpointRequest('/api/realtime/tickets', 'POST', { clientId, clientKind: 'desktop', protocolVersion: REALTIME_PROTOCOL_VERSION }, identity.deviceId);
           if (!['desktop.device-frames.v1', 'desktop.durable-execution.v1'].every(capability => ticket.realtime?.capabilities?.includes(capability))) throw new RealtimeConnectionError('DESKTOP_EXECUTION_UNSUPPORTED', false);
           if (terminalEnabled && !ticket.realtime?.capabilities?.includes('desktop.terminal.v1')) throw new RealtimeConnectionError('DESKTOP_TERMINAL_UNSUPPORTED', false);
+          if (browserEnabled && !ticket.realtime?.capabilities?.includes('desktop.browser.v1')) throw new RealtimeConnectionError('DESKTOP_BROWSER_UNSUPPORTED', false);
           if (computerEnabled && !ticket.realtime?.capabilities?.includes('desktop.computer.v1')) throw new RealtimeConnectionError('DESKTOP_COMPUTER_UNSUPPORTED', false);
           return { ...ticket, connectionProof: await this.options.auth.connectionProof(ticket.ticket) };
         },
@@ -206,6 +220,7 @@ export class DesktopExecutionHost {
           const verified = verifyDesktopGatewayFrame(text, binding, this.options.binding.publicKey, sequence); sequence = verified.sequence;
           if (message.kind === 'realtime.ready') {
             if (!['desktop.device-frames.v1', 'desktop.durable-execution.v1'].every(capability => message.payload.negotiatedCapabilities?.includes(capability))) throw new Error('DESKTOP_EXECUTION_UNSUPPORTED');
+            if (this.grant.toolRevisions[REMOTE_BROWSER_CONTROL_TOOL] && !message.payload.negotiatedCapabilities?.includes('desktop.browser.v1')) throw new Error('DESKTOP_BROWSER_UNSUPPORTED');
             if (this.grant.toolRevisions[REMOTE_COMPUTER_CONTROL_TOOL] && !message.payload.negotiatedCapabilities?.includes('desktop.computer.v1')) throw new Error('DESKTOP_COMPUTER_UNSUPPORTED');
             ready = true;
           } else if (!ready) throw new Error('DESKTOP_GATEWAY_FRAME_INVALID');
