@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
 import { DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
+import { desktopOperationIntentSchema, desktopOperationReceiptSchema } from './execution.js';
+import { desktopTerminalCommandSchema, desktopTerminalEventSchema } from './terminal.js';
+export * from './execution.js';
 export { ENDPOINT_FILE_OUTPUT_SCHEMA, ENDPOINT_CONTACT_RECORD_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 
 export const ENDPOINT_PROTOCOL_VERSION = 2 as const;
@@ -113,6 +116,13 @@ export const endpointHelloPayloadSchema = z.strictObject({
   signedAt: timestampSchema,
   signature: z.string().min(16).max(1_024),
   tools: z.array(endpointToolDescriptorSchema).max(100),
+  deviceFrames: z.strictObject({ version: z.literal(1), authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }).optional(),
+  execution: z.strictObject({ version: z.literal(1), grantId: z.uuid(), authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), expiresAt: timestampSchema }).optional(),
+  terminal: z.strictObject({ version: z.literal(1) }).optional(),
+}).superRefine((hello, context) => {
+  if (hello.terminal && (hello.kind !== 'desktop' || !hello.execution || !hello.deviceFrames)) {
+    context.addIssue({ code: 'custom', path: ['terminal'], message: 'Terminal negotiation requires an independently authenticated durable desktop connection' });
+  }
 });
 
 export const toolInvokePayloadSchema = z.strictObject({
@@ -123,6 +133,8 @@ export const toolInvokePayloadSchema = z.strictObject({
   descriptorRevision: z.string().min(1).max(128),
   confirmationRequired: z.boolean(),
   deadlineAt: timestampSchema,
+  execution: desktopOperationIntentSchema.optional(),
+  operationQuery: desktopOperationIntentSchema.optional(),
   uploadGrant: z.strictObject({
     path: z.string().startsWith('/').max(500),
     token: identifierSchema,
@@ -152,6 +164,10 @@ export const endpointToolContentSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+export const durableEndpointResultSchema = z.strictObject({
+  content: z.array(endpointToolContentSchema).min(1).max(20), details: jsonObjectSchema.optional(),
+});
+
 export const endpointToolErrorCodeSchema = z.enum([
   'ENDPOINT_OFFLINE',
   'ENDPOINT_NOT_FOREGROUND',
@@ -166,6 +182,9 @@ export const endpointToolErrorCodeSchema = z.enum([
   'TOOL_CANCELLED',
   'RESULT_TOO_LARGE',
   'PROTOCOL_ERROR',
+  'OUTCOME_UNKNOWN',
+  'EXECUTION_STOP_UNCONFIRMED',
+  'TOOL_EXECUTION_FAILED',
 ]);
 
 const envelope = <TType extends string, TPayload extends z.ZodType>(
@@ -180,6 +199,7 @@ const envelope = <TType extends string, TPayload extends z.ZodType>(
 });
 
 export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
+  envelope('terminal.event', z.strictObject({ invocationId: z.uuid(), event: desktopTerminalEventSchema })),
   envelope('endpoint.availability_changed', z.strictObject({ availability: endpointAvailabilitySchema })),
   envelope('tool.received', invocationPayloadSchema),
   envelope('tool.progress', z.strictObject({
@@ -191,16 +211,20 @@ export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
     invocationId: z.uuid(),
     content: z.array(endpointToolContentSchema).min(1).max(20),
     details: jsonObjectSchema.optional(),
+    operationReceipt: desktopOperationReceiptSchema.optional(),
   })),
   envelope('tool.error', z.strictObject({
     invocationId: z.uuid(),
     code: endpointToolErrorCodeSchema,
     message: z.string().min(1).max(2_000),
+    operationReceipt: desktopOperationReceiptSchema.optional(),
+    operationResult: durableEndpointResultSchema.optional(),
   })),
-  envelope('tool.cancelled', invocationPayloadSchema),
+  envelope('tool.cancelled', invocationPayloadSchema.extend({ operationReceipt: desktopOperationReceiptSchema.optional() })),
 ]);
 
 export const serverEndpointMessageSchema = z.discriminatedUnion('type', [
+  envelope('terminal.command', z.strictObject({ invocationId: z.uuid(), command: desktopTerminalCommandSchema })),
   envelope('tool.invoke', toolInvokePayloadSchema),
   envelope('tool.cancel', toolCancelPayloadSchema),
 ]);
@@ -312,3 +336,9 @@ export { locationDescriptor, locationRequestSchema, locationSampleSchema, LOCATI
 export { personalDescriptor, PERSONAL_TOOL_NAMES, CONTACT_PICK_INPUT_SCHEMA, CALENDAR_INPUT_SCHEMA, CALENDAR_OUTPUT_SCHEMA, type PersonalToolName } from './personal.js';
 export * from './context.js';
 export * from './location-sharing.js';
+export * from './screen.js';
+
+export * from './operation-status.js';
+export * from './workspace.js';
+export * from './command.js';
+export * from './terminal.js';

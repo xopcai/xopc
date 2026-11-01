@@ -1,12 +1,13 @@
 import crypto from 'node:crypto';
 
-import { initialDeviceRefreshTokenSchema } from '@xopcai/gateway-contract';
+import { initialDeviceRefreshTokenSchema, isMobileDevicePlatform } from '@xopcai/gateway-contract';
 
 import { buckets } from '../../gateway/rate-limit/index.js';
 
 import type { GatewayScope } from '../../gateway/security/gateway-scopes.js';
 import { parseGatewayScopes } from '../../gateway/security/gateway-scopes.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+import { revokeDesktopExecutionRow } from './desktop-execution-state.js';
 
 const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1_000;
 const REFRESH_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1_000;
@@ -373,11 +374,48 @@ export function isDeviceAccessSessionActive(deviceId: string, sessionId: string,
 export function setDevicePhoneAccess(deviceId: string, access: 'none' | 'view' | 'control'): DeviceRecord | undefined {
   return runSqliteWriteTransaction(db => {
     const device = getDevice(deviceId);
-    if (!device || device.revokedAt !== undefined || device.platform === 'chrome') return undefined;
+    if (!device || device.revokedAt !== undefined || !isMobileDevicePlatform(device.platform)) return undefined;
     const scopes: GatewayScope[] = device.scopes.filter(scope => scope !== 'phone.view' && scope !== 'phone.control');
     if (access !== 'none') scopes.push('phone.view');
     if (access === 'control') scopes.push('phone.control');
     db.prepare('UPDATE devices SET scopes_json = ? WHERE device_id = ?').run(JSON.stringify(scopes), deviceId);
     return getDevice(deviceId);
   });
+}
+
+export function getDesktopStateObservation(deviceId: string): { deviceId: string; stateEnabled: boolean; revision: number } | undefined {
+  const device = getDevice(deviceId);
+  if (!device || device.revokedAt !== undefined || device.platform !== 'desktop') return;
+  const row = getSqliteDatabase().prepare('SELECT revision FROM desktop_observation_grants WHERE device_id = ?').get(deviceId) as { revision: number } | undefined;
+  return { deviceId, stateEnabled: device.scopes.includes('desktop.observe.state'), revision: row?.revision ?? 0 };
+}
+
+export function getDesktopScreenObservation(deviceId: string): { deviceId: string; screenEnabled: boolean; revision: number } | undefined {
+  const base = getDesktopStateObservation(deviceId), device = getDevice(deviceId);
+  return base && device ? { deviceId, screenEnabled: device.scopes.includes('desktop.observe.screen'), revision: base.revision } : undefined;
+}
+
+/** Revocation advances the shared version even before an earlier capability grant arrives. */
+function setDesktopObservationScope(deviceId: string, scope: 'desktop.observe.state' | 'desktop.observe.screen', enabled: boolean, expectedRevision?: number): number | undefined {
+  return runSqliteWriteTransaction(db => {
+    const device = getDevice(deviceId), current = getDesktopStateObservation(deviceId);
+    if (!device || !current) return undefined;
+    if (expectedRevision !== undefined && current.revision !== expectedRevision) throw new Error('DESKTOP_OBSERVATION_REVISION_CHANGED');
+    if (!Number.isSafeInteger(current.revision + 1)) throw new Error('DESKTOP_OBSERVATION_REVISION_LIMIT');
+    const scopes: GatewayScope[] = device.scopes.filter(value => value !== scope && (!enabled || value !== 'desktop.execute'));
+    if (enabled) revokeDesktopExecutionRow(db, deviceId);
+    if (enabled) scopes.push(scope);
+    db.prepare('UPDATE devices SET scopes_json = ? WHERE device_id = ?').run(JSON.stringify(scopes), deviceId);
+    db.prepare(`INSERT INTO desktop_observation_grants(device_id, revision, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(device_id) DO UPDATE SET revision = excluded.revision, updated_at = excluded.updated_at`).run(deviceId, current.revision + 1, Date.now());
+    return current.revision + 1;
+  });
+}
+export function setDesktopStateObservation(deviceId: string, enabled: boolean, expectedRevision?: number): ReturnType<typeof getDesktopStateObservation> {
+  const revision = setDesktopObservationScope(deviceId, 'desktop.observe.state', enabled, expectedRevision);
+  return revision === undefined ? undefined : { deviceId, stateEnabled: enabled, revision };
+}
+export function setDesktopScreenObservation(deviceId: string, enabled: boolean, expectedRevision?: number): ReturnType<typeof getDesktopScreenObservation> {
+  const revision = setDesktopObservationScope(deviceId, 'desktop.observe.screen', enabled, expectedRevision);
+  return revision === undefined ? undefined : { deviceId, screenEnabled: enabled, revision };
 }

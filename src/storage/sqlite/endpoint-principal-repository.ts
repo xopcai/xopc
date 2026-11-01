@@ -65,6 +65,12 @@ export function getEndpointPrincipal(id: string): EndpointPrincipal | undefined 
   return row ? fromRow(row) : undefined;
 }
 
+/** Retains device identity after a connection disappears; an offline device must not become a server-tool fallback. */
+export function getBoundEndpointPrincipalId(endpointId: string): string | undefined {
+  const row = getSqliteDatabase().prepare('SELECT principal_id FROM endpoint_instance_bindings WHERE endpoint_id = ?').get(endpointId) as { principal_id: string } | undefined;
+  return row?.principal_id;
+}
+
 export function listEndpointPrincipals(): EndpointPrincipal[] {
   const rows = getSqliteDatabase()
     .prepare('SELECT * FROM endpoint_principals ORDER BY created_at DESC')

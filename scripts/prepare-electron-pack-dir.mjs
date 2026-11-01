@@ -14,6 +14,7 @@ import { pruneElectronPdfjsRuntime } from './prune-electron-pdfjs-runtime.mjs';
 import { prepareCuaSdkRuntime } from './prepare-cua-sdk.mjs';
 import { COMPUTER_DRIVER_VERSION, computerDriverRelease } from './lib/computer-driver-release.mjs';
 import { createHash } from 'node:crypto';
+import { verifyStagedDesktopPackage } from './electron-package-layout.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const packDir = mkdtempSync(join(tmpdir(), 'xopc-electron-pack-'));
@@ -109,6 +110,18 @@ function stageVoiceHotkeyHelper(repoRoot, packDirPath, target) {
   cpSync(source, join(destDir, name));
 }
 
+function stageWorkspaceExecutor(repoRoot, packDirPath, target) {
+  const destination = join(packDirPath, '_pack-resources', 'desktop-workspace');
+  mkdirSync(destination, { recursive: true });
+  if (target.platform !== 'darwin') return;
+  const source = join(repoRoot, 'dist/electron/native/desktop-workspace.node');
+  if (!existsSync(source)) throw new Error('[prepare-electron-pack-dir] Build the native workspace adapter before packaging');
+  const checked = spawnSync('lipo', [source, '-verify_arch', target.arch === 'x64' ? 'x86_64' : target.arch]);
+  if (checked.status !== 0) throw new Error('[prepare-electron-pack-dir] Workspace adapter does not match the target architecture');
+  cpSync(source, join(destination, 'desktop-workspace.node'));
+  cpSync(join(repoRoot, 'electron/desktop/workspace-worker.cjs'), join(destination, 'workspace-worker.cjs'));
+}
+
 export function thinMacBinary(source, destination, arch, runLipo = spawnSync) {
   const slice = arch === 'x64' ? 'x86_64' : arch;
   if (slice !== 'arm64' && slice !== 'x86_64') {
@@ -155,6 +168,7 @@ export function prepareElectronPackDir(
 
   for (const { from, to } of APP_COPY_PATHS) copyRequired(repoRoot, from, to);
   for (const { from, to } of PACK_RESOURCE_COPIES) copyRequired(repoRoot, from, to);
+  verifyStagedDesktopPackage(packDir, repoRoot);
 
   const rootPkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
   const minimalPkg = buildMinimalElectronPackageJson(rootPkg, repoRoot);
@@ -172,6 +186,7 @@ export function prepareElectronPackDir(
   stageNodePtyRuntime(repoRoot, packDir, target);
   stageRipgrepBinary(packDir, target);
   stageVoiceHotkeyHelper(repoRoot, packDir, target);
+  stageWorkspaceExecutor(repoRoot, packDir, target);
   stageComputerDriver(repoRoot, packDir, target);
   rmSync(join(packDir, 'node_modules', '@vscode', `ripgrep-${target.platform}-${target.arch}`), {
     recursive: true,

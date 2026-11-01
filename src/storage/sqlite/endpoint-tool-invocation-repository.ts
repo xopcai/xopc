@@ -10,6 +10,7 @@ export interface EndpointToolInvocationAudit {
   effect: EndpointEffect;
   confirmationRequired: boolean;
   argumentsSha256: string;
+  operationId?: string;
   status: 'running' | 'succeeded' | 'failed';
   errorCode?: EndpointToolErrorCode;
   errorMessage?: string;
@@ -22,7 +23,7 @@ interface AuditRow {
   tool_name: string; effect: EndpointEffect; confirmation_required: number;
   arguments_sha256: string; status: EndpointToolInvocationAudit['status'];
   error_code: EndpointToolErrorCode | null; error_message: string | null;
-  started_at: number; completed_at: number | null;
+  started_at: number; completed_at: number | null; operation_id: string | null;
 }
 
 function fromRow(row: AuditRow): EndpointToolInvocationAudit {
@@ -35,6 +36,7 @@ function fromRow(row: AuditRow): EndpointToolInvocationAudit {
     effect: row.effect,
     confirmationRequired: row.confirmation_required === 1,
     argumentsSha256: row.arguments_sha256,
+    ...(row.operation_id === null ? {} : { operationId: row.operation_id }),
     status: row.status,
     ...(row.error_code === null ? {} : { errorCode: row.error_code }),
     ...(row.error_message === null ? {} : { errorMessage: row.error_message }),
@@ -49,11 +51,11 @@ export function startEndpointToolInvocationAudit(
   getSqliteDatabase().prepare(`
     INSERT INTO endpoint_tool_invocations (
       id, principal_id, endpoint_id, tool_call_id, tool_name, effect,
-      confirmation_required, arguments_sha256, status, started_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
+      confirmation_required, arguments_sha256, status, started_at, operation_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)
   `).run(
     audit.id, audit.principalId, audit.endpointId, audit.toolCallId, audit.toolName,
-    audit.effect, audit.confirmationRequired ? 1 : 0, audit.argumentsSha256, audit.startedAt,
+    audit.effect, audit.confirmationRequired ? 1 : 0, audit.argumentsSha256, audit.startedAt, audit.operationId ?? null,
   );
 }
 
@@ -90,6 +92,7 @@ export function listEndpointToolInvocationAuditPage(options: {
   pageSize?: number;
   query?: string;
   principalId?: string;
+  operationId?: string;
   status?: EndpointToolInvocationAudit['status'];
   effect?: EndpointEffect;
 } = {}): EndpointToolInvocationAuditPage {
@@ -106,6 +109,10 @@ export function listEndpointToolInvocationAuditPage(options: {
   if (options.principalId) {
     clauses.push('principal_id = ?');
     values.push(options.principalId);
+  }
+  if (options.operationId) {
+    clauses.push('operation_id = ?');
+    values.push(options.operationId);
   }
   if (options.status) {
     clauses.push('status = ?');

@@ -55,11 +55,13 @@ export async function executeComputerProgram(code: string, host: ComputerProgram
     lifetime.abort();
     await Promise.allSettled([...inFlight]);
     const text = result.output.filter(item => item.type === 'text').map(item => item.text).join('\n').slice(0, 16_000);
-    if (unawaited || cancelledHostCall || hostErrorCode) return { status: 'program_error' as const, output: text,
-      errorCode: hostErrorCode ?? 'COMPUTER_PROGRAM_UNAWAITED_CALL', scriptError: 'aborted' };
+    if (hostErrorCode) return { status: 'program_error' as const, output: text, errorCode: hostErrorCode, scriptError: 'aborted' };
     if (result.ok === false) return { status: 'program_error' as const, output: text,
       errorCode: hostErrorCode ?? 'COMPUTER_PROGRAM_FAILED', scriptError: result.error.kind,
       scriptErrorMessage: result.error.message.slice(0, 1000) };
+    if (signal.aborted) return { status: 'program_error' as const, output: text, errorCode: 'COMPUTER_PROGRAM_FAILED', scriptError: 'aborted' };
+    if (unawaited || cancelledHostCall) return { status: 'program_error' as const, output: text,
+      errorCode: 'COMPUTER_PROGRAM_UNAWAITED_CALL', scriptError: 'aborted' };
     const next: Record<string, unknown> = { ...store };
     for (const key of result.storeWrites.delete) delete next[key];
     Object.assign(next, result.storeWrites.set);

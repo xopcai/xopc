@@ -211,9 +211,9 @@ export function sortModelsForPicker(models: readonly Model<Api>[]): Model<Api>[]
 }
 
 export function getRecommendedModelsForProvider(provider: string, limit = 4): ModelCatalogView[] {
-  const models = sortModelsForPicker(getModelsByProvider(provider));
-  const fromRegistry = models
-    .filter((model) => !isDedicatedPhoneModel(model) && !isDedicatedComputerModel(model) && isRecommendedModel(provider, model.id))
+  const eligible = getModelsByProvider(provider)
+    .filter((model) => !isDedicatedPhoneModel(model) && !isDedicatedComputerModel(model) && isRecommendedModel(provider, model.id));
+  const fromRegistry = sortModelsForPicker(eligible)
     .slice(0, limit)
     .map(modelToCatalogView);
   if (fromRegistry.length > 0) return fromRegistry;
