@@ -13,6 +13,7 @@ function fixture() {
   const intent = { operationId: randomUUID(), gatewayId: scope.gatewayId, deviceId: scope.deviceId, workspaceId: scope.workspaceId,
     authorizationRevision: 1, tool: 'desktop.terminal.open', argumentHash: 'a'.repeat(64), toolRevision: 'b'.repeat(64), expiresAt: Date.now() + 60000 };
   const worker = { ready: Promise.resolve(scope), stop: vi.fn(async () => ({ confirmed: true })), input: vi.fn(async () => ({ dispatch: 'accepted' })),
+    rejectInput: vi.fn(async () => ({ dispatch: 'notStarted' })),
     acknowledge: vi.fn(), resize: vi.fn(async () => {}) };
   let current = true;
   const options = { current: () => current, confirmOpen: vi.fn(async () => true), confirmInput: vi.fn(async (_scope: DesktopTerminalScope, _input: DesktopTerminalInput, _signal: AbortSignal) => true), emit: vi.fn(),
@@ -35,7 +36,8 @@ it('opens a running root only after consent, fences remote scopes and never skip
       await expect(f.broker.input({ ...f.scope, ...change }, f.input, new AbortController().signal)).rejects.toThrow('AUTHORITY_INVALID');
     }
     f.options.confirmInput.mockResolvedValueOnce(false);
-    await expect(f.broker.input(f.scope, f.input, new AbortController().signal)).rejects.toThrow('USER_DENIED');
+    expect(await f.broker.input(f.scope, f.input, new AbortController().signal)).toMatchObject({ dispatch: 'notStarted' });
+    expect(f.worker.rejectInput).toHaveBeenCalledOnce();
     expect(f.worker.input).not.toHaveBeenCalled();
     expect(await f.broker.input(f.scope, f.input, new AbortController().signal)).toMatchObject({ dispatch: 'accepted' });
     expect(f.options.confirmInput).toHaveBeenCalledTimes(2); expect(f.worker.input).toHaveBeenCalledOnce();

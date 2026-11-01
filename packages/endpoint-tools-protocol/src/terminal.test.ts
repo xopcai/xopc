@@ -28,7 +28,7 @@ it('bounds stdin/output and resize, rejects source flags, arbitrary container id
   }
   expect(desktopTerminalEventSchema.safeParse({ ...scope, event: 'output', sequence: 1, bytes: Buffer.alloc(16384).toString('base64') }).success).toBe(true);
   expect(desktopTerminalEventSchema.safeParse({ ...scope, event: 'output', sequence: 1, bytes: Buffer.alloc(16385).toString('base64') }).success).toBe(false);
-  expect(desktopTerminalCommandSchema.safeParse({ ...scope, action: 'resize', columns: 100, rows: 30 }).success).toBe(true);
+  expect(desktopTerminalCommandSchema.safeParse({ ...scope, action: 'resize', requestId: randomUUID(), columns: 100, rows: 30 }).success).toBe(true);
   expect(desktopTerminalCommandSchema.safeParse({ ...scope, action: 'resize', columns: 501, rows: 30 }).success).toBe(false);
   expect(desktopTerminalEventSchema.safeParse({ ...scope, event: 'input-ack', inputId: randomUUID(), sequence: 1, dispatch: 'completed' }).success).toBe(false);
 });

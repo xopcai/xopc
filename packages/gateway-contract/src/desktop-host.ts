@@ -14,19 +14,20 @@ export const desktopPairingRouteSchema = z.union([
   devicePairingRouteSchema.refine(route => route.kind !== 'local-browser', 'Desktop pairing cannot use browser enrollment'),
   z.strictObject({ id: z.string().min(1).max(80), kind: z.literal('ssh-loopback'), url: desktopSshOriginSchema }),
 ]);
-export const DESKTOP_HOST_CAPABILITIES = Object.freeze({ sshPairing: true, deviceStateObservation: true, screenObservation: true, signedGatewayFrames: 1, signedDeviceFrames: 1, observationRevocationVersion: 1, reliableExecutionVersion: 1, operationStatusVersion: 1, operationReviewVersion: 1, workspaceExecutionVersion: 1, containerCommandVersion: 1 } as const);
+export const DESKTOP_HOST_CAPABILITIES = Object.freeze({ sshPairing: true, deviceStateObservation: true, screenObservation: true, signedGatewayFrames: 1, signedDeviceFrames: 1, observationRevocationVersion: 1, reliableExecutionVersion: 1, operationStatusVersion: 1, operationReviewVersion: 1, workspaceExecutionVersion: 1, containerCommandVersion: 1, containerTerminalVersion: 1 } as const);
 export const DESKTOP_STATE_OBSERVATION_TOOL = 'desktop.device.get_state' as const;
 export const DESKTOP_SCREEN_OBSERVATION_TOOL = 'desktop.screen.capture' as const;
 export const desktopExecutionGrantSchema = z.strictObject({
   version: z.literal(1), grantId: z.uuid(), localApprovalId: z.uuid(),
-  toolRevisions: z.partialRecord(z.enum(['desktop.clipboard.write', 'desktop.operation.get_status', 'desktop.workspace.list', 'desktop.workspace.read', 'desktop.workspace.write', 'desktop.command.run']), z.string().regex(/^[a-f0-9]{64}$/))
+  toolRevisions: z.partialRecord(z.enum(['desktop.clipboard.write', 'desktop.operation.get_status', 'desktop.workspace.list', 'desktop.workspace.read', 'desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open', 'desktop.terminal.control']), z.string().regex(/^[a-f0-9]{64}$/))
     .refine(value => Object.keys(value).length > 0),
   workspaceId: z.uuid().optional(),
   expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 }).refine(value => {
-  const tools = Object.keys(value.toolRevisions), workspace = tools.some(name => name.startsWith('desktop.workspace.')), container = tools.includes('desktop.command.run');
+  const tools = Object.keys(value.toolRevisions), workspace = tools.some(name => name.startsWith('desktop.workspace.')), container = tools.includes('desktop.command.run') || tools.some(name => name.startsWith('desktop.terminal.'));
   return !(workspace && container) && (workspace || container) === Boolean(value.workspaceId)
-    && (!(workspace || container) || tools.every(name => name === 'desktop.operation.get_status' || (container ? name === 'desktop.command.run' : name.startsWith('desktop.workspace.'))));
+    && (!(workspace || container) || tools.every(name => name === 'desktop.operation.get_status' || (container ? name === 'desktop.command.run' || name.startsWith('desktop.terminal.') : name.startsWith('desktop.workspace.'))))
+    && Boolean(value.toolRevisions['desktop.terminal.open']) === Boolean(value.toolRevisions['desktop.terminal.control']);
 }, 'Workspace execution must bind exactly one native-authorized workspace');
 export type DesktopExecutionGrant = z.infer<typeof desktopExecutionGrantSchema>;
 export const desktopPairingInvitationSchema = z.strictObject({

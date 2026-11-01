@@ -45,6 +45,7 @@ interface PendingInvocation {
   abortSignal?: AbortSignal;
   abortHandler?: () => void;
   onProgress?: (progress: { message?: string; percent?: number }) => void;
+  onTerminal?: (invocationId: string, event: Extract<ClientEndpointMessage, { type: 'terminal.event' }>['payload']['event']) => void;
   resolve: (result: EndpointInvocationResult) => void;
   reject: (error: Error) => void;
 }
@@ -117,6 +118,7 @@ export class EndpointInvocationService {
     operationId?: string;
     signal?: AbortSignal;
     onProgress?: (progress: { message?: string; percent?: number }) => void;
+    onTerminal?: PendingInvocation['onTerminal'];
   }): Promise<EndpointInvocationResult> {
     if (params.operationId !== undefined && !z.uuid().safeParse(params.operationId).success) {
       return Promise.reject(this.error('INVALID_ARGUMENTS', 'Invalid stable operation identity'));
@@ -138,7 +140,7 @@ export class EndpointInvocationService {
         return Promise.reject(this.error('INVALID_ARGUMENTS', 'Calendar range must be positive and at most seven days'));
       }
     }
-    if (params.toolName === 'desktop.command.run' && (!Array.isArray(params.arguments.argv) || !params.arguments.argv[0]
+    if (['desktop.command.run', 'desktop.terminal.open'].includes(params.toolName) && (!Array.isArray(params.arguments.argv) || !params.arguments.argv[0]
       || params.arguments.argv.some(value => typeof value !== 'string' || value.includes('\0'))
       || Buffer.byteLength(JSON.stringify(params.arguments.argv)) > DESKTOP_COMMAND_ARGV_BYTES)) return Promise.reject(new EndpointToolExecutionError('INVALID_ARGUMENTS', 'Container argv exceeds its bounded contract', true));
     let confirmationRequired: boolean;
@@ -169,7 +171,7 @@ export class EndpointInvocationService {
     const startedAt = Date.now();
     let execution: PendingInvocation['execution'];
     const deadlineAt = Math.min(startedAt + tool.descriptor.timeoutMs, endpoint.executionAuthority?.expiresAt ?? Infinity);
-    if ((params.toolName.startsWith('desktop.workspace.') || params.toolName === 'desktop.command.run') && (!endpoint.executionAuthority?.workspaceId
+    if ((params.toolName.startsWith('desktop.workspace.') || ['desktop.command.run', 'desktop.terminal.open'].includes(params.toolName)) && (!endpoint.executionAuthority?.workspaceId
       || params.arguments.workspaceId !== endpoint.executionAuthority.workspaceId)) {
       return Promise.reject(new EndpointToolExecutionError('PROTOCOL_ERROR', 'The selected workspace is not authorized for this device connection', true));
     }
@@ -230,6 +232,7 @@ export class EndpointInvocationService {
         }, Math.max(1, deadlineAt - Date.now())),
         abortSignal: params.signal,
         onProgress: params.onProgress,
+        onTerminal: params.onTerminal,
         resolve,
         reject,
       };
@@ -267,6 +270,14 @@ export class EndpointInvocationService {
       catch { this.fail(invocationId, this.error(pending.execution ? 'OUTCOME_UNKNOWN' : 'PROTOCOL_ERROR', 'Endpoint operation evidence is invalid')); return; }
     }
     switch (message.type) {
+      case 'terminal.event':
+        if (pending.state !== 'running' || pending.toolName !== 'desktop.terminal.open' || !pending.execution || !pending.onTerminal
+          || message.payload.event.connectionInstanceId !== pending.execution.connectionInstanceId) {
+          this.fail(invocationId, this.error('PROTOCOL_ERROR', 'Terminal event is outside its running root')); return;
+        }
+        try { pending.onTerminal(invocationId, message.payload.event); }
+        catch { this.cancel(invocationId, 'Terminal event failed its scope check', 'TOOL_CANCELLED'); }
+        return;
       case 'tool.received':
         if (pending.state !== 'sent') return;
         pending.state = 'running';

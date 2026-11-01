@@ -11,6 +11,7 @@ import {
 import {
   personalDescriptor,
   desktopCommandDescriptor,
+  desktopTerminalDescriptors,
   PERSONAL_TOOL_NAMES,
   BRIDGE_LIST_OUTPUT_SCHEMA,
   BRIDGE_READ_OUTPUT_SCHEMA,
@@ -61,6 +62,8 @@ function contract(
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
+  ...Object.fromEntries(desktopTerminalDescriptors().map(descriptor => [descriptor.name,
+    contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema)])),
   'desktop.command.run': (() => {
     const descriptor = desktopCommandDescriptor();
     return contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema);
@@ -204,6 +207,12 @@ export class EndpointToolPolicy {
           || descriptor.supportsCancellation !== true
           || descriptor.idempotent !== false) {
           throw new EndpointToolPolicyError(`Browser tool ${descriptor.name} violates its trusted policy`);
+        }
+        return;
+      case 'desktop.terminal-scoped':
+        this.assertFields(descriptor, 'write', 'never', true, 'personal');
+        if (descriptor.timeoutMs !== 60000 || descriptor.maxConcurrency !== 1 || !descriptor.supportsCancellation || descriptor.idempotent) {
+          throw new EndpointToolPolicyError('Terminal transport violates its trusted policy');
         }
         return;
       case 'computer.session-scoped':

@@ -16,6 +16,8 @@ export function assertDesktopExecutionHello(device: DeviceRecord, hello: Endpoin
     || hello.deviceFrames?.version !== 1 || hello.deviceFrames.authorizationRevision !== snapshot.revision
     || !capabilities.includes('desktop.device-frames.v1') || !capabilities.includes('desktop.durable-execution.v1')
     || hello.tools.some(tool => tool.name === 'desktop.operation.get_status') && !capabilities.includes('desktop.operation-status.v1')
+    || Boolean(hello.terminal) !== Boolean(grant.toolRevisions['desktop.terminal.open'])
+    || hello.terminal && !capabilities.includes('desktop.terminal.v1')
     || hello.tools.length !== Object.keys(grant.toolRevisions).length
     || new Set(hello.tools.map(tool => tool.name)).size !== hello.tools.length
     || hello.tools.some(tool => grant.toolRevisions[tool.name as keyof typeof grant.toolRevisions] !== endpointToolRevision(tool))) {

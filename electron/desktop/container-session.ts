@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
-import { desktopCommandDescriptor, desktopOperationStatusDescriptor, type DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
+import { desktopCommandDescriptor, desktopOperationStatusDescriptor, desktopTerminalDescriptors, type DesktopOperationIntent, type DesktopTerminalBinding, type DesktopTerminalOutput } from '@xopcai/endpoint-tools-protocol';
 
 import { DesktopContainerEngine } from './container-engine.js';
 import { DesktopContainerResources } from './container-resources.js';
@@ -9,6 +9,9 @@ import { DesktopContainerWorker } from './container-worker.js';
 import { DesktopExecutionCatalog } from './execution-catalog.js';
 import type { DesktopExecutionManager } from './execution-manager.js';
 import type { DesktopExecutionWorker } from './operation-supervisor.js';
+import type { DesktopExecutionLease } from './operation-journal.js';
+import { DesktopTerminalLedger } from './terminal-input-ledger.js';
+import { DesktopTerminalWorker } from './terminal-worker.js';
 
 /** One explicitly authorized isolated volume. No host filesystem is mounted and no closed session is reopened. */
 export class DesktopContainerSession {
@@ -17,12 +20,13 @@ export class DesktopContainerSession {
   private closed = false;
   private activated = false;
   private workspaceReady = false;
-  private readonly workers = new Set<DesktopContainerWorker>();
+  private readonly workers = new Set<DesktopContainerWorker | DesktopTerminalWorker>();
+  private readonly ledgers = new Map<DesktopTerminalWorker, DesktopTerminalLedger>();
   constructor(readonly engine: DesktopContainerEngine, readonly imageId: string, private readonly resources: DesktopContainerResources, private readonly current: () => boolean,
-    private readonly retained?: { workspaceId: string; ownerId: string; existing: boolean; persist?(): Promise<void> }) {
+    private readonly retained?: { workspaceId: string; ownerId: string; existing: boolean; persist?(): Promise<void> }, private readonly terminalMode = false) {
     this.workspaceId = retained ? z.uuid().parse(retained.workspaceId) : randomUUID(); this.ownerId = retained ? z.uuid().parse(retained.ownerId) : randomUUID();
   }
-  catalog() { return new DesktopExecutionCatalog([desktopCommandDescriptor(this.workspaceId, this.imageId), desktopOperationStatusDescriptor()]); }
+  catalog() { return new DesktopExecutionCatalog([...(this.terminalMode ? desktopTerminalDescriptors(this.workspaceId, this.imageId) : [desktopCommandDescriptor(this.workspaceId, this.imageId)]), desktopOperationStatusDescriptor()]); }
   retainedData() { return this.retained?.existing === true; }
   /** Called only after native grant consent. Creating an empty owned volume does not start a command. */
   async authorizeWorkspace(signal: AbortSignal) {
@@ -53,9 +57,18 @@ export class DesktopContainerSession {
       stop: async () => { const result = await worker.stop(); if (result.confirmed) this.workers.delete(worker); return result; },
     };
   }
+  terminal(intent: DesktopOperationIntent, binding: DesktopTerminalBinding, emit: (frame: DesktopTerminalOutput) => void, lease: DesktopExecutionLease) {
+    if (!this.terminalMode || this.closed || !this.workspaceReady || !this.current() || intent.tool !== 'desktop.terminal.open' || intent.workspaceId !== this.workspaceId) throw new Error('DESKTOP_TERMINAL_AUTHORITY_INVALID');
+    const ledger = new DesktopTerminalLedger(lease, binding);
+    const worker = new DesktopTerminalWorker({ engine: this.engine, imageId: this.imageId, resources: this.resources, intent: structuredClone(intent), ownerId: this.ownerId,
+      workspaceId: this.workspaceId, binding, ledger, current: () => !this.closed && this.current(), emit });
+    this.workers.add(worker); this.ledgers.set(worker, ledger); return worker;
+  }
   async stop() {
     this.closed = true;
-    const outcomes = await Promise.all([...this.workers].map(async worker => { const outcome = await worker.stop(); if (outcome.confirmed) this.workers.delete(worker); return outcome; }));
+    const outcomes = await Promise.all([...this.workers].map(async worker => { const outcome = await worker.stop(); if (outcome.confirmed) {
+      this.workers.delete(worker); if (worker instanceof DesktopTerminalWorker) { this.ledgers.get(worker)?.close(); this.ledgers.delete(worker); }
+    } return outcome; }));
     return { confirmed: outcomes.every(outcome => outcome.confirmed) };
   }
 }

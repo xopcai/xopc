@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { DesktopExecutionGrant } from '@xopcai/gateway-contract';
 import type { DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
+import type { DesktopTerminalHostController } from './terminal-host-controller.js';
 
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
 import { isConnectionId } from '../gateway/profiles.js';
@@ -36,10 +37,13 @@ export class DesktopExecutionManager {
     confirm: ConstructorParameters<typeof DesktopExecutionSession>[0]['confirm'];
     confirmRead?(request: DesktopWorkspaceReadApproval, signal: AbortSignal): Promise<boolean>;
     createWorker(tool: string, intent?: DesktopOperationIntent): DesktopExecutionWorker;
+    createTerminal?(...input: [...Parameters<ConstructorParameters<typeof DesktopTerminalHostController>[0]['createWorker']>, DesktopExecutionLease]): ReturnType<ConstructorParameters<typeof DesktopTerminalHostController>[0]['createWorker']>;
+    confirmTerminalInput?: ConstructorParameters<typeof DesktopTerminalHostController>[0]['confirmInput'];
   }) {}
-  snapshot(): (Status & { workspaceId?: string; container?: true }) | undefined { return this.status ? { ...this.status,
+  snapshot(): (Status & { workspaceId?: string; container?: true; terminal?: true }) | undefined { return this.status ? { ...this.status,
     ...(this.active?.proposed?.workspaceId ? { workspaceId: this.active.proposed.workspaceId } : {}),
-    ...(this.active?.proposed?.toolRevisions['desktop.command.run'] ? { container: true } : {}) } : undefined; }
+    ...(this.active?.proposed?.toolRevisions['desktop.command.run'] || this.active?.proposed?.toolRevisions['desktop.terminal.open'] ? { container: true } : {}),
+    ...(this.active?.proposed?.toolRevisions['desktop.terminal.open'] ? { terminal: true } : {}) } : undefined; }
   origin() {
     const run = this.active, current = this.options.manager.snapshot();
     return run && !run.abort.signal.aborted && current.epoch === run.epoch && current.selectedId === run.binding.profileId ? run.host?.origin() : undefined;
@@ -130,6 +134,7 @@ export class DesktopExecutionManager {
       const compatibility = await client.endpointRequest('/api/desktop-host/compatibility', 'GET', undefined, run.deviceId); current();
       if (compatibility?.gatewayId !== binding.gatewayId || compatibility.publicKey !== binding.publicKey || compatibility.capabilities?.reliableExecutionVersion !== 1) throw new Error('DESKTOP_EXECUTION_UNSUPPORTED');
       if (workspace && (workspace.kind === 'container' ? compatibility.capabilities?.containerCommandVersion !== 1 : compatibility.capabilities?.workspaceExecutionVersion !== 1)) throw new Error('DESKTOP_WORKSPACE_UNSUPPORTED');
+      if (workspace?.catalog.revision('desktop.terminal.open') && compatibility.capabilities?.containerTerminalVersion !== 1) throw new Error('DESKTOP_TERMINAL_UNSUPPORTED');
       if (compatibility.capabilities?.operationReviewVersion === 1) {
         const pending = await client.endpointRequest('/api/desktop-host/operations', 'GET', undefined, run.deviceId); current();
         if (!Array.isArray(pending?.items) || pending.items.length) throw new Error('DESKTOP_OPERATION_RECONCILIATION_REQUIRED');
@@ -149,6 +154,8 @@ export class DesktopExecutionManager {
       run.host = new DesktopExecutionHost({ binding, auth: client, appVersion: this.options.appVersion, approved: grant,
         authorizationRevision: authorization.revision, catalog, journal: run.journal, foreground: this.options.foreground,
         confirm: this.options.confirm, confirmRead: this.options.confirmRead, createWorker: this.options.createWorker,
+        ...(this.options.createTerminal ? { createTerminal: (intent, binding, emit) => this.options.createTerminal!(intent, binding, emit, run.lease!) } : {}),
+        confirmTerminalInput: this.options.confirmTerminalInput,
         onState: (state, error) => {
           if (this.active !== run || abort.signal.aborted) return;
           this.status = { profileId: id, state: state === 'stopped' ? 'stop-requested' : state, ...(error ? { error } : {}) };

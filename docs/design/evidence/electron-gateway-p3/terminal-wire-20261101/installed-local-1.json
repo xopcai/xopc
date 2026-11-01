@@ -1,0 +1,51 @@
+{
+  "passed": true,
+  "scope": "Installed macOS app local spawn/reuse, real bundled Gateway/SQLite/IPC/PTY/browser with deterministic inference; not upgrade or S5 acceptance",
+  "samples": [
+    {
+      "mode": "spawn",
+      "passed": true,
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "99a7ab43-00e6-4f39-b894-0e5346aba4f8"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "ownedRestartPreservesChat": true
+    },
+    {
+      "mode": "reuse",
+      "passed": true,
+      "reusedDatabaseVersionBefore": "266",
+      "functions": {
+        "chatRendered": true,
+        "cookieApi": true,
+        "realtimeSessionEvent": true,
+        "nativeFileReadWrite": true,
+        "nativeFileBoundary": true,
+        "nativePty": true,
+        "embeddedBrowserLoaded": true,
+        "conversationId": "3f61c8f8-83bf-49ca-8ec7-3912102c415b"
+      },
+      "corruptRemoteProfileIgnored": true,
+      "externalRestartDenied": true,
+      "reusedGatewaySurvivesExit": true,
+      "reusedDatabaseVersionAfter": "266"
+    }
+  ],
+  "packageBefore": {
+    "files": 1431,
+    "sha256": "ad66efcebfcf35f33adcc5e09d6ae7485bad41641fcf49da7e8f85a6454df719"
+  },
+  "packageAfter": {
+    "files": 1431,
+    "sha256": "ad66efcebfcf35f33adcc5e09d6ae7485bad41641fcf49da7e8f85a6454df719"
+  },
+  "startedAt": "2026-11-01T07:37:09.462Z",
+  "finishedAt": "2026-11-01T07:37:41.337Z"
+}

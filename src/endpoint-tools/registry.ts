@@ -36,6 +36,7 @@ export interface EndpointConnectionSnapshot {
   lastHeartbeatAt: number;
   tools: RegisteredEndpointTool[];
   executionAuthority?: EndpointDesktopExecutionAuthority;
+  terminalVersion?: 1;
 }
 
 type EndpointConnection = EndpointConnectionSnapshot & {
@@ -66,6 +67,7 @@ function snapshot(connection: EndpointConnection): EndpointConnectionSnapshot {
     lastHeartbeatAt: connection.lastHeartbeatAt,
     tools: [...connection.toolByName.values()],
     ...(connection.executionAuthority ? { executionAuthority: { ...connection.executionAuthority } } : {}),
+    ...(connection.terminalVersion ? { terminalVersion: connection.terminalVersion } : {}),
   };
 }
 
@@ -141,6 +143,7 @@ export class EndpointRegistry {
       turnToken: crypto.randomBytes(32).toString('base64url'),
       toolByName,
       ...(authority ? { executionAuthority: authority } : {}),
+      ...(hello.terminal && authority ? { terminalVersion: 1 as const } : {}),
     };
     this.connectionByEndpointId.set(connection.endpointId, connection);
     for (const listener of this.changeListeners) listener(connection.endpointId);
@@ -191,7 +194,7 @@ export class EndpointRegistry {
     return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
   }
 
-  send(endpointId: string, type: 'tool.invoke' | 'tool.cancel', payload: unknown): void {
+  send(endpointId: string, type: ServerEndpointMessage['type'], payload: unknown): void {
     const connection = this.connectionByEndpointId.get(endpointId);
     if (!connection || connection.transport.readyState !== 1) {
       throw new Error(`Endpoint is offline: ${endpointId}`);

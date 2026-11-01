@@ -15,7 +15,8 @@ export class DesktopExecutionCatalog {
       const query = descriptor.name === 'desktop.operation.get_status' && descriptor.effect === 'read' && descriptor.confirmation === 'never';
       const workspaceRead = ['desktop.workspace.read', 'desktop.workspace.list'].includes(descriptor.name) && descriptor.effect === 'read'
         && descriptor.sensitivity === 'personal' && descriptor.confirmation === 'always';
-      if (this.tools.has(descriptor.name) || !query && ((!workspaceRead && descriptor.effect === 'read') || descriptor.confirmation !== 'always')
+      const terminalControl = descriptor.name === 'desktop.terminal.control' && descriptor.policyId === 'desktop.terminal-scoped' && descriptor.effect === 'write' && descriptor.confirmation === 'never';
+      if (this.tools.has(descriptor.name) || !query && !terminalControl && ((!workspaceRead && descriptor.effect === 'read') || descriptor.confirmation !== 'always')
         || !descriptor.requiresForeground || descriptor.maxConcurrency !== 1 || !descriptor.supportsCancellation) throw new Error('DESKTOP_RELIABLE_DESCRIPTOR_INVALID');
       this.tools.set(descriptor.name, { descriptor, revision: endpointToolRevision(descriptor), input: ajv.compile(descriptor.inputSchema), output: ajv.compile(descriptor.outputSchema) });
     }
@@ -28,7 +29,7 @@ export class DesktopExecutionCatalog {
   descriptors(): EndpointToolDescriptor[] { return [...this.tools.values()].map(tool => structuredClone(tool.descriptor)); }
   validateArguments(tool: string, args: Record<string, unknown>): void {
     if (!this.tools.get(tool)?.input(args)) throw new Error('DESKTOP_EXECUTION_ARGUMENT_INVALID');
-    if (tool === 'desktop.command.run' && (!Array.isArray(args.argv) || !args.argv[0] || args.argv.some(value => typeof value !== 'string' || value.includes('\0'))
+    if (['desktop.command.run', 'desktop.terminal.open'].includes(tool) && (!Array.isArray(args.argv) || !args.argv[0] || args.argv.some(value => typeof value !== 'string' || value.includes('\0'))
       || Buffer.byteLength(JSON.stringify(args.argv)) > DESKTOP_COMMAND_ARGV_BYTES)) throw new Error('DESKTOP_EXECUTION_ARGUMENT_INVALID');
   }
   readonly validateResult = (result: unknown, tool: string): unknown => {
