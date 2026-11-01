@@ -1,0 +1,24 @@
+{
+  "source": "f5b4b66015a386813ff31923cde8bde702fa544d",
+  "frozenAt": "2026-10-31T02:29:21.672Z",
+  "baselineSha256": "e752bb4b97f54e4713d8ecc8b6f8cd302d3e80d044099b0397dfe113d0f45746",
+  "builtFiles": 3040,
+  "builtFilesSha256": "9cd6976b16302c72f0023258aa13e85919a1811b545ad309df13729148ab87d2",
+  "scope": "Node/Web/main/preload; development runtime with documented test layout mappings, not installer",
+  "runsPerMode": 30,
+  "operationsFirstRun": 100,
+  "p95Budgets": {
+    "spawn": {
+      "readyMs": 2140.4790750000006,
+      "configMs": 52.599999994039536,
+      "sessionsMs": 31.600000023841858,
+      "rssMiB": 1077.64453125
+    },
+    "reuse": {
+      "readyMs": 1102.2085420000076,
+      "configMs": 53.30000001192093,
+      "sessionsMs": 25,
+      "rssMiB": 719.52890625
+    }
+  }
+}
