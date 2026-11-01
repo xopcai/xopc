@@ -37,6 +37,7 @@ it('rejects mismatched authority and arguments before a worker can execute', asy
   const supervisor = create();
   await expect(supervisor.execute({ ...request(), intent: { ...operation, deviceId: randomUUID() } })).rejects.toThrow('AUTHORITY_INVALID');
   await expect(supervisor.execute({ ...request(), arguments: { ...args, content: 'changed' } })).rejects.toThrow('ARGUMENT_MISMATCH');
+  await expect(supervisor.execute({ ...request(), intent: { ...operation, workspaceId: randomUUID() } })).rejects.toThrow('AUTHORITY_INVALID');
   expect(worker.run).not.toHaveBeenCalled(); expect(journal.inspect(operation)).toBeUndefined();
 });
 

@@ -1,3 +1,4 @@
+import { getDesktopExecutionGrant } from '../../../storage/sqlite/desktop-execution-repository.js';
 import { z } from 'zod';
 import {
   endpointPrincipalRegistrationSchema,
@@ -147,7 +148,7 @@ export function registerEndpointToolRoutes(
       const compatibleKind = device?.platform === 'chrome'
         ? parsed.data.kind === 'browser' && parsed.data.platform === 'chrome'
         : device?.platform === 'desktop' ? parsed.data.kind === 'desktop' && parsed.data.platform === 'desktop'
-          && (device.scopes.includes('desktop.observe.state') || device.scopes.includes('desktop.observe.screen')) && parsed.data.publicKey === desktopDeviceEndpointKey(device)
+          && (device.scopes.includes('desktop.observe.state') || device.scopes.includes('desktop.observe.screen') || device.scopes.includes('desktop.execute') && getDesktopExecutionGrant(device.id)?.active) && parsed.data.publicKey === desktopDeviceEndpointKey(device)
         : parsed.data.kind === 'mobile';
       if (!ownsPrincipal || !compatibleKind) {
         return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint identity does not match this device' } }, 403);

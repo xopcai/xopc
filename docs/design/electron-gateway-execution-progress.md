@@ -52,3 +52,5 @@ D3a已完成独立签名的设备状态只读Host与逐项原生同意，实际A
 已继续完成J2b-1共享操作/停止回执契约、可取消批准的执行会话适配、独立设备结果帧签名协商及只读Host接线，修复迟到握手和旧socket跨代干扰。277项相关回归、13项主要集成、类型检查、新DMG包内校验、本地新启动/复用、远端恢复/兼容及包内实际Agent图像HTTP验证通过；初次类型和夹具失败保留，原预算不变。见[本批证据](./evidence/electron-gateway-p2b/device-frames-20261101/README.md)。J2b审计/核实与写授权接线、J3/P3/P4继续推进；未提前合入main。
 
 后续J2b-2已将Agent稳定operationId关联到Endpoint审计并提供筛选，修复设备调用审计归属和批量撤销权限边界。schema266完整升级链/历史保留、247项存储、286项连接/协议/Provider、58项认证观察、类型检查以及新DMG本地/旧265 Gateway复用、真实跨包升级/备份、包内认证审计HTTP和远端恢复验证均通过；历史夹具的首次失败已保留，见[审计证据](./evidence/electron-gateway-p2b/operation-audit-20261101/README.md)。继续执行授权与回执接线，仍未开放远端写工具、未完成J3/P3/P4，也未提前合入main。
+
+J2b-3 继续完成独立设备执行授权/CAS 与 Gateway 签名回执、双能力协商/授权绑定、Gateway 下发前意图持久化及终态回执核验、确认停止等待和未知操作的设备级新写入阻断。修复带 JSON 的 DELETE 缺 Content-Length 导致撤销请求认证失败；首次失败保留，相关回归已通过。相关协议/连接310项、认证/观察集成81项、SQLite253项和新增真实 Gateway 执行夹具 E2E 通过，集合重叠不相加。新DMG阶段包的本地新启动/旧266 Gateway复用、跨包265→267升级备份、包内认证授权API、远端恢复与兼容、实际Agent图像HTTP均通过。证据见[执行接线记录](./evidence/electron-gateway-p2b/execution-wire-20261101/README.md)。原生写入 Host/UI、人工核实、J3/P3/P4 尚未完成，最终 main 合并与交付条件不变。

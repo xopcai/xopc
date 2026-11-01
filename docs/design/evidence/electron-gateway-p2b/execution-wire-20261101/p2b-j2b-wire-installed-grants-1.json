@@ -1,0 +1,25 @@
+{
+  "passed": true,
+  "scope": "Actual installed bundled Gateway HTTP auth/audit query with synthetic pre-seeded metadata; no OS tool execution or native consent claim.",
+  "checks": {
+    "unauthenticatedDenied": true,
+    "ownerOperationFilter": true,
+    "ownDeviceRowsOnly": true,
+    "crossDeviceDenied": true,
+    "deviceSelfCannotRevoke": true,
+    "invalidFilterDenied": true,
+    "packagedExecutionGrantAuthAndSignature": true,
+    "packagedDeleteBodyAndRevocation": true,
+    "defaultDesktopCannotExecute": true
+  },
+  "startedAt": "2026-11-01T02:19:16.185Z",
+  "packageBefore": {
+    "files": 1428,
+    "sha256": "d5bc394e7bdf902a0f89a07471307026c3fdc5fc2083343ff8ff5567292dda81"
+  },
+  "packageAfter": {
+    "files": 1428,
+    "sha256": "d5bc394e7bdf902a0f89a07471307026c3fdc5fc2083343ff8ff5567292dda81"
+  },
+  "finishedAt": "2026-11-01T02:19:17.724Z"
+}

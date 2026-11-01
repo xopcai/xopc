@@ -9,7 +9,7 @@ import type { DesktopScreenSession } from './screen-session.js';
 
 type ObservationCapability = 'device-state' | 'screen';
 type Observation = { profileId: string; state: DesktopObservationState; error?: string; capability: ObservationCapability; serverRevocationConfirmed?: boolean };
-type Run = { binding: DesktopBinding; transport: 'ssh' | 'direct'; epoch: number; capability: ObservationCapability; controller: AbortController; host?: DesktopObservationHost; screen?: DesktopScreenSession; deviceId?: string; close(): void };
+type Run = { binding: DesktopBinding; transport: 'ssh' | 'direct'; epoch: number; capability: ObservationCapability; controller: AbortController; host?: DesktopObservationHost; screen?: DesktopScreenSession; deviceId?: string; revisionedRevocation?: boolean; authorizationRevision?: number; close(): void };
 
 export class DesktopObservationManager {
   private active?: Run;
@@ -40,8 +40,9 @@ export class DesktopObservationManager {
     this.cleanup = this.cleanup.catch(() => {}).then(async () => {
       let confirmed = false;
       const channel = desktopAuthTransport(run.binding, run.transport), client = new DesktopDeviceAuth(run.binding, this.options.store, channel.request);
-      try { if (run.deviceId) {
-        const result = await client.endpointRequest(run.capability === 'screen' ? '/api/desktop-host/screen' : '/api/desktop-host/observation', 'DELETE', undefined, run.deviceId);
+      try { if (run.deviceId && (!run.revisionedRevocation || run.authorizationRevision !== undefined)) {
+        const result = await client.endpointRequest(run.capability === 'screen' ? '/api/desktop-host/screen' : '/api/desktop-host/observation', 'DELETE',
+          run.revisionedRevocation ? { expectedRevision: run.authorizationRevision } : undefined, run.deviceId);
         confirmed = run.capability === 'screen' ? result?.screenEnabled === false : result?.stateEnabled === false;
       } }
       catch { /* The local Host remains stopped if the server cannot confirm revocation. */ }
@@ -70,9 +71,11 @@ export class DesktopObservationManager {
       const discovery = await owner.request('/api/desktop-host/compatibility'); current();
       if (discovery.payload?.gatewayId !== binding.gatewayId || discovery.payload.publicKey !== binding.publicKey
         || discovery.payload.capabilities?.[capability === 'screen' ? 'screenObservation' : 'deviceStateObservation'] !== true || discovery.payload.capabilities.signedGatewayFrames !== 1) throw new Error('DESKTOP_OBSERVATION_UNSUPPORTED');
+      run.revisionedRevocation = discovery.payload.capabilities.observationRevocationVersion === 1;
       const route = `/api/desktop-host/devices/${run.deviceId}/${capability === 'screen' ? 'screen' : 'observation'}`;
       const authorization = await owner.request(route); current();
       if (authorization.payload?.deviceId !== run.deviceId || !Number.isSafeInteger(authorization.payload.revision)) throw new Error('DESKTOP_OBSERVATION_DENIED');
+      run.authorizationRevision = authorization.payload.revision;
       if (capability === 'screen') {
         run.screen = await this.options.selectScreen?.(binding, controller.signal); current();
         if (!run.screen) throw new Error('DESKTOP_LOCAL_CONSENT_DENIED');
@@ -81,6 +84,8 @@ export class DesktopObservationManager {
       if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
       const grant = await owner.request(route, 'POST', { [capability === 'screen' ? 'screen' : 'state']: true, expectedRevision: authorization.payload.revision }); current();
       if (grant.payload?.deviceId !== run.deviceId || grant.payload[capability === 'screen' ? 'screenEnabled' : 'stateEnabled'] !== true) throw new Error('DESKTOP_OBSERVATION_DENIED');
+      if (run.revisionedRevocation && !Number.isSafeInteger(grant.payload.revision)) throw new Error('DESKTOP_OBSERVATION_DENIED');
+      run.authorizationRevision = grant.payload.revision;
       const signedDeviceFrames = discovery.payload.capabilities.signedDeviceFrames === 1;
       if (signedDeviceFrames && !Number.isSafeInteger(grant.payload.revision)) throw new Error('DESKTOP_OBSERVATION_DENIED');
       this.status = { profileId: id, state: 'connecting', capability };

@@ -14,9 +14,12 @@ import { installedAppFingerprint, macPackagedTarget, packagedGatewayEnvironment 
 
 const argument = (name: string) => { const index = process.argv.indexOf(name); assert(index >= 0 && process.argv[index + 1]); return process.argv[index + 1]; };
 const target = await macPackagedTarget(argument('--app')), previous = await macPackagedTarget(argument('--from-app'));
+const schemaArg = process.argv.indexOf('--to-schema');
+const toSchema = schemaArg < 0 ? 266 : Number(process.argv[schemaArg + 1]);
+assert(Number.isSafeInteger(toSchema) && toSchema >= 266 && toSchema <= 267, 'Unsupported audit upgrade target');
 const output = await createAcceptanceOutput(join(process.cwd(), 'reports/endpoint-audit-upgrade-installed.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-audit-upgrade-')), token = randomUUID(), auditId = randomUUID();
-const report: any = { passed: false, scope: 'Actual packaged v265 Gateway creates the isolated DB, then the candidate performs the offline v266 upgrade, backup and authenticated audit read. Synthetic historical metadata only.', checks: {}, startedAt: new Date().toISOString() };
+const report: any = { passed: false, scope: `Actual packaged v265 Gateway creates the isolated DB, then the candidate performs the offline v${toSchema} upgrade, backup and authenticated audit read. Synthetic historical metadata only.`, checks: {}, startedAt: new Date().toISOString() };
 let child: ReturnType<typeof spawn> | undefined, logs = '';
 async function stop() {
   if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return;
@@ -64,8 +67,13 @@ try {
   await stop();
   const current = new DatabaseSync(path, { readOnly: true });
   try {
-    assert.equal(current.prepare("SELECT value FROM schema_meta WHERE key='schema_version'").get()?.value, '266');
+    assert.equal(current.prepare("SELECT value FROM schema_meta WHERE key='schema_version'").get()?.value, String(toSchema));
     assert.equal(current.prepare('SELECT operation_id FROM endpoint_tool_invocations WHERE id=?').get(auditId)?.operation_id, null);
+    if (toSchema >= 267) {
+      assert.equal(current.prepare('SELECT count(*) AS count FROM desktop_execution_grants').get()?.count, 0);
+      assert(current.prepare('PRAGMA table_info(capability_operations)').all().some(column => column.name === 'desktop_intent_json'));
+      report.checks.reliableExecutionSchema = true;
+    }
     assert.equal(current.prepare('PRAGMA integrity_check').get()?.integrity_check, 'ok'); assert.deepEqual(current.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { current.close(); }
   report.checks.newSchemaIntegrity = true;

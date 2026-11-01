@@ -1,0 +1,2 @@
+{"level":"info","time":"2026-11-01T02:18:33.178Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-audit-installed-7aumTg/xopc.db","msg":"Opened xopc SQLite database"}
+{"passed":true,"checks":{"unauthenticatedDenied":true,"ownerOperationFilter":true,"ownDeviceRowsOnly":true,"crossDeviceDenied":true,"deviceSelfCannotRevoke":true,"invalidFilterDenied":true}}

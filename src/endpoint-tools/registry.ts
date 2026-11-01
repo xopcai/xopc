@@ -3,6 +3,8 @@ import crypto from 'node:crypto';
 import {
   ENDPOINT_PROTOCOL_VERSION,
   canonicalJson,
+  endpointDesktopExecutionAuthoritySchema,
+  type EndpointDesktopExecutionAuthority,
   type EndpointAvailability,
   type EndpointHelloPayload,
   type EndpointKind,
@@ -33,6 +35,7 @@ export interface EndpointConnectionSnapshot {
   availability: EndpointAvailability;
   lastHeartbeatAt: number;
   tools: RegisteredEndpointTool[];
+  executionAuthority?: EndpointDesktopExecutionAuthority;
 }
 
 type EndpointConnection = EndpointConnectionSnapshot & {
@@ -62,6 +65,7 @@ function snapshot(connection: EndpointConnection): EndpointConnectionSnapshot {
     availability: connection.availability,
     lastHeartbeatAt: connection.lastHeartbeatAt,
     tools: [...connection.toolByName.values()],
+    ...(connection.executionAuthority ? { executionAuthority: { ...connection.executionAuthority } } : {}),
   };
 }
 
@@ -97,7 +101,13 @@ export class EndpointRegistry {
     connectionId: string,
     transport: EndpointTransport,
     now = Date.now(),
+    executionAuthority?: EndpointDesktopExecutionAuthority,
   ): EndpointRegistration {
+    const authority = executionAuthority ? endpointDesktopExecutionAuthoritySchema.parse(executionAuthority) : undefined;
+    if (authority && (hello.kind !== 'desktop' || hello.principalId !== authority.deviceId
+      || hello.connectionInstanceId !== authority.connectionInstanceId || hello.execution?.grantId !== authority.grantId
+      || hello.execution.authorizationRevision !== authority.authorizationRevision || hello.execution.expiresAt !== authority.expiresAt
+      || hello.deviceFrames?.authorizationRevision !== authority.authorizationRevision || authority.expiresAt <= now)) throw new Error('DESKTOP_EXECUTION_AUTHORITY_INVALID');
     const toolByName = new Map<string, RegisteredEndpointTool>();
     for (const descriptor of hello.tools) {
       this.policy.validateDescriptor(hello.kind, descriptor);
@@ -130,6 +140,7 @@ export class EndpointRegistry {
       transport,
       turnToken: crypto.randomBytes(32).toString('base64url'),
       toolByName,
+      ...(authority ? { executionAuthority: authority } : {}),
     };
     this.connectionByEndpointId.set(connection.endpointId, connection);
     for (const listener of this.changeListeners) listener(connection.endpointId);

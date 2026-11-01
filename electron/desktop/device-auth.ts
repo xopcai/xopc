@@ -6,6 +6,7 @@ import type { EndpointToolFile, EndpointToolUploadGrant } from '@xopcai/endpoint
 
 import { DesktopIdentityStore, type DesktopBinding, type DesktopIdentity } from './device-identity.js';
 import { DesktopDeviceFrameSigner } from '../../src/endpoint-tools/desktop-device-frame.js';
+import { verifyDesktopAuthorityResponse } from '../../src/endpoint-tools/desktop-authority-response.js';
 
 export type DesktopAuthTransport = (path: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown,
   headers?: Record<string, string>, signal?: AbortSignal) => Promise<{ status: number; body: any }>;
@@ -95,8 +96,13 @@ export class DesktopDeviceAuth {
     const timestamp = Date.now(), nonce = randomBytes(24).toString('base64url'), bodyDigest = digest(Buffer.isBuffer(body) ? body : body === undefined ? '' : JSON.stringify(body)), token = this.access!.token;
     const payload = ['xopc-request-v1', this.binding.gatewayId, digest(token), method, target, bodyDigest,
       headers['content-type'], '', '', extraHeaders['x-endpoint-id'] ?? '', extraHeaders['x-endpoint-upload-token'] ?? '', String(timestamp), nonce].join('\n');
-    return this.transport(target, method, body, { Authorization: `Bearer ${token}`, ...headers,
+    const response = await this.transport(target, method, body, { Authorization: `Bearer ${token}`, ...headers,
       'X-Xopc-Proof': `${timestamp}.${nonce}.${bodyDigest}.${signature(record, payload)}` }, signal);
+    if (target === '/api/desktop-host/execution' && response.status >= 200 && response.status < 300) {
+      return { status: response.status, body: verifyDesktopAuthorityResponse(response,
+        { gatewayId: this.binding.gatewayId, deviceId: record.deviceId!, nonce, method, target }, this.binding.publicKey) };
+    }
+    return response;
   }
   private async enrolled(): Promise<DesktopIdentity> {
     const record = await this.store.load(this.binding);
@@ -114,6 +120,7 @@ export class DesktopDeviceAuth {
     return this.serial(async () => {
       signal?.throwIfAborted();
       if (!(method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path)
+        || path === '/api/desktop-host/execution' && ['GET', 'POST', 'DELETE'].includes(method)
         || method === 'GET' && ['/api/endpoint-tools/compatibility', '/api/desktop-host/status'].includes(path)
         || method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path))) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
       const record = await this.enrolled();
@@ -128,7 +135,7 @@ export class DesktopDeviceAuth {
   signEndpointHello(hello: EndpointHelloPayload): Promise<EndpointHelloPayload> {
     return this.serial(async () => {
       const record = await this.enrolled();
-      if (hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
+      if (hello.execution || hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
         || hello.tools.length !== 1 || !['desktop.device.get_state', 'desktop.screen.capture'].includes(hello.tools[0]?.name)) throw new Error('DESKTOP_OBSERVATION_DENIED');
       return { ...hello, signature: signature(record, endpointHelloSigningPayload(hello)) };
     });
@@ -136,7 +143,7 @@ export class DesktopDeviceAuth {
   prepareSignedEndpoint(hello: EndpointHelloPayload, clientId: string): Promise<{ hello: EndpointHelloPayload; signer: DesktopDeviceFrameSigner }> {
     return this.serial(async () => {
       const record = await this.enrolled();
-      if (hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
+      if (hello.execution || hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
         || hello.tools.length !== 1 || !['desktop.device.get_state', 'desktop.screen.capture'].includes(hello.tools[0]?.name)
         || hello.deviceFrames?.version !== 1) throw new Error('DESKTOP_OBSERVATION_DENIED');
       const signer = new DesktopDeviceFrameSigner({ gatewayId: this.binding.gatewayId, deviceId: record.deviceId!, clientId,

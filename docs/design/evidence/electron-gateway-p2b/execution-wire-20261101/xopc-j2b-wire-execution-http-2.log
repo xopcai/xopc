@@ -1,0 +1,16 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+{"level":"info","time":"2026-11-01T02:10:43.438Z","module":"MarketplaceRegistry","adapterId":"store","msg":"Registered marketplace adapter: store"}
+{"level":"info","time":"2026-11-01T02:10:43.450Z","module":"MarketplaceRegistry","adapterId":"skillhub","msg":"Registered marketplace adapter: skillhub"}
+{"level":"info","time":"2026-11-01T02:10:43.453Z","module":"MarketplaceRegistry","adapterId":"clawhub","msg":"Registered marketplace adapter: clawhub"}
+{"level":"info","time":"2026-11-01T02:10:44.073Z","module":"Sqlite:Connection","path":"/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-execution-grant-http-ExeQqK/gateway.db","msg":"Opened xopc SQLite database"}
+{"level":"info","time":"2026-11-01T02:10:44.217Z","module":"Gateway:HTTP","requestId":"0c143fb7-ec4c-4e60-aad5-4508fa7a14cd","method":"POST","path":"/api/desktop-host/execution","status":403,"durationMs":1,"clientIp":"unknown","userAgent":"node","contentLength":287,"msg":"HTTP POST /api/desktop-host/execution → 403 (1ms)"}
+{"level":"info","time":"2026-11-01T02:10:44.234Z","module":"Gateway:HTTP","requestId":"3309a556-6b16-4070-8fed-5f6a3c698ab0","method":"DELETE","path":"/api/desktop-host/observation","status":409,"durationMs":1,"clientIp":"unknown","contentLength":22,"msg":"HTTP DELETE /api/desktop-host/observation → 409 (1ms)"}
+{"level":"info","time":"2026-11-01T02:10:44.242Z","module":"Gateway:HTTP","requestId":"81a311d4-518b-409a-bd6c-ca21b3e89b19","method":"DELETE","path":"/api/desktop-host/execution","status":409,"durationMs":1,"clientIp":"unknown","contentLength":71,"msg":"HTTP DELETE /api/desktop-host/execution → 409 (1ms)"}
+
+ Test Files  3 passed (3)
+      Tests  3 passed (3)
+   Start at  10:10:40
+   Duration  3.29s (transform 1.83s, setup 27ms, import 3.05s, tests 275ms, environment 0ms)
+

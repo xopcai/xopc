@@ -14,15 +14,20 @@ export function desktopAuthTransport(binding: DesktopBinding, transport: 'direct
       || ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path) && method === 'POST'
       || ['/api/endpoint-tools/compatibility', '/api/desktop-host/status'].includes(path) && method === 'GET'
       || ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path) && method === 'DELETE'
+      || path === '/api/desktop-host/execution' && ['GET', 'POST', 'DELETE'].includes(method)
       || upload
       || path === '/api/devices/me' && ['GET', 'DELETE'].includes(method))) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
     const signal = AbortSignal.any([...(lifetime ? [lifetime] : []), ...(operationSignal ? [operationSignal] : []), AbortSignal.timeout(15000)]);
     await upstream.verifyPinnedIdentity(signal);
     const bytes = Buffer.isBuffer(body) ? body : body === undefined ? undefined : JSON.stringify(body);
+    if (method === 'GET' && bytes !== undefined) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
     if (Buffer.isBuffer(body) && (!upload || headers['content-type'] !== 'image/png')) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');
     if (bytes && Buffer.byteLength(bytes) > (upload ? SCREEN_CAPTURE_MAX_BYTES : 8192)) throw new Error('DESKTOP_AUTH_REQUEST_LIMIT');
     return new Promise((resolve, reject) => {
-      const req = upstream.request(path, method, { 'content-type': 'application/json', ...headers }, signal, false);
+      const wireHeaders: Record<string, string> = { 'content-type': 'application/json', ...headers };
+      if (bytes !== undefined) wireHeaders['content-length'] = String(Buffer.byteLength(bytes));
+      else delete wireHeaders['content-length'];
+      const req = upstream.request(path, method, wireHeaders, signal, false);
       req.on('error', () => reject(new Error('DESKTOP_AUTH_NETWORK_FAILED')));
       req.on('response', res => {
         const chunks: Buffer[] = []; let size = 0;

@@ -15,6 +15,7 @@ export const GATEWAY_SCOPES = [
   'device.self',
   'desktop.observe.state',
   'desktop.observe.screen',
+  'desktop.execute',
   'phone.view',
   'phone.control',
   'gateway.admin',

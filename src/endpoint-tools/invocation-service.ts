@@ -7,12 +7,17 @@ import {
   ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS,
   ENDPOINT_MAX_CONCURRENT_INVOCATIONS,
   canonicalJson,
+  desktopOperationReceiptSchema,
+  type DesktopOperationIntent,
   type ClientEndpointMessage,
   type EndpointToolContent,
   type EndpointToolDescriptor,
   type EndpointToolErrorCode,
 } from '@xopcai/endpoint-tools-protocol';
 
+import { getOrCreateGatewayIdentity } from '../storage/sqlite/gateway-identity-repository.js';
+import { recordDesktopOperationIntent, recordDesktopOperationReceipt } from '../storage/sqlite/desktop-operation-repository.js';
+import { getDesktopExecutionGrant } from '../storage/sqlite/desktop-execution-repository.js';
 import { createLogger } from '../utils/logger.js';
 
 import { EndpointRegistry } from './registry.js';
@@ -31,6 +36,8 @@ interface PendingInvocation {
   descriptor: EndpointToolDescriptor;
   arguments: Record<string, unknown>;
   state: PendingState;
+  execution?: { intent: DesktopOperationIntent; connectionInstanceId: string };
+  stopTimer?: ReturnType<typeof setTimeout>;
   receiptTimer: ReturnType<typeof setTimeout>;
   deadlineTimer: ReturnType<typeof setTimeout>;
   abortSignal?: AbortSignal;
@@ -154,6 +161,19 @@ export class EndpointInvocationService {
 
     const invocationId = crypto.randomUUID();
     const startedAt = Date.now();
+    let execution: PendingInvocation['execution'];
+    const deadlineAt = Math.min(startedAt + tool.descriptor.timeoutMs, endpoint.executionAuthority?.expiresAt ?? Infinity);
+    if (endpoint.executionAuthority && tool.descriptor.effect !== 'read') {
+      try {
+        const authority = endpoint.executionAuthority, grant = getDesktopExecutionGrant(authority.deviceId, startedAt);
+        if (!params.operationId || !confirmationRequired || !grant?.active || grant.revision !== authority.authorizationRevision
+          || grant.grant?.grantId !== authority.grantId || getOrCreateGatewayIdentity().id !== authority.gatewayId) throw new Error('Desktop execution authority is no longer active');
+        execution = { intent: recordDesktopOperationIntent({ operationId: params.operationId, gatewayId: authority.gatewayId,
+          deviceId: authority.deviceId, tool: params.toolName, argumentHash: crypto.createHash('sha256').update(canonicalJson(params.arguments)).digest('hex'),
+          toolRevision: tool.revision, authorizationRevision: authority.authorizationRevision, expiresAt: deadlineAt }, authority.grantId, startedAt),
+          connectionInstanceId: authority.connectionInstanceId };
+      } catch { return Promise.reject(this.error('PROTOCOL_ERROR', 'Durable desktop intent could not be recorded')); }
+    }
     const uploadGrant = tool.descriptor.resultKinds.includes('file')
       ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, ['desktop.computer.control', 'desktop.screen.capture'].includes(params.toolName) ? 'computer-frame' : params.toolName.startsWith('mobile.') ? 'personal' : 'durable', endpoint.principalId)
       : undefined;
@@ -182,12 +202,13 @@ export class EndpointInvocationService {
         descriptor: tool.descriptor,
         arguments: params.arguments,
         state: 'sent',
+        ...(execution ? { execution } : {}),
         receiptTimer: setTimeout(() => {
-          this.fail(invocationId, this.error('TOOL_TIMEOUT', 'Endpoint did not receive the invocation'));
+          this.fail(invocationId, this.error(execution ? 'OUTCOME_UNKNOWN' : 'TOOL_TIMEOUT', 'Endpoint did not acknowledge the invocation'));
         }, ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS),
         deadlineTimer: setTimeout(() => {
           this.cancel(invocationId, 'Endpoint tool timed out', 'TOOL_TIMEOUT');
-        }, tool.descriptor.timeoutMs),
+        }, Math.max(1, deadlineAt - Date.now())),
         abortSignal: params.signal,
         onProgress: params.onProgress,
         resolve,
@@ -206,11 +227,12 @@ export class EndpointInvocationService {
           arguments: params.arguments,
           descriptorRevision: params.descriptorRevision,
           confirmationRequired,
-          deadlineAt: Date.now() + tool.descriptor.timeoutMs,
+          deadlineAt,
+          ...(execution ? { execution: execution.intent } : {}),
           ...(uploadGrant ? { uploadGrant } : {}),
         });
       } catch {
-        this.fail(invocationId, this.error('ENDPOINT_DISCONNECTED', 'Endpoint disconnected before invocation'));
+        this.fail(invocationId, this.error(execution ? 'OUTCOME_UNKNOWN' : 'ENDPOINT_DISCONNECTED', 'Endpoint disconnected before acknowledgement'));
       }
     });
   }
@@ -220,6 +242,10 @@ export class EndpointInvocationService {
     const pending = this.pending.get(invocationId);
     if (!pending || pending.endpointId !== endpointId) return;
 
+    if (['tool.result', 'tool.error', 'tool.cancelled'].includes(message.type)) {
+      try { this.verifyExecutionReceipt(pending, message); }
+      catch { this.fail(invocationId, this.error(pending.execution ? 'OUTCOME_UNKNOWN' : 'PROTOCOL_ERROR', 'Endpoint operation evidence is invalid')); return; }
+    }
     switch (message.type) {
       case 'tool.received':
         if (pending.state !== 'sent') return;
@@ -260,7 +286,7 @@ export class EndpointInvocationService {
           this.options.uploads?.validateAndClose(invocationId, message.payload.content);
         } catch (error) {
           this.fail(invocationId, this.error(
-            'PROTOCOL_ERROR',
+            pending.execution ? 'OUTCOME_UNKNOWN' : 'PROTOCOL_ERROR',
             (pending.descriptor.sensitivity === 'personal' && pending.descriptor.effect === 'read') ? 'Invalid personal device result' : error instanceof Error ? error.message : String(error),
           ));
           return;
@@ -281,14 +307,14 @@ export class EndpointInvocationService {
   failEndpoint(endpointId: string): void {
     for (const pending of this.pending.values()) {
       if (pending.endpointId === endpointId) {
-        this.fail(pending.id, this.error('ENDPOINT_DISCONNECTED', 'Endpoint disconnected'));
+        this.fail(pending.id, this.error(pending.execution ? 'OUTCOME_UNKNOWN' : 'ENDPOINT_DISCONNECTED', 'Endpoint disconnected'));
       }
     }
   }
 
   close(): void {
     for (const pending of this.pending.values()) {
-      this.fail(pending.id, this.error('ENDPOINT_DISCONNECTED', 'Endpoint runtime stopped'));
+      this.fail(pending.id, this.error(pending.execution ? 'OUTCOME_UNKNOWN' : 'ENDPOINT_DISCONNECTED', 'Endpoint runtime stopped'));
     }
   }
 
@@ -299,12 +325,42 @@ export class EndpointInvocationService {
   ): void {
     const pending = this.pending.get(invocationId);
     if (!pending) return;
+    if (pending.execution && pending.stopTimer) return;
+    if (pending.execution) {
+      clearTimeout(pending.receiptTimer);
+      clearTimeout(pending.deadlineTimer);
+      pending.stopTimer = setTimeout(() => this.fail(invocationId, this.error('OUTCOME_UNKNOWN', 'Desktop stop could not be confirmed')), 3000);
+    }
     try {
       this.registry.send(pending.endpointId, 'tool.cancel', { invocationId, reason });
     } catch {
       // The local terminal state is authoritative when the endpoint is already gone.
     }
-    this.fail(invocationId, this.error(code, reason));
+    if (!pending.execution) this.fail(invocationId, this.error(code, reason));
+  }
+
+  private verifyExecutionReceipt(pending: PendingInvocation, message: ToolClientMessage): void {
+    if (message.type !== 'tool.result' && message.type !== 'tool.error' && message.type !== 'tool.cancelled') return;
+    const receipt = message.payload.operationReceipt;
+    if (!pending.execution) {
+      if (receipt || message.type === 'tool.error' && message.payload.operationResult) throw new Error('Unexpected execution evidence');
+      return;
+    }
+    // A signed denial before recording an operation proves that this particular attempt applied no effect.
+    if (!receipt && message.type === 'tool.error' && message.payload.code === 'USER_DENIED') return;
+    const parsed = desktopOperationReceiptSchema.parse(receipt), execution = pending.execution;
+    if (parsed.operationId !== execution.intent.operationId || parsed.invocationId !== pending.id
+      || parsed.connectionInstanceId !== execution.connectionInstanceId) throw new Error('Operation attempt changed');
+    if (message.type === 'tool.result' || message.type === 'tool.error' && message.payload.code === 'TOOL_EXECUTION_FAILED') {
+      const result = message.type === 'tool.result' ? { content: message.payload.content,
+        ...(message.payload.details === undefined ? {} : { details: message.payload.details }) } : message.payload.operationResult;
+      const expectedState = message.type === 'tool.result' ? 'succeeded' : 'failed';
+      if (!result || parsed.state !== expectedState || !parsed.executionStopped
+        || parsed.resultHash !== crypto.createHash('sha256').update(canonicalJson(result)).digest('hex')) throw new Error('Operation result hash mismatch');
+    } else if (message.type === 'tool.cancelled') {
+      if (parsed.state !== 'stopped' || !parsed.executionStopped) throw new Error('Executor has not stopped');
+    } else if (message.payload.code !== 'OUTCOME_UNKNOWN' || parsed.state !== 'unknown') throw new Error('Unexpected operation outcome');
+    recordDesktopOperationReceipt(execution.intent, parsed);
   }
 
   private succeed(invocationId: string, result: EndpointInvocationResult): void {
@@ -360,6 +416,7 @@ export class EndpointInvocationService {
     this.pending.delete(invocationId);
     clearTimeout(pending.receiptTimer);
     clearTimeout(pending.deadlineTimer);
+    clearTimeout(pending.stopTimer);
     if (pending.abortSignal && pending.abortHandler) {
       pending.abortSignal.removeEventListener('abort', pending.abortHandler);
     }

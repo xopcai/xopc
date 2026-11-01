@@ -145,6 +145,10 @@ export class EndpointToolHostController {
   }
 
   private async invoke(message: ToolInvokeMessage): Promise<void> {
+    if (message.payload.execution) {
+      this.sendError(message.payload.invocationId, 'PROTOCOL_ERROR', 'Reliable execution requires an explicitly negotiated durable controller');
+      return;
+    }
     const {
       invocationId,
       toolName,
