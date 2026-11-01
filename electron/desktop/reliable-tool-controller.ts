@@ -36,6 +36,10 @@ export class DesktopReliableToolController {
   async handleMessage(input: unknown): Promise<void> {
     if (this.closed || !this.sendMessage) return;
     const message = serverEndpointMessageSchema.parse(input), { invocationId } = message.payload;
+    if (message.type === 'terminal.command') {
+      this.error(invocationId, 'PROTOCOL_ERROR', 'Terminal control requires its dedicated negotiated controller');
+      return;
+    }
     if (message.type === 'tool.cancel') {
       if (this.active === invocationId) { this.cancelRequested = true; await this.options.reads?.cancel(invocationId).catch(() => {}); await this.options.session.cancel(invocationId).catch(() => {}); }
       // The invocation handler emits its one durable outcome; cancel itself never asserts completion.

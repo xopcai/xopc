@@ -45,6 +45,13 @@ beforeEach(() => {
 afterEach(async () => { await controller.disconnect(); journal.close(); lease.close(); rmSync(root, { recursive: true, force: true }); });
 const cancel = () => ({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), type: 'tool.cancel', payload: { invocationId: request.payload.invocationId, reason: 'fixture' } });
 
+it('rejects terminal commands instead of executing them through the ordinary reliable controller', async () => {
+  await controller.handleMessage({ protocolVersion: 2, messageId: randomUUID(), type: 'terminal.command', sentAt: Date.now(),
+    payload: { invocationId: request.payload.invocationId, command: { action: 'close', sessionId: randomUUID(), generation: randomUUID(), connectionInstanceId: randomUUID() } } });
+  expect(worker.run).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled();
+  expect(frames).toMatchObject([{ type: 'tool.error', payload: { code: 'PROTOCOL_ERROR' } }]);
+});
+
 it('returns one persisted completion receipt and refuses to replay an existing result body or action', async () => {
   await controller.handleMessage(request);
   expect(frames.map(frame => frame.type)).toEqual(['tool.received', 'tool.result']);

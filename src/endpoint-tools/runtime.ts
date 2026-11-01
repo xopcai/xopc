@@ -112,6 +112,7 @@ export class EndpointToolRuntime {
       this.registry.heartbeat(endpointId, connectionId, message.payload.availability);
       return;
     }
+    if (message.type === 'terminal.event') throw new Error('DESKTOP_TERMINAL_NOT_NEGOTIATED');
     this.invocations.handleMessage(endpointId, message);
   }
 

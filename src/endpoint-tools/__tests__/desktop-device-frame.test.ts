@@ -1,6 +1,7 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 
 import { type ClientEndpointMessage } from '@xopcai/endpoint-tools-protocol';
+import { REALTIME_MAX_CLIENT_FRAME_BYTES } from '@xopcai/realtime-protocol';
 import { expect, it } from 'vitest';
 
 import { DesktopDeviceFrameSigner, DesktopDeviceFrameVerifier } from '../desktop-device-frame.js';
@@ -11,6 +12,18 @@ const publicKey = pair.publicKey.export({ type: 'spki', format: 'pem' }).toStrin
 const binding = { gatewayId: randomUUID(), deviceId: randomUUID(), clientId: randomUUID(), connectionInstanceId: randomUUID(), authorizationRevision: 7 };
 const frame = (): ClientEndpointMessage => ({ protocolVersion: 2, messageId: randomUUID(), type: 'tool.result', sentAt: Date.now(),
   payload: { invocationId: randomUUID(), content: [{ type: 'text', text: 'Synthetic result' }] } });
+
+it('reuses signed device frames for bounded terminal output without relaxing the existing realtime frame budget', () => {
+  const signer = new DesktopDeviceFrameSigner(binding, privateKey), verifier = new DesktopDeviceFrameVerifier(binding, publicKey);
+  const message: ClientEndpointMessage = { protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), type: 'terminal.event',
+    payload: { invocationId: randomUUID(), event: { event: 'output', sessionId: randomUUID(), generation: randomUUID(), connectionInstanceId: binding.connectionInstanceId,
+      sequence: 1, bytes: Buffer.alloc(16384, 7).toString('base64') } } };
+  const wire = signer.sign(message);
+  expect(Buffer.byteLength(JSON.stringify({ kind: 'desktop.endpoint.message', payload: JSON.parse(wire) }))).toBeLessThan(REALTIME_MAX_CLIENT_FRAME_BYTES);
+  const forged = JSON.parse(wire); forged.message.payload.event.bytes = Buffer.from('changed').toString('base64');
+  expect(() => verifier.verify(JSON.stringify(forged))).toThrow('DESKTOP_DEVICE_FRAME_INVALID');
+  expect(verifier.verify(wire)).toEqual(message); expect(() => verifier.verify(wire)).toThrow('DESKTOP_DEVICE_FRAME_INVALID'); signer.close();
+});
 
 it('authenticates results and rejects replay, reordering and altered results without consuming a valid sequence', () => {
   const signer = new DesktopDeviceFrameSigner(binding, privateKey), verifier = new DesktopDeviceFrameVerifier(binding, publicKey);

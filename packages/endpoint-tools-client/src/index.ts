@@ -137,6 +137,10 @@ export class EndpointToolHostController {
   }
 
   async handleMessage(message: ServerEndpointMessage): Promise<void> {
+    if (message.type === 'terminal.command') {
+      this.sendError(message.payload.invocationId, 'PROTOCOL_ERROR', 'Terminal control requires its dedicated negotiated controller');
+      return;
+    }
     if (message.type === 'tool.cancel') {
       this.cancel(message.payload.invocationId);
       return;
