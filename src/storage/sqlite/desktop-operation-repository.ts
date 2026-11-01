@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { REMOTE_COMPUTER_DESCRIPTOR, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
+
 import { desktopOperationReviewSchema, type DesktopOperationReview, canonicalJson, desktopOperationIntentSchema, desktopOperationReceiptSchema, type DesktopOperationIntent, type DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
 
 import { getDevice } from './device-access-repository.js';
@@ -85,7 +87,8 @@ export function reviewDesktopOperation(operationId: string, deviceId: string, ga
     if (!intent || !row || row.state !== 'unknown' || row.generation !== review.expectedGeneration
       || review.intentFingerprint !== createHash('sha256').update(JSON.stringify(intent)).digest('hex')
       || review.receipt && review.receipt.operationId !== operationId
-      || review.localStatus === 'not-found' && !(intent.tool === 'desktop.clipboard.write' || ['desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
+      || review.localStatus === 'not-found' && !(intent.tool === 'desktop.clipboard.write' || intent.tool === REMOTE_COMPUTER_CONTROL_TOOL && !intent.workspaceId
+        && intent.toolRevision === createHash('sha256').update(canonicalJson(REMOTE_COMPUTER_DESCRIPTOR)).digest('hex') || ['desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
     const json = canonicalJson(review), previous = db.prepare('SELECT review_id,observation_json FROM desktop_operation_reviews WHERE operation_id=?').get(operationId) as { review_id: string; observation_json: string } | undefined;
     if (previous) {
       if (previous.review_id !== review.reviewId || previous.observation_json !== json) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');

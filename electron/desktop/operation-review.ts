@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { canonicalJson, desktopWorkspaceDescriptor, desktopOperationIntentSchema, desktopOperationReceiptSchema, desktopOperationReviewSchema,
   type DesktopOperationIntent, type DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
 import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
+import { REMOTE_COMPUTER_DESCRIPTOR, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 import { z } from 'zod';
 
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
@@ -112,10 +113,13 @@ export class DesktopOperationReviewManager {
         if (record.state !== 'unknown' || previous && previous.expectedGeneration !== record.generation) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
         if (!review) {
           let receipt = journal.inspect(intent);
-          const finiteExecutor = finiteOperation(intent) || ((!receipt || !receipt.executionStopped) && await this.options.proveStopped?.(intent));
+          // The exclusive lease fences the old Host. This exact adapter cannot create its private driver before journal.start.
+          const neverStartedComputer = !receipt && !intent.workspaceId && intent.tool === REMOTE_COMPUTER_CONTROL_TOOL
+            && intent.toolRevision === endpointToolRevision(REMOTE_COMPUTER_DESCRIPTOR as never);
+          const finiteExecutor = neverStartedComputer || finiteOperation(intent) || ((!receipt || !receipt.executionStopped) && await this.options.proveStopped?.(intent));
           current();
           if ((!receipt || !receipt.executionStopped) && !finiteExecutor) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
-          // Independent stop evidence: the fixed-root lease and this known no-child-process adapter; a human click never proves stop.
+          // Independent evidence comes from the fixed-root lease and adapter barriers or explicit process-stop proof; a human click never proves stop.
           if (receipt && !receipt.executionStopped) receipt = journal.confirmUnknownStopped(intent);
           if (!await this.options.confirm(binding, structuredClone(intent), receipt && structuredClone(receipt), signal)) throw new Error('DESKTOP_LOCAL_CONSENT_DENIED');
           current(); if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');

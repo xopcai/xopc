@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 import { serve } from '@hono/node-server';
 import { canonicalJson, endpointHelloSigningPayload, ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointToolDescriptor, type ClientEndpointMessage } from '@xopcai/endpoint-tools-protocol';
 import { expect, it, vi } from 'vitest';
@@ -38,7 +39,7 @@ import { ConnectionCredentialStore } from '../../../electron/gateway/credentials
 import { DesktopOperationReviewManager } from '../../../electron/desktop/operation-review.js';
 import { DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR } from '../../../electron/desktop/clipboard-tool.js';
 import { recordDesktopOperationIntent } from '../../storage/sqlite/desktop-operation-repository.js';
-it('requires native human review, signs metadata replies, restores a lost acknowledgement and never replays the old intent', async () => {
+it.each(['clipboard', 'computer-not-started'] as const)('requires native human review, restores a lost acknowledgement and never replays the old intent: %s', async scenario => {
   const legacyFrames = false; let loseReviewAck = false, tamperList = false;
   const directory = await mkdtemp(join(tmpdir(), 'xopc-desktop-observation-'));
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'gateway.db') });
@@ -65,6 +66,7 @@ it('requires native human review, signs metadata replies, restores a lost acknow
     if (!server.listening) await once(server, 'listening');
     const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing listener');
     const origin = `http://127.0.0.1:${address.port}`;
+    config.gateway.corsOrigins = [origin];
     const owner = async (path: string, method = 'GET', body?: unknown) => {
       const response = await fetch(origin + path, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
       expect(response.status, await response.clone().text()).toBeLessThan(300); return response.json();
@@ -84,17 +86,20 @@ it('requires native human review, signs metadata replies, restores a lost acknow
       approve: async (requestId, revision) => { await owner(`/api/device-pairing/requests/${requestId}/decision`, 'POST', { decision: 'approve', expectedRevision: revision }); },
     });
     await expect(client.endpointRequest('/api/realtime/tickets', 'POST', { clientId: randomUUID(), clientKind: 'desktop', protocolVersion: 2 })).rejects.toThrow('DESKTOP_OBSERVATION_DENIED');
-    const descriptor = DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, revision = endpointToolRevision(descriptor), args = { text: 'fixture only' };
+    const descriptor = scenario === 'clipboard' ? DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR : REMOTE_COMPUTER_DESCRIPTOR, revision = endpointToolRevision(descriptor), args = { text: 'fixture only' };
     const approved = await client.endpointRequest('/api/desktop-host/execution', 'POST', { expectedRevision: 0, grant: { version: 1, grantId: randomUUID(), localApprovalId: randomUUID(),
-      toolRevisions: { 'desktop.clipboard.write': revision }, expiresAt: Date.now() + 60000 } });
+      toolRevisions: { [descriptor.name]: revision }, expiresAt: Date.now() + 60000 } });
     const executorRoot = join(directory, 'executor'), lease = new DesktopExecutionLease(executorRoot), journal = new DesktopOperationJournal(lease);
     let effects = 0, intent: any;
     const invoke = (key: string) => executeExternalOperation({ principalId: deviceId, capabilityId: 'fixture', idempotencyKey: key,
       requestDigest: createHash('sha256').update(canonicalJson(args)).digest('hex'), descriptorDigest: revision, surface: 'fixture', recovery: 'manual' }, async operationId => {
       intent = recordDesktopOperationIntent({ operationId, gatewayId: binding.gatewayId, deviceId, tool: descriptor.name,
         argumentHash: createHash('sha256').update(canonicalJson(args)).digest('hex'), toolRevision: revision, authorizationRevision: approved.revision, expiresAt: Date.now() + 10000 }, approved.grant.grantId);
-      journal.record(intent); journal.start(intent, { invocationId: randomUUID(), connectionInstanceId: randomUUID() });
-      effects += 1; journal.finish(intent, 'succeeded', 'a'.repeat(64)); throw new Error('Fixture completion lost after local persistence');
+      if (scenario === 'clipboard') {
+        journal.record(intent); journal.start(intent, { invocationId: randomUUID(), connectionInstanceId: randomUUID() });
+        effects += 1; journal.finish(intent, 'succeeded', 'a'.repeat(64));
+      }
+      throw new Error('Fixture transport lost before acknowledgement');
     });
     await expect(invoke('original')).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' }); journal.close(); lease.close();
     let allow = false, approvals = 0;
@@ -108,10 +113,10 @@ it('requires native human review, signs metadata replies, restores a lost acknow
     await expect(review.review(manager.snapshot().epoch, id, intent.operationId)).rejects.toThrow('AUTH_UNAVAILABLE');
     expect(approvals).toBe(2);
     expect(await review.review(manager.snapshot().epoch, id, intent.operationId)).toMatchObject({ reviewed: true, outcome: 'unknown' });
-    expect(approvals).toBe(2); expect(effects).toBe(1); expect(await review.list(manager.snapshot().epoch, id)).toEqual([]);
+    expect(approvals).toBe(2); expect(effects).toBe(scenario === 'clipboard' ? 1 : 0); expect(await review.list(manager.snapshot().epoch, id)).toEqual([]);
     const state = getSqliteDatabase().prepare('SELECT state FROM capability_operations WHERE operation_id=?').get(intent.operationId);
     expect(state?.state).toBe('unknown');
-    await expect(invoke('original')).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' }); expect(effects).toBe(1);
+    await expect(invoke('original')).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' }); expect(effects).toBe(scenario === 'clipboard' ? 1 : 0);
     const forbidden = await fetch(origin + `/api/desktop-host/operations/${intent.operationId}/review`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: '{}' });
     expect(forbidden.status).toBe(403);
     await expect(review.review(manager.snapshot().epoch, id, randomUUID())).rejects.toThrow(); expect(approvals).toBe(2);
