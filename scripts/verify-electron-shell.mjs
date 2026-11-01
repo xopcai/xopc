@@ -204,7 +204,7 @@ try {
     process.kill(worker.pid, 'SIGKILL');
   });
   await closedOnCrash;
-  assert.equal(await setup.getByRole('heading', { name: /^Gateway 连接(?:预览|管理)$/ }).isVisible(), true);
+  assert.match(await setup.title(), /^Gateway 连接(?:预览|管理)$/);
   report.checks.shellCrashKeepsIndependentRecovery = true;
   await stopGateway();
   const database = new DatabaseSync(join(gatewayState, 'xopc.db'));

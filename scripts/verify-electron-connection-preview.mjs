@@ -41,20 +41,22 @@ async function files(directory) {
 try {
   let page = await launch();
   assert.equal(await page.evaluate(() => window.electronAPI), undefined);
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.gatewayConnections).sort()), ['connect', 'quit', 'remove', 'save', 'select', 'snapshot', 'useLocal'].sort());
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.gatewayConnections).sort()), ['snapshot', 'save', 'connect', 'select', 'remove', 'enrollDesktop', 'checkDesktop', 'disableDesktop', 'reenrollDesktop', 'startObservation', 'startScreenObservation', 'listLocalOperations', 'reviewLocalOperation', 'listOperations', 'reviewOperation', 'startExecution', 'startWorkspace', 'startComputer', 'startBrowser', 'flushStopReceipts', 'startContainer', 'startTerminal', 'listContainers', 'stopExecution', 'stopObservation', 'useLocal', 'quit'].sort());
   report.checks.restrictedPreload = true;
   const secret = `test-only-${randomUUID()}`;
+  await page.getByRole('button', { name: '添加服务器', exact: false }).click();
+  await page.getByText('更多选项', { exact: true }).click();
   await page.getByLabel('连接名称', { exact: true }).fill('Server A');
-  await page.getByLabel('Gateway origin', { exact: true }).fill(origin);
+  await page.getByLabel('服务器地址', { exact: true }).fill(origin);
   await page.getByRole('button', { name: '已有 SSH loopback 转发' }).click();
-  await page.getByLabel('管理凭据', { exact: false }).fill(secret);
-  await page.getByRole('button', { name: '保存连接配置' }).click();
+  await page.getByLabel('访问令牌', { exact: false }).fill(secret);
+  await page.getByRole('button', { name: '仅保存连接' }).click();
   await page.getByText('Server A', { exact: false }).first().waitFor({ timeout: 20_000 });
   let snapshot = await page.evaluate(() => window.gatewayConnections.snapshot());
   assert.equal(snapshot.profiles.length, 1);
   assert.equal(snapshot.profiles[0].hasCredential, true);
   assert.equal(JSON.stringify(snapshot).includes(secret), false);
-  assert.equal(await page.getByLabel('管理凭据', { exact: false }).inputValue(), '');
+  assert.equal(await page.getByLabel('访问令牌', { exact: false }).inputValue(), '');
   const profileFile = join(state, 'electron/gateway-connections-v1/profiles.json');
   assert.equal((await readFile(profileFile, 'utf8')).includes(secret), false);
   const encryptedFiles = await files(join(state, 'electron/gateway-connections-v1/credentials'));
@@ -62,13 +64,28 @@ try {
   const ciphertext = await readFile(join(state, 'electron/gateway-connections-v1/credentials', encryptedFiles[0]));
   assert.equal(ciphertext.includes(Buffer.from(secret)), false);
   report.checks.safeStorageApi = 'Async Electron API under Playwright mock-keychain flags; native backend tested separately';
+  await page.getByLabel('更多：Server A', { exact: true }).click();
   await page.getByRole('button', { name: '选择配置', exact: true }).click();
-  await page.getByText('配置已选择；点击连接打开远端聊天。本机能力保持禁用。', { exact: true }).waitFor();
+  await page.getByText('当前选择：Server A', { exact: true }).waitFor();
   snapshot = await page.evaluate(() => window.gatewayConnections.snapshot());
   assert.equal(snapshot.status, 'remote-chat-unavailable');
   const stale = await page.evaluate(({ id, epoch }) => window.gatewayConnections.select(epoch - 1, id), { id: snapshot.profiles[0].id, epoch: snapshot.epoch });
   assert.deepEqual(stale, { ok: false, error: 'STALE_CONNECTION_EPOCH', snapshot });
   report.checks.epochAndNoReadyClaim = true;
+  await page.getByRole('button', { name: '详情 ›', exact: true }).click();
+  assert.equal((await page.evaluate(() => window.gatewayConnections.snapshot())).epoch, snapshot.epoch);
+  assert.equal(await page.locator('#detail-identity').textContent(), '连接后核验');
+  assert.equal(await page.locator('[data-desktop="enroll"]').isDisabled(), true);
+  assert.equal(await page.locator('#desktop-actions .capabilities').isHidden(), true);
+  const profileBeforeCancelledEdit = await readFile(profileFile);
+  await page.locator('#detail-login').click();
+  await page.getByLabel('新的管理凭据', { exact: true }).fill('cancelled-test-only');
+  await page.locator('#login-cancel').click();
+  assert.equal(await page.locator('#login-credential').inputValue(), '');
+  assert.deepEqual(await readFile(profileFile), profileBeforeCancelledEdit);
+  await page.screenshot({ path: output + '.settings.png' });
+  await page.getByRole('button', { name: '‹ 所有连接', exact: true }).click();
+  report.checks.standaloneDetailsAndCredentialCancellation = true;
 
   // Even accidental legacy registrations must be blocked before a side effect.
   const probePreload = join(state, 'probe.cjs');
