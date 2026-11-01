@@ -12,7 +12,8 @@ export class DesktopExecutionCatalog {
     ajv.addFormat('uri', { type: 'string', validate: value => z.url().safeParse(value).success });
     for (const input of descriptors) {
       const descriptor = endpointToolDescriptorSchema.parse(JSON.parse(JSON.stringify(input)));
-      if (this.tools.has(descriptor.name) || descriptor.effect === 'read' || descriptor.confirmation !== 'always'
+      const query = descriptor.name === 'desktop.operation.get_status' && descriptor.effect === 'read' && descriptor.confirmation === 'never';
+      if (this.tools.has(descriptor.name) || !query && (descriptor.effect === 'read' || descriptor.confirmation !== 'always')
         || !descriptor.requiresForeground || descriptor.maxConcurrency !== 1 || !descriptor.supportsCancellation) throw new Error('DESKTOP_RELIABLE_DESCRIPTOR_INVALID');
       this.tools.set(descriptor.name, { descriptor, revision: endpointToolRevision(descriptor), input: ajv.compile(descriptor.inputSchema), output: ajv.compile(descriptor.outputSchema) });
     }

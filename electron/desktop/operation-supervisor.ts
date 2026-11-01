@@ -39,10 +39,10 @@ export class DesktopOperationSupervisor {
     stopTimeoutMs?: number;
   }) {
     options.journal.attachSupervisor();
-    this.blocked = options.journal.hasUnknown();
+    this.blocked = options.journal.hasUnknown() || options.journal.hasUnconfirmedStops();
   }
   status(): { activeOperationId?: string; blocked: boolean; stopRequested: boolean; stopUnconfirmed: boolean } {
-    return { ...(this.active ? { activeOperationId: this.active.operationId } : {}), blocked: this.blocked, stopRequested: this.active?.stopRequested ?? false, stopUnconfirmed: Boolean(this.uncertain) };
+    return { ...(this.active ? { activeOperationId: this.active.operationId } : {}), blocked: this.blocked, stopRequested: this.active?.stopRequested ?? false, stopUnconfirmed: Boolean(this.uncertain) || this.options.journal.hasUnconfirmedStops() };
   }
   inspect(intent: DesktopOperationIntent): DesktopOperationReceipt | undefined {
     const authority = this.options.authority(intent.tool);
@@ -69,7 +69,7 @@ export class DesktopOperationSupervisor {
     if (Buffer.byteLength(encoded) > 65536 || createHash('sha256').update(encoded).digest('hex') !== input.intent.argumentHash) throw new Error('DESKTOP_EXECUTION_ARGUMENT_MISMATCH');
     const existing = this.options.journal.inspect(input.intent);
     if (existing) return { receipt: existing, repeated: true };
-    if (this.blocked) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+    if (this.blocked) throw new Error(this.status().stopUnconfirmed ? 'DESKTOP_EXECUTION_STOP_UNCONFIRMED' : 'DESKTOP_OPERATION_RECONCILIATION_REQUIRED');
     if (this.active) throw new Error('DESKTOP_EXECUTION_BUSY');
     // Worker construction must have no external side effect. Execution begins only after start commits.
     const worker = this.options.createWorker(input.intent.tool);
@@ -107,6 +107,7 @@ export class DesktopOperationSupervisor {
           resultHash = createHash('sha256').update(result).digest('hex');
         } catch { this.blocked = true; this.uncertain = run; return { receipt: this.options.journal.finish(run.intent, 'unknown'), repeated: false }; }
       }
+      if (outcome.state === 'stopped') this.blocked = true;
       if (outcome.state === 'unknown') { this.blocked = true; this.uncertain = run; }
       const receipt = this.options.journal.finish(run.intent, outcome.state, resultHash);
       return { receipt, ...('result' in outcome ? { result: outcome.result } : {}), repeated: false };
@@ -158,9 +159,9 @@ export class DesktopOperationSupervisor {
       finally { clearTimeout(timer); }
       return { state: 'unknown' };
     }
-    if (!run) return { state: this.blocked ? 'unknown' : 'idle' };
+    if (!run) return this.blocked ? this.options.journal.hasUnconfirmedStops() ? { state: 'unknown' } : { state: 'stopped', resultUnknown: true } : { state: 'idle' };
     await this.stopRun(run);
     const outcome = await run.stop;
-    return { state: outcome.state === 'stopped' ? 'stopped' : 'unknown' };
+    return outcome.state === 'stopped' ? { state: 'stopped', resultUnknown: true } : { state: 'unknown' };
   }
 }

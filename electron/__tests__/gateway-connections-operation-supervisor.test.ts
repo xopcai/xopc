@@ -62,9 +62,11 @@ it('does not confuse an abort request with confirmed executor termination', asyn
 it('supports a local stop independently of the remote signal and records executor confirmation', async () => {
   const started = Promise.withResolvers<void>(); worker.run = vi.fn(async () => { started.resolve(); return new Promise(() => {}); });
   const supervisor = create(), pending = supervisor.execute(request()); await started.promise;
-  expect(await supervisor.stop()).toEqual({ state: 'stopped' });
+  expect(await supervisor.stop()).toEqual({ state: 'stopped', resultUnknown: true });
   expect(await pending).toMatchObject({ receipt: { state: 'stopped' } });
   expect(worker.stop).toHaveBeenCalledTimes(1);
+  expect(journal.hasUnknown()).toBe(true); expect(journal.hasUnconfirmedStops()).toBe(false);
+  await expect(supervisor.execute(request({ ...operation, operationId: randomUUID() }))).rejects.toThrow('RECONCILIATION_REQUIRED');
 });
 
 it('bounds a hung stop and prevents takeover when confirmation is missing', async () => {
@@ -84,7 +86,7 @@ it('retains an unconfirmed executor for a later local stop without turning unkno
   expect(await supervisor.stop()).toEqual({ state: 'stopped', resultUnknown: true });
   expect(supervisor.inspect(operation)).toMatchObject({ state: 'unknown', executionStopped: true });
   expect(supervisor.status().blocked).toBe(true);
-  await expect(supervisor.execute(request({ ...operation, operationId: randomUUID() }))).rejects.toThrow('STOP_UNCONFIRMED');
+  await expect(supervisor.execute(request({ ...operation, operationId: randomUUID() }))).rejects.toThrow('RECONCILIATION_REQUIRED');
 });
 
 it('uses a watchdog to stop expired work without waiting for the network', async () => {

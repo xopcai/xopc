@@ -98,7 +98,7 @@ export class DesktopDeviceAuth {
       headers['content-type'], '', '', extraHeaders['x-endpoint-id'] ?? '', extraHeaders['x-endpoint-upload-token'] ?? '', String(timestamp), nonce].join('\n');
     const response = await this.transport(target, method, body, { Authorization: `Bearer ${token}`, ...headers,
       'X-Xopc-Proof': `${timestamp}.${nonce}.${bodyDigest}.${signature(record, payload)}` }, signal);
-    if (target === '/api/desktop-host/execution' && response.status >= 200 && response.status < 300) {
+    if ((target === '/api/desktop-host/execution' || target === '/api/desktop-host/operations' || /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}$/.test(target) || /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}\/review$/.test(target)) && response.status >= 200 && response.status < 300) {
       return { status: response.status, body: verifyDesktopAuthorityResponse(response,
         { gatewayId: this.binding.gatewayId, deviceId: record.deviceId!, nonce, method, target }, this.binding.publicKey) };
     }
@@ -120,6 +120,7 @@ export class DesktopDeviceAuth {
     return this.serial(async () => {
       signal?.throwIfAborted();
       if (!(method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(path)
+        || method === 'GET' && (path === '/api/desktop-host/operations' || /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}$/.test(path)) || method === 'POST' && /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}\/review$/.test(path)
         || path === '/api/desktop-host/execution' && ['GET', 'POST', 'DELETE'].includes(method)
         || method === 'GET' && ['/api/endpoint-tools/compatibility', '/api/desktop-host/status', '/api/desktop-host/compatibility'].includes(path)
         || method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path))) throw new Error('DESKTOP_AUTH_ROUTE_DENIED');

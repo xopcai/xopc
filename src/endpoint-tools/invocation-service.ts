@@ -16,7 +16,7 @@ import {
 } from '@xopcai/endpoint-tools-protocol';
 
 import { getOrCreateGatewayIdentity } from '../storage/sqlite/gateway-identity-repository.js';
-import { recordDesktopOperationIntent, recordDesktopOperationReceipt } from '../storage/sqlite/desktop-operation-repository.js';
+import { recordDesktopOperationIntent, recordDesktopOperationReceipt, getDesktopOperationIntent } from '../storage/sqlite/desktop-operation-repository.js';
 import { getDesktopExecutionGrant } from '../storage/sqlite/desktop-execution-repository.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -36,6 +36,7 @@ interface PendingInvocation {
   descriptor: EndpointToolDescriptor;
   arguments: Record<string, unknown>;
   state: PendingState;
+  operationQuery?: DesktopOperationIntent;
   execution?: { intent: DesktopOperationIntent; connectionInstanceId: string };
   stopTimer?: ReturnType<typeof setTimeout>;
   receiptTimer: ReturnType<typeof setTimeout>;
@@ -174,6 +175,14 @@ export class EndpointInvocationService {
           connectionInstanceId: authority.connectionInstanceId };
       } catch { return Promise.reject(this.error('PROTOCOL_ERROR', 'Durable desktop intent could not be recorded')); }
     }
+    let operationQuery: DesktopOperationIntent | undefined;
+    if (params.toolName === 'desktop.operation.get_status') {
+      const authority = endpoint.executionAuthority, grant = authority && getDesktopExecutionGrant(authority.deviceId, startedAt);
+      if (!authority?.operationStatus || !grant?.active || grant.revision !== authority.authorizationRevision || grant.grant?.grantId !== authority.grantId
+        || typeof params.arguments.operationId !== 'string') return Promise.reject(this.error('PERMISSION_DENIED', 'Operation status is not authorized'));
+      operationQuery = getDesktopOperationIntent(params.arguments.operationId, authority.deviceId, authority.gatewayId);
+      if (!operationQuery) return Promise.reject(this.error('TOOL_NOT_FOUND', 'Operation metadata is not available for this device'));
+    }
     const uploadGrant = tool.descriptor.resultKinds.includes('file')
       ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, ['desktop.computer.control', 'desktop.screen.capture'].includes(params.toolName) ? 'computer-frame' : params.toolName.startsWith('mobile.') ? 'personal' : 'durable', endpoint.principalId)
       : undefined;
@@ -203,6 +212,7 @@ export class EndpointInvocationService {
         arguments: params.arguments,
         state: 'sent',
         ...(execution ? { execution } : {}),
+        ...(operationQuery ? { operationQuery } : {}),
         receiptTimer: setTimeout(() => {
           this.fail(invocationId, this.error(execution ? 'OUTCOME_UNKNOWN' : 'TOOL_TIMEOUT', 'Endpoint did not acknowledge the invocation'));
         }, ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS),
@@ -229,6 +239,7 @@ export class EndpointInvocationService {
           confirmationRequired,
           deadlineAt,
           ...(execution ? { execution: execution.intent } : {}),
+          ...(operationQuery ? { operationQuery } : {}),
           ...(uploadGrant ? { uploadGrant } : {}),
         });
       } catch {
@@ -268,6 +279,12 @@ export class EndpointInvocationService {
             throw new Error(`Endpoint result does not match its contract: ${this.ajv.errorsText(validate.errors)}`);
           }
           const reading = message.payload.content[0];
+          if (pending.operationQuery) {
+            const value = reading?.type === 'json' ? reading.value as { operationId?: string; status?: string; receipt?: unknown } : undefined;
+            if (!value || value.operationId !== pending.operationQuery.operationId || message.payload.details !== undefined
+              || value.status === 'not-found' && value.receipt !== undefined || value.status === 'recorded'
+              && desktopOperationReceiptSchema.parse(value.receipt).operationId !== pending.operationQuery.operationId) throw new Error('Operation status identity changed');
+          }
           if (pending.toolName.startsWith('mobile.calendar.') && reading?.type === 'json') {
             const value = reading.value as { startAt: number; endAt: number; events: Array<{ title?: string; startAt: number; endAt: number }> };
             if (value.startAt !== pending.arguments.startAt || value.endAt !== pending.arguments.endAt

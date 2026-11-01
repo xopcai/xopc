@@ -7,6 +7,8 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, saf
 
 import { DesktopEnrollmentManager, type DesktopEnrollmentAction } from '../desktop/enrollment.js';
 import { DesktopIdentityStore } from '../desktop/device-identity.js';
+import { desktopOperationStatusDescriptor } from '@xopcai/endpoint-tools-protocol';
+import { DesktopOperationReviewManager } from '../desktop/operation-review.js';
 import { DesktopExecutionManager } from '../desktop/execution-manager.js';
 import { DesktopExecutionCatalog } from '../desktop/execution-catalog.js';
 import { DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopClipboardWorker } from '../desktop/clipboard-tool.js';
@@ -85,13 +87,13 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     return visible() && window.isFocused() || Boolean(chat && chat.isVisible() && !chat.isMinimized() && chat.isFocused());
   };
   const execution = new DesktopExecutionManager({ manager, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'),
-    appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR]), foreground,
+    appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopOperationStatusDescriptor()]), foreground,
     createWorker: tool => { if (tool !== DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name) throw new Error('DESKTOP_EXECUTION_DENIED'); return desktopClipboardWorker(clipboard); },
     consent: async (binding, _grant, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
       const result = await dialog.showMessageBox(window, { type: 'question', title: '授权本机剪贴板写入',
         message: '允许此 Gateway 请求写入本机剪贴板？',
-        detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n\n授权最长两分钟，仅允许写入不超过4000字符的文本；每次仍需本机确认。不会读取现有剪贴板、文件或执行命令。断线、锁屏、切换连接后需重新授权。`,
+        detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n\n授权最长两分钟，仅允许写入不超过4000字符的文本；每次仍需本机确认。可查询本机操作元数据，但不包含参数正文。不会读取现有剪贴板、文件或执行命令。断线、锁屏、切换连接后需重新授权。`,
         buttons: ['取消', '允许逐次确认写入'], defaultId: 0, cancelId: 0, noLink: true, signal });
       return result.response === 1 && !signal.aborted && visible();
     },
@@ -106,9 +108,20 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       return result.response === 1 && !signal.aborted && foreground();
     },
   });
+  let localOperationReviews: Awaited<ReturnType<DesktopOperationReviewManager['listLocal']>> | undefined;
+  let operationReviews: { profileId: string; epoch: number; items: Awaited<ReturnType<DesktopOperationReviewManager['list']>> } | undefined;
+  const reviews = new DesktopOperationReviewManager({ manager, execution, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'), visible,
+    confirm: async (binding, intent, receipt, signal) => {
+      if (!visible() || !window.isFocused() || signal.aborted) return false;
+      const answer = await dialog.showMessageBox(window, { type: 'warning', title: '核实结果未知的操作',
+        message: '检查实际效果后，仅允许后续的新操作？',
+        detail: `Gateway：${binding.origin}\n操作：${intent.operationId}\n工具：${intent.tool}\n本机记录：${receipt?.state ?? '未找到匹配记录'}\n\n请先检查实际效果；旧操作可能已经生效。此次确认不会将旧结果改成成功，也不会重做旧操作。执行器已停止，每个新写入仍需另行授权。${binding.offline ? '\n\n这是本机离线核实，原服务器尚未确认，旧任务结果仍保持未知。' : ''}`,
+        buttons: ['取消', '已检查，允许新意图'], defaultId: 0, cancelId: 0, noLink: true, signal });
+      return answer.response === 1 && !signal.aborted && visible() && window.isFocused();
+    } });
   const stopObservation = () => { observation.stop(); void shell?.setHostOrigin().catch(() => {}); };
-  const stopCapabilities = () => { stopObservation(); void execution.stop(); };
-  const cancelDesktop = () => { stopCapabilities(); desktop.cancel(); };
+  const stopCapabilities = () => { reviews.cancel(); stopObservation(); void execution.stop(); };
+  const cancelDesktop = () => { stopCapabilities(); desktop.cancel(); operationReviews = undefined; };
   const removeSessionBoundary = installDesktopSessionBoundary(powerMonitor, cancelDesktop);
   window.once('closed', removeSessionBoundary);
   const desktop = new DesktopEnrollmentManager({ manager, store: desktopStore, visible,
@@ -141,7 +154,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   window.on('closed', () => { cancelDesktop(); policy.revoke(); void shell?.close().then(() => app.quit(), () => app.quit()); });
   app.on('second-instance', () => presentation.reveal(window, true));
   shell = new RemoteShellWindow(dirname(fileURLToPath(entryUrl)), assetRoot, manager, () => { stopCapabilities(); presentation.reveal(window); }, chatState, presentation);
-  const snapshot = () => ({ ...manager.snapshot(), localCapabilities: Boolean(execution.origin() || observation.origin()), desktop: desktop.snapshot(), observation: observation.snapshot(), execution: execution.snapshot(), presentation: {
+  const snapshot = () => ({ ...manager.snapshot(), localCapabilities: Boolean(execution.origin() || observation.origin()), desktop: desktop.snapshot(), observation: observation.snapshot(), execution: execution.snapshot(), localOperationReviews, operationReviews: operationReviews?.epoch === manager.snapshot().epoch ? operationReviews : undefined, presentation: {
     connectionVisible: window.isVisible(), connectionFocused: window.isFocused(), chat: shell!.presentationState(),
   } });
   let operations = Promise.resolve();
@@ -192,6 +205,19 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   ipcMain.handle('connections:observation-start', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { if (id !== manager.snapshot().selectedId) throw new Error('STALE_CONNECTION_EPOCH'); await execution.requireStopped(); await observation.start(epoch, id); return snapshot(); })));
   ipcMain.handle('connections:screen-start', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { if (id !== manager.snapshot().selectedId) throw new Error('STALE_CONNECTION_EPOCH'); await execution.requireStopped(); await observation.start(epoch, id, 'screen'); return snapshot(); })));
   ipcMain.handle('connections:observation-stop', () => { stopObservation(); return { ok: true, snapshot: snapshot() }; });
+  ipcMain.handle('connections:local-operations', (_event, epoch) => reply(() => atEpoch(epoch, async () => {
+    localOperationReviews = await reviews.listLocal(epoch); return snapshot();
+  })));
+  ipcMain.handle('connections:local-operation-review', (_event, epoch, operationId) => reply(() => atEpoch(epoch, async () => {
+    await reviews.reviewLocal(epoch, operationId); localOperationReviews = await reviews.listLocal(epoch); return snapshot();
+  })));
+  ipcMain.handle('connections:operation-list', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => {
+    const items = await reviews.list(epoch, id); operationReviews = { epoch: epoch as number, profileId: id as string, items }; return snapshot();
+  })));
+  ipcMain.handle('connections:operation-review', (_event, epoch, id, operationId) => reply(() => atEpoch(epoch, async () => {
+    await reviews.review(epoch, id, operationId);
+    const items = await reviews.list(epoch, id); operationReviews = { epoch: epoch as number, profileId: id as string, items }; return snapshot();
+  })));
   ipcMain.handle('connections:execution-start', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => { if (id !== manager.snapshot().selectedId) throw new Error('STALE_CONNECTION_EPOCH'); stopObservation(); await observation.whenStopped(); await execution.start(epoch, id); return snapshot(); })));
   ipcMain.handle('connections:execution-stop', () => reply(async () => { await execution.stop(); return snapshot(); }));
   ipcMain.handle('connections:quit', () => { cancelDesktop(); app.quit(); });

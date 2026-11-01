@@ -15,11 +15,12 @@ export function assertDesktopExecutionHello(device: DeviceRecord, hello: Endpoin
     || execution.grantId !== grant.grantId || execution.expiresAt !== grant.expiresAt || execution.authorizationRevision !== snapshot.revision
     || hello.deviceFrames?.version !== 1 || hello.deviceFrames.authorizationRevision !== snapshot.revision
     || !capabilities.includes('desktop.device-frames.v1') || !capabilities.includes('desktop.durable-execution.v1')
+    || hello.tools.some(tool => tool.name === 'desktop.operation.get_status') && !capabilities.includes('desktop.operation-status.v1')
     || hello.tools.length !== Object.keys(grant.toolRevisions).length
     || new Set(hello.tools.map(tool => tool.name)).size !== hello.tools.length
     || hello.tools.some(tool => grant.toolRevisions[tool.name as keyof typeof grant.toolRevisions] !== endpointToolRevision(tool))) {
     throw new Error('DESKTOP_EXECUTION_DENIED');
   }
   return endpointDesktopExecutionAuthoritySchema.parse({ gatewayId, deviceId: device.id, clientId,
-    connectionInstanceId: hello.connectionInstanceId, authorizationRevision: snapshot.revision, grantId: grant.grantId, expiresAt: grant.expiresAt });
+    connectionInstanceId: hello.connectionInstanceId, authorizationRevision: snapshot.revision, grantId: grant.grantId, expiresAt: grant.expiresAt, ...(capabilities.includes('desktop.operation-status.v1') ? { operationStatus: true } : {}) });
 }

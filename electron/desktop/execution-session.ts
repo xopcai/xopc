@@ -1,4 +1,4 @@
-import { desktopExecutionBindingSchema, desktopExecutionRequestSchema,
+import { desktopExecutionBindingSchema, desktopExecutionRequestSchema, desktopOperationIntentSchema,
   type DesktopExecutionBinding, type DesktopExecutionRequest } from '@xopcai/endpoint-tools-protocol';
 
 import { DesktopOperationSupervisor } from './operation-supervisor.js';
@@ -18,6 +18,12 @@ export class DesktopExecutionSession {
   }) {
     this.binding = desktopExecutionBindingSchema.parse(options.binding);
   }
+  inspect(input: unknown) {
+    if (this.closed) throw new Error('DESKTOP_EXECUTION_SESSION_CLOSED');
+    const intent = desktopOperationIntentSchema.parse(input);
+    if (intent.gatewayId !== this.binding.gatewayId || intent.deviceId !== this.binding.deviceId) throw new Error('DESKTOP_EXECUTION_BINDING_MISMATCH');
+    return this.options.supervisor.inspect(intent);
+  }
   invoke(input: unknown, options?: { beforeStart(): undefined }): Promise<ExecutionOutcome> {
     if (this.closed) return Promise.reject(new Error('DESKTOP_EXECUTION_SESSION_CLOSED'));
     let request: DesktopExecutionRequest;
@@ -32,7 +38,8 @@ export class DesktopExecutionSession {
       // A receipt query never starts a worker or renews an expired execution intent.
       const receipt = this.options.supervisor.inspect(request.execution);
       if (receipt) return Promise.resolve({ receipt, repeated: true });
-      if (this.options.supervisor.status().blocked) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
+      const status = this.options.supervisor.status();
+      if (status.blocked) throw new Error(status.stopUnconfirmed ? 'DESKTOP_EXECUTION_STOP_UNCONFIRMED' : 'DESKTOP_OPERATION_RECONCILIATION_REQUIRED');
       if (this.pending) throw new Error('DESKTOP_EXECUTION_BUSY');
     } catch (error) { return Promise.reject(error); }
     const controller = new AbortController();

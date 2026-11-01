@@ -301,7 +301,9 @@ export function auth(config?: AuthConfig) {
           }
         }
         if (device?.platform === 'desktop' && !(
-          ['GET', 'POST', 'DELETE'].includes(c.req.method) && requestPath === '/api/desktop-host/execution'
+          c.req.method === 'GET' && (requestPath === '/api/desktop-host/operations' || /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}$/.test(requestPath))
+          || c.req.method === 'POST' && /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}\/review$/.test(requestPath)
+          || ['GET', 'POST', 'DELETE'].includes(c.req.method) && requestPath === '/api/desktop-host/execution'
           || c.req.method === 'GET' && ['/api/desktop-host/compatibility', '/api/devices/me'].includes(requestPath)
           || c.req.method === 'DELETE' && requestPath === '/api/devices/me'
           || c.req.method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(requestPath)

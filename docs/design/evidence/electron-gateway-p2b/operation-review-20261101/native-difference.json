@@ -1,0 +1,8 @@
+{
+  "differences": [
+    "Contents/Info.plist",
+    "Contents/MacOS/xopc"
+  ],
+  "files": 1429,
+  "asarIdentical": true
+}

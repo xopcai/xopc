@@ -20,6 +20,9 @@ const errors = {
   DESKTOP_EXECUTION_UNSUPPORTED: '此 Gateway 不支持可靠执行；聊天和可用的只读能力仍可使用。',
   DESKTOP_EXECUTION_STOP_UNCONFIRMED: '执行器停止尚未确认，不能切换连接或启动新执行。请再次请求停止。',
   DESKTOP_OPERATION_RECONCILIATION_REQUIRED: '存在结果未知的操作，必须先核实；不会自动重做。',
+  DESKTOP_OPERATION_REVIEW_UNSUPPORTED: '此 Gateway 不支持操作核实；聊天仍可使用。',
+  DESKTOP_OPERATION_REVIEW_CONFLICT: '操作记录已变化或核实记录不一致，请刷新后检查。',
+  DESKTOP_OPERATION_CONTEXT_UNAVAILABLE: '缺少旧操作上下文，请连接原 Gateway 或恢复本机元数据备份；不会删除记录来解除阻断。',
   DESKTOP_AUTH_UNAVAILABLE: '暂时无法连接登记服务，请检查网络后重试。', DESKTOP_AUTH_REVOKED: '登记凭据已失效，需要确认旧登记撤销后重新登记。',
   DESKTOP_REENROLLMENT_REQUIRED: '请先确认旧登记已撤销，再重新登记。', DESKTOP_OPERATION_BUSY: '另一项登记操作仍在结束，请稍后重试。',
   SECURE_STORAGE_UNAVAILABLE: '系统安全存储不可用，无法保存电脑身份。',
@@ -37,7 +40,7 @@ function render(value) {
   const executionLabels = { authorizing: '等待本机授权。', connecting: '本机执行连接中。', online: '已授权逐次确认剪贴板写入，最长两分钟。',
     'stop-requested': '已请求停止，正在核实。', stopped: execution?.remoteRevocationConfirmed ? '本机执行已停止，服务器撤销已确认。' : '本机执行已停止，服务器撤销尚未确认。',
     'stop-unconfirmed': '执行器停止尚未确认；禁止切换或启动新的执行。', error: '本机执行连接失败，请检查后重新授权。' };
-  element('execution-status').textContent = execution ? executionLabels[execution.state] : '本机写入未授权。';
+  element('execution-status').textContent = execution ? executionLabels[execution.state] + (execution.resultUnknown ? ' 操作效果仍未知，核实后才能启动新写入。' : '') : '本机写入未授权。';
   element('execution-stop').disabled = !busy && (!execution || execution.state === 'stopped');
   const observation = value.observation;
   const observing = observation && ['connecting', 'online', 'offline'].includes(observation.state);
@@ -92,8 +95,33 @@ function render(value) {
     actionButton('授权读取设备状态', api.startObservation, selected && state === 'registered' && !observing && !executing, 'observe-state');
     actionButton('选择截图来源并授权', api.startScreenObservation, selected && state === 'registered' && !observing && !executing, 'observe-screen');
     actionButton('授权逐次确认剪贴板写入', api.startExecution, selected && state === 'registered' && value.desktop?.[profile.id]?.reliableExecution === true && !observing && !executing, 'execute-clipboard');
+    actionButton('查看待核实操作', api.listOperations, selected && state === 'registered' && value.desktop?.[profile.id]?.operationReview === true, 'operation-list');
     row.append(group);
     element('profiles').append(row);
+  }
+  element('local-operation-list').disabled = busy;
+  element('local-operation-reviews').replaceChildren();
+  if (value.localOperationReviews) {
+    for (const item of value.localOperationReviews) {
+      const row = document.createElement('li'), label = document.createElement('p'), action = document.createElement('button');
+      label.textContent = `${item.intent?.tool ?? '上下文缺失'} · ${item.operationId}`;
+      action.textContent = '离线检查后允许新意图'; action.dataset.localOperationReview = item.operationId; action.disabled = busy || !item.intent;
+      action.onclick = () => perform(() => api.reviewLocalOperation(snapshot.epoch, item.operationId));
+      row.append(label, action); element('local-operation-reviews').append(row);
+    }
+    element('local-operation-note').textContent = value.localOperationReviews.length ? '离线核实只记录本机确认，原服务器仍可能需要单独确认。不能确认停止的操作不会放行。' : '本机没有未核实的遗留记录。';
+  }
+  const reviews = value.operationReviews;
+  element('operation-review-panel').hidden = !reviews;
+  element('operation-reviews').replaceChildren();
+  if (reviews) {
+    for (const item of reviews.items) {
+      const row = document.createElement('li'), label = document.createElement('p'), action = document.createElement('button');
+      label.textContent = `${item.intent.tool} · ${item.intent.operationId}`; action.textContent = '检查后允许新意图'; action.dataset.operationReview = item.intent.operationId; action.disabled = busy;
+      action.onclick = () => perform(() => api.reviewOperation(snapshot.epoch, reviews.profileId, item.intent.operationId));
+      row.append(label, action); element('operation-reviews').append(row);
+    }
+    element('operation-review-note').textContent = reviews.items.length ? '每次最多显示8项；核实后可刷新继续。缺少回执不代表没有执行。' : '当前连接没有待核实的服务器操作。';
   }
   if (focusedAction) document.querySelector(focusedAction)?.focus();
 }
@@ -133,6 +161,7 @@ element('profile-form').onsubmit = event => {
 };
 element('local').onclick = () => void api.useLocal();
 element('observation-stop').onclick = () => { void api.stopObservation().then(result => { if (result?.snapshot) render(result.snapshot); }).catch(() => {}); };
+element('local-operation-list').onclick = () => void perform(() => api.listLocalOperations(snapshot.epoch));
 element('execution-stop').onclick = () => { element('execution-status').textContent = '已请求停止，正在核实。'; void api.stopExecution().then(result => { if (result?.snapshot) render(result.snapshot); }).catch(() => {}); };
 element('quit').onclick = () => void api.quit();
 element('login-update').onsubmit = event => {

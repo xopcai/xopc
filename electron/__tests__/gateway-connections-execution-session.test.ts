@@ -89,7 +89,7 @@ it('waits for a durable terminal receipt before close permits the journal owner 
   const started = Promise.withResolvers<void>();
   worker.run = vi.fn(async () => { started.resolve(); return new Promise(() => {}); });
   const pending = session.invoke(request); await started.promise;
-  expect(await session.close()).toEqual({ state: 'stopped' });
+  expect(await session.close()).toEqual({ state: 'stopped', resultUnknown: true });
   expect(journal.inspect(request.execution)).toMatchObject({ state: 'stopped', executionStopped: true });
   expect(await pending).toMatchObject({ receipt: { state: 'stopped' } });
 });

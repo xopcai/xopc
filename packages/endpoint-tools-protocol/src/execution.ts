@@ -41,7 +41,7 @@ export const desktopExecutionBindingSchema = z.strictObject({
   gatewayId: z.uuid(), deviceId: z.uuid(), clientId: z.string().min(1).max(160), connectionInstanceId: z.uuid(),
   authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
 });
-export const endpointDesktopExecutionAuthoritySchema = desktopExecutionBindingSchema.extend({ grantId: z.uuid(), expiresAt: timestamp });
+export const endpointDesktopExecutionAuthoritySchema = desktopExecutionBindingSchema.extend({ grantId: z.uuid(), expiresAt: timestamp, operationStatus: z.literal(true).optional() });
 export type EndpointDesktopExecutionAuthority = z.infer<typeof endpointDesktopExecutionAuthoritySchema>;
 export const desktopDeviceFrameProofSchema = z.strictObject({
   signedPayload: z.string().min(1).max(512 * 1024).regex(/^[A-Za-z0-9_-]+$/),
@@ -54,3 +54,14 @@ export type DesktopExecutionRequest = z.infer<typeof desktopExecutionRequestSche
 export type DesktopOperationState = z.infer<typeof desktopOperationStateSchema>;
 export type DesktopOperationReceipt = z.infer<typeof desktopOperationReceiptSchema>;
 export type DesktopExecutionBinding = z.infer<typeof desktopExecutionBindingSchema>;
+
+/** A native human review permits new intents; it never changes or replays the original unknown outcome. */
+export const desktopOperationReviewSchema = z.strictObject({
+  reviewId: z.uuid(), expectedGeneration: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), intentFingerprint: digest,
+  executorStopped: z.literal(true), localStatus: z.enum(['recorded', 'not-found']), receipt: desktopOperationReceiptSchema.optional(),
+}).superRefine((review, context) => {
+  if (review.localStatus === 'recorded' ? !review.receipt?.executionStopped : review.receipt !== undefined) {
+    context.addIssue({ code: 'custom', message: 'A review requires confirmed executor stop; absence never proves no effect' });
+  }
+});
+export type DesktopOperationReview = z.infer<typeof desktopOperationReviewSchema>;

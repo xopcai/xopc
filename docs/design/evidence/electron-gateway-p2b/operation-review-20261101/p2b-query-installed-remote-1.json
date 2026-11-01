@@ -1,0 +1,68 @@
+{
+  "passed": true,
+  "tls": false,
+  "startedAt": "2026-11-01T03:41:22.241Z",
+  "checks": {
+    "actualRemoteStartAppendHistory": true,
+    "serverStopVerified": true,
+    "networkAndGapRecoveryWithoutResubmission": true,
+    "processRestartAndWorkerCrashPreserveUnknownInput": true,
+    "lostReplyReceiptRecoveryAndGatewayDraftIsolation": true,
+    "encryptedHintsNoLocalGatewayDatabaseHostOrWorkspace": true,
+    "actualPackagedLocalRelaunch": true
+  },
+  "scope": "Installed macOS app and bundled Gateway runtime, isolated same-host server processes, deterministic inference; not independent physical server or public certificate acceptance",
+  "background": false,
+  "fixtureLifetimeSeconds": 86400,
+  "application": "/tmp/xopc-j2b-query-delivery-2/installed/xopc.app",
+  "packageBefore": {
+    "files": 1429,
+    "sha256": "22e9de118d0a13fd3e2815dcedbe3729d6d95206390ab21cc5078912592c599b"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-j2b-query-delivery-2/installed/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-j2b-query-delivery-2/installed/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-s3-chat-LL52Wj",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 36215
+  },
+  "normalInputs": 2,
+  "normalSamples": [
+    {
+      "input": 1,
+      "durationMs": 315
+    },
+    {
+      "input": 2,
+      "durationMs": 123
+    }
+  ],
+  "inputIntervalMs": 0,
+  "stopTarget": {
+    "expectedRunId": "816a4ecf-763d-45af-b991-15e5da36dbe2",
+    "actualRunId": "816a4ecf-763d-45af-b991-15e5da36dbe2",
+    "passed": true
+  },
+  "packageAfter": {
+    "files": 1429,
+    "sha256": "22e9de118d0a13fd3e2815dcedbe3729d6d95206390ab21cc5078912592c599b"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "failures": []
+  },
+  "finishedAt": "2026-11-01T03:41:31.382Z"
+}
