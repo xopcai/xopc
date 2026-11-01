@@ -161,3 +161,15 @@ export const COMPUTER_DESCRIPTOR = {
   timeoutMs: 30_000, maxConcurrency: 1, supportsCancellation: true, idempotent: false,
   resultKinds: ['json', 'file'],
 } as const;
+
+/** Independent remote grant; the original local session transport keeps its existing approval policy. */
+export const REMOTE_COMPUTER_CONTROL_TOOL = 'desktop.computer.remote_control';
+export const REMOTE_COMPUTER_DESCRIPTOR = {
+  ...COMPUTER_DESCRIPTOR,
+  name: REMOTE_COMPUTER_CONTROL_TOOL,
+  title: 'Remote Computer control transport',
+  description: 'Private native-approved remote desktop transport. Use computer_use instead.',
+  policyId: 'computer.remote-session-scoped',
+  confirmation: 'always',
+  requiresForeground: true,
+} as const;

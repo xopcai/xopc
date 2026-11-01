@@ -10,7 +10,7 @@ const PAIRING_ATTEMPTS = 5;
 
 export type DeviceRoute = {
   id: string;
-  kind: 'xopc-secure-link' | 'tailscale' | 'custom-https' | 'local-browser';
+  kind: 'xopc-secure-link' | 'tailscale' | 'custom-https' | 'local-browser' | 'ssh-loopback';
   url: string;
 };
 

@@ -24,6 +24,15 @@ import type { RawData, WebSocket } from 'ws';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import { EndpointToolPolicyError } from '../endpoint-tools/policy.js';
 import type { EndpointTransport } from '../endpoint-tools/registry.js';
+import type { EndpointDesktopExecutionAuthority } from '@xopcai/endpoint-tools-protocol';
+import { assertDesktopExecutionHello } from '../endpoint-tools/desktop-execution.js';
+import { getDesktopExecutionGrant } from '../storage/sqlite/desktop-execution-repository.js';
+import { assertDesktopObservationHello } from '../endpoint-tools/desktop-observation.js';
+import { signDesktopGatewayFrame, type DesktopFrameBinding } from '../endpoint-tools/desktop-frame.js';
+import { DesktopDeviceFrameVerifier } from '../endpoint-tools/desktop-device-frame.js';
+import { getDevice, getDesktopStateObservation } from '../storage/sqlite/device-access-repository.js';
+import { getEndpointPrincipal } from '../storage/sqlite/endpoint-principal-repository.js';
+import { getOrCreateGatewayIdentity, signGatewayPayload } from '../storage/sqlite/gateway-identity-repository.js';
 import { createLogger } from '../utils/logger.js';
 import { createPreauthConnectionBudget } from '../gateway/security/preauth-connection-budget.js';
 import { hasGatewayScope, type GatewayScope } from '../gateway/security/gateway-scopes.js';
@@ -161,6 +170,19 @@ export class RealtimeRuntime {
     let endpointId: string | undefined;
     let principalId: string | undefined;
     let grantedScopes: readonly GatewayScope[] = [];
+    let desktopBinding: DesktopFrameBinding | undefined;
+    let desktopDeviceFrames: { verifier: DesktopDeviceFrameVerifier; authorizationRevision: number } | undefined;
+    let executionAuthority: EndpointDesktopExecutionAuthority | undefined;
+    const executionActive = () => {
+      if (!executionAuthority) return true;
+      const grant = getDesktopExecutionGrant(executionAuthority.deviceId);
+      return grant?.active && grant.revision === executionAuthority.authorizationRevision && grant.grant?.grantId === executionAuthority.grantId;
+    };
+    let desktopSequence = 0;
+    let desktopReady = false;
+    const pendingDesktopFrames: ServerRealtimeMessage[] = [];
+    const scopedFrame = (message: ServerRealtimeMessage): ServerRealtimeMessage => desktopBinding
+      ? signDesktopGatewayFrame(message, desktopBinding, ++desktopSequence, signGatewayPayload) as unknown as ServerRealtimeMessage : message;
     let budgetHeld = true;
 
     const releaseBudget = () => {
@@ -185,7 +207,7 @@ export class RealtimeRuntime {
 
     const helloTimer = setTimeout(() => socket.close(4401, 'Realtime hello timeout'), REALTIME_HELLO_TIMEOUT_MS);
     const heartbeatTimer = setInterval(() => guardConnection('heartbeat', () => {
-      if (principalId && !this.isPrincipalActive(principalId)) { socket.terminate(); return; }
+      if (!executionActive() || principalId && !this.isPrincipalActive(principalId)) { socket.terminate(); return; }
       if (Date.now() - lastSeenAt > REALTIME_HEARTBEAT_TIMEOUT_MS) {
         socket.close(4408, 'Realtime heartbeat timeout');
       }
@@ -197,7 +219,7 @@ export class RealtimeRuntime {
 
     const subscribe = (requested: RealtimeSubscription[]): boolean => {
       const authorized = requested.filter((item) => {
-        if (isAuthorizedTopic(item.topic, grantedScopes)) return true;
+        if (!desktopBinding && isAuthorizedTopic(item.topic, grantedScopes)) return true;
         sendError('FORBIDDEN_TOPIC', `Topic is not available: ${item.topic}`);
         return false;
       });
@@ -285,6 +307,32 @@ export class RealtimeRuntime {
         principalSockets.add(socket);
         this.socketsByPrincipal.set(principalId, principalSockets);
         connectionId = crypto.randomUUID();
+        const endpointPrincipalId = message.payload.endpoint?.kind === 'desktop' ? message.payload.endpoint.principalId : undefined;
+        const device = claim.deviceId ? getDevice(claim.deviceId)
+          : endpointPrincipalId && /^[0-9a-f-]{36}$/.test(endpointPrincipalId) ? getDevice(endpointPrincipalId) : undefined;
+        if (device?.platform === 'desktop') {
+          try {
+            if (claim.deviceId !== device.id || claim.clientKind !== 'desktop' || !message.payload.endpoint) throw new Error('DESKTOP_OBSERVATION_DENIED');
+            if (message.payload.endpoint.execution) {
+              if (!claim.scopes.includes('desktop.execute')) throw new Error('DESKTOP_EXECUTION_DENIED');
+              executionAuthority = assertDesktopExecutionHello(device, message.payload.endpoint, getEndpointPrincipal(device.id)?.publicKey,
+                getOrCreateGatewayIdentity().id, claim.clientId, message.payload.capabilities ?? []);
+            } else assertDesktopObservationHello(device, message.payload.endpoint, getEndpointPrincipal(device.id)?.publicKey);
+            desktopBinding = { gatewayId: getOrCreateGatewayIdentity().id, deviceId: device.id, clientId: claim.clientId,
+              connectionInstanceId: message.payload.endpoint.connectionInstanceId };
+            const frames = message.payload.endpoint.deviceFrames;
+            if (frames) {
+              if (!message.payload.capabilities?.includes('desktop.device-frames.v1')
+                || (executionAuthority?.authorizationRevision ?? getDesktopStateObservation(device.id)?.revision) !== frames.authorizationRevision) throw new Error('DESKTOP_DEVICE_FRAME_INVALID');
+              desktopDeviceFrames = { authorizationRevision: frames.authorizationRevision,
+                verifier: new DesktopDeviceFrameVerifier({ ...desktopBinding, authorizationRevision: frames.authorizationRevision },
+                  crypto.createPublicKey({ key: device.publicKeyJwk, format: 'jwk' }).export({ type: 'spki', format: 'pem' }).toString()) };
+            }
+          } catch { socket.close(4401, 'Desktop observation is not authorized'); return; }
+        }
+        if (message.payload.endpoint?.execution && !executionAuthority || message.payload.endpoint?.deviceFrames && !desktopDeviceFrames) {
+          socket.close(4401, 'Device frame proof requires an independently authenticated desktop'); return;
+        }
         let endpointReady: { endpointId: string; turnToken: string } | undefined;
         if (message.payload.endpoint) {
           const endpointKindMatches = message.payload.endpoint.kind === message.payload.clientKind
@@ -299,7 +347,12 @@ export class RealtimeRuntime {
               return socket.readyState;
             },
             send: (data) => {
-              writer.enqueue(serverMessage('endpoint.message', JSON.parse(data)), 'critical');
+              const frame = serverMessage('endpoint.message', JSON.parse(data));
+              if (desktopBinding && !desktopReady) {
+                if (pendingDesktopFrames.length >= 32) { socket.close(4413, 'Desktop startup message limit'); return; }
+                pendingDesktopFrames.push(frame); return;
+              }
+              writer.enqueue(scopedFrame(frame), 'critical');
             },
             close: (code, reason) => socket.close(code, reason),
           };
@@ -308,6 +361,7 @@ export class RealtimeRuntime {
               message.payload.endpoint,
               connectionId,
               transport,
+              executionAuthority,
             );
             endpointId = message.payload.endpoint.endpointId;
             this.setupAuthorities.delete(endpointId);
@@ -330,13 +384,15 @@ export class RealtimeRuntime {
           ? [...new Set(message.payload.capabilities.filter(capability =>
             (REALTIME_CAPABILITIES as readonly string[]).includes(capability)))]
           : undefined;
-        writer.enqueue(serverMessage('realtime.ready', {
+        writer.enqueue(scopedFrame(serverMessage('realtime.ready', {
           connectionId,
           heartbeatIntervalMs: REALTIME_HEARTBEAT_INTERVAL_MS,
           heartbeatTimeoutMs: REALTIME_HEARTBEAT_TIMEOUT_MS,
           ...(message.payload.capabilities ? { negotiatedCapabilities } : {}),
           ...(endpointReady ? { endpoint: endpointReady } : {}),
-        }), 'critical');
+        })), 'critical');
+        desktopReady = true;
+        for (const frame of pendingDesktopFrames.splice(0)) writer.enqueue(scopedFrame(frame), 'critical');
         subscribe(message.payload.subscriptions);
         log.info({ connectionId, principalId, clientId: claim.clientId, clientKind: claim.clientKind }, 'Realtime client connected');
         return;
@@ -351,6 +407,8 @@ export class RealtimeRuntime {
           subscriptions.get(topic)?.unsubscribe();
           subscriptions.delete(topic);
         }
+      } else if (!executionActive()) {
+        socket.close(4401, 'Desktop execution authorization expired');
       } else if (message.kind === 'realtime.ping') {
         if (endpointId && connectionId) this.endpointTools?.touch(endpointId, connectionId);
         writer.enqueue(serverMessage('realtime.pong', {}), 'critical');
@@ -358,7 +416,16 @@ export class RealtimeRuntime {
         sendError('ENDPOINT_NOT_REGISTERED', 'Endpoint messages require an endpoint identity');
       } else {
         try {
-          this.endpointTools.handleMessage(endpointId, connectionId, message.payload);
+          if (desktopDeviceFrames) {
+            const device = desktopBinding && getDevice(desktopBinding.deviceId);
+            if (message.kind !== 'desktop.endpoint.message' || !device || device.revokedAt !== undefined
+              || !executionActive() || (executionAuthority?.authorizationRevision ?? getDesktopStateObservation(device.id)?.revision) !== desktopDeviceFrames.authorizationRevision) throw new Error('DESKTOP_DEVICE_FRAME_INVALID');
+            const verified = desktopDeviceFrames.verifier.verify(JSON.stringify(message.payload));
+            this.endpointTools.handleMessage(endpointId, connectionId, verified);
+          } else {
+            if (message.kind !== 'endpoint.message') throw new Error('DESKTOP_DEVICE_FRAME_NOT_NEGOTIATED');
+            this.endpointTools.handleMessage(endpointId, connectionId, message.payload);
+          }
         } catch (error) {
           log.warn({ err: error, endpointId, connectionId }, 'Realtime endpoint message failed');
           socket.close(4400, 'Invalid endpoint message');

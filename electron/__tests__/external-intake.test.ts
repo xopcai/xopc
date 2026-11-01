@@ -1,12 +1,12 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 
 import { ExternalIntakeQueue, intakePaths, INTAKE_MAX_BYTES } from '../external-intake.js';
 
 const roots: string[] = [];
-afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+afterEach(async () => { vi.restoreAllMocks(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'xopc-intake-')); roots.push(root);
   return { root, queue: new ExternalIntakeQueue(join(root, 'queue')) };
@@ -16,17 +16,22 @@ it('captures original bytes, recovers multiple batches after restart and binds o
   const { root, queue } = await setup();
   const source = join(root, 'with spaces.png');
   await writeFile(source, new Uint8Array([0, 1, 255]));
-  await queue.receive([source]); await writeFile(source, 'changed'); await queue.receive([source]);
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+  await queue.receive([source]); const captured = (await queue.list())[0]!;
+  await writeFile(source, 'changed'); await queue.receive([source]);
   const restarted = new ExternalIntakeQueue(join(root, 'queue'));
   const batches = await restarted.list(); expect(batches).toHaveLength(2);
-  const first = batches[0]!;
+  const first = batches.find(batch => batch.id === captured.id)!;
+  const second = batches.find(batch => batch.id !== captured.id)!;
+  expect(first.createdAt).toBe(second.createdAt);
+  expect(await restarted.read(second.id, second.items[0]!.id)).toBe(Buffer.from('changed').toString('base64'));
   expect(await restarted.read(first.id, first.items[0]!.id)).toBe('AAH/');
   await expect(restarted.read(first.id, '../../secret')).rejects.toThrow('Unknown attachment');
   await restarted.target(first.id, 'a'.repeat(64), '12345678-1234-4234-8234-123456789abc');
   await expect(restarted.target(first.id, 'b'.repeat(64), '12345678-1234-4234-8234-123456789abc')).rejects.toThrow('another target');
   await expect(restarted.release(first.id, 'b'.repeat(64))).rejects.toThrow('another connection');
   await restarted.release(first.id, 'a'.repeat(64));
-  expect((await restarted.list())[0]!.target).toBeUndefined();
+  expect((await restarted.list()).find(batch => batch.id === first.id)!.target).toBeUndefined();
   await restarted.remove(first.id);
   expect(await restarted.list()).toHaveLength(1);
 });

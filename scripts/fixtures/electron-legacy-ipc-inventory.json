@@ -1,0 +1,783 @@
+{
+  "source": "f5b4b66015a386813ff31923cde8bde702fa544d",
+  "scan": "TypeScript AST calls on ipcMain/ipc: handle/on/once; non-IPC entry points listed separately in S0 scope",
+  "channels": [
+    {
+      "file": "electron/ipc/agent-ipc.ts",
+      "line": 11,
+      "method": "handle",
+      "channel": "agent:send",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/browser/browser-host.ts",
+      "line": 172,
+      "method": "handle",
+      "channel": "browser:close",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/browser/browser-host.ts",
+      "line": 170,
+      "method": "handle",
+      "channel": "browser:command",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/browser/browser-host.ts",
+      "line": 168,
+      "method": "handle",
+      "channel": "browser:ensure",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/browser/browser-host.ts",
+      "line": 169,
+      "method": "handle",
+      "channel": "browser:navigate",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/browser/browser-host.ts",
+      "line": 171,
+      "method": "handle",
+      "channel": "browser:present",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/browser/browser-host.ts",
+      "line": 173,
+      "method": "handle",
+      "channel": "browser:release",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1319,
+      "method": "handle",
+      "channel": "clipboard:read-text",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1313,
+      "method": "handle",
+      "channel": "clipboard:write-text",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/computer/preview-ipc.ts",
+      "line": 15,
+      "method": "handle",
+      "channel": "computer-preview:current",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/computer/preview-ipc.ts",
+      "line": 42,
+      "method": "handle",
+      "channel": "computer-preview:preset",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/computer/preview-ipc.ts",
+      "line": 48,
+      "method": "handle",
+      "channel": "computer-preview:stop-control",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/computer/preview-ipc.ts",
+      "line": 20,
+      "method": "handle",
+      "channel": "computer-preview:subscribe",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/computer/preview-ipc.ts",
+      "line": 47,
+      "method": "handle",
+      "channel": "computer-preview:unsubscribe",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1235,
+      "method": "handle",
+      "channel": "computer:access",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/computer/preview-ipc.ts",
+      "line": 7,
+      "method": "handle",
+      "channel": "computer:focus-target",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1247,
+      "method": "handle",
+      "channel": "computer:reenroll",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1236,
+      "method": "handle",
+      "channel": "computer:set-all-app-access",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1241,
+      "method": "handle",
+      "channel": "computer:set-app-access",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1233,
+      "method": "handle",
+      "channel": "computer:status",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1246,
+      "method": "handle",
+      "channel": "computer:stop",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/cron-display-wake-ipc.ts",
+      "line": 7,
+      "method": "handle",
+      "channel": "cron:set-prevent-display-sleep",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 113,
+      "method": "handle",
+      "channel": "desktop-pet:ack-event",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 126,
+      "method": "handle",
+      "channel": "desktop-pet:create-from-prompt",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 150,
+      "method": "handle",
+      "channel": "desktop-pet:drag-end",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 146,
+      "method": "handle",
+      "channel": "desktop-pet:drag-move",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 142,
+      "method": "handle",
+      "channel": "desktop-pet:drag-start",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 67,
+      "method": "handle",
+      "channel": "desktop-pet:get-state",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 84,
+      "method": "handle",
+      "channel": "desktop-pet:hide",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 122,
+      "method": "handle",
+      "channel": "desktop-pet:open-custom-dir",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 96,
+      "method": "handle",
+      "channel": "desktop-pet:open-main-window",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 92,
+      "method": "handle",
+      "channel": "desktop-pet:reset-position",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 107,
+      "method": "handle",
+      "channel": "desktop-pet:send-event",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 103,
+      "method": "handle",
+      "channel": "desktop-pet:set-click-through",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 154,
+      "method": "handle",
+      "channel": "desktop-pet:set-content-size",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 71,
+      "method": "handle",
+      "channel": "desktop-pet:set-prefs",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 80,
+      "method": "handle",
+      "channel": "desktop-pet:show",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/desktop-pet/ipc.ts",
+      "line": 88,
+      "method": "handle",
+      "channel": "desktop-pet:toggle",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 660,
+      "method": "handle",
+      "channel": "electron-locale:get",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 683,
+      "method": "handle",
+      "channel": "electron-locale:set",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 665,
+      "method": "handle",
+      "channel": "electron-theme:get",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 670,
+      "method": "handle",
+      "channel": "electron-theme:set",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 667,
+      "method": "handle",
+      "channel": "file:list-dir",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 690,
+      "method": "handle",
+      "channel": "file:open-dir-dialog",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 703,
+      "method": "handle",
+      "channel": "file:open-file-dialog",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 720,
+      "method": "handle",
+      "channel": "file:pick-endpoint-file",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 652,
+      "method": "handle",
+      "channel": "file:read",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 746,
+      "method": "handle",
+      "channel": "file:save-endpoint-text",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 980,
+      "method": "handle",
+      "channel": "file:watch",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 659,
+      "method": "handle",
+      "channel": "file:write",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1391,
+      "method": "handle",
+      "channel": "gateway:get-credential",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1371,
+      "method": "handle",
+      "channel": "gateway:restart",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1254,
+      "method": "handle",
+      "channel": "intake:list",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1255,
+      "method": "handle",
+      "channel": "intake:read",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1257,
+      "method": "handle",
+      "channel": "intake:release",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1258,
+      "method": "handle",
+      "channel": "intake:remove",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1256,
+      "method": "handle",
+      "channel": "intake:target",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1334,
+      "method": "handle",
+      "channel": "menu:get-model",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1339,
+      "method": "handle",
+      "channel": "menu:invoke",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1304,
+      "method": "on",
+      "channel": "preload:dom-content-loaded",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1295,
+      "method": "on",
+      "channel": "preload:ready",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/search-ipc.ts",
+      "line": 54,
+      "method": "handle",
+      "channel": "search:ripgrep",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 892,
+      "method": "handle",
+      "channel": "shell:choose-app-and-open-file-resource",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 866,
+      "method": "handle",
+      "channel": "shell:choose-app-and-open-path",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 974,
+      "method": "handle",
+      "channel": "shell:clear-recent-open-with-apps",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 838,
+      "method": "handle",
+      "channel": "shell:copy-file-resource-path",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 956,
+      "method": "handle",
+      "channel": "shell:get-open-with-apps-for-file-resource",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 941,
+      "method": "handle",
+      "channel": "shell:get-open-with-apps-for-path",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 936,
+      "method": "handle",
+      "channel": "shell:get-recent-open-with-apps",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1321,
+      "method": "handle",
+      "channel": "shell:open-external-url",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 779,
+      "method": "handle",
+      "channel": "shell:open-file-resource",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 926,
+      "method": "handle",
+      "channel": "shell:open-file-resource-with-app",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 771,
+      "method": "handle",
+      "channel": "shell:open-path",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 918,
+      "method": "handle",
+      "channel": "shell:open-path-with-app",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 789,
+      "method": "handle",
+      "channel": "shell:open-temporary-file",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 828,
+      "method": "handle",
+      "channel": "shell:show-file-resource-in-folder",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 820,
+      "method": "handle",
+      "channel": "shell:show-item-in-folder",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/file-ipc.ts",
+      "line": 848,
+      "method": "handle",
+      "channel": "shell:trash-file-resource",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 600,
+      "method": "handle",
+      "channel": "startup:check-update",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 578,
+      "method": "handle",
+      "channel": "startup:copy-diagnostic",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 574,
+      "method": "handle",
+      "channel": "startup:get-diagnostic",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 595,
+      "method": "handle",
+      "channel": "startup:get-update-status",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 588,
+      "method": "handle",
+      "channel": "startup:open-data-dir",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 612,
+      "method": "handle",
+      "channel": "startup:quit-and-install",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 618,
+      "method": "handle",
+      "channel": "startup:retry-gateway",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 869,
+      "method": "handle",
+      "channel": "system-settings:clear-user-data",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 656,
+      "method": "handle",
+      "channel": "system-settings:get-behavior",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 756,
+      "method": "handle",
+      "channel": "system-settings:get-permissions",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 863,
+      "method": "handle",
+      "channel": "system-settings:get-uninstall-info",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 764,
+      "method": "handle",
+      "channel": "system-settings:open-privacy",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 771,
+      "method": "handle",
+      "channel": "system-settings:request-accessibility",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 766,
+      "method": "handle",
+      "channel": "system-settings:request-microphone",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 776,
+      "method": "handle",
+      "channel": "system-settings:request-notifications",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 858,
+      "method": "handle",
+      "channel": "system-settings:request-screen",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 696,
+      "method": "handle",
+      "channel": "system-settings:set-behavior",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 781,
+      "method": "handle",
+      "channel": "system-settings:show-endpoint-notification",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 789,
+      "method": "handle",
+      "channel": "system-settings:show-product-notification",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/system-settings-ipc.ts",
+      "line": 875,
+      "method": "handle",
+      "channel": "system-settings:uninstall-app",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/terminal-ipc.ts",
+      "line": 328,
+      "method": "handle",
+      "channel": "terminal:create",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/terminal-ipc.ts",
+      "line": 349,
+      "method": "handle",
+      "channel": "terminal:dispose",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/terminal-ipc.ts",
+      "line": 344,
+      "method": "handle",
+      "channel": "terminal:resize",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/terminal-ipc.ts",
+      "line": 333,
+      "method": "on",
+      "channel": "terminal:write",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/understanding-sources-ipc.ts",
+      "line": 268,
+      "method": "handle",
+      "channel": "understanding-sources:catalog",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/understanding-sources-ipc.ts",
+      "line": 272,
+      "method": "handle",
+      "channel": "understanding-sources:collect",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/updater-ipc.ts",
+      "line": 14,
+      "method": "handle",
+      "channel": "updater:check",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/updater-ipc.ts",
+      "line": 10,
+      "method": "handle",
+      "channel": "updater:get-status",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/ipc/updater-ipc.ts",
+      "line": 20,
+      "method": "handle",
+      "channel": "updater:quit-and-install",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1351,
+      "method": "handle",
+      "channel": "window:fullscreen-enter",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1356,
+      "method": "handle",
+      "channel": "window:fullscreen-exit",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1366,
+      "method": "handle",
+      "channel": "window:fullscreen-is",
+      "remoteS1": "deny"
+    },
+    {
+      "file": "electron/main.ts",
+      "line": 1361,
+      "method": "handle",
+      "channel": "window:fullscreen-toggle",
+      "remoteS1": "deny"
+    }
+  ]
+}

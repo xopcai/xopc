@@ -1,3 +1,4 @@
+import { getDesktopExecutionGrant } from '../../../storage/sqlite/desktop-execution-repository.js';
 import { createMiddleware } from 'hono/factory';
 import type { Context } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -282,7 +283,8 @@ export function auth(config?: AuthConfig) {
               gatewayId: getOrCreateGatewayIdentity().id, credential: providedCredential!, method: c.req.method,
               target: url.pathname + url.search, headers: name => c.req.header(name), proof,
             }))) return c.json({ error: 'Unauthorized', code: 'REQUEST_PROOF_INVALID' }, 401);
-          const isUpload = /^(multipart\/form-data|application\/octet-stream)/i.test(c.req.header('content-type') ?? '')
+          const isUpload = /^\/api\/endpoint-tools\/invocations\/[^/]+\/files$/.test(requestPath)
+            || /^(multipart\/form-data|application\/octet-stream)/i.test(c.req.header('content-type') ?? '')
             || Number(c.req.header('content-length') ?? 0) > 65_536;
           const release = isUpload ? acquireProofBodyBudget(device.id) : () => {};
           if (!release) {
@@ -298,6 +300,22 @@ export function auth(config?: AuthConfig) {
             return c.json({ error: 'Unauthorized', code: 'REQUEST_REPLAYED' }, 401);
           }
         }
+        const desktopExecution = device?.platform === 'desktop' && device.scopes.includes('desktop.execute') ? getDesktopExecutionGrant(device.id) : undefined;
+        if (device?.platform === 'desktop' && !(
+          c.req.method === 'GET' && (requestPath === '/api/desktop-host/operations' || /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}$/.test(requestPath))
+          || c.req.method === 'POST' && /^\/api\/desktop-host\/operations\/[0-9a-f-]{36}\/review$/.test(requestPath)
+          || ['GET', 'POST', 'DELETE'].includes(c.req.method) && requestPath === '/api/desktop-host/execution'
+          || c.req.method === 'GET' && ['/api/desktop-host/compatibility', '/api/devices/me'].includes(requestPath)
+          || c.req.method === 'DELETE' && requestPath === '/api/devices/me'
+          || c.req.method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(requestPath)
+          || (device.scopes.includes('desktop.observe.screen') || device.scopes.includes('desktop.execute')
+            && desktopExecution?.active && (desktopExecution.grant?.toolRevisions['desktop.computer.remote_control'] || desktopExecution.grant?.toolRevisions['desktop.browser.control']))
+            && c.req.method === 'POST' && /^\/api\/endpoint-tools\/invocations\/[0-9a-f-]{36}\/files$/.test(requestPath)
+          || (device.scopes.includes('desktop.observe.state') || device.scopes.includes('desktop.observe.screen') || desktopExecution?.active) && (
+            c.req.method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(requestPath)
+            || c.req.method === 'GET' && ['/api/endpoint-tools/compatibility', '/api/desktop-host/status'].includes(requestPath)
+          )
+        )) return c.json({ error: 'Forbidden', code: 'DESKTOP_CREDENTIAL_SCOPE_DENIED' }, 403);
         recordSuccess(rl);
         setGatewayPrincipal(c, {
           kind: 'device',

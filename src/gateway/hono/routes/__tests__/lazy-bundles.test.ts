@@ -6,6 +6,20 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps independent desktop discovery and pairing without capturing chat or nearby routes', () => {
+    for (const path of ['/api/desktop-host/execution', '/api/desktop-host/operations', '/api/desktop-host/operations/operation-id', '/api/desktop-host/operations/operation-id/review', '/api/desktop-host/devices/device-id/execution']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('desktop-host');
+    for (const path of ['/api/desktop-host/operations/operation-id/extra', '/api/desktop-host/operations/operation-id/review/extra', '/api/desktop-host/execution/extra', '/api/desktop-host/devices/device-id/execution/extra', '/api/desktop-host/execution-other']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
+    for (const path of ['/api/desktop-host/compatibility', '/api/desktop-host/pairing-setups', '/api/desktop-host/observation', '/api/desktop-host/devices/device-id/observation', '/api/desktop-host/status', '/api/desktop-host/screen', '/api/desktop-host/devices/device-id/screen']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('desktop-host');
+    for (const path of ['/api/desktop-chat/bootstrap', '/api/desktop-host/compatibility/extra', '/api/desktop-host-other/compatibility', '/api/device-pairing/setups', '/api/desktop-host/devices/device-id/observation/extra', '/api/desktop-host/devices/device-id/control']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
+    for (const path of ['/api/desktop-host/status/extra', '/api/desktop-host/devices/device-id/screen/extra', '/api/desktop-host/screen-other']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
+  });
+
+  it('maps only the authenticated desktop chat discovery endpoint', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/desktop-chat/bootstrap')?.id).toBe('desktop-chat');
+    for (const path of ['/api/desktop-chat', '/api/desktop-chat/bootstrap/extra', '/api/desktop-chat-other/bootstrap', '/api/gateway-identity/challenge']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-chat');
+    }
+  });
   it('maps session input control without capturing input and transcript routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/input-control')?.id).toBe('session-input-control');
     for (const path of ['/api/sessions/id/inputs', '/api/sessions/id/input-control/extra', '/api/sessions/id/input-state']) {
@@ -59,6 +73,8 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/phone/devices')?.id).not.toBe('runtime-tools');
   });
   it('maps provider setup preview and apply through the models bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/providers/meta')?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/providers-other/meta')).toBeUndefined();
     for (const path of ['/api/models/setup/qwen-token-plan-cn', '/api/models/setup/xopc-cloud/preview', '/api/models/setup/xiaomi-token-plan-cn/apply']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('models');
     expect(findAuthenticatedLazyRouteBundle('/api/models-setup/xopc-cloud')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/global-defaults')?.id).not.toBe('models');
@@ -138,7 +154,7 @@ describe('lazy route bundles', () => {
     }
   });
   it('keeps draft and preview adapters in their authenticated domain bundles', () => {
-    for (const path of ['/api/automation-runs', '/api/automation-runs/run-1', '/api/automation-runs/run-1/read', '/api/automations/draft', '/api/automations/simulate', '/api/automation-runs/run/repair-draft', '/api/automation-events', '/api/automation-events/event-1/replay', '/api/automation-deliveries', '/api/automation-deliveries/run-1/gateway_event/retry']) {
+    for (const path of ['/api/automation-runs', '/api/automation-runs/product-events', '/api/automation-runs/run-1', '/api/automation-runs/run-1/read', '/api/automations/draft', '/api/automations/simulate', '/api/automation-runs/run/repair-draft', '/api/automation-events', '/api/automation-events/event-1/replay', '/api/automation-deliveries', '/api/automation-deliveries/run-1/gateway_event/retry']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('automations');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/notes/note/ai/edit')?.id).toBe('notes');
@@ -224,7 +240,7 @@ describe('lazy route bundles', () => {
   });
   it('maps the compatibility preflight without intercepting endpoint core routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/compatibility')?.id).toBe('endpoint-compatibility');
-    for (const path of ['/api/endpoint-tools/principals', '/api/endpoint-tools/compatibility-other']) {
+    for (const path of ['/api/endpoint-tools/principals', '/api/endpoint-tools/invocations', '/api/endpoint-tools/compatibility-other']) {
       expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }
   });
@@ -438,4 +454,9 @@ it('maps mobile phone workspace and permission routes without neighboring prefix
   for (const path of ['/api/phone/conversations/id/summary', '/api/phone/conversations/id/session/video-ticket', '/api/phone/conversations/id/session/control']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('phone');
   expect(findAuthenticatedLazyRouteBundle('/api/phone-other/conversations/id/summary')).toBeUndefined();
   expect(findAuthenticatedLazyRouteBundle('/api/phone/device-access/id')?.id).toBe('phone');
+});
+it('keeps purpose-authenticated stop receipts outside owner/device-token lazy routes', () => {
+  expect(findAuthenticatedLazyRouteBundle('/api/device-auth/execution-stops')).toBeUndefined();
+  expect(findAuthenticatedLazyRouteBundle('/api/device-auth/execution-stops/extra')).toBeUndefined();
+  expect(findAuthenticatedLazyRouteBundle('/api/desktop-host/execution')?.id).toBe('desktop-host');
 });

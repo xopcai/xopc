@@ -1,5 +1,6 @@
 import { resetSessionRecord } from '../session-repository.js';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -24,6 +25,8 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../index.js';
 import { ensureXopcDatabaseSchema, setSchemaVersion } from '../schema.js';
+import { readSqliteAsset, resolveSqliteAssetPath } from '../sql-assets.js';
+import { memorySearchText } from '../../../knowledge-memory/search-text.js';
 
 describe('session input repository', () => {
   let dir: string;
@@ -119,10 +122,31 @@ describe('session input repository', () => {
       id: 'endpoint', conversationId, clientMessageId: 'client-endpoint',
       requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Endpoint', origin,
     });
-    // v260 predates the session control tables; keep the fixture faithful to that schema.
-    db.exec('DROP TABLE session_input_control_operations; DROP TABLE session_input_control');
-    setSchemaVersion(db, 260);
-    ensureXopcDatabaseSchema(db);
+    // Build the real historical schema instead of relabelling today's schema as v260.
+    const tables = ['agents', 'sessions', 'transcripts', 'transcript_entries', 'session_config', 'session_inputs'];
+    const rows = tables.map(table => db.prepare(`SELECT * FROM ${table}`).all());
+    const databasePath = (db.prepare('PRAGMA database_list').all() as { name: string; file: string }[]).find(row => row.name === 'main')!.file;
+    closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
+    const legacyPath = join(databasePath + '.fixture-v260');
+    const legacy = new DatabaseSync(legacyPath);
+    try {
+      legacy.function('xopc_memory_search_text', { deterministic: true }, value => memorySearchText(String(value ?? '')));
+      legacy.function('xopc_operation_id', () => null);
+      legacy.exec(readFileSync(new URL('./fixtures/schema-v217.sql', import.meta.url), 'utf8'));
+      for (const file of readdirSync(resolveSqliteAssetPath('upgrades')).sort()) {
+        const version = Number(file.slice(0, 3));
+        if (version > 217 && version <= 260) legacy.exec(readSqliteAsset(`upgrades/${file}`));
+      }
+      for (const [index, table] of tables.entries()) {
+        const columns = new Set((legacy.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(column => column.name));
+        for (const row of rows[index]) {
+          const names = Object.keys(row).filter(name => columns.has(name));
+          legacy.prepare(`INSERT INTO ${table} (${names.join(',')}) VALUES (${names.map(() => '?').join(',')})`).run(...names.map(name => row[name]));
+        }
+      }
+      setSchemaVersion(legacy, 260);
+    } finally { legacy.close(); }
+    const upgraded = openXopcDatabase({ path: legacyPath }).db;
 
     for (const status of statuses) {
       expect(findSessionInput(conversationId, `client-${status}`)).toMatchObject({
@@ -131,7 +155,7 @@ describe('session input repository', () => {
       });
     }
     expect(findSessionInput(conversationId, 'client-endpoint')).toMatchObject({ origin, version: 1 });
-    ensureXopcDatabaseSchema(db);
+    ensureXopcDatabaseSchema(upgraded);
     expect(findSessionInput(conversationId, 'client-completed')?.version).toBe(2);
     expect(recoverSessionInputState()).toContain(conversationId);
     expect(getSessionInputState(conversationId).inputs.map(input => [input.id, input.status])).toEqual([

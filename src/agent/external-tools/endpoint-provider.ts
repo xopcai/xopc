@@ -1,8 +1,9 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { createHash } from 'node:crypto';
 import type { EndpointToolContent } from '@xopcai/endpoint-tools-protocol';
+import { REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
 import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
-import { COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
+import { COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import { extractDocumentText } from '../../document-understanding/extract.js';
 import { prepareImageForModel } from '../image/prepare-image-for-model.js';
@@ -14,6 +15,7 @@ import { DeviceTargetResolver } from '../../endpoint-tools/target-resolver.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import { EndpointToolExecutionError } from '../../endpoint-tools/invocation-service.js';
 import { executeExternalOperation, ExternalEffectNotAppliedError } from '../../capabilities/runtime/external-operations.js';
+import { CapabilityError } from '../../capabilities/runtime/errors.js';
 import { canonicalCapabilityJson } from '../../capabilities/runtime/dispatcher.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
@@ -44,7 +46,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const context = this.deps.getCurrentContext();
     if (!context) return [];
     const resolver = this.targetResolver();
-    return resolver.candidates(context.conversationId, context.origin).flatMap(endpoint => endpoint.tools.filter(({ descriptor }) => ![BROWSER_CONTROL_ENDPOINT_TOOL_NAME, COMPUTER_CONTROL_TOOL].includes(descriptor.name)
+    return resolver.candidates(context.conversationId, context.origin).flatMap(endpoint => endpoint.tools.filter(({ descriptor }) => ![BROWSER_CONTROL_ENDPOINT_TOOL_NAME, REMOTE_BROWSER_CONTROL_TOOL, COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL].includes(descriptor.name)
       && resolver.resolve(context.conversationId, context.origin, endpoint.endpointId, descriptor.name)).map(({ descriptor }) => ({
       toolRef: externalToolRef(this.source, endpoint.endpointId, descriptor.name),
       source: this.source,
@@ -85,7 +87,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     if (!resolved) throw new Error(`Endpoint tool is unavailable for this turn: ${toolRef}`);
     const revision = context.contractRevision ?? resolved.contractRevision;
     let grantLease: ReturnType<NonNullable<EndpointToolRuntime['grants']>['reserve']> | undefined;
-    const invoke = () => {
+    const invoke = (operationId?: string) => {
       context.signal?.throwIfAborted();
       if (this.resolve(toolRef)?.contractRevision !== revision) {
         throw new ExternalEffectNotAppliedError('Endpoint connection, binding or tool contract changed');
@@ -100,6 +102,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
       toolName: resolved.tool.descriptor.name,
       arguments: args,
       descriptorRevision: resolved.tool.revision,
+      ...(operationId ? { operationId } : {}),
       signal,
       onProgress: (progress) => {
         context.onUpdate?.({
@@ -111,6 +114,9 @@ export class EndpointToolProvider implements ExternalToolProvider {
         });
       },
       }).catch(error => {
+        if (error instanceof EndpointToolExecutionError && error.confirmedNoEffect) {
+          throw new ExternalEffectNotAppliedError(error.message, { cause: new CapabilityError('UNAVAILABLE', error.message) });
+        }
         if (resolved.tool.descriptor.confirmation === 'always'
           && error instanceof EndpointToolExecutionError && error.code === 'USER_DENIED') {
           throw new ExternalEffectNotAppliedError(error.message, { cause: error });
@@ -119,6 +125,20 @@ export class EndpointToolProvider implements ExternalToolProvider {
       });
     };
     try {
+    if (['desktop.terminal.open', 'desktop.terminal.control'].includes(resolved.tool.descriptor.name)) {
+      context.signal?.throwIfAborted();
+      if (this.resolve(toolRef)?.contractRevision !== revision) throw new ExternalEffectNotAppliedError('Terminal device or contract changed');
+      const turn = this.deps.getCurrentContext()!;
+      const grant = this.deps.runtime.grants.find(turn.conversationId, turn.origin, resolved.endpointId, resolved.tool.descriptor.name);
+      if (grant) grantLease = this.deps.runtime.grants.reserve(grant.id, args);
+      const signal = grantLease ? AbortSignal.any([grantLease.signal, context.signal ?? new AbortController().signal]) : context.signal;
+      const key = createHash('sha256').update(`${turn.conversationId}:${context.toolCallId}`).digest('hex');
+      const value = resolved.tool.descriptor.name === 'desktop.terminal.open'
+        ? await this.deps.runtime.terminals.open({ endpointId: resolved.endpointId, args, revision: resolved.tool.revision, key, toolCallId: context.toolCallId, signal })
+        : await this.deps.runtime.terminals.control({ endpointId: resolved.endpointId, args, key, signal });
+      return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: { content: [{ type: 'json', value }] },
+        details: { endpointId: resolved.endpointId, endpointToolName: resolved.tool.descriptor.name } };
+    }
     const result = resolved.tool.descriptor.effect === 'read' ? await invoke() : await executeExternalOperation({
       principalId: resolved.principalId,
       capabilityId: toolRef,
@@ -144,6 +164,20 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const modelContent: AgentToolResult<Record<string, unknown>>['content'] = observation
       ? [{ type: 'text', text: JSON.stringify(observation) }] : result.content.map(item => ({ type: 'text', text: contentText(item) }));
     for (const file of files) {
+      if (resolved.tool.descriptor.name === 'desktop.screen.capture') {
+        const bytes = result.invocationId ? this.deps.runtime.uploads.takeComputerFrame(file.fileId, result.invocationId) : undefined;
+        if (!bytes || file.mimeType !== 'image/png') throw new Error('Screenshot is no longer available');
+        const currentSource = () => {
+          context.signal?.throwIfAborted();
+          const current = this.deps.runtime.registry.get(resolved.endpointId);
+          if (!current || current.connectionId !== resolved.connectionId || current.availability !== 'foreground') throw new Error('Screenshot source is no longer active');
+        };
+        try {
+          currentSource(); const image = await prepareImageForModel(Buffer.from(bytes), file.mimeType); currentSource();
+          modelContent.push({ type: 'image', data: image.buffer.toString('base64'), mimeType: image.mimeType });
+        } finally { bytes.fill(0); }
+        continue;
+      }
       const uploaded = this.deps.runtime.uploads.getFile(file.fileId);
       if (!uploaded || uploaded.endpointId !== resolved.endpointId) throw new Error('Selected file is unavailable for this device');
       const bytes = this.deps.runtime.uploads.readFile(file.fileId);
@@ -169,7 +203,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
         endpointToolName: resolved.tool.descriptor.name,
         endpointSensitivity: resolved.tool.descriptor.sensitivity,
         ...(result.details ?? {}),
-        ...(files.length === 0 ? {} : { endpointFiles: files }),
+        ...(files.length === 0 || resolved.tool.descriptor.name === 'desktop.screen.capture' ? {} : { endpointFiles: files }),
       },
     };
     } finally { grantLease?.complete(); }
@@ -187,7 +221,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const endpoint = this.targetResolver().resolve(context.conversationId, context.origin, parsed.namespace, parsed.toolName);
     if (!endpoint || endpoint.endpointId !== parsed.namespace) return undefined;
     const tool = this.deps.runtime.registry.getTool(endpoint.endpointId, parsed.toolName);
-    if (tool && [BROWSER_CONTROL_ENDPOINT_TOOL_NAME, COMPUTER_CONTROL_TOOL].includes(tool.descriptor.name)) return undefined;
+    if (tool && [BROWSER_CONTROL_ENDPOINT_TOOL_NAME, REMOTE_BROWSER_CONTROL_TOOL, COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL].includes(tool.descriptor.name)) return undefined;
     return tool ? { approvedArguments: this.deps.runtime.grants.find(context.conversationId, context.origin, endpoint.endpointId, parsed.toolName)?.arguments, connectionId: endpoint.connectionId, endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName, tool,
       contractRevision: createHash('sha256').update(JSON.stringify([endpoint.principalId, endpoint.connectionId, tool.revision,
         this.deps.runtime.bindings.get(this.deps.getCurrentContext()!.conversationId)?.boundAt ?? null,

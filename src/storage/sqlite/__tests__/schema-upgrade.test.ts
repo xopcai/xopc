@@ -73,6 +73,42 @@ function expectPreserved(db: DatabaseSync): void {
 }
 
 describe('supported installed database upgrades', () => {
+  it('preserves installed v265 invocation history when adding optional stable operation audit identity', () => {
+    const db = historicalDatabase(265);
+    try {
+      db.exec(`INSERT INTO endpoint_tool_invocations(id,principal_id,endpoint_id,tool_call_id,tool_name,effect,
+        confirmation_required,arguments_sha256,status,started_at,completed_at)
+        VALUES ('keep-invocation','keep-device','keep-endpoint','keep-call','desktop.file.save','write',1,'hash','succeeded',10,20)`);
+      const before = db.prepare('SELECT * FROM endpoint_tool_invocations').all();
+      ensureXopcDatabaseSchema(db);
+      expect(db.prepare('SELECT * FROM endpoint_tool_invocations').all()).toEqual(before.map(row => ({ ...row, operation_id: null })));
+      expect(db.prepare('PRAGMA integrity_check').get()?.integrity_check).toBe('ok');
+    } finally { db.close(); }
+  });
+  it('preserves device credentials, pending approval and foreign-key dependents upgrading v262', () => {
+    const db = historicalDatabase(262);
+    try {
+      db.exec(`INSERT INTO devices(device_id, display_name, platform, public_key_jwk, scopes_json, created_at, request_proof_version)
+        VALUES ('legacy-phone', 'Keep phone', 'ios', '{}', '["device.self"]', 1, 0);
+        INSERT INTO device_pairing_sessions(pairing_id, secret_hash, routes_json, expires_at, attempts_remaining, created_at, target_kind)
+          VALUES ('keep-pair', 'hash', '[]', 9999999999999, 5, 1, 'mobile');
+        INSERT INTO device_pairing_requests(request_id, pairing_id, device_json, status, confirmation_code, expires_at, recovery_until, device_id, created_at)
+          VALUES ('keep-request', 'keep-pair', '{}', 'approved', '123456', 9999999999999, 9999999999999, 'legacy-phone', 1);
+        INSERT INTO device_access_sessions(session_id, device_id, token_hash, expires_at, created_at)
+          VALUES ('keep-access', 'legacy-phone', 'access-hash', 9999999999999, 1);
+        INSERT INTO device_refresh_credentials(credential_id, device_id, token_hash, expires_at, created_at)
+          VALUES ('keep-refresh', 'legacy-phone', 'refresh-hash', 9999999999999, 1);
+        PRAGMA foreign_keys = ON;`);
+      const tables = ['devices', 'device_pairing_sessions', 'device_pairing_requests', 'device_access_sessions', 'device_refresh_credentials'];
+      const before = tables.map(table => db.prepare(`SELECT * FROM ${table}`).all());
+      ensureXopcDatabaseSchema(db);
+      expect(tables.map(table => db.prepare(`SELECT * FROM ${table}`).all())).toEqual(before);
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys).toBe(1);
+      expect(db.prepare('PRAGMA integrity_check').get()?.integrity_check).toBe('ok');
+    } finally { db.close(); }
+  });
+
   it.each(Array.from({ length: XOPC_DB_SCHEMA_VERSION - 202 }, (_, index) => 202 + index))('preserves data upgrading historical schema v%i to the current schema', version => {
     const db = historicalDatabase(version);
     try {

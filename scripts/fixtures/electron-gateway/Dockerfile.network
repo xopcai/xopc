@@ -1,0 +1,7 @@
+ARG GATEWAY_BASE=xopc:s4-bundled-gateway
+FROM ${GATEWAY_BASE}
+USER root
+RUN node -e "const fs=require('node:fs');fs.mkdirSync('/etc/ssl/certs',{recursive:true});fs.writeFileSync('/etc/ssl/certs/ca-certificates.crt',require('node:tls').getCACertificates('bundled').join('\n')+'\n')"
+RUN node -e "const fs=require('node:fs');const p='/etc/apt/sources.list.d/debian.sources';fs.writeFileSync(p,fs.readFileSync(p,'utf8').replaceAll('http://deb.debian.org','https://deb.debian.org'))"
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates iproute2 iptables
+USER node

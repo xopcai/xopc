@@ -23,6 +23,7 @@ export interface BrowserRuntimeOptions {
   isTrustedSetupUrl?: (taskKey: string, url: string) => boolean;
   emit?: (type: string, payload: unknown) => void;
   resolveTarget?: (taskKey: string) => BrowserTarget | undefined;
+  retainSessionsUntilStopped?: boolean;
 }
 
 interface RuntimeSession {
@@ -306,6 +307,7 @@ export class BrowserRuntime {
   }
 
   private evictExpiredSessions(): void {
+    if (this.options.retainSessionsUntilStopped) return;
     const expiresBefore = Date.now() - this.options.getConfig().limits.sessionTimeoutMs;
     for (const [taskKey, session] of this.sessionsByTask) {
       if (session.lastUsedAt >= expiresBefore) continue;

@@ -85,6 +85,20 @@ function createHost(options: {
 }
 
 describe('EndpointToolHostController', () => {
+  it('rejects dedicated terminal controls without invoking a legacy tool', async () => {
+    const { host, sent, execute } = createHost();
+    await host.handleMessage({ protocolVersion: 2, messageId: crypto.randomUUID(), sentAt: Date.now(), type: 'terminal.command',
+      payload: { invocationId: crypto.randomUUID(), command: { action: 'close', sessionId: crypto.randomUUID(), generation: crypto.randomUUID(), connectionInstanceId: crypto.randomUUID() } } });
+    expect(execute).not.toHaveBeenCalled();
+    expect(sent).toMatchObject([{ type: 'tool.error', payload: { code: 'PROTOCOL_ERROR' } }]);
+  });
+  it.each(['execution', 'operationQuery'])('refuses %s metadata instead of executing it through the legacy controller', async field => {
+    const { host, sent, execute } = createHost();
+    await host.handleMessage(invocation({ [field]: { operationId: crypto.randomUUID(), gatewayId: crypto.randomUUID(), deviceId: crypto.randomUUID(),
+      tool: descriptor.name, argumentHash: 'a'.repeat(64), toolRevision: endpointToolRevision(descriptor), authorizationRevision: 1, expiresAt: Date.now() + 10000 } }));
+    expect(execute).not.toHaveBeenCalled();
+    expect(sent).toMatchObject([{ type: 'tool.error', payload: { code: 'PROTOCOL_ERROR' } }]);
+  });
   it('executes registered tools and returns validated content', async () => {
     const { host, sent } = createHost();
 

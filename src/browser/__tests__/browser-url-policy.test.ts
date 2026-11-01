@@ -123,3 +123,34 @@ describe('checkPostRedirectUrl', () => {
     expect(checkPostRedirectUrl('http://169.254.169.254/', { privateHostAllowed: true })).toMatch(/metadata/i);
   });
 });
+
+describe('IPv6 browser destinations', () => {
+  it.each([
+    '[::]', '[::1]', '[0:0:0:0:0:0:0:1]', '[fc00::1]', '[fd00::1]', '[fe80::1]', '[febf::1]',
+    '[::ffff:127.0.0.1]', '[::ffff:7f00:1]', '[::ffff:192.168.1.1]', '[::ffff:10.0.0.1]',
+  ])('blocks private IPv6 destination %s before navigation and after redirects', host => {
+    const url = `http://${host}:18790/`;
+    expect(() => assertBrowserUrlAllowed(url)).toThrow();
+    expect(checkPostRedirectUrl(url)).toBeDefined();
+    expect(() => assertBrowserUrlAllowed(url, { privateHostAllowed: true })).not.toThrow();
+    expect(checkPostRedirectUrl(url, { privateHostAllowed: true })).toBeUndefined();
+  });
+
+  it.each(['[::ffff:169.254.169.254]', '[::ffff:a9fe:a9fe]', '[::ffff:100.100.100.200]'])(
+    'always blocks mapped metadata destination %s, including explicit private access', host => {
+      const url = `http://${host}/`;
+      expect(isAlwaysBlockedUrl(url)).toBe(true);
+      for (const privateHostAllowed of [false, true]) {
+        expect(() => assertBrowserUrlAllowed(url, { privateHostAllowed })).toThrow();
+        expect(checkPostRedirectUrl(url, { privateHostAllowed })).toMatch(/metadata/i);
+      }
+    },
+  );
+
+  it.each(['[2606:4700:4700::1111]', '[::ffff:8.8.8.8]'])('allows public IPv6 destination %s', host => {
+    const url = `https://${host}/`;
+    expect(() => assertBrowserUrlAllowed(url)).not.toThrow();
+    expect(checkPostRedirectUrl(url)).toBeUndefined();
+    expect(isAlwaysBlockedUrl(url)).toBe(false);
+  });
+});

@@ -5,8 +5,10 @@ export const MOBILE_PAIRING_INVITATION_VERSION = 4;
 export const MOBILE_PAIRING_INVITATION_PREFIX = 'https://link.xopc.ai/c#';
 export const BROWSER_PAIRING_INVITATION_VERSION = 1;
 export const BROWSER_PAIRING_INVITATION_PREFIX = `XOPC-BROWSER-INVITE-V${BROWSER_PAIRING_INVITATION_VERSION}:`;
-export const devicePairingTargetKindSchema = z.enum(['mobile', 'browser']);
-export const devicePlatformSchema = z.enum(['ios', 'android', 'harmonyos', 'chrome']);
+export const devicePairingTargetKindSchema = z.enum(['mobile', 'browser', 'desktop']);
+export const devicePlatformSchema = z.enum(['ios', 'android', 'harmonyos', 'chrome', 'desktop']);
+export const MOBILE_DEVICE_PLATFORMS = ['ios', 'android', 'harmonyos'] as const;
+export function isMobileDevicePlatform(platform: unknown): boolean { return MOBILE_DEVICE_PLATFORMS.some(value => value === platform); }
 export type DevicePlatform = z.infer<typeof devicePlatformSchema>;
 export type DevicePairingTargetKind = z.infer<typeof devicePairingTargetKindSchema>;
 export const devicePairingRouteSchema = z.strictObject({
