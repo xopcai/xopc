@@ -1,10 +1,12 @@
 import { JSDOM } from 'jsdom';
 import { expect, it } from 'vitest';
 
-import { desktopBrowserDom } from '../desktop/browser-dom.js';
+import { desktopBrowserDom, desktopBrowserObservation } from '../desktop/browser-dom.js';
+import { verifyBrowserExpectation } from '../../src/browser/verification/expectation.js';
 
 function fixture(html = '<button id="counter" aria-label="Increment">0</button><input aria-label="Draft"><input type="password" value="secret"><input type="file">') {
   const dom = new JSDOM(html, { url: 'https://fixture.invalid/', runScripts: 'outside-only', pretendToBeVisual: true });
+  Object.assign(dom.window, { TextEncoder });
   dom.window.HTMLElement.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, width: 100, height: 30, top: 0, right: 100, bottom: 30, left: 0, toJSON() {} });
   const run = (command: Parameters<typeof desktopBrowserDom>[1]) => dom.window.eval(`(${desktopBrowserDom.toString()})('private_fixture',${JSON.stringify(command)})`) as ReturnType<typeof desktopBrowserDom>;
   return { dom, run };
@@ -47,4 +49,26 @@ it('rejects changed focus and sensitive focused fields before Main can send any 
   const current = f.run({ action: 'snapshot' });
   expect(f.run({ action: 'press', revision: current.revision!, key: 'a' })).toEqual({ error: 'INVALID_INPUT' });
   f.dom.window.close();
+});
+
+it.each(['中'.repeat(240), '😀'.repeat(120)])('bounds duplicated observation nodes by UTF-8 bytes for multibyte pages', label => {
+  const f = fixture(`<button>${label}</button>`.repeat(100));
+  try {
+    f.dom.window.document.title = '\u0001'.repeat(4096);
+    const raw = f.run({ action: 'snapshot' });
+    const observation = desktopBrowserObservation('s'.repeat(200), 't'.repeat(200), raw);
+    const result = { ok: true, receipt: { action: 'observe', risk: 'read', durationMs: 0, verified: true, observation } };
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(49152);
+    const message = verifyBrowserExpectation({ textIncludes: '\u0002'.repeat(1024) }, observation);
+    const failure = { ok: false, error: { code: 'EXPECTATION_FAILED', message, observation } };
+    expect(message).not.toBeNull();
+    expect(Buffer.byteLength(JSON.stringify(failure))).toBeLessThanOrEqual(49152);
+    expect(raw.nodes!.length).toBeGreaterThan(0);
+    expect(raw.nodes!.length).toBeLessThan(100);
+    let clicks = 0;
+    f.dom.window.document.querySelector('button')!.addEventListener('click', () => clicks++);
+    expect(f.run({ action: 'click', revision: raw.revision!, ref: raw.nodes![0]!.ref })).toEqual({});
+    expect(clicks).toBe(1);
+    expect(f.run({ action: 'resolve', semanticTarget: { role: 'button', name: label } })).toEqual({ error: 'TARGET_NOT_FOUND' });
+  } finally { f.dom.window.close(); }
 });

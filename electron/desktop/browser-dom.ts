@@ -33,7 +33,11 @@ export function desktopBrowserDom(namespace: string, command: { action: 'snapsho
     || element.textContent || element.getAttribute('placeholder') || '').trim().slice(0, 240);
   if (command.action === 'snapshot') {
     const refs = new Map<string, HTMLElement>(), nodes: BrowserNode[] = [];
-    let characters = 0; state.truncated = false;
+    const metadata = { revision: state.revision + 1, documentId: state.documentId, title: document.title.slice(0, 4096), url: location.href.slice(0, 4096) };
+    const encoder = new TextEncoder();
+    // Count both node arrays and metadata; reserve 8 KiB below the result limit for identifiers and escaped expectation errors.
+    let bytes = encoder.encode(JSON.stringify({ ...metadata, nodes: [], changes: { added: [], changed: [], removed: [] } })).byteLength;
+    state.truncated = false;
     for (const element of document.querySelectorAll<HTMLElement>('a[href],button,input:not([type=hidden]),textarea,select,summary,[contenteditable=true],[role],[tabindex]')) {
       if (!visible(element) || element instanceof HTMLInputElement && ['file', 'password'].includes(element.type)) continue;
       const ref = `e${nodes.length + 1}`, rect = element.getBoundingClientRect();
@@ -45,12 +49,12 @@ export function desktopBrowserDom(namespace: string, command: { action: 'snapsho
         bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
       if (element instanceof HTMLAnchorElement) item.href = element.href.slice(0, 4096);
       if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) item.value = element.value.slice(0, 1024);
-      characters += JSON.stringify(item).length;
-      if (characters > 18000 || nodes.length >= 100) { state.truncated = true; break; }
+      bytes += 2 * (encoder.encode(JSON.stringify(item)).byteLength + 1);
+      if (bytes > 40 * 1024 || nodes.length >= 100) { state.truncated = true; break; }
       refs.set(ref, element); nodes.push(item);
     }
     state.refs = refs; state.nodes = nodes; state.revision++; state.observedEpoch = state.epoch; state.url = location.href; state.focused = document.activeElement;
-    return { nodes, revision: state.revision, documentId: state.documentId, title: document.title.slice(0, 4096), url: location.href.slice(0, 4096),
+    return { nodes, ...metadata,
       focused: nodes.find(node => node.states.includes('focused'))?.ref };
   }
   if (command.action !== 'wait' && state.observedEpoch !== state.epoch || state.url !== location.href) return { error: 'STALE_OBSERVATION' };
