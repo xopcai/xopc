@@ -22,9 +22,10 @@ export class DesktopTerminalBroker {
     confirmOpen(scope: DesktopTerminalScope, intent: DesktopOperationIntent, args: Record<string, unknown>, signal: AbortSignal): Promise<boolean>;
     confirmInput(scope: DesktopTerminalScope, input: DesktopTerminalInput, signal: AbortSignal): Promise<boolean>;
     create(scope: DesktopTerminalScope, intent: DesktopOperationIntent, emit: (frame: DesktopTerminalOutput) => void): {
-      worker: DesktopTerminalWorker; supervisor: DesktopOperationSupervisor;
+      worker: DesktopTerminalWorker; supervisor: Pick<DesktopOperationSupervisor, 'execute'>;
     };
     emit(frame: DesktopTerminalOutput): void;
+    confirmRootStopped?(intent: DesktopOperationIntent): Promise<boolean>;
   }) {}
   private same(a: DesktopTerminalScope, b: DesktopTerminalScope) { return canonicalJson(a) === canonicalJson(b); }
   private require(scope: DesktopTerminalScope): Session {
@@ -78,7 +79,9 @@ export class DesktopTerminalBroker {
     try {
       const approvalSignal = AbortSignal.any([signal, session.controller.signal, AbortSignal.timeout(Math.max(1, Math.min(120000, session.intent.expiresAt - Date.now())))]);
       approvalSignal.throwIfAborted();
-      if (!await this.options.confirmInput(structuredClone(scope), structuredClone(input), approvalSignal)) throw new Error('DESKTOP_TERMINAL_USER_DENIED');
+      if (!await this.options.confirmInput(structuredClone(scope), structuredClone(input), approvalSignal)) {
+        approvalSignal.throwIfAborted(); this.require(scope); return await session.worker.rejectInput(input, approvalSignal);
+      }
       approvalSignal.throwIfAborted(); this.require(scope);
       return await session.worker.input(input, approvalSignal);
     } finally { session.inputBusy = false; }
@@ -88,6 +91,21 @@ export class DesktopTerminalBroker {
     const session = this.require(scope);
     await session.worker.resize({ sessionId: scope.sessionId, generation: scope.generation, connectionInstanceId: scope.connectionInstanceId }, columns, rows);
     this.require(scope);
+  }
+  async closeTerminal(scope: DesktopTerminalScope) {
+    const session = this.require(scope);
+    if (session.inputBusy) throw new Error('DESKTOP_TERMINAL_INPUT_BUSY');
+    session.inputBusy = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([(async () => {
+        await session.worker.closeTerminal();
+        const outcome = await session.execution;
+        if (!outcome?.receipt.executionStopped || outcome.receipt.state !== 'succeeded') throw new Error('DESKTOP_TERMINAL_STOP_UNCONFIRMED');
+      })(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('DESKTOP_TERMINAL_STOP_UNCONFIRMED')), 3000); })]);
+      this.closed = true; return { confirmed: true };
+    } catch (error) { this.closed = true; this.blocked = true; void this.stop(); throw error; }
+    finally { clearTimeout(timer); session.inputBusy = false; }
   }
   /** The caller retains the fixed-root executor lease until this returns confirmed and root terminal persistence settles. */
   async stop() {
@@ -100,7 +118,7 @@ export class DesktopTerminalBroker {
       const confirmed = await Promise.race([(async () => {
         if (!(await session.worker.stop()).confirmed) return false;
         const outcome = await session.execution;
-        return !outcome || outcome.receipt.executionStopped;
+        return !outcome || outcome.receipt.executionStopped || await this.options.confirmRootStopped?.(session.intent) === true;
       })(), new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), 3000); })]);
       this.blocked = !confirmed;
       // Keep the closed session identity. Reopening always requires a new broker/generation, never implicit reconnect.

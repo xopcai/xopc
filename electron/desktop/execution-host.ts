@@ -16,6 +16,7 @@ import { DesktopWorkspaceReadSession, type DesktopWorkspaceReadApproval } from '
 import { DesktopOperationJournal } from './operation-journal.js';
 import { DesktopOperationSupervisor, type DesktopExecutionWorker } from './operation-supervisor.js';
 import { DesktopReliableToolController } from './reliable-tool-controller.js';
+import { DesktopTerminalHostController } from './terminal-host-controller.js';
 
 type State = 'connecting' | 'online' | 'stopped' | 'error';
 /** One explicitly approved connection. Network loss stops execution and never renews or replays a grant. */
@@ -38,6 +39,8 @@ export class DesktopExecutionHost {
     confirm: ConstructorParameters<typeof DesktopExecutionSession>[0]['confirm'];
     confirmRead?(request: DesktopWorkspaceReadApproval, signal: AbortSignal): Promise<boolean>;
     createWorker(tool: string, intent?: DesktopOperationIntent): DesktopExecutionWorker;
+    createTerminal?: ConstructorParameters<typeof DesktopTerminalHostController>[0]['createWorker'];
+    confirmTerminalInput?: ConstructorParameters<typeof DesktopTerminalHostController>[0]['confirmInput'];
     onState(state: State, error?: string): void;
   }) {
     this.grant = desktopExecutionGrantSchema.parse(JSON.parse(JSON.stringify(options.approved)));
@@ -92,10 +95,13 @@ export class DesktopExecutionHost {
       const binding = { gatewayId: this.options.binding.gatewayId, deviceId: identity.deviceId, clientId, connectionInstanceId };
       this.binding = binding;
       const active = () => !this.stopped && Date.now() < this.grant.expiresAt;
+      let terminal: DesktopTerminalHostController | undefined;
+      const terminalEnabled = Boolean(this.grant.toolRevisions['desktop.terminal.open']);
+      if (terminalEnabled && (!this.options.createTerminal || !this.options.confirmTerminalInput)) throw new Error('DESKTOP_TERMINAL_UNSUPPORTED');
       const supervisor = new DesktopOperationSupervisor({ journal: this.options.journal,
         authority: tool => ({ gatewayId: binding.gatewayId, deviceId: binding.deviceId, authorizationRevision: this.options.authorizationRevision,
-          toolRevision: this.options.catalog.revision(tool) ?? '', expiresAt: this.grant.expiresAt, active: active() && (tool !== 'desktop.command.run' || this.options.foreground()), ...(this.grant.workspaceId ? { workspaceId: this.grant.workspaceId } : {}) }),
-        createWorker: this.options.createWorker, validateResult: this.options.catalog.validateResult });
+          toolRevision: this.options.catalog.revision(tool) ?? '', expiresAt: this.grant.expiresAt, active: active() && (!['desktop.command.run', 'desktop.terminal.open'].includes(tool) || this.options.foreground()), ...(this.grant.workspaceId ? { workspaceId: this.grant.workspaceId } : {}) }),
+        createWorker: (tool, intent) => tool === 'desktop.terminal.open' ? terminal!.workerFor(intent) : this.options.createWorker(tool, intent), validateResult: this.options.catalog.validateResult });
       this.session = new DesktopExecutionSession({ binding: { ...binding, authorizationRevision: this.options.authorizationRevision }, supervisor, confirm: this.options.confirm });
       const hasFileReads = this.options.catalog.descriptors().some(tool => ['desktop.workspace.list', 'desktop.workspace.read'].includes(tool.name));
       if (hasFileReads && !this.options.confirmRead) throw new Error('DESKTOP_EXECUTION_DENIED');
@@ -104,7 +110,13 @@ export class DesktopExecutionHost {
         catalog: this.options.catalog, foreground: () => active() && this.options.foreground(), confirm: this.options.confirmRead,
         createWorker: this.options.createWorker, onExecutorStopped: () => { void this.stop(); },
       }) : undefined;
-      const controller = new DesktopReliableToolController({ catalog: this.options.catalog, session: this.session,
+      let controller!: DesktopReliableToolController;
+      if (terminalEnabled) terminal = new DesktopTerminalHostController({ binding: { ...binding, authorizationRevision: this.options.authorizationRevision }, session: this.session,
+        current: () => active() && this.options.foreground(), createWorker: this.options.createTerminal!, confirmInput: this.options.confirmTerminalInput!,
+        confirmRootStopped: async intent => { await this.session!.close(); return this.options.journal.inspect(intent)?.executionStopped === true; },
+        emit: (invocationId, event) => client.sendEndpointMessage({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), type: 'terminal.event', payload: { invocationId, event } }) });
+      controller = new DesktopReliableToolController({ catalog: this.options.catalog, session: this.session,
+        ...(terminal ? { terminal } : {}),
         ...(reads ? { reads } : {}),
         availability: () => this.options.foreground() && active() ? 'foreground' : 'background', onTransportFailure: () => { void this.stop(); } });
       this.controller = controller;
@@ -116,6 +128,7 @@ export class DesktopExecutionHost {
           if (!active()) throw new RealtimeConnectionError('DESKTOP_EXECUTION_DENIED', false);
           const ticket = await this.options.auth.endpointRequest('/api/realtime/tickets', 'POST', { clientId, clientKind: 'desktop', protocolVersion: REALTIME_PROTOCOL_VERSION }, identity.deviceId);
           if (!['desktop.device-frames.v1', 'desktop.durable-execution.v1'].every(capability => ticket.realtime?.capabilities?.includes(capability))) throw new RealtimeConnectionError('DESKTOP_EXECUTION_UNSUPPORTED', false);
+          if (terminalEnabled && !ticket.realtime?.capabilities?.includes('desktop.terminal.v1')) throw new RealtimeConnectionError('DESKTOP_TERMINAL_UNSUPPORTED', false);
           return { ...ticket, connectionProof: await this.options.auth.connectionProof(ticket.ticket) };
         },
         onStateChange: (state, error) => {
@@ -136,6 +149,7 @@ export class DesktopExecutionHost {
           nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: this.options.catalog.descriptors(),
           deviceFrames: { version: 1, authorizationRevision: this.options.authorizationRevision },
           execution: { version: 1, grantId: this.grant.grantId, authorizationRevision: this.options.authorizationRevision, expiresAt: this.grant.expiresAt } };
+        if (terminalEnabled) unsigned.terminal = { version: 1 };
         const prepared = await this.options.auth.prepareExecutionEndpoint(unsigned, clientId, this.grant);
         if (!active()) { prepared.signer.close(); throw new RealtimeConnectionError('DESKTOP_EXECUTION_DENIED', false); }
         this.signer = prepared.signer; return prepared.hello;

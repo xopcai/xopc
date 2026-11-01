@@ -105,6 +105,19 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   let nativeApprovalGeneration = 0;
   const execution = new DesktopExecutionManager({ manager, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'),
     appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopOperationStatusDescriptor()]), foreground,
+    createTerminal: (intent, binding, emit, lease) => {
+      if (!container) throw new Error('DESKTOP_TERMINAL_AUTHORITY_INVALID'); return container.terminal(intent, binding, emit, lease);
+    },
+    confirmTerminalInput: async (scope, input, signal) => {
+      const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId), parent = shell?.captureWindow() ?? window;
+      if (profile?.identity?.gatewayId !== scope.gatewayId || container?.workspaceId !== scope.workspaceId || !foreground() || signal.aborted || parent.isDestroyed()) return false;
+      const generation = nativeApprovalGeneration;
+      const bytes = Buffer.from(input.bytes, 'base64');
+      const answer = await dialog.showMessageBox(parent, { type: 'warning', title: '确认本次终端输入', message: '将以下字节发送到隔离Docker终端？',
+        detail: `Gateway：${profile.origin}\n设备：${scope.deviceId}\n工作区：${scope.workspaceId}\n会话：${scope.sessionId}\n代次：${scope.generation}\n输入：${input.inputId} / ${input.sequence}\n完整字节（Base64）：${input.bytes}\n文本预览（转义）：${JSON.stringify(bytes.toString('utf8'))}\n\n仅批准这次输入。接收回执不代表命令完成；断线或结果未知不会重放。`,
+        buttons: ['取消', '发送本次终端输入'], defaultId: 0, cancelId: 0, noLink: true, signal });
+      return answer.response === 1 && !signal.aborted && generation === nativeApprovalGeneration && foreground();
+    },
     createWorker: (tool, intent) => {
       if (tool === DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name) return desktopClipboardWorker(clipboard);
       if (tool === 'desktop.command.run') {
@@ -114,10 +127,10 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     },
     consent: async (binding, grant, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
-      if (grant.toolRevisions['desktop.command.run']) {
+      if (grant.toolRevisions['desktop.command.run'] || grant.toolRevisions['desktop.terminal.open']) {
         if (!container || container.workspaceId !== grant.workspaceId) return false;
         const generation = nativeApprovalGeneration;
-        const result = await dialog.showMessageBox(window, { type: 'warning', title: '授权本机Docker命令', message: '允许此Gateway请求在独立Docker工作区运行命令？',
+        const result = await dialog.showMessageBox(window, { type: 'warning', title: grant.toolRevisions['desktop.terminal.open'] ? '授权本机Docker终端' : '授权本机Docker命令', message: grant.toolRevisions['desktop.terminal.open'] ? '允许此Gateway请求打开独立Docker终端？输出会发送给Gateway，每次输入仍需本机确认。' : '允许此Gateway请求在独立Docker工作区运行命令？',
           detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n镜像：${container.imageId}\n隔离工作区：${container.workspaceId}\n数据：${container.retainedData() ? '重新使用保留的隔离卷，旧授权不恢复' : '新建隔离卷'}\n\n授权最长两分钟，每个命令仍须逐次本机批准。容器无网络，以非root运行，不挂载本机目录或Docker socket，不传递主机凭据。命令仅修改本隔离卷，卷保留供核实；不会直接修改本机工作区。锁屏、断线或切换后需重新授权，停止未确认时不能接管。`,
           buttons: ['取消', '允许逐次确认容器命令'], defaultId: 0, cancelId: 0, noLink: true, signal });
         if (result.response !== 1 || signal.aborted || generation !== nativeApprovalGeneration || !foreground()) return false;
@@ -141,12 +154,12 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId);
       const parent = shell?.captureWindow() ?? window;
       if (profile?.identity?.gatewayId !== request.execution.gatewayId || !foreground() || signal.aborted || parent.isDestroyed()) return false;
-      if (request.toolName === 'desktop.command.run') {
+      if (['desktop.command.run', 'desktop.terminal.open'].includes(request.toolName)) {
         if (!container || request.execution.workspaceId !== container.workspaceId || request.arguments.workspaceId !== container.workspaceId) return false;
         const generation = nativeApprovalGeneration;
-        const result = await dialog.showMessageBox(parent, { type: 'warning', title: '确认本次容器命令', message: '运行以下隔离容器命令？',
+        const result = await dialog.showMessageBox(parent, { type: 'warning', title: request.toolName === 'desktop.terminal.open' ? '确认打开隔离终端' : '确认本次容器命令', message: request.toolName === 'desktop.terminal.open' ? '以以下argv打开隔离终端？每次输入仍需本机确认。' : '运行以下隔离容器命令？',
           detail: `Gateway：${profile.origin}\n设备：${request.execution.deviceId}\n镜像：${container.imageId}\n隔离工作区：${container.workspaceId}\n操作：${request.execution.operationId}\n参数摘要：${request.execution.argumentHash}\n\n完整argv：\n${JSON.stringify(request.arguments.argv)}\n\n仅本次有效。容器无网络或本机目录挂载；专用卷内的修改可能在中断后保留。返回非零退出码不代表没有副作用；结果未知时不会重做。`,
-          buttons: ['取消', '运行本次容器命令'], defaultId: 0, cancelId: 0, noLink: true, signal });
+          buttons: ['取消', request.toolName === 'desktop.terminal.open' ? '打开本次隔离终端' : '运行本次容器命令'], defaultId: 0, cancelId: 0, noLink: true, signal });
         return result.response === 1 && !signal.aborted && generation === nativeApprovalGeneration && foreground();
       }
       if (request.toolName === 'desktop.workspace.write') {
@@ -182,7 +195,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   let localOperationReviews: Awaited<ReturnType<DesktopOperationReviewManager['listLocal']>> | undefined;
   let operationReviews: { profileId: string; epoch: number; items: Awaited<ReturnType<DesktopOperationReviewManager['list']>> } | undefined;
   const proveContainerStopped = async (intent: Parameters<typeof stopRecordedContainer>[1]) => {
-    if (intent.tool !== 'desktop.command.run') return false;
+    if (!['desktop.command.run', 'desktop.terminal.open'].includes(intent.tool)) return false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([stopRecordedContainer(containerResources, intent), new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), 3000); })]);
@@ -193,7 +206,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     confirm: async (binding, intent, receipt, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
       const file = intent.tool === 'desktop.workspace.write' ? await workspaceRecovery.load(intent) : undefined;
-      const command = intent.tool === 'desktop.command.run' ? await containerResources.load(intent) : undefined;
+      const command = ['desktop.command.run', 'desktop.terminal.open'].includes(intent.tool) ? await containerResources.load(intent) : undefined;
       if (command && command.phase !== 'stopped' && !await proveContainerStopped(intent)) throw new Error('DESKTOP_EXECUTION_STOP_UNCONFIRMED');
       const commandDetail = command ? `\n镜像：${command.imageId}\n隔离工作区：${command.workspaceId}\nDocker卷：xopc-workspace-${command.ownerId}-${command.workspaceId}\n完整argv：${JSON.stringify(command.argv)}\n容器已核实删除，但隔离卷内的修改可能仍存在；不会自动删除卷或重做命令。` : '';
       if (signal.aborted || !visible() || !window.isFocused()) return false;
@@ -351,7 +364,8 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     const items = await containerWorkspaces.list({ profileId: id, origin: profile.origin, ...profile.identity });
     savedContainers = { epoch: state.epoch, profileId: id, items: items.map(item => ({ workspaceId: item.workspaceId, label: item.label, imageId: item.imageId })) }; return snapshot();
   })));
-  ipcMain.handle('connections:container-start', (_event, epoch, id, workspaceId) => reply(() => atEpoch(epoch, async () => {
+  ipcMain.handle('connections:container-start', (_event, epoch, id, workspaceId, kind) => reply(() => atEpoch(epoch, async () => {
+    if (kind !== undefined && kind !== 'terminal') throw new Error('DESKTOP_CONTAINER_ARGUMENT_INVALID');
     const state = manager.snapshot(), profile = state.profiles.find(profile => profile.id === id);
     if (process.platform !== 'darwin') throw new Error('DESKTOP_CONTAINER_UNSUPPORTED');
     if (id !== state.selectedId || !profile?.identity) throw new Error('STALE_CONNECTION_EPOCH');
@@ -365,7 +379,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     if (!current() || !visible() || !window.isFocused()) throw new Error('DESKTOP_OPERATION_CANCELLED');
     const identity = retained ? { workspaceId: retained.workspaceId, ownerId: retained.ownerId } : { workspaceId: randomUUID(), ownerId: randomUUID() };
     container = new DesktopContainerSession(engine, imageId, containerResources, current, { ...identity, existing: Boolean(retained),
-      ...(!retained ? { persist: async () => { await containerWorkspaces.create(binding, { socketPath: engine.socketPath, engineId: engine.engineId, imageId, label: 'Docker工作区 ' + new Date().toLocaleString() }, identity); } } : {}) });
+      ...(!retained ? { persist: async () => { await containerWorkspaces.create(binding, { socketPath: engine.socketPath, engineId: engine.engineId, imageId, label: 'Docker工作区 ' + new Date().toLocaleString() }, identity); } } : {}) }, kind === 'terminal');
     await container.activate(execution, epoch, id); return snapshot();
   })));
   ipcMain.handle('connections:quit', () => { cancelDesktop(); app.quit(); });

@@ -54,6 +54,15 @@ export function getDesktopOperationIntent(operationId: string, deviceId: string,
   return intent.gatewayId === gatewayId && intent.deviceId === deviceId && intent.operationId === operationId ? intent : undefined;
 }
 
+export function getDesktopOperationReceipt(operationId: string, deviceId: string, gatewayId: string): DesktopOperationReceipt | undefined {
+  if (!getDesktopOperationIntent(operationId, deviceId, gatewayId)) return;
+  const row = getSqliteDatabase().prepare('SELECT desktop_receipt_json FROM capability_operations WHERE operation_id=? AND principal_id=?').get(operationId, deviceId) as { desktop_receipt_json: string | null } | undefined;
+  if (!row?.desktop_receipt_json) return;
+  const receipt = desktopOperationReceiptSchema.parse(JSON.parse(row.desktop_receipt_json));
+  if (receipt.operationId !== operationId) throw new Error('DESKTOP_OPERATION_RECEIPT_INVALID');
+  return receipt;
+}
+
 export function listDesktopOperationsForReview(deviceId: string, gatewayId: string) {
   return (getSqliteDatabase().prepare(`SELECT o.operation_id, o.generation, o.desktop_intent_json, o.desktop_receipt_json
     FROM capability_operations o LEFT JOIN desktop_operation_reviews r ON r.operation_id=o.operation_id
@@ -76,7 +85,7 @@ export function reviewDesktopOperation(operationId: string, deviceId: string, ga
     if (!intent || !row || row.state !== 'unknown' || row.generation !== review.expectedGeneration
       || review.intentFingerprint !== createHash('sha256').update(JSON.stringify(intent)).digest('hex')
       || review.receipt && review.receipt.operationId !== operationId
-      || review.localStatus === 'not-found' && !(intent.tool === 'desktop.clipboard.write' || ['desktop.workspace.write', 'desktop.command.run'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
+      || review.localStatus === 'not-found' && !(intent.tool === 'desktop.clipboard.write' || ['desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
     const json = canonicalJson(review), previous = db.prepare('SELECT review_id,observation_json FROM desktop_operation_reviews WHERE operation_id=?').get(operationId) as { review_id: string; observation_json: string } | undefined;
     if (previous) {
       if (previous.review_id !== review.reviewId || previous.observation_json !== json) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');

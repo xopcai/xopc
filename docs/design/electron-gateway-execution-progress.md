@@ -74,3 +74,5 @@ P3c-1本机Docker监督核心完成：真实Engine隔离/专用卷、先CID持�
 P3c-2命令已接入独立设备/Native/Host/Agent，并保存隔离卷数据身份供全新授权复用。第3版安装包本地/旧266复用和远端聊天恢复通过，原生第4轮完整通过取消、批准、读原卷、非零退出、真实丢回执unknown、人工核实取消/批准与同卷新授权/新意图；前三轮失败保留，两分钟授权未延长，见[本批证据](./evidence/electron-gateway-p3/container-native-20261101/README.md)。PTY有序字节流及根操作生命周期核心测试通过但尚未Gateway/Host/UI接线，不能标记P3c整体完成；总磁盘配额/卷管理、P3d/P3e后续和P4继续待办。性能和24小时长测不阻塞开发，最终main交付条件不变。
 
 PTY Main内部broker已实现精确身份/连接代次隔离、逐次输入批准、离线停止和3秒原停止预算，修复等待打开批准期间停止后仍可能迟到启动的问题。实际Docker通过broker/根journal/输入去重/销毁链路，14项专项与类型检查通过；首次resize接线失败保留。该模块尚未开放网络/IPC，下一批须完成Gateway/Host/Agent/UI专用通道及安装包故障E2E，不能用内部夹具宣称完整PTY验收。
+
+P3c-3已实现Gateway/Host/Agent及原生授权入口的PTY专用接线，源代码实际Gateway/签名设备/Docker整链路与输入ACK丢失故障通过。252项相关回归、438项包测试及类型检查通过（集合重叠），新包本地/旧266复用回归通过。正常关闭删除竞争与迟到停止证据问题已修复，失败保留。Native整轮待解锁，详见[证据](./evidence/electron-gateway-p3/terminal-wire-20261101/README.md)。继续独立文件/卷管理、P3d/P4开发；不能提前标记全部功能完成或合入main。

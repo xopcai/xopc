@@ -1,0 +1,42 @@
+[
+  {
+    "source": "/tmp/xopc-p3c-terminal-e2e-1.log",
+    "sha256": "6339d6b6f5bfde55c098f729e8174a597843885c4c39299049a66bfe5b2a52c7",
+    "passed": false
+  },
+  {
+    "source": "/tmp/xopc-p3c-terminal-e2e-2.log",
+    "sha256": "5970523c72a572cb9e949c1b3069e889713e1a891fd19420e3e41e4ee528eaa1",
+    "passed": false
+  },
+  {
+    "source": "/tmp/xopc-p3c-terminal-e2e-3.log",
+    "sha256": "26a8a1666193fdb1a0a50b319cb6231122ee040771ebd778811416f90d93047c",
+    "passed": false
+  },
+  {
+    "source": "/tmp/xopc-p3c-terminal-e2e-4.log",
+    "sha256": "8ca8c0cf8c6bcb1f6c23a3e19f7c6c034929549325b62ef433e066b09e7f39e7",
+    "passed": true
+  },
+  {
+    "source": "/tmp/xopc-p3c-terminal-e2e-5.log",
+    "sha256": "038c6675fb753371ac7c42cd15ff96f8ae040fe52cea5feb3ea6619bc6a3ed0e",
+    "passed": false
+  },
+  {
+    "source": "/tmp/xopc-p3c-terminal-e2e-6.log",
+    "sha256": "4dfa4d2fd4e6e29f99acfbd5925f5f708c29a2e9a665ef2c138152873e24e10a",
+    "passed": false
+  },
+  {
+    "source": "/tmp/xopc-p3c-terminal-e2e-7.log",
+    "sha256": "9c75b85e4466086e4216ba2e90d90f83b9c2e6fe5903bd2c2df9b115c5b0f259",
+    "passed": false
+  },
+  {
+    "source": "/tmp/xopc-p3c-terminal-gateway-typecheck-1.log",
+    "sha256": "c40b93e56977376ceaf982d14c9a77ccddf7a1b23777d2034982f15d880c73c5",
+    "passed": false
+  }
+]

@@ -36,6 +36,7 @@ import {
 import { EndpointUploadService } from './upload-service.js';
 import { EndpointContextStore } from './context-store.js';
 import { LocationSharingService } from './location-sharing.js';
+import { DesktopTerminalGatewayBroker } from './terminal-broker.js';
 
 const log = createLogger('EndpointTools');
 const MAX_MESSAGE_CLOCK_SKEW_MS = 60_000;
@@ -48,6 +49,7 @@ export class EndpointToolRuntime {
   readonly invocations: EndpointInvocationService;
   readonly uploads: EndpointUploadService;
   readonly bindings: EndpointBindingService;
+  readonly terminals: DesktopTerminalGatewayBroker;
 
   private readonly authenticator: EndpointAuthenticator;
   private closed = false;
@@ -83,6 +85,7 @@ export class EndpointToolRuntime {
       uploads: this.uploads,
       policy,
     });
+    this.terminals = new DesktopTerminalGatewayBroker(this.registry, this.invocations);
   }
 
   connect(
@@ -112,7 +115,7 @@ export class EndpointToolRuntime {
       this.registry.heartbeat(endpointId, connectionId, message.payload.availability);
       return;
     }
-    if (message.type === 'terminal.event') throw new Error('DESKTOP_TERMINAL_NOT_NEGOTIATED');
+    if (message.type === 'terminal.event' && this.registry.get(endpointId)?.terminalVersion !== 1) throw new Error('DESKTOP_TERMINAL_NOT_NEGOTIATED');
     this.invocations.handleMessage(endpointId, message);
   }
 
@@ -140,6 +143,7 @@ export class EndpointToolRuntime {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.terminals.close();
     this.grants.close();
     this.invocations.close();
     this.uploads.close();

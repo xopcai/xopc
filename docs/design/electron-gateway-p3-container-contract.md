@@ -40,3 +40,9 @@ PTY打开回执只证明会话已建立。根操作在容器存在期间保持ru
 输出使用独立有序帧和累计ACK，最多16个未确认帧、每帧16KiB，暂停底层流处理背压。输入每帧最多4KiB、每会话最多1000个序号；这些是新增终端流限制，不放宽Endpoint原预算。超时、授权失效、传输断开或输出不确定时，独立销毁容器并核实；停止失败保留执行权阻断。完整Gateway/Host/Agent/UI接线与原生验收另行完成，不能以字节流核心测试代替。
 
 通道在Endpoint v2上以显式协商的`terminal.version=1`扩展复用签名设备连接：`terminal.command`承载input/ack/resize/close，`terminal.event`承载opened/output/input-ack/stream-ended。每个包保留根invocationId与完整会话三元组；不能使用tool.progress代替字节流。opened只能表示running/未停止，input-ack仅表示输入分派，stream-ended不能携带停止证明。根操作仍由原可靠tool回执核实停止。旧普通/可靠控制器明确拒绝terminal.command；Gateway在专用Broker未接线时拒绝terminal.event，不因schema认识字段就开放功能。Terminal hello仅允许独立durable desktop连接声明。
+
+P3c-3接线采用独立`desktop.terminal.open`与`desktop.terminal.control`目录，和命令目录分开原生授权。Root操作先持久记录，打开响应返回后仍保持running，输入/输出使用专用帧；Agent调用不会因收到opened而提交根操作成功。每次stdin均须本机批准，取消也持久记为notStarted并消耗该输入序号，重试不再写入。输入接收仅表示分派，不代表shell命令完成。
+
+resize须回传对应requestId/尺寸的签名ACK；输出按字节序号有界排队，一次读取最多16KiB，累计ACK只确认已取出的帧，并提供跨帧UTF-8解码文本。根操作正常关闭先独立核实容器删除，再提交生命周期终态；强制终止不伪造进程退出码，以terminated标志和可空exitCode表达。它不承诺终端中每条shell输入的文件效果都成功。断连/未知输入仍走unknown和人工核实；后续本机停止证明不会改写服务器旧unknown。Root和控制操作分别持久化幂等记录，关闭、切换或重连不恢复旧会话。
+
+本批仅复用已有Gateway认证/设备/Endpoint路径，未增加认证路由。60秒单次输入确认沿用容器命令预算，仍受两分钟原生总授权约束；停止/关闭保持3秒确认预算。完整Native整轮和安装包故障验证通过前，不将接线完成等同于P3c整体验收完成。

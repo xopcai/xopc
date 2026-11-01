@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 
 import { canonicalJson, desktopTerminalBindingSchema, type DesktopOperationIntent, type DesktopTerminalBinding, type DesktopTerminalOutput } from '@xopcai/endpoint-tools-protocol';
 import { z } from 'zod';
+import { createLogger } from '../../src/utils/logger.js';
 
 import type { DesktopContainerEngine } from './container-engine.js';
 import type { DesktopContainerResources } from './container-resources.js';
 import type { DesktopExecutionWorker } from './operation-supervisor.js';
 import { DesktopTerminalBytes, type DesktopTerminalInputLedger } from './terminal-bytes.js';
+const log = createLogger('DesktopTerminal');
 
 /** A running root operation, not an ordinary tool that finishes when its terminal opens. Not exposed without a dedicated broker. */
 export class DesktopTerminalWorker implements DesktopExecutionWorker {
@@ -19,8 +21,13 @@ export class DesktopTerminalWorker implements DesktopExecutionWorker {
   private creating?: Promise<void>;
   private opening?: Promise<void>;
   private stopping?: Promise<{ confirmed: boolean }>;
+  private closingResource?: Promise<void>;
   private stream?: DesktopTerminalBytes;
   private readonly lifetime = new AbortController();
+  private readonly inputs = new Set<Promise<unknown>>();
+  private resolveNormalClose!: (value: { exitCode: null; terminated: true }) => void;
+  private readonly normalClose = new Promise<{ exitCode: null; terminated: true }>(resolve => { this.resolveNormalClose = resolve; });
+  private streamEndTimer?: ReturnType<typeof setTimeout>;
   private readonly watchdog: ReturnType<typeof setInterval>;
   private resolveReady!: (binding: DesktopTerminalBinding) => void;
   private rejectReady!: (error: unknown) => void;
@@ -66,18 +73,45 @@ export class DesktopTerminalWorker implements DesktopExecutionWorker {
         if (this.cancelled) { socket.destroy(); throw new Error('DESKTOP_TERMINAL_AUTHORITY_INVALID'); }
         this.stream = new DesktopTerminalBytes({ binding: this.binding, socket, ledger: this.options.ledger, lastInputSequence: 0,
           current: () => !this.cancelled && this.options.current() && Date.now() < this.options.intent.expiresAt,
-          emit: this.options.emit, onUnknown: () => { void this.stop(); }, onStreamClosed: () => { void this.stop(); } });
+          emit: this.options.emit, onUnknown: () => { void this.stop(); }, onStreamClosed: () => {
+            this.streamEndTimer = setTimeout(() => { void this.stop(); }, 1000);
+          } });
       })();
       await this.opening; this.current(); signal.throwIfAborted();
       await this.options.engine.start(this.id!, this.ownership());
       this.current(); signal.throwIfAborted(); this.stream!.startOutput(); this.resolveReady({ ...this.binding });
-      const exitCode = await this.options.engine.wait(this.id!, this.ownership(), this.lifetime.signal);
+      const exit = this.options.engine.wait(this.id!, this.ownership(), this.lifetime.signal).then(exitCode => ({ exitCode, terminated: false })).catch(async error => {
+        if (!this.closingResource) throw error;
+        await this.closingResource; return { exitCode: null, terminated: true };
+      });
+      const result = await Promise.race([this.normalClose, exit]);
+      clearTimeout(this.streamEndTimer);
       if (!(await this.stop()).confirmed) throw new Error('DESKTOP_TERMINAL_STOP_UNCONFIRMED');
-      return { status: 'succeeded' as const, result: { content: [{ type: 'json' as const, value: { exitCode } }] } };
-    } catch (error) { this.rejectReady(error); await this.stop(); throw error; }
+      return { status: 'succeeded' as const, result: { content: [{ type: 'json' as const, value: result }] } };
+    } catch (error) {
+      log.warn({ err: error, operationId: this.options.intent.operationId, phase: 'terminal_root' }, 'Terminal root needs execution verification');
+      this.rejectReady(error); await this.stop(); throw error;
+    }
     finally { signal.removeEventListener('abort', abort); }
   }
-  async input(value: unknown, signal: AbortSignal) { this.current(); if (!this.stream) throw new Error('DESKTOP_TERMINAL_NOT_READY'); return this.stream.input(value, signal); }
+  private dispatch(value: unknown, signal: AbortSignal, permission: 'write' | 'deny') {
+    this.current(); if (!this.stream) throw new Error('DESKTOP_TERMINAL_NOT_READY');
+    const pending = this.stream.input(value, signal, permission); this.inputs.add(pending);
+    return pending.finally(() => this.inputs.delete(pending));
+  }
+  async input(value: unknown, signal: AbortSignal) { return this.dispatch(value, signal, 'write'); }
+  async rejectInput(value: unknown, signal: AbortSignal) { return this.dispatch(value, signal, 'deny'); }
+  async closeTerminal() {
+    this.current();
+    if (!this.id || this.inputs.size) throw new Error('DESKTOP_TERMINAL_INPUT_BUSY');
+    this.closingResource ??= (async () => {
+      clearTimeout(this.streamEndTimer); this.stream?.close();
+      if (!(await this.options.engine.remove(this.id!, this.ownership())).confirmed) throw new Error('DESKTOP_TERMINAL_STOP_UNCONFIRMED');
+      await this.options.resources.stopped(this.options.intent);
+      this.resolveNormalClose({ exitCode: null, terminated: true });
+    })();
+    await this.closingResource;
+  }
   acknowledge(value: unknown) { this.current(); if (!this.stream) throw new Error('DESKTOP_TERMINAL_NOT_READY'); this.stream.acknowledge(value); }
   async resize(binding: DesktopTerminalBinding, columns: number, rows: number) {
     this.current();
@@ -86,12 +120,14 @@ export class DesktopTerminalWorker implements DesktopExecutionWorker {
   }
   stop(): Promise<{ confirmed: boolean }> {
     if (this.stopping) return this.stopping;
-    this.cancelled = true; clearInterval(this.watchdog); this.lifetime.abort();
+    this.cancelled = true; clearInterval(this.watchdog); clearTimeout(this.streamEndTimer); this.lifetime.abort();
     this.rejectReady(new Error('DESKTOP_TERMINAL_STOPPED')); this.stream?.close();
     this.stopping = (async () => {
       try {
         await this.preparing?.catch(() => {}); await this.creating?.catch(() => {}); await this.opening?.catch(() => {});
+        await this.closingResource?.catch(() => {});
         this.stream?.close();
+        await Promise.allSettled([...this.inputs]);
         if (this.id && !(await this.options.engine.remove(this.id, this.ownership())).confirmed) return { confirmed: false };
         if (this.prepared) await this.options.resources.stopped(this.options.intent);
         return { confirmed: true };

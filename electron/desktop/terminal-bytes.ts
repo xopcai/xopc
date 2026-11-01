@@ -67,7 +67,7 @@ export class DesktopTerminalBytes {
     for (const sequence of this.outstanding.keys()) if (sequence <= this.acknowledged) this.outstanding.delete(sequence);
     this.pump();
   }
-  async input(value: unknown, signal: AbortSignal): Promise<{ inputId: string; sequence: number; dispatch: Exclude<DesktopTerminalDispatch, 'pending'> }> {
+  async input(value: unknown, signal: AbortSignal, permission: 'write' | 'deny' = 'write'): Promise<{ inputId: string; sequence: number; dispatch: Exclude<DesktopTerminalDispatch, 'pending'> }> {
     this.requireCurrent(); signal.throwIfAborted(); const input = desktopTerminalInputSchema.parse(value);
     const bytes = Buffer.from(input.bytes, 'base64');
     if (!this.matches(input) || bytes.toString('base64') !== input.bytes) throw new Error('DESKTOP_TERMINAL_INPUT_IDENTITY_MISMATCH');
@@ -85,6 +85,10 @@ export class DesktopTerminalBytes {
       if (input.sequence !== this.inputSequence + 1 || input.sequence > 1000) throw new Error('DESKTOP_TERMINAL_INPUT_SEQUENCE_INVALID');
       await this.options.ledger.record(input.inputId, fingerprint, input.sequence); recorded = true;
       this.inputSequence = input.sequence; this.requireCurrent(); signal.throwIfAborted();
+      if (permission === 'deny') {
+        await this.options.ledger.finish(input.inputId, 'notStarted');
+        return { inputId: input.inputId, sequence: input.sequence, dispatch: 'notStarted' };
+      }
       dispatched = true;
       await this.write(bytes, AbortSignal.any([signal, this.closing.signal]));
       await this.options.ledger.finish(input.inputId, 'accepted');

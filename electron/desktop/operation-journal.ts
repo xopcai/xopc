@@ -135,7 +135,7 @@ export class DesktopOperationJournal {
           if (database.prepare('SELECT 1 FROM operation_reviews WHERE review_id=?').get(review.reviewId)) throw new Error('DESKTOP_OPERATION_REVIEW_CONFLICT');
           const row = this.row(database, intent), receipt = row ? this.receipt(intent, row) : undefined;
           if (receipt ? review.localStatus !== 'recorded' || !receipt.executionStopped || canonicalJson(receipt) !== canonicalJson(review.receipt)
-            : review.localStatus !== 'not-found' || !(intent.tool === 'desktop.clipboard.write' || ['desktop.workspace.write', 'desktop.command.run'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_STOP_UNCONFIRMED');
+            : review.localStatus !== 'not-found' || !(intent.tool === 'desktop.clipboard.write' || ['desktop.workspace.write', 'desktop.command.run', 'desktop.terminal.open'].includes(intent.tool) && intent.workspaceId)) throw new Error('DESKTOP_OPERATION_STOP_UNCONFIRMED');
           if (!row) {
             if ((database.prepare('SELECT count(*) AS count FROM operations').get()!.count as number) >= 100000) throw new Error('DESKTOP_OPERATION_HISTORY_FULL');
             // A missing receipt is not permission to execute the old intent later.

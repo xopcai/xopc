@@ -124,6 +124,20 @@ export class EndpointToolProvider implements ExternalToolProvider {
       });
     };
     try {
+    if (['desktop.terminal.open', 'desktop.terminal.control'].includes(resolved.tool.descriptor.name)) {
+      context.signal?.throwIfAborted();
+      if (this.resolve(toolRef)?.contractRevision !== revision) throw new ExternalEffectNotAppliedError('Terminal device or contract changed');
+      const turn = this.deps.getCurrentContext()!;
+      const grant = this.deps.runtime.grants.find(turn.conversationId, turn.origin, resolved.endpointId, resolved.tool.descriptor.name);
+      if (grant) grantLease = this.deps.runtime.grants.reserve(grant.id, args);
+      const signal = grantLease ? AbortSignal.any([grantLease.signal, context.signal ?? new AbortController().signal]) : context.signal;
+      const key = createHash('sha256').update(`${turn.conversationId}:${context.toolCallId}`).digest('hex');
+      const value = resolved.tool.descriptor.name === 'desktop.terminal.open'
+        ? await this.deps.runtime.terminals.open({ endpointId: resolved.endpointId, args, revision: resolved.tool.revision, key, toolCallId: context.toolCallId, signal })
+        : await this.deps.runtime.terminals.control({ endpointId: resolved.endpointId, args, key, signal });
+      return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: { content: [{ type: 'json', value }] },
+        details: { endpointId: resolved.endpointId, endpointToolName: resolved.tool.descriptor.name } };
+    }
     const result = resolved.tool.descriptor.effect === 'read' ? await invoke() : await executeExternalOperation({
       principalId: resolved.principalId,
       capabilityId: toolRef,

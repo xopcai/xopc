@@ -6,6 +6,7 @@ import { durableEndpointResultSchema, desktopOperationReceiptSchema, serverEndpo
 import { DesktopExecutionSession } from './execution-session.js';
 import { DesktopExecutionCatalog } from './execution-catalog.js';
 import type { DesktopWorkspaceReadSession } from './workspace-read-session.js';
+import type { DesktopTerminalHostController } from './terminal-host-controller.js';
 import { createLogger } from '../../src/utils/logger.js';
 
 const log = createLogger('DesktopWorkspace');
@@ -20,6 +21,7 @@ export class DesktopReliableToolController {
     catalog: DesktopExecutionCatalog;
     session: DesktopExecutionSession;
     reads?: DesktopWorkspaceReadSession;
+    terminal?: DesktopTerminalHostController;
     availability(): EndpointAvailability;
     onTransportFailure?(): void;
   }) {}
@@ -29,19 +31,21 @@ export class DesktopReliableToolController {
   }
   async disconnect() {
     this.closed = true; this.sendMessage = undefined;
+    const terminal = await this.options.terminal?.close();
     const read = await this.options.reads?.close();
     const write = await this.options.session.close();
-    return read?.state === 'unknown' ? { state: 'unknown' as const } : write;
+    return terminal?.confirmed === false || read?.state === 'unknown' ? { state: 'unknown' as const } : write;
   }
   async handleMessage(input: unknown): Promise<void> {
     if (this.closed || !this.sendMessage) return;
     const message = serverEndpointMessageSchema.parse(input), { invocationId } = message.payload;
     if (message.type === 'terminal.command') {
+      if (this.options.terminal) { await this.options.terminal.command(invocationId, message.payload.command); return; }
       this.error(invocationId, 'PROTOCOL_ERROR', 'Terminal control requires its dedicated negotiated controller');
       return;
     }
     if (message.type === 'tool.cancel') {
-      if (this.active === invocationId) { this.cancelRequested = true; await this.options.reads?.cancel(invocationId).catch(() => {}); await this.options.session.cancel(invocationId).catch(() => {}); }
+      if (this.active === invocationId) { this.cancelRequested = true; await this.options.terminal?.close(); await this.options.reads?.cancel(invocationId).catch(() => {}); await this.options.session.cancel(invocationId).catch(() => {}); }
       // The invocation handler emits its one durable outcome; cancel itself never asserts completion.
       return;
     }
@@ -92,9 +96,9 @@ export class DesktopReliableToolController {
     try {
       this.send('tool.received', { invocationId });
       if (this.cancelRequested) { this.error(invocationId, 'TOOL_CANCELLED', 'Operation cancelled before execution'); return; }
-      const outcome = await this.options.session.invoke(message.payload, { beforeStart: () => {
+      const outcome = await (message.payload.toolName === 'desktop.terminal.open' && this.options.terminal ? this.options.terminal.run(message.payload) : this.options.session.invoke(message.payload, { beforeStart: () => {
         if (this.options.availability() !== 'foreground') throw new Error('DESKTOP_EXECUTION_NOT_FOREGROUND');
-      } });
+      } }));
       if (this.closed) return;
       const receipt = desktopOperationReceiptSchema.parse(outcome.receipt);
       if (receipt.state === 'succeeded' && !outcome.repeated) {
