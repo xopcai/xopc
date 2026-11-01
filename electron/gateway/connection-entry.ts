@@ -20,6 +20,7 @@ import { DesktopContainerEngine } from '../desktop/container-engine.js';
 import { DesktopContainerResources } from '../desktop/container-resources.js';
 import { DesktopContainerSession } from '../desktop/container-session.js';
 import { DesktopContainerWorkspaces } from '../desktop/container-workspaces.js';
+import { DesktopNativeApprovalFocus } from '../desktop/native-approval-focus.js';
 import { stopRecordedContainer } from '../desktop/container-worker.js';
 import { DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopClipboardWorker } from '../desktop/clipboard-tool.js';
 import { resolveStateDir } from '../../src/config/paths-state.js';
@@ -92,9 +93,12 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       return result.response === 1 && !signal.aborted && visible();
     },
   });
+  let nativeApprovalGeneration = 0;
+  const nativeApprovalFocus = new DesktopNativeApprovalFocus();
   const foreground = () => {
     const chat = shell?.captureWindow();
-    return visible() && window.isFocused() || Boolean(chat && chat.isVisible() && !chat.isMinimized() && chat.isFocused());
+    return visible() && window.isFocused() || Boolean(chat && chat.isVisible() && !chat.isMinimized() && chat.isFocused())
+      || nativeApprovalFocus.focused(chat, nativeApprovalGeneration, process.platform === 'darwin' && app.isActive(), Boolean(chat && chat.isVisible() && !chat.isMinimized()));
   };
   let workspace: DesktopWorkspaceSession | undefined;
   let container: DesktopContainerSession | undefined;
@@ -102,7 +106,6 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   const containerWorkspaces = new DesktopContainerWorkspaces(join(resolveStateDir(), 'desktop-execution-v1', 'container-workspaces'), encryption);
   let savedContainers: { epoch: number; profileId: string; items: Array<{ workspaceId: string; label: string; imageId: string }> } | undefined;
   const workspaceRecovery = new DesktopWorkspaceRecoveryStore(join(resolveStateDir(), 'desktop-execution-v1', 'workspace-recovery'), encryption);
-  let nativeApprovalGeneration = 0;
   const execution = new DesktopExecutionManager({ manager, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'),
     appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopOperationStatusDescriptor()]), foreground,
     createTerminal: (intent, binding, emit, lease) => {
@@ -113,10 +116,13 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       if (profile?.identity?.gatewayId !== scope.gatewayId || container?.workspaceId !== scope.workspaceId || !foreground() || signal.aborted || parent.isDestroyed()) return false;
       const generation = nativeApprovalGeneration;
       const bytes = Buffer.from(input.bytes, 'base64');
+      const release = nativeApprovalFocus.begin(parent, generation, signal);
+      try {
       const answer = await dialog.showMessageBox(parent, { type: 'warning', title: '确认本次终端输入', message: '将以下字节发送到隔离Docker终端？',
         detail: `Gateway：${profile.origin}\n设备：${scope.deviceId}\n工作区：${scope.workspaceId}\n会话：${scope.sessionId}\n代次：${scope.generation}\n输入：${input.inputId} / ${input.sequence}\n完整字节（Base64）：${input.bytes}\n文本预览（转义）：${JSON.stringify(bytes.toString('utf8'))}\n\n仅批准这次输入。接收回执不代表命令完成；断线或结果未知不会重放。`,
         buttons: ['取消', '发送本次终端输入'], defaultId: 0, cancelId: 0, noLink: true, signal });
       return answer.response === 1 && !signal.aborted && generation === nativeApprovalGeneration && foreground();
+      } finally { release(); }
     },
     createWorker: (tool, intent) => {
       if (tool === DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR.name) return desktopClipboardWorker(clipboard);
