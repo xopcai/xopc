@@ -18,6 +18,7 @@ export class DesktopComputerSession {
     current(): boolean;
     /** Must use the existing ComputerBroker with deferred approval disabled and independent native consent. */
     createBroker(): Broker;
+    prepareOperation?(intent: DesktopOperationIntent, signal: AbortSignal): Promise<void>;
     /** Only invocation-bound upload grants may implement this hook. Paths and bytes never enter durable metadata. */
     uploadFrame(frame: Frame, intent: DesktopOperationIntent, signal: AbortSignal): Promise<Extract<EndpointToolContent, { type: 'file' }>>;
   }) {}
@@ -43,6 +44,9 @@ export class DesktopComputerSession {
         let frame: Frame | undefined;
         try {
           this.broker ??= this.options.createBroker();
+          signal.throwIfAborted();
+          if (this.closed || !this.options.current()) throw new Error('DESKTOP_COMPUTER_AUTHORITY_INVALID');
+          await this.options.prepareOperation?.(operation, signal);
           signal.throwIfAborted();
           if (this.closed || !this.options.current()) throw new Error('DESKTOP_COMPUTER_AUTHORITY_INVALID');
           const result = await this.broker.command(command as ComputerCommand);
