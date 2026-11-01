@@ -3,9 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import {
-  computerActionInputCount, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
+  COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL, computerActionInputCount, ComputerActionSchema, ComputerTransportTimingSchema, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
   type ActionEnvelope, type ComputerCommand, type ComputerModelBinding,
 } from '@xopcai/computer-control-contract';
+import { hasReviewedDesktopExecutionStop, type ReviewedDesktopExecutionScope } from '../storage/sqlite/desktop-operation-repository.js';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForSession } from '../config/agent-profile.js';
@@ -49,6 +50,7 @@ type Session = {
   task: ComputerTaskState;
   flowCapture: ComputerFlowCapture; flowScope: string; flowPrincipalId?: string; lastFlowId?: string;
   diagnostics: ComputerSessionDiagnostics;
+  executionScope?: ReviewedDesktopExecutionScope;
   pendingContext?: { goal: string; before: z.infer<typeof ComputerObservationSchema>; expectation?: ComputerExpectation; flowId?: string };
   serviceLimits?: ComputerServiceLimits;
 };
@@ -386,6 +388,9 @@ export class ComputerRuntime {
       signal.throwIfAborted();
       s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, adapter,
         binding,
+        ...(endpoint.executionAuthority ? { executionScope: { gatewayId: endpoint.executionAuthority.gatewayId, deviceId: endpoint.executionAuthority.deviceId,
+          authorizationRevision: endpoint.executionAuthority.authorizationRevision, tool: REMOTE_COMPUTER_CONTROL_TOOL,
+          toolRevision: endpoint.tools.find(tool => tool.descriptor.name === REMOTE_COMPUTER_CONTROL_TOOL)?.revision ?? '' } } : {}),
         createdAt: Date.now(), actions: 0, modelRequests: 0, rescues: 0, rescueLimit: config.computer.maxRescuesPerSession,
         controller: new AbortController(), task: new ComputerTaskState(),
         flowCapture: new ComputerFlowCapture(), flowPrincipalId: endpoint.principalId, flowScope: JSON.stringify([effective.id, effective.workspace]),
@@ -650,6 +655,7 @@ export class ComputerRuntime {
     const endpoint = explicitBinding ? this.endpoints.bindings.resolve(owner)
       : turnEndpoint ? this.endpoints.registry.get(turnEndpoint) : this.endpoints.bindings.resolve(owner);
     if (!endpoint || endpoint.kind !== 'desktop') throw new Error('COMPUTER_DESKTOP_BINDING_REQUIRED');
+    if (!this.endpoints.registry.getTool(endpoint.endpointId, endpoint.executionAuthority ? REMOTE_COMPUTER_CONTROL_TOOL : COMPUTER_CONTROL_TOOL)) throw new Error('COMPUTER_DESKTOP_UPGRADE_REQUIRED');
     return endpoint;
   }
   private async send(s: Pick<Session, 'endpointId' | 'id'> & Partial<Pick<Session, 'diagnostics'>>, command: ComputerCommand, signal?: AbortSignal) {
@@ -696,6 +702,8 @@ export class ComputerRuntime {
       if (reply.value.status === 'stopped') { this.forget(s); return true; }
     } catch (error) {
       if (error instanceof Error && error.message === 'COMPUTER_SESSION_NOT_FOUND') { this.forget(s); return true; }
+      // Only independently recorded native stop review can release stale remote admission metadata.
+      try { if (s.executionScope && hasReviewedDesktopExecutionStop(s.executionScope)) { this.forget(s); return true; } } catch { /* Unavailable proof keeps the session quarantined. */ }
       // Retain the admission gate until desktop revocation is confirmed.
     }
     s.diagnostics.fail(new Error('COMPUTER_RELEASE_UNCONFIRMED'), 'release', 'unknown');

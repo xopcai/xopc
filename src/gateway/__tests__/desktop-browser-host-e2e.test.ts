@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,8 @@ import { type DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
 import sharp from 'sharp';
 import { expect, it, vi } from 'vitest';
 
+import { RemoteDeviceBrowserDriver } from '../../browser/remote/device-driver.js';
+import { hasReviewedDesktopExecutionStop } from '../../storage/sqlite/desktop-operation-repository.js';
 import { DesktopBrowserSession } from '../../../electron/desktop/browser-session.js';
 import { DesktopDeviceAuth } from '../../../electron/desktop/device-auth.js';
 import { DesktopIdentityStore } from '../../../electron/desktop/device-identity.js';
@@ -28,7 +30,7 @@ import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
-it.each(['success', 'lost-result'] as const)('runs durable Browser commands through signed HTTP/WSS with injected browser Broker and native approval: %s', async scenario => {
+it.each(['success', 'lost-result', 'driver-recovery'] as const)('runs durable Browser commands through signed HTTP/WSS with injected browser Broker and native approval: %s', async scenario => {
   const root = await mkdtemp(join(tmpdir(), 'xopc-browser-host-'));
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(root, 'gateway.db') });
   const endpoints = new EndpointToolRuntime({ uploadRoot: join(root, 'frames') }), realtime = new RealtimeRuntime(endpoints, id => getDevice(id)?.revokedAt === undefined);
@@ -98,23 +100,44 @@ it.each(['success', 'lost-result'] as const)('runs durable Browser commands thro
     expect(metadata(await invoke(make({ action: 'navigate', url: 'https://fixture.invalid/' })))).toMatchObject({ result: { ok: true } });
     expect(metadata(await invoke(make({ action: 'observe', visual: 'always' })))).toMatchObject({ dispatch: 'completed' });
     const action = make({ action: 'click', revision: 2, ref: 'e1' });
-    if (scenario === 'lost-result') {
+    if (scenario !== 'success') {
+      const driver = new RemoteDeviceBrowserDriver(endpoints, endpointId, ownerId);
+      if (scenario === 'driver-recovery') { await driver.connect(); await driver.createSession(sessionId); }
       const deliver = endpoints.invocations.handleMessage.bind(endpoints.invocations);
       vi.spyOn(endpoints.invocations, 'handleMessage').mockImplementation((id, message) => {
         if (message.type === 'tool.result' && effects === 1) { void host!.stop(); return; }
         return deliver(id, message);
       });
-      await expect(invoke(action)).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+      await expect(scenario === 'driver-recovery' ? driver.perform(sessionId, { action: 'click', revision: 2, ref: 'e1' }) : invoke(action)).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
       await host.verifyStopped();
       expect(journal.inspect(currentIntent!)).toMatchObject({ state: 'succeeded', executionStopped: true });
       expect(getSqliteDatabase().prepare('SELECT state FROM capability_operations WHERE operation_id=?').get(currentIntent!.operationId)).toEqual({ state: 'unknown' });
       await expect(invoke(action)).rejects.toThrow();
+      if (scenario === 'driver-recovery') {
+        const original = currentIntent!, scope = { gatewayId: original.gatewayId, deviceId, authorizationRevision: authorization.revision,
+          tool: REMOTE_BROWSER_DESCRIPTOR.name, toolRevision: original.toolRevision };
+        expect(hasReviewedDesktopExecutionStop(scope)).toBe(false);
+        await expect(driver.closeSession(sessionId)).rejects.toThrow();
+        await auth.endpointRequest('/api/desktop-host/execution', 'DELETE', { grantId: approved.grantId, expectedRevision: authorization.revision }, deviceId);
+        expect(hasReviewedDesktopExecutionStop(scope)).toBe(false);
+        const review = { reviewId: randomUUID(), expectedGeneration: 1, intentFingerprint: createHash('sha256').update(JSON.stringify(original)).digest('hex'),
+          executorStopped: true, localStatus: 'recorded', receipt: journal.inspect(original) };
+        expect(await auth.endpointRequest(`/api/desktop-host/operations/${original.operationId}/review`, 'POST', review, deviceId)).toMatchObject({ reviewed: true, outcome: 'unknown' });
+        expect(hasReviewedDesktopExecutionStop(scope)).toBe(true);
+        const before = broker.execute.mock.calls.length;
+        await driver.closeSession(sessionId); await driver.disconnect(); expect(broker.execute).toHaveBeenCalledTimes(before);
+        expect(getSqliteDatabase().prepare('SELECT state FROM capability_operations WHERE operation_id=?').get(original.operationId)?.state).toBe('unknown');
+      }
     } else {
       expect(metadata(await invoke(action))).toMatchObject({ result: { ok: true } });
       await invoke(action); expect(effects).toBe(1);
       await expect(invoke({ ...action, input: { action: 'click', revision: 2, ref: 'other' } })).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
       expect(effects).toBe(1);
-      expect(metadata(await invoke(make({ action: 'close' })))).toMatchObject({ result: { ok: true, receipt: { action: 'close' } } });
+      const driver = new RemoteDeviceBrowserDriver(endpoints, endpointId, ownerId);
+      await driver.connect(); await driver.createSession(sessionId);
+      const observed = await driver.observe(sessionId, { action: 'observe', visual: 'always' });
+      expect(observed.sessionId).toBe(sessionId); expect(Buffer.from(observed.visual!.data, 'base64')).toEqual(image);
+      await driver.closeSession(sessionId); await driver.disconnect();
     }
     expect(effects).toBe(1); expect(createBroker).toHaveBeenCalledOnce();
     expect(await readdir(join(root, 'frames'))).toEqual([]); passed = true;

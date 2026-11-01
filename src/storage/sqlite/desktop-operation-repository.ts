@@ -1,12 +1,51 @@
 import { createHash } from 'node:crypto';
 
 import { REMOTE_COMPUTER_DESCRIPTOR, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
 
 import { desktopOperationReviewSchema, type DesktopOperationReview, canonicalJson, desktopOperationIntentSchema, desktopOperationReceiptSchema, type DesktopOperationIntent, type DesktopOperationReceipt } from '@xopcai/endpoint-tools-protocol';
 
 import { getDevice } from './device-access-repository.js';
 import { getDesktopExecutionGrant } from './desktop-execution-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+
+export interface ReviewedDesktopExecutionScope {
+  gatewayId: string;
+  deviceId: string;
+  authorizationRevision: number;
+  tool: typeof REMOTE_COMPUTER_CONTROL_TOOL | typeof REMOTE_BROWSER_CONTROL_TOOL;
+  toolRevision: string;
+}
+
+/** Clear stale admission metadata only after native manual stop verification, never merely after reconnect/revocation. */
+export function hasReviewedDesktopExecutionStop(scope: ReviewedDesktopExecutionScope): boolean {
+  if (![REMOTE_COMPUTER_CONTROL_TOOL, REMOTE_BROWSER_CONTROL_TOOL].includes(scope.tool)) return false;
+  const current = getDesktopExecutionGrant(scope.deviceId);
+  if (current?.active && current.revision === scope.authorizationRevision) return false;
+  const rows = getSqliteDatabase().prepare(`SELECT o.operation_id,o.generation,o.state,o.desktop_intent_json,r.observation_json
+    FROM capability_operations o LEFT JOIN desktop_operation_reviews r ON r.operation_id=o.operation_id
+    WHERE o.principal_id=? AND o.desktop_intent_json IS NOT NULL AND o.state IN ('running','unknown')
+      AND json_extract(o.desktop_intent_json,'$.gatewayId')=? AND json_extract(o.desktop_intent_json,'$.authorizationRevision')=?
+      AND json_extract(o.desktop_intent_json,'$.tool')=? AND json_extract(o.desktop_intent_json,'$.toolRevision')=? LIMIT 257`)
+    .all(scope.deviceId, scope.gatewayId, scope.authorizationRevision, scope.tool, scope.toolRevision) as {
+      operation_id: string; generation: number; state: string; desktop_intent_json: string; observation_json: string | null;
+    }[];
+  if (rows.length > 256) return false;
+  let verified = false;
+  for (const row of rows) {
+    const intent = desktopOperationIntentSchema.parse(JSON.parse(row.desktop_intent_json));
+    if (intent.deviceId !== scope.deviceId || intent.gatewayId !== scope.gatewayId || intent.authorizationRevision !== scope.authorizationRevision
+      || intent.tool !== scope.tool || intent.toolRevision !== scope.toolRevision) continue;
+    if (intent.operationId !== row.operation_id || row.state === 'running') return false;
+    if (row.state !== 'unknown') continue;
+    if (!row.observation_json) return false;
+    const review = desktopOperationReviewSchema.parse(JSON.parse(row.observation_json));
+    if (!review.executorStopped || review.expectedGeneration !== row.generation
+      || review.intentFingerprint !== createHash('sha256').update(JSON.stringify(intent)).digest('hex')) return false;
+    verified = true;
+  }
+  return verified;
+}
 
 /** Persist the immutable intent before sending any command that may change the device. */
 export function recordDesktopOperationIntent(input: DesktopOperationIntent, grantId: string, now = Date.now()): DesktopOperationIntent {

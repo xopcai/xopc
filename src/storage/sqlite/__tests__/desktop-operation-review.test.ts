@@ -4,13 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { DesktopOperationIntent, DesktopOperationReview } from '@xopcai/endpoint-tools-protocol';
+import { REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
+import { endpointToolRevision } from '@xopcai/endpoint-tools-client';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 
 import { executeExternalOperation } from '../../../capabilities/runtime/external-operations.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../connection.js';
 import { createDevice, revokeDevice } from '../device-access-repository.js';
-import { setDesktopExecutionGrant } from '../desktop-execution-repository.js';
-import { listDesktopOperationsForReview, recordDesktopOperationIntent, reviewDesktopOperation } from '../desktop-operation-repository.js';
+import { revokeDesktopExecutionGrant, setDesktopExecutionGrant } from '../desktop-execution-repository.js';
+import { hasReviewedDesktopExecutionStop, listDesktopOperationsForReview, recordDesktopOperationIntent, reviewDesktopOperation } from '../desktop-operation-repository.js';
 import { getSqliteDatabase } from '../transaction.js';
 
 let root: string, deviceId: string, gatewayId: string, grantId: string;
@@ -61,4 +64,34 @@ it('does not reuse a native review identity for another operation or silently re
   expect(() => reviewDesktopOperation(second.operationId, deviceId, gatewayId, { ...body(second), reviewId: review.reviewId })).toThrow('REVIEW_CONFLICT');
   expect(() => reviewDesktopOperation(first.operationId, deviceId, gatewayId, { ...review, reviewId: randomUUID() })).toThrow('REVIEW_CONFLICT');
   expect(listDesktopOperationsForReview(deviceId, gatewayId)).toHaveLength(1);
+});
+it.each([REMOTE_COMPUTER_DESCRIPTOR, REMOTE_BROWSER_DESCRIPTOR])('releases only the exact old $name scope after every unknown has native review and old execution authority is inactive', async descriptor => {
+  const toolRevision = endpointToolRevision(descriptor as never), nextGrantId = randomUUID();
+  const grant = setDesktopExecutionGrant(deviceId, 1, { version: 1, grantId: nextGrantId, localApprovalId: randomUUID(), expiresAt: Date.now() + 60000,
+    toolRevisions: { [descriptor.name]: toolRevision } });
+  const scope = { gatewayId, deviceId, authorizationRevision: grant.revision, tool: descriptor.name, toolRevision };
+  const lost = async (key: string) => {
+    let intent!: DesktopOperationIntent;
+    await expect(executeExternalOperation({ principalId: deviceId, capabilityId: 'control-fixture', idempotencyKey: key,
+      requestDigest: 'a'.repeat(64), descriptorDigest: toolRevision, surface: 'fixture', recovery: 'manual' }, operationId => {
+      intent = recordDesktopOperationIntent({ operationId, gatewayId, deviceId, tool: descriptor.name, toolRevision, argumentHash: 'a'.repeat(64),
+        authorizationRevision: grant.revision, expiresAt: Date.now() + 10000 }, nextGrantId);
+      throw new Error('Lost control reply');
+    })).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    return intent;
+  };
+  const first = await lost('control-first');
+  expect(hasReviewedDesktopExecutionStop(scope)).toBe(false);
+  reviewDesktopOperation(first.operationId, deviceId, gatewayId, body(first));
+  expect(hasReviewedDesktopExecutionStop(scope)).toBe(false);
+  const second = await lost('control-second');
+  revokeDesktopExecutionGrant(deviceId, nextGrantId, grant.revision);
+  expect(hasReviewedDesktopExecutionStop(scope)).toBe(false);
+  reviewDesktopOperation(second.operationId, deviceId, gatewayId, body(second));
+  expect(hasReviewedDesktopExecutionStop(scope)).toBe(true);
+  for (const patch of [{ deviceId: randomUUID() }, { gatewayId: randomUUID() }, { authorizationRevision: grant.revision + 1 },
+    { toolRevision: 'e'.repeat(64) }, { tool: descriptor.name === REMOTE_COMPUTER_DESCRIPTOR.name ? REMOTE_BROWSER_DESCRIPTOR.name : REMOTE_COMPUTER_DESCRIPTOR.name }]) {
+    expect(hasReviewedDesktopExecutionStop({ ...scope, ...patch })).toBe(false);
+  }
+  expect(getSqliteDatabase().prepare("SELECT count(*) AS count FROM capability_operations WHERE principal_id=? AND state='unknown'").get(deviceId)?.count).toBe(2);
 });

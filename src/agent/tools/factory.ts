@@ -99,6 +99,9 @@ import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { BrowserNotReadyError, checkBrowserReadiness } from '../../browser/index.js';
 import { createBrowserDriver } from '../../browser/drivers/create-driver.js';
+import { RemoteDeviceBrowserDriver } from '../../browser/remote/device-driver.js';
+import { RemoteDeviceBrowserRuntime } from '../../browser/remote/device-runtime.js';
+import { remoteBrowserEndpoint } from '../../browser/remote/device-target.js';
 import { BrowserRuntime } from '../../browser/runtime/browser-runtime.js';
 import { getBrowserTabBinding } from '../../storage/sqlite/browser-tab-binding-repository.js';
 import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
@@ -238,6 +241,7 @@ export class AgentToolsFactory {
   }
 
   private browserRuntime: BrowserRuntime | null = null;
+  private readonly deviceBrowserRuntimes = new Map<string, { owner: string; runtime: RemoteDeviceBrowserRuntime }>();
   /** Cached readiness probe keyed by the active driver configuration. */
   private browserReadinessCache: {
     key: string;
@@ -339,6 +343,37 @@ export class AgentToolsFactory {
     return this.browserRuntime;
   }
 
+  private deviceBrowserTarget(owner: string | undefined): string | undefined {
+    const context = this.deps.getCurrentContext(), endpoints = this.deps.endpointTools;
+    if (!owner || !endpoints) return undefined;
+    if (!context || context.conversationId !== owner) {
+      if ([...this.deviceBrowserRuntimes.values()].some(entry => entry.owner === owner)) throw new Error('BROWSER_REMOTE_CONTEXT_CHANGED');
+      return undefined;
+    }
+    return remoteBrowserEndpoint(endpoints, owner, context.origin);
+  }
+  private browserRuntimeForTurn(owner: string | undefined): BrowserRuntime {
+    const endpointId = this.deviceBrowserTarget(owner);
+    if (!endpointId || !owner) return this.ensureBrowserRuntime();
+    const key = JSON.stringify([owner, endpointId]), existing = this.deviceBrowserRuntimes.get(key);
+    if (existing) return existing.runtime;
+    if (this.deviceBrowserRuntimes.size >= 20) throw new Error('BROWSER_REMOTE_SESSION_LIMIT');
+    const runtime = new RemoteDeviceBrowserRuntime({
+      getConfig: () => { const config = this.deps.getConfig?.(); if (!config) throw new Error('Browser configuration is unavailable'); return config.browser; },
+      createDriver: async () => new RemoteDeviceBrowserDriver(this.deps.endpointTools!, endpointId, owner),
+      resolveTarget: () => ({ kind: 'endpoint', endpointId }),
+      allowedUploadRoots: [], emit: this.deps.emitBrowserEvent,
+    }, () => { if (this.deviceBrowserRuntimes.get(key)?.runtime === runtime) this.deviceBrowserRuntimes.delete(key); });
+    this.deviceBrowserRuntimes.set(key, { owner, runtime });
+    return runtime;
+  }
+  private async closeDeviceBrowserRuntimes(owner?: string): Promise<void> {
+    const entries = [...this.deviceBrowserRuntimes].filter(([, entry]) => owner === undefined || entry.owner === owner);
+    const results = await Promise.allSettled(entries.map(([, entry]) => entry.runtime.shutdown()));
+    results.forEach((result, index) => { if (result.status === 'fulfilled') this.deviceBrowserRuntimes.delete(entries[index]![0]); });
+    if (results.some(result => result.status === 'rejected')) throw new Error('BROWSER_REMOTE_RELEASE_UNCONFIRMED');
+  }
+
   private computerRuntime?: ComputerRuntime;
   private ensureComputerRuntime(): ComputerRuntime {
     if (!this.deps.endpointTools) throw new Error('Computer endpoint runtime is unavailable');
@@ -352,25 +387,30 @@ export class AgentToolsFactory {
     });
   }
 
-  hasBrowserSessions(): boolean { return this.browserRuntime?.hasSessions() ?? false; }
+  hasBrowserSessions(): boolean { return Boolean(this.browserRuntime?.hasSessions() || [...this.deviceBrowserRuntimes.values()].some(entry => entry.runtime.hasSessions())); }
 
-  /** Close Playwright and all pages (gateway stop, agent manager dispose, or config hot-reload). */
+  private async closeBrowserResources(resources: Array<() => Promise<unknown>>): Promise<void> {
+    const failures: unknown[] = [];
+    for (const close of resources) { try { await close(); } catch (error) { failures.push(error); } }
+    if (failures.length) throw new AggregateError(failures, 'Browser resources did not confirm release');
+  }
+  /** Close every independent resource even when one device cannot confirm stop. Failed runtimes remain quarantined. */
   async shutdownBrowser(): Promise<void> {
-    await this.computerRuntime?.shutdown();
-    this.computerRuntime = undefined;
-    this.browserReadinessCache = null;
-    if (!this.browserRuntime) {
-      return;
-    }
-    await this.browserRuntime.shutdown();
-    this.browserRuntime = null;
+    await this.closeBrowserResources([
+      ...(this.deviceBrowserRuntimes.size ? [() => this.closeDeviceBrowserRuntimes()] : []),
+      async () => { await this.computerRuntime?.shutdown(); this.computerRuntime = undefined; },
+      async () => { this.browserReadinessCache = null; await this.browserRuntime?.shutdown(); this.browserRuntime = null; },
+    ]);
   }
 
   /** Drop the tab for a session when its agent instance is removed. */
   async closeBrowserPageForSession(conversationId: string): Promise<void> {
-    await getPhoneRuntime().releaseConversation(conversationId);
-    await this.computerRuntime?.close(conversationId);
-    await this.browserRuntime?.closeTaskSession(conversationId);
+    await this.closeBrowserResources([
+      ...(this.deviceBrowserRuntimes.size ? [() => this.closeDeviceBrowserRuntimes(conversationId)] : []),
+      () => getPhoneRuntime().releaseConversation(conversationId),
+      async () => { await this.computerRuntime?.close(conversationId); },
+      async () => { await this.browserRuntime?.closeTaskSession(conversationId); },
+    ]);
   }
 
   createCoreTools(options?: CreateCoreToolsOptions): AgentTool<any, any>[] {
@@ -769,11 +809,11 @@ export class AgentToolsFactory {
       ...((browserEnabled || this.deps.getBrowserSetupService)
         ? [
             createBrowserUseTool({
-              getRuntime: () => this.ensureBrowserRuntime(),
-              getSetupService: this.deps.getBrowserSetupService,
+              getRuntime: () => this.browserRuntimeForTurn(currentConversationId()),
+              getSetupService: () => this.deviceBrowserTarget(currentConversationId()) ? undefined : this.deps.getBrowserSetupService?.(),
               getAgentId: () => resolvedAgentId,
               getTaskId: () => options?.conversationId ?? this.deps.getCurrentContext()?.conversationId ?? 'default',
-              getReadiness: () => this.checkBrowserReadinessCached(),
+              getReadiness: () => this.deviceBrowserTarget(currentConversationId()) ? Promise.resolve(null) : this.checkBrowserReadinessCached(),
             }),
           ]
         : []),
