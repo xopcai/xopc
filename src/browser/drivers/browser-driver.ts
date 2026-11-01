@@ -14,7 +14,7 @@ export type BrowserPrimitiveInput = Exclude<
 >;
 
 export interface BrowserDriver {
-  readonly kind: 'playwright' | 'extension';
+  readonly kind: 'playwright' | 'extension' | 'desktop';
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   createSession(sessionId: string): Promise<void>;

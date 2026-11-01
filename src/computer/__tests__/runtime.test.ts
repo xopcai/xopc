@@ -52,13 +52,14 @@ function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
     if (frame) { frames.set('frame', frame.bytes); content.push({ type: 'file', fileId: 'frame', mimeType: frame.mimeType }); }
     return { content, invocationId: 'invoke' };
   });
+  let toolAvailable = true;
   const endpointIdentity = { kind: 'desktop', endpointId: 'endpoint', principalId: undefined as string | undefined };
   const endpoint = { bindings: { get: () => undefined, resolve: () => undefined }, registry: {
-    get: (id: string) => id === endpointIdentity.endpointId ? endpointIdentity : undefined, getTool: () => ({ revision: 'r1' }) },
+    get: (id: string) => id === endpointIdentity.endpointId ? endpointIdentity : undefined, getTool: () => toolAvailable ? ({ revision: 'r1' }) : undefined },
     invocations: { invoke }, uploads: { takeComputerFrame: (id: string) => { const value = frames.get(id); frames.delete(id); return value; } } };
   const runtime = new ComputerRuntime(endpoint as any, () => config as any, () => endpointIdentity.endpointId, flowStore);
   cleanups.push(async () => { await runtime.shutdown(); await broker.dispose(); });
-  return { runtime, broker, driver, frames, images, config, fetch, invoke, endpointIdentity, approve: (value = true) => approve(value),
+  return { runtime, broker, driver, frames, images, config, fetch, invoke, endpointIdentity, setToolAvailable: (value: boolean) => { toolAvailable = value; }, approve: (value = true) => approve(value),
     discover: async () => (await runtime.execute('owner', { op: 'discover', query: '飞书' })).apps![0].appRef,
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
@@ -1107,4 +1108,13 @@ describe('bounded small-goal execution', () => {
     expect(f.fetch).not.toHaveBeenCalled();
     for (const raw of [{ op: 'run', goal: 'Continue' }, { ...goal, maxActions: 0 }, { ...goal, maxActions: 13 }]) expect(ComputerUseInputSchema.safeParse(raw).success).toBe(false);
   });
+});
+
+it('rejects a missing Computer capability before acquiring conversation admission and can open after explicit capability restoration', async () => {
+  const f = fixture(), appRef = await f.discover();
+  f.setToolAvailable(false);
+  await expect(f.runtime.execute('owner', { op: 'open', appRef, mode: 'control', prepare: false })).rejects.toThrow('COMPUTER_DESKTOP_UPGRADE_REQUIRED');
+  expect(isComputerControlActive('owner')).toBe(false); expect(f.driver.resolveTarget).not.toHaveBeenCalled();
+  f.setToolAvailable(true);
+  expect(await f.runtime.execute('owner', { op: 'open', appRef, mode: 'control', prepare: false })).toMatchObject({ status: 'ready' });
 });
