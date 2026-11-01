@@ -1,0 +1,8 @@
+{
+  "application": "/tmp/xopc-j2b-delivery-1/installed/xopc.app",
+  "fingerprint": {
+    "files": 1426,
+    "sha256": "47de1d73b8db151b7f4e27a6076a2621cbff151829f069564140b00a47b780a5"
+  },
+  "dmgSha256": "a464457582d1f3f204c2dfd785417961cb9d3f763bebaec72d167c41482be702"
+}

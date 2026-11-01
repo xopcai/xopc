@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
+export * from './execution.js';
 export { ENDPOINT_FILE_OUTPUT_SCHEMA, ENDPOINT_CONTACT_RECORD_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 
 export const ENDPOINT_PROTOCOL_VERSION = 2 as const;
@@ -113,6 +114,7 @@ export const endpointHelloPayloadSchema = z.strictObject({
   signedAt: timestampSchema,
   signature: z.string().min(16).max(1_024),
   tools: z.array(endpointToolDescriptorSchema).max(100),
+  deviceFrames: z.strictObject({ version: z.literal(1), authorizationRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }).optional(),
 });
 
 export const toolInvokePayloadSchema = z.strictObject({

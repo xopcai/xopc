@@ -5,6 +5,7 @@ import { endpointHelloSigningPayload, endpointToolContentSchema, SCREEN_CAPTURE_
 import type { EndpointToolFile, EndpointToolUploadGrant } from '@xopcai/endpoint-tools-client';
 
 import { DesktopIdentityStore, type DesktopBinding, type DesktopIdentity } from './device-identity.js';
+import { DesktopDeviceFrameSigner } from '../../src/endpoint-tools/desktop-device-frame.js';
 
 export type DesktopAuthTransport = (path: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown,
   headers?: Record<string, string>, signal?: AbortSignal) => Promise<{ status: number; body: any }>;
@@ -130,6 +131,18 @@ export class DesktopDeviceAuth {
       if (hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
         || hello.tools.length !== 1 || !['desktop.device.get_state', 'desktop.screen.capture'].includes(hello.tools[0]?.name)) throw new Error('DESKTOP_OBSERVATION_DENIED');
       return { ...hello, signature: signature(record, endpointHelloSigningPayload(hello)) };
+    });
+  }
+  prepareSignedEndpoint(hello: EndpointHelloPayload, clientId: string): Promise<{ hello: EndpointHelloPayload; signer: DesktopDeviceFrameSigner }> {
+    return this.serial(async () => {
+      const record = await this.enrolled();
+      if (hello.principalId !== record.deviceId || hello.kind !== 'desktop' || hello.platform !== 'desktop'
+        || hello.tools.length !== 1 || !['desktop.device.get_state', 'desktop.screen.capture'].includes(hello.tools[0]?.name)
+        || hello.deviceFrames?.version !== 1) throw new Error('DESKTOP_OBSERVATION_DENIED');
+      const signer = new DesktopDeviceFrameSigner({ gatewayId: this.binding.gatewayId, deviceId: record.deviceId!, clientId,
+        connectionInstanceId: hello.connectionInstanceId, authorizationRevision: hello.deviceFrames.authorizationRevision }, record.privateKey);
+      try { return { hello: { ...hello, signature: signature(record, endpointHelloSigningPayload(hello)) }, signer }; }
+      catch (error) { signer.close(); throw error; }
     });
   }
   uploadScreenshot(options: { endpointId: string; deviceId: string; invocationId: string; grant: EndpointToolUploadGrant; file: EndpointToolFile; signal: AbortSignal }) {

@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
 import { EndpointToolHostController, EndpointToolRegistry, type EndpointToolDefinition } from '@xopcai/endpoint-tools-client';
-import { deviceStateDescriptor, screenCaptureDescriptor, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
-import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from '@xopcai/realtime-client';
-import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
+import { deviceStateDescriptor, screenCaptureDescriptor, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
+import { RealtimeClient, RealtimeConnectionError, RealtimeFrameTooLargeError, type RealtimeWebSocket } from '@xopcai/realtime-client';
+import { REALTIME_PROTOCOL_VERSION, REALTIME_MAX_CLIENT_FRAME_BYTES } from '@xopcai/realtime-protocol';
 import WebSocket from 'ws';
 
 import { verifyDesktopGatewayFrame, type DesktopFrameBinding } from '../../src/endpoint-tools/desktop-frame.js';
+import type { DesktopDeviceFrameSigner } from '../../src/endpoint-tools/desktop-device-frame.js';
 import type { DesktopDeviceAuth } from './device-auth.js';
 import type { DesktopBinding } from './device-identity.js';
 import type { DesktopScreenSession } from './screen-session.js';
@@ -19,6 +20,8 @@ export class DesktopObservationHost {
   private realtime?: RealtimeClient;
   private controller?: EndpointToolHostController;
   private frameBinding?: DesktopFrameBinding;
+  private frameSigner?: DesktopDeviceFrameSigner;
+  private helloGeneration = 0;
   private claim?: EndpointTurnClaim;
   private deviceId?: string;
   constructor(private readonly options: {
@@ -26,6 +29,7 @@ export class DesktopObservationHost {
     readState(): Promise<{ platform: string; systemVersion: string; locale: string; timezone: string }>;
     onState(state: DesktopObservationState, error?: string): void;
     screen?: DesktopScreenSession;
+    deviceFrames?: { authorizationRevision: number };
   }) {}
   origin(): EndpointTurnClaim | undefined { return this.stopped || !this.claim ? undefined : { ...this.claim }; }
   async readyOrigin(): Promise<EndpointTurnClaim | undefined> {
@@ -44,7 +48,8 @@ export class DesktopObservationHost {
   }
   stop(): void {
     if (this.stopped) return;
-    this.stopped = true; this.claim = undefined; this.controller?.disconnect(); this.realtime?.disconnect();
+    this.stopped = true; this.helloGeneration++; this.claim = undefined; this.controller?.disconnect(); this.realtime?.disconnect();
+    this.frameSigner?.close(); this.frameSigner = undefined;
     this.options.onState('stopped');
   }
   async start(): Promise<void> {
@@ -100,6 +105,7 @@ export class DesktopObservationHost {
       getWebSocketUrl: () => this.options.binding.origin.replace(/^http/, 'ws') + '/api/realtime/v1/ws',
       issueTicket: async () => {
         const ticket = await request('/api/realtime/tickets', 'POST', { clientId, clientKind: 'desktop', protocolVersion: REALTIME_PROTOCOL_VERSION });
+        if (this.options.deviceFrames && !ticket.realtime?.capabilities?.includes('desktop.device-frames.v1')) throw new RealtimeConnectionError('DESKTOP_DEVICE_FRAMES_UNSUPPORTED', false);
         return { ...ticket, connectionProof: await this.options.auth.connectionProof(ticket.ticket) };
       },
       createWebSocket: url => this.socket(url),
@@ -109,13 +115,25 @@ export class DesktopObservationHost {
       },
     });
     client.setEndpoint({ createHello: async () => {
+      const generation = ++this.helloGeneration;
+      this.frameSigner?.close(); this.frameSigner = undefined;
+      const current = () => {
+        if (this.stopped || generation !== this.helloGeneration) throw new RealtimeConnectionError('DESKTOP_HOST_STOPPED', false);
+      };
       await request('/api/endpoint-tools/principals', 'POST', { principalId: identity.deviceId, displayName: identity.displayName,
         publicKey: identity.publicKey, kind: 'desktop', platform: 'desktop' });
+      current();
       const connectionInstanceId = randomUUID();
-      const hello = await this.options.auth.signEndpointHello({ principalId: identity.deviceId, endpointId, connectionInstanceId,
+      const unsigned: EndpointHelloPayload = { principalId: identity.deviceId, endpointId, connectionInstanceId,
         kind: 'desktop', platform: 'desktop', displayName: identity.displayName, appVersion: this.options.appVersion,
-        availability: available(), nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: registry.descriptors() });
-      if (this.stopped) throw new RealtimeConnectionError('DESKTOP_HOST_STOPPED', false);
+        availability: available(), nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: registry.descriptors(),
+        ...(this.options.deviceFrames ? { deviceFrames: { version: 1, ...this.options.deviceFrames } } : {}) };
+      let hello: EndpointHelloPayload;
+      if (this.options.deviceFrames) {
+        const prepared = await this.options.auth.prepareSignedEndpoint(unsigned, clientId), signer = prepared.signer;
+        if (this.stopped || generation !== this.helloGeneration) { signer.close(); throw new RealtimeConnectionError('DESKTOP_HOST_STOPPED', false); }
+        this.frameSigner = signer; hello = prepared.hello;
+      } else { hello = await this.options.auth.signEndpointHello(unsigned); current(); }
       this.frameBinding = { gatewayId: this.options.binding.gatewayId, deviceId: identity.deviceId, clientId, connectionInstanceId };
       return hello;
     }, onReady: result => {
@@ -123,7 +141,7 @@ export class DesktopObservationHost {
       this.claim = { type: 'endpoint', endpointId, token: result.turnToken };
       controller.connect(message => client.sendEndpointMessage(message));
     }, onMessage: message => { if (!this.stopped && this.claim) void controller.handleMessage(message); },
-    onDisconnected: () => { this.claim = undefined; controller.disconnect(); if (!this.stopped) this.options.onState('offline'); } });
+    onDisconnected: () => { this.helloGeneration++; this.claim = undefined; controller.disconnect(); this.frameSigner?.close(); this.frameSigner = undefined; if (!this.stopped) this.options.onState('offline'); } });
     this.realtime = client;
     if (this.stopped) return;
     client.connect();
@@ -131,22 +149,34 @@ export class DesktopObservationHost {
   private socket(url: string): RealtimeWebSocket {
     if (!this.frameBinding || this.stopped) throw new Error('DESKTOP_HOST_STOPPED');
     const binding = { ...this.frameBinding };
+    const signer = this.frameSigner;
+    const generation = this.helloGeneration;
     let sequence = 0, ready = false;
     const wire = new WebSocket(url, { maxPayload: 768 * 1024, handshakeTimeout: 15000, followRedirects: false });
     const adapter: RealtimeWebSocket = { get readyState() { return wire.readyState; },
       onopen: null, onmessage: null, onerror: null, onclose: null,
-      send: data => wire.send(data), close: (code, reason) => wire.close(code, reason) };
+      send: data => {
+        if (this.stopped || generation !== this.helloGeneration) throw new Error('DESKTOP_HOST_STOPPED');
+        const message = JSON.parse(data);
+        const output = signer && message.kind === 'endpoint.message'
+          ? JSON.stringify({ ...message, kind: 'desktop.endpoint.message', payload: JSON.parse(signer.sign(message.payload)) }) : data;
+        if (Buffer.byteLength(output) > REALTIME_MAX_CLIENT_FRAME_BYTES) throw new RealtimeFrameTooLargeError(Buffer.byteLength(output), REALTIME_MAX_CLIENT_FRAME_BYTES);
+        wire.send(output);
+      }, close: (code, reason) => wire.close(code, reason) };
     wire.onopen = event => adapter.onopen?.(event);
     wire.onerror = event => adapter.onerror?.(event);
     wire.onclose = event => adapter.onclose?.(event);
     wire.onmessage = event => {
-      if (this.stopped) return;
+      if (this.stopped || generation !== this.helloGeneration) return;
       try {
         const text = String(event.data), message = JSON.parse(text);
         if (['realtime.ready', 'endpoint.message'].includes(message.kind)) {
           const verified = verifyDesktopGatewayFrame(text, binding, this.options.binding.publicKey, sequence);
           sequence = verified.sequence;
-          if (message.kind === 'realtime.ready') ready = true;
+          if (message.kind === 'realtime.ready') {
+            if (signer && !message.payload.negotiatedCapabilities?.includes('desktop.device-frames.v1')) throw new Error('DESKTOP_DEVICE_FRAMES_UNSUPPORTED');
+            ready = true;
+          }
           else if (!ready) throw new Error('DESKTOP_GATEWAY_FRAME_INVALID');
         } else if (message.kind !== 'realtime.pong' && message.kind !== 'realtime.error') throw new Error('DESKTOP_GATEWAY_FRAME_INVALID');
         adapter.onmessage?.({ data: text });

@@ -81,8 +81,11 @@ export class DesktopObservationManager {
       if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
       const grant = await owner.request(route, 'POST', { [capability === 'screen' ? 'screen' : 'state']: true, expectedRevision: authorization.payload.revision }); current();
       if (grant.payload?.deviceId !== run.deviceId || grant.payload[capability === 'screen' ? 'screenEnabled' : 'stateEnabled'] !== true) throw new Error('DESKTOP_OBSERVATION_DENIED');
+      const signedDeviceFrames = discovery.payload.capabilities.signedDeviceFrames === 1;
+      if (signedDeviceFrames && !Number.isSafeInteger(grant.payload.revision)) throw new Error('DESKTOP_OBSERVATION_DENIED');
       this.status = { profileId: id, state: 'connecting', capability };
       run.host = new DesktopObservationHost({ binding, auth: client, appVersion: this.options.appVersion, readState: this.options.readState,
+        ...(signedDeviceFrames ? { deviceFrames: { authorizationRevision: grant.payload.revision } } : {}),
         ...(run.screen ? { screen: run.screen } : {}),
         onState: (state, error) => {
           if (this.active !== run || epoch !== this.options.manager.snapshot().epoch) return;

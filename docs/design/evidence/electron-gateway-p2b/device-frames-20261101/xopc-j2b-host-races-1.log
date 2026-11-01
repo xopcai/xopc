@@ -1,0 +1,9 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  08:58:16
+   Duration  316ms (transform 67ms, setup 17ms, import 101ms, tests 111ms, environment 0ms)
+
