@@ -1,3 +1,4 @@
+import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
@@ -18,6 +19,8 @@ import { DesktopIdentityStore } from '../../../electron/desktop/device-identity.
 import { desktopAuthTransport } from '../../../electron/desktop/device-transport.js';
 import { DesktopExecutionCatalog } from '../../../electron/desktop/execution-catalog.js';
 import { DesktopExecutionManager } from '../../../electron/desktop/execution-manager.js';
+import { DesktopExecutionGrantLedger } from '../../../electron/desktop/execution-grant-ledger.js';
+import { DesktopExecutionLease, DesktopOperationJournal } from '../../../electron/desktop/operation-journal.js';
 import { DesktopExecutionStopOutbox } from '../../../electron/desktop/execution-stop-outbox.js';
 import { hasVerifiedDesktopExecutionStop } from '../../storage/sqlite/desktop-execution-stop-repository.js';
 import { GatewayConnectionPreview } from '../../../electron/gateway/connection-manager.js';
@@ -93,7 +96,10 @@ it.each(['computer', 'browser'] as const)('negotiates remote %s before native co
     }));
     const createControl = kind === 'computer' ? createComputer : createBrowser;
     const stopOutbox = new DesktopExecutionStopOutbox(join(root, 'stop-outbox'), encryption);
-    execution = new DesktopExecutionManager({ manager, store, stopOutbox, executorRoot: join(root, 'executor'), catalog, appVersion: 'fixture', foreground: () => true,
+    const grantLedger = new DesktopExecutionGrantLedger(join(root, 'grant-ledger'), encryption);
+    let recoverable = false;
+    const recoverResource = vi.fn(async () => recoverable);
+    execution = new DesktopExecutionManager({ manager, store, stopOutbox, grantLedger, recoverResource, executorRoot: join(root, 'executor'), catalog, appVersion: 'fixture', foreground: () => true,
       consent, confirm: async () => true, createWorker: () => { throw new Error('Generic executor is forbidden'); }, createComputer, createBrowser });
     let resourcesStopped = true;
     const stopResources = vi.fn(async () => ({ confirmed: resourcesStopped }));
@@ -128,7 +134,56 @@ it.each(['computer', 'browser'] as const)('negotiates remote %s before native co
     expect(hasVerifiedDesktopExecutionStop(scope)).toBe(true); expect(await stopOutbox.pending(binding)).toEqual([]);
     expect(stopResources.mock.calls.length).toBeGreaterThan(before); if (kind === 'computer') expect(driver.stop).toHaveBeenCalled(); else expect(browserStop).toHaveBeenCalled();
     expect(execution.origin()).toBeUndefined(); expect(getDevice(deviceId)?.scopes).not.toContain('desktop.execute');
-    expect(manager.snapshot().selectedId).toBe(id); passed = true;
+    expect(manager.snapshot().selectedId).toBe(id);
+    expect(await grantLedger.pending()).toEqual([]);
+    const previous = await auth.endpointRequest('/api/desktop-host/execution', 'GET', undefined, deviceId);
+    const grant = { version: 1 as const, grantId: randomUUID(), localApprovalId: randomUUID(), expiresAt: Date.now() + 120000,
+      toolRevisions: { [descriptor.name]: catalog.revision(descriptor.name)! } };
+    const intent = { operationId: randomUUID(), gatewayId: binding.gatewayId, deviceId,
+      authorizationRevision: previous.revision + 1, tool: descriptor.name, toolRevision: catalog.revision(descriptor.name)!,
+      argumentHash: 'a'.repeat(64), expiresAt: grant.expiresAt };
+    let child: ChildProcess | undefined;
+    try {
+      child = spawn(process.execPath, ['--import', 'tsx/esm', 'scripts/fixtures/desktop-grant-owner.mjs'], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+        env: { ...process.env, XOPC_TEST_GRANT_INPUT: JSON.stringify({ executorRoot: join(root, 'executor'), directory: join(root, 'grant-ledger'),
+          record: { version: 1, binding, transport: 'ssh', deviceId, grant, authorizationRevision: intent.authorizationRevision },
+          intent, invocationId: randomUUID(), connectionInstanceId: randomUUID() }) } });
+      let childError = ''; child.stderr!.on('data', chunk => { childError += chunk; });
+      const ready = await Promise.race([once(child, 'message'), once(child, 'exit').then(() => { throw new Error(childError); })]);
+      const record = ready[0].record;
+      await auth.endpointRequest('/api/desktop-host/execution', 'POST', { expectedRevision: previous.revision, grant }, deviceId);
+      // The real OS lease rejects a second owner before resource recovery or signing.
+      await expect(execution.requireStopped()).rejects.toThrow('ALREADY_OWNED'); expect(recoverResource).not.toHaveBeenCalled();
+      const exited = once(child, 'exit'); child.kill('SIGKILL'); await exited;
+      await expect(execution.requireStopped()).rejects.toThrow('STOP_UNCONFIRMED');
+      expect(await stopOutbox.pending(binding)).toEqual([]); expect(await grantLedger.pending()).toEqual([record]);
+      recoverable = true; await execution.requireStopped();
+      expect(recoverResource).toHaveBeenLastCalledWith(intent); expect(await grantLedger.pending()).toEqual([]);
+      const queued = await stopOutbox.pending(binding); expect(queued).toHaveLength(1);
+      expect(queued[0].receipt).toMatchObject({ grantId: grant.grantId, leaseGeneration: record.leaseGeneration });
+      // Simulate a crash after outbox fsync but before ledger removal; the exact proof must be reused.
+      await grantLedger.save(record); await execution.requireStopped(); expect(await stopOutbox.pending(binding)).toEqual(queued);
+      const recoveredLease = new DesktopExecutionLease(join(root, 'executor')), recoveredJournal = new DesktopOperationJournal(recoveredLease);
+      try { expect(recoveredJournal.inspect(intent)).toMatchObject({ state: 'unknown', executionStopped: true }); expect(recoveredJournal.hasUnknown()).toBe(true); }
+      finally { recoveredJournal.close(); recoveredLease.close(); }
+      await execution.flushStopReceipts(manager.snapshot().epoch, id); expect(await stopOutbox.pending(binding)).toEqual([]);
+      expect(hasVerifiedDesktopExecutionStop({ ...scope, authorizationRevision: intent.authorizationRevision })).toBe(true);
+      expect(createControl).toHaveBeenCalledOnce();
+      const idlePrevious = await auth.endpointRequest('/api/desktop-host/execution', 'GET', undefined, deviceId);
+      const idleGrant = { ...grant, grantId: randomUUID(), localApprovalId: randomUUID() };
+      child = spawn(process.execPath, ['--import', 'tsx/esm', 'scripts/fixtures/desktop-grant-owner.mjs'], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+        env: { ...process.env, XOPC_TEST_GRANT_INPUT: JSON.stringify({ executorRoot: join(root, 'executor'), directory: join(root, 'grant-ledger'),
+          record: { version: 1, binding, transport: 'ssh', deviceId, grant: idleGrant, authorizationRevision: idlePrevious.revision + 1 } }) } });
+      let idleError = ''; child.stderr!.on('data', chunk => { idleError += chunk; });
+      await Promise.race([once(child, 'message'), once(child, 'exit').then(() => { throw new Error(idleError); })]);
+      await auth.endpointRequest('/api/desktop-host/execution', 'POST', { expectedRevision: idlePrevious.revision, grant: idleGrant }, deviceId);
+      const idleExited = once(child, 'exit'); child.kill('SIGKILL'); await idleExited;
+      const calls = recoverResource.mock.calls.length;
+      await execution.requireStopped(); expect(recoverResource.mock.calls).toHaveLength(calls);
+      await execution.flushStopReceipts(manager.snapshot().epoch, id);
+      expect(hasVerifiedDesktopExecutionStop({ ...scope, authorizationRevision: idlePrevious.revision + 1 })).toBe(true);
+    } finally { if (child && child.exitCode === null && child.signalCode === null) { const exited = once(child, 'exit'); child.kill('SIGKILL'); await exited; } }
+    passed = true;
   } finally {
     await execution?.requireStopped(); channel?.close(); realtime.close(); endpoints.close();
     server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));

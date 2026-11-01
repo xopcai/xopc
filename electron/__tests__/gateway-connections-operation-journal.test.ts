@@ -120,3 +120,14 @@ it.each(['clipboard', 'computer', 'browser'] as const)('makes a permanent unknow
   const unsafe = { ...intent(), tool: 'workspace.command' };
   expect(() => journal!.review(unsafe, { ...body, reviewId: randomUUID(), intentFingerprint: createHash('sha256').update(JSON.stringify(unsafe)).digest('hex') })).toThrow('STOP_UNCONFIRMED');
 });
+
+it('enumerates an exact crashed grant generation including successful operations and rejects a mismatched scope', () => {
+  lease = new DesktopExecutionLease(directory); journal = new DesktopOperationJournal(lease);
+  const operation = intent(); journal.record(operation); journal.start(operation, { invocationId: randomUUID(), connectionInstanceId: randomUUID() });
+  journal.finish(operation, 'succeeded', 'f'.repeat(64));
+  const scope = { gatewayId: operation.gatewayId, deviceId: operation.deviceId, authorizationRevision: operation.authorizationRevision };
+  expect(journal.generationIntents(lease.generation, scope)).toEqual([operation]);
+  expect(journal.generationIntents(randomUUID(), scope)).toEqual([]);
+  expect(() => journal!.generationIntents(lease!.generation, { ...scope, deviceId: randomUUID() })).toThrow('IDENTITY_MISMATCH');
+  expect(journal.inspect(operation)).toMatchObject({ state: 'succeeded', executionStopped: true });
+});

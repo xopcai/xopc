@@ -1,0 +1,36 @@
+[
+  {
+    "report": "reports/grant-ledger-native-computer-cancel-1.json",
+    "sha256": "e452b3eb18708a0ab29e85d2917cea72c4d034c914f1e1714b9b3d564c6c8f07",
+    "passed": false,
+    "error": "Error: Error: Computer tool failed: COMPUTER_OBSERVE_FAILED\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-computer.mjs:28:34)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-computer.mjs:160:3",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "executionAtFailure": {
+      "profileId": "26fd366d-8d17-42f2-9761-a5aa94048b63",
+      "state": "stopped",
+      "remoteRevocationConfirmed": true,
+      "stopReceiptConfirmed": true,
+      "resultUnknown": true
+    }
+  },
+  {
+    "report": "reports/grant-ledger-native-computer-cancel-2.json",
+    "sha256": "d322a571c20136ed644fa231c935faf00e595eced5815079f4e5ee909a185acf",
+    "passed": false,
+    "error": "Error: Error: Computer tool failed: COMPUTER_PROGRAM_UNAWAITED_CALL\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-computer.mjs:28:34)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-computer.mjs:160:3",
+    "checks": {
+      "isolatedNativeFixture": true,
+      "nativeGrantCancelled": true
+    },
+    "executionAtFailure": {
+      "profileId": "6f2b3be2-8880-4784-8bb8-d7f51756f6bb",
+      "state": "stopped",
+      "remoteRevocationConfirmed": true,
+      "stopReceiptConfirmed": true,
+      "resultUnknown": true
+    }
+  }
+]
