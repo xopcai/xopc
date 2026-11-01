@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
@@ -12,11 +12,12 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { createLocalConnectionFixture, dismissLocalConnectionOnboarding, verifyLocalConnectionFunctions } from './electron-local-connection-fixture.mjs';
 import { createAcceptanceOutput, localConnectionEnvironment, withTimeout } from './electron-local-connection-support.mjs';
-import { installedAppFingerprint, killAcceptanceApplication, launchInstalledApplication, macPackagedTarget, packagedAcceptanceEnvironment, packagedGatewayEnvironment } from './electron-packaged-acceptance.mjs';
+import { installedApplicationPids, installedAppFingerprint, killAcceptanceApplication, launchInstalledApplication, macPackagedTarget, packagedAcceptanceEnvironment, packagedGatewayEnvironment } from './electron-packaged-acceptance.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const appIndex = process.argv.indexOf('--app'); assert(appIndex >= 0 && process.argv[appIndex + 1]);
 const target = await macPackagedTarget(process.argv[appIndex + 1]);
+const executablePaths = [...new Set([target.executablePath, await realpath(target.executablePath)])];
 const externalIndex = process.argv.indexOf('--reuse-server-app');
 const externalTarget = externalIndex < 0 ? target : await macPackagedTarget(process.argv[externalIndex + 1]);
 const output = await createAcceptanceOutput(join(root, 'reports/s4-installed-local.json'));
@@ -28,7 +29,7 @@ const databaseVersion = state => { const db = new DatabaseSync(join(state, 'xopc
 try {
   for (const mode of ['spawn', 'reuse']) {
     const state = await mkdtemp(join(tmpdir(), 'xopc-s4-local-'));
-    let app, external, fixture;
+    let app, external, fixture, connectionProcess;
     const token = randomUUID(); let logs = '';
     const sample = { mode, passed: false }; report.samples.push(sample);
     try {
@@ -63,9 +64,34 @@ try {
         await page.getByRole('main').getByText('XOPC_LOCAL_CHAT_OK', { exact: true }).first().waitFor();
         sample.ownedRestartPreservesChat = true;
       } else { assert.equal(restart.ok, false); assert.match(restart.message, /not registered/); assert(await healthy()); sample.externalRestartDenied = true; }
+      let connectionSwitch;
+      if (process.argv.includes('--connection-menu')) {
+        const applicationPids = () => installedApplicationPids(execFileSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' }), executablePaths);
+        const before = new Set(applicationPids());
+        const model = await page.evaluate(() => window.electronAPI.menu.getModel());
+        assert(JSON.stringify(model).includes('file.gatewayConnections'));
+        await page.evaluate(() => window.electronAPI.menu.invoke('file.gatewayConnections')).catch(() => {});
+        await until(() => {
+          const candidates = applicationPids().filter(pid => !before.has(pid));
+          if (candidates.length !== 1) return false;
+          const pid = candidates[0];
+          connectionProcess = { process: () => ({ pid }) };
+          const command = execFileSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8' }).trim();
+          assert(executablePaths.some(path => command === path + ' --gateway-connections'));
+          return true;
+        }, 30_000);
+        connectionSwitch = true;
+      }
       await withTimeout(app.close(), 15_000, 'Electron shutdown exceeded 15 seconds'); app = undefined;
       if (mode === 'reuse') { assert.equal(external.exitCode, null); assert(await healthy()); sample.reusedGatewaySurvivesExit = true; sample.reusedDatabaseVersionAfter = databaseVersion(state); assert.equal(sample.reusedDatabaseVersionAfter, sample.reusedDatabaseVersionBefore, 'Reusing a Gateway must not upgrade or take ownership of its database'); }
       else await until(() => healthy().then(value => !value, () => true), 15_000);
+      if (connectionSwitch) {
+        assert.equal(await readFile(profile, 'utf8'), '{corrupt-remote-profile');
+        if (mode === 'reuse') assert(await healthy());
+        else assert.equal(await healthy().catch(() => false), false);
+        sample.connectionMenuRelaunchAfterCleanup = true;
+        killAcceptanceApplication(connectionProcess); connectionProcess = undefined;
+      }
       sample.passed = true;
     } catch (error) {
       const redact = value => String(value).replaceAll(token, '[redacted]').replace(/Token: [^\n]+/g, 'Token: [redacted]');
@@ -74,6 +100,7 @@ try {
       throw error;
     }
     finally {
+      if (connectionProcess) killAcceptanceApplication(connectionProcess);
       if (app) await withTimeout(app.close(), 10_000, 'Electron cleanup').catch(() => killAcceptanceApplication(app));
       if (external && external.exitCode === null && external.signalCode === null) { const exit = once(external, 'exit'); external.kill('SIGTERM'); await withTimeout(exit, 10_000, 'Gateway cleanup').catch(() => external.kill('SIGKILL')); }
       await fixture?.close();

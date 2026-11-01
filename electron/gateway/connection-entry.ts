@@ -75,7 +75,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   const documentUrl = pathToFileURL(documentPath).href;
   const window = new BrowserWindow({ width: 780, height: 720, minWidth: 560, minHeight: 540,
     show: presentation.showInitially, paintWhenInitiallyHidden: presentation.showInitially,
-    title: 'xopc · Gateway connections (S1 preview)',
+    title: 'xopc · Gateway connections',
     webPreferences: { preload: join(assetRoot, 'connections.cjs'), session: isolated,
       contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, navigateOnDragDrop: false } });
   const desktopStore = new DesktopIdentityStore(join(root, 'desktop-identities'), encryption);

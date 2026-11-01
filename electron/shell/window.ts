@@ -106,7 +106,7 @@ export class RemoteShellWindow {
       partition.setPermissionRequestHandler((_w, _p, done) => done(false));
       partition.on('will-download', event => event.preventDefault());
       const window = new BrowserWindow({ width: 900, height: 700, show: this.presentation.showInitially,
-        paintWhenInitiallyHidden: this.presentation.showInitially, title: 'xopc · Remote Shell (S2)', webPreferences: {
+        paintWhenInitiallyHidden: this.presentation.showInitially, title: 'xopc · Remote chat', webPreferences: {
         // Realtime heartbeat and bounded recovery timers must run while the chat window is hidden.
         backgroundThrottling: false,
         session: partition, preload: join(this.assets, 'shell.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false, navigateOnDragDrop: false,
