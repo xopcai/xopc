@@ -1,0 +1,13 @@
+$ cross-env XOPC_LOG_LEVEL=fatal vitest run --shard=4/4
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc
+
+(node:26176) TimeoutNaNWarning: NaN is not a number.
+Timeout duration was set to 1.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  467 passed (467)
+      Tests  3177 passed (3177)
+   Start at  12:16:59
+   Duration  82.01s (transform 13.39s, setup 1.03s, import 68.67s, tests 52.69s, environment 16.34s)
+

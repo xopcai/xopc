@@ -1,0 +1,33 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc
+
+ ❯ |computer-desktop| electron/__tests__/gateway-process.test.ts (14 tests | 1 failed) 86ms
+   × reports authenticated readiness promptly without skipping compatibility checks 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |computer-desktop| electron/__tests__/gateway-process.test.ts > reports authenticated readiness promptly without skipping compatibility checks
+AssertionError: expected undefined to be 12345 // Object.is equality
+
+- Expected:
+12345
+
++ Received:
+undefined
+
+ ❯ electron/__tests__/gateway-process.test.ts:156:19
+    154|     available = true;
+    155|     await vi.advanceTimersByTimeAsync(149);
+    156|     expect(ready).toBe(12345);
+       |                   ^
+    157|     expect(fetch).toHaveBeenCalledTimes(3);
+    158|   } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 passed (14)
+   Start at  11:35:36
+   Duration  244ms (transform 55ms, setup 11ms, import 87ms, tests 86ms, environment 0ms)
+

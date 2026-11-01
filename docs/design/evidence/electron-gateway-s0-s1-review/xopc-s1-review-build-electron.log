@@ -1,0 +1,59 @@
+$ cross-env ELECTRON_ENTRY=out/main/index.js ELECTRON_VITE_SKIP_RENDERER=1 electron-vite build
+(!) renderer config is missing
+
+vite v8.1.6 building ssr environment for production...
+(node:33533) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[2Ktransforming...✓ 1732 modules transformed.
+rendering chunks...
+out/main/chunks/node-BxZjBG1W.js                        0.18 kB
+out/main/chunks/clear-user-data-MJ3RGGWv.js             0.18 kB
+out/main/compatibility.js                               0.25 kB
+out/main/chunks/node-M38OMdRF.js                        0.34 kB
+out/main/chunks/provider-env-CJypxlDu.js                0.58 kB
+out/main/chunks/constants-1sAUWXPo.js                   0.69 kB
+out/main/index.js                                       0.70 kB
+out/main/chunks/get-uninstall-info-BGS9EGdk.js          0.95 kB
+out/main/chunks/rolldown-runtime-BYo2W52V.js            1.05 kB
+out/main/chunks/clear-user-data-3ane1niS.js             1.10 kB
+out/main/chunks/paths-BXN1-0U-.js                       1.28 kB
+out/main/chunks/dir-size-DZMbfYmG.js                    1.45 kB
+out/main/chunks/error-body-BrILUwPw.js                  1.53 kB
+out/main/chunks/uninstall-BWEKi7Nx.js                   2.04 kB
+out/main/chunks/provider-retry-DFQBJFqN.js              3.01 kB
+out/main/chunks/src-DBFAFdnX.js                         4.22 kB
+out/main/chunks/systemd-C--dSuAQ.js                     4.97 kB
+out/main/chunks/openai-decisions-BDFyrR49.js            5.07 kB
+out/main/chunks/launchd-BJ0TfZVS.js                     5.80 kB
+out/main/chunks/promise-Cq6YLqHD.js                     6.15 kB
+out/main/chunks/schtasks-DwDJNvDN.js                    6.85 kB
+out/main/chunks/models-BaFl4e45.js                      7.03 kB
+out/main/chunks/connection-entry-DZn_3MNn.js           10.80 kB
+out/main/chunks/transform-messages-DAKaNQFP.js         17.18 kB
+out/main/chunks/gateway-compatibility-kBmbmruL.js      18.11 kB
+out/main/chunks/openai-responses-8rQhWezp.js           20.41 kB
+out/main/chunks/openai-completions-CsiqKRus.js         23.42 kB
+out/main/chunks/tunnel-main-qT-nRWAq.js                37.26 kB
+out/main/chunks/node-DbSYO428.js                       39.29 kB
+out/main/chunks/paths-7-f4vmV3.js                      42.58 kB
+out/main/chunks/logger-TjFqeaCm.js                     85.04 kB
+out/main/chunks/schemas-DRgcmsQ1.js                    98.72 kB
+out/main/chunks/anthropic-messages-zSSpe6Du.js        208.09 kB
+out/main/chunks/collect-support-report-BdQ1FsFS.js    225.46 kB
+out/main/chunks/openai-prompt-cache-CoaA28ML.js       276.13 kB
+out/main/chunks/auto-updater-Bodk0qWh.js              299.88 kB
+out/main/main.js                                      541.66 kB
+out/main/chunks/resolve-route-Crq5eyQp.js           1,081.52 kB
+
+✓ built in 317ms
+vite v8.1.6 building ssr environment for production...
+[2Ktransforming...✓ 4 modules transformed.
+rendering chunks...
+out/preload/computer-preview.html      0.16 kB
+out/preload/gateway-connections.html   2.06 kB
+out/preload/gateway-connections.js     2.67 kB
+out/preload/connections.cjs            0.44 kB
+out/preload/computer-preview.cjs       2.06 kB
+out/preload/index.cjs                 11.59 kB
+
+✓ built in 10ms

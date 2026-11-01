@@ -1,0 +1,8 @@
+{
+  "startedAt": "2026-10-31T02:32:51.852Z",
+  "passed": false,
+  "checks": {},
+  "scope": "Built production main/restricted preload, development Electron; no remote chat, Host or signed installer acceptance",
+  "error": "TimeoutError: electron.launch: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - <launching> /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc/.pnpm/electron@45.0.0/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron -r /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc/.pnpm/_1152b278c7fe15a16871b06812a0f2af/node_modules/playwright-core/lib/server/electron/loader.js --inspect=0 --remote-debugging-port=0 /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc/out/main/index.js --gateway-connections\u001b[22m\n\u001b[2m  - <launched> pid=21169\u001b[22m\n\u001b[2m  - [pid=21169][err] Debugger listening on ws://127.0.0.1:54178/8c1840ec-d746-4303-b09c-3c246da6cbf9\u001b[22m\n\u001b[2m  - [pid=21169][err] For help, see: https://nodejs.org/learn/getting-started/debugging\u001b[22m\n\u001b[2m  - <ws connecting> ws://127.0.0.1:54178/8c1840ec-d746-4303-b09c-3c246da6cbf9\u001b[22m\n\u001b[2m  - [pid=21169][err] Debugger attached.\u001b[22m\n\u001b[2m  - <ws connected> ws://127.0.0.1:54178/8c1840ec-d746-4303-b09c-3c246da6cbf9\u001b[22m\n",
+  "finishedAt": "2026-10-31T02:33:21.860Z"
+}

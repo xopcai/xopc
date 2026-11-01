@@ -1,0 +1,41 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc
+
+stderr | src/gateway/hono/routes/__tests__/provider-meta.test.ts > counts a single fresh model snapshot per metadata request without changing provider auth state
+ReferenceError: modelCounts is not defined
+    at /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc/src/gateway/hono/routes/models.ts:880:36
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Promise.all (index 0)
+    at Array.<anonymous> (/Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc/src/gateway/hono/routes/models.ts:871:18)
+    at /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc/src/gateway/hono/routes/__tests__/provider-meta.test.ts:29:20
+
+ ❯ |component| src/gateway/hono/routes/__tests__/provider-meta.test.ts (1 test | 1 failed) 7ms
+   × counts a single fresh model snapshot per metadata request without changing provider auth state 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |component| src/gateway/hono/routes/__tests__/provider-meta.test.ts > counts a single fresh model snapshot per metadata request without changing provider auth state
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/gateway/hono/routes/__tests__/provider-meta.test.ts:30:27
+     28|     strictRateLimitMiddleware: async (_c, next) => next() } as never);
+     29|   const response = await app.request('/api/providers/meta');
+     30|   expect(response.status).toBe(200);
+       |                           ^
+     31|   const body = await response.json();
+     32|   expect(body.payload.providers.find(p => p.id === 'openai')).toMatchO…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  11:12:47
+   Duration  1.62s (transform 910ms, setup 11ms, import 1.54s, tests 7ms, environment 0ms)
+

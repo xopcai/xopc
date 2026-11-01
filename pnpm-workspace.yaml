@@ -16,7 +16,7 @@ virtualStoreDirMaxLength: 20
 overrides:
   dompurify: ">=3.4.17"
   markdown-it: "14.3.3"
-  follow-redirects: ">=1.16.1"
+  follow-redirects: ">=1.16.2"
   zod: "4.6.6"
   body-parser: ">=2.4.0"
   "undici@>=6.0.0 <6.29.1": "6.29.1"

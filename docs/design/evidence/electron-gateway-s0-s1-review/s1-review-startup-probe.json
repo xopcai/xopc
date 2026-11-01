@@ -1,0 +1,1599 @@
+{
+  "schemaVersion": 2,
+  "samplingPlan": "first-launch-heavy-v1",
+  "startedAt": "2026-10-31T03:35:07.557Z",
+  "commit": "28ee6729ca9bee4635fa8518c88eef3633608cf5",
+  "worktreeDirty": true,
+  "artifactSha256": "3e3fcdb203b00d2197f64b85bb2da732c9d7158d8f9efd7ea232e8e9a1adda99",
+  "developmentLayoutLink": true,
+  "node": "v26.12.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "osRelease": "25.6.0",
+  "artifactSourceRef": "28ee6729c",
+  "scope": "Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server",
+  "runs": 8,
+  "operations": 1,
+  "functional": false,
+  "diagnostics": true,
+  "serverDiagnostics": false,
+  "modes": [
+    "spawn"
+  ],
+  "samples": [
+    {
+      "mode": "spawn",
+      "index": 0,
+      "passed": true,
+      "readyMs": 1961.664625,
+      "configMs": [
+        8.200000017881393
+      ],
+      "sessionsMs": [
+        1.199999988079071
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 415.40000000596046,
+          "headersAt": 423.2000000178814,
+          "completedAt": 423.60000002384186,
+          "requestId": "cc125c97-dd0c-417f-945c-d938c77d5277"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 423.60000002384186,
+          "headersAt": 424.7000000178814,
+          "completedAt": 424.80000001192093,
+          "requestId": "5115841b-bad9-4f4d-8588-4a78a2377a8a"
+        }
+      ],
+      "timeOrigin": 1793417709327,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793417709178.3127
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417708126.2217,
+            "elapsedMs": 10.650417000000004,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417708149.4504,
+            "elapsedMs": 1.764708999999982,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417708154.137,
+            "elapsedMs": 0.8272499999999923,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417708406.393,
+            "elapsedMs": 0.5634999999999764,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417708658.3909,
+            "elapsedMs": 0.6247499999999491,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417708910.2153,
+            "elapsedMs": 0.5736669999998867,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417709160.6296,
+            "elapsedMs": 19.85570800000005,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417709180.5305,
+            "elapsedMs": 1.96162500000014,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417709183.615,
+            "elapsedMs": 3.390625,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417709183.821,
+            "elapsedMs": 3.7023340000000644,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:35:08.007Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-wpt1ne/electron/Crashpad\n[2026-10-31T03:35:09.325Z] loading gateway url=http://127.0.0.1:58485/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 165.5,
+            "duration": 55
+          },
+          {
+            "startTime": 233.60000002384186,
+            "duration": 54
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58485/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 221.30000001192093,
+            "navigationId": 6026,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.10000002384185791,
+            "domainLookupStart": 4,
+            "domainLookupEnd": 4.300000011920929,
+            "connectStart": 4.300000011920929,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.4000000059604645,
+            "requestStart": 4.5,
+            "responseStart": 5.600000023841858,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.600000023841858,
+            "responseEnd": 6.5,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 59.80000001192093,
+            "domContentLoadedEventStart": 221,
+            "domContentLoadedEventEnd": 221,
+            "domComplete": 221.2000000178814,
+            "loadEventStart": 221.30000001192093,
+            "loadEventEnd": 221.30000001192093,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          45677,
+          45680,
+          45681,
+          45702,
+          45796
+        ],
+        "processes": 5,
+        "rssMiB": 1006.453125,
+        "cpuPercentSnapshot": 127.80000000000001
+      },
+      "shutdownMs": 204.25487500000008,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 1,
+      "passed": true,
+      "readyMs": 1942.7970420000001,
+      "configMs": [
+        11.799999982118607
+      ],
+      "sessionsMs": [
+        2.0999999940395355
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 413.7000000178814,
+          "headersAt": 425,
+          "completedAt": 425.5,
+          "requestId": "a08d4e75-845e-4166-a484-8c3e49e2d62c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 425.5,
+          "headersAt": 427.5,
+          "completedAt": 427.59999999403954,
+          "requestId": "f24f6794-f3fc-4c3b-9dd6-5abd9cac7701"
+        }
+      ],
+      "timeOrigin": 1793417712029,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793417711785.0757
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417710839.538,
+            "elapsedMs": 12.767250000000047,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417710862.674,
+            "elapsedMs": 0.80174999999997,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417710866.4158,
+            "elapsedMs": 1.8246669999999767,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417711119.64,
+            "elapsedMs": 0.5469160000000102,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417711371.159,
+            "elapsedMs": 0.5670000000000073,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417711622.8958,
+            "elapsedMs": 0.4942919999998594,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417711873.967,
+            "elapsedMs": 8.241834000000154,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417711882.2747,
+            "elapsedMs": 2.4986670000000686,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417711886.048,
+            "elapsedMs": 3.2449159999998756,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417711886.239,
+            "elapsedMs": 3.565417000000025,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:35:10.723Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-7tnSgx/electron/Crashpad\n[2026-10-31T03:35:12.027Z] loading gateway url=http://127.0.0.1:58551/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 167.59999999403954,
+            "duration": 56
+          },
+          {
+            "startTime": 235.2000000178814,
+            "duration": 54
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58551/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 224,
+            "navigationId": 2770,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.20000001788139343,
+            "domainLookupStart": 4.300000011920929,
+            "domainLookupEnd": 4.5,
+            "connectStart": 4.5,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.5999999940395355,
+            "requestStart": 4.800000011920929,
+            "responseStart": 6.0999999940395355,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.0999999940395355,
+            "responseEnd": 6.800000011920929,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 61.900000005960464,
+            "domContentLoadedEventStart": 223.7000000178814,
+            "domContentLoadedEventEnd": 223.7000000178814,
+            "domComplete": 224,
+            "loadEventStart": 224,
+            "loadEventEnd": 224,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          45845,
+          45851,
+          45852,
+          45872,
+          45898
+        ],
+        "processes": 5,
+        "rssMiB": 1012.484375,
+        "cpuPercentSnapshot": 115.5
+      },
+      "shutdownMs": 203.98149999999987,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 2,
+      "passed": true,
+      "readyMs": 1939.2462080000005,
+      "configMs": [
+        13.700000017881393
+      ],
+      "sessionsMs": [
+        1.4000000059604645
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 404.2999999821186,
+          "headersAt": 417.59999999403954,
+          "completedAt": 418,
+          "requestId": "d772fa51-e750-466c-82d7-b19af642f9a7"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 418,
+          "headersAt": 419.2999999821186,
+          "completedAt": 419.40000000596046,
+          "requestId": "41465c04-133f-4fd9-b316-f782550255f2"
+        }
+      ],
+      "timeOrigin": 1793417714743.8,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793417714548.4148
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417713557.5908,
+            "elapsedMs": 13.166207999999983,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417713578.482,
+            "elapsedMs": 2.0249999999999773,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417713583.53,
+            "elapsedMs": 0.6667919999999867,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417713835.4646,
+            "elapsedMs": 0.52374999999995,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417714086.8616,
+            "elapsedMs": 0.5914999999999964,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417714338.6128,
+            "elapsedMs": 0.5617499999998472,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417714589.5361,
+            "elapsedMs": 7.853041999999959,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417714597.4343,
+            "elapsedMs": 1.8957909999999174,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417714600.5537,
+            "elapsedMs": 3.2929169999999885,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417714600.8086,
+            "elapsedMs": 3.503791999999976,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:35:13.441Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-lZgCN0/electron/Crashpad\n[2026-10-31T03:35:14.741Z] loading gateway url=http://127.0.0.1:58610/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 166.09999999403954,
+            "duration": 55
+          },
+          {
+            "startTime": 232.40000000596046,
+            "duration": 53
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58610/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 221.19999998807907,
+            "navigationId": 2867,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.09999999403953552,
+            "domainLookupStart": 4.299999982118607,
+            "domainLookupEnd": 4.4000000059604645,
+            "connectStart": 4.4000000059604645,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.5999999940395355,
+            "requestStart": 4.5999999940395355,
+            "responseStart": 6.0999999940395355,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.0999999940395355,
+            "responseEnd": 6.699999988079071,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 64,
+            "domContentLoadedEventStart": 220.90000000596046,
+            "domContentLoadedEventEnd": 220.90000000596046,
+            "domComplete": 221.19999998807907,
+            "loadEventStart": 221.19999998807907,
+            "loadEventEnd": 221.19999998807907,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          45951,
+          45962,
+          45963,
+          45983,
+          46053
+        ],
+        "processes": 5,
+        "rssMiB": 1014.21875,
+        "cpuPercentSnapshot": 120
+      },
+      "shutdownMs": 211.90670900000077,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 3,
+      "passed": true,
+      "readyMs": 1961.2950409999994,
+      "configMs": [
+        35
+      ],
+      "sessionsMs": [
+        10.900000005960464
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 412.2999999821186,
+          "headersAt": 445.2999999821186,
+          "completedAt": 447.2999999821186,
+          "requestId": "af42af54-235d-4402-8213-da271c2c8e52"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 447.2999999821186,
+          "headersAt": 457.5,
+          "completedAt": 458.19999998807907,
+          "requestId": "8bd6ae6d-9ee1-4988-9540-d8e1f0ffaf47"
+        }
+      ],
+      "timeOrigin": 1793417717455.2,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793417717305.5571
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417716255.2017,
+            "elapsedMs": 7.403707999999995,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417716287.7395,
+            "elapsedMs": 0.8633750000000191,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417716291.8523,
+            "elapsedMs": 2.0353749999999877,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417716545.3396,
+            "elapsedMs": 0.5802079999999705,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417716797.2407,
+            "elapsedMs": 0.5741669999999885,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417717048.0107,
+            "elapsedMs": 0.5758330000001024,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417717298.745,
+            "elapsedMs": 10.066833999999972,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417717308.861,
+            "elapsedMs": 2.0982500000000073,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417717311.9592,
+            "elapsedMs": 2.905416999999943,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417717312.1228,
+            "elapsedMs": 3.1734590000000935,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:35:16.140Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-m7TVzu/electron/Crashpad\n[2026-10-31T03:35:17.453Z] loading gateway url=http://127.0.0.1:58685/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 171.69999998807907,
+            "duration": 59
+          },
+          {
+            "startTime": 243,
+            "duration": 54
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58685/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 230.7999999821186,
+            "navigationId": 8683,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.09999999403953552,
+            "domainLookupStart": 4.799999982118607,
+            "domainLookupEnd": 5.0999999940395355,
+            "connectStart": 5.0999999940395355,
+            "secureConnectionStart": 0,
+            "connectEnd": 5.199999988079071,
+            "requestStart": 5.299999982118607,
+            "responseStart": 6.5,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.5,
+            "responseEnd": 7.0999999940395355,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 58.29999998211861,
+            "domContentLoadedEventStart": 230.5,
+            "domContentLoadedEventEnd": 230.59999999403954,
+            "domComplete": 230.7999999821186,
+            "loadEventStart": 230.7999999821186,
+            "loadEventEnd": 230.7999999821186,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          46076,
+          46079,
+          46080,
+          46104,
+          46158
+        ],
+        "processes": 5,
+        "rssMiB": 1002.734375,
+        "cpuPercentSnapshot": 130.9
+      },
+      "shutdownMs": 200.13541599999917,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 4,
+      "passed": true,
+      "readyMs": 1956.818874999999,
+      "configMs": [
+        45.30000001192093
+      ],
+      "sessionsMs": [
+        6.199999988079071
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 396.80000001192093,
+          "headersAt": 437.30000001192093,
+          "completedAt": 442.10000002384186,
+          "requestId": "a372db2c-eb72-40e4-8443-cdacdee62bf8"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 442.10000002384186,
+          "headersAt": 447.5,
+          "completedAt": 448.30000001192093,
+          "requestId": "f5ec585a-abfd-45ed-9245-62226121212b"
+        }
+      ],
+      "timeOrigin": 1793417720188,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793417719969.7563
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417718990.796,
+            "elapsedMs": 7.819958000000042,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417719020.8213,
+            "elapsedMs": 0.6759999999999877,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417719024.6392,
+            "elapsedMs": 1.8223339999999553,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417719277.7935,
+            "elapsedMs": 0.5294589999999744,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417719529.6182,
+            "elapsedMs": 0.5532920000000559,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417719781.3428,
+            "elapsedMs": 0.5420409999999265,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417720032.128,
+            "elapsedMs": 8.401041999999961,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417720040.5728,
+            "elapsedMs": 3.0742499999998927,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417720044.7898,
+            "elapsedMs": 3.536542000000054,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417720044.9844,
+            "elapsedMs": 3.777832999999873,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:35:18.866Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-lyY7MN/electron/Crashpad\n[2026-10-31T03:35:20.186Z] loading gateway url=http://127.0.0.1:58748/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 165.2000000178814,
+            "duration": 57
+          },
+          {
+            "startTime": 235.10000002384186,
+            "duration": 55
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58748/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 222.5,
+            "navigationId": 1839,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.10000002384185791,
+            "domainLookupStart": 3.800000011920929,
+            "domainLookupEnd": 3.9000000059604645,
+            "connectStart": 3.9000000059604645,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.100000023841858,
+            "requestStart": 4.200000017881393,
+            "responseStart": 5.600000023841858,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.600000023841858,
+            "responseEnd": 6.200000017881393,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 59.5,
+            "domContentLoadedEventStart": 222.30000001192093,
+            "domContentLoadedEventEnd": 222.30000001192093,
+            "domComplete": 222.5,
+            "loadEventStart": 222.5,
+            "loadEventEnd": 222.5,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          46215,
+          46218,
+          46219,
+          46252,
+          46287
+        ],
+        "processes": 5,
+        "rssMiB": 1005,
+        "cpuPercentSnapshot": 126
+      },
+      "shutdownMs": 205.0064169999987,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 5,
+      "passed": true,
+      "readyMs": 1937.9760829999996,
+      "configMs": [
+        12.099999994039536
+      ],
+      "sessionsMs": [
+        1
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 406.2000000178814,
+          "headersAt": 418.10000002384186,
+          "completedAt": 418.30000001192093,
+          "requestId": "07dfd85f-f351-4589-858d-2589349a62a3"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 418.40000000596046,
+          "headersAt": 419.30000001192093,
+          "completedAt": 419.40000000596046,
+          "requestId": "5bac6c1c-005e-4a36-bb54-5c946059f04f"
+        }
+      ],
+      "timeOrigin": 1793417722888,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793417722650.5574
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417721696.0388,
+            "elapsedMs": 7.254957999999988,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417721724.1602,
+            "elapsedMs": 0.6780830000000151,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417721727.7407,
+            "elapsedMs": 2.1176660000000425,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417721981.115,
+            "elapsedMs": 0.5731670000000122,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417722232.003,
+            "elapsedMs": 0.5911670000000413,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417722482.8503,
+            "elapsedMs": 0.6130829999999605,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417722733.0242,
+            "elapsedMs": 7.99354100000005,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417722741.0605,
+            "elapsedMs": 2.567832999999837,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417722744.901,
+            "elapsedMs": 3.2682079999999587,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417722745.1038,
+            "elapsedMs": 3.545958000000155,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:35:21.576Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-rOnEJP/electron/Crashpad\n[2026-10-31T03:35:22.885Z] loading gateway url=http://127.0.0.1:58808/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 164.40000000596046,
+            "duration": 55
+          },
+          {
+            "startTime": 231,
+            "duration": 54
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58808/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 220,
+            "navigationId": 3730,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.20000001788139343,
+            "domainLookupStart": 5.600000023841858,
+            "domainLookupEnd": 5.800000011920929,
+            "connectStart": 5.800000011920929,
+            "secureConnectionStart": 0,
+            "connectEnd": 5.9000000059604645,
+            "requestStart": 6,
+            "responseStart": 7.300000011920929,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 7.300000011920929,
+            "responseEnd": 8,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 63.400000005960464,
+            "domContentLoadedEventStart": 219.60000002384186,
+            "domContentLoadedEventEnd": 219.7000000178814,
+            "domComplete": 220,
+            "loadEventStart": 220,
+            "loadEventEnd": 220,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          46336,
+          46339,
+          46340,
+          46360,
+          46412
+        ],
+        "processes": 5,
+        "rssMiB": 1018.28125,
+        "cpuPercentSnapshot": 126.4
+      },
+      "shutdownMs": 201.42604199999914,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 6,
+      "passed": true,
+      "readyMs": 1965.3449169999985,
+      "configMs": [
+        36.29999998211861
+      ],
+      "sessionsMs": [
+        4.799999982118607
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 398,
+          "headersAt": 425.09999999403954,
+          "completedAt": 434.2999999821186,
+          "requestId": "26fb8802-a5c7-4a1f-896e-dce6a7713f08"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 434.40000000596046,
+          "headersAt": 438,
+          "completedAt": 439.19999998807907,
+          "requestId": "6cf7ee7a-2347-4ad7-a374-e1293265eb55"
+        }
+      ],
+      "timeOrigin": 1793417725612.6,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793417725385.8455
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417724421.7102,
+            "elapsedMs": 10.020500000000027,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417724445.9136,
+            "elapsedMs": 0.6938749999999914,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417724449.6108,
+            "elapsedMs": 1.7781669999999963,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417724702.842,
+            "elapsedMs": 0.5009170000000722,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417724954.662,
+            "elapsedMs": 0.5813329999999723,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417725205.735,
+            "elapsedMs": 0.5287499999999454,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417725456.612,
+            "elapsedMs": 8.332957999999962,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417725464.988,
+            "elapsedMs": 2.6352079999999205,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417725468.8784,
+            "elapsedMs": 3.4969579999999496,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417725469.0925,
+            "elapsedMs": 3.854624999999942,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:35:24.300Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-S1kz7f/electron/Crashpad\n[2026-10-31T03:35:25.610Z] loading gateway url=http://127.0.0.1:58867/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 164.40000000596046,
+            "duration": 54
+          },
+          {
+            "startTime": 231.5,
+            "duration": 53
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58867/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 219.09999999403954,
+            "navigationId": 4420,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 5.4000000059604645,
+            "domainLookupEnd": 5.5999999940395355,
+            "connectStart": 5.5999999940395355,
+            "secureConnectionStart": 0,
+            "connectEnd": 5.699999988079071,
+            "requestStart": 5.9000000059604645,
+            "responseStart": 7.299999982118607,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 7.299999982118607,
+            "responseEnd": 8,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 62.900000005960464,
+            "domContentLoadedEventStart": 218.7999999821186,
+            "domContentLoadedEventEnd": 219,
+            "domComplete": 219.09999999403954,
+            "loadEventStart": 219.09999999403954,
+            "loadEventEnd": 219.09999999403954,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          46436,
+          46458,
+          46459,
+          46482,
+          46534
+        ],
+        "processes": 5,
+        "rssMiB": 1014.9375,
+        "cpuPercentSnapshot": 117.9
+      },
+      "shutdownMs": 195.01625000000058,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 7,
+      "passed": true,
+      "readyMs": 1969.5888339999983,
+      "configMs": [
+        11
+      ],
+      "sessionsMs": [
+        1.4000000059604645
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 420.90000000596046,
+          "headersAt": 431.5,
+          "completedAt": 431.90000000596046,
+          "requestId": "f00351d7-124f-4d72-99ef-d26290683f4c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 431.90000000596046,
+          "headersAt": 433.19999998807907,
+          "completedAt": 433.30000001192093,
+          "requestId": "25113307-6b6d-457b-9c00-ceacf43200c4"
+        }
+      ],
+      "timeOrigin": 1793417728315.2,
+      "startupDiagnostics": {
+        "independentProbe": {
+          "firstObservedAuthenticatedAt": 1793417728096.7334
+        },
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417727122.741,
+            "elapsedMs": 11.90104100000002,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417727146.1045,
+            "elapsedMs": 0.6882919999999899,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417727150.077,
+            "elapsedMs": 2.2102089999999635,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417727403.688,
+            "elapsedMs": 0.5116249999999809,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417727655.5251,
+            "elapsedMs": 0.5879579999999578,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417727907.3032,
+            "elapsedMs": 0.5640419999999722,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417728158.914,
+            "elapsedMs": 8.046542000000045,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417728167.0115,
+            "elapsedMs": 2.3535830000000715,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417728170.5522,
+            "elapsedMs": 3.4647919999999885,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417728170.739,
+            "elapsedMs": 3.787375000000111,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:35:27.000Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-qU9owd/electron/Crashpad\n[2026-10-31T03:35:28.312Z] loading gateway url=http://127.0.0.1:58920/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 170,
+            "duration": 58
+          },
+          {
+            "startTime": 239,
+            "duration": 56
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58920/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 227.80000001192093,
+            "navigationId": 9688,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 4.4000000059604645,
+            "domainLookupEnd": 4.5999999940395355,
+            "connectStart": 4.5999999940395355,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.800000011920929,
+            "requestStart": 4.800000011920929,
+            "responseStart": 6.199999988079071,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.199999988079071,
+            "responseEnd": 6.699999988079071,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 62.900000005960464,
+            "domContentLoadedEventStart": 227.59999999403954,
+            "domContentLoadedEventEnd": 227.59999999403954,
+            "domComplete": 227.80000001192093,
+            "loadEventStart": 227.80000001192093,
+            "loadEventEnd": 227.80000001192093,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          46585,
+          46590,
+          46591,
+          46612,
+          46649
+        ],
+        "processes": 5,
+        "rssMiB": 1003.71875,
+        "cpuPercentSnapshot": 125
+      },
+      "shutdownMs": 189.29520900000352,
+      "ownedGatewayStopped": true
+    }
+  ],
+  "passed": true,
+  "electronBuildSha256": "7730e08f71e7cf511cc822d727f6b8333e0c7899ed5b2088743f5822ea9c1022",
+  "artifactManifest": {
+    "out/main": {
+      "files": 38,
+      "sha256": "f5dda917d62cdd6ab1d7fc95886722738184fa340cda6b7408385ca15e81ca5f"
+    },
+    "out/preload": {
+      "files": 6,
+      "sha256": "71648d06f9293bdd4203b1f1633939e97baa9ebb5c44d92cd6b76b8987e0a1c1"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3001,
+      "sha256": "f0b03306a7aa5dca07609efc0c76e4bb0a6a953bb80b1b3f0d3dd1caa3e1055c"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "summary": {
+    "spawn": {
+      "readyMs": {
+        "count": 8,
+        "mean": 1954.3414531249994,
+        "p95": 1969.5888339999983,
+        "max": 1969.5888339999983
+      },
+      "configMs": {
+        "count": 8,
+        "mean": 21.675000000745058,
+        "p95": 45.30000001192093,
+        "max": 45.30000001192093
+      },
+      "sessionsMs": {
+        "count": 8,
+        "mean": 3.6249999962747097,
+        "p95": 10.900000005960464,
+        "max": 10.900000005960464
+      },
+      "shutdownMs": {
+        "count": 8,
+        "mean": 201.37780225000023,
+        "p95": 211.90670900000077,
+        "max": 211.90670900000077
+      },
+      "rssMiB": {
+        "count": 8,
+        "mean": 1009.728515625,
+        "p95": 1018.28125,
+        "max": 1018.28125
+      }
+    }
+  },
+  "latencyPopulations": {
+    "spawn": {
+      "configMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 8,
+          "mean": 21.675000000745058,
+          "p95": 45.30000001192093,
+          "max": 45.30000001192093
+        },
+        "subsequentInFirstLaunch": null
+      },
+      "sessionsMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 8,
+          "mean": 3.6249999962747097,
+          "p95": 10.900000005960464,
+          "max": 10.900000005960464
+        },
+        "subsequentInFirstLaunch": null
+      }
+    }
+  },
+  "finishedAt": "2026-10-31T03:35:29.691Z"
+}

@@ -1,0 +1,12 @@
+{
+  "startedAt": "2026-10-31T04:13:03.993Z",
+  "passed": true,
+  "scope": "Production preview, bare Electron launcher + CDP; native safeStorage backend, no mock-keychain or password-store override; development runtime, not installer",
+  "checks": {
+    "nativeEncrypt": true,
+    "crossProcessDecrypt": true,
+    "encryptedCredentialCleanup": true
+  },
+  "ciphertextSha256": "58342721ca8a7b47bc77fe76a0abc10076c134f4b90f1387db343d3862d28319",
+  "finishedAt": "2026-10-31T04:13:04.683Z"
+}

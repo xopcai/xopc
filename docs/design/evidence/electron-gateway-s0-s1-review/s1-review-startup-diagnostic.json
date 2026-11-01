@@ -1,0 +1,2371 @@
+{
+  "schemaVersion": 2,
+  "samplingPlan": "first-launch-heavy-v1",
+  "startedAt": "2026-10-31T03:34:09.005Z",
+  "commit": "28ee6729ca9bee4635fa8518c88eef3633608cf5",
+  "worktreeDirty": true,
+  "artifactSha256": "3e3fcdb203b00d2197f64b85bb2da732c9d7158d8f9efd7ea232e8e9a1adda99",
+  "developmentLayoutLink": true,
+  "node": "v26.12.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "osRelease": "25.6.0",
+  "artifactSourceRef": "28ee6729c",
+  "scope": "Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server",
+  "runs": 12,
+  "operations": 1,
+  "functional": false,
+  "diagnostics": true,
+  "serverDiagnostics": false,
+  "modes": [
+    "spawn"
+  ],
+  "samples": [
+    {
+      "mode": "spawn",
+      "index": 0,
+      "passed": true,
+      "readyMs": 2515.746834,
+      "configMs": [
+        15.200000017881393
+      ],
+      "sessionsMs": [
+        1.5
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 511.19999998807907,
+          "headersAt": 525.6999999880791,
+          "completedAt": 526.4000000059605,
+          "requestId": "4433c7ca-b29e-4f9a-a5f3-b724a3fe4b81"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 526.4000000059605,
+          "headersAt": 527.7999999821186,
+          "completedAt": 527.9000000059605,
+          "requestId": "cc644bd6-80b7-4bf7-9e7a-cc8fe261c6ee"
+        }
+      ],
+      "timeOrigin": 1793417651285.9,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417649574.847,
+            "elapsedMs": 10.360500000000002,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417649600.8813,
+            "elapsedMs": 1.923667000000023,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417649606.466,
+            "elapsedMs": 1.1152910000000134,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417649858.9583,
+            "elapsedMs": 0.6461659999999938,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417650111.1182,
+            "elapsedMs": 0.7999169999999367,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417650363.1416,
+            "elapsedMs": 0.5675410000001193,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417650614.728,
+            "elapsedMs": 0.6312500000001364,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417650865.6045,
+            "elapsedMs": 0.6234169999997903,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417651115.8884,
+            "elapsedMs": 22.579750000000104,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417651138.5227,
+            "elapsedMs": 2.4899579999998878,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417651142.2634,
+            "elapsedMs": 3.665875000000142,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417651142.5042,
+            "elapsedMs": 3.9359159999999065,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417651586.88,
+            "elapsedMs": 42.38291699999991,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793417651629.7878,
+            "elapsedMs": 17.290250000000015,
+            "status": 201
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417651647.1921,
+            "elapsedMs": 39.73637499999995,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417651689.2734,
+            "elapsedMs": 6.431040999999823,
+            "status": 200
+          },
+          {
+            "path": "/api/realtime/tickets",
+            "start": 1793417651689.09,
+            "elapsedMs": 7.519709000000148,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/principals",
+            "start": 1793417651696.0842,
+            "elapsedMs": 6.973875000000135,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:09.460Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-QE5faL/electron/Crashpad\n[2026-10-31T03:34:11.284Z] loading gateway url=http://127.0.0.1:57789/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 182.5,
+            "duration": 62
+          },
+          {
+            "startTime": 259,
+            "duration": 60
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:57789/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 244.90000000596046,
+            "navigationId": 3922,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 3.7999999821186066,
+            "domainLookupEnd": 4,
+            "connectStart": 4,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.199999988079071,
+            "requestStart": 4.299999982118607,
+            "responseStart": 5.5,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.5,
+            "responseEnd": 6.199999988079071,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 61.900000005960464,
+            "domContentLoadedEventStart": 244.5,
+            "domContentLoadedEventEnd": 244.59999999403954,
+            "domComplete": 244.90000000596046,
+            "loadEventStart": 244.90000000596046,
+            "loadEventEnd": 244.90000000596046,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "low"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          43665,
+          43669,
+          43670,
+          43690,
+          43777
+        ],
+        "processes": 5,
+        "rssMiB": 950.09375,
+        "cpuPercentSnapshot": 307.6
+      },
+      "shutdownMs": 128.9194580000003,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 1,
+      "passed": true,
+      "readyMs": 2052.6178330000002,
+      "configMs": [
+        4.600000023841858
+      ],
+      "sessionsMs": [
+        1
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 452.39999997615814,
+          "headersAt": 456.5,
+          "completedAt": 457,
+          "requestId": "e1ffc8bc-7b4e-4ea4-9155-feeb7e616045"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 457,
+          "headersAt": 458,
+          "completedAt": 458,
+          "requestId": "4c124e8a-450d-4842-aa4e-44483a47168f"
+        }
+      ],
+      "timeOrigin": 1793417653662.7,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417652456.3044,
+            "elapsedMs": 7.524583000000007,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417652484.9526,
+            "elapsedMs": 1.754624999999976,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417652490.0308,
+            "elapsedMs": 0.8226659999999697,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417652742.2937,
+            "elapsedMs": 0.7337499999999864,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417652994.399,
+            "elapsedMs": 0.5654169999999112,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417653246.1729,
+            "elapsedMs": 0.5847089999999753,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417653497.1748,
+            "elapsedMs": 18.678709000000026,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417653515.9038,
+            "elapsedMs": 2.807457999999997,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417653519.7773,
+            "elapsedMs": 3.3467090000001463,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417653519.9587,
+            "elapsedMs": 3.7443329999998696,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:12.316Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-qv0Pmp/electron/Crashpad\n[2026-10-31T03:34:13.660Z] loading gateway url=http://127.0.0.1:57862/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 184.09999999403954,
+            "duration": 58
+          },
+          {
+            "startTime": 254.89999997615814,
+            "duration": 56
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:57862/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 242.7999999821186,
+            "navigationId": 8760,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 3.899999976158142,
+            "domainLookupEnd": 4.0999999940395355,
+            "connectStart": 4.0999999940395355,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.399999976158142,
+            "requestStart": 4.5999999940395355,
+            "responseStart": 6.5999999940395355,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.5999999940395355,
+            "responseEnd": 7.199999988079071,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 61,
+            "domContentLoadedEventStart": 242.5,
+            "domContentLoadedEventEnd": 242.59999999403954,
+            "domComplete": 242.7999999821186,
+            "loadEventStart": 242.7999999821186,
+            "loadEventEnd": 242.7999999821186,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "low"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          43795,
+          43812,
+          43813,
+          43833,
+          43887
+        ],
+        "processes": 5,
+        "rssMiB": 1012.0625,
+        "cpuPercentSnapshot": 146.7
+      },
+      "shutdownMs": 216.8396670000002,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 2,
+      "passed": true,
+      "readyMs": 2313.373708000001,
+      "configMs": [
+        4.799999982118607
+      ],
+      "sessionsMs": [
+        1.100000023841858
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 455.7000000178814,
+          "headersAt": 460.10000002384186,
+          "completedAt": 460.5,
+          "requestId": "4fdc7c2f-6bac-4fbd-8bb5-f2302165333a"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 460.5,
+          "headersAt": 461.5,
+          "completedAt": 461.60000002384186,
+          "requestId": "21072d86-5384-4b49-8749-2e3f860020c7"
+        }
+      ],
+      "timeOrigin": 1793417656758.6,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417655300.236,
+            "elapsedMs": 13.792750000000012,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417655325.055,
+            "elapsedMs": 0.8929160000000138,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417655328.8115,
+            "elapsedMs": 1.7951659999999947,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417655582.1274,
+            "elapsedMs": 0.5905420000000277,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417655834.2068,
+            "elapsedMs": 0.8256669999999531,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417656085.5996,
+            "elapsedMs": 0.6611660000000938,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417656335.9797,
+            "elapsedMs": 0.5167500000000018,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417656587.3071,
+            "elapsedMs": 23.59654099999989,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417656610.9502,
+            "elapsedMs": 2.395999999999958,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417656614.5864,
+            "elapsedMs": 4.384457999999995,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417656614.8389,
+            "elapsedMs": 4.535583999999972,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:15.153Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-epRpDx/electron/Crashpad\n[2026-10-31T03:34:16.756Z] loading gateway url=http://127.0.0.1:57916/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 181.40000000596046,
+            "duration": 58
+          },
+          {
+            "startTime": 252.40000000596046,
+            "duration": 58
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:57916/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 240,
+            "navigationId": 6814,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.30000001192092896,
+            "domainLookupStart": 5.700000017881393,
+            "domainLookupEnd": 5.800000011920929,
+            "connectStart": 5.800000011920929,
+            "secureConnectionStart": 0,
+            "connectEnd": 5.9000000059604645,
+            "requestStart": 6,
+            "responseStart": 8.400000005960464,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 8.400000005960464,
+            "responseEnd": 9.5,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 68.60000002384186,
+            "domContentLoadedEventStart": 239.60000002384186,
+            "domContentLoadedEventEnd": 239.7000000178814,
+            "domComplete": 240,
+            "loadEventStart": 240,
+            "loadEventEnd": 240,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          43910,
+          43913,
+          43914,
+          43974,
+          44017
+        ],
+        "processes": 5,
+        "rssMiB": 729.140625,
+        "cpuPercentSnapshot": 252.20000000000002
+      },
+      "shutdownMs": 214.8184170000004,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 3,
+      "passed": true,
+      "readyMs": 2098.5980839999993,
+      "configMs": [
+        34
+      ],
+      "sessionsMs": [
+        1.4000000059604645
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 481.2999999821186,
+          "headersAt": 515,
+          "completedAt": 515.2999999821186,
+          "requestId": "d771139a-9034-46be-839e-cd73fc69d296"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 515.2999999821186,
+          "headersAt": 516.6999999880791,
+          "completedAt": 516.6999999880791,
+          "requestId": "79b3bf81-039a-4374-8e5a-13b026129409"
+        }
+      ],
+      "timeOrigin": 1793417659369.7,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417658144.0159,
+            "elapsedMs": 8.29849999999999,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417658193.507,
+            "elapsedMs": 0.9210419999999999,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417658197.171,
+            "elapsedMs": 2.0133329999999887,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417658449.9219,
+            "elapsedMs": 0.7211670000000368,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417658702.0576,
+            "elapsedMs": 0.6181669999999713,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417658953.6035,
+            "elapsedMs": 0.6054579999999987,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417659203.971,
+            "elapsedMs": 18.696457999999893,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417659222.7246,
+            "elapsedMs": 2.475750000000062,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417659226.4695,
+            "elapsedMs": 33.82570899999996,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417659226.8008,
+            "elapsedMs": 33.72737499999994,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:17.991Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-nSpmzB/electron/Crashpad\n[2026-10-31T03:34:19.367Z] loading gateway url=http://127.0.0.1:57980/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 223,
+            "duration": 58
+          },
+          {
+            "startTime": 293.69999998807907,
+            "duration": 55
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:57980/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 281.59999999403954,
+            "navigationId": 4604,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 4.399999976158142,
+            "domainLookupEnd": 4.699999988079071,
+            "connectStart": 4.699999988079071,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.799999982118607,
+            "requestStart": 4.899999976158142,
+            "responseStart": 7.0999999940395355,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 7.0999999940395355,
+            "responseEnd": 8,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 66.09999999403954,
+            "domContentLoadedEventStart": 281.2999999821186,
+            "domContentLoadedEventEnd": 281.39999997615814,
+            "domComplete": 281.59999999403954,
+            "loadEventStart": 281.59999999403954,
+            "loadEventEnd": 281.59999999403954,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          44064,
+          44068,
+          44069,
+          44093,
+          44145
+        ],
+        "processes": 5,
+        "rssMiB": 866.828125,
+        "cpuPercentSnapshot": 143.1
+      },
+      "shutdownMs": 183.94650000000001,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 4,
+      "passed": true,
+      "readyMs": 2026.5138750000006,
+      "configMs": [
+        9.199999988079071
+      ],
+      "sessionsMs": [
+        1.5999999940395355
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 429.2000000178814,
+          "headersAt": 438,
+          "completedAt": 438.40000000596046,
+          "requestId": "9848a751-a3cd-4e7e-8a51-f4e94f748112"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 438.40000000596046,
+          "headersAt": 439.90000000596046,
+          "completedAt": 440,
+          "requestId": "89fc25fe-6092-4508-99fd-1b775a9a904b"
+        }
+      ],
+      "timeOrigin": 1793417662119.5,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417660913.6304,
+            "elapsedMs": 10.626958000000002,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417660941.3596,
+            "elapsedMs": 1.2000419999999963,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417660946.007,
+            "elapsedMs": 3.898042000000032,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417661200.5469,
+            "elapsedMs": 0.711208000000056,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417661451.614,
+            "elapsedMs": 0.6105000000000018,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417661703.414,
+            "elapsedMs": 0.5312920000001213,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417661953.924,
+            "elapsedMs": 18.545166999999992,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417661972.5571,
+            "elapsedMs": 2.3171250000000327,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417661976.1548,
+            "elapsedMs": 3.538000000000011,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417661976.422,
+            "elapsedMs": 3.7245419999999285,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:20.766Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-AX3ruo/electron/Crashpad\n[2026-10-31T03:34:22.117Z] loading gateway url=http://127.0.0.1:58029/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 178.60000002384186,
+            "duration": 56
+          },
+          {
+            "startTime": 246.60000002384186,
+            "duration": 54
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58029/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 234.60000002384186,
+            "navigationId": 4513,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.20000001788139343,
+            "domainLookupStart": 3.5,
+            "domainLookupEnd": 3.7000000178813934,
+            "connectStart": 3.7000000178813934,
+            "secureConnectionStart": 0,
+            "connectEnd": 3.9000000059604645,
+            "requestStart": 3.9000000059604645,
+            "responseStart": 5.4000000059604645,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.4000000059604645,
+            "responseEnd": 6.300000011920929,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 58.900000005960464,
+            "domContentLoadedEventStart": 234.30000001192093,
+            "domContentLoadedEventEnd": 234.40000000596046,
+            "domComplete": 234.60000002384186,
+            "loadEventStart": 234.60000002384186,
+            "loadEventEnd": 234.60000002384186,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          44177,
+          44187,
+          44188,
+          44209,
+          44261
+        ],
+        "processes": 5,
+        "rssMiB": 1002.390625,
+        "cpuPercentSnapshot": 127.6
+      },
+      "shutdownMs": 199.7506659999999,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 5,
+      "passed": true,
+      "readyMs": 2012.8384170000008,
+      "configMs": [
+        5.299999982118607
+      ],
+      "sessionsMs": [
+        19.900000005960464
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 428.30000001192093,
+          "headersAt": 433.30000001192093,
+          "completedAt": 433.59999999403954,
+          "requestId": "9c4592bd-4b26-48d4-9595-67e0e64a5f5b"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 433.59999999403954,
+          "headersAt": 449.80000001192093,
+          "completedAt": 453.5,
+          "requestId": "a5020ff0-3af3-4df3-bd35-dda9ce55f85d"
+        }
+      ],
+      "timeOrigin": 1793417664896.9,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417663685.8708,
+            "elapsedMs": 7.976333000000011,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417663718.7883,
+            "elapsedMs": 0.6655419999999594,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417663722.492,
+            "elapsedMs": 2.8336250000000405,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417663976.8171,
+            "elapsedMs": 0.6124999999999545,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417664228.5046,
+            "elapsedMs": 0.6075829999999769,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417664479.9788,
+            "elapsedMs": 0.5486250000001291,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417664731.5938,
+            "elapsedMs": 17.93504199999984,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417664749.5667,
+            "elapsedMs": 2.6180420000000595,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417664753.304,
+            "elapsedMs": 3.40949999999998,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417664753.5015,
+            "elapsedMs": 3.60354099999995,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:23.533Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-JbwNZ9/electron/Crashpad\n[2026-10-31T03:34:24.895Z] loading gateway url=http://127.0.0.1:58076/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 174.40000000596046,
+            "duration": 59
+          },
+          {
+            "startTime": 244.90000000596046,
+            "duration": 56
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58076/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 233.2000000178814,
+            "navigationId": 5017,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.20000001788139343,
+            "domainLookupStart": 4.200000017881393,
+            "domainLookupEnd": 4.4000000059604645,
+            "connectStart": 4.4000000059604645,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.700000017881393,
+            "requestStart": 4.800000011920929,
+            "responseStart": 6.0999999940395355,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.0999999940395355,
+            "responseEnd": 6.700000017881393,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 59.400000005960464,
+            "domContentLoadedEventStart": 232.90000000596046,
+            "domContentLoadedEventEnd": 232.90000000596046,
+            "domComplete": 233.2000000178814,
+            "loadEventStart": 233.2000000178814,
+            "loadEventEnd": 233.2000000178814,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          44288,
+          44317,
+          44318,
+          44338,
+          44364
+        ],
+        "processes": 5,
+        "rssMiB": 998.09375,
+        "cpuPercentSnapshot": 125.60000000000001
+      },
+      "shutdownMs": 191.65991699999722,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 6,
+      "passed": true,
+      "readyMs": 2238.610375,
+      "configMs": [
+        27
+      ],
+      "sessionsMs": [
+        1.199999988079071
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 402.60000002384186,
+          "headersAt": 429,
+          "completedAt": 429.60000002384186,
+          "requestId": "bc601a78-ac7f-451a-907c-917156b1fb28"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 429.60000002384186,
+          "headersAt": 430.7000000178814,
+          "completedAt": 430.80000001192093,
+          "requestId": "bc98e3f8-2e5d-4eb2-8852-f9cd8a2f07d6"
+        }
+      ],
+      "timeOrigin": 1793417667892.8,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417666430.6406,
+            "elapsedMs": 16.828499999999963,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417666462.37,
+            "elapsedMs": 2.2177090000000135,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417666468.1306,
+            "elapsedMs": 0.6729579999999942,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417666720.2031,
+            "elapsedMs": 0.6674579999998969,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417666972.24,
+            "elapsedMs": 0.6553340000000389,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417667224.181,
+            "elapsedMs": 0.8344589999999243,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417667475.381,
+            "elapsedMs": 0.6969169999999849,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417667726.4006,
+            "elapsedMs": 18.770500000000084,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417667745.2156,
+            "elapsedMs": 2.1791670000000067,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417667748.4343,
+            "elapsedMs": 4.286375000000135,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417667748.6326,
+            "elapsedMs": 4.574415999999928,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:26.284Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-IQDupT/electron/Crashpad\n[2026-10-31T03:34:27.890Z] loading gateway url=http://127.0.0.1:58104/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 171.40000000596046,
+            "duration": 56
+          },
+          {
+            "startTime": 239.60000002384186,
+            "duration": 56
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58104/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 227.90000000596046,
+            "navigationId": 8832,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.10000002384185791,
+            "domainLookupStart": 3.7000000178813934,
+            "domainLookupEnd": 3.800000011920929,
+            "connectStart": 3.800000011920929,
+            "secureConnectionStart": 0,
+            "connectEnd": 4,
+            "requestStart": 4,
+            "responseStart": 5.100000023841858,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.100000023841858,
+            "responseEnd": 5.800000011920929,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 59.70000001788139,
+            "domContentLoadedEventStart": 227.7000000178814,
+            "domContentLoadedEventEnd": 227.7000000178814,
+            "domComplete": 227.90000000596046,
+            "loadEventStart": 227.90000000596046,
+            "loadEventEnd": 227.90000000596046,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          44429,
+          44436,
+          44438,
+          44458,
+          44519
+        ],
+        "processes": 5,
+        "rssMiB": 1002.984375,
+        "cpuPercentSnapshot": 219
+      },
+      "shutdownMs": 194.18237500000032,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 7,
+      "passed": true,
+      "readyMs": 2044.9932079999999,
+      "configMs": [
+        4.0999999940395355
+      ],
+      "sessionsMs": [
+        0.9000000059604645
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 445.7000000178814,
+          "headersAt": 449.5,
+          "completedAt": 449.80000001192093,
+          "requestId": "fead2835-71c5-418a-be1f-920c92c9928c"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 449.80000001192093,
+          "headersAt": 450.7000000178814,
+          "completedAt": 450.7000000178814,
+          "requestId": "404b164b-e04e-435e-93fc-b39532b63b78"
+        }
+      ],
+      "timeOrigin": 1793417670464.9,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417669247.7332,
+            "elapsedMs": 7.220916999999986,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417669282.7698,
+            "elapsedMs": 2.483000000000004,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417669288.394,
+            "elapsedMs": 0.9890829999999937,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417669541.228,
+            "elapsedMs": 0.8132499999999254,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417669792.8552,
+            "elapsedMs": 0.8290000000000646,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417670044.8708,
+            "elapsedMs": 0.5647500000000036,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417670296.574,
+            "elapsedMs": 20.527374999999893,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417670317.1704,
+            "elapsedMs": 3.311333000000104,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417670321.5393,
+            "elapsedMs": 3.36324999999988,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417670321.9287,
+            "elapsedMs": 3.356499999999869,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:29.094Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-CAyqHc/electron/Crashpad\n[2026-10-31T03:34:30.463Z] loading gateway url=http://127.0.0.1:58159/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 177.2000000178814,
+            "duration": 56
+          },
+          {
+            "startTime": 247.10000002384186,
+            "duration": 55
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58159/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 233.2000000178814,
+            "navigationId": 1242,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.20000001788139343,
+            "domainLookupStart": 4.5,
+            "domainLookupEnd": 4.700000017881393,
+            "connectStart": 4.700000017881393,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.9000000059604645,
+            "requestStart": 4.9000000059604645,
+            "responseStart": 6.200000017881393,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.200000017881393,
+            "responseEnd": 6.9000000059604645,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 60,
+            "domContentLoadedEventStart": 232.90000000596046,
+            "domContentLoadedEventEnd": 233,
+            "domComplete": 233.2000000178814,
+            "loadEventStart": 233.2000000178814,
+            "loadEventEnd": 233.2000000178814,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          44541,
+          44544,
+          44545,
+          44569,
+          44626
+        ],
+        "processes": 5,
+        "rssMiB": 994.59375,
+        "cpuPercentSnapshot": 116.6
+      },
+      "shutdownMs": 211.33258299999943,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 8,
+      "passed": true,
+      "readyMs": 2014.628417,
+      "configMs": [
+        5.0999999940395355
+      ],
+      "sessionsMs": [
+        1.4000000059604645
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 426.59999999403954,
+          "headersAt": 430.7999999821186,
+          "completedAt": 431.69999998807907,
+          "requestId": "f30cb4a6-f371-4f7e-b5f4-a7d3a3be54fa"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 431.69999998807907,
+          "headersAt": 433,
+          "completedAt": 433.09999999403954,
+          "requestId": "0eb42691-578b-42ae-b450-9eaf8b4f1ad2"
+        }
+      ],
+      "timeOrigin": 1793417673260.1,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417672041.1821,
+            "elapsedMs": 13.438791999999978,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417672075.5645,
+            "elapsedMs": 1.0782080000000178,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417672079.513,
+            "elapsedMs": 2.8553329999999733,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417672333.904,
+            "elapsedMs": 0.69074999999998,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417672585.921,
+            "elapsedMs": 0.6036669999999731,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417672842.6133,
+            "elapsedMs": 0.8879159999999047,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417673095.2158,
+            "elapsedMs": 17.72524999999996,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417673112.9905,
+            "elapsedMs": 2.250583000000006,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417673116.34,
+            "elapsedMs": 3.5632919999998194,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417673116.532,
+            "elapsedMs": 3.902749999999969,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:31.884Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-YvYqmX/electron/Crashpad\n[2026-10-31T03:34:33.257Z] loading gateway url=http://127.0.0.1:58209/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 170.7999999821186,
+            "duration": 57
+          },
+          {
+            "startTime": 239.2999999821186,
+            "duration": 55
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58209/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 228.09999999403954,
+            "navigationId": 7168,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.19999998807907104,
+            "domainLookupStart": 3.699999988079071,
+            "domainLookupEnd": 3.9000000059604645,
+            "connectStart": 3.9000000059604645,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.0999999940395355,
+            "requestStart": 4.199999988079071,
+            "responseStart": 5.4000000059604645,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.4000000059604645,
+            "responseEnd": 6.199999988079071,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 62.099999994039536,
+            "domContentLoadedEventStart": 227.7999999821186,
+            "domContentLoadedEventEnd": 227.90000000596046,
+            "domComplete": 228.09999999403954,
+            "loadEventStart": 228.09999999403954,
+            "loadEventEnd": 228.09999999403954,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          44692,
+          44695,
+          44696,
+          44716,
+          44746
+        ],
+        "processes": 5,
+        "rssMiB": 1010.046875,
+        "cpuPercentSnapshot": 129.70000000000002
+      },
+      "shutdownMs": 198.84800000000178,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 9,
+      "passed": true,
+      "readyMs": 2001.610041,
+      "configMs": [
+        4.9000000059604645
+      ],
+      "sessionsMs": [
+        19.600000023841858
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 429,
+          "headersAt": 433.7000000178814,
+          "completedAt": 433.90000000596046,
+          "requestId": "ce6ec681-3ba4-4b93-bd98-b362f728b1ae"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 434,
+          "headersAt": 449.40000000596046,
+          "completedAt": 453.60000002384186,
+          "requestId": "f06572d7-e402-4fbe-b9a2-5ee9bafec52c"
+        }
+      ],
+      "timeOrigin": 1793417676018.8,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417674813.2842,
+            "elapsedMs": 13.407457999999963,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417674839.8323,
+            "elapsedMs": 0.8191670000000499,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417674844.0452,
+            "elapsedMs": 2.1274160000000393,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417675097.7966,
+            "elapsedMs": 0.7163339999999607,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417675349.8623,
+            "elapsedMs": 0.8714159999999538,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417675601.9343,
+            "elapsedMs": 0.5684590000000753,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417675853.5017,
+            "elapsedMs": 18.631083999999873,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417675872.1765,
+            "elapsedMs": 2.202709000000141,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417675875.4934,
+            "elapsedMs": 4.286000000000058,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417675875.7388,
+            "elapsedMs": 4.606874999999945,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:34.658Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-BRsJSh/electron/Crashpad\n[2026-10-31T03:34:36.017Z] loading gateway url=http://127.0.0.1:58259/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 170.90000000596046,
+            "duration": 57
+          },
+          {
+            "startTime": 240.30000001192093,
+            "duration": 55
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58259/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 228.60000002384186,
+            "navigationId": 8237,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.10000002384185791,
+            "domainLookupStart": 3,
+            "domainLookupEnd": 3.100000023841858,
+            "connectStart": 3.100000023841858,
+            "secureConnectionStart": 0,
+            "connectEnd": 3.300000011920929,
+            "requestStart": 3.300000011920929,
+            "responseStart": 4.700000017881393,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 4.700000017881393,
+            "responseEnd": 5.200000017881393,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 53.5,
+            "domContentLoadedEventStart": 228.30000001192093,
+            "domContentLoadedEventEnd": 228.30000001192093,
+            "domComplete": 228.5,
+            "loadEventStart": 228.60000002384186,
+            "loadEventEnd": 228.60000002384186,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          44794,
+          44797,
+          44798,
+          44819,
+          44885
+        ],
+        "processes": 5,
+        "rssMiB": 1015.203125,
+        "cpuPercentSnapshot": 135.29999999999998
+      },
+      "shutdownMs": 201.71920799999862,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 10,
+      "passed": true,
+      "readyMs": 2043.3017910000017,
+      "configMs": [
+        25.900000005960464
+      ],
+      "sessionsMs": [
+        1.9000000059604645
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 409.90000000596046,
+          "headersAt": 435.40000000596046,
+          "completedAt": 435.80000001192093,
+          "requestId": "41ab8c43-62fb-44ba-a287-1c1e75fb5da7"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 435.80000001192093,
+          "headersAt": 437.5,
+          "completedAt": 437.7000000178814,
+          "requestId": "03c40770-cef0-4342-94b2-7f0fea064a10"
+        }
+      ],
+      "timeOrigin": 1793417678826.3,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417677595.5178,
+            "elapsedMs": 7.591083000000026,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417677623.6814,
+            "elapsedMs": 0.766208000000006,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417677627.682,
+            "elapsedMs": 2.0102079999999773,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417677881.1968,
+            "elapsedMs": 0.6278750000000173,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417678133.286,
+            "elapsedMs": 0.7060000000000173,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417678385.23,
+            "elapsedMs": 0.5696249999998599,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417678635.9136,
+            "elapsedMs": 42.834458999999924,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417678678.798,
+            "elapsedMs": 2.993791999999985,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417678682.9766,
+            "elapsedMs": 4.6023750000001655,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417678683.1877,
+            "elapsedMs": 4.948874999999816,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:37.442Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-fRdk5O/electron/Crashpad\n[2026-10-31T03:34:38.824Z] loading gateway url=http://127.0.0.1:58291/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 170.2000000178814,
+            "duration": 57
+          },
+          {
+            "startTime": 239.80000001192093,
+            "duration": 56
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58291/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 227.5,
+            "navigationId": 6910,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.20000001788139343,
+            "domainLookupStart": 3.5,
+            "domainLookupEnd": 3.7000000178813934,
+            "connectStart": 3.7000000178813934,
+            "secureConnectionStart": 0,
+            "connectEnd": 3.800000011920929,
+            "requestStart": 3.9000000059604645,
+            "responseStart": 5.200000017881393,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 5.200000017881393,
+            "responseEnd": 5.9000000059604645,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 58.900000005960464,
+            "domContentLoadedEventStart": 227.30000001192093,
+            "domContentLoadedEventEnd": 227.30000001192093,
+            "domComplete": 227.5,
+            "loadEventStart": 227.5,
+            "loadEventEnd": 227.5,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          44928,
+          44931,
+          44932,
+          44952,
+          45005
+        ],
+        "processes": 5,
+        "rssMiB": 1010.171875,
+        "cpuPercentSnapshot": 142.4
+      },
+      "shutdownMs": 199.52699999999822,
+      "ownedGatewayStopped": true
+    },
+    {
+      "mode": "spawn",
+      "index": 11,
+      "passed": true,
+      "readyMs": 2069.6747090000026,
+      "configMs": [
+        34.599999994039536
+      ],
+      "sessionsMs": [
+        5
+      ],
+      "browserSession": true,
+      "timing": [
+        {
+          "path": "/api/config",
+          "index": 0,
+          "start": 465.80000001192093,
+          "headersAt": 496.09999999403954,
+          "completedAt": 500.40000000596046,
+          "requestId": "1d8d5224-6d0a-4c8b-8609-c481ddd6274f"
+        },
+        {
+          "path": "/api/sessions",
+          "index": 0,
+          "start": 500.40000000596046,
+          "headersAt": 504.40000000596046,
+          "completedAt": 505.40000000596046,
+          "requestId": "3227c0ee-8960-429e-80e7-38f85b23af9f"
+        }
+      ],
+      "timeOrigin": 1793417681608.2,
+      "startupDiagnostics": {
+        "mainRequests": [
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417680387.0767,
+            "elapsedMs": 17.398874999999975,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417680418.441,
+            "elapsedMs": 0.7162500000000023,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417680422.1433,
+            "elapsedMs": 2.571834000000024,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417680676.5225,
+            "elapsedMs": 0.6394169999999804,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417680928.7437,
+            "elapsedMs": 0.5955830000000333,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417681179.8403,
+            "elapsedMs": 0.6026249999999891,
+            "failed": true
+          },
+          {
+            "path": "/api/config",
+            "start": 1793417681431.282,
+            "elapsedMs": 29.298917000000074,
+            "status": 200
+          },
+          {
+            "path": "/api/endpoint-tools/compatibility",
+            "start": 1793417681460.6316,
+            "elapsedMs": 2.038583000000017,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417681463.819,
+            "elapsedMs": 4.218499999999949,
+            "status": 200
+          },
+          {
+            "path": "/api/tunnel/status",
+            "start": 1793417681464.0366,
+            "elapsedMs": 4.728624999999965,
+            "status": 200
+          }
+        ],
+        "lifecycleLog": "[2026-10-31T03:34:40.237Z] app ready platform=darwin packaged=false electron=45.0.0 chrome=156.0.8078.48 crashReporter=true crashDumps=/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-local-connection-hjLV0K/electron/Crashpad\n[2026-10-31T03:34:41.605Z] loading gateway url=http://127.0.0.1:58359/#/chat\n"
+      },
+      "browserDiagnostics": {
+        "longTasks": [
+          {
+            "startTime": 217.7000000178814,
+            "duration": 59
+          },
+          {
+            "startTime": 288.5,
+            "duration": 54
+          }
+        ],
+        "navigation": [
+          {
+            "name": "http://127.0.0.1:58359/#/chat",
+            "entryType": "navigation",
+            "startTime": 0,
+            "duration": 277.2000000178814,
+            "navigationId": 6441,
+            "initiatorType": "navigation",
+            "deliveryType": "",
+            "nextHopProtocol": "http/1.1",
+            "renderBlockingStatus": "non-blocking",
+            "contentType": "text/html",
+            "contentEncoding": "",
+            "workerStart": 0,
+            "workerRouterEvaluationStart": 0,
+            "workerCacheLookupStart": 0,
+            "workerMatchedSourceType": "",
+            "workerFinalSourceType": "",
+            "redirectStart": 0,
+            "redirectEnd": 0,
+            "fetchStart": 0.30000001192092896,
+            "domainLookupStart": 4.300000011920929,
+            "domainLookupEnd": 4.5,
+            "connectStart": 4.5,
+            "secureConnectionStart": 0,
+            "connectEnd": 4.5999999940395355,
+            "requestStart": 4.800000011920929,
+            "responseStart": 6.200000017881393,
+            "firstInterimResponseStart": 0,
+            "finalResponseHeadersStart": 6.200000017881393,
+            "responseEnd": 6.800000011920929,
+            "transferSize": 25226,
+            "encodedBodySize": 24926,
+            "decodedBodySize": 24926,
+            "responseStatus": 200,
+            "serverTiming": [],
+            "unloadEventStart": 0,
+            "unloadEventEnd": 0,
+            "domInteractive": 66.2000000178814,
+            "domContentLoadedEventStart": 277,
+            "domContentLoadedEventEnd": 277,
+            "domComplete": 277.2000000178814,
+            "loadEventStart": 277.2000000178814,
+            "loadEventEnd": 277.2000000178814,
+            "type": "navigate",
+            "redirectCount": 0,
+            "activationStart": 0,
+            "criticalCHRestart": 0,
+            "notRestoredReasons": null,
+            "confidence": {
+              "randomizedTriggerRate": 0.4994798,
+              "value": "high"
+            }
+          }
+        ],
+        "resources": []
+      },
+      "endpointConnected": true,
+      "runtime": {
+        "node": "24.22.0",
+        "electron": "45.0.0"
+      },
+      "resources": {
+        "pids": [
+          45053,
+          45057,
+          45058,
+          45081,
+          45124
+        ],
+        "processes": 5,
+        "rssMiB": 1003.609375,
+        "cpuPercentSnapshot": 161.5
+      },
+      "shutdownMs": 203.07541700000002,
+      "ownedGatewayStopped": true
+    }
+  ],
+  "passed": true,
+  "electronBuildSha256": "7730e08f71e7cf511cc822d727f6b8333e0c7899ed5b2088743f5822ea9c1022",
+  "artifactManifest": {
+    "out/main": {
+      "files": 38,
+      "sha256": "f5dda917d62cdd6ab1d7fc95886722738184fa340cda6b7408385ca15e81ca5f"
+    },
+    "out/preload": {
+      "files": 6,
+      "sha256": "71648d06f9293bdd4203b1f1633939e97baa9ebb5c44d92cd6b76b8987e0a1c1"
+    },
+    "out/server": null,
+    "dist": {
+      "files": 3001,
+      "sha256": "f0b03306a7aa5dca07609efc0c76e4bb0a6a953bb80b1b3f0d3dd1caa3e1055c"
+    },
+    "src/storage/sqlite": {
+      "files": 168,
+      "sha256": "f7c8e5e3f5445e01dbb129081aea17ba6e1f72e6fb551ba4e94d832d23e52f95"
+    }
+  },
+  "summary": {
+    "spawn": {
+      "readyMs": {
+        "count": 12,
+        "mean": 2119.3756076666673,
+        "p95": 2515.746834,
+        "max": 2515.746834
+      },
+      "configMs": {
+        "count": 12,
+        "mean": 14.558333332339922,
+        "p95": 34.599999994039536,
+        "max": 34.599999994039536
+      },
+      "sessionsMs": {
+        "count": 12,
+        "mean": 4.708333338300387,
+        "p95": 19.900000005960464,
+        "max": 19.900000005960464
+      },
+      "shutdownMs": {
+        "count": 12,
+        "mean": 195.3849339999997,
+        "p95": 216.8396670000002,
+        "max": 216.8396670000002
+      },
+      "rssMiB": {
+        "count": 12,
+        "mean": 966.2682291666666,
+        "p95": 1015.203125,
+        "max": 1015.203125
+      }
+    }
+  },
+  "latencyPopulations": {
+    "spawn": {
+      "configMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 12,
+          "mean": 14.558333332339922,
+          "p95": 34.599999994039536,
+          "max": 34.599999994039536
+        },
+        "subsequentInFirstLaunch": null
+      },
+      "sessionsMs": {
+        "firstMeasuredPerLaunch": {
+          "count": 12,
+          "mean": 4.708333338300387,
+          "p95": 19.900000005960464,
+          "max": 19.900000005960464
+        },
+        "subsequentInFirstLaunch": null
+      }
+    }
+  },
+  "finishedAt": "2026-10-31T03:34:42.936Z"
+}

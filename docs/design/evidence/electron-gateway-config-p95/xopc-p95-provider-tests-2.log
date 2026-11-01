@@ -1,0 +1,9 @@
+
+ RUN  v4.1.5 /Users/micjoyce/.codex/worktrees/gateway-connection-p0-p1/xopc
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  11:13:01
+   Duration  1.54s (transform 851ms, setup 10ms, import 1.48s, tests 5ms, environment 0ms)
+
