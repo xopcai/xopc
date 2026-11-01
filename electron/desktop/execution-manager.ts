@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { DesktopExecutionGrant } from '@xopcai/gateway-contract';
 import type { DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
 import type { DesktopTerminalHostController } from './terminal-host-controller.js';
+import type { DesktopComputerHostController } from './computer-host-controller.js';
+import { REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
 import { isConnectionId } from '../gateway/profiles.js';
@@ -22,7 +24,8 @@ type Run = { binding: DesktopBinding; epoch: number; transport: 'ssh' | 'direct'
   deviceId?: string; proposed?: DesktopExecutionGrant; expectedRevision?: number; host?: DesktopExecutionHost;
   lease?: DesktopExecutionLease; journal?: DesktopOperationJournal; watchdog?: ReturnType<typeof setInterval>;
   stopResources?: WorkspaceContext['stopResources']; resourceStop?: Promise<{ confirmed: boolean }> };
-type WorkspaceContext = { workspaceId: string; kind?: 'container'; catalog: DesktopExecutionCatalog; stopResources(): Promise<{ confirmed: boolean }> };
+type WorkspaceContext = { catalog: DesktopExecutionCatalog; stopResources(): Promise<{ confirmed: boolean }> } &
+  ({ workspaceId: string; kind?: 'container' } | { kind: 'computer'; workspaceId?: never });
 
 /** Remote-only coordinator. The executor root must be the fixed per-user state root, never a profile or userData directory. */
 export class DesktopExecutionManager {
@@ -39,11 +42,13 @@ export class DesktopExecutionManager {
     createWorker(tool: string, intent?: DesktopOperationIntent): DesktopExecutionWorker;
     createTerminal?(...input: [...Parameters<ConstructorParameters<typeof DesktopTerminalHostController>[0]['createWorker']>, DesktopExecutionLease]): ReturnType<ConstructorParameters<typeof DesktopTerminalHostController>[0]['createWorker']>;
     confirmTerminalInput?: ConstructorParameters<typeof DesktopTerminalHostController>[0]['confirmInput'];
+    createComputer?: ConstructorParameters<typeof DesktopComputerHostController>[0]['createSession'];
   }) {}
-  snapshot(): (Status & { workspaceId?: string; container?: true; terminal?: true }) | undefined { return this.status ? { ...this.status,
+  snapshot(): (Status & { workspaceId?: string; container?: true; terminal?: true; computer?: true }) | undefined { return this.status ? { ...this.status,
     ...(this.active?.proposed?.workspaceId ? { workspaceId: this.active.proposed.workspaceId } : {}),
     ...(this.active?.proposed?.toolRevisions['desktop.command.run'] || this.active?.proposed?.toolRevisions['desktop.terminal.open'] ? { container: true } : {}),
-    ...(this.active?.proposed?.toolRevisions['desktop.terminal.open'] ? { terminal: true } : {}) } : undefined; }
+    ...(this.active?.proposed?.toolRevisions['desktop.terminal.open'] ? { terminal: true } : {}),
+    ...(this.active?.proposed?.toolRevisions[REMOTE_COMPUTER_CONTROL_TOOL] ? { computer: true } : {}) } : undefined; }
   origin() {
     const run = this.active, current = this.options.manager.snapshot();
     return run && !run.abort.signal.aborted && current.epoch === run.epoch && current.selectedId === run.binding.profileId ? run.host?.origin() : undefined;
@@ -133,7 +138,9 @@ export class DesktopExecutionManager {
       run.deviceId = (await client.readSelf()).deviceId; current();
       const compatibility = await client.endpointRequest('/api/desktop-host/compatibility', 'GET', undefined, run.deviceId); current();
       if (compatibility?.gatewayId !== binding.gatewayId || compatibility.publicKey !== binding.publicKey || compatibility.capabilities?.reliableExecutionVersion !== 1) throw new Error('DESKTOP_EXECUTION_UNSUPPORTED');
-      if (workspace && (workspace.kind === 'container' ? compatibility.capabilities?.containerCommandVersion !== 1 : compatibility.capabilities?.workspaceExecutionVersion !== 1)) throw new Error('DESKTOP_WORKSPACE_UNSUPPORTED');
+      if (workspace && (workspace.kind === 'computer' ? compatibility.capabilities?.remoteComputerVersion !== 1
+        : workspace.kind === 'container' ? compatibility.capabilities?.containerCommandVersion !== 1 : compatibility.capabilities?.workspaceExecutionVersion !== 1)) throw new Error('DESKTOP_WORKSPACE_UNSUPPORTED');
+      if (workspace?.kind === 'computer' && !workspace.catalog.revision(REMOTE_COMPUTER_CONTROL_TOOL)) throw new Error('DESKTOP_COMPUTER_UNSUPPORTED');
       if (workspace?.catalog.revision('desktop.terminal.open') && compatibility.capabilities?.containerTerminalVersion !== 1) throw new Error('DESKTOP_TERMINAL_UNSUPPORTED');
       if (compatibility.capabilities?.operationReviewVersion === 1) {
         const pending = await client.endpointRequest('/api/desktop-host/operations', 'GET', undefined, run.deviceId); current();
@@ -143,7 +150,7 @@ export class DesktopExecutionManager {
       const previous = await client.endpointRequest('/api/desktop-host/execution', 'GET', undefined, run.deviceId); current();
       if (previous?.deviceId !== run.deviceId || !Number.isSafeInteger(previous.revision)) throw new Error('DESKTOP_EXECUTION_DENIED');
       const grant: DesktopExecutionGrant = { version: 1, grantId: randomUUID(), localApprovalId: randomUUID(), expiresAt: Date.now() + 120000,
-        toolRevisions: Object.fromEntries(catalog.descriptors().map(tool => [tool.name, catalog.revision(tool.name)!])), ...(workspace ? { workspaceId: workspace.workspaceId } : {}) };
+        toolRevisions: Object.fromEntries(catalog.descriptors().map(tool => [tool.name, catalog.revision(tool.name)!])), ...(workspace?.workspaceId ? { workspaceId: workspace.workspaceId } : {}) };
       if (!await this.options.consent(binding, structuredClone(grant), abort.signal)) throw new Error('DESKTOP_LOCAL_CONSENT_DENIED');
       current(); if (!this.options.foreground()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
       // Record the expected revision before POST, so a lost acknowledgement can still be revoked by exact grant identity.
@@ -156,6 +163,7 @@ export class DesktopExecutionManager {
         confirm: this.options.confirm, confirmRead: this.options.confirmRead, createWorker: this.options.createWorker,
         ...(this.options.createTerminal ? { createTerminal: (intent, binding, emit) => this.options.createTerminal!(intent, binding, emit, run.lease!) } : {}),
         confirmTerminalInput: this.options.confirmTerminalInput,
+        createComputer: this.options.createComputer,
         onState: (state, error) => {
           if (this.active !== run || abort.signal.aborted) return;
           this.status = { profileId: id, state: state === 'stopped' ? 'stop-requested' : state, ...(error ? { error } : {}) };

@@ -5,7 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { release } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, safeStorage, session } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, safeStorage, session, systemPreferences } from 'electron';
+import { REMOTE_COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 
 import { DesktopEnrollmentManager, type DesktopEnrollmentAction } from '../desktop/enrollment.js';
 import { DesktopIdentityStore } from '../desktop/device-identity.js';
@@ -21,6 +22,13 @@ import { DesktopContainerResources } from '../desktop/container-resources.js';
 import { DesktopContainerSession } from '../desktop/container-session.js';
 import { DesktopContainerWorkspaces } from '../desktop/container-workspaces.js';
 import { DesktopNativeApprovalFocus } from '../desktop/native-approval-focus.js';
+import { DesktopComputerPresence } from '../desktop/computer-presence.js';
+import { DesktopComputerResources } from '../desktop/computer-resources.js';
+import { createNativeComputerSession } from '../desktop/computer-native-session.js';
+import { computerHostBundleId } from '../desktop/computer-host-identity.js';
+import type { DesktopComputerSession } from '../desktop/computer-session.js';
+import { CuaComputerDriver } from '../computer/cua-driver.js';
+import { resolveComputerDriverPath, resolveComputerDriverSdkUrl } from '../computer/desktop-host.js';
 import { stopRecordedContainer } from '../desktop/container-worker.js';
 import { DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopClipboardWorker } from '../desktop/clipboard-tool.js';
 import { resolveStateDir } from '../../src/config/paths-state.js';
@@ -95,10 +103,14 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   });
   let nativeApprovalGeneration = 0;
   const nativeApprovalFocus = new DesktopNativeApprovalFocus();
+  const computerPresence = new DesktopComputerPresence(() => { computerContext = undefined; void execution.stop(); });
+  let computer: DesktopComputerSession | undefined, computerBundleId: string | undefined;
+  let computerContext: { parent: BrowserWindow; generation: number } | undefined;
   const foreground = () => {
     const chat = shell?.captureWindow();
     return visible() && window.isFocused() || Boolean(chat && chat.isVisible() && !chat.isMinimized() && chat.isFocused())
-      || nativeApprovalFocus.focused(chat, nativeApprovalGeneration, process.platform === 'darwin' && app.isActive(), Boolean(chat && chat.isVisible() && !chat.isMinimized()));
+      || nativeApprovalFocus.focused(chat, nativeApprovalGeneration, process.platform === 'darwin' && app.isActive(), Boolean(chat && chat.isVisible() && !chat.isMinimized()))
+      || computerPresence.visible();
   };
   let workspace: DesktopWorkspaceSession | undefined;
   let container: DesktopContainerSession | undefined;
@@ -106,10 +118,37 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   const containerWorkspaces = new DesktopContainerWorkspaces(join(resolveStateDir(), 'desktop-execution-v1', 'container-workspaces'), encryption);
   let savedContainers: { epoch: number; profileId: string; items: Array<{ workspaceId: string; label: string; imageId: string }> } | undefined;
   const workspaceRecovery = new DesktopWorkspaceRecoveryStore(join(resolveStateDir(), 'desktop-execution-v1', 'workspace-recovery'), encryption);
+  const computerResources = new DesktopComputerResources(join(resolveStateDir(), 'desktop-execution-v1', 'computer-resources'), encryption);
+  const stopComputer = async () => {
+    computerPresence.close(); computerContext = undefined;
+    await computerPresence.whenStopped();
+    const previous = computer, outcome = await previous?.stop() ?? { confirmed: true };
+    if (outcome.confirmed && computer === previous) computer = undefined;
+    return outcome;
+  };
   const execution = new DesktopExecutionManager({ manager, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'),
     appVersion: app.getVersion(), catalog: new DesktopExecutionCatalog([DESKTOP_CLIPBOARD_WRITE_DESCRIPTOR, desktopOperationStatusDescriptor()]), foreground,
     createTerminal: (intent, binding, emit, lease) => {
       if (!container) throw new Error('DESKTOP_TERMINAL_AUTHORITY_INVALID'); return container.terminal(intent, binding, emit, lease);
+    },
+    createComputer: uploadFrame => {
+      const context = computerContext;
+      if (!context || !computerBundleId || !computerPresence.visible()) throw new Error('DESKTOP_COMPUTER_AUTHORITY_INVALID');
+      const current = () => computerContext === context && context.generation === nativeApprovalGeneration && computerPresence.visible();
+      const sdkUrl = resolveComputerDriverSdkUrl({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
+      const driver = new CuaComputerDriver(resolveComputerDriverPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, mainDir: dirname(fileURLToPath(entryUrl)) }),
+        computerBundleId, sdkUrl ? () => import(/* @vite-ignore */ sdkUrl) : undefined, process.platform, current);
+      computer = createNativeComputerSession({ driver, resources: computerResources, current, uploadFrame,
+        requestApproval: async (request, signal) => {
+          const detail = JSON.stringify(request);
+          if (!current() || signal.aborted || Buffer.byteLength(detail) > 8192) return false;
+          const result = await dialog.showMessageBox(context.parent, { type: 'warning', title: request.kind === 'session' ? '确认电脑控制目标' : '确认本次电脑输入',
+            message: request.kind === 'session' ? '仅允许以下应用与模式？' : '向以下已核验窗口发送这次输入？',
+            detail: `${detail}\n\n应用名称和内容可能来自不可信界面。仅本次有效，不继承本地模式的应用授权；结果未知不会自动重做。`,
+            buttons: ['取消', request.kind === 'session' ? '允许本次目标' : '执行本次输入'], defaultId: 0, cancelId: 0, noLink: true, signal });
+          return result.response === 1 && !signal.aborted && current();
+        } });
+      return computer;
     },
     confirmTerminalInput: async (scope, input, signal) => {
       const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId), parent = shell?.captureWindow() ?? window;
@@ -133,6 +172,21 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     },
     consent: async (binding, grant, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
+      if (grant.toolRevisions[REMOTE_COMPUTER_CONTROL_TOOL]) {
+        const generation = nativeApprovalGeneration, epoch = manager.snapshot().epoch, parent = shell?.captureWindow() ?? window;
+        const result = await dialog.showMessageBox(window, { type: 'warning', title: '授权本机电脑控制', message: '允许此Gateway逐次请求观察与控制本机应用？',
+          detail: `Gateway：${binding.origin}\n身份：${binding.gatewayId}\n\n授权最长两分钟。应用列表、目标选择、窗口截图和输入每次仍需本机确认；截图和界面信息发送给此Gateway。输入可能产生保存、发送或删除等实际效果。聊天/停止窗口将在其他桌面保持可见；目标应用可持有焦点。最小化、关闭、锁屏、断线或切换后需重新授权，旧输入不会重放。不能访问任意Electron IPC、运行主机命令或继承本地应用授权。`,
+          buttons: ['取消', '允许逐次确认电脑控制'], defaultId: 0, cancelId: 0, noLink: true, signal });
+        if (result.response !== 1 || signal.aborted || generation !== nativeApprovalGeneration || !foreground()) return false;
+        const context = { parent, generation }; computerContext = context;
+        await computerPresence.begin(parent, () => {
+          const state = manager.snapshot(), profile = state.profiles.find(item => item.id === binding.profileId);
+          return computerContext === context && generation === nativeApprovalGeneration && state.epoch === epoch && state.selectedId === binding.profileId
+            && profile?.identity?.gatewayId === binding.gatewayId && profile.identity.publicKey === binding.publicKey
+            && (parent === window ? !window.isDestroyed() && window.webContents.getURL() === documentUrl && window.webContents.mainFrame.url === documentUrl : shell?.captureWindow() === parent);
+        }, signal);
+        return !signal.aborted && computerPresence.visible();
+      }
       if (grant.toolRevisions['desktop.command.run'] || grant.toolRevisions['desktop.terminal.open']) {
         if (!container || container.workspaceId !== grant.workspaceId) return false;
         const generation = nativeApprovalGeneration;
@@ -160,6 +214,15 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       const profile = manager.snapshot().profiles.find(profile => profile.id === manager.snapshot().selectedId);
       const parent = shell?.captureWindow() ?? window;
       if (profile?.identity?.gatewayId !== request.execution.gatewayId || !foreground() || signal.aborted || parent.isDestroyed()) return false;
+      if (request.toolName === REMOTE_COMPUTER_CONTROL_TOOL) {
+        const detail = JSON.stringify(request.arguments), generation = nativeApprovalGeneration;
+        if (!computerPresence.visible() || Buffer.byteLength(detail) > 8192) return false;
+        const result = await dialog.showMessageBox(parent, { type: 'warning', title: '确认本次电脑操作',
+          message: request.arguments.op === 'observe' ? '截取已授权窗口并发送给此Gateway？' : request.arguments.op === 'discover' ? '将本机应用列表发送给此Gateway？' : '仅执行以下电脑控制请求？',
+          detail: `Gateway：${profile.origin}\n设备：${request.execution.deviceId}\n操作：${request.execution.operationId}\n完整请求：${detail}\n\n每个输入还会核验目标并单独请求批准。结果未知时不会重做。`,
+          buttons: ['取消', '允许本次电脑操作'], defaultId: 0, cancelId: 0, noLink: true, signal });
+        return result.response === 1 && !signal.aborted && generation === nativeApprovalGeneration && computerPresence.visible();
+      }
       if (['desktop.command.run', 'desktop.terminal.open'].includes(request.toolName)) {
         if (!container || request.execution.workspaceId !== container.workspaceId || request.arguments.workspaceId !== container.workspaceId) return false;
         const generation = nativeApprovalGeneration;
@@ -208,7 +271,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     } catch { return false; } finally { clearTimeout(timer); }
   };
   const reviews = new DesktopOperationReviewManager({ manager, execution, store: desktopStore, executorRoot: join(resolveStateDir(), 'desktop-execution-v1'), visible,
-    proveStopped: proveContainerStopped,
+    proveStopped: intent => intent.tool === REMOTE_COMPUTER_CONTROL_TOOL ? computerResources.recoverAfterParentExit(intent).catch(() => false) : proveContainerStopped(intent),
     confirm: async (binding, intent, receipt, signal) => {
       if (!visible() || !window.isFocused() || signal.aborted) return false;
       const file = intent.tool === 'desktop.workspace.write' ? await workspaceRecovery.load(intent) : undefined;
@@ -223,7 +286,7 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
       return answer.response === 1 && !signal.aborted && visible() && window.isFocused();
     } });
   const stopObservation = () => { observation.stop(); void shell?.setHostOrigin().catch(() => {}); };
-  const stopCapabilities = () => { nativeApprovalGeneration += 1; shell?.stopFiles(); reviews.cancel(); stopObservation(); void execution.stop(); };
+  const stopCapabilities = () => { nativeApprovalGeneration += 1; computerPresence.close(); computerContext = undefined; shell?.stopFiles(); reviews.cancel(); stopObservation(); void execution.stop(); };
   const cancelDesktop = () => { stopCapabilities(); desktop.cancel(); operationReviews = undefined; savedContainers = undefined; };
   const removeSessionBoundary = installDesktopSessionBoundary(powerMonitor, cancelDesktop);
   window.once('closed', removeSessionBoundary);
@@ -363,6 +426,19 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     return snapshot();
   })));
   ipcMain.handle('connections:execution-stop', () => reply(async () => { stopCapabilities(); await execution.stop(); return snapshot(); }));
+  ipcMain.handle('connections:computer-start', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => {
+    if (process.platform !== 'darwin') throw new Error('DESKTOP_COMPUTER_UNSUPPORTED');
+    const state = manager.snapshot(), profile = state.profiles.find(item => item.id === id);
+    if (id !== state.selectedId || !profile?.identity) throw new Error('STALE_CONNECTION_EPOCH');
+    if (!visible() || !window.isFocused()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
+    stopObservation(); await observation.whenStopped(); await execution.requireStopped();
+    if (!systemPreferences.isTrustedAccessibilityClient(false) || systemPreferences.getMediaAccessStatus('screen') !== 'granted') throw new Error('DESKTOP_COMPUTER_PERMISSIONS_REQUIRED');
+    const generation = nativeApprovalGeneration;
+    computerBundleId = await computerHostBundleId({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
+    if (generation !== nativeApprovalGeneration || !foreground() || manager.snapshot().epoch !== epoch) throw new Error('DESKTOP_OPERATION_CANCELLED');
+    await execution.start(epoch, id, { kind: 'computer', catalog: new DesktopExecutionCatalog([REMOTE_COMPUTER_DESCRIPTOR as never, desktopOperationStatusDescriptor()]), stopResources: stopComputer });
+    return snapshot();
+  })));
   ipcMain.handle('connections:container-list', (_event, epoch, id) => reply(() => atEpoch(epoch, async () => {
     const state = manager.snapshot(), profile = state.profiles.find(profile => profile.id === id);
     if (id !== state.selectedId || !profile?.identity) throw new Error('STALE_CONNECTION_EPOCH');
