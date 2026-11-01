@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "startedAt": "2026-11-01T13:35:05.897Z",
+  "finishedAt": "2026-11-01T13:36:31.001Z",
+  "scope": "Installed Electron with real native approvals, private Cua driver, isolated Cocoa counter, signed device HTTP/WSS and bundled Gateway/Agent; synthetic visual inference, same-host fixtures. Not physical WAN or platform matrix acceptance.",
+  "checks": {
+    "isolatedNativeFixture": true,
+    "nativeGrantCancelled": true,
+    "nativeInputRefusalReported": true,
+    "agentProgramAndClose": true,
+    "actualNativeInputCancelled": true,
+    "durableNativeResults": true
+  },
+  "packageBefore": {
+    "files": 1432,
+    "sha256": "0607e15bdb9aaa0462c50f26f394b4b8c65a8d029f2fe684b9e5440d7c27c116"
+  },
+  "packageAfter": {
+    "files": 1432,
+    "sha256": "0607e15bdb9aaa0462c50f26f394b4b8c65a8d029f2fe684b9e5440d7c27c116"
+  }
+}
