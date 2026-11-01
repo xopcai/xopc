@@ -1,5 +1,5 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +15,7 @@ import { DesktopDeviceAuth } from '../../../electron/desktop/device-auth.js';
 import { DesktopIdentityStore } from '../../../electron/desktop/device-identity.js';
 import { desktopAuthTransport } from '../../../electron/desktop/device-transport.js';
 import { DesktopObservationManager } from '../../../electron/desktop/observation-manager.js';
+import { installDesktopSessionBoundary } from '../../../electron/desktop/session-boundary.js';
 import { ConnectionCredentialStore } from '../../../electron/gateway/credentials.js';
 import { GatewayConnectionPreview } from '../../../electron/gateway/connection-manager.js';
 import { ConnectionProfileStore } from '../../../electron/gateway/profiles.js';
@@ -145,6 +146,21 @@ it('uploads only individually confirmed screenshots through signed grants, keeps
     await until(() => observer?.snapshot()?.state === 'error');
     expect(getDevice(deviceId)?.scopes).toEqual(['gateway.status', 'device.self']);
     observer.stop();
+    await observer.whenStopped();
+    await observer.start(manager.snapshot().epoch, id, 'screen'); await until(() => Boolean(observer?.origin()));
+    const resumed = endpoints.registry.list().find(item => item.principalId === deviceId)!;
+    barrier = Promise.withResolvers<Buffer>(); captureAborted = false;
+    const capturing = endpoints.invocations.invoke({ endpointId: resumed.endpointId, toolCallId: randomUUID(), toolName: 'desktop.screen.capture', arguments: {}, descriptorRevision: resumed.tools[0].revision });
+    const disconnected = expect(capturing).rejects.toMatchObject({ code: 'ENDPOINT_DISCONNECTED' });
+    const power = new EventEmitter(), releaseBoundary = installDesktopSessionBoundary(power, () => observer!.stop());
+    try {
+      await until(() => reads === 4); power.emit('lock-screen');
+      expect(observer.origin()).toBeUndefined(); await disconnected; await until(() => captureAborted);
+      const delayedFrame = Buffer.from(image); barrier.resolve(delayedFrame); await until(() => delayedFrame.every(byte => byte === 0));
+      await observer.whenStopped(); power.emit('unlock-screen');
+      expect(observer.origin()).toBeUndefined(); expect(getDevice(deviceId)?.scopes).toEqual(['gateway.status', 'device.self']);
+      expect(await readdir(join(directory, 'files'))).toEqual([]);
+    } finally { releaseBoundary(); }
   } finally {
     observer?.stop(); await observer?.whenStopped(); channel?.close(); realtime.close(); endpoints.close();
     server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));

@@ -21,6 +21,7 @@ const screen = process.argv.includes('--screen');
 const observation = screen || process.argv.includes('--observation');
 const observationTool = screen ? 'desktop.screen.capture' : 'desktop.device.get_state';
 const observationScope = screen ? 'desktop.observe.screen' : 'desktop.observe.state';
+const modelShapes = process.argv.includes('--model-shapes');
 const output = await createAcceptanceOutput(join(root, 'reports/p2a2-native-enrollment.json'));
 const state = await mkdtemp(join(tmpdir(), 'xopc-native-enrollment-')), token = randomUUID();
 const report = { passed: false, startedAt: new Date().toISOString(), checks: {}, scope: 'Installed macOS application, actual OS safeStorage, native parented consent, independent bundled Gateway through SSH-loopback transport; no local tools or physical WAN claim', interactions: [] };
@@ -48,21 +49,22 @@ try {
         const chunks = []; for await (const chunk of req) chunks.push(chunk);
         const body = JSON.parse(Buffer.concat(chunks).toString()), messages = body.messages ?? [], lastUser = messages.findLastIndex(message => message.role === 'user' && /Synthetic explicit desktop origin|Retained while desktop offline/.test(JSON.stringify(message.content)));
         const prompt = JSON.stringify(messages[lastUser]?.content ?? ''), results = messages.slice(lastUser + 1).filter(message => message.role === 'tool');
-        if (screen && messages.slice(lastUser + 1).some(message => JSON.stringify(message.content).includes('data:image/png;base64,'))) imageSeen = true;
+        const images = messages.flatMap(message => Array.isArray(message.content) ? message.content : []).filter(part => part.type === 'image_url' && /^data:image\//.test(part.image_url?.url ?? ''));
+        if (screen && images.length) imageSeen = true;
         const names = (body.tools ?? []).map(tool => tool.function?.name);
         const chunk = (delta, finish_reason = null) => `data: ${JSON.stringify({ id: 'd3-fixture', object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'chat', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
         let tool;
         report.inferenceRequests ??= [];
-        if (report.inferenceRequests.length < 40) report.inferenceRequests.push({ tools: names.slice(0, 24), toolResults: results.length, explicitDesktopTurn: prompt.includes('Synthetic explicit desktop origin') });
+        if (report.inferenceRequests.length < 40) report.inferenceRequests.push({ tools: names.slice(0, 24), toolResults: results.length, imageParts: images.map(part => ({ mimeType: part.image_url.url.slice(5).split(';')[0], encodedBytes: part.image_url.url.length })), explicitDesktopTurn: prompt.includes('Synthetic explicit desktop origin') });
         if (prompt.includes('Synthetic explicit desktop origin') && names.length) {
           if (!results.length) { assert(names.includes('tool_search'), 'Device tool discovery was not available'); tool = { name: 'tool_search', arguments: JSON.stringify({ query: screen ? 'desktop screenshot capture' : 'desktop device environment', limit: 5 }) }; }
-          else if (screen ? !imageSeen && !JSON.stringify(results).includes('USER_DENIED') : !JSON.stringify(results).includes('systemVersion')) {
+          else if (screen ? !imageSeen && results.length < 2 : !JSON.stringify(results).includes('systemVersion')) {
             const name = names.find(name => name?.startsWith(screen ? 'device__desktop_screen_capture_' : 'device__desktop_device_get_state_'));
             assert(name, 'Discovery did not load the explicitly selected desktop state tool'); tool = { name, arguments: '{}' };
           } else if (!screen) { assert(JSON.stringify(results).includes('darwin')); stateReadSeen = true; }
         } else if (prompt.includes('Retained while desktop offline')) assert(!names.some(name => name?.startsWith('device__')), 'A stopped desktop tool remained declared for the server-only turn');
         res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-        res.end(chunk({ role: 'assistant' }) + (tool ? chunk({ tool_calls: [{ index: 0, id: `d3-${results.length}`, type: 'function', function: tool }] }) + chunk({}, 'tool_calls')
+        res.end(chunk({ role: 'assistant' }) + (tool ? chunk({ tool_calls: [{ index: 0, id: `d3-${randomUUID()}`, type: 'function', function: tool }] }) + chunk({}, 'tool_calls')
           : chunk({ content: 'OBSERVATION_CHAT_OK' }) + chunk({}, 'stop')) + 'data: [DONE]\n\n');
       } catch (error) { inferenceError = String(error); res.writeHead(500).end('{}'); }
     }).listen(0, '127.0.0.1'); await once(inference, 'listening');
@@ -70,10 +72,34 @@ try {
   }
   const serverPort = await port(), config = join(serverState, 'xopc.json');
   await writeFile(config, JSON.stringify({ gateway: { mode: 'local', bind: 'loopback', port: serverPort, auth: { mode: 'token', token } }, browser: { enabled: false } }), { mode: 0o600 });
+  const gatewayEnv = packagedGatewayEnvironment(localConnectionEnvironment(process.env, root, serverState, config, join(serverState, 'workspace')), target);
+  if (modelShapes) Object.assign(gatewayEnv, { XOPC_LOG_LEVEL: 'debug', XOPC_LOG_CONSOLE: 'true', XOPC_LOG_LLM_PAYLOAD: 'true' });
   gateway = spawn(target.executablePath, [target.server, 'gateway', '--foreground', '--bind', 'loopback', '--port', String(serverPort), '--no-hot-reload'], {
-    cwd: state, env: packagedGatewayEnvironment(localConnectionEnvironment(process.env, root, serverState, config, join(serverState, 'workspace')), target), stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: state, env: gatewayEnv, stdio: ['ignore', 'pipe', 'pipe'],
   });
-  for (const stream of [gateway.stdout, gateway.stderr]) stream.on('data', chunk => { logs = (logs + chunk).slice(-16000); });
+  for (const stream of [gateway.stdout, gateway.stderr]) {
+    let pending = '';
+    stream.on('data', chunk => {
+      if (!modelShapes) { logs = (logs + chunk).slice(-16000); return; }
+      pending += String(chunk);
+      if (pending.length > 4 * 1024 * 1024) { pending = ''; logs += '[Oversized diagnostic line omitted]\n'; return; }
+      let end;
+      while ((end = pending.indexOf('\n')) >= 0) {
+        const line = pending.slice(0, end); pending = pending.slice(end + 1);
+        try {
+          const entry = JSON.parse(line);
+          if (entry.effectiveContext) {
+            report.modelShapes ??= [];
+            report.modelShapes.push({ modelRef: entry.modelRef, messages: entry.effectiveContext.messages.map(message => ({ role: message.role, toolName: message.toolName,
+              contentTypes: Array.isArray(message.content) ? message.content.map(block => block.type) : ['text'],
+              imageDisabled: JSON.stringify(message.content).includes('Image reading is disabled.'), imageOmitted: JSON.stringify(message.content).includes('image omitted') })) });
+            void writeFile(output + '.model-shapes.json', JSON.stringify(report.modelShapes, null, 2));
+          }
+          logs = (logs + JSON.stringify({ module: entry.module, msg: entry.msg, phase: entry.phase }) + '\n').slice(-16000);
+        } catch { logs = (logs + '[Non-JSON diagnostic omitted]\n').slice(-16000); }
+      }
+    });
+  }
   const owner = async (path, method = 'GET', body) => {
     const response = await fetch(`http://127.0.0.1:${serverPort}${path}`, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(5000) });
     assert(response.ok, `Owner fixture ${path}: ${response.status}`); const json = await response.json(); return json.payload ?? json;
@@ -115,6 +141,10 @@ try {
     await page.getByRole('heading', { name: 'Gateway 连接预览' }).waitFor(); return page;
   };
   let page = await launch();
+  if (process.argv.includes('--pause-before-save')) {
+    console.log(`NATIVE PREPARATION PID ${application.process().pid}; focus the actual test window, then create ${output}.ready`);
+    await until(() => readFile(output + '.ready', 'utf8').then(value => value.trim() === 'ready').catch(() => false), 120000);
+  }
   const save = async credential => {
     const response = await page.evaluate(async ({ origin, credential }) => {
       const api = window.gatewayConnections, snapshot = await api.snapshot(), existing = snapshot.profiles.find(profile => profile.name === 'Native enrollment');
@@ -171,7 +201,11 @@ try {
     assert.equal(registered.endpoints.length, 1); assert.deepEqual(registered.endpoints[0].tools.map(tool => tool.descriptor.name), [observationTool]);
     assert(registered.access.scopes.includes(observationScope));
     await chat.bringToFront();
-    const hostOrigin = await chat.evaluate(() => window.desktopShell.hostOrigin());
+    let hostOrigin;
+    if (screen) {
+      console.log('NATIVE PREPARATION focus the actual remote chat window; OS foreground is required before obtaining a screenshot origin');
+      await until(async () => { hostOrigin = await chat.evaluate(() => window.desktopShell.hostOrigin()); return hostOrigin?.type === 'endpoint'; }, 120000);
+    } else hostOrigin = await chat.evaluate(() => window.desktopShell.hostOrigin());
     assert.equal(hostOrigin.type, 'endpoint'); assert.equal(hostOrigin.endpointId, registered.endpoints[0].endpointId);
     const send = async text => { await chat.bringToFront(); await chat.locator('#use-host').check(); await chat.locator('#input').fill(text); await chat.locator('#send').click(); };
     if (screen && !approvalOnly) {

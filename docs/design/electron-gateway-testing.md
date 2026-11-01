@@ -6,13 +6,13 @@
 
 不要用真实用户数据验证数据库升级、删除、断线或崩溃。测试服务器使用专用工作区和凭据；本机使用全新的状态目录与 Electron userData。
 
-macOS arm64 当前已验证预览副本：`/tmp/xopc-electron-preview-20261101/installed/xopc.app`，来自实际 DMG，整体文件摘要为 `effe3a59fa2cbed8035a9f3d6b590677ce7d69827c227053dde18304c28a8c0b`。DMG 为 `/tmp/xopc-electron-preview-20261101/xopc-preview-arm64.dmg`，SHA-256 为 `3fa5dcc22cb19f28818dc3995f6b2b66773ee1b86ebf17511786e962658730b4`。这是 Developer ID 签名、尚未公证的内部预览。它包含远端聊天与只读观察，不包含完整 P2b/P3/P4。后续代码中的执行账本/监督器尚未在该应用中接入。
+macOS arm64 当前已验证预览副本：`/tmp/xopc-d3b-lock-delivery/installed/xopc.app`，来自实际 DMG，整体文件摘要为 `8630225aa778288202abbe9c74c1421a21a8c8d5d06c38c7829657d0a59af229`。DMG 为 `/tmp/xopc-d3b-lock-delivery/xopc-preview-arm64.dmg`，SHA-256 为 `bb15eb26f2d44ae253bcc39ad0f679134ecc1ce5c29252f9ef051a128a0ba1b8`。这是 Developer ID 签名、尚未公证的内部预览。它包含远端聊天与只读观察，不包含完整 P2b/P3/P4。后续代码中的执行账本/监督器尚未在该应用中接入。
 
 在仓库终端运行隔离启动器。它创建私有目录、随机空闲 Gateway 端口和专用 token，清除继承的 xopc 路径及模型凭据；不会复用真实用户数据库或默认端口：
 
 ```sh
 node scripts/launch-electron-sandbox.mjs \
-  --app /tmp/xopc-electron-preview-20261101/installed/xopc.app
+  --app /tmp/xopc-d3b-lock-delivery/installed/xopc.app
 ```
 
 终端会打印测试目录。重启复用该目录时，显式加上 `--state /tmp/实际打印的目录 --reuse`。启动远端连接入口再加 `--remote`；该标志只打开连接页，不启动本地 Agent。目录和报告不要删除，便于核查失败。
@@ -46,7 +46,7 @@ node scripts/launch-electron-sandbox.mjs \
 5. 本机停止后，设备能力立即不可用；勾选本机能力的未发送草稿应保留，不应悄悄改在服务器执行。主动取消勾选后才允许发送服务器任务。
 6. 撤销设备、退出应用或切换 Gateway 后不自动恢复本机批准。服务器撤销未确认与本机已停止必须分别显示。
 
-当前原生截图验收仍待解锁本机后完成，不能将上述检查当作已通过结果。截图实际进入模型后遵循既有会话保存策略；上传传输缓存使用短期内存帧，不等于会话中没有图像。
+当前聊天窗口截图的原生取消/批准及实际模型图像链路已通过；显示器录制、其他平台和新增能力WAN仍未验收，不能将这些项目当作已通过。截图实际进入模型后遵循既有会话保存策略；上传传输缓存使用短期内存帧，不等于会话中没有图像。
 
 ## 自动验证与最终合并
 

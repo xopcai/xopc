@@ -3,12 +3,13 @@ import { dirname, join, resolve } from 'node:path';
 import { release } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, powerMonitor, safeStorage, session } from 'electron';
 
 import { DesktopEnrollmentManager, type DesktopEnrollmentAction } from '../desktop/enrollment.js';
 import { DesktopIdentityStore } from '../desktop/device-identity.js';
 import { DesktopObservationManager } from '../desktop/observation-manager.js';
 import { selectDesktopScreenSession } from '../desktop/screen-session.js';
+import { installDesktopSessionBoundary } from '../desktop/session-boundary.js';
 import { RemoteChatStateStore } from '../chat/state.js';
 import { RemoteShellWindow } from '../shell/window.js';
 
@@ -77,6 +78,8 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
   });
   const stopObservation = () => { observation.stop(); void shell?.setHostOrigin().catch(() => {}); };
   const cancelDesktop = () => { stopObservation(); desktop.cancel(); };
+  const removeSessionBoundary = installDesktopSessionBoundary(powerMonitor, cancelDesktop);
+  window.once('closed', removeSessionBoundary);
   const desktop = new DesktopEnrollmentManager({ manager, store: desktopStore, visible,
     consent: async (binding, signal, reenroll) => {
       if (window.isDestroyed() || !window.isVisible() || window.isMinimized() || signal.aborted) return false;

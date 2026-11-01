@@ -1,0 +1,139 @@
+{
+  "passed": false,
+  "startedAt": "2026-10-31T23:55:43.248Z",
+  "checks": {
+    "nativeApprovalCreatesIndependentIdentity": true,
+    "actualAgentDiscoveryAndSignedElectronStateInvocation": true,
+    "explicitDesktopOriginAcceptedThroughShellAndGateway": true
+  },
+  "scope": "Installed macOS runtime with OS safeStorage, native granular consent, independently authenticated state-only Host and explicit chat origin against a bundled Gateway; synthetic inference and same-host SSH-loopback, no screenshot/files/commands or physical WAN claim",
+  "interactions": [
+    {
+      "label": "approve first enrollment",
+      "startedAt": "2026-10-31T23:56:26.810Z",
+      "status": "native-dialog-returned",
+      "pid": 52064,
+      "finishedAt": "2026-10-31T23:57:01.276Z"
+    },
+    {
+      "label": "approve state observation",
+      "startedAt": "2026-10-31T23:57:01.682Z",
+      "status": "native-dialog-returned",
+      "pid": 52064,
+      "finishedAt": "2026-10-31T23:57:09.393Z"
+    }
+  ],
+  "nativeCancelCovered": false,
+  "packageBefore": {
+    "files": 1424,
+    "sha256": "81376f6b00ffd43204088f96aa04a145e8f132011e673f1c2c941df628419093"
+  },
+  "runtime": {
+    "executable": "/tmp/xopc-p2a2-d3-delivery/native-automation/xopc.app/Contents/MacOS/xopc",
+    "appAsar": "/tmp/xopc-p2a2-d3-delivery/native-automation/xopc.app/Contents/Resources/app.asar",
+    "cwd": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-LNXEj3",
+    "rendererCdpOnly": true,
+    "preserveBrowserDefaults": false,
+    "fuses": {
+      "0": 49,
+      "1": 49,
+      "2": 48,
+      "3": 48,
+      "4": 49,
+      "5": 49,
+      "6": 48,
+      "7": 48,
+      "8": 49,
+      "version": "1"
+    },
+    "pid": 52064
+  },
+  "inferenceRequests": [
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search"
+      ],
+      "toolResults": 0,
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_device_get_state_3beb383630f3",
+        "phone_use"
+      ],
+      "toolResults": 1,
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [
+        "apply_patch",
+        "automation",
+        "exec_command",
+        "find",
+        "grep",
+        "list_dir",
+        "mcp_setup",
+        "publish_artifacts",
+        "read_file",
+        "review_workspace",
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "codemode",
+        "tool_search",
+        "device__desktop_device_get_state_3beb383630f3",
+        "phone_use"
+      ],
+      "toolResults": 2,
+      "explicitDesktopTurn": true
+    },
+    {
+      "tools": [],
+      "toolResults": 0,
+      "explicitDesktopTurn": true
+    }
+  ],
+  "error": "Error: Acceptance condition deadline exceeded\n    at until (file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:36:9)\n    at async file:///Users/micjoyce/.codex/worktrees/gateway-p2a1-s4/xopc/scripts/verify-electron-desktop-enrollment.mjs:205:5",
+  "logs": "🚀 Starting xopc gateway...\n   Bind: loopback (127.0.0.1)\n   Port: 50232\n\nPress Ctrl+C to stop\n\n[GatewayLock] Lock acquired: pid=51977, lockPath=/Users/micjoyce/.xopc/locks/gateway.8fca57b2.lock\n[GatewayRunLoop] Starting gateway server...\n[GatewayServer] Starting gateway server on 127.0.0.1:50232...\n✅ Gateway started\n   URL: http://127.0.0.1:50232\n   Token: [redacted]\n\n[GatewayServer] Gateway server running at http://127.0.0.1:50232\n",
+  "applicationOutput": "\nDevTools listening on ws://127.0.0.1:50254/devtools/browser/314c5337-e815-44e9-9648-a1bfaee60b64\n[52064:1101/075710.808978:ERROR:electron/shell/browser/ui/message_box_mac.mm:217] CloseMessageBox called with nonexistent ID\n",
+  "failureStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-native-enrollment-LNXEj3",
+  "finishedAt": "2026-10-31T23:57:41.363Z"
+}
