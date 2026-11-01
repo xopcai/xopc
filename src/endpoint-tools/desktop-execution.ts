@@ -1,4 +1,5 @@
 import { endpointDesktopExecutionAuthoritySchema, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import { REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
 import { REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import type { DeviceRecord } from '../storage/sqlite/device-access-repository.js';
@@ -18,6 +19,7 @@ export function assertDesktopExecutionHello(device: DeviceRecord, hello: Endpoin
     || !capabilities.includes('desktop.device-frames.v1') || !capabilities.includes('desktop.durable-execution.v1')
     || hello.tools.some(tool => tool.name === 'desktop.operation.get_status') && !capabilities.includes('desktop.operation-status.v1')
     || hello.tools.some(tool => tool.name === REMOTE_COMPUTER_CONTROL_TOOL) && !capabilities.includes('desktop.computer.v1')
+    || hello.tools.some(tool => tool.name === REMOTE_BROWSER_CONTROL_TOOL) && !capabilities.includes('desktop.browser.v1')
     || Boolean(hello.terminal) !== Boolean(grant.toolRevisions['desktop.terminal.open'])
     || hello.terminal && !capabilities.includes('desktop.terminal.v1')
     || hello.tools.length !== Object.keys(grant.toolRevisions).length

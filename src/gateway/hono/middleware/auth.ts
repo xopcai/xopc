@@ -309,7 +309,7 @@ export function auth(config?: AuthConfig) {
           || c.req.method === 'DELETE' && requestPath === '/api/devices/me'
           || c.req.method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(requestPath)
           || (device.scopes.includes('desktop.observe.screen') || device.scopes.includes('desktop.execute')
-            && desktopExecution?.active && desktopExecution.grant?.toolRevisions['desktop.computer.remote_control'])
+            && desktopExecution?.active && (desktopExecution.grant?.toolRevisions['desktop.computer.remote_control'] || desktopExecution.grant?.toolRevisions['desktop.browser.control']))
             && c.req.method === 'POST' && /^\/api\/endpoint-tools\/invocations\/[0-9a-f-]{36}\/files$/.test(requestPath)
           || (device.scopes.includes('desktop.observe.state') || device.scopes.includes('desktop.observe.screen') || desktopExecution?.active) && (
             c.req.method === 'POST' && ['/api/endpoint-tools/principals', '/api/realtime/tickets'].includes(requestPath)

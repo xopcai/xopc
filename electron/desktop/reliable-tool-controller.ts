@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
+import type { DesktopBrowserHostController } from './browser-host-controller.js';
 import { REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import { durableEndpointResultSchema, desktopOperationReceiptSchema, serverEndpointMessageSchema,
@@ -25,6 +27,7 @@ export class DesktopReliableToolController {
     reads?: DesktopWorkspaceReadSession;
     terminal?: DesktopTerminalHostController;
     computer?: DesktopComputerHostController;
+    browser?: DesktopBrowserHostController;
     availability(): EndpointAvailability;
     onTransportFailure?(): void;
   }) {}
@@ -35,10 +38,11 @@ export class DesktopReliableToolController {
   async disconnect() {
     this.closed = true; this.sendMessage = undefined;
     const terminal = await this.options.terminal?.close();
+    const browser = await this.options.browser?.close().catch(() => ({ state: 'unknown' as const }));
     const computer = await this.options.computer?.close().catch(() => ({ state: 'unknown' as const }));
     const read = await this.options.reads?.close();
     const write = await this.options.session.close();
-    return terminal?.confirmed === false || computer?.state === 'unknown' || read?.state === 'unknown' ? { state: 'unknown' as const } : write;
+    return terminal?.confirmed === false || browser?.state === 'unknown' || computer?.state === 'unknown' || read?.state === 'unknown' ? { state: 'unknown' as const } : write;
   }
   async handleMessage(input: unknown): Promise<void> {
     if (this.closed || !this.sendMessage) return;
@@ -49,7 +53,7 @@ export class DesktopReliableToolController {
       return;
     }
     if (message.type === 'tool.cancel') {
-      if (this.active === invocationId) { this.cancelRequested = true; await this.options.terminal?.close(); await this.options.computer?.close().catch(() => {}); await this.options.reads?.cancel(invocationId).catch(() => {}); await this.options.session.cancel(invocationId).catch(() => {}); }
+      if (this.active === invocationId) { this.cancelRequested = true; await this.options.terminal?.close(); await this.options.computer?.close().catch(() => {}); await this.options.browser?.close().catch(() => {}); await this.options.reads?.cancel(invocationId).catch(() => {}); await this.options.session.cancel(invocationId).catch(() => {}); }
       // The invocation handler emits its one durable outcome; cancel itself never asserts completion.
       return;
     }
@@ -92,9 +96,10 @@ export class DesktopReliableToolController {
     if (!message.payload.execution || !message.payload.confirmationRequired) { this.error(invocationId, 'PROTOCOL_ERROR', 'Durable operation intent is required'); return; }
     if (this.options.availability() !== 'foreground') { this.error(invocationId, 'ENDPOINT_NOT_FOREGROUND', 'Desktop is not foreground'); return; }
     if (!this.options.catalog.deadlineAllowed(message.payload.toolName, message.payload.deadlineAt)) { this.error(invocationId, 'TOOL_TIMEOUT', 'Durable deadline exceeds its local contract'); return; }
-    const computer = message.payload.toolName === REMOTE_COMPUTER_CONTROL_TOOL;
+    const computer = message.payload.toolName === REMOTE_COMPUTER_CONTROL_TOOL, browser = message.payload.toolName === REMOTE_BROWSER_CONTROL_TOOL;
+    if (browser && !this.options.browser) { this.error(invocationId, 'TOOL_NOT_FOUND', 'Browser control requires its dedicated controller'); return; }
     if (computer && !this.options.computer) { this.error(invocationId, 'TOOL_NOT_FOUND', 'Computer control requires its dedicated controller'); return; }
-    if (message.payload.uploadGrant && !computer) { this.error(invocationId, 'PROTOCOL_ERROR', 'Durable writes do not accept upload grants'); return; }
+    if (message.payload.uploadGrant && !computer && !browser) { this.error(invocationId, 'PROTOCOL_ERROR', 'Durable writes do not accept upload grants'); return; }
     try { this.options.catalog.validateArguments(message.payload.toolName, message.payload.arguments); }
     catch { this.error(invocationId, 'INVALID_ARGUMENTS', 'Durable arguments do not match their local contract'); return; }
     this.active = invocationId;
@@ -102,7 +107,7 @@ export class DesktopReliableToolController {
     try {
       this.send('tool.received', { invocationId });
       if (this.cancelRequested) { this.error(invocationId, 'TOOL_CANCELLED', 'Operation cancelled before execution'); return; }
-      const outcome = await (computer ? this.options.computer!.run(message.payload)
+      const outcome = await (browser ? this.options.browser!.run(message.payload) : computer ? this.options.computer!.run(message.payload)
         : message.payload.toolName === 'desktop.terminal.open' && this.options.terminal ? this.options.terminal.run(message.payload) : this.options.session.invoke(message.payload, { beforeStart: () => {
         if (this.options.availability() !== 'foreground') throw new Error('DESKTOP_EXECUTION_NOT_FOREGROUND');
       } }));
@@ -137,6 +142,7 @@ export class DesktopReliableToolController {
     catch {
       this.closed = true; this.sendMessage = undefined;
       void this.options.computer?.close().catch(() => {});
+      void this.options.browser?.close().catch(() => {});
       void this.options.session.close().catch(() => {});
       this.options.onTransportFailure?.();
       throw new Error('DESKTOP_EXECUTION_TRANSPORT_FAILED');

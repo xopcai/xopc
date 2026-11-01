@@ -4,12 +4,16 @@ import { buildDevicePairingProof, desktopPairingInvitationSchema, desktopExecuti
 import { endpointHelloSigningPayload, endpointToolContentSchema, SCREEN_CAPTURE_MAX_BYTES, desktopOperationIntentSchema, toolInvokePayloadSchema,
   type EndpointHelloPayload, type DesktopOperationIntent } from '@xopcai/endpoint-tools-protocol';
 import { endpointToolRevision, type EndpointToolFile, type EndpointToolUploadGrant } from '@xopcai/endpoint-tools-client';
+import { REMOTE_BROWSER_FRAME_MAX_BYTES, REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
 import { COMPUTER_FRAME_MAX_BYTES, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 import { z } from 'zod';
 
 import { DesktopIdentityStore, type DesktopBinding, type DesktopIdentity } from './device-identity.js';
 import { DesktopDeviceFrameSigner } from '../../src/endpoint-tools/desktop-device-frame.js';
 import { verifyDesktopAuthorityResponse } from '../../src/endpoint-tools/desktop-authority-response.js';
+
+type DesktopControlFrameUpload = { endpointId: string; deviceId: string; invocationId: string; grant: EndpointToolUploadGrant;
+  approved: DesktopExecutionGrant; authorizationRevision: number; intent: DesktopOperationIntent; file: EndpointToolFile; signal: AbortSignal };
 
 export type DesktopAuthTransport = (path: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown,
   headers?: Record<string, string>, signal?: AbortSignal) => Promise<{ status: number; body: any }>;
@@ -196,8 +200,11 @@ export class DesktopDeviceAuth {
       } finally { bytes.fill(0); }
     });
   }
-  async uploadComputerFrame(options: { endpointId: string; deviceId: string; invocationId: string; grant: EndpointToolUploadGrant;
-    approved: DesktopExecutionGrant; authorizationRevision: number; intent: DesktopOperationIntent; file: EndpointToolFile; signal: AbortSignal }) {
+  uploadComputerFrame(options: DesktopControlFrameUpload) { return this.uploadControlFrame(options, REMOTE_COMPUTER_CONTROL_TOOL); }
+  uploadBrowserFrame(options: DesktopControlFrameUpload) { return this.uploadControlFrame(options, REMOTE_BROWSER_CONTROL_TOOL); }
+  private async uploadControlFrame(options: DesktopControlFrameUpload, tool: typeof REMOTE_COMPUTER_CONTROL_TOOL | typeof REMOTE_BROWSER_CONTROL_TOOL) {
+    const maximum = tool === REMOTE_BROWSER_CONTROL_TOOL ? REMOTE_BROWSER_FRAME_MAX_BYTES : COMPUTER_FRAME_MAX_BYTES;
+    const prefix = tool === REMOTE_BROWSER_CONTROL_TOOL ? 'DESKTOP_BROWSER' : 'DESKTOP_COMPUTER';
     const approved = desktopExecutionGrantSchema.parse(structuredClone(options.approved));
     const intent = desktopOperationIntentSchema.parse(structuredClone(options.intent));
     const grant = toolInvokePayloadSchema.shape.uploadGrant.parse(structuredClone(options.grant));
@@ -210,15 +217,15 @@ export class DesktopDeviceAuth {
     if (!grant || !z.uuid().safeParse(invocationId).success || !endpointId.startsWith(deviceId + ':')
       || !z.uuid().safeParse(endpointId.slice(deviceId.length + 1)).success
       || grant.path !== `/api/endpoint-tools/invocations/${invocationId}/files` || grant.maxFiles !== 1
-      || grant.maxBytes > COMPUTER_FRAME_MAX_BYTES || source.byteLength > Math.min(grant.maxBytes, COMPUTER_FRAME_MAX_BYTES)
+      || grant.maxBytes > maximum || source.byteLength > Math.min(grant.maxBytes, maximum)
       || !(png || jpeg) || intent.gatewayId !== this.binding.gatewayId || intent.deviceId !== deviceId
-      || intent.tool !== REMOTE_COMPUTER_CONTROL_TOOL || intent.workspaceId || intent.authorizationRevision !== authorizationRevision
-      || approved.toolRevisions[REMOTE_COMPUTER_CONTROL_TOOL] !== intent.toolRevision
-      || intent.expiresAt > approved.expiresAt) throw new Error('DESKTOP_COMPUTER_UPLOAD_DENIED');
+      || intent.tool !== tool || intent.workspaceId || intent.authorizationRevision !== authorizationRevision
+      || approved.toolRevisions[tool] !== intent.toolRevision
+      || intent.expiresAt > approved.expiresAt) throw new Error(`${prefix}_UPLOAD_DENIED`);
     const bytes = Buffer.from(source);
     const valid = () => {
       signal.throwIfAborted();
-      if (Math.min(grant.expiresAt, intent.expiresAt, approved.expiresAt) <= Date.now()) throw new Error('DESKTOP_COMPUTER_UPLOAD_DENIED');
+      if (Math.min(grant.expiresAt, intent.expiresAt, approved.expiresAt) <= Date.now()) throw new Error(`${prefix}_UPLOAD_DENIED`);
     };
     try {
       return await this.serial(async () => {
@@ -229,12 +236,12 @@ export class DesktopDeviceAuth {
         const response = await this.deviceRequest(record, 'POST', `${grant.path}?name=${name}`, bytes,
           { 'content-type': mimeType, 'content-length': String(bytes.length), 'x-endpoint-id': endpointId, 'x-endpoint-upload-token': grant.token }, signal);
         if (response.status === 401) { this.access = undefined; record.phase = 'revoked'; await this.store.save(record); throw new Error('DESKTOP_AUTH_REVOKED'); }
-        if (response.status === 403) throw new Error('DESKTOP_COMPUTER_UPLOAD_DENIED');
+        if (response.status === 403) throw new Error(`${prefix}_UPLOAD_DENIED`);
         valid();
         const parsed = endpointToolContentSchema.safeParse(response.body?.payload);
         if (response.status !== 201 || response.body?.ok !== true || !parsed.success || parsed.data.type !== 'file'
           || parsed.data.mimeType !== mimeType || parsed.data.name !== name || parsed.data.size !== bytes.length
-          || parsed.data.sha256 !== digest(bytes)) throw new Error('DESKTOP_COMPUTER_UPLOAD_FAILED');
+          || parsed.data.sha256 !== digest(bytes)) throw new Error(`${prefix}_UPLOAD_FAILED`);
         return parsed.data;
       });
     } finally { bytes.fill(0); }
