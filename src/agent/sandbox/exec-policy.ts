@@ -56,6 +56,7 @@ export function evaluateExecPolicy(params: {
     );
     return {
       allowed: false,
+      blockedBy: 'command',
       reason: commandResult.reason,
       sanitizedEnv: {},
       effectiveCwd: params.cwd,
@@ -80,6 +81,7 @@ export function evaluateExecPolicy(params: {
     log.warn({ cwd: params.cwd, reason: cwdResult.reason }, 'CWD blocked by path policy');
     return {
       allowed: false,
+      blockedBy: 'cwd',
       reason: `Working directory blocked: ${cwdResult.reason}`,
       sanitizedEnv: {},
       effectiveCwd: params.cwd,

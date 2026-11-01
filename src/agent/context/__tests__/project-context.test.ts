@@ -5,7 +5,8 @@ function seedConversationFixtures(): void {
   ensureFixtureConversation("958be7fd-89d5-48d0-8a78-4d900096a8fb", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"s1","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"s1"}});
   ensureFixtureConversation("7f9f0629-ac4b-4546-8f45-0d071b02634b", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"project-memory","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"project-memory"}});
 }
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,6 +16,8 @@ import type { ProjectTaskContext } from '../project-context.js';
 import { ProjectService } from '../../../projects/index.js';
 import type { Project } from '../../../projects/types.js';
 import { writeKnowledgeItem } from '../../../knowledge-memory/index.js';
+import { ExecutionEnvironmentStore } from '../../../execution-environments/store.js';
+import { LocalWorktreeManager } from '../../../execution-environments/local-worktree-manager.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
@@ -145,6 +148,47 @@ describe('buildActiveProjectContextForPrompt', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('uses the bound worktree instead of directing commands to the source checkout', async () => {
+    const repositoryRoot = join(stateDir, 'repository');
+    mkdirSync(repositoryRoot);
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: repositoryRoot, encoding: 'utf8' });
+    git('init', '-b', 'main');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@xopc.local', 'commit', '--allow-empty', '-m', 'initial');
+    const projects = new ProjectService();
+    const scopedProject = projects.create({ name: 'Worktree Project', workspaceRoot: repositoryRoot });
+    const conversationId = '958be7fd-89d5-48d0-8a78-4d900096a8fb';
+    ensureSessionRecord(conversationId, repositoryRoot, { agentId: 'main' });
+    projects.attachSession(conversationId, scopedProject.id);
+    const store = new ExecutionEnvironmentStore();
+    const environment = await new LocalWorktreeManager({ store, stateDir }).provisionManagedWorktree({
+      projectId: scopedProject.id, repositoryPath: repositoryRoot,
+    });
+    store.bind({ conversationId, environmentId: environment.id });
+
+    const text = buildActiveProjectContextForPrompt(conversationId, { includeKnowledge: false });
+
+    expect(text).toContain(`Workspace root: ${environment.rootPath}`);
+    expect(text).toContain(`Source repository (reference only): ${environment.repositoryRoot}`);
+    expect(text).toContain('Run commands and file operations in this session workspace');
+    expect(text).not.toContain(`Workspace root: ${environment.repositoryRoot}`);
+    expect(text).not.toContain('This project session uses the project workspace');
+  });
+
+  it('keeps the project workspace when no execution environment is bound', () => {
+    const repositoryRoot = join(stateDir, 'project');
+    mkdirSync(repositoryRoot);
+    const projects = new ProjectService();
+    const scopedProject = projects.create({ name: 'Checkout Project', workspaceRoot: repositoryRoot });
+    const conversationId = '958be7fd-89d5-48d0-8a78-4d900096a8fb';
+    ensureSessionRecord(conversationId, repositoryRoot, { agentId: 'main' });
+    projects.attachSession(conversationId, scopedProject.id);
+
+    const text = buildActiveProjectContextForPrompt(conversationId, { includeKnowledge: false });
+
+    expect(text).toContain(`Workspace root: ${scopedProject.workspaceRoot}`);
+    expect(text).not.toContain('Source repository (reference only)');
   });
 
   it('keeps objective-relevant project knowledge alongside recent knowledge', () => {
