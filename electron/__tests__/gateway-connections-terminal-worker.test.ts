@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Duplex } from 'node:stream';
 
-import { canonicalJson } from '@xopcai/endpoint-tools-protocol';
+import { canonicalJson, type DesktopTerminalOutput } from '@xopcai/endpoint-tools-protocol';
 import { expect, it, vi } from 'vitest';
 
 import { DesktopContainerEngine } from '../desktop/container-engine.js';
@@ -14,6 +14,7 @@ import { DesktopExecutionLease, DesktopOperationJournal } from '../desktop/opera
 import { DesktopOperationSupervisor } from '../desktop/operation-supervisor.js';
 import { DesktopTerminalLedger } from '../desktop/terminal-input-ledger.js';
 import { DesktopTerminalWorker } from '../desktop/terminal-worker.js';
+import { DesktopTerminalBroker } from '../desktop/terminal-broker.js';
 
 it('fences cancellation during creation and retries independent removal without starting a late terminal', async () => {
   const workspaceId = randomUUID(), ownerId = randomUUID(), args = { workspaceId, argv: ['/bin/sh'] };
@@ -51,31 +52,33 @@ it.skipIf(process.env.XOPC_CONTAINER_LIVE !== '1')('keeps the root intent runnin
     argumentHash: createHash('sha256').update(canonicalJson(args)).digest('hex'), toolRevision: 'a'.repeat(64), authorizationRevision: 1, expiresAt: Date.now() + 60000 };
   const lease = new DesktopExecutionLease(root), journal = new DesktopOperationJournal(lease), ledger = new DesktopTerminalLedger(lease, binding);
   const resources = new DesktopContainerResources(join(root, 'resources'), encryption), frames: Array<{ bytes: string; sequence: number }> = [];
-  let current = true;
-  const worker = new DesktopTerminalWorker({ engine, resources, intent, ownerId, workspaceId, imageId, binding, ledger, current: () => current, emit: frame => { frames.push(frame); } });
+  let current = true, emit: ((frame: DesktopTerminalOutput) => void) | undefined;
+  const worker = new DesktopTerminalWorker({ engine, resources, intent, ownerId, workspaceId, imageId, binding, ledger, current: () => current, emit: frame => { emit!(frame); } });
   const supervisor = new DesktopOperationSupervisor({ journal, authority: () => ({ gatewayId: intent.gatewayId, deviceId: intent.deviceId, workspaceId,
     authorizationRevision: 1, toolRevision: intent.toolRevision, expiresAt: intent.expiresAt, active: current }), createWorker: () => worker });
+  const scope = { ...binding, gatewayId: intent.gatewayId, deviceId: intent.deviceId, workspaceId, authorizationRevision: 1 };
+  const confirmInput = vi.fn(async () => true);
+  const broker = new DesktopTerminalBroker({ current: () => current, confirmOpen: async () => true, confirmInput,
+    create: (_scope, _intent, callback) => { emit = callback; return { worker, supervisor }; }, emit: frame => { frames.push(frame); } });
   try {
-    let settled = false;
-    const execution = supervisor.execute({ intent, arguments: args, invocationId: randomUUID(), connectionInstanceId: binding.connectionInstanceId, signal: new AbortController().signal });
-    void execution.then(() => { settled = true; });
-    expect(await worker.ready).toEqual(binding);
-    expect(journal.inspect(intent)).toMatchObject({ state: 'running', executionStopped: false }); expect(settled).toBe(false);
-    await worker.resize(binding, 100, 30);
+    expect(await broker.open({ scope, intent, args, invocationId: randomUUID(), signal: new AbortController().signal })).toMatchObject({ ...binding, state: 'running', executionStopped: false });
+    expect(journal.inspect(intent)).toMatchObject({ state: 'running', executionStopped: false });
+    await broker.resize(scope, 100, 30);
     await expect(worker.resize({ ...binding, generation: randomUUID() }, 100, 30)).rejects.toThrow('BINDING_INVALID');
     const input = { ...binding, inputId: randomUUID(), sequence: 1, bytes: Buffer.from("printf x >> /home/node/count; printf 'WORKER_%s\\n' READY\r").toString('base64') };
-    expect(await worker.input(input, AbortSignal.timeout(5000))).toMatchObject({ dispatch: 'accepted' });
-    expect(await worker.input(input, AbortSignal.timeout(5000))).toMatchObject({ dispatch: 'accepted' });
+    expect(await broker.input(scope, input, AbortSignal.timeout(5000))).toMatchObject({ dispatch: 'accepted' });
+    expect(await broker.input(scope, input, AbortSignal.timeout(5000))).toMatchObject({ dispatch: 'accepted' });
+    expect(confirmInput).toHaveBeenCalledTimes(2);
     const output = () => Buffer.concat(frames.map(frame => Buffer.from(frame.bytes, 'base64'))).toString();
     await vi.waitFor(() => expect(output()).toContain('WORKER_READY'), { timeout: 5000 });
-    worker.acknowledge({ ...binding, throughSequence: frames.at(-1)!.sequence });
+    broker.acknowledge(scope, { ...binding, throughSequence: frames.at(-1)!.sequence });
     const record = await resources.load(intent); expect(record.phase).toBe('created');
     current = false;
-    const outcome = await execution;
-    expect(outcome.receipt.executionStopped).toBe(true);
-    expect(['stopped', 'unknown']).toContain(outcome.receipt.state);
+    expect(await broker.stop()).toEqual({ confirmed: true });
+    expect(journal.inspect(intent)?.executionStopped).toBe(true);
+    expect(['stopped', 'unknown']).toContain(journal.inspect(intent)?.state);
     expect(await engine.inspect(record.containerId!, { ownerId, workspaceId, operationId: intent.operationId })).toBeUndefined();
-    await expect(worker.input(input, AbortSignal.timeout(1000))).rejects.toThrow('AUTHORITY_INVALID');
+    await expect(broker.input(scope, input, AbortSignal.timeout(1000))).rejects.toThrow('AUTHORITY_INVALID');
     expect(await resources.load(intent)).toMatchObject({ phase: 'stopped' });
     const repeated = await supervisor.execute({ intent, arguments: args, invocationId: randomUUID(), connectionInstanceId: randomUUID(), signal: new AbortController().signal }).catch(error => error);
     expect(repeated instanceof Error).toBe(true);
