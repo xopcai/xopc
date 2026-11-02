@@ -25,6 +25,7 @@ parser.add_argument("--follow-cases", type=int, default=150)
 parser.add_argument("--concurrency", type=int, default=2)
 parser.add_argument("--dialogue-fixtures")
 parser.add_argument("--eq-case-id")
+parser.add_argument("--no-transport-retries", action="store_true")
 args = parser.parse_args()
 out = Path(args.out)
 upstream = Path(args.upstream)
@@ -54,7 +55,7 @@ def completion(role, messages, **options):
     body = {"caseId": local.case_id, "suite": local.suite, "role": role, "messages": messages, **options}
     context = {"owner": out.name, "caseId": local.case_id, "role": role,
                "inputSha256": hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()}
-    for attempt in range(2 if role != "evaluated" else 1):
+    for attempt in range(2 if role != "evaluated" and not args.no_transport_retries else 1):
         try:
             with shared_lease("judge" if role == "judge" else "generation", {**context, "attempt": attempt + 1}):
                 return bridge("/complete", body)
@@ -77,10 +78,10 @@ def finish(result):
     return result
 
 
-def run_with_restart(function, doc):
+def run_with_restart(function, doc, allow_restart=True):
     local.capture_override = None
     result = function(doc)
-    if result.get("error") and "CandidateTransportFailure:" in result["error"]:
+    if allow_restart and result.get("error") and "CandidateTransportFailure:" in result["error"]:
         original = out / "cases" / (result["caseId"] + ".json")
         retained = out / "case-attempts" / (result["caseId"] + ".first.json")
         shutil.copyfile(original, retained)
@@ -125,7 +126,8 @@ def eq_completion(**kwargs):
         # passed as a labeled user prefix; private persona and judging prompts stay out.
         options["systemContext"] = "\n".join(m["content"] for m in kwargs["messages"] if m["role"] == "system")
     try:
-        return CompletionResult(**completion(role, kwargs["messages"], **options))
+        response = completion(role, kwargs["messages"], **options)
+        return CompletionResult(**{key: value for key, value in response.items() if key not in {"latencyMs", "firstDeltaMs"}})
     except Exception as error:
         raise APIError(str(error)) from error
 
@@ -138,11 +140,13 @@ dimensions = [line.split(":", 1)[0].strip() for line in rubric.splitlines() if "
 def run_scripted(doc):
     local.case_id, local.suite = getattr(local, "capture_override", None) or doc["id"], "personal-p0-scripted"
     started = time.monotonic()
-    result = {"caseId": doc["id"], "category": doc["category"], "transcript": []}
+    result = {"caseId": doc["id"], "category": doc["category"], "transcript": [], "turnObservations": []}
     try:
         for user_text in doc["userTurns"]:
             result["transcript"].append({"role": "user", "content": user_text})
-            answer = completion("evaluated", result["transcript"])["content"]
+            response = completion("evaluated", result["transcript"])
+            answer = response["content"]
+            result["turnObservations"].append({"turn": len(result["turnObservations"]) + 1, "latencyMs": response.get("latencyMs"), "firstDeltaMs": response.get("firstDeltaMs"), "usage": response.get("usage")})
             result["transcript"].append({"role": "assistant", "content": answer})
         result["assistantTurns"] = len(doc["userTurns"])
     except Exception as error:
@@ -223,7 +227,7 @@ except Exception as error:
 if args.dialogue_fixtures:
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as pool:
-        for result in pool.map(lambda doc: run_with_restart(run_scripted, doc), scripted):
+        for result in pool.map(lambda doc: run_with_restart(run_scripted, doc, not args.no_transport_retries), scripted):
             results.append(result)
             save(out / "scripted-summary.json", {"expected": len(scripted), "attempted": len(results),
                  "errors": sum(bool(r.get("error")) for r in results), "scored": False})

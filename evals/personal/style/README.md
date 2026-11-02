@@ -340,3 +340,76 @@ fresh retry state and non-retry of valid failures; `tsconfig.check.json` checks 
 TypeScript evaluator. Model calls retain the specified GPT-5.6 Sol candidate and
 GPT-6.1 Sol judge/simulated user. A fixed6Follow+1EQ control-only pilot is excluded from
 all quality aggregates.
+
+## Chinese multi-turn assistant flow, v1 (2026-11-02)
+
+See [the construction and acceptance plan](../../../docs/design/personal-dialogue-style-evolution-plan.md).
+`assistant-flow-dialogues-v1.json` fixes 12 four-turn Chinese scripts: six development,
+six validation. It covers follow-ups, corrections, topic switching, scoped style
+exceptions, required detail, grounded disagreement and draft-versus-send boundaries.
+These are product-authored disclosed regressions, not human satisfaction data or
+an official EQ/FollowBench score. Live tool execution transitions are a later phase.
+
+```sh
+node evals/personal/style/prepare-assistant-flow.mjs /absolute/new-cycle
+node evals/personal/style/run-assistant-flow-cycle.mjs /absolute/new-cycle
+pnpm exec tsx evals/personal/style/report-assistant-flow.mts /absolute/new-cycle
+```
+
+Preparation freezes current production source and one experimental shared style rule,
+checks that only the declared source module differs, and preregisters the split,
+model identities, budgets and gates. It refuses existing directories. The candidate
+is only in its frozen checkout; no production default is changed.
+
+The user-specified candidate model is `xopc-cloud/openai-codex/gpt-5.6-sol`, with
+`xopc-cloud/openai-codex/gpt-6.1-sol` judging. Existing style reasoning is off, evaluator
+reasoning low, fresh default profile, two concurrent isolated scenes; no model fallback.
+`--no-transport-retries` retains each failed original attempt without restarting it.
+Only fixed user text enters the production Personal; expectations stay evaluator-side.
+Captures retain per-turn completion and first-delta latency separately, plus final
+runtime usage. Model endpoints also use control-plane physical HTTP instrumentation.
+
+`compare-p0.mts --assistant-flow --style-focus --evidence-focus --runtime-context`
+adds conversation-flow and preference-scope errors with the same exact-quote validation.
+Both display orders are judged; failed scene captures remain unjudgeable slots in the
+planned denominator. Invalid judge output remains an error; there is no tiebreak/retry.
+The two order calls are correlated observations from one judge.
+
+`report-assistant-flow.mts` reports development and validation separately, including
+wins/losses/ties/discordance/unresolved, either-order major issues and p95 completion
+latency. It validates original manifests, preregistration and independent HTTP/runtime
+usage evidence. It imports capture evidence into `personal-style` as `manual_review`,
+not a fabricated binary quality pass. The improvement page has the blind comparison,
+A/B text previews and explicit pending human-review state. Raw human A/B queues are
+separate from condition mapping; reviewers should not see mappings/model decisions
+until their independent vote is saved. This read-only Dashboard does not submit votes.
+
+The first report cannot adopt the candidate: two independent human reviewers are
+still required. Original decisions are immutable. Later human reviews are new evidence
+supplements and, when appropriate, a newly registered decision; never overwrite the
+first rejection. Costs without authoritative receipts remain unknown. Local raw synthetic
+transcripts, traces, failures, judge inputs and artifacts stay ignored; a portable report
+and its hashes may be committed separately.
+
+For a new preregistered iteration, specify all experimental inputs explicitly:
+
+```sh
+node evals/personal/style/prepare-assistant-flow.mjs /absolute/new-cycle \
+  --fixtures evals/personal/style/assistant-flow-dialogues-v5.json \
+  --candidate evals/personal/style/assistant-flow-candidate-v5.json \
+  --previous-cycle /absolute/previous-cycle
+```
+
+Candidate specs may replace exact source fragments in one declared module. The
+preparer requires one match per fragment and freezes each condition before calls.
+Previously exposed scenes must stay in development; new validation IDs cannot overlap
+any prior-cycle scene. Independent analysis checks alternating roles, exact user text,
+complete dimension sets and grounded quotes, so malformed evidence cannot become a
+zero-error result. A new candidate is not a retry of an already scored candidate.
+
+The current user-authorized stopping condition is an automated benchmark pass;
+independent human review remains pending. Automated success includes campaign validity
+and physical-request/usage reconciliation as well as every original style gate.
+Stopping automated iteration does not adopt production defaults. Continuous selection
+until pass induces selection bias; disclose every attempt and retain a separate human
+adoption gate. See [iteration evidence and results](../../../docs/design/personal-dialogue-style-self-iteration-2026-11-02.md).

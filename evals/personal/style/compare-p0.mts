@@ -12,9 +12,11 @@ const { values } = parseArgs({ options: {
   concurrency: { type: 'string', default: '2' }, kind: { type: 'string', default: 'scripted' }, fixtures: { type: 'string' },
   judge: { type: 'string', default: 'xopc-cloud/openai-codex/gpt-6.1-sol' },
   'right-supplement': { type: 'string' }, 'left-supplement': { type: 'string' },
+  'assistant-flow': { type: 'boolean' },
   'style-focus': { type: 'boolean' }, 'tone-scale': { type: 'boolean' }, 'evidence-focus': { type: 'boolean' }, 'runtime-context': { type: 'boolean' }, 'recover-call': { type: 'string' },
 } });
 if (!values.left || !values.right || !values.out || !['scripted', 'eq', 'follow'].includes(values.kind!)) throw new Error('Pass --left, --right, --out and --kind scripted|eq|follow');
+if (values['assistant-flow'] && !values['style-focus']) throw new Error('--assistant-flow requires --style-focus');
 if (values['tone-scale'] && !values['style-focus']) throw new Error('--tone-scale requires --style-focus');
 if (values['evidence-focus'] && !values['style-focus']) throw new Error('--evidence-focus requires --style-focus');
 if (values['runtime-context'] && !values['style-focus']) throw new Error('--runtime-context requires --style-focus');
@@ -57,7 +59,7 @@ for (const [index, supplement] of supplements.entries()) {
 for (const root of [leftRoot, rightRoot]) {
   const completion = read(join(root, 'completion.json'));
   if (completion.sourceChanged) throw new Error('Source changed during capture');
-  if (values.kind === 'scripted' && (completion.exitCode !== 0 || !read(join(root, 'summary.json')).complete)) throw new Error('Scripted capture is incomplete');
+  if (!values['assistant-flow'] && values.kind === 'scripted' && (completion.exitCode !== 0 || !read(join(root, 'summary.json')).complete)) throw new Error('Scripted capture is incomplete');
   if (values.kind === 'eq' && !read(join(root, 'eq-summary.json')).complete && !supplements[root === leftRoot ? 0 : 1]) throw new Error('EQ capture is incomplete');
 }
 type Message = { role: string; content: string };
@@ -78,6 +80,7 @@ const inboundTimestampEnvelopes = (root: string, id: string): string[] => {
   } finally { db.close(); }
 };
 const pairs: Pair[] = [];
+const unjudgeable: Array<{ caseId: string; reason: string }> = [];
 const pair = (id: string, category: string, context: string, expectations: string, transform: (row: any) => Message[]) => {
   const paths = [leftRoot, rightRoot].map(root => join(root, 'cases', `${id}.json`));
   const captures = paths.map(read);
@@ -91,7 +94,10 @@ const pair = (id: string, category: string, context: string, expectations: strin
       [`${index === 0 ? 'left' : 'right'}SupplementalSource`]: replacement };
     paths[index] = replacement; captures[index] = read(replacement);
   }
-  if (captures.some(c => c.error)) throw new Error(`Cannot judge failed capture ${id}`);
+  if (captures.some(c => c.error)) {
+    if (!values['assistant-flow']) throw new Error(`Cannot judge failed capture ${id}`);
+    unjudgeable.push({caseId:id, reason:'Incomplete capture: ' + captures.map(c => c.error ?? 'complete').join(' / ')}); return;
+  }
   const histories = captures.map(transform);
   const runtimeContexts = values['runtime-context'] ? paths.map((path, index) => {
     const envelopes = inboundTimestampEnvelopes(resolve(path, '..', '..'), captures[index].captureCaseId ?? id);
@@ -159,8 +165,14 @@ relationship_generalization: 0=scope supported by facts or explicitly evidenced 
 coaching_register: 0=role-appropriate concrete language (requested explanation/structure allowed); 1=one polished reflection/explanatory closing with little new value; 2=repeated acknowledgment-summary-principle wrappers or generic maxims; 3=training/therapy-style voice dominates or the user visibly objects; 4=continues despite correction or materially obstructs the practical conversation.
 Tone-score evidence can overlap a violation, but a positive tone score does not require a violation. Keep overall quality and naturalness judgments separate.`;
 }
+if (values['assistant-flow']) {
+  system = system.replace('Each violation identifies', 'conversation_flow: Missing the current conversational move, disconnected follow-ups, unnecessary topic restarts, or stock acknowledgment/summary wrappers that obstruct the requested response. Requested detail, useful structure and brief closure are legitimate; do not reward brevity alone.\npreference_scope: Ignoring a current style preference, failing to apply its correction/revocation, or treating a single-turn exception as a permanent preference change. Judge only the visible scope; do not invent cross-session memory.\nEach violation identifies')
+    .replaceAll('"didactic_expression":[]}', '"didactic_expression":[],"conversation_flow":[],"preference_scope":[]}');
+  system += '\nEvaluate a practical Chinese assistant across the whole four-turn exchange, not a therapist persona. Keep naturalness separate from factual completeness and permissions. These are fixed continuations, not observed human satisfaction. Task requests to draft text do not authorize external sending. References to earlier assistant text must actually fit its generated history.';
+}
 const dimensions = ['overinterpretation', 'unnecessary_question', 'repeated_closing', 'premature_resolution', 'required_content_or_boundary'];
 if (values['style-focus']) dimensions.push('didactic_expression');
+if (values['assistant-flow']) dimensions.push('conversation_flow', 'preference_scope');
 const validate = (judgment: any, left: Message[], right: Message[]) => {
   if (Object.keys(judgment).sort().join() !== ['left', 'right', 'winner', 'reason', ...(values['style-focus'] ? ['naturalnessWinner', 'naturalnessReason'] : []), ...(values['tone-scale'] ? ['toneScores'] : [])].sort().join()
     || !['left', 'right', 'tie'].includes(judgment.winner) || typeof judgment.reason !== 'string') throw new Error('Malformed pair judgment');
@@ -200,7 +212,7 @@ const recoveryPath = values['recover-call'] ? resolve(values['recover-call']) : 
 const originalCall = recoveryPath ? read(recoveryPath) : undefined;
 if (originalCall && (!originalCall.error || originalCall.judge !== values.judge
   || read(join(resolve(recoveryPath!, '..'), 'registration.json')).rubric !== system)) throw new Error('Recovery requires a failed call with the identical rubric and judge');
-writeFileSync(join(out, 'registration.json'), JSON.stringify({ schemaVersion: 1, createdAt: new Date().toISOString(), judge: values.judge,
+writeFileSync(join(out, 'registration.json'), JSON.stringify({ schemaVersion: 1, assistantFlow: Boolean(values['assistant-flow']), unjudgeable, createdAt: new Date().toISOString(), judge: values.judge,
   reasoning: 'low', temperature: 0, concurrency: Number(values.concurrency), repetitionsPerPair: 2, order: 'both display orders, no discretionary tiebreak calls',
   sourceRuns: [leftRoot, rightRoot], sourceManifests: [hash(readFileSync(join(leftRoot, 'manifest.json'))), hash(readFileSync(join(rightRoot, 'manifest.json')))],
   sourceCompletions: [read(join(leftRoot, 'completion.json')), read(join(rightRoot, 'completion.json'))],
@@ -217,7 +229,7 @@ if (existsSync(join(sourceState, 'cache/model-catalog'))) cpSync(join(sourceStat
 Object.assign(process.env, { XOPC_STATE_DIR: state, XOPC_CONFIG_PATH: configPath, XOPC_CREDENTIALS_DIR: credentials,
   XOPC_LOG_DIR: join(state, 'logs'), XOPC_LOG_LEVEL: 'fatal', XOPC_LOG_CONSOLE: 'false' });
 await import('../../../src/infra/http-proxy-env.js');
-const { openXopcDatabase, closeXopcDatabase } = await import('../../../src/storage/sqlite/index.js');
+const { openXopcDatabase, closeXopcDatabase, getSqliteDatabase } = await import('../../../src/storage/sqlite/index.js');
 const { resolveModel } = await import('../../../src/providers/index.js');
 const { completeWithResolvedCredentials } = await import('../../../src/providers/model-call.js');
 openXopcDatabase({ path: join(state, 'xopc.db') });
@@ -260,9 +272,10 @@ try {
   }));
   workerErrors = workers.filter((r): r is PromiseRejectedResult => r.status === 'rejected').map(r => String(r.reason));
 } finally {
+  writeFileSync(join(out,'runtime-usage.json'),JSON.stringify({finalSnapshotGuaranteed:true,rows:getSqliteDatabase().prepare('SELECT * FROM ai_usage_events ORDER BY started_at').all()},null,2));
   closeXopcDatabase(); rmSync(state, { recursive: true, force: true });
 }
-const errors = results.filter(r => r.error).length + workerErrors.length;
-writeFileSync(join(out, 'completion.json'), JSON.stringify({ expected: jobs.length, attempted: results.length, errors,
-  workerErrors, complete: results.length === jobs.length && errors === 0, costUsd: null }, null, 2));
-process.exit(results.length === jobs.length && errors === 0 ? 0 : 1);
+const errors = results.filter(r => r.error).length + workerErrors.length + unjudgeable.length * 2;
+writeFileSync(join(out, 'completion.json'), JSON.stringify({ expected: jobs.length + unjudgeable.length * 2, unjudgeable, attempted: results.length, errors,
+  workerErrors, complete: results.length === jobs.length && unjudgeable.length === 0 && errors === 0, costUsd: null }, null, 2));
+process.exit(results.length === jobs.length && unjudgeable.length === 0 && errors === 0 ? 0 : 1);

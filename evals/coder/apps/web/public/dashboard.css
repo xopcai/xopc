@@ -24,3 +24,5 @@ aside nav a{position:relative;z-index:1;transition:color 150ms ease,background-c
 aside nav[data-sliding-ready=true] a[aria-current=page]{background:transparent}
 .navigation-indicator{position:absolute;left:0;top:0;pointer-events:none;border-radius:8px;background:var(--color-surface-panel);transition:transform 250ms cubic-bezier(.32,.72,0,1),width 250ms cubic-bezier(.32,.72,0,1),height 250ms cubic-bezier(.32,.72,0,1)}
 @media(prefers-reduced-motion:reduce){.navigation-indicator,aside nav a{transition:none}}
+
+.dialogue-message{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65}
