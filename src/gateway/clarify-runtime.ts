@@ -1,6 +1,8 @@
+export type ChannelApprovalIdentity = { channel: string; accountId: string; chatId: string; senderId: string };
+
 export type ClarificationChannelRuntime = {
   answerChoice(requestId: string, choiceIndex: number, idempotencyKey: string): boolean;
-  answerDecision(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string): boolean;
+  answerDecision(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string, identity?: ChannelApprovalIdentity): boolean;
   answerText(conversationId: string, text: string, idempotencyKey: string): boolean;
 };
 
@@ -26,6 +28,6 @@ export function answerClarificationTextFromChannel(
   return runtime?.answerText(conversationId, text, idempotencyKey) ?? false;
 }
 
-export function answerClarificationDecisionFromChannel(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string): boolean {
-  return runtime?.answerDecision(requestId, decision, idempotencyKey) ?? false;
+export function answerClarificationDecisionFromChannel(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string, identity?: ChannelApprovalIdentity): boolean {
+  return runtime?.answerDecision(requestId, decision, idempotencyKey, identity) ?? false;
 }

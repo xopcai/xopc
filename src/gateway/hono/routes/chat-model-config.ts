@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
 import { withModelConfigLock } from '../../../session/model-config-lock.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -9,6 +10,9 @@ export async function patchChatModelConfig(
   conversationId: string,
   body: Record<string, unknown>,
 ) {
+  if (body.actionApprovalMode !== undefined && !getGatewayPrincipal(c).scopes.includes('gateway.admin')) {
+    return c.json({ ok: false, error: 'Only the gateway owner can change action permissions.' }, 403);
+  }
   return withModelConfigLock(conversationId, async () => {
     const changesModel = body.model !== undefined || body.thinkingLevel !== undefined;
     if (changesModel) {

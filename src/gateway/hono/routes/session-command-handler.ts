@@ -33,6 +33,9 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
   if (!id.success || !parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session command' } }, 400);
   const command = parsed.data;
   const principal = getGatewayPrincipal(c);
+  if ('creation' in command && command.creation.actionApprovalMode === 'full' && !principal.scopes.includes('gateway.admin')) {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Full access requires gateway owner authentication' } }, 403);
+  }
   if ('input' in command) {
     const origin = command.origin.type === 'endpoint' ? endpointTurnClaimSchema.safeParse(command.origin) : null;
     if (origin && (!origin.success || !deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token))) {

@@ -14,6 +14,11 @@ export interface DelegatedTaskSummary {
 }
 
 export class TaskOriginRepository {
+  conversationIds(taskId: string): string[] {
+    return (getSqliteDatabase().prepare('SELECT conversation_id FROM task_origin_links WHERE task_id = ?')
+      .all(taskId) as { conversation_id: string }[]).map(row => row.conversation_id);
+  }
+
   owns(taskId: string, conversationId: string): boolean {
     return Boolean(getSqliteDatabase().prepare(`SELECT 1 FROM task_origin_links
       WHERE task_id = ? AND conversation_id = ?`).get(taskId, conversationId));

@@ -956,6 +956,7 @@ CREATE TABLE "session_config" (
   working_directory_override TEXT,
   response_language TEXT,
   user_context_mode TEXT CHECK (user_context_mode IN ('enabled', 'off', 'temporary')),
+  action_approval_mode TEXT CHECK (action_approval_mode IN ('ask', 'full')),
   updated_at INTEGER NOT NULL, fixed_model INTEGER NOT NULL DEFAULT 0 CHECK (fixed_model IN (0, 1)),
   FOREIGN KEY ("conversation_id") REFERENCES sessions("conversation_id") ON DELETE CASCADE
 );

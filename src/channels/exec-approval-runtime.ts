@@ -17,6 +17,7 @@ export interface ExecApprovalRequestPayload {
 export interface ExecApprovalHandler {
   isEnabled(cfg: Config, params: { channel: string; accountId?: string }): boolean;
   requestApproval(cfg: Config, payload: ExecApprovalRequestPayload): Promise<boolean>;
+  approvalRecipients?(cfg: Config, params: { accountId?: string }): string[];
 }
 
 const handlers = new Map<string, ExecApprovalHandler>();
@@ -43,4 +44,13 @@ export async function maybeRequestChannelExecApproval(params: {
     approved,
     reason: approved ? undefined : 'Exec approval denied or timed out',
   };
+}
+
+/** Existing channel confirmation floors feed the shared durable approval gate. */
+export function channelExecApprovalRequired(cfg: Config, channel: string, accountId?: string): boolean {
+  return handlers.get(channel)?.isEnabled(cfg, { channel, accountId }) ?? false;
+}
+
+export function channelApprovalRecipients(cfg: Config, channel: string, accountId?: string): string[] {
+  return handlers.get(channel)?.approvalRecipients?.(cfg, { accountId }) ?? [];
 }

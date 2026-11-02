@@ -1,3 +1,6 @@
+import type { ChannelApprovalIdentity } from '../clarify-runtime.js';
+import { channelExecApprovalRequired, channelApprovalRecipients } from '../../channels/exec-approval-runtime.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { completePhoneAssistanceFromUser, preparePhoneContinuation } from '../../phone/assistance-service.js';
 import { readClarificationPresentation, type ClarificationSubmission } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
@@ -422,9 +425,15 @@ export class GatewayAgentRunner {
       idempotencyKey, action: 'answer', response: { choiceId: choice.id } }).ok;
   }
 
-  answerClarificationDecision(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string): boolean {
+  answerClarificationDecision(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string, identity?: ChannelApprovalIdentity): boolean {
     const wait = getClarification(requestId);
-    if (!wait || wait.kind !== 'approval' || wait.status !== 'open') return false;
+    if (!wait || wait.kind !== 'approval' || wait.status !== 'open' || !identity) return false;
+    const routing = getSessionMetadata(wait.conversationId)?.routing;
+    if (!routing || routing.source !== identity.channel || routing.accountId !== identity.accountId) return false;
+    const recipients = channelApprovalRecipients(this.opts.getConfig(), identity.channel, identity.accountId);
+    if (!recipients.length && channelExecApprovalRequired(this.opts.getConfig(), identity.channel, identity.accountId)) return false;
+    if (recipients.length ? !recipients.includes(identity.senderId)
+      : routing.peerKind !== 'direct' || routing.peerId !== identity.senderId || identity.chatId !== routing.peerId) return false;
     return this.resolveClarificationResponse({ id: wait.id, expectedVersion: wait.version,
       idempotencyKey, action: 'answer', decision }).ok;
   }
@@ -599,14 +608,14 @@ export class GatewayAgentRunner {
       ? '\n\nReply with your answer, or tap an option below.'
       : '\n\nReply with your answer.';
 
-    await this.opts.getChannelManager().send({
-      channel: 'telegram',
-      chat_id: routing.peerId,
-      content: body,
-      metadata: {
-        accountId: routing.accountId,
-        ...(routing.threadId ? { threadId: routing.threadId } : {}),
-      },
+    const recipients = ctx.request.kind === 'approval'
+      ? channelApprovalRecipients(this.opts.getConfig(), 'telegram', routing.accountId) : [];
+    const channelFloor = ctx.request.kind === 'approval' && channelExecApprovalRequired(this.opts.getConfig(), 'telegram', routing.accountId);
+    const destinations = recipients.length ? recipients : !channelFloor && (ctx.request.kind !== 'approval' || routing.peerKind === 'direct') ? [routing.peerId] : [];
+    for (const chatId of destinations) await this.opts.getChannelManager().send({
+      channel: 'telegram', chat_id: chatId, content: body,
+      metadata: { accountId: routing.accountId,
+        ...(chatId === routing.peerId && routing.threadId ? { threadId: routing.threadId } : {}) },
       buttons: buttonRows,
     });
   }

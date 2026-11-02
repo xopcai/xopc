@@ -776,9 +776,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       if (phoneStopped) return { block: true, reason: 'Waiting for the user to finish operating the phone.', terminate: true };
       if (connectionStopped) return { block: true, reason: 'Waiting for the user to connect an app.', terminate: true };
+      clarificationStopped ||= isClarificationSuspended(conversationId, runId);
       if (clarificationStopped) return { block: true, reason: 'Waiting for the user to answer.', terminate: true };
       const decision = await params.turnPolicy?.beforeToolCall(externalPolicyContext(context, tools), signal);
       if (decision?.block) {
+        clarificationStopped ||= isClarificationSuspended(conversationId, runId);
         policyStopped ||= decision.terminate === true;
         if (decision.terminate) policyStopReason = decision.reason;
         return decision;

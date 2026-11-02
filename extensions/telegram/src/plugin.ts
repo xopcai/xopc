@@ -665,7 +665,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         const idx = /^\d+$/.test(suffix) ? Number(suffix) : NaN;
         const idempotencyKey = `telegram:${_accountId}:callback:${ctx.callbackQuery.id}`;
         const handled = suffix === 'approve' || suffix === 'deny'
-          ? answerClarificationDecisionFromChannel(requestId, suffix, idempotencyKey)
+          ? answerClarificationDecisionFromChannel(requestId, suffix, idempotencyKey, { channel: 'telegram', accountId: _accountId, chatId: String(ctx.chat?.id ?? ''), senderId: String(ctx.from?.id ?? '') })
           : Number.isFinite(idx) && answerClarificationChoiceFromChannel(requestId, idx, idempotencyKey);
         if (requestId && handled) {
           await ctx.answerCallbackQuery();

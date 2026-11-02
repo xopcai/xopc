@@ -139,7 +139,8 @@ export function registerAgentCapabilities(dispatcher: CapabilityDispatcher): voi
     description: 'Create a complete Agent definition and queue recoverable directory provisioning.',
     input: AgentEntrySchema,
     output: AgentMutationOutputSchema,
-    execute(input) {
+    execute(input, context) {
+      if (context.surface === 'agent' && input.runtime?.actionApprovalMode !== undefined) throw new CapabilityError('FORBIDDEN', 'Change action permissions through the owner settings.');
       const agent = translateMutationError(() => repository.create(input));
       return { ok: true as const, ...view(repository, agent) };
     },
@@ -151,8 +152,12 @@ export function registerAgentCapabilities(dispatcher: CapabilityDispatcher): voi
     description: 'Update an Agent at an exact revision.',
     input: AgentUpdateInputSchema,
     output: AgentMutationOutputSchema,
-    execute({ id, expectedRevision, patch }) {
+    execute({ id, expectedRevision, patch }, context) {
       const current = requireAgent(repository, id);
+      if (context.surface === 'agent' && patch.runtime) {
+        if (patch.runtime.actionApprovalMode !== undefined && patch.runtime.actionApprovalMode !== current.runtime?.actionApprovalMode) throw new CapabilityError('FORBIDDEN', 'Change action permissions through the owner settings.');
+        patch = { ...patch, runtime: { ...patch.runtime, actionApprovalMode: current.runtime?.actionApprovalMode } };
+      }
       const { revision: _revision, provisioningState: _state, provisioningError: _error,
         createdAt: _created, updatedAt: _updated, deletedAt: _deleted, ...entry } = current;
       const agent = translateMutationError(() => repository.update(

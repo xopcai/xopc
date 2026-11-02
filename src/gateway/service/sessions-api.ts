@@ -21,6 +21,9 @@ import type { ExportFormat, SessionListQuery } from '../../session/types.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { publicExecutionDetail } from '../../session/execution-detail.js';
 import { buildSessionTimeline } from '../../session/transcript-outline.js';
+import { getActiveClarification } from '../../storage/sqlite/clarification-wait-repository.js';
+import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
+import { commandRegistry } from '../../agent/commands/command-registry.js';
 import type { SessionPatchBody } from '../../session/patch-metadata.js';
 import { collectMediaUrisFromValues, deleteMediaUris } from '../../media/session-references.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
@@ -246,9 +249,19 @@ export class GatewaySessionsApi {
       verboseLevel?: string;
       workingDirectory?: string;
       responseLanguage?: string | null;
+      actionApprovalMode?: 'ask' | 'full' | null;
       userContextMode?: 'enabled' | 'off' | 'temporary';
     },
   ) {
+    if (body.actionApprovalMode !== undefined) {
+      const state = getSessionInputState(conversationId);
+      if (this.opts.listActiveExecutions().some(run => run.conversationId === conversationId)
+        || state.activeRunId || state.inputs.length || getActiveClarification(conversationId)
+        || commandRegistry().list(conversationId).some(command => command.status === 'running')) {
+        return Promise.resolve({ ok: false, code: 'CONFIG_CHANGED' as const,
+          error: 'Stop the active task and cancel pending questions before changing action permissions.' });
+      }
+    }
     return this.opts.getAgentService().sessionConfig.patch(conversationId, body);
   }
 

@@ -38,6 +38,7 @@ export function shouldShowHistoryLoading(status: SessionHistoryStatus | undefine
 export type ChatSessionSlice = {
   name: string | null;
   model: string;
+  actionApprovalMode?: 'ask' | 'full';
   configVersion?: number;
   localDraft?: boolean;
   modelConfigSaving?: boolean;
@@ -87,6 +88,7 @@ type ChatSessionStoreActions = {
         | 'effectiveWorkspacePath'
         | 'workspaceSource'
         | 'userContextMode'
+  | 'actionApprovalMode'
       >
     >,
   ) => void;
@@ -346,6 +348,7 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
     effectiveWorkspacePath: slice.effectiveWorkspacePath,
     workspaceSource: slice.workspaceSource,
     userContextMode: slice.userContextMode,
+    actionApprovalMode: slice.actionApprovalMode,
     historyStatus: slice.historyStatus,
     messages: cloneMessages(slice.messages),
     hasMore: slice.hasMore,
@@ -375,6 +378,7 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
   | 'effectiveWorkspacePath'
   | 'workspaceSource'
   | 'userContextMode'
+  | 'actionApprovalMode'
 > {
   if (!current) return defaultSessionMeta();
   return {
@@ -388,6 +392,7 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
     effectiveWorkspacePath: current.effectiveWorkspacePath,
     workspaceSource: current.workspaceSource,
     userContextMode: current.userContextMode,
+    actionApprovalMode: current.actionApprovalMode,
   };
 }
 

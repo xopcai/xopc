@@ -1465,8 +1465,8 @@ export class GatewayService {
     registerClarificationChannelRuntime({
       answerChoice: (requestId, choiceIndex, idempotencyKey) =>
         this.agentRunner.answerClarificationChoice(requestId, choiceIndex, idempotencyKey),
-      answerDecision: (requestId, decision, idempotencyKey) =>
-        this.agentRunner.answerClarificationDecision(requestId, decision, idempotencyKey),
+      answerDecision: (requestId, decision, idempotencyKey, identity) =>
+        this.agentRunner.answerClarificationDecision(requestId, decision, idempotencyKey, identity),
       answerText: (conversationId, text, idempotencyKey) =>
         this.agentRunner.answerClarificationText(conversationId, text, idempotencyKey),
     });

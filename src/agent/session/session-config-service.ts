@@ -14,7 +14,7 @@
  * (e.g. new per-session overrides) only touch this file.
  */
 
-import { chooseModelThinking, type ModelThinkingValue } from '@xopcai/gateway-contract';
+import { ActionApprovalModeSchema, chooseModelThinking, type ModelThinkingValue } from '@xopcai/gateway-contract';
 import { getModelThinking } from '../../providers/model-thinking.js';
 
 import { mkdir } from 'node:fs/promises';
@@ -33,6 +33,7 @@ import type { ModelManager } from '../models/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
+import { updateSessionActionApprovalMode } from '../../storage/sqlite/config-repository.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 
 const log = createLogger('SessionConfigService');
@@ -56,6 +57,7 @@ export interface PatchSessionAgentConfigInput {
   verboseLevel?: string;
   workingDirectory?: string;
   responseLanguage?: string | null;
+  actionApprovalMode?: 'ask' | 'full' | null;
   userContextMode?: 'enabled' | 'off' | 'temporary';
 }
 
@@ -81,6 +83,14 @@ export class SessionConfigService {
     conversationId: string,
     partial: PatchSessionAgentConfigInput,
   ): Promise<PatchSessionAgentConfigResult> {
+    if (partial.actionApprovalMode !== undefined) {
+      if (Object.keys(partial).some(key => !['actionApprovalMode', 'configVersion'].includes(key))) return { ok: false, error: 'Change action permissions separately from other settings.' };
+      const parsed = partial.actionApprovalMode === null ? undefined : ActionApprovalModeSchema.safeParse(partial.actionApprovalMode);
+      if (parsed && !parsed.success) return { ok: false, error: 'Invalid action approval mode' };
+      if (partial.configVersion === undefined) return { ok: false, code: 'CONFIG_CHANGED', error: 'Refresh the session configuration before changing action permissions.' };
+      const existing = await this.opts.sessionConfigStore.get(conversationId);
+      if (partial.configVersion !== (existing?.updatedAt ?? 0)) return { ok: false, code: 'CONFIG_CHANGED', error: 'Session configuration changed. Refresh and try again.' };
+    }
     const personal = isPersonalConversation(conversationId);
     const configuredThinking = personal ? undefined : resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
     if (configuredThinking && partial.thinkingLevel !== undefined && partial.thinkingLevel !== configuredThinking) {
@@ -176,6 +186,12 @@ export class SessionConfigService {
       if (!result.ok) return result;
     }
 
+    if (partial.actionApprovalMode !== undefined) {
+      if (!updateSessionActionApprovalMode(conversationId, partial.actionApprovalMode ?? undefined, partial.configVersion!,
+        this.opts.agentManager.getResolvedWorkspaceForSession(conversationId))) {
+        return { ok: false, code: 'CONFIG_CHANGED', error: 'Session configuration or execution changed. Stop the task and refresh before changing permissions.' };
+      }
+    }
     return { ok: true };
   }
 

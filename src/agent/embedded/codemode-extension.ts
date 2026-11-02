@@ -1,3 +1,4 @@
+import { markActionApprovalCore } from '../approval/action-policy.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { AgentTool, BeforeToolCallContext } from '@earendil-works/pi-agent-core';
@@ -99,6 +100,7 @@ export function createXopcCodemodeExtension(
         pi.appendEntry(customType, data);
       },
       registerTool(definition) {
+        markActionApprovalCore(definition);
         const prepare = definition.prepareLoadout;
         pi.registerTool({
           ...definition,

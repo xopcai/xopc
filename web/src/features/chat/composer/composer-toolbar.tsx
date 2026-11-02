@@ -1,6 +1,7 @@
 import { AudioLines, Plus, Send, Square } from 'lucide-react';
 import { memo, type HTMLAttributes } from 'react';
 
+import { ActionApprovalControl } from './action-approval-control';
 import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
 import { ComposerVoiceInputButton } from '@/features/chat/composer/composer-voice-input-button';
 import { interpolate } from '@/features/chat/composer/composer.types';
@@ -9,6 +10,7 @@ import { interaction } from '@/lib/interaction';
 import type { MessageBundle } from '@/i18n/messages';
 
 export interface ComposerToolbarProps {
+  conversationId?: string | null;
   disabled: boolean;
   sendDisabled?: boolean;
   sending: boolean;
@@ -155,6 +157,7 @@ export function ComposerToolbarRow({ className, ...props }: HTMLAttributes<HTMLD
 }
 
 export const ComposerToolbar = memo(function ComposerToolbar({
+  conversationId,
   disabled,
   sendDisabled = false,
   runBusy,
@@ -190,6 +193,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         onPickFiles={onPickFiles}
       />
 
+      {conversationId ? <ActionApprovalControl key={conversationId} conversationId={conversationId} disabled={disabled || runBusy || modelDisabled} /> : null}
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {showModelSelector ? (
           <ComposerModelConfigControl

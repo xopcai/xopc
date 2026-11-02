@@ -37,6 +37,7 @@ export class SessionModelRequiredError extends Error {
 
 export type SessionAgentConfig = {
   localDraft?: boolean;
+  actionApprovalMode?: 'ask' | 'full';
   thinkingLevel: string;
   configVersion?: number;
   fixedModel?: boolean;
@@ -89,6 +90,7 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
     throw new Error('Invalid session agent config response');
   }
   return {
+    actionApprovalMode: payload.actionApprovalMode === 'ask' || payload.actionApprovalMode === 'full' ? payload.actionApprovalMode : undefined,
     thinkingLevel: payload.thinkingLevel,
     configVersion: typeof payload.configVersion === 'number' ? payload.configVersion : undefined,
     fixedModel: payload.fixedModel === true,
@@ -249,12 +251,14 @@ export class SessionManager {
       configVersion?: number;
       model?: string | null;
       workingDirectory?: string;
+      actionApprovalMode?: 'ask' | 'full';
       userContextMode?: 'enabled' | 'off' | 'temporary';
     },
   ): Promise<SessionAgentConfig> {
     const draft = await readLocalSessionDraft(conversationId);
     if (draft) {
       if (draft.submission || draft.materialization) throw new Error('Resolve the pending creation command before changing its configuration');
+      if (patch.actionApprovalMode !== undefined) draft.creation.actionApprovalMode = patch.actionApprovalMode;
       if (patch.model !== undefined) draft.creation.model = patch.model ?? '';
       if (patch.thinkingLevel !== undefined) draft.creation.thinkingLevel = patch.thinkingLevel;
       if (patch.userContextMode !== undefined) draft.creation.temporary = patch.userContextMode === 'temporary';
@@ -424,6 +428,7 @@ export class SessionManager {
       temporary: options?.temporary === true,
       model: options?.initialAgentConfig?.model ?? '',
       thinkingLevel: options?.initialAgentConfig?.thinkingLevel ?? 'off',
+      actionApprovalMode: options?.initialAgentConfig?.actionApprovalMode ?? 'ask',
     };
     await saveLocalSessionDraft({ conversationId, creation, createdAt });
     return { key: conversationId, agentId: creation.agentId, projectId: creation.projectId ?? undefined,

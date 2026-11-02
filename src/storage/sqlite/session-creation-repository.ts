@@ -92,6 +92,7 @@ export function acceptSessionCommand(input: {
       setSessionConfig(conversationId, input.config ?? {
         modelOverride: creation.model, fixedModel: true,
         thinkingLevel: creation.thinkingLevel as SessionAgentConfig['thinkingLevel'],
+        actionApprovalMode: creation.actionApprovalMode,
         userContextMode: creation.temporary ? 'temporary' : 'enabled',
       }, '');
       if (creation.projectId) {
