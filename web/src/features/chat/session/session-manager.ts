@@ -255,6 +255,12 @@ export class SessionManager {
     const draft = await readLocalSessionDraft(conversationId);
     if (draft) {
       if (draft.submission || draft.materialization) throw new Error('Resolve the pending creation command before changing its configuration');
+      if (patch.workingDirectory !== undefined) {
+        if (draft.creation.projectId) throw new Error('A project controls the working directory');
+        const path = patch.workingDirectory.trim();
+        if (!path) throw new Error('Working directory is empty');
+        draft.creation.workingDirectory = path;
+      }
       if (patch.model !== undefined) draft.creation.model = patch.model ?? '';
       if (patch.thinkingLevel !== undefined) draft.creation.thinkingLevel = patch.thinkingLevel;
       if (patch.userContextMode !== undefined) draft.creation.temporary = patch.userContextMode === 'temporary';

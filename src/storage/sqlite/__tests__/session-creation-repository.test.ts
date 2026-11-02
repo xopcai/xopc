@@ -9,6 +9,7 @@ import { acceptSessionCommand, getSessionInputReceipt, claimSessionPreparation, 
 import { getSqliteDatabase } from '../transaction.js';
 import { claimNextSessionInput } from '../session-input-repository.js';
 import { deleteSessionRecord, getSessionMetadata, resetSessionRecord } from '../session-repository.js';
+import { getSessionConfig } from '../config-repository.js';
 
 describe('durable session creation', () => {
   let dir: string;
@@ -28,6 +29,10 @@ describe('durable session creation', () => {
     openXopcDatabase({ path: join(dir, 'xopc.db') });
   });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true }); });
+  it('keeps the selected draft folder when accepting the first input', () => {
+    accept({ ...command, creation: { ...command.creation, workingDirectory: dir } });
+    expect(getSessionConfig(conversationId)?.workingDirectoryOverride).toBe(dir);
+  });
 
   it('atomically receives once and survives reopening the database', () => {
     const first = accept();

@@ -93,6 +93,7 @@ export function acceptSessionCommand(input: {
         modelOverride: creation.model, fixedModel: true,
         thinkingLevel: creation.thinkingLevel as SessionAgentConfig['thinkingLevel'],
         userContextMode: creation.temporary ? 'temporary' : 'enabled',
+        ...(creation.workingDirectory ? { workingDirectoryOverride: creation.workingDirectory } : {}),
       }, '');
       if (creation.projectId) {
         if (!input.attachProject) throw new Error('Project attachment is required');
