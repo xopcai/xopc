@@ -75,10 +75,16 @@ describe('follow-up actions', () => {
     }
   });
 
-  it('keeps attachment messages out of steering and side chat', async () => {
+  it.each(['attachment', 'reference'])('steers an %s-only message while keeping side chat text-only', async kind => {
     const handlers = callbacks();
-    act(() => root.render(<ChatPendingFollowUpStack items={[{ ...item, attachments: [{ type: 'file', name: 'report.pdf' }] }]} {...handlers} />));
-    expect(container.querySelector<HTMLButtonElement>(`[aria-label="${chat.followUpQueueSteerNow}"]`)!.disabled).toBe(true);
+    const rich = kind === 'attachment'
+      ? { ...item, text: '', attachments: [{ type: 'file', name: 'report.pdf' }] }
+      : { ...item, text: '', contextRefs: [{ kind: 'note' as const, sourceId: 'note', title: 'Note', expectedVersion: '1' }] };
+    act(() => root.render(<ChatPendingFollowUpStack items={[rich]} {...handlers} />));
+    const button = container.querySelector<HTMLButtonElement>(`[aria-label="${chat.followUpQueueSteerNow}"]`)!;
+    expect(button.disabled).toBe(false);
+    act(() => button.click());
+    expect(handlers.onSteer).toHaveBeenCalledExactlyOnceWith(item.id);
     await openMenu();
     expect(menuItem(chat.followUpQueueOpenSideChat).hasAttribute('data-disabled')).toBe(true);
     expect(menuItem(chat.followUpQueueClickToEdit).hasAttribute('data-disabled')).toBe(false);

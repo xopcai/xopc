@@ -313,20 +313,21 @@ export function useChatSessionStreaming(deps: {
 
   const interruptAndSend = useCallback(
     async (content: string, attachments?: WireAttachment[], _levelOverride?: string, contextRefs?: ComposerContextRef[]) => {
-      if (!content.trim() && !attachments?.length && !contextRefs?.length) return;
+      if (!content.trim() && !attachments?.length && !contextRefs?.length) return false;
       const key = conversationIdRef.current;
-      if (!key) return;
-      if (!sendingRef.current && !streamingRef.current && !chatRunManager.isStreamingFor(key)) return;
+      if (!key) return false;
+      if (!sendingRef.current && !streamingRef.current && !chatRunManager.isStreamingFor(key)) return false;
       const trimmed = content.trim();
       if (taskId && isTaskDestructiveCommand(trimmed)) {
         setShellError('A task has one continuous conversation.');
-        return;
+        return false;
       }
       if (isBareResetCommand(trimmed) && !attachments?.length) {
         await resetCurrentSession();
         return;
       }
       await fq.addPendingFollowUp(content, attachments, contextRefs, undefined, true);
+      return true;
     },
     [
       sendingRef,

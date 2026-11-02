@@ -26,6 +26,7 @@ export interface ComposerKbdContext {
   flushSteeringDraft?: () => void | Promise<void>;
   interruptDraft?: () => void;
   steerDraft?: () => void | Promise<void>;
+  steerCurrentReply?: () => void;
   editingFollowUpId: string | null;
   editingUserTurnId?: string | null;
   onCancelUserMessageEdit?: () => void;
@@ -144,6 +145,17 @@ export const ChatComposerInput = memo(function ChatComposerInput({
       }}
       onKeyDown={(e) => {
         const k = kbdRef.current;
+        // IME confirmation must never select a picker item, submit, or insert a newline.
+        if (k.isComposing || isComposingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+
+        // Steering is a run control shortcut, even when a draft picker is open.
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey
+          && k.runBusy && !k.editingUserTurnId && !k.editingFollowUpId && !disabled && !hidden) {
+          e.preventDefault();
+          if (e.repeat) return;
+          if (k.pendingFollowUpsCount > 0 || k.valueRef.current.trim() || k.attachmentsLen > 0 || k.contextRefsLen > 0) k.steerCurrentReply?.();
+          return;
+        }
 
         // 1. Pill-aware Backspace (handles single-char deletes that should swallow whole tokens).
         if (e.key === 'Backspace' && !k.isComposing && !isComposingRef.current && !e.nativeEvent.isComposing && editorRef.current) {
@@ -218,10 +230,6 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           );
           if (e.altKey && !e.metaKey && !e.ctrlKey && hasDraft && k.runBusy && !k.editingUserTurnId && !k.editingFollowUpId) {
             void k.steerDraft?.();
-            return;
-          }
-          if ((e.metaKey || e.ctrlKey) && hasDraft && !k.editingUserTurnId && !k.editingFollowUpId) {
-            k.interruptDraft?.();
             return;
           }
           if (e.metaKey || e.ctrlKey || e.altKey) return;

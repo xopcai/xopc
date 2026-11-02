@@ -53,6 +53,83 @@ describe('composer acceptance preserves drafts', () => {
     expect(options.resetEditor).toHaveBeenCalledOnce();
   });
 
+  it.each([false, true])('steers the first queued input and preserves the whole draft (personal=%s)', async personal => {
+    const onSteerPendingFollowUp = vi.fn();
+    const onAddPendingFollowUp = vi.fn();
+    options = { ...options, personal, runBusy: true, pendingFollowUpsCount: 2,
+      firstPendingFollowUpId: 'first', onSteerPendingFollowUp, onAddPendingFollowUp,
+      wireAttachmentsPayload: () => [{ type: 'file', name: 'draft.pdf' }],
+      getContextRefs: () => [{ kind: 'note', sourceId: 'note', title: 'Draft note', expectedVersion: '1' }] };
+    await render();
+    act(() => actions.steerCurrentReply());
+    expect(onSteerPendingFollowUp).toHaveBeenCalledExactlyOnceWith('first');
+    expect(onAddPendingFollowUp).not.toHaveBeenCalled();
+    expect(options.resetEditor).not.toHaveBeenCalled();
+    expect(options.clearAttachments).not.toHaveBeenCalled();
+    expect(options.clearContextRefs).not.toHaveBeenCalled();
+  });
+
+  it.each(['text', 'attachment', 'reference'])('steers a %s draft cooperatively when the queue is empty', async kind => {
+    const onAddPendingFollowUp = vi.fn(async () => {});
+    options = { ...options, personal: true, runBusy: true, onAddPendingFollowUp };
+    if (kind !== 'text') options.getTextValue = () => '';
+    if (kind === 'attachment') {
+      options.getAttachmentCount = () => 1;
+      options.wireAttachmentsPayload = () => [{ type: 'file', name: 'draft.pdf' }];
+    }
+    if (kind === 'reference') options.getContextRefs = () => [{ kind: 'note', sourceId: 'note', title: 'Note', expectedVersion: '1' }];
+    await render();
+    await act(async () => actions.steerCurrentReply());
+    expect(onAddPendingFollowUp).toHaveBeenCalledExactlyOnceWith(options.getTextValue(),
+      kind === 'attachment' ? options.wireAttachmentsPayload() : undefined,
+      kind === 'reference' ? options.getContextRefs() : undefined, false, 'steer');
+  });
+
+  it.each(['idle', 'blocked', 'voice', 'edit-follow-up', 'edit-turn', 'steering'])('ignores shared steer while %s', async mode => {
+    const onSteerPendingFollowUp = vi.fn();
+    const onAddPendingFollowUp = vi.fn();
+    options = { ...options, runBusy: mode !== 'idle', pendingFollowUpsCount: 1,
+      firstPendingFollowUpId: 'first', onSteerPendingFollowUp, onAddPendingFollowUp,
+      blocked: mode === 'blocked', voiceActive: mode === 'voice', steeringPending: mode === 'steering',
+      editingFollowUpId: mode === 'edit-follow-up' ? 'edit' : null,
+      editingUserTurnId: mode === 'edit-turn' ? 'turn' : null };
+    await render();
+    act(() => actions.steerCurrentReply());
+    expect(onSteerPendingFollowUp).not.toHaveBeenCalled();
+    expect(onAddPendingFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('waits for interrupt acceptance and suppresses repeated submissions', async () => {
+    let resolve!: (accepted: boolean) => void;
+    const onSteeringInterrupt = vi.fn(() => new Promise<boolean>(done => { resolve = done; }));
+    options = { ...options, runBusy: true, onSteeringInterrupt };
+    await render();
+    await act(async () => { actions.interruptDraft(); actions.interruptDraft(); });
+    expect(onSteeringInterrupt).toHaveBeenCalledOnce();
+    expect(options.resetEditor).not.toHaveBeenCalled();
+    await act(async () => resolve(true));
+    expect(options.resetEditor).toHaveBeenCalledOnce();
+  });
+
+  it.each(['rejected', 'failed', 'changed', 'switched'])('retains the draft when interrupt is %s', async mode => {
+    let resolve!: (accepted: boolean) => void;
+    let reject!: (error: Error) => void;
+    options = { ...options, runBusy: true, draftScope: 'first',
+      onSteeringInterrupt: () => new Promise<boolean>((done, fail) => { resolve = done; reject = fail; }) };
+    await render();
+    await act(async () => actions.interruptDraft());
+    if (mode === 'changed') options = { ...options, getTextValue: () => 'New draft' };
+    if (mode === 'switched') options = { ...options, draftScope: 'second' };
+    await render();
+    await act(async () => {
+      if (mode === 'failed') reject(new Error('Connection lost'));
+      else resolve(mode !== 'rejected');
+    });
+    expect(options.resetEditor).not.toHaveBeenCalled();
+    expect(options.clearAttachments).not.toHaveBeenCalled();
+    expect(options.clearContextRefs).not.toHaveBeenCalled();
+  });
+
   it('clears an unchanged draft only after acceptance', async () => {
     actions.send();
     expect(options.resetEditor).not.toHaveBeenCalled();

@@ -177,7 +177,7 @@ export class GatewayAgentRunner {
           contexts.filter((context): context is AgentSourceContext => context !== null),
         );
       },
-      steer: (conversationId, content, runId) => opts.getAgentService().turnDispatcher.steerWebchatSession(conversationId, content, runId),
+      steer: (conversationId, content, runId, options) => opts.getAgentService().turnDispatcher.steerWebchatSession(conversationId, content, runId, options),
       emit: (type, payload) => {
         opts.emit(type, payload);
         if (type === 'session.input-interrupt') opts.publishRealtime('sessions', type, payload);

@@ -49,6 +49,9 @@ import {
 } from '../service/process-direct-one-shot.js';
 import { maybeEmitWebchatTts, type WebchatTtsResult } from '../service/webchat-tts.js';
 import type { AgentSourceContext, AgentSourceContextResolver } from '../source-context/types.js';
+import { summarizeSourceContext } from '../source-context/types.js';
+import { hydrateUserTurnForLlm } from './attachment-pipeline.js';
+import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
 
 export interface TurnDispatcherConfig {
   log: ContextualLogger;
@@ -178,10 +181,31 @@ export class TurnDispatcher {
    * after current tool work, before the next LLM call). See `Agent.steer`
    * in `@earendil-works/pi-agent-core`.
    */
-  async steerWebchatSession(conversationId: string, text: string, expectedRunId?: string): Promise<boolean> {
+  async steerWebchatSession(conversationId: string, text: string, expectedRunId?: string, options?: {
+    attachments?: DirectAttachment[];
+    sourceContexts?: AgentSourceContext[];
+  }): Promise<boolean> {
     const trimmed = text.trim();
-    if (!trimmed) return false;
+    if (!trimmed && !options?.attachments?.length && !options?.sourceContexts?.length) return false;
     try {
+      if (options?.attachments?.length || options?.sourceContexts?.length) {
+        const c = this.cfg;
+        const modelRef = c.modelManager.getModelForSession(conversationId);
+        const prepared = await c.prepareInboundAttachments(conversationId, options.attachments);
+        const message = await buildDirectUserMessageContent({
+          content: trimmed, attachments: prepared, conversationId, config: c.requireConfig(),
+          agentManager: c.agentManager, modelManager: c.modelManager,
+        });
+        const transcriptMessage = options.sourceContexts?.length ? {
+          ...message, metadata: { sourceContexts: options.sourceContexts.map(summarizeSourceContext) },
+        } : message;
+        const hydrated = await hydrateUserTurnForLlm({ message: transcriptMessage, modelRef });
+        const contextImages = resolveImageHandlingStrategy(modelRef) === 'native'
+          ? options.sourceContexts?.flatMap(context => context.images ?? []) ?? [] : [];
+        return await queueEmbeddedSteer(conversationId, hydrated.text, expectedRunId, {
+          images: [...hydrated.images, ...contextImages], transcriptMessage,
+        });
+      }
       return await queueEmbeddedSteer(conversationId, trimmed, expectedRunId);
     } catch (err) {
       this.log.warn({ err, conversationId }, 'steerWebchatSession failed');

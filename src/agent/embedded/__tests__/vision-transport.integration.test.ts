@@ -30,6 +30,80 @@ import { onSessionTranscriptUpdate } from '../../../session/transcript-events.js
 import { ConfigSchema } from '../../../config/schema.js';
 import { clearPendingTranscriptUserMessage, setPendingTranscriptUserMessage } from '../../inbound/attachment-pipeline.js';
 import { persistInboundAttachments } from '../../../channels/attachments/inbound-persist.js';
+import { TurnDispatcher, type TurnDispatcherConfig } from '../../inbound/turn-dispatcher.js';
+import { injectSourceContextsIntoUserMessage } from '../../source-context/injector.js';
+import { createLogger } from '../../../utils/logger.js';
+import type { AgentSourceContext } from '../../source-context/types.js';
+
+it('steers attachments and reference images through a live AgentSession and stores metadata only', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'xopc-rich-steer-'));
+  initializeTestAgentCatalog();
+  const conversationId = createConversation({ agentId: 'main' }).key;
+  const runId = randomUUID();
+  const config = ConfigSchema.parse({ userContext: { enabled: false } });
+  const store = new SessionStore({ config });
+  const unsubscribe = onSessionTranscriptUpdate(update => { void store.syncEmbeddedTranscriptUpdate(update); });
+  const image = await sharp({ create: { width: 16, height: 16, channels: 3, background: '#ff0000' } }).png().toBuffer();
+  const imagePart = { type: 'image' as const, data: image.toString('base64'), mimeType: 'image/png' };
+  const contexts: AgentSourceContext[] = [{ kind: 'note', sourceId: 'fixture-note', version: 'v1',
+    title: 'Frozen note', text: 'Use the revised design', images: [imagePart] }];
+  const dispatcher = new TurnDispatcher({
+    log: createLogger('SteeringTest'), requireConfig: () => config,
+    agentManager: { getResolvedWorkspaceForSession: () => directory },
+    modelManager: { getModelForSession: () => 'openai/gpt-4o' },
+    prepareInboundAttachments: async (_id: string, attachments: Parameters<typeof persistInboundAttachments>[0]) => persistInboundAttachments(attachments),
+  } as unknown as TurnDispatcherConfig);
+  const requests: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];
+  const server = createServer((request, response) => {
+    const chunks: Buffer[] = [];
+    request.on('data', chunk => chunks.push(Buffer.from(chunk)));
+    request.on('end', () => {
+      requests.push(JSON.parse(Buffer.concat(chunks).toString()));
+      const first = requests.length === 1;
+      const delta = first ? { role: 'assistant', tool_calls: [{ index: 0, id: 'wait-call', type: 'function',
+        function: { name: 'fixture_wait', arguments: '{}' } }] } : { role: 'assistant', content: 'Revised design received.' };
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.end(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: 'deepseek-flash', choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`
+        + `data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: first ? 'tool_calls' : 'stop' }] })}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const result = await runXopcEmbeddedTurn({ conversationId, runId, workspaceDir: directory,
+      transcriptRuntime: await createSqliteTranscriptRuntime({ conversationId, sessionStore: store }),
+      userMessage: { role: 'user', content: 'Start work.', timestamp: Date.now() },
+      systemPrompt: 'Use fixture_wait once.', thinkingLevel: 'off', timeoutMs: 10000,
+      modelRef: 'deepseek/deepseek-flash', model: { id: 'deepseek-flash', name: 'Fixture', provider: 'deepseek', api: 'openai-completions',
+        baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`, input: ['text', 'image'], reasoning: false,
+        contextWindow: 128000, maxTokens: 1000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      tools: [{ name: 'fixture_wait', label: 'Wait', description: 'Accept a steering message.', parameters: Type.Object({}),
+        execute: async () => {
+          const enriched = injectSourceContextsIntoUserMessage({ role: 'user', content: 'Change course', timestamp: Date.now() }, contexts);
+          const text = (enriched.content as Array<{ text: string }>)[0]!.text;
+          expect(await dispatcher.steerWebchatSession(conversationId, text, runId, { sourceContexts: contexts,
+            attachments: [{ type: 'image', name: 'design.png', mimeType: 'image/png', data: imagePart.data },
+              { type: 'file', name: 'brief.txt', mimeType: 'text/plain', data: Buffer.from('Updated brief').toString('base64') }],
+          })).toBe(true);
+          return { content: [{ type: 'text' as const, text: 'Ready.' }], details: {} };
+        } }],
+    });
+    expect(result, result.errorMessage).toMatchObject({ ok: true });
+    expect(requests).toHaveLength(2);
+    const wire = JSON.stringify(requests[1]);
+    expect(wire).toContain('Use the revised design');
+    expect(wire).toContain('brief.txt');
+    expect(wire.match(/"type":"image_url"/g)).toHaveLength(2);
+    const messages = await store.loadMessages(conversationId);
+    const steered = messages.find(message => message.role === 'user' && JSON.stringify(message).includes('Change course'));
+    expect(steered).toMatchObject({ media: [{ name: 'design.png' }, { name: 'brief.txt' }],
+      metadata: { sourceContexts: [{ sourceId: 'fixture-note', version: 'v1' }] } });
+    expect(JSON.stringify(steered)).not.toContain(imagePart.data);
+  } finally {
+    unsubscribe(); evictEmbeddedSessionRunner(conversationId); server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    closeXopcDatabase(); await rm(directory, { recursive: true, force: true });
+  }
+}, 15000);
 
 it.each([false, true])('delivers a tool-produced image through AgentSession to HTTP (persistent=%s)', async persistent => {
   const directory = await mkdtemp(join(tmpdir(), 'xopc-tool-image-wire-'));

@@ -249,6 +249,20 @@ export async function hydrateUserTurnForLlm(opts: {
 
 const pendingTranscriptBySession = new Map<string, TranscriptUserMessage>();
 const activeTranscriptUserBySession = new Map<string, TranscriptUserMessage>();
+const pendingSteeringTranscripts = new Map<string, TranscriptUserMessage[]>();
+
+/** Retain each queued steer separately so image bytes never enter transcript storage. */
+export function registerSteeringTranscript(conversationId: string, message: TranscriptUserMessage): () => void {
+  assertTranscriptUserMessage(message);
+  const pending = pendingSteeringTranscripts.get(conversationId) ?? [];
+  pending.push(message);
+  pendingSteeringTranscripts.set(conversationId, pending);
+  return () => {
+    const index = pending.indexOf(message);
+    if (index >= 0) pending.splice(index, 1);
+    if (pending.length === 0 && pendingSteeringTranscripts.get(conversationId) === pending) pendingSteeringTranscripts.delete(conversationId);
+  };
+}
 
 function messageTextForPendingCompare(message: AgentMessage): string {
   return joinTextBlocks(textBlocksFromContent(readAgentMessageContent(message)));
@@ -320,6 +334,13 @@ export function transformUserMessageForPersistence(
     return message;
   }
   if (conversationId) {
+    const steering = pendingSteeringTranscripts.get(conversationId);
+    const index = steering?.findIndex(pending => pendingMatchesMessage(pending, message)) ?? -1;
+    if (steering && index >= 0) {
+      const [pending] = steering.splice(index, 1);
+      if (steering.length === 0) pendingSteeringTranscripts.delete(conversationId);
+      return pending!;
+    }
     const pending = pendingTranscriptBySession.get(conversationId);
     if (pending && pendingMatchesMessage(pending, message)) {
       pendingTranscriptBySession.delete(conversationId);

@@ -28,18 +28,18 @@ const SCHEME_PREVIEW: Record<
 > = {
   default: {
     light: {
-      canvas: '#ffffff',
-      panel: '#fafafa',
+      canvas: '#f7f8fa',
+      panel: '#ffffff',
       accent: '#3a6bff',
       fg: '#111111',
       muted: '#ececec',
     },
     dark: {
-      canvas: '#0a0a0a',
-      panel: '#121212',
+      canvas: '#14171c',
+      panel: '#1b1f26',
       accent: '#3a6bff',
-      fg: '#f5f5f5',
-      muted: '#222222',
+      fg: '#f4f6f8',
+      muted: '#323844',
     },
   },
   emerald: {
@@ -62,7 +62,7 @@ const SCHEME_PREVIEW: Record<
     light: {
       canvas: '#fffaf0',
       panel: '#ffffff',
-      accent: '#1a3a3a',
+      accent: '#0a0a0a',
       fg: '#0a0a0a',
       muted: '#e5e5e5',
     },
@@ -80,30 +80,30 @@ const SCHEME_PREVIEW: Record<
       panel: '#fffcf7',
       accent: '#985d4d',
       fg: '#352e2a',
-      muted: '#e8d9cf',
+      muted: '#e4dcd3',
     },
     dark: {
       canvas: '#211c19',
       panel: '#2b2420',
       accent: '#d4a08c',
       fg: '#f3eae1',
-      muted: '#493a32',
+      muted: '#4a3e35',
     },
   },
   dawn: {
     light: {
-      canvas: '#accdec',
-      panel: '#f8fbff',
+      canvas: 'linear-gradient(180deg, #accdec 0%, #e7ebf4 61.54%, #ffddb9 100%)',
+      panel: 'rgb(255 255 255 / 0.6)',
       accent: '#34363a',
-      fg: '#262626',
-      muted: '#e7ebf4',
+      fg: 'rgb(0 0 0 / 0.85)',
+      muted: 'rgb(111 137 163 / 0.2)',
     },
     dark: {
-      canvas: '#172433',
-      panel: '#253342',
+      canvas: 'linear-gradient(180deg, #21394f 0%, #283545 61.54%, #564536 100%)',
+      panel: 'rgb(31 45 59 / 0.68)',
       accent: '#d9dde2',
-      fg: '#f3f6fa',
-      muted: '#415264',
+      fg: 'rgb(255 255 255 / 0.92)',
+      muted: 'rgb(255 255 255 / 0.14)',
     },
   },
 };
@@ -122,7 +122,7 @@ function SchemePreviewHalf({
   muted: string;
 }) {
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-1 p-1.5" style={{ backgroundColor: canvas }}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-1 p-1.5" style={{ background: canvas }}>
       <div className="flex flex-col gap-0.5 rounded-sm p-1" style={{ backgroundColor: panel }}>
         <div className="flex items-center gap-1">
           <div className="size-1 shrink-0 rounded-full" style={{ backgroundColor: accent }} />

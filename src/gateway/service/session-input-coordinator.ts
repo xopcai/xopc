@@ -1,4 +1,4 @@
-import type { SessionInputControlCommand } from '@xopcai/gateway-contract';
+import { parseUserTurnDocument, renderUserTurnDocument, type SessionInputControlCommand } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
 import { consumePhoneAssistance, finishPhoneAssistance, phoneAssistance, queuePhoneAssistance, reconcilePhoneAssistance, type PhoneAssistance } from '../../phone/assistance.js';
 import { isDeepStrictEqual } from 'node:util';
@@ -78,16 +78,18 @@ function sameAppContext(input: SubmitSessionInput, existing: SessionInput): bool
 }
 
 function canSteerContexts(state: SessionInputState, origin: TurnOrigin, contexts?: AgentSourceContext[]): boolean {
-  if (!contexts?.length) return true;
+  if (!contexts?.some(context => context.kind === 'device_context' || context.kind === 'app_context')) return true;
   const active = state.activeInputId ? getSessionInputById(state.conversationId, state.activeInputId) : undefined;
-  return Boolean(active && isDeepStrictEqual(active.origin, origin)
-    && contexts.every(context => context.kind === 'device_context'));
+  return Boolean(active && isDeepStrictEqual(active.origin, origin));
 }
 
 function steeringText(content: string, contexts?: AgentSourceContext[]): string {
+  const document = parseUserTurnDocument(content);
+  if (document) content = renderUserTurnDocument(document, refId => contexts?.find(context => context.refId === refId)?.title ?? null);
   if (!contexts?.length) return content;
   const message = injectSourceContextsIntoUserMessage({ role: 'user', content, timestamp: Date.now() } as AgentMessage, contexts);
-  return (message as { content: Array<{ text: string }> }).content[0]!.text;
+  const enriched = (message as { content: string | Array<{ type: string; text?: string }> }).content;
+  return typeof enriched === 'string' ? enriched : enriched.filter(part => part.type === 'text').map(part => part.text ?? '').join('\n');
 }
 
 function contextRefsMatchFrozenSnapshot(
@@ -163,7 +165,10 @@ export class SessionInputCoordinator {
       conversationId: string,
       contextRefs?: TurnContextRef[],
     ) => Promise<AgentSourceContext[] | undefined>;
-    steer: (conversationId: string, content: string, runId?: string) => Promise<boolean>;
+    steer: (conversationId: string, content: string, runId?: string, options?: {
+      attachments?: UserTurnAttachment[];
+      sourceContexts?: AgentSourceContext[];
+    }) => Promise<boolean>;
     emit: (type: string, payload: unknown) => void;
   }) {}
 
@@ -175,8 +180,7 @@ export class SessionInputCoordinator {
       if (!target.ok) throw new SessionInputControlConflict('Only the latest user turn can be edited');
     }
     const row = command.inputId ? getSessionInputById(conversationId, command.inputId) : undefined;
-    if (!replay && command.action === 'steer' && (!row || row.attachments?.length
-      || row.contextRefs?.some(ref => ref.kind !== 'device_context')
+    if (!replay && command.action === 'steer' && (!row
       || !canSteerContexts(this.snapshot(conversationId), row.origin, row.contextSnapshots))) {
       throw new SessionInputControlConflict('This input cannot steer the active reply');
     }
@@ -185,7 +189,7 @@ export class SessionInputCoordinator {
     if (command.action === 'steer') {
       if (!accepted.replay && row) {
         try {
-          if (!await this.deps.steer(conversationId, steeringText(row.content, row.contextSnapshots), accepted.runId)) {
+          if (!await this.steerInput(row, accepted.runId)) {
             setSessionInputStatus(row.id, 'interrupted', { effectiveDelivery: 'next', targetRunId: null, error: 'Current reply ended before steering' });
           }
         } catch (err) {
@@ -256,11 +260,11 @@ export class SessionInputCoordinator {
         return;
       }
       if (row.requestedDelivery !== 'steer'
-        || !state.activeRunId || row.attachments?.length || !canSteerContexts(state, row.origin, row.contextSnapshots)
+        || !state.activeRunId || !canSteerContexts(state, row.origin, row.contextSnapshots)
         || (state.preparation && state.preparation.state !== 'ready')) return;
       setSessionInputStatus(row.id, 'injecting', { effectiveDelivery: 'steer', targetRunId: state.activeRunId });
       try {
-        if (!await this.deps.steer(row.conversationId, steeringText(row.content, row.contextSnapshots), state.activeRunId)) {
+        if (!await this.steerInput(row, state.activeRunId)) {
           setSessionInputStatus(row.id, 'queued', { effectiveDelivery: 'next', targetRunId: null });
         }
       } catch (error) {
@@ -349,7 +353,7 @@ export class SessionInputCoordinator {
       const content = input.content.trim();
       const targetTurnId = input.targetTurnId.trim();
       if (!conversationId || !clientMessageId || !targetTurnId
-        || (!content && !input.attachments?.length && !input.sourceContexts?.length)) {
+        || (!content && !input.attachments?.length && !input.sourceContexts?.length && !input.contextRefs?.length)) {
         return { ok: false, code: 'BAD_REQUEST' };
       }
       if (!await this.deps.sessionExists(conversationId)) return { ok: false, code: 'BAD_REQUEST' };
@@ -425,7 +429,7 @@ export class SessionInputCoordinator {
     const clientMessageId = input.clientMessageId.trim();
     const content = input.content.trim();
     if (!conversationId || !clientMessageId
-      || (!content && !input.attachments?.length && !input.sourceContexts?.length)) {
+      || (!content && !input.attachments?.length && !input.sourceContexts?.length && !input.contextRefs?.length)) {
       return { ok: false, code: 'BAD_REQUEST' };
     }
     if (!await this.deps.sessionExists(conversationId)) return { ok: false, code: 'BAD_REQUEST' };
@@ -472,7 +476,6 @@ export class SessionInputCoordinator {
     const priority = !runtime.control.paused && !wait && input.interrupt !== false && this.deps.prioritizeInput?.(input) === true;
     const canSteer = !runtime.control.paused && !wait && !priority && input.delivery === 'steer'
       && runtime.activeRunId !== undefined
-      && !attachments?.length
       && canSteerContexts(runtime, input.origin, sourceContexts);
     const effectiveDelivery: SessionInputDelivery = canSteer ? 'steer' : 'next';
     const row = runSqliteWriteTransaction(() => {
@@ -505,7 +508,7 @@ export class SessionInputCoordinator {
       return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
     }
     if (canSteer) {
-      const accepted = await this.deps.steer(conversationId, steeringText(content, sourceContexts), runtime.activeRunId);
+      const accepted = await this.steerInput(row, runtime.activeRunId);
       if (!accepted) {
         setSessionInputStatus(row.id, 'queued', { effectiveDelivery: 'next', targetRunId: null });
         void this.drain(conversationId);
@@ -516,6 +519,14 @@ export class SessionInputCoordinator {
 
     void this.drain(conversationId);
     return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
+  }
+
+  private steerInput(row: SessionInput, runId?: string): Promise<boolean> {
+    const text = steeringText(row.content, row.contextSnapshots);
+    if (!row.attachments?.length && !row.contextSnapshots?.length) return this.deps.steer(row.conversationId, text, runId);
+    return this.deps.steer(row.conversationId, text, runId, {
+      attachments: row.attachments as UserTurnAttachment[] | undefined, sourceContexts: row.contextSnapshots,
+    });
   }
 
   async drain(conversationId: string): Promise<void> {

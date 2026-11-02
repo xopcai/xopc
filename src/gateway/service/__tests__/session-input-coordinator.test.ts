@@ -290,7 +290,7 @@ describe('SessionInputCoordinator', () => {
     await coordinator.waitForCompletion(conversationId, 'accepted-endpoint-steer');
   });
 
-  it('queues endpoint steer requests containing attachments', async () => {
+  it.each(['text-and-attachment', 'attachment-only', 'reference-only'])('steers %s into the current run', async kind => {
     let complete!: (value: { status: string; summary: string }) => void;
     const execute = vi.fn(() => new Promise<{ status: string; summary: string }>((resolve) => { complete = resolve; }));
     const steer = vi.fn(async () => true);
@@ -298,7 +298,7 @@ describe('SessionInputCoordinator', () => {
       sessionExists: async () => true,
       execute,
       prepareAttachments: async (_key, attachments) => attachments,
-      prepareContexts: async () => undefined,
+      prepareContexts: async (_id, refs) => refs?.length ? [{ kind: 'note', sourceId: 'note', version: 'v1', title: 'Note', text: 'Frozen note' }] : undefined,
       steer,
       emit: () => {},
     });
@@ -308,17 +308,21 @@ describe('SessionInputCoordinator', () => {
       conversationId,
       clientMessageId: 'endpoint-rich-steer',
       delivery: 'steer',
-      content: 'see image',
-      attachments: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
+      content: kind === 'text-and-attachment' ? 'see image' : '',
+      attachments: kind === 'reference-only' ? undefined : [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
+      contextRefs: kind === 'reference-only' ? [{ kind: 'note', sourceId: 'note', expectedVersion: 'v1' }] : undefined,
       origin: { type: 'endpoint', endpointId: 'mobile' },
     });
 
-    expect(queued.ok && queued.effectiveDelivery).toBe('next');
-    expect(steer).not.toHaveBeenCalled();
-    expect(coordinator.snapshot(conversationId).inputs.map(row => row.status)).toEqual(['running', 'queued']);
+    expect(queued.ok && queued.effectiveDelivery).toBe('steer');
+    expect(steer).toHaveBeenCalledWith(conversationId, kind === 'reference-only' ? expect.stringContaining('Frozen note') : kind === 'attachment-only' ? '' : 'see image', coordinator.snapshot(conversationId).activeRunId, {
+      attachments: kind === 'reference-only' ? undefined : [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
+      sourceContexts: kind === 'reference-only' ? [expect.objectContaining({ text: 'Frozen note', version: 'v1' })] : [],
+    });
+    expect(coordinator.snapshot(conversationId).inputs.map(row => row.status)).toEqual(['running', 'injecting']);
     complete({ status: 'ok', summary: 'done' });
-    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
-    complete({ status: 'ok', summary: 'done' });
+    await coordinator.waitForCompletion(conversationId, 'endpoint-rich-steer');
+    expect(execute).toHaveBeenCalledOnce();
   });
 
   it('keeps the frozen Note snapshot when queued text is edited without changing its refs', async () => {
