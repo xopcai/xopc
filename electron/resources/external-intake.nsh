@@ -45,19 +45,37 @@ Function XopcPrivacyPage
   File /oname=desktop-privacy.utf16.txt "${BUILD_RESOURCES_DIR}\desktop-privacy.utf16.txt"
   nsDialogs::CreateControl EDIT ${WS_VISIBLE}|${WS_CHILD}|${WS_TABSTOP}|${WS_VSCROLL}|${ES_MULTILINE}|${ES_READONLY}|${ES_AUTOVSCROLL} ${WS_EX_CLIENTEDGE} 0 0 100% 100u ""
   Pop $4
-  FileOpen $1 "$PLUGINSDIR\desktop-privacy.utf16.txt" r
-  IfErrors xopc_privacy_failed
-  xopc_read_privacy:
-    ClearErrors
-    FileReadUTF16LE $1 $3
-    IfErrors xopc_privacy_loaded
-    SendMessage $4 ${EM_SETSEL} -1 -1
-    SendMessage $4 ${EM_REPLACESEL} 0 "STR:$3"
-    Goto xopc_read_privacy
-  xopc_privacy_loaded:
-  FileClose $1
-  SendMessage $4 ${EM_SETSEL} 0 0
-  SendMessage $4 ${EM_SCROLLCARET} 0 0
+  ; Load the complete UTF-16 document without a bounded NSIS string or per-line message loop.
+  System::Call 'kernel32::CreateFileW(w "$PLUGINSDIR\desktop-privacy.utf16.txt", i 0x80000000, i 1, p 0, i 3, i 0x80, p 0) p.r1'
+  ${If} $1 == -1
+    Goto xopc_privacy_failed
+  ${EndIf}
+  System::Call 'kernel32::GetFileSize(p r1, p 0) i.r2'
+  ${If} $2 < 2
+  ${OrIf} $2 > 1048576
+    System::Call 'kernel32::CloseHandle(p r1)'
+    Goto xopc_privacy_failed
+  ${EndIf}
+  IntOp $6 $2 + 2
+  System::Alloc $6
+  Pop $3
+  ${If} $3 == 0
+    System::Call 'kernel32::CloseHandle(p r1)'
+    Goto xopc_privacy_failed
+  ${EndIf}
+  System::Call 'kernel32::ReadFile(p r1, p r3, i r2, *i.r5, p 0) i.r6'
+  System::Call 'kernel32::CloseHandle(p r1)'
+  ${If} $6 == 0
+  ${OrIf} $5 != $2
+    System::Free $3
+    Goto xopc_privacy_failed
+  ${EndIf}
+  IntOp $5 $3 + $2
+  System::Call '*$5(&i2 0)'
+  ; Skip the generated UTF-16 BOM; WM_SETTEXT copies the entire buffer synchronously.
+  IntOp $5 $3 + 2
+  SendMessage $4 ${WM_SETTEXT} 0 $5
+  System::Free $3
   ${NSD_CreateCheckbox} 0 102u 100% 15u "Enable automatic desktop updates / 开启桌面自动更新"
   Pop $XopcUpdateCheckbox
   ${NSD_SetState} $XopcUpdateCheckbox $XopcAutomaticUpdates
