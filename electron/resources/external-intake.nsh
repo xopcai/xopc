@@ -2,8 +2,10 @@
 !include LogicLib.nsh
 !include FileFunc.nsh
 
-Var XopcAutomaticUpdates
-Var XopcUpdateCheckbox
+!ifndef BUILD_UNINSTALLER
+  Var XopcAutomaticUpdates
+  Var XopcUpdateCheckbox
+!endif
 
 !macro customInit
   StrCpy $XopcAutomaticUpdates 0
