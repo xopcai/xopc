@@ -1,3 +1,4 @@
+import { getActionDispatchGuard } from '../embedded/execution-context.js';
 import { Type } from '@sinclair/typebox';
 import type {
   AgentTool,
@@ -278,7 +279,7 @@ export function createExecCommandTool(
       const registry = commandRegistry();
       successfulChecks.delete(checkKey);
       let commandResult = await registry.start({
-        workspace: workspaceCwd, isolation,
+        workspace: workspaceCwd, isolation, authorize: getActionDispatchGuard(toolCallId),
         owner, command, cwd: policy.effectiveCwd, env: { ...runtimeEnv, COLUMNS: '200' },
         timeoutMs, maxOutputChars, signal,
         snapshot: true,

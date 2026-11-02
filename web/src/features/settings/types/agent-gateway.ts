@@ -43,6 +43,7 @@ export type AgentDefaults = {
   skills: SkillDefaults;
   tools: Record<string, ToolPolicy>;
   runtime: {
+    actionApprovalMode?: 'ask' | 'full';
     codemode?: { enabled: boolean; timeoutMs?: number; maxConcurrentCalls?: number; maxCalls?: number; maxOutputTokens?: number };
     cloudCreditLimitPerRunMicro?: string;
     maxTurns?: number;

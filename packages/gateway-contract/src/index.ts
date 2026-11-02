@@ -33,6 +33,7 @@ export * from './cloud-credits.js';
 
 export * from './connection-waits.js';
 export * from './clarifications.js';
+export * from './action-approval.js';
 
 
 export * from './discussions.js';

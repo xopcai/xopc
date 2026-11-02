@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ActionApprovalModeSchema } from './action-approval.js';
 import { interactionCapabilitiesSchema } from './clarification-questions.js';
 
 import { AppContextEnvelopeSchema } from './app-context.js';
@@ -14,6 +15,7 @@ export const sessionCreationSchema = z.strictObject({
   temporary: z.boolean(),
   model: z.string().trim().min(1),
   thinkingLevel: z.string().min(1),
+  actionApprovalMode: ActionApprovalModeSchema.optional(),
 }).refine(value => value.projectId !== null || value.execution === null, {
   message: 'An execution environment requires a project', path: ['execution'],
 });

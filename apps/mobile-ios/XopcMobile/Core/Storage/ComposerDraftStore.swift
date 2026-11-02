@@ -41,6 +41,17 @@ struct ComposerDraftStore {
         return root.appendingPathComponent(key + ".json")
     }
 
+    func actionApproval(configuration: GatewayConfiguration, agentID: String) throws -> ActionApprovalMode? {
+        let path = try url(Self.accountScope(configuration) + ":permissions:" + agentID)
+        guard FileManager.default.fileExists(atPath: path.path) else { return nil }
+        return try? JSONDecoder().decode(ActionApprovalMode.self, from: Data(contentsOf: path))
+    }
+
+    func rememberActionApproval(_ mode: ActionApprovalMode, configuration: GatewayConfiguration, agentID: String) throws {
+        try JSONEncoder().encode(mode).write(to: url(Self.accountScope(configuration) + ":permissions:" + agentID),
+                                             options: [.atomic, .completeFileProtection])
+    }
+
     func saveSelection(_ selection: ConversationSelection, configuration: GatewayConfiguration) throws {
         try JSONEncoder().encode(selection).write(to: url(Self.accountScope(configuration) + ":selection"), options: [.atomic, .completeFileProtection])
     }

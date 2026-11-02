@@ -11,7 +11,7 @@ function readConfigRow(db: DatabaseSync, conversationId: string): SessionConfigR
     .prepare(
       `SELECT conversation_id, thinking_level, reasoning_level, verbose_level, elevated_mode,
               model_override, provider_override, working_directory_override, response_language,
-              user_context_mode, fixed_model, updated_at
+              user_context_mode, action_approval_mode, fixed_model, updated_at
        FROM session_config WHERE conversation_id = ?`,
     )
     .get(conversationId) as SessionConfigRow | undefined;
@@ -43,8 +43,8 @@ export function setSessionConfig(conversationId: string, config: SessionAgentCon
     db.prepare(
       `INSERT INTO session_config (
         conversation_id, thinking_level, reasoning_level, verbose_level, elevated_mode,
-        model_override, provider_override, working_directory_override, response_language, user_context_mode, fixed_model, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        model_override, provider_override, working_directory_override, response_language, user_context_mode, action_approval_mode, fixed_model, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(conversation_id) DO UPDATE SET
         thinking_level = excluded.thinking_level,
         reasoning_level = excluded.reasoning_level,
@@ -55,6 +55,7 @@ export function setSessionConfig(conversationId: string, config: SessionAgentCon
         working_directory_override = excluded.working_directory_override,
         response_language = excluded.response_language,
         user_context_mode = excluded.user_context_mode,
+        action_approval_mode = excluded.action_approval_mode,
         fixed_model = excluded.fixed_model,
         updated_at = excluded.updated_at`,
     ).run(
@@ -68,6 +69,7 @@ export function setSessionConfig(conversationId: string, config: SessionAgentCon
       next.workingDirectoryOverride ?? null,
       next.responseLanguage ?? null,
       next.userContextMode ?? null,
+      next.actionApprovalMode ?? null,
       next.fixedModel ? 1 : 0,
       updatedAt,
     );
@@ -97,4 +99,20 @@ export function hasSessionConfig(conversationId: string): boolean {
     .prepare(`SELECT 1 AS ok FROM session_config WHERE conversation_id = ?`)
     .get(conversationId) as { ok?: number } | undefined;
   return row?.ok === 1;
+}
+
+/** Compare-and-swap permissions only while the persisted execution queue is idle. */
+export function updateSessionActionApprovalMode(
+  conversationId: string, mode: SessionAgentConfig['actionApprovalMode'], expectedVersion: number, cwd: string,
+): boolean {
+  return runSqliteWriteTransaction(db => {
+    const existing = getSessionConfig(conversationId);
+    if ((existing?.updatedAt ?? 0) !== expectedVersion) return false;
+    const running = db.prepare('SELECT 1 FROM session_input_runtime WHERE conversation_id = ? AND active_run_id IS NOT NULL').get(conversationId);
+    const queued = db.prepare("SELECT 1 FROM session_inputs WHERE conversation_id = ? AND status IN ('queued','running','injecting','interrupted')").get(conversationId);
+    const waiting = db.prepare("SELECT 1 FROM session_clarification_waits WHERE conversation_id = ? AND status IN ('open','queued')").get(conversationId);
+    if (running || queued || waiting) return false;
+    setSessionConfig(conversationId, { ...existing, actionApprovalMode: mode }, cwd);
+    return true;
+  });
 }

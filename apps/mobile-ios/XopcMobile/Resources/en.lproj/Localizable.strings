@@ -1017,3 +1017,9 @@
 "重试提交" = "Retry submission";
 "此请求已过期" = "This request has expired";
 "回答内容过长，请精简后再提交" = "Answers are too long. Shorten them before submitting.";
+
+"每次确认" = "Ask for approval";
+
+"完全访问" = "Full access";
+
+"操作权限" = "Action permissions";

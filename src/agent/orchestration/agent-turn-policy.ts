@@ -37,6 +37,8 @@ export interface AgentTurnPolicyOptions {
 
 // Context provenance is host-owned; tool arguments cannot bypass operation expansion.
 const expandedBatchContexts = new WeakSet<BeforeToolCallContext>();
+const batchOperations = new WeakSet<BeforeToolCallContext>();
+export function isBatchPolicyOperation(context: BeforeToolCallContext): boolean { return batchOperations.has(context); }
 
 /** One user-visible run policy. A fresh instance is created for every embedded run. */
 export function createAgentTurnPolicy(options: AgentTurnPolicyOptions): AgentTurnPolicy {
@@ -67,6 +69,7 @@ export function createAgentTurnPolicy(options: AgentTurnPolicyOptions): AgentTur
           }))]
         : [context];
       for (const item of contexts) {
+        if (expand && item !== wrapper) batchOperations.add(item);
         signal?.throwIfAborted();
         const limit = options.resolveToolLimit?.(item.toolCall.name, item.args);
         if (limit) {

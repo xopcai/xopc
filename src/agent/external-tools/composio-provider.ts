@@ -1,3 +1,4 @@
+import { requestPreparedActionApproval } from '../embedded/execution-context.js';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
@@ -334,6 +335,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
       if (!hook.allowed) throw new Error(hook.reason ?? 'Connected app tool call blocked by policy hook.');
       executionArgs = hook.params ?? args;
     }
+    context.validateArguments?.(executionArgs);
     const toolkit = toolkitFromInstallation(resolved.installation);
     const action = listConnectorActionMetadata(resolved.installation.connectorId)
       .find((candidate) => candidate.actionId === resolved.actionId);
@@ -429,7 +431,13 @@ export class ComposioToolProvider implements ExternalToolProvider {
       if (evaluation.decision === 'denied') throw new CapabilityError('FORBIDDEN', evaluation.reason);
       return evaluation;
     };
-    const evaluation = authorizeCurrent();
+    let evaluation = authorizeCurrent();
+    if (evaluation.decision === 'denied') throw new CapabilityError('FORBIDDEN', evaluation.reason);
+    const sharedApproval = await requestPreparedActionApproval(context.toolCallId, { toolRef, arguments: executionArgs,
+      binding: { accountId: connection.accountId, connectionId: connection.id, descriptorDigest },
+      readOnly: action.scope === 'read', confirmationRequired: evaluation.decision === 'confirmation_required' });
+    if (sharedApproval === false) return textResult({ status: 'approval_required', instruction: 'The action did not run. Wait for the existing approval card; do not retry or switch tools.' });
+    if (sharedApproval === true) { confirmed ||= evaluation.decision === 'confirmation_required'; evaluation = authorizeCurrent(); }
     let result: Awaited<ReturnType<ComposioSessionsAdapter['executeWithPolicy']>>;
     try {
       const execute = async () => this.adapter.executeWithPolicy({

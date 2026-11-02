@@ -7,6 +7,7 @@ struct SessionCreationCommand: Encodable {
     let temporary: Bool
     let model: String
     let thinkingLevel: String
+    var actionApprovalMode: ActionApprovalMode?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -24,6 +25,7 @@ struct SessionCreationCommand: Encodable {
         try container.encode(temporary, forKey: .temporary)
         try container.encode(model, forKey: .model)
         try container.encode(thinkingLevel, forKey: .thinkingLevel)
+        try container.encodeIfPresent(actionApprovalMode, forKey: .actionApprovalMode)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -33,6 +35,7 @@ struct SessionCreationCommand: Encodable {
         case temporary
         case model
         case thinkingLevel
+        case actionApprovalMode
     }
 }
 

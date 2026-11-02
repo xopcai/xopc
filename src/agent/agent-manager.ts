@@ -1,3 +1,6 @@
+import { getSessionInputState } from '../storage/sqlite/session-input-repository.js';
+import { commandApprovalBinding } from './approval/command-binding.js';
+import { resolveSessionActionApprovalMode } from './approval/session-mode.js';
 import { AgentPluginStore } from '../extensions/agent-plugins/store.js';
 import { pluginRuntimeAccessKey } from '../extensions/agent-plugins/capability-access.js';
 import { connectorArgumentsPreview } from '../connectors/approval.js';
@@ -12,7 +15,10 @@ import { traceTools } from '../observability/runtime.js';
  * and concurrent processing across sessions.
  */
 
-import { createHash } from 'node:crypto';
+import { actionApprovalKey, isActionApprovalCore, requiresActionApproval } from './approval/action-policy.js';
+import { dataOperationCalls } from './data-acquisition/schema.js';
+import { isBatchPolicyOperation } from './orchestration/agent-turn-policy.js';
+import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 
 import {
   Agent,
@@ -60,7 +66,7 @@ import {
   type AgentCapabilityCatalogEntry,
   type AgentCapabilitySessionState,
 } from './capabilities/index.js';
-import { getEmbeddedExecutionRunId } from './embedded/execution-context.js';
+import { bindActionDispatchGuard, bindReviewedToolArguments, setPreparedActionApprover, getEmbeddedExecutionRunId } from './embedded/execution-context.js';
 import { evictAllEmbeddedSessionRunners, evictEmbeddedSessionRunner } from './embedded/session-runner.js';
 import { abortEmbeddedRun } from './embedded/runs.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
@@ -98,7 +104,7 @@ import { ExecutionContextCoordinator, type ExecutionContextPlan } from './contex
 import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
 import { evaluateToolGate } from './context/execution-context.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
-import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
+import { channelExecApprovalRequired } from '../channels/exec-approval-runtime.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
 import { ProjectTrustStore, hasTrustRequiringProjectResources, isProjectWorkspaceTrusted } from '../project-trust/trust-store.js';
@@ -1465,6 +1471,7 @@ export class AgentManager implements AgentInstanceGateway {
     profile: EffectiveAgentProfile,
   ): AgentTurnPolicy {
     const currentProfile = () => resolveEffectiveAgentProfileForSession(conversationId);
+    let waitingForApproval = false;
     return buildAgentTurnPolicy({
       maxTurns: profile.config.runtime.maxTurns,
       maxToolFailures: profile.config.runtime.maxToolFailuresPerTurn,
@@ -1473,7 +1480,10 @@ export class AgentManager implements AgentInstanceGateway {
         const maxCalls = policy?.maxCallsPerTurn;
         return policy && maxCalls ? { id: policy.id, maxCalls } : undefined;
       },
-      authorizeToolCall: async ({ toolCall, args }) => {
+      authorizeToolCall: async (context, signal) => {
+        const { toolCall, args } = context;
+        if (waitingForApproval) return { block: true, terminate: true, reason: '正在等待你确认，操作尚未执行。' };
+        signal?.throwIfAborted();
         const toolName = toolCall.name;
         const operation = ({
           message: 'external_send',
@@ -1490,64 +1500,93 @@ export class AgentManager implements AgentInstanceGateway {
             return { block: true, terminate: true, reason: decision.reason ?? 'Blocked by collaboration rule.' };
           }
         }
-        const policy = this.resolveToolPolicy(currentProfile(), toolName, args);
-        const detail = JSON.stringify(args ?? {});
-        if (policy?.mode === 'deny') return { block: true, reason: `${policy.id} is denied by tool policy.` };
-        if (policy?.mode === 'ask') {
-          const approved = await this.requestToolConfirmation(
-            conversationId,
-            policy?.id ?? toolName,
-            detail,
-          );
-          if (!approved) {
-            return { block: true, terminate: true, reason: `User did not approve ${policy?.id ?? toolName}.` };
-          }
+        const effective = currentProfile();
+        const policy = this.resolveToolPolicy(effective, toolName, args);
+        const calls = toolName === 'data_batch' ? dataOperationCalls(args) : [];
+        const childPolicies = calls.map(call => this.resolveToolPolicy(effective, call.name, call.args));
+        const denied = [policy, ...childPolicies].find(item => item?.mode === 'deny');
+        if (denied) return { block: true, reason: `${denied.id} is denied by tool policy.` };
+        if (this.config.hookRunner) {
+          const hookResult = await this.config.hookRunner.runBeforeToolCall(toolName, (args ?? {}) as Record<string, unknown>, { conversationId });
+          if (!hookResult.allowed) return { block: true, reason: hookResult.reason ?? 'Tool call blocked by policy hook.' };
         }
-
-        if (toolName === 'exec_command') {
-          const ctx = this.config.getCurrentContext();
-          const cfg = this.mergedConfig();
-          if (ctx && cfg) {
-            const command =
-              typeof (args as { cmd?: unknown })?.cmd === 'string'
-                ? (args as { cmd: string }).cmd
-                : JSON.stringify(args ?? {});
-            const accountId =
-              typeof ctx.metadata?.accountId === 'string' ? ctx.metadata.accountId : undefined;
-            const approval = await maybeRequestChannelExecApproval({
-              cfg,
-              payload: {
-                conversationId: ctx.conversationId,
-                channel: ctx.channel,
-                chatId: ctx.chatId,
-                accountId,
-                toolName,
-                summary: command.slice(0, 500),
-                details: { command: command.slice(0, 2000) },
-              },
+        if (waitingForApproval) return { block: true, terminate: true, reason: '正在等待你确认，操作尚未执行。' };
+        const mode = resolveSessionActionApprovalMode(conversationId);
+        const workspace = this.getResolvedWorkspaceForSession(conversationId);
+        const origin = this.config.getCurrentContext();
+        const cfg = this.mergedConfig();
+        const channelAsk = Boolean((toolName === 'exec_command' || calls.some(call => call.name === 'exec_command')) && cfg && origin && channelExecApprovalRequired(cfg, origin.channel,
+          typeof origin.metadata?.accountId === 'string' ? origin.metadata.accountId : undefined));
+        const explicitAsk = channelAsk || [policy, ...childPolicies].some(item => item?.mode === 'ask');
+        const preparedConnector = toolName === 'xopc_tool_execute'
+          && /^(cli|composio):/.test(String((args as { toolRef?: string })?.toolRef ?? ''))
+          && !isBatchPolicyOperation(context)
+          && setPreparedActionApprover(toolCall.id, async action => {
+            if (waitingForApproval) return false;
+            const profile = currentProfile();
+            if (action.toolRef !== String((args as { toolRef?: string })?.toolRef ?? '')) return false;
+            const currentPolicy = this.resolveToolPolicy(profile, 'xopc_tool_execute', { toolRef: action.toolRef });
+            if (currentPolicy?.mode === 'deny') return false;
+            signal?.throwIfAborted();
+            const currentMode = resolveSessionActionApprovalMode(conversationId);
+            const key = () => actionApprovalKey({ toolName: action.toolRef, args: action.arguments,
+              workspace: this.getResolvedWorkspaceForSession(conversationId), mode: resolveSessionActionApprovalMode(conversationId),
+              agentId: currentProfile().agentId, policy: currentProfile().config.tools,
+              binding: { ...action.binding, sessionVersion: getSessionConfig(conversationId)?.updatedAt ?? 0 } });
+            const accepted = key();
+            const bindDispatch = () => bindActionDispatchGuard(toolCall.id, () => {
+              signal?.throwIfAborted();
+              if (accepted !== key()) throw new Error('Connector authorization changed before dispatch.');
             });
-            if (approval.required && !approval.approved) {
-              return {
-                block: true,
-                reason: approval.reason ?? 'Exec approval denied or timed out.',
-              };
+            if (currentPolicy?.mode !== 'ask' && !action.confirmationRequired && (currentMode === 'full' || action.readOnly)) {
+              bindDispatch();
+              return true;
             }
+            waitingForApproval = true;
+            const approved = await this.requestToolConfirmation(conversationId, action.toolRef,
+              { arguments: action.arguments, target: action.binding }, accepted, toolCall.id);
+            signal?.throwIfAborted();
+            if (approved !== 'approved' || accepted !== key()) return false;
+            bindDispatch();
+            waitingForApproval = false;
+            return true;
+          });
+        const requiresApproval = !preparedConnector && !isBatchPolicyOperation(context) && (explicitAsk || requiresActionApproval({
+          name: toolName, args, workspace, mode,
+          core: isActionApprovalCore(context.context?.tools?.find(tool => tool.name === toolName)), policy,
+        }));
+        if (requiresApproval) {
+          waitingForApproval = true;
+          const keyForCurrentPolicy = () => {
+            const profile = currentProfile();
+            const current = getSessionConfig(conversationId);
+            return actionApprovalKey({ toolName, args, workspace: this.getResolvedWorkspaceForSession(conversationId),
+              mode: resolveSessionActionApprovalMode(conversationId),
+              agentId: profile.agentId, policy: profile.config.tools,
+              binding: { sessionVersion: current?.updatedAt ?? 0, isolation: profile.config.runtime.commandIsolation,
+                ...(toolName === 'exec_command' ? { command: commandApprovalBinding(args, this.getResolvedWorkspaceForSession(conversationId)) } : {}) } });
+          };
+          const approvalKey = keyForCurrentPolicy();
+          const approved = await this.requestToolConfirmation(conversationId, toolName, args, approvalKey, toolCall.id);
+          signal?.throwIfAborted();
+          if (approved !== 'approved') {
+            const reason = approved === 'waiting' ? '正在等待你确认，操作尚未执行。'
+              : approved === 'denied' ? '这次操作未获批准，未执行。'
+                : '暂时无法发起操作确认，操作未执行。请稍后重试。';
+            return { block: true, terminate: true, reason };
           }
+          if (keyForCurrentPolicy() !== approvalKey) {
+            return { block: true, terminate: true, reason: '操作内容或授权已变化，本次未执行。请重新确认后继续。' };
+          }
+          bindActionDispatchGuard(toolCall.id, () => {
+            signal?.throwIfAborted();
+            if (keyForCurrentPolicy() !== approvalKey) throw new Error('Action authorization or file operands changed before dispatch. Nothing was executed.');
+          });
+          if (toolName === 'xopc_tool_execute') bindReviewedToolArguments(toolCall.id,
+            ((args as { arguments?: Record<string, unknown> })?.arguments ?? {}) );
+          waitingForApproval = false;
         }
 
-        if (!this.config.hookRunner) {
-          return undefined;
-        }
-        const hookResult = await this.config.hookRunner.runBeforeToolCall(
-          toolName,
-          (args ?? {}) as Record<string, unknown>,
-          {
-            conversationId,
-          },
-        );
-        if (!hookResult.allowed) {
-          return { block: true, reason: hookResult.reason ?? 'Tool call blocked by policy hook.' };
-        }
         return undefined;
       },
     });
@@ -1571,22 +1610,26 @@ export class AgentManager implements AgentInstanceGateway {
     return externalPolicy ? { id: toolRef, ...externalPolicy } : gatewayPolicy ? { id: toolName, ...gatewayPolicy } : undefined;
   }
 
-  private async requestToolConfirmation(conversationId: string, toolName: string, detail: string): Promise<boolean> {
+  private async requestToolConfirmation(
+    conversationId: string, toolName: string, args: unknown, approvalKey: string, toolCallId: string,
+  ): Promise<'approved' | 'denied' | 'waiting' | 'unavailable'> {
     const request = this.config.gatewayClarify?.requestClarification;
-    if (!request) return false;
-    const approvalKey = createHash('sha256').update(`${toolName}\0${detail}`).digest('hex');
+    if (!request) return 'unavailable';
     const existing = consumeClarificationApproval(conversationId, approvalKey);
-    if (existing) return existing === 'approved';
-    const runId = getEmbeddedExecutionRunId();
-    if (!runId) return false;
-    const argumentsPreview = connectorArgumentsPreview(JSON.parse(detail));
-    const result = await request({ conversationId, runId, toolCallId: `approval:${approvalKey}` }, {
+    if (existing) return existing;
+    const embeddedRunId = getEmbeddedExecutionRunId();
+    const runId = getSessionInputState(conversationId).activeRunId ?? embeddedRunId;
+    if (!runId) return 'unavailable';
+    const argumentsPreview = connectorArgumentsPreview((args ?? {}) as Record<string, unknown>);
+    const result = await request({ conversationId, runId, toolCallId: `approval:${embeddedRunId ?? runId}:${toolCallId}` }, {
       kind: 'approval',
       approval: { operation: toolName, argumentsPreview },
       question: `Allow ${toolName} to run once?\n${JSON.stringify(argumentsPreview)}`,
       approvalKey,
-    }).catch(() => ({ status: 'answered' as const, answer: 'deny' }));
-    return result.status === 'answered' && result.answer === 'approve';
+    }).catch(() => undefined);
+    if (!result) return 'unavailable';
+    if (result.status === 'waiting') return 'waiting';
+    return result.answer === 'approve' ? 'approved' : 'denied';
   }
 
   private refreshDynamicContextIfChanged(instance: AgentInstance, force = false): void {

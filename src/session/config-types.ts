@@ -1,3 +1,5 @@
+import type { ActionApprovalMode } from '@xopcai/gateway-contract';
+
 import type {
   ElevatedMode,
   ReasoningLevel,
@@ -21,5 +23,6 @@ export interface SessionAgentConfig {
   workingDirectoryOverride?: string;
   responseLanguage?: ResponseLanguage;
   userContextMode?: 'enabled' | 'off' | 'temporary';
+  actionApprovalMode?: ActionApprovalMode;
   updatedAt?: number;
 }

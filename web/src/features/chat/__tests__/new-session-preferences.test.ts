@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
+import { actionApprovalPreferenceForAgent } from '@xopcai/gateway-contract';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   readNewSessionPreferences,
   rememberAgentModel,
+  rememberAgentActionApproval,
+  actionApprovalPreferenceScope,
   rememberLastChatScope,
   rememberProjectExecutionMode,
   rememberSelectedAgent,
@@ -47,4 +51,13 @@ describe('web new-session preferences', () => {
     });
   });
 
+});
+
+it('keeps action permissions in the same preference record while isolating gateway identities', () => {
+  useGatewayStore.setState({ baseUrl: 'https://gateway-a.test', conversationId: 'account-a' });
+  rememberAgentActionApproval('Coder', 'full');
+  rememberAgentModel('Coder', { modelRef: 'test/model' });
+  expect(actionApprovalPreferenceForAgent(readNewSessionPreferences(), 'coder', actionApprovalPreferenceScope())).toBe('full');
+  useGatewayStore.setState({ conversationId: 'account-b' });
+  expect(actionApprovalPreferenceForAgent(readNewSessionPreferences(), 'coder', actionApprovalPreferenceScope())).toBeUndefined();
 });

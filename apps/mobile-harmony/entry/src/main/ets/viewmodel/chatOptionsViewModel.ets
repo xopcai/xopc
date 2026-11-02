@@ -22,6 +22,8 @@ export class XopcChatOptionsViewModel {
   private queuePositionOffset: number = 0;
   private timer: number = -1;
   @Trace thinkingLevel: string = 'off';
+  @Trace actionApprovalMode: string = 'ask';
+  private configVersion?: number;
 
   dispose(): void { this.generation++; this.queueRequest++; clearInterval(this.timer); this.timer = -1; }
   pause(): void { this.queueRequest++; clearInterval(this.timer); this.timer = -1; }
@@ -45,9 +47,10 @@ export class XopcChatOptionsViewModel {
       const models = await this.repository.models(this.agentId);
       if (generation !== this.generation) return;
       this.models = models.models ?? models.items ?? [];
-      const config: XopcAgentConfig = draft ? { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel }
+      const config: XopcAgentConfig = draft ? { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel, actionApprovalMode: draft.creation.actionApprovalMode }
         : await this.repository.config(id);
       if (generation !== this.generation) return;
+      this.configVersion = config.configVersion; this.actionApprovalMode = config.actionApprovalMode || 'ask';
       this.modelId = config.model || models.defaultId || this.models[0]?.id || '';
       const currentModel = this.models.find((item: XopcChatModel): boolean => item.id === this.modelId);
       this.thinkingLevel = this.supportedThinking(currentModel, config.thinkingLevel);
@@ -79,6 +82,9 @@ export class XopcChatOptionsViewModel {
       if (generation !== this.generation) return false;
       this.modelId = id; this.thinkingLevel = level;
       await this.repository.rememberModel(this.agentId, id, level);
+      const config = await this.repository.config(this.conversationId);
+      if (generation !== this.generation) return false;
+      this.configVersion = config.configVersion;
       return generation === this.generation;
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; return false; }
     finally { this.saving = false; }
@@ -94,7 +100,22 @@ export class XopcChatOptionsViewModel {
       if (generation !== this.generation) return false;
       this.thinkingLevel = level;
       await this.repository.rememberModel(this.agentId, this.modelId, level);
+      const config = await this.repository.config(this.conversationId);
+      if (generation !== this.generation) return false;
+      this.configVersion = config.configVersion;
       return generation === this.generation;
+    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; return false; }
+    finally { this.saving = false; }
+  }
+  async selectActionApproval(mode: string): Promise<boolean> {
+    if (this.loading || this.saving || !this.conversationId) return false;
+    this.saving = true; this.error = ''; const generation = ++this.generation;
+    try {
+      const config = await this.repository.setActionApproval(this.conversationId, this.agentId, mode, this.configVersion);
+      if (generation !== this.generation) return false;
+      this.actionApprovalMode = config.actionApprovalMode || mode;
+      this.configVersion = config.configVersion;
+      return true;
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; return false; }
     finally { this.saving = false; }
   }

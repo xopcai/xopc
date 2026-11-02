@@ -156,6 +156,13 @@ struct GatewayStub: GatewayServing {
         }
     }
 
+    func saveActionApproval(_: ActionApprovalMode, conversation _: ConversationSelection, configVersion: Int?) async throws -> Int? {
+        if modelSaveFails {
+            throw GatewayClientError.server("Save failed")
+        }
+        return configVersion.map { $0 + 1 }
+    }
+
     func fetchClarification(conversationID _: String) async throws -> ClarificationRequest? {
         clarification
     }

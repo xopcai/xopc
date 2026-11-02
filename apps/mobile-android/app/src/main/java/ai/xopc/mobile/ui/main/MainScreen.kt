@@ -427,6 +427,7 @@ fun MainScreen(
   onReloadModels: () -> Unit = {},
   onSelectModel: (String) -> Unit = {},
   onSelectThinking: (String) -> Unit = {},
+  onSelectActionApproval: (String) -> Unit = {},
   onLoadQueuedInputs: () -> Unit = {},
   onUpdateQueuedInput: (String, String?, Int?) -> Unit = { _, _, _ -> },
   onCancelQueuedInput: (String) -> Unit = {},
@@ -765,7 +766,7 @@ fun MainScreen(
     onSendMessage = onSendMessage,
     onRetryPendingInput = onRetryPendingInput, onStopRun = onStopRun,
     onReloadModels = onReloadModels, onSelectModel = onSelectModel,
-    onSelectThinking = onSelectThinking,
+    onSelectThinking = onSelectThinking, onSelectActionApproval = onSelectActionApproval,
     onLoadQueuedInputs = onLoadQueuedInputs,
     onUpdateQueuedInput = onUpdateQueuedInput,
     onCancelQueuedInput = onCancelQueuedInput,
@@ -956,6 +957,7 @@ internal fun MainContent(
   onReloadModels: () -> Unit = {},
   onSelectModel: (String) -> Unit = {},
   onSelectThinking: (String) -> Unit = {},
+  onSelectActionApproval: (String) -> Unit = {},
   onLoadQueuedInputs: () -> Unit = {},
   onUpdateQueuedInput: (String, String?, Int?) -> Unit = { _, _, _ -> },
   onCancelQueuedInput: (String) -> Unit = {},
@@ -1577,7 +1579,7 @@ internal fun MainContent(
           onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
           onNoteFileContent,
           onRetryPendingInput,
-          onReloadModels, onSelectModel, onSelectThinking, onLoadQueuedInputs,
+          onReloadModels, onSelectModel, onSelectThinking, onSelectActionApproval, onLoadQueuedInputs,
           onUpdateQueuedInput, onCancelQueuedInput, onReloadAgents, onSwitchAgent,
           onReloadContext,
           onLoadContextPanel, onSetContextDirectory, onAddContextFile, onCreateContextConversation,
@@ -2457,6 +2459,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onRetryPendingInput: () -> Unit,
   onReloadModels: () -> Unit, onSelectModel: (String) -> Unit,
   onSelectThinking: (String) -> Unit,
+  onSelectActionApproval: (String) -> Unit,
   onLoadQueuedInputs: () -> Unit,
   onUpdateQueuedInput: (String, String?, Int?) -> Unit,
   onCancelQueuedInput: (String) -> Unit,
@@ -3157,6 +3160,16 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             }, "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true, flat = true) {
             optionsOpen = false; thinkingPickerOpen = true
           }
+          listOf("ask", "full").forEach { mode ->
+            ContextRow(stringResource(if (mode == "ask") R.string.action_approval_ask else R.string.action_approval_full),
+              if (connection.actionApprovalMode == mode) "✓" else "", "assistant-permissions-$mode",
+              compact = true, flat = true,
+              enabled = !connection.modelsLoading && !connection.modelSaving && !connection.sending &&
+                connection.activeRunId == null && connection.pendingInput == null && connection.clarification == null) {
+              onSelectActionApproval(mode)
+            }
+          }
+          if (connection.modelError) Text(stringResource(R.string.action_approval_error))
           if (connection.queuedInputs.isNotEmpty()) ContextRow(stringResource(R.string.assistant_queue), "", "assistant-queue",
             iconRes = R.drawable.action_new_chat, compact = true, flat = true) {
             optionsOpen = false; queueOpen = true; onLoadQueuedInputs()

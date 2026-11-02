@@ -1,3 +1,4 @@
+import { getActionDispatchGuard, assertReviewedToolArguments } from '../embedded/execution-context.js';
 import crypto from 'node:crypto';
 
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -203,6 +204,8 @@ export class ExternalToolService {
       throw new Error(`Tool contract is invalid: ${params.toolRef}`, { cause: error });
     }
     const validateArguments = (input: Record<string, unknown>) => {
+      getActionDispatchGuard(params.context.toolCallId)?.();
+      assertReviewedToolArguments(params.context.toolCallId, input);
       if (!validate(input)) {
         throw new Error(`Arguments do not match ${params.toolRef}: ${this.ajv.errorsText(validate.errors)}`);
       }
@@ -211,6 +214,7 @@ export class ExternalToolService {
     params.context.authorize?.();
     return provider.execute(params.toolRef, args, params.approvalId, {
       ...params.context, contractRevision: current.contractRevision, validateArguments,
+      authorize: () => { params.context.authorize?.(); getActionDispatchGuard(params.context.toolCallId)?.(); },
     });
   }
 

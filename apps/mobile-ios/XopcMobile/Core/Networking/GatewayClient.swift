@@ -8,6 +8,8 @@ protocol GatewayServing: Sendable {
     func fetchModels(agentID: String) async throws -> ChatModelCatalog
     func fetchAgentConfiguration(conversationID: String) async throws -> SessionAgentConfiguration
     func updateAgentConfiguration(conversationID: String, model: String, thinkingLevel: String) async throws
+    func draftActionApproval(agentID: String) async throws -> ActionApprovalMode
+    func saveActionApproval(_ mode: ActionApprovalMode, conversation: ConversationSelection, configVersion: Int?) async throws -> Int?
     func fetchClarification(conversationID: String) async throws -> ClarificationRequest?
     func respondToClarification(_ clarification: ClarificationRequest, command: ClarificationResponseCommand) async throws
     func fetchInputState(conversationID: String) async throws -> InputState
@@ -35,6 +37,14 @@ protocol GatewayServing: Sendable {
 }
 
 extension GatewayServing {
+    func draftActionApproval(agentID _: String) async throws -> ActionApprovalMode {
+        .ask
+    }
+
+    func saveActionApproval(_: ActionApprovalMode, conversation _: ConversationSelection, configVersion _: Int?) async throws -> Int? {
+        throw GatewayClientError.server("当前连接不支持权限设置")
+    }
+
     func streamTaskResults(conversationID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }

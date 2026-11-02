@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readPendingSessionCommand, confirmSessionCommand, type LocalSessionDraft } from '@/features/chat/session/local-session-drafts';
 
+import { rememberAgentActionApproval } from '@/features/chat/session/new-session-preferences';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -15,6 +17,10 @@ vi.mock('@/lib/fetch', () => ({
 vi.mock('@/lib/gateway-startup-retry', () => ({
   apiFetchWithStartupRetry: vi.fn(),
 }));
+const effective = vi.hoisted(() => ({ load: vi.fn() }));
+vi.mock('@/features/settings/agents-admin-api', () => ({ fetchGatewayAgentEffectiveConfig: effective.load }));
+beforeEach(() => { localStorage.clear(); effective.load.mockReset().mockResolvedValue({ config: { runtime: {}, models: { chat: { primary: 'test/model' } } } }); });
+
 const drafts = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn() }));
 vi.mock('@/features/chat/session/local-session-drafts', () => ({
   readLocalSessionDraft: drafts.read, saveLocalSessionDraft: drafts.save,
@@ -100,7 +106,7 @@ describe('SessionManager local drafts', () => {
     mockedApiFetch.mockReset();
   });
 
-  it('persists a final UUID without requesting the Gateway', async () => {
+  it('persists a final UUID after reading agent defaults without creating a Gateway session', async () => {
     const session = await new SessionManager().createSession({ agentId: 'main' });
     expect(session.key).toMatch(/^[a-f0-9-]{36}$/);
     expect(drafts.save).toHaveBeenCalledWith(expect.objectContaining({ conversationId: session.key }));
@@ -386,4 +392,44 @@ describe('SessionManager materialization confirmation', () => {
     await pending;
     expect(confirmSessionCommand).not.toHaveBeenCalled();
   });
+});
+
+describe('SessionManager action permission inheritance', () => {
+  it('inherits the last explicit choice for the same Agent across project contexts', async () => {
+    useGatewayStore.setState({ baseUrl: 'https://approval-inheritance.test', conversationId: 'owner' });
+    rememberAgentActionApproval('coder', 'full');
+    const manager = new SessionManager();
+    for (const projectId of ['project-a', 'project-b']) {
+      await manager.createSession({ agentId: ' Coder ', projectId, initialAgentConfig: { model: 'test/model' } });
+      expect(drafts.save).toHaveBeenLastCalledWith(expect.objectContaining({ creation: expect.objectContaining({ agentId: 'coder', projectId, actionApprovalMode: 'full' }) }));
+    }
+    expect(effective.load).not.toHaveBeenCalled();
+    await manager.createSession({ agentId: 'research' });
+    expect(drafts.save).toHaveBeenLastCalledWith(expect.objectContaining({ creation: expect.objectContaining({ agentId: 'research', actionApprovalMode: 'ask' }) }));
+  });
+  it('uses explicit handoff settings before the remembered choice, then Agent defaults and ask fallback', async () => {
+    rememberAgentActionApproval('main', 'full');
+    const manager = new SessionManager();
+    await manager.createSession({ initialAgentConfig: { actionApprovalMode: 'ask' } });
+    expect(drafts.save).toHaveBeenLastCalledWith(expect.objectContaining({ creation: expect.objectContaining({ actionApprovalMode: 'ask' }) }));
+    localStorage.clear();
+    effective.load.mockResolvedValueOnce({ config: { runtime: { actionApprovalMode: 'full' } } });
+    await manager.createSession();
+    expect(drafts.save).toHaveBeenLastCalledWith(expect.objectContaining({ creation: expect.objectContaining({ actionApprovalMode: 'full' }) }));
+    effective.load.mockRejectedValueOnce(new Error('offline'));
+    await manager.createSession();
+    expect(drafts.save).toHaveBeenLastCalledWith(expect.objectContaining({ creation: expect.objectContaining({ actionApprovalMode: 'ask' }) }));
+  });
+});
+
+it('does not carry an in-flight inherited default into another Gateway login context', async () => {
+  let resolveDefault!: (value: unknown) => void;
+  effective.load.mockImplementationOnce(() => new Promise(resolve => { resolveDefault = resolve; }));
+  const before = drafts.save.mock.calls.length;
+  const pending = new SessionManager().createSession({ agentId: 'fresh' });
+  const rejected = expect(pending).rejects.toThrow('Active Gateway identity changed');
+  useGatewayStore.setState({ conversationId: 'another-owner' });
+  resolveDefault({ config: { runtime: { actionApprovalMode: 'full' } } });
+  await rejected;
+  expect(drafts.save).toHaveBeenCalledTimes(before);
 });

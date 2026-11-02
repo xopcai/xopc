@@ -1,3 +1,4 @@
+import { requestPreparedActionApproval } from '../embedded/execution-context.js';
 import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -110,8 +111,17 @@ export class CliToolProvider implements ExternalToolProvider {
     const descriptorDigest = connectorArgumentsHash({ action, adapterVersion: item.adapter.version, binaryVersion: item.adapter.binaryVersion });
     const argumentsHash = () => connectorArgumentsHash({ args: input, exportResult, instanceId: item.instance.instanceId, accountId: connection.accountId, connectionId: connection.id,
       descriptorDigest, principalId: item.principal.principalId, agentId: item.agentId, conversationId, objective: conversationId ? connectorObjectiveScope(conversationId) : undefined });
-    const decision = evaluateConnectorExecutionPolicy({ installation: item.policy, action: { scope: action.scope, curated: true }, agentId: item.agentId, accountId: connection.accountId, confirmed: Boolean(approvalId) });
+    let confirmed = Boolean(approvalId);
+    let decision = evaluateConnectorExecutionPolicy({ installation: item.policy, action: { scope: action.scope, curated: true }, agentId: item.agentId, accountId: connection.accountId, confirmed: Boolean(approvalId) });
     if (decision.decision === 'denied') throw new Error(decision.reason);
+    const sharedApproval = await requestPreparedActionApproval(context.toolCallId, { toolRef, arguments: args,
+      binding: { accountId: connection.accountId, connectionId: connection.id, descriptorDigest },
+      readOnly: action.scope === 'read' && !exportResult, confirmationRequired: decision.decision === 'confirmation_required' });
+    if (sharedApproval === false) return result({ status: 'approval_required', instruction: 'The action did not run. Wait for the existing approval card; do not retry or switch tools.' });
+    if (sharedApproval === true) {
+      confirmed ||= decision.decision === 'confirmation_required';
+      decision = evaluateConnectorExecutionPolicy({ installation: item.policy, action: { scope: action.scope, curated: true }, agentId: item.agentId, accountId: connection.accountId, confirmed });
+    }
     if (decision.decision === 'confirmation_required') {
       const wait = conversationId && getSessionInputState(conversationId).activeInputId ? requireSessionConnection({ conversationId, principalId: item.principal.principalId,
         agentId: item.agentId ?? 'main', summary: `Confirm ${action.id}`, needs: [{ key: `${item.instance.connectorId}:${connection.accountId}`, target: { type: 'connector', connectorId: item.instance.connectorId }, accountId: connection.accountId, connectionId: connection.id, label: item.instance.displayName, capabilities: [action.id] }] }) : undefined;
@@ -142,7 +152,7 @@ export class CliToolProvider implements ExternalToolProvider {
         || action.requiredScopes.some(scope => !currentScopes.includes(scope))
         || (action.anyScopes?.length && !action.anyScopes.some(scope => currentScopes.includes(scope)))
         || !selectConnectorAccount({ installation: freshPolicy, agentId: item.agentId, conversationId, requestedAccountId: connection.accountId }).connection
-        || evaluateConnectorExecutionPolicy({ installation: freshPolicy, action: { scope: action.scope, curated: true }, accountId: connection.accountId, agentId: item.agentId, confirmed: Boolean(approvalId) }).decision !== 'allowed') {
+        || evaluateConnectorExecutionPolicy({ installation: freshPolicy, action: { scope: action.scope, curated: true }, accountId: connection.accountId, agentId: item.agentId, confirmed }).decision !== 'allowed') {
         throw new CapabilityError('FORBIDDEN', 'Connector permission changed.');
       }
       if (argumentsHash() !== acceptedArgumentsHash) throw new CapabilityError('REVISION_CONFLICT', 'Connector objective changed.');

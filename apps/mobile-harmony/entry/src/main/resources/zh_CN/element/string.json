@@ -1,5 +1,7 @@
 {
   "string": [
+    { "name": "chat_approval_ask", "value": "每次确认" },
+    { "name": "chat_approval_full", "value": "完全访问" },
     {"name":"recording_outcome_save_failed_title","value":"录音未能保存"},
     {"name":"recording_outcome_save_failed_body","value":"尚未确认可恢复的原音。请检查麦克风权限和可用存储空间后重新录制。"},
     {"name":"recording_outcome_cancelled_title","value":"已停止整理"},

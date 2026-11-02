@@ -1,3 +1,4 @@
+import { resolveSessionActionApprovalMode } from '../approval/session-mode.js';
 /**
  * SessionInspector — read-only / introspection-oriented operations on a session.
  *
@@ -81,6 +82,7 @@ export interface SessionAgentConfigView {
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
   workspaceSource: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+  actionApprovalMode: 'ask' | 'full';
   userContextMode: 'enabled' | 'off' | 'temporary';
 }
 
@@ -262,6 +264,7 @@ export class SessionInspector {
       verboseLevel,
       effectiveWorkspacePath,
       workingDirectoryLocked: Boolean(environment || projectWorkspace || hasSessionWorkspaceOverride),
+      actionApprovalMode: resolveSessionActionApprovalMode(conversationId),
       userContextMode: sc?.userContextMode ?? 'enabled',
       workspaceSource: environment
         ? 'execution_environment'

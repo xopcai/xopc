@@ -166,6 +166,7 @@ export interface SessionResponse {
 }
 
 export interface SessionInitialAgentConfig {
+  actionApprovalMode?: 'ask' | 'full';
   model?: string;
   thinkingLevel?: string;
 }

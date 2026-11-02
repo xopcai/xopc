@@ -59,6 +59,22 @@ struct AssistantSessionActionsView: View {
                     } label: {
                         optionRow("思考档位", value: thinkingLabel(options.thinkingLevel), symbol: "slider.horizontal.3")
                     }.disabled(options.isLoading)
+                    Menu {
+                        ForEach(ActionApprovalMode.allCases, id: \.self) { mode in
+                            Button {
+                                Task {
+                                    if let updated = await options.saveActionApproval(mode, conversation: conversation,
+                                                                                      using: GatewayClient(configuration: configuration))
+                                    {
+                                        onConversationUpdated(updated)
+                                    }
+                                }
+                            } label: {
+                                Label(mode.title, systemImage: options.actionApprovalMode == mode ? "checkmark" : "shield")
+                            }
+                        }
+                    } label: { optionRow("操作权限", value: options.actionApprovalMode.title, symbol: "shield") }
+                        .disabled(options.isLoading || options.isSaving || state.isSending || state.runID != nil)
                     if !state.pendingInputs.isEmpty {
                         NavigationLink {
                             ScrollView {

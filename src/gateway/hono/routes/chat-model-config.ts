@@ -1,4 +1,6 @@
 import type { Context } from 'hono';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
 import { withModelConfigLock } from '../../../session/model-config-lock.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -9,6 +11,9 @@ export async function patchChatModelConfig(
   conversationId: string,
   body: Record<string, unknown>,
 ) {
+  if (body.actionApprovalMode !== undefined && !hasGatewayScope(getGatewayPrincipal(c).scopes, 'sessions.permissions')) {
+    return c.json({ ok: false, error: 'Changing action permissions requires sessions.permissions authorization.' }, 403);
+  }
   return withModelConfigLock(conversationId, async () => {
     const changesModel = body.model !== undefined || body.thinkingLevel !== undefined;
     if (changesModel) {

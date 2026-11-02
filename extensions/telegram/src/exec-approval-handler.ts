@@ -13,6 +13,7 @@ export function createTelegramExecApprovalHandler(deps: {
   getConfig: () => Config;
 }): ExecApprovalHandler {
   return {
+    approvalRecipients: (cfg, params) => resolveTelegramExecApprovers(cfg, params.accountId ?? 'default'),
     isEnabled(cfg, params) {
       if (params.channel !== 'telegram') return false;
       return isTelegramExecApprovalEnabled(cfg, params.accountId ?? 'default');

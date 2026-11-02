@@ -6,6 +6,7 @@ import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import { deviceTurnSourceContext, endpointClaimBelongsToPrincipal } from '../../../endpoint-tools/turn-context.js';
 import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { receiveSessionCommand, sessionCommandSnapshot } from '../../service/session-command-service.js';
 import { getSessionInputReceipt, isConversationDeleted, SessionCommandError, retrySessionPreparation } from '../../../storage/sqlite/session-creation-repository.js';
@@ -33,6 +34,9 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
   if (!id.success || !parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session command' } }, 400);
   const command = parsed.data;
   const principal = getGatewayPrincipal(c);
+  if ('creation' in command && command.creation.actionApprovalMode === 'full' && !hasGatewayScope(principal.scopes, 'sessions.permissions')) {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Full access requires sessions.permissions authorization' } }, 403);
+  }
   if ('input' in command) {
     const origin = command.origin.type === 'endpoint' ? endpointTurnClaimSchema.safeParse(command.origin) : null;
     if (origin && (!origin.success || !deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token))) {

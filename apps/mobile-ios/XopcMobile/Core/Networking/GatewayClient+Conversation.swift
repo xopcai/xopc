@@ -1,5 +1,17 @@
 import Foundation
 
+private struct ActionApprovalDefaults: Decodable {
+    let config: ActionApprovalDefaultsConfig
+}
+
+private struct ActionApprovalDefaultsConfig: Decodable {
+    let runtime: ActionApprovalDefaultsRuntime?
+}
+
+private struct ActionApprovalDefaultsRuntime: Decodable {
+    let actionApprovalMode: ActionApprovalMode?
+}
+
 extension GatewayClient {
     func ensureTaskConversation(taskID: String) async throws -> String {
         let response: TaskConversationCreation = try await request(
@@ -91,6 +103,35 @@ extension GatewayClient {
             throw GatewayClientError.server(envelope.error?.message ?? "无法读取模型列表")
         }
         return catalog
+    }
+
+    func draftActionApproval(agentID: String) async throws -> ActionApprovalMode {
+        if let remembered = try ComposerDraftStore().actionApproval(configuration: configuration, agentID: agentID) {
+            return remembered
+        }
+        let envelope: GatewayEnvelope<ActionApprovalDefaults>? = try? await request(
+            path: "/api/agents/\(agentID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? agentID)/effective-config"
+        )
+        try Task.checkCancellation()
+        return envelope?.payload?.config.runtime?.actionApprovalMode ?? .ask
+    }
+
+    func saveActionApproval(_ mode: ActionApprovalMode, conversation: ConversationSelection, configVersion: Int?) async throws -> Int? {
+        var updatedVersion: Int?
+        if !conversation.isDraft {
+            guard let configVersion else { throw GatewayClientError.invalidResponse }
+            struct Command: Encodable { let actionApprovalMode: ActionApprovalMode; let configVersion: Int }
+            let envelope: GatewayEnvelope<SessionAgentConfiguration> = try await request(
+                path: "/api/sessions/\(conversation.id)/agent-config", method: "PATCH",
+                body: encoder.encode(Command(actionApprovalMode: mode, configVersion: configVersion))
+            )
+            guard envelope.isSuccessful, let version = envelope.payload?.configVersion else {
+                throw GatewayClientError.server(envelope.error?.message ?? "无法更新权限")
+            }
+            updatedVersion = version
+        }
+        try ComposerDraftStore().rememberActionApproval(mode, configuration: configuration, agentID: conversation.agentId)
+        return updatedVersion
     }
 
     func fetchAgentConfiguration(conversationID: String) async throws -> SessionAgentConfiguration {

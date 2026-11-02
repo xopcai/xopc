@@ -65,7 +65,7 @@ export class CommandRegistry {
 
   async start(input: {
     owner: string; command: string; cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number;
-    workspace?: string; isolation?: CommandIsolation;
+    workspace?: string; isolation?: CommandIsolation; authorize?: () => void;
     maxOutputChars?: number; signal?: AbortSignal; snapshot?: boolean;
     onOutput?: (stream: 'stdout' | 'stderr', delta: string) => void;
   }): Promise<CommandResult> {
@@ -78,6 +78,7 @@ export class CommandRegistry {
     const startRevision = input.snapshot ? await readWorkspaceRevision(input.cwd) : undefined;
     input.signal?.throwIfAborted();
     const launch = await isolatedCommand({ id, command: input.command, cwd: input.cwd, workspace: input.workspace ?? input.cwd, isolation: input.isolation });
+    input.authorize?.();
     const result: CommandResult = {
       isolation: input.isolation?.mode ?? 'host',
       ...(launch.containerName ? { containerName: launch.containerName } : {}),

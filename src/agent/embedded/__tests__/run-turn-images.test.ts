@@ -4,6 +4,7 @@ import { bindComputerAgentTurn, computerAgentTurn, retainComputerFrame, computer
 
 const mocks = vi.hoisted(() => ({
   phoneSuspended: vi.fn(),
+  clarificationSuspended: vi.fn(),
   appendMessage: vi.fn(),
   connectionSuspended: vi.fn(),
   connectionResume: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock('../../../storage/sqlite/connection-wait-repository.js', () => ({
 
 vi.mock('../../../storage/sqlite/session-repository.js', () => ({ getSessionMetadata: () => ({ agentId: 'main' }) }));
 vi.mock('../../../storage/sqlite/clarification-wait-repository.js', () => ({
-  isClarificationSuspended: () => false, getClarificationResumeInput: () => undefined,
+  isClarificationSuspended: (...args: unknown[]) => mocks.clarificationSuspended(...args), getClarificationResumeInput: () => undefined,
 }));
 
 vi.mock('../../../utils/logger.js', () => ({
@@ -247,6 +248,7 @@ describe('runXopcEmbeddedTurn image input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.phoneSuspended.mockReturnValue(false);
+    mocks.clarificationSuspended.mockReturnValue(false);
     mocks.connectionSuspended.mockReturnValue(false);
     mocks.connectionResume.mockReturnValue(undefined);
     mocks.mcpResume.mockReturnValue(undefined);
@@ -834,6 +836,49 @@ describe('runXopcEmbeddedTurn image input', () => {
       'Sending messages to AI',
     );
   });
+  it('still reports a real policy limit as a non-retryable failure without a user wait', async () => {
+    const turnPolicy = { reset: vi.fn(), afterToolCall: vi.fn(), shouldStopAfterTurn: vi.fn(() => true),
+      beforeToolCall: vi.fn(async () => ({ block: true as const, terminate: true, reason: 'Tool limit reached' })) };
+    mocks.prompt.mockImplementationOnce(async () => {
+      await mocks.session.agent.beforeToolCall({ toolCall: { id: 'limited', name: 'exec_command' }, args: {} });
+      await mocks.session.agent.finishTurn({});
+    });
+    const result = await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'limited-run',
+      userMessage: { role: 'user', content: 'Run the action', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any, modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000, turnPolicy,
+    });
+    expect(result).toMatchObject({ ok: false, retryable: false, stopReason: 'policy_limit', errorMessage: 'Tool limit reached' });
+  });
+
+  it('suspends a pending approval instead of exposing its policy reason as a chat error', async () => {
+    const turnPolicy = {
+      reset: vi.fn(), afterToolCall: vi.fn(), shouldStopAfterTurn: vi.fn(() => true),
+      beforeToolCall: vi.fn(async () => {
+        mocks.clarificationSuspended.mockReturnValue(true);
+        return { block: true as const, terminate: true, reason: 'Internal approval stop instruction' };
+      }),
+    };
+    mocks.prompt.mockImplementationOnce(async () => {
+      await mocks.session.agent.beforeToolCall({ toolCall: { id: 'approval', name: 'exec_command' }, args: {} });
+      await expect(mocks.session.agent.finishTurn({})).resolves.toEqual({ action: 'end' });
+      await expect(mocks.session.agent.beforeToolCall({ toolCall: { id: 'bypass', name: 'shell' }, args: {} }))
+        .resolves.toMatchObject({ block: true, terminate: true });
+    });
+    const result = await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'approval-run',
+      userMessage: { role: 'user', content: 'Run the action', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any, modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000, turnPolicy, requireVisibleReply: true,
+    });
+    expect(result).toMatchObject({ ok: true, stopReason: 'clarification_required' });
+    expect(result.errorMessage).toBeUndefined();
+    expect(turnPolicy.beforeToolCall).toHaveBeenCalledOnce();
+    expect(mocks.retryTurn).not.toHaveBeenCalled();
+    expect(mocks.session.abort).not.toHaveBeenCalled();
+  });
+
   it('suspends after a durable connection request without aborting or retrying the model', async () => {
     mocks.prompt.mockImplementationOnce(async () => {
       mocks.connectionSuspended.mockReturnValue(true);

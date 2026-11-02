@@ -77,7 +77,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
     <Popover.Root onOpenChange={(open) => { if (!open) { setView('config'); setError(''); } }}>
       <Popover.Trigger asChild>
         <button type="button" aria-label={`${m.modelConfigLabel}: ${modelIdentity}${effort ? ` · ${effort}` : ''}`} title={modelIdentity}
-          className={cn('inline-flex h-8 min-w-0 max-w-[min(18rem,calc(100vw-10rem))] items-center gap-1.5 rounded-lg bg-surface-hover/70 px-2.5 text-[13px] text-fg hover:bg-surface-hover', interaction.focusRingPanel, interaction.transition)}>
+          className={cn('inline-flex h-8 min-w-0 max-w-[min(18rem,calc(100vw-10rem))] items-center gap-1.5 rounded-lg bg-transparent px-2.5 text-[13px] text-fg hover:bg-surface-hover', interaction.focusRingPanel, interaction.transition)}>
           {registry.isLoading || (!sessionModel && models.length > 0) ? <Skeleton className="h-4 w-28" /> : <>
             <span className="min-w-0 truncate font-medium">{title}</span>
             {unavailable ? <span className="shrink-0 text-fg-muted">{m.modelUnavailable}</span>

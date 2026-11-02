@@ -149,6 +149,13 @@ export struct XopcChatOptions {
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_model'), summary: this.model.modelName(appSettings.effectiveLanguage()), compact: true, onOpen: (): void => { this.onMode('model'); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_thinking_effort'), summary: this.thinkingSummary(), compact: true,
             onOpen: (): void => { this.onMode('thinking'); } }) }
+          ForEach(['ask', 'full'], (mode: string) => {
+            ListItem() {
+              XopcHubRow({ heading: mode === 'ask' ? $r('app.string.chat_approval_ask') : $r('app.string.chat_approval_full'),
+                summary: this.model.actionApprovalMode === mode ? '✓' : '', compact: true,
+                onOpen: async (): Promise<void> => { await this.model.selectActionApproval(mode); } })
+            }.enabled(!this.model.loading && !this.model.saving && !this.thinkingBusy)
+          }, (mode: string): string => mode)
           ListItem() { XopcHubRow({ heading: $r('app.string.new_chat'), compact: true, symbol: $r('sys.symbol.square_and_pencil'), onOpen: (): void => { this.onNewChat(); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_session_files'), compact: true, symbol: $r('sys.symbol.folder'), onOpen: (): void => { this.onFiles(); } }) }
         }

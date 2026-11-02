@@ -16,6 +16,7 @@ export type PopoverSelectOption = {
   icon?: ReactNode;
   disabled?: boolean;
   group?: string;
+  tone?: 'danger';
 };
 
 /** Inline choices for an existing panel; avoids stacking another popover above it. */
@@ -231,6 +232,8 @@ export function PopoverSelect({
                     className={cn(
                       'touch-target flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-fg hover:bg-surface-hover',
                       option.value === value && 'bg-surface-active font-medium',
+                      option.tone === 'danger' && 'text-danger hover:bg-danger-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-danger',
+                      option.tone === 'danger' && option.value === value && 'bg-danger-soft',
                       disabled && 'cursor-not-allowed opacity-45 hover:bg-transparent',
                     )}
                     onClick={() => {

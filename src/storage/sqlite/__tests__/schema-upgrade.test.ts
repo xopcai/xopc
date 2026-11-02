@@ -64,6 +64,7 @@ function expectPreserved(db: DatabaseSync): void {
   expect(db.prepare('SELECT title FROM tasks').get()?.title).toBe('Keep my task');
   expect(db.prepare('SELECT content FROM knowledge_items').get()?.content).toBe('保留我的记忆');
   expect(db.prepare('SELECT thinking_level FROM session_config').get()?.thinking_level).toBe('high');
+  expect(db.prepare('SELECT action_approval_mode FROM session_config').get()?.action_approval_mode).toBeNull();
   expect(db.prepare('SELECT name FROM automations').get()?.name).toBe('Keep my automation');
   expect(db.prepare('SELECT identity_json FROM connector_accounts').get()?.identity_json).toBe('{"email":"test@example.com"}');
   expect(db.prepare('SELECT content, origin_json, status FROM session_inputs WHERE id = ?').get('legacy-task-input'))

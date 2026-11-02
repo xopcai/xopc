@@ -26,6 +26,44 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GatewaySessionTest {
+  @Test fun actionApprovalPreferencesStayLocalAndOnlyRememberSuccessfulChanges() {
+    val app = ApplicationProvider.getApplicationContext<Context>()
+    val credentials = AndroidSecureStore(app, "approval_credentials_test_v1", "xopc.approval.credentials.test.v1")
+    val local = AndroidSecureStore(app, "approval_preferences_test_v1", "xopc.approval.preferences.test.v1")
+    clear(credentials)
+    try {
+      val fake = FakeGateway()
+      val session = GatewaySession(app, fake, DeviceIdentity("xopc.approval.device.test.v1"), credentials)
+      session.pair(invitation()) {}
+      val repo = ConversationRepository(session, pendingStore = local)
+      repo.removeGatewayLocal(gatewayId.toString())
+      val first = repo.createDraft("main")
+      assertEquals("ask", first.actionApprovalMode)
+      repo.setActionApproval(first.conversationId, "main", "full", null)
+      val restored = ConversationRepository(session, pendingStore = local)
+      val next = restored.createDraft("main")
+      assertEquals("full", next.actionApprovalMode)
+      assertEquals("full", restored.draft(first.conversationId)?.actionApprovalMode)
+      assertEquals("ask", restored.createDraft("research").actionApprovalMode)
+      restored.prepareDraftModel(next.conversationId)
+      restored.send(next.conversationId, "Quick topic", TurnClaim("endpoint", "claim"))
+      assertEquals("full", fake.lastInputCommand?.getJSONObject("creation")?.getString("actionApprovalMode"))
+      val voice = restored.createDraft("main")
+      restored.materializeForVoice(voice.conversationId)
+      assertEquals("full", fake.lastMaterializeCommand?.getJSONObject("creation")?.getString("actionApprovalMode"))
+      val existing = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+      assertEquals(13L, restored.setActionApproval(existing, "main", "ask", 12))
+      assertEquals("ask", fake.lastModelPatch?.getString("actionApprovalMode"))
+      assertEquals(false, fake.lastModelPatch?.has("model"))
+      fake.rejectActionApproval = true
+      assertThrows(Exception::class.java) { restored.setActionApproval(existing, "main", "full", 13) }
+      assertEquals("ask", restored.createDraft("main").actionApprovalMode)
+      assertEquals("full", restored.draft(first.conversationId)?.actionApprovalMode)
+    } finally { ConversationRepository(GatewaySession(app, FakeGateway(),
+      DeviceIdentity("xopc.approval.device.cleanup.test.v1"), credentials), pendingStore = local)
+      .removeGatewayLocal(gatewayId.toString()); clear(credentials) }
+  }
+
   @Test fun workspaceFileReferenceSurvivesRestartAndSendsPathWithoutPayload() {
     val app = ApplicationProvider.getApplicationContext<Context>()
     val store = ChatAttachmentStore(app)
@@ -876,6 +914,7 @@ class GatewaySessionTest {
     private val fakeId: UUID = gatewayId, private val fakePairingId: UUID = pairingId,
     private val fakeSigningKey: Ed25519PrivateKeyParameters = signingKey,
     private val fakeOrigin: String = origin) : GatewayHttp {
+    var rejectActionApproval = false
     var rejectStatus = false
     var rejectPairingStatus = false
     var pairingFinalStatus = "approved"
@@ -885,6 +924,7 @@ class GatewaySessionTest {
     var projectWorkspaceRoot: String? = null
     var projectExecutionMode = "local_checkout"
     var lastInputCommand: JSONObject? = null
+    var lastMaterializeCommand: JSONObject? = null
     var taskInputPostCount = 0
     var lastModelPatch: JSONObject? = null
     var lastDirectoryPatch: JSONObject? = null
@@ -1405,6 +1445,12 @@ class GatewaySessionTest {
           lastDirectoryPatch = input
           """{"ok":true,"payload":{"workingDirectory":"/workspace"}}"""
         }
+        path.endsWith("/agent-config") && method == "PATCH" && input.has("actionApprovalMode") -> {
+          if (rejectActionApproval) throw IllegalStateException("HTTP_403")
+          lastModelPatch = input
+          JSONObject().put("ok", true).put("payload", JSONObject()
+            .put("actionApprovalMode", input.getString("actionApprovalMode")).put("configVersion", 13)).toString()
+        }
         path.endsWith("/agent-config") && method == "PATCH" -> {
           lastModelPatch = input
           JSONObject().put("ok", true).put("payload", JSONObject()
@@ -1434,6 +1480,12 @@ class GatewaySessionTest {
         path.startsWith("/api/sessions/") && method == "DELETE" -> {
           deletedIds += path.removePrefix("/api/sessions/")
           JSONObject().put("deleted", true).toString()
+        }
+        path.endsWith("/materialize") -> {
+          lastMaterializeCommand = input
+          JSONObject().put("ok", true).put("payload", JSONObject().put("receipt", JSONObject()
+            .put("conversationId", input.getString("commandId")).put("clientMessageId", input.getString("commandId"))
+            .put("lifecycle", "ready"))).toString()
         }
         path.endsWith("/inputs") -> {
           inputPostCount++

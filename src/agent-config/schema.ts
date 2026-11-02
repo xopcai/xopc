@@ -1,4 +1,4 @@
-import { SpecialistProfileSchema } from '@xopcai/gateway-contract';
+import { ActionApprovalModeSchema, SpecialistProfileSchema } from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
 export const DEFAULT_AGENT_MODEL_REF = 'xopc-cloud/auto';
@@ -117,6 +117,7 @@ export const SkillOverrideSchema = z.discriminatedUnion('mode', [
 ]);
 
 export const RuntimePolicySchema = z.object({
+  actionApprovalMode: ActionApprovalModeSchema.optional(),
   codemode: z.object({
     enabled: z.boolean().default(false),
     timeoutMs: z.number().int().min(1).max(60_000).default(60_000),

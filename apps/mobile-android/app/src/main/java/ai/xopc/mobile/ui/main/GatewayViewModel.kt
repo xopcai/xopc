@@ -345,6 +345,7 @@ data class ConnectionUiState(
   val models: List<ConversationModel> = emptyList(),
   val selectedModelId: String = "",
   val thinkingLevel: String = "off",
+  val actionApprovalMode: String = "ask",
   val modelConfigVersion: Long? = null,
   val modelsLoading: Boolean = false,
   val modelSaving: Boolean = false,
@@ -3515,6 +3516,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
           models = selection.models, selectedModelId = selection.selectedId,
           modelConfigVersion = selection.configVersion, thinkingLevel = selection.thinkingLevel,
+          actionApprovalMode = selection.actionApprovalMode ?: "ask",
           modelsLoading = false) }
       } catch (error: CancellationException) {
         throw error
@@ -3546,6 +3548,27 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         if (mutableState.value.selectedConversationId == id) {
           mutableState.update { it.copy(modelSaving = false, modelError = true) }
         }
+      }
+    }
+  }
+
+  fun selectActionApproval(mode: String) {
+    val current = mutableState.value
+    val id = current.selectedConversationId ?: return
+    if (mode !in setOf("ask", "full") || current.modelSaving || current.modelsLoading || current.sending ||
+      current.activeRunId != null || current.pendingInput != null || current.clarification != null) return
+    mutableState.update { it.copy(modelSaving = true, modelError = false) }
+    viewModelScope.launch {
+      try {
+        val version = runInterruptible(Dispatchers.IO) {
+          conversations.setActionApproval(id, current.selectedAgentId, mode, current.modelConfigVersion)
+        }
+        if (mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(actionApprovalMode = mode, modelConfigVersion = version, modelSaving = false)
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(modelSaving = false, modelError = true) }
       }
     }
   }

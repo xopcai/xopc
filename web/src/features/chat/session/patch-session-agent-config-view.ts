@@ -4,6 +4,7 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 
 export type SessionAgentConfigView = {
   model: string;
+  actionApprovalMode?: 'ask' | 'full';
   configVersion?: number;
   localDraft?: boolean;
   thinkingLevel?: string | null;
@@ -27,6 +28,7 @@ export function patchSessionAgentConfigView(conversationId: string, cfg: Session
   if (currentVersion !== undefined && (cfg.configVersion === undefined || cfg.configVersion < currentVersion)) return;
   store.patchSessionMeta(key, {
     model: cfg.model,
+    actionApprovalMode: cfg.actionApprovalMode,
     configVersion: cfg.configVersion,
     localDraft: cfg.localDraft === true,
     thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,

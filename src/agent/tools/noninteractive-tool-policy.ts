@@ -1,3 +1,5 @@
+import { requiresActionApproval, isActionApprovalCore } from '../approval/action-policy.js';
+import { resolveSessionActionApprovalMode } from '../approval/session-mode.js';
 import type { Config } from '../../config/schema.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { createAgentTurnPolicy } from '../orchestration/agent-turn-policy.js';
@@ -22,6 +24,13 @@ export function createNoninteractiveToolPolicy(options: { getConfig: () => Confi
   };
   return createAgentTurnPolicy({
     authorizeToolCall: async context => {
+      const resolved = options.conversationId ? resolveEffectiveAgentConfigForSession(options.conversationId)
+        : resolveEffectiveAgentConfigForAgent(options.agentId ?? 'main');
+      const mode = options.conversationId ? resolveSessionActionApprovalMode(options.conversationId) : resolved.config.runtime.actionApprovalMode ?? 'full';
+      if (requiresActionApproval({ name: context.toolCall.name, args: context.args, mode,
+        workspace: resolved.config.workspace, core: isActionApprovalCore(context.context?.tools?.find(tool => tool.name === context.toolCall.name)) })) {
+        return { block: true, terminate: true, reason: 'Action requires user approval; this noninteractive run cannot approve it.' };
+      }
       const blocked = policies(context.toolCall.name, context.args).find(policy => policy.mode !== 'allow');
       return blocked ? { block: true, reason: `${blocked.id} requires authorization (${blocked.mode}).` } : undefined;
     },

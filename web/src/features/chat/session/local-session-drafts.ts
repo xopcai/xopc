@@ -178,6 +178,7 @@ export async function confirmSessionCommand(id: string, transcriptId: string): P
 export function draftAgentConfig(draft: LocalSessionDraft): SessionAgentConfig {
   return {
     localDraft: true,
+    actionApprovalMode: draft.creation.actionApprovalMode ?? 'full',
     model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel,
     fixedModel: false,
     activityDetail: { default: 'on', override: null, effective: 'on', source: 'default' },

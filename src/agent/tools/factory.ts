@@ -2,6 +2,7 @@ import { getPhoneRuntime, phoneExecutionContext } from '../../phone/runtime.js';
 import { createPhoneUseTool } from './phone-use-tool.js';
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
 import { withCoreToolExposure } from './toolExposure.js';
+import { markActionApprovalCore } from '../approval/action-policy.js';
 import { markCodemodeCoreRead } from './codemode-permissions.js';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
 import { filterExecutionTools, PERSONAL_REQUEST_TOOL_IDS, resolveExecutionToolPolicy, TASK_EXECUTION_TOOL_IDS } from '../embedded/execution-tool-policy.js';
@@ -902,7 +903,7 @@ export class AgentToolsFactory {
         allowHostGit: () => getCommandIsolation()?.mode !== 'docker',
       }));
     }
-    const selected = filterToolsByDisabledSet(core.map(markCodemodeCoreRead), disabled)
+    const selected = filterToolsByDisabledSet(core.map(markCodemodeCoreRead).map(markActionApprovalCore), disabled)
       .filter(tool => tool.name !== 'xopc_tool_search')
       .filter(tool => (!allowed || allowed.has(tool.name)) && !(personalToolsConfigured && tool.name === 'clarify'))
       .map(tool => personalToolsConfigured && !tool.name.startsWith('personal_') && PERSONAL_TOOL_DESCRIPTIONS[tool.name]

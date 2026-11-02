@@ -457,14 +457,17 @@ export function consumeClarificationApproval(
     const state = getSessionInputState(conversationId);
     if (!state.activeInputId) return undefined;
     const input = getSessionInputById(conversationId, state.activeInputId);
-    if (input?.kind !== 'clarification_resume' || !input.payload) return undefined;
+    if (input?.kind !== 'clarification_resume' || !input.payload || input.status !== 'running') return undefined;
     const wait = getClarification(input.payload.waitId);
     if (!wait || wait.kind !== 'approval' || wait.approvalKey !== approvalKey || wait.approvalConsumedAt) {
       return undefined;
     }
+    if (wait.conversationId !== conversationId || wait.principalId !== 'local-owner'
+      || wait.transcriptId !== readCurrentTranscriptId(getSqliteDatabase(), conversationId)
+      || wait.resumeInputId !== input.id || !['queued', 'resolved'].includes(wait.status)) return undefined;
     const approved = (wait.expiresAt === undefined || wait.expiresAt > Date.now())
       && wait.decision === 'approve';
-    writeWait({ ...wait, approvalConsumedAt: Date.now(), updatedAt: Date.now() }, wait.version);
+    if (!writeWait({ ...wait, approvalConsumedAt: Date.now(), updatedAt: Date.now() }, wait.version)) return undefined;
     return approved ? 'approved' : 'denied';
   });
 }
