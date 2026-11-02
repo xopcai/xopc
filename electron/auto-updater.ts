@@ -34,6 +34,7 @@ let checkDelayTimer: ReturnType<typeof setTimeout> | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 let lastCheckWasManual = false;
 let automaticUpdates = true;
+let initialized = false;
 
 /**
  * True after `update-downloaded` until process exit. Further `checkForUpdates` calls are skipped to avoid
@@ -58,6 +59,7 @@ export function initAutoUpdater(mainWindow: BrowserWindow, options: { automaticU
   }
 
   mainWindowRef = mainWindow;
+  initialized = true;
   automaticUpdates = options.automaticUpdates ?? true;
   if (process.platform === 'win32') {
     (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = verifyWindowsUpdateSignature;
@@ -234,7 +236,7 @@ export function hasPendingInstall(): boolean {
 }
 
 export function checkForUpdates(manual = false): void {
-  if (!app.isPackaged || (!manual && !automaticUpdates)) {
+  if (!app.isPackaged || !initialized || (!manual && !automaticUpdates)) {
     return;
   }
   if (updateDownloadedPendingInstall) {
@@ -267,6 +269,7 @@ export function quitAndInstall(): void {
 }
 
 export function stopAutoUpdater(): void {
+  initialized = false;
   if (checkDelayTimer) { clearTimeout(checkDelayTimer); checkDelayTimer = null; }
   if (checkTimer) {
     clearInterval(checkTimer);
