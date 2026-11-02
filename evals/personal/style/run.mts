@@ -11,6 +11,7 @@ import { parseArgs } from 'node:util';
 import { serve } from '@hono/node-server';
 import { EvalStore, ArtifactStore } from '../../coder/packages/storage/src/index.js';
 import { TraceEmitter, redactSensitive, type EvalCase } from '../../coder/packages/protocol/src/index.js';
+import { readRuntimeUsage } from '../../control/runtime-usage.mjs';
 import { runRealtimeInput } from '../../coder/packages/adapters/xopc/src/realtime-run.js';
 
 const { values } = parseArgs({ options: {
@@ -22,6 +23,7 @@ const { values } = parseArgs({ options: {
   concurrency: { type: 'string', default: '2' }, 'dry-run': { type: 'boolean' },
   'dialogue-fixtures': { type: 'string' },
   'fresh-profile': { type: 'boolean' },
+  'no-transport-retries': { type: 'boolean' },
   'eq-case-id': { type: 'string' },
 } });
 for (const key of ['eq-cases', 'follow-cases', 'concurrency'] as const) {
@@ -67,6 +69,7 @@ const manifest = {
   workingTreeDirty: Boolean(execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim()),
   sourceHash: fingerprint(), upstreams: pins, model, judge, persona: personaModel,
   eqCases: Number(values['eq-cases']), followCases: Number(values['follow-cases']), concurrency: Number(values.concurrency),
+  transportRetries: values['no-transport-retries'] ? 0 : 1,
   eqTurns: 8, repetitions: 1, reasoning: 'off', evaluatorReasoning: 'low',
   ...(process.env.XOPC_STYLE_POOL_URL ? { requestPools: { generation: 4, judge: 4, scenes: 3, sharedAcrossProcesses: true, adaptiveDownshift: true } } : {}),
   personalProfile: personalSource ? 'existing-profile-isolated-state' : 'fresh-production-default',
@@ -204,13 +207,18 @@ try {
         if (userMessage?.role !== 'user') throw new Error('Candidate request must end with user message');
         let text = userMessage.content as string;
         if (body.systemContext) text = `[Benchmark interaction context]\n${body.systemContext}\n[/Benchmark interaction context]\n\n${text}`;
+        const requestStartedAt = performance.now();
+        let firstDeltaAt: number | undefined;
         let answer = '', failed = '', usage: Record<string, number> = {};
         await runRealtimeInput({ baseUrl, headers, conversationId: run.conversationId, transcriptId: String(meta.active_transcript_id), configVersion: selected.configVersion,
           message: text, thinking: 'off', signal: AbortSignal.timeout(240_000), onRunId: () => {}, onEvent: async (event, data) => {
             await run.trace.emit('agent.event', { event, data });
             const type = typeof data.type === 'string' ? data.type : event;
             const payload = (data.payload ?? {}) as Record<string, any>;
-            if (type === 'assistant_delta' && typeof payload.delta === 'string') answer += payload.delta;
+            if (type === 'assistant_delta' && typeof payload.delta === 'string') {
+              if (payload.delta.length && firstDeltaAt === undefined) firstDeltaAt = performance.now();
+              answer += payload.delta;
+            }
             if (type === 'error') failed = String(payload.message ?? JSON.stringify(payload));
             if (type === 'run_end' && payload.status !== 'success') failed = String(payload.summary ?? payload.status);
             if (type === 'assistant_message_end' && payload.usage) {
@@ -218,7 +226,7 @@ try {
             }
           } });
         if (failed || !answer.trim()) throw new Error(failed || 'Personal returned no text');
-        result = { content: answer, model, backend: 'custom', usage, cost_usd: null, cost_source: 'unavailable' };
+        result = { content: answer, latencyMs: performance.now() - requestStartedAt, firstDeltaMs: firstDeltaAt === undefined ? null : firstDeltaAt - requestStartedAt, model, backend: 'custom', usage, cost_usd: null, cost_source: 'unavailable' };
       } else result = await evaluator(body);
       for (const [key, value] of Object.entries(result.usage ?? {})) if (typeof value === 'number') run.usage[`${body.role}.${key}`] = (run.usage[`${body.role}.${key}`] ?? 0) + value;
       await run.trace.emit('model.response', { role: body.role, ...result });
@@ -232,6 +240,7 @@ try {
   const child = spawn(join(upstream, 'eqbench4/.venv/bin/python'), [resolve('evals/personal/style/driver.py'), '--out', out, '--upstream', upstream,
     '--eq-cases', values['eq-cases']!, '--follow-cases', values['follow-cases']!, '--concurrency', values.concurrency!,
     ...(dialogueFixtures ? ['--dialogue-fixtures', dialogueFixtures] : []),
+    ...(values['no-transport-retries'] ? ['--no-transport-retries'] : []),
     ...(values['eq-case-id'] ? ['--eq-case-id', values['eq-case-id']] : [])],
     { stdio: 'inherit', env: { ...process.env, XOPC_STYLE_BRIDGE: bridgeUrl, XOPC_STYLE_TOKEN: token, PYTHONPATH: join(upstream, 'eqbench4/src') } });
   const [code] = await once(child, 'exit');
@@ -244,7 +253,9 @@ try {
   for (const id of experiments.values()) store.completeExperiment(id, success ? 'completed' : 'failed');
   if (bridge) { bridge.closeAllConnections(); await new Promise<void>(resolve => bridge!.close(() => resolve())); }
   if (gateway) { if ('closeAllConnections' in gateway) gateway.closeAllConnections(); await new Promise<void>(resolve => gateway!.close(() => resolve())); }
-  await service.stop(); closeXopcDatabase(); store.close();
+  await service.stop();
+  write('runtime-usage.json', { finalSnapshotGuaranteed: true, rows: readRuntimeUsage(join(state, 'xopc.db')) });
+  closeXopcDatabase(); store.close();
   // Retain only synthetic receipts, never the copied config containing provider settings.
   rmSync(state, { recursive: true, force: true });
 }

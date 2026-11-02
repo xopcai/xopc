@@ -33,6 +33,29 @@ class ProtocolTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_dialogue_fixtures({"schemaVersion": 1, "cases": cases})
 
+    def test_assistant_flow_is_a_frozen_balanced_four_turn_cohort(self):
+        path = Path(__file__).parent / 'assistant-flow-dialogues-v1.json'
+        cases = validate_dialogue_fixtures(json.loads(path.read_text()))
+        self.assertEqual(len(cases), 12)
+        self.assertEqual(sum(c['split'] == 'development' for c in cases), 6)
+        self.assertEqual(sum(c['split'] == 'validation' for c in cases), 6)
+        self.assertTrue(all(len(c['userTurns']) == 4 for c in cases))
+        self.assertEqual(sum(len(c['userTurns']) for c in cases), 48)
+
+    def test_new_iteration_does_not_relabel_exposed_validation(self):
+        root = Path(__file__).parent
+        old = validate_dialogue_fixtures(json.loads((root / 'assistant-flow-dialogues-v1.json').read_text()))
+        for version in [2, 3, 4, 5]:
+            new = validate_dialogue_fixtures(json.loads((root / f'assistant-flow-dialogues-v{version}.json').read_text()))
+            exposed = {c['id'] for c in old}
+            development = {c['id'] for c in new if c['split'] == 'development'}
+            validation = {c['id'] for c in new if c['split'] == 'validation'}
+            self.assertTrue(exposed.issubset(development))
+            self.assertFalse(exposed & validation)
+            self.assertEqual(len(validation), 6)
+            self.assertTrue(all(len(c['userTurns']) == 4 for c in new))
+            old = new
+
     def test_grading_rejects_missing_extra_uncertain_and_executable_output(self):
         for text in ["['YES']", "['YES','NO','YES']", "['YES','MAYBE']", "__import__('os').system('false')", "['YES', True]"]:
             with self.assertRaises(ValueError):

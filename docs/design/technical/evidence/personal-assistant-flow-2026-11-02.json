@@ -1,0 +1,1054 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "phaseOneComplete": false,
+  "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+  "productionDefaultsChanged": false,
+  "batches": [
+    {
+      "batch": 1,
+      "localDirectory": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1",
+      "improvementId": "7543a53c-e60a-4b0e-8a51-d916f2fba657",
+      "promotion": "rejected",
+      "registration": {
+        "schemaVersion": 1,
+        "registeredAt": "2026-11-02T01:45:54.152Z",
+        "suite": "personal-assistant-flow-zh-v1",
+        "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+        "reasoning": "off",
+        "evaluatorReasoning": "low",
+        "personalProfile": "fresh-production-default",
+        "concurrency": 2,
+        "transportRetries": 0,
+        "expectedScenes": 12,
+        "expectedUserInputs": 96,
+        "expectedJudgeCalls": 24,
+        "development": [
+          "P0-FLOW-D01",
+          "P0-FLOW-D02",
+          "P0-FLOW-D03",
+          "P0-FLOW-D04",
+          "P0-FLOW-D05",
+          "P0-FLOW-D06"
+        ],
+        "validation": [
+          "P0-FLOW-V01",
+          "P0-FLOW-V02",
+          "P0-FLOW-V03",
+          "P0-FLOW-V04",
+          "P0-FLOW-V05",
+          "P0-FLOW-V06"
+        ],
+        "fixture": "/Users/micjoyce/develop/github/xopc/evals/personal/style/assistant-flow-dialogues-v1.json",
+        "fixtureSha256": "45b17db9718c5d573ccd232cb14a72dc93d5db8c3a726bcee8d566728b47670a",
+        "candidateRuleSha256": "2fb93721ad23009f0561866dd49c5d0d618fd07f3370fe470f23c7f175f2f16c",
+        "conditions": [
+          {
+            "path": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-source",
+            "commit": "a232fbd896dde115d6dd27e917dbe3d1965e453c",
+            "moduleSha256": "e8b1ae2e7397ac297645e0084d59e8f6e516ad9e6a45fec600a7214e9702687d"
+          },
+          {
+            "path": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-source",
+            "commit": "d83d78cc5900b2c4a1eb36dbb264e9e901802f09",
+            "moduleSha256": "f39e2aada0ee6681678625616b02dcbc38045f0f4f9bfe21309b80513f2e195e"
+          }
+        ],
+        "onlyChangedModule": "src/personal-agent/reply-style.ts",
+        "gate": {
+          "validationOverallMinNetWins": 1,
+          "validationNaturalnessMinNetWins": 1,
+          "noCandidateMajorEitherOrder": true,
+          "validationViolationsNonincrease": true,
+          "validationP95LatencyRatio": 1.2,
+          "minIndependentHumanReviewers": 2,
+          "completeDenominatorRequired": true
+        },
+        "budget": {
+          "generationMaxRequests": 180,
+          "judgeMaxRequests": 40,
+          "totalWallMs": 1800000,
+          "requestTimeoutMs": 240000
+        },
+        "limitations": [
+          "Product-authored fixed continuations, not observed adaptive human behavior",
+          "Single judge, swapped orders correlated",
+          "No paid unchanged rerun, no score-based replacement",
+          "No production adoption before human review; task execution transitions require stage two live-tool fixtures"
+        ]
+      },
+      "sourceManifests": [
+        {
+          "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+          "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+          "reasoning": "off",
+          "sourceHash": "f5e9d3e76ef2a1db49b5e67bc820eaa4871c840f33e37505ce5f99c87b30e600",
+          "commit": "a232fbd896dde115d6dd27e917dbe3d1965e453c",
+          "transportRetries": 0,
+          "fixtureSha256": "45b17db9718c5d573ccd232cb14a72dc93d5db8c3a726bcee8d566728b47670a"
+        },
+        {
+          "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+          "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+          "reasoning": "off",
+          "sourceHash": "a9688203827fcd7e99b53e1a4ad439da6ad24face080f885a760b2aedc284def",
+          "commit": "d83d78cc5900b2c4a1eb36dbb264e9e901802f09",
+          "transportRetries": 0,
+          "fixtureSha256": "45b17db9718c5d573ccd232cb14a72dc93d5db8c3a726bcee8d566728b47670a"
+        }
+      ],
+      "sourceCompletions": [
+        {
+          "exitCode": 0,
+          "sourceHashEnd": "f5e9d3e76ef2a1db49b5e67bc820eaa4871c840f33e37505ce5f99c87b30e600",
+          "sourceChanged": false,
+          "experiments": {
+            "style-preflight": "9a53b934-96e3-4303-8dd9-5026d4d64b68",
+            "personal-p0-scripted": "10366496-eb49-4672-8e3a-88eaa7521739"
+          },
+          "costUsd": null
+        },
+        {
+          "exitCode": 0,
+          "sourceHashEnd": "a9688203827fcd7e99b53e1a4ad439da6ad24face080f885a760b2aedc284def",
+          "sourceChanged": false,
+          "experiments": {
+            "style-preflight": "a71918e1-74ef-4c17-96ff-a5fc00ee0f3f",
+            "personal-p0-scripted": "a73102e9-d332-469e-98df-a5d4d5012461"
+          },
+          "costUsd": null
+        }
+      ],
+      "analysis": {
+        "expected": 12,
+        "completed": 12,
+        "cohorts": {
+          "development": {
+            "expected": 6,
+            "complete": 6,
+            "overall": {
+              "baseline": 1,
+              "candidate": 1,
+              "tie": 3,
+              "discordant": 1,
+              "unresolved": 0
+            },
+            "naturalness": {
+              "baseline": 0,
+              "candidate": 0,
+              "tie": 5,
+              "discordant": 1,
+              "unresolved": 0
+            },
+            "violationCounts": {
+              "overinterpretation": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "unnecessary_question": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "repeated_closing": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "premature_resolution": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "required_content_or_boundary": {
+                "baseline": 3,
+                "candidate": 3
+              },
+              "didactic_expression": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "conversation_flow": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "preference_scope": {
+                "baseline": 1,
+                "candidate": 1
+              }
+            },
+            "majorCandidateEitherOrder": [],
+            "latency": {
+              "baselineP95Ms": 8098.427291,
+              "candidateP95Ms": 8915.970874999999,
+              "baselineSamples": 24,
+              "candidateSamples": 24,
+              "expectedSamples": 24
+            }
+          },
+          "validation": {
+            "expected": 6,
+            "complete": 6,
+            "overall": {
+              "baseline": 1,
+              "candidate": 0,
+              "tie": 5,
+              "discordant": 0,
+              "unresolved": 0
+            },
+            "naturalness": {
+              "baseline": 1,
+              "candidate": 0,
+              "tie": 5,
+              "discordant": 0,
+              "unresolved": 0
+            },
+            "violationCounts": {
+              "overinterpretation": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "unnecessary_question": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "repeated_closing": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "premature_resolution": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "required_content_or_boundary": {
+                "baseline": 0,
+                "candidate": 1
+              },
+              "didactic_expression": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "conversation_flow": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "preference_scope": {
+                "baseline": 0,
+                "candidate": 0
+              }
+            },
+            "majorCandidateEitherOrder": [],
+            "latency": {
+              "baselineP95Ms": 5466.490542000014,
+              "candidateP95Ms": 5405.0174169999955,
+              "baselineSamples": 24,
+              "candidateSamples": 24,
+              "expectedSamples": 24
+            }
+          }
+        },
+        "gates": {
+          "allExpectedScenesCapturedAndJudged": true,
+          "validationOverallNetPositive": false,
+          "validationNaturalnessNetPositive": false,
+          "noCandidateMajorEitherOrder": true,
+          "validationViolationsNonincrease": false,
+          "validationLatencyComplete": true,
+          "validationP95Within120Percent": true
+        },
+        "automatedPassed": false,
+        "caseOutcomes": [
+          {
+            "caseId": "P0-FLOW-D01",
+            "split": "development",
+            "overall": "discordant",
+            "naturalness": "discordant",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D02",
+            "split": "development",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D03",
+            "split": "development",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D04",
+            "split": "development",
+            "overall": "baseline",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D05",
+            "split": "development",
+            "overall": "candidate",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D06",
+            "split": "development",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V01",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "baseline",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V02",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V03",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V04",
+            "split": "validation",
+            "overall": "baseline",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V05",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V06",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          }
+        ]
+      },
+      "audit": [
+        {
+          "id": "baseline",
+          "physicalRequests": 51,
+          "runtimeRequests": null,
+          "completedRequests": 51,
+          "observedWireTokens": 594514,
+          "observedRuntimeTokens": null,
+          "perRequestMatched": false,
+          "usageMatched": false,
+          "unknownRequests": 0,
+          "ledgerFinalSnapshotGuaranteed": false,
+          "files": {
+            "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline-model-requests.jsonl",
+            "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline-runtime-usage.json"
+          },
+          "hashes": {
+            "wire": "ac799418be5e53cab22e666e7558977e15a6ad21dbd778956a42b229c01c783d",
+            "ledger": null
+          },
+          "actualCharge": null,
+          "observedRuntimeRows": 0,
+          "runtimeCountKnown": false
+        },
+        {
+          "id": "candidate",
+          "physicalRequests": 51,
+          "runtimeRequests": null,
+          "completedRequests": 51,
+          "observedWireTokens": 600270,
+          "observedRuntimeTokens": null,
+          "perRequestMatched": false,
+          "usageMatched": false,
+          "unknownRequests": 0,
+          "ledgerFinalSnapshotGuaranteed": false,
+          "files": {
+            "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate-model-requests.jsonl",
+            "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate-runtime-usage.json"
+          },
+          "hashes": {
+            "wire": "907526ed0aeb38fb00c1eb694aab1231576fcb36229592c456d3f808faf77874",
+            "ledger": null
+          },
+          "actualCharge": null,
+          "observedRuntimeRows": 0,
+          "runtimeCountKnown": false
+        },
+        {
+          "id": "judge",
+          "physicalRequests": 24,
+          "runtimeRequests": 24,
+          "completedRequests": 24,
+          "observedWireTokens": 62430,
+          "observedRuntimeTokens": 62430,
+          "perRequestMatched": true,
+          "usageMatched": true,
+          "unknownRequests": 0,
+          "ledgerFinalSnapshotGuaranteed": true,
+          "files": {
+            "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge-model-requests.jsonl",
+            "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/runtime-usage.json"
+          },
+          "hashes": {
+            "wire": "b6b5b474ff935620a20d00170ed40cf7ecfd1effa6479dc8f6c1ed2afda244d5",
+            "ledger": "e124c4574d4545c435fa4905b992397b831e438f72cc57a55ec516351e86ca92"
+          },
+          "actualCharge": null,
+          "observedRuntimeRows": 24,
+          "runtimeCountKnown": true
+        }
+      ],
+      "decisionReasons": [
+        "Campaign validity or idle state failed: 0",
+        "Campaign validity or idle state failed: 1",
+        "Physical request/runtime usage reconciliation failed: baseline",
+        "Physical request/runtime usage reconciliation failed: candidate",
+        "Style gate failed: validationOverallNetPositive",
+        "Style gate failed: validationNaturalnessNetPositive",
+        "Style gate failed: validationViolationsNonincrease",
+        "Human blind review pending: two independent reviewers required before adoption"
+      ],
+      "decisionSha256": "4d6205d0cab74d5fcf52d256cce39779b6213591443ae42500ddfed47463f573",
+      "humanReview": {
+        "status": "pending",
+        "expectedReviewers": 2,
+        "completedReviewers": 0,
+        "queue": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/human-blind-review.json"
+      },
+      "artifactHashes": {
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-D01.json": "f99319a7ce65ed3a77d5e06c163c21e1a7c53669085952b439ac015d3ecfd961",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-D01.json": "1a3e0ac078056e14897132b2ee91bfbfc253c8622de47c0aee173d8e9bbec623",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D01.forward.json": "b785259e7edc5fc5a5ad2d2b422cea9b52c7ac1fb3a100ee552bf6968017025b",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D01.reverse.json": "e380a6c32b15ab4c7470747e09ab141a555d0b0a01d43b06f24bc486d48b135d",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-D02.json": "d9bfbb845d2925dce56149f1e756b0baeadb3f0f987d1e2c2cbabec031be1c7f",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-D02.json": "9e47e0f68c48bdca1c13d28b406e320d25e7a6b37f337b276830da3efc96b9e1",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D02.forward.json": "a74ff1415ae08e9c1fe77af192a73f9f10062275c622f179f02d880abff25329",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D02.reverse.json": "88da31fad78df4c442776eb5a6b8be66b0935915c11bc6aad07710352dc3eff7",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-D03.json": "e2e9a7c534803cd8a232c58653d35a5bbcd9070b40819088e02e468d4f46ec67",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-D03.json": "36405db1b94929106eaa5dbaa2d358ee059cfc5bc652edf4a3324d5235f04a2e",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D03.forward.json": "c8e9781aa8529afaaacc1807647c21e69819404d0b5a0221131955003dd53bed",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D03.reverse.json": "91c9dbd3e47c36e35b6c709a38dd3504050b9ab781a14b3434e9e83d39158e1e",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-D04.json": "ad06d2a995c3b29033cf294cdd8efe9a62182cb3c4c2e22b5b273f2dbdc4ce3c",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-D04.json": "b27a37c13f7e9da911496fd2fd7347b29383163a739b5eb6cbf77a93013d47af",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D04.forward.json": "dd770ecf57a746da9e91f9398315b1fe74d33698d9af134daab32b3c95dc9581",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D04.reverse.json": "06a56652917dc348890aa2b9eea8d58dccab49d9bf24317daaba00358ec49687",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-D05.json": "820b5498020227bd90886a732e550e376d7d87f9f83c463d0a009e1780e3ae67",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-D05.json": "f382eb1b86f4cefb75aef2feabf3ea1e6fb6c12dd1de5f3c28e6f02b13a2bf9b",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D05.forward.json": "da7f91337a1efb4a270c748e8a0a575a5eb9e9a02c83557111b6845fb8666a60",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D05.reverse.json": "b13c66576e9af0d24dd552b1700beb4185993833a56e7a2ec5f024b0ee1c298a",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-D06.json": "b538aab155a8826d6ec621c8228de9d846ec5e67135ac9059a8e745d9d9f3992",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-D06.json": "0714a46ff27da472bf04807922a34dd9673a6b352104e95a6971ade9d18a8f3b",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D06.forward.json": "e74e5d1f86af7c650b01a2ead26f7458cafb2c682243141f60eea85c196087fb",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-D06.reverse.json": "a1caea5b0c36d038c89fc7c4de1b8245c9067dd36e5996c4af8578025718fdff",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-V01.json": "04ba5ea53785178617fde4ea91415a8f688199cf214fe28d47c76f07701f3826",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-V01.json": "88d24d8dc75b56a6492b82b8297287079901a5ee4249b0061f17d54801005447",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V01.forward.json": "973bc86abc4c1b9208bb935200f144e8a6e2e2ed974fee71a68f4880f6108585",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V01.reverse.json": "bad2ca1081497486d211402e04f5ce2fa6a770e22be37c6435cb4394e266dc0b",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-V02.json": "d6fccf14b5a2407a1c08dfda8edb01319007f90de08eb7feea598b435b5e8a8f",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-V02.json": "3a8ae8729fca32ccab37c57860db1ac30dabb73b77fda7e260c483b8072ca8f9",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V02.forward.json": "8811ecd615af4a4c02e05a248fed02f066c968511a27451645f5aa187e170ba7",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V02.reverse.json": "f9a8495f0ae5136d2de35878ebb2a50835c8d6454ea0883c108e44d35fb16675",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-V03.json": "144878ddf98e4f15d3b67cb8af00b75c10eb48d3971ccce802aefb7b19814441",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-V03.json": "11345c6d25cd513b254eba9cbb8d60035ac435f5ec698e6e3154205cbbf6ea60",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V03.forward.json": "b9226b0447f9cba072c35ebc86ced5483c27bb54ace3d06a1e9004cabf4d233e",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V03.reverse.json": "1a1e4e37ba6024025b6fbf98fa814d21fd948237d93b2932212120f38703ab9b",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-V04.json": "1c9a0cf81ba8afb557eaa5eea615fd611a62427b56373884c981eed90ea95916",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-V04.json": "d5dd40c27deab3bc44962547f9596a22233218d5e3b12a7525b787051025dbb0",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V04.forward.json": "387326ee1da0b4e44ff53fea4b20ed21c86842652f1ef8516d22f0c7ce177432",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V04.reverse.json": "ff33e413cfc2d1e144598eeaf86e6ac4b9771610f0f12c25cacd4303ce40d916",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-V05.json": "29343d0f482ec28baa6ffa3c3f515dd5f8ed86ab554e4c2ee77a488f415e2c92",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-V05.json": "3474a672e0f1abc89f1f0f31508f7de8f22023276e3b7e215a069401dd162cac",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V05.forward.json": "64f85ca8ca95b8a833eb40f0034adb1572076d1daf9beb1880eaf096016725e7",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V05.reverse.json": "a443cc88b24688f4d04f82a40f0575b60efd548639ae643f53161eda5a6b077a",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/baseline-run/baseline/cases/P0-FLOW-V06.json": "63b160ce3b0948605768a38063ff5b557d0508d7e26c1b1ff271590d90a5681d",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/candidate-run/candidate/cases/P0-FLOW-V06.json": "44768b8014dc502ab01f9115f636a8db95facacb079af633c9c434e651b131d9",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V06.forward.json": "da10b7c5a39b3b5f76c475d3125bfe0d247b88440b7161118cc27d780aa77b71",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1/judging/judge/P0-FLOW-V06.reverse.json": "75ed6275d80969965b1f7b2fa340384cb627295d9f78d66f27c537c6a8272cc6"
+      },
+      "portableReportSha256": "888177ecd356141f4d851dd8abba9a65411c87606670e938a5f4978ae6436bfc"
+    },
+    {
+      "batch": 2,
+      "localDirectory": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2",
+      "improvementId": "36dd798a-c1a3-46aa-b917-ff11f05734ee",
+      "promotion": "rejected",
+      "registration": {
+        "schemaVersion": 1,
+        "methodologyRecoveryOf": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v1",
+        "methodologyRepair": "Gateway.stop closes the application DB handle. Use an independent read-only connection for the final ledger; filter scripted latency extensions from the upstream EQ CompletionResult contract. Original complete captures and cleanup failures are retained; no style scores inspected when this recovery was registered.",
+        "registeredAt": "2026-11-02T01:49:56.157Z",
+        "suite": "personal-assistant-flow-zh-v1",
+        "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+        "reasoning": "off",
+        "evaluatorReasoning": "low",
+        "personalProfile": "fresh-production-default",
+        "concurrency": 2,
+        "transportRetries": 0,
+        "expectedScenes": 12,
+        "expectedUserInputs": 96,
+        "expectedJudgeCalls": 24,
+        "development": [
+          "P0-FLOW-D01",
+          "P0-FLOW-D02",
+          "P0-FLOW-D03",
+          "P0-FLOW-D04",
+          "P0-FLOW-D05",
+          "P0-FLOW-D06"
+        ],
+        "validation": [
+          "P0-FLOW-V01",
+          "P0-FLOW-V02",
+          "P0-FLOW-V03",
+          "P0-FLOW-V04",
+          "P0-FLOW-V05",
+          "P0-FLOW-V06"
+        ],
+        "fixture": "/Users/micjoyce/develop/github/xopc/evals/personal/style/assistant-flow-dialogues-v1.json",
+        "fixtureSha256": "45b17db9718c5d573ccd232cb14a72dc93d5db8c3a726bcee8d566728b47670a",
+        "candidateRuleSha256": "2fb93721ad23009f0561866dd49c5d0d618fd07f3370fe470f23c7f175f2f16c",
+        "conditions": [
+          {
+            "path": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-source",
+            "commit": "09bbf754fa5377fa91055570fe3ef2236e9b689a",
+            "moduleSha256": "e8b1ae2e7397ac297645e0084d59e8f6e516ad9e6a45fec600a7214e9702687d"
+          },
+          {
+            "path": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-source",
+            "commit": "4b2aa1b3076a60123098fa7876bffeced21d7f3c",
+            "moduleSha256": "f39e2aada0ee6681678625616b02dcbc38045f0f4f9bfe21309b80513f2e195e"
+          }
+        ],
+        "onlyChangedModule": "src/personal-agent/reply-style.ts",
+        "gate": {
+          "validationOverallMinNetWins": 1,
+          "validationNaturalnessMinNetWins": 1,
+          "noCandidateMajorEitherOrder": true,
+          "validationViolationsNonincrease": true,
+          "validationP95LatencyRatio": 1.2,
+          "minIndependentHumanReviewers": 2,
+          "completeDenominatorRequired": true
+        },
+        "budget": {
+          "generationMaxRequests": 180,
+          "judgeMaxRequests": 40,
+          "totalWallMs": 1800000,
+          "requestTimeoutMs": 240000
+        },
+        "limitations": [
+          "Product-authored fixed continuations, not observed adaptive human behavior",
+          "Single judge, swapped orders correlated",
+          "No paid unchanged rerun, no score-based replacement",
+          "No production adoption before human review; task execution transitions require stage two live-tool fixtures"
+        ]
+      },
+      "sourceManifests": [
+        {
+          "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+          "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+          "reasoning": "off",
+          "sourceHash": "fad6e260a22857ef133981e642bcf2f5d98bfba2caefa988e25f3ed573de59b3",
+          "commit": "09bbf754fa5377fa91055570fe3ef2236e9b689a",
+          "transportRetries": 0,
+          "fixtureSha256": "45b17db9718c5d573ccd232cb14a72dc93d5db8c3a726bcee8d566728b47670a"
+        },
+        {
+          "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+          "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+          "reasoning": "off",
+          "sourceHash": "f6832c7ac016763a7af5671b7ec99b70d6acfdc85d0615a9eeaa43a839a27fa8",
+          "commit": "4b2aa1b3076a60123098fa7876bffeced21d7f3c",
+          "transportRetries": 0,
+          "fixtureSha256": "45b17db9718c5d573ccd232cb14a72dc93d5db8c3a726bcee8d566728b47670a"
+        }
+      ],
+      "sourceCompletions": [
+        {
+          "exitCode": 0,
+          "sourceHashEnd": "fad6e260a22857ef133981e642bcf2f5d98bfba2caefa988e25f3ed573de59b3",
+          "sourceChanged": false,
+          "experiments": {
+            "style-preflight": "0e2231c7-4bce-40d7-8354-aa1a5644726d",
+            "personal-p0-scripted": "d239ded8-40d4-4e5d-a9b4-8de9d76399b2"
+          },
+          "costUsd": null
+        },
+        {
+          "exitCode": 0,
+          "sourceHashEnd": "f6832c7ac016763a7af5671b7ec99b70d6acfdc85d0615a9eeaa43a839a27fa8",
+          "sourceChanged": false,
+          "experiments": {
+            "style-preflight": "9e34b08a-544a-41e7-b887-3af0511fbe66",
+            "personal-p0-scripted": "3a91672e-294c-4ad0-b7f3-0470d6cd0fbc"
+          },
+          "costUsd": null
+        }
+      ],
+      "analysis": {
+        "expected": 12,
+        "completed": 12,
+        "cohorts": {
+          "development": {
+            "expected": 6,
+            "complete": 6,
+            "overall": {
+              "baseline": 0,
+              "candidate": 1,
+              "tie": 5,
+              "discordant": 0,
+              "unresolved": 0
+            },
+            "naturalness": {
+              "baseline": 0,
+              "candidate": 0,
+              "tie": 6,
+              "discordant": 0,
+              "unresolved": 0
+            },
+            "violationCounts": {
+              "overinterpretation": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "unnecessary_question": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "repeated_closing": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "premature_resolution": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "required_content_or_boundary": {
+                "baseline": 1,
+                "candidate": 0
+              },
+              "didactic_expression": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "conversation_flow": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "preference_scope": {
+                "baseline": 0,
+                "candidate": 0
+              }
+            },
+            "majorCandidateEitherOrder": [],
+            "latency": {
+              "baselineP95Ms": 13940.255333000001,
+              "candidateP95Ms": 8073.907625,
+              "baselineSamples": 24,
+              "candidateSamples": 24,
+              "expectedSamples": 24
+            }
+          },
+          "validation": {
+            "expected": 6,
+            "complete": 6,
+            "overall": {
+              "baseline": 0,
+              "candidate": 0,
+              "tie": 5,
+              "discordant": 1,
+              "unresolved": 0
+            },
+            "naturalness": {
+              "baseline": 1,
+              "candidate": 0,
+              "tie": 5,
+              "discordant": 0,
+              "unresolved": 0
+            },
+            "violationCounts": {
+              "overinterpretation": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "unnecessary_question": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "repeated_closing": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "premature_resolution": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "required_content_or_boundary": {
+                "baseline": 1,
+                "candidate": 2
+              },
+              "didactic_expression": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "conversation_flow": {
+                "baseline": 0,
+                "candidate": 0
+              },
+              "preference_scope": {
+                "baseline": 0,
+                "candidate": 0
+              }
+            },
+            "majorCandidateEitherOrder": [],
+            "latency": {
+              "baselineP95Ms": 5471.174915999989,
+              "candidateP95Ms": 7475.752833999999,
+              "baselineSamples": 24,
+              "candidateSamples": 24,
+              "expectedSamples": 24
+            }
+          }
+        },
+        "gates": {
+          "allExpectedScenesCapturedAndJudged": true,
+          "validationOverallNetPositive": false,
+          "validationNaturalnessNetPositive": false,
+          "noCandidateMajorEitherOrder": true,
+          "validationViolationsNonincrease": false,
+          "validationLatencyComplete": true,
+          "validationP95Within120Percent": false
+        },
+        "automatedPassed": false,
+        "caseOutcomes": [
+          {
+            "caseId": "P0-FLOW-D01",
+            "split": "development",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D02",
+            "split": "development",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D03",
+            "split": "development",
+            "overall": "candidate",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D04",
+            "split": "development",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D05",
+            "split": "development",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-D06",
+            "split": "development",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V01",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "baseline",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V02",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V03",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V04",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V05",
+            "split": "validation",
+            "overall": "tie",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          },
+          {
+            "caseId": "P0-FLOW-V06",
+            "split": "validation",
+            "overall": "discordant",
+            "naturalness": "tie",
+            "complete": true,
+            "errors": []
+          }
+        ]
+      },
+      "audit": [
+        {
+          "id": "baseline",
+          "physicalRequests": 51,
+          "runtimeRequests": 51,
+          "completedRequests": 51,
+          "observedWireTokens": 595426,
+          "observedRuntimeTokens": 595426,
+          "perRequestMatched": true,
+          "usageMatched": true,
+          "unknownRequests": 0,
+          "ledgerFinalSnapshotGuaranteed": true,
+          "files": {
+            "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline-model-requests.jsonl",
+            "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/runtime-usage.json"
+          },
+          "hashes": {
+            "wire": "10bfbffd9e37c5896805f8f1369b83039383bc71ffe93a0bd057a9cf81470087",
+            "ledger": "f217dcf0a0bfc254e6d8faa25af83f3343d234f39cdfbcd757940cb04bc33e05"
+          },
+          "actualCharge": null,
+          "observedRuntimeRows": 51,
+          "runtimeCountKnown": true
+        },
+        {
+          "id": "candidate",
+          "physicalRequests": 51,
+          "runtimeRequests": 51,
+          "completedRequests": 51,
+          "observedWireTokens": 599838,
+          "observedRuntimeTokens": 599838,
+          "perRequestMatched": true,
+          "usageMatched": true,
+          "unknownRequests": 0,
+          "ledgerFinalSnapshotGuaranteed": true,
+          "files": {
+            "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate-model-requests.jsonl",
+            "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/runtime-usage.json"
+          },
+          "hashes": {
+            "wire": "1b959570ba2af1e0216a4b95af7d92294741db3f61bf72109f2169a0244d57de",
+            "ledger": "f4bb6ec2a737907c8ffafb6cb88bde6c24ae09d9f8e91682408667a9cb0e9150"
+          },
+          "actualCharge": null,
+          "observedRuntimeRows": 51,
+          "runtimeCountKnown": true
+        },
+        {
+          "id": "judge",
+          "physicalRequests": 24,
+          "runtimeRequests": 24,
+          "completedRequests": 24,
+          "observedWireTokens": 62127,
+          "observedRuntimeTokens": 62127,
+          "perRequestMatched": true,
+          "usageMatched": true,
+          "unknownRequests": 0,
+          "ledgerFinalSnapshotGuaranteed": true,
+          "files": {
+            "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge-model-requests.jsonl",
+            "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/runtime-usage.json"
+          },
+          "hashes": {
+            "wire": "8e721325a8d3de87051432691bbdc873a21b73b191bfb9b07f14cf79af241697",
+            "ledger": "9e0c4a5f5d50f6bbed92d38220a6d300788f9dc3b1062d848cdc7e5ae83cf331"
+          },
+          "actualCharge": null,
+          "observedRuntimeRows": 24,
+          "runtimeCountKnown": true
+        }
+      ],
+      "decisionReasons": [
+        "Style gate failed: validationOverallNetPositive",
+        "Style gate failed: validationNaturalnessNetPositive",
+        "Style gate failed: validationViolationsNonincrease",
+        "Style gate failed: validationP95Within120Percent",
+        "Human blind review pending: two independent reviewers required before adoption"
+      ],
+      "decisionSha256": "000d212c78848c9e554c859ab8cfd1cf9b688a56344a652324b334577ce0c8c0",
+      "humanReview": {
+        "status": "pending",
+        "expectedReviewers": 2,
+        "completedReviewers": 0,
+        "queue": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/human-blind-review.json"
+      },
+      "artifactHashes": {
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-D01.json": "4b7c183f5b38481659047b65cc223773c0f65ac3895ac34790704fe97bb0cb11",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-D01.json": "698675c5bc34cfa12f4b1b390785c3b1358fb240250b5bbba2800af84891ec26",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D01.forward.json": "32017b51a5f73a190058787ef4203290c8dc7835c07d8e66b370d34da830f49e",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D01.reverse.json": "98374ef16074fa479383d71ad8e071e98508fcd466e3b80a92ceb1dd0638d592",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-D02.json": "d6eed17a67b7b3a05f2f4af17763f1da76fe7dfd1584f2c8b2d3de008b3d6094",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-D02.json": "58e82fec769eff94edff4ab4b13bbcd1650d558142364d8c94943a3572eb0a45",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D02.forward.json": "e8d1e83464e553dbaa3ab52a6d3138acc42976e03fbe3d8b94aeade2800a55f1",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D02.reverse.json": "5c87cedb2a7d751f647ef55e869c3b7ab59124ff7cb4e4ac86e9c9b7e2cdcc14",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-D03.json": "99fe52966f614125c2bd3b4f258599b79b538f8b3d7c6860b46660bd7833a226",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-D03.json": "2b3faaf954364eeccd4d708a272cb41fa507eda0ce3ca07bf8161b58f4cbdc3e",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D03.forward.json": "0b975906e09a1fd708a09c3112c2c7d893cb55bec7b57e9f1fb860b3c73e680e",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D03.reverse.json": "172285f2a62821e22e3a34cbd6a7fefff4000db910152c5e6ca6c9f54fdcc225",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-D04.json": "17e7aa105b1a27cb04a39bfccff7f6bf9819d617ee389b4c032975ca315a31f3",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-D04.json": "82df1ad8f2bbaf79258d26681751b4003a3aabf21f04d89e6f80a9e4c1ed1b77",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D04.forward.json": "764d68f07275def753ecd92161047142f63e63ddf3c9f5e35f51892e822cd99d",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D04.reverse.json": "0f00617ed9b7b7bacc266e2819a94bc130321af4c2d449583f7771cfb2b78d1b",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-D05.json": "d4d39f49ed46c159981aaa83ed3e1815b720c9e40e7454e218b055944143a44c",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-D05.json": "47b6b0b58771a8ce56a69ebd7f5ecc80d3dbe303e18b20e34e123803b7c36bcb",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D05.forward.json": "7772739dbd48cc9ae98c408d05bdae5fbe3b24f6705d5b801707a4f5b667778c",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D05.reverse.json": "a880b21b9f84f0cfd6114294dfcff2e91db6403ad268e494fcf710a5afc901b9",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-D06.json": "ce62570429784e44fb65effe2221901bf753dfcd7200c1f2ea4dc7961ab9e3e6",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-D06.json": "83a3259150be71022d1b5c926eb93fc2a5786cfd6e0ba0e6a566030b49f515dc",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D06.forward.json": "df474c4278056daf6704815e58960c2d54c05533bc4a2a9893f3f6b79c6d23ee",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-D06.reverse.json": "83881668138f52352baab4ff0c9467c14d9c0b2cd764bf496f9cc4cfa1f104c9",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-V01.json": "fe4837fbd90da488f7ac092388114a17fd0e65d49eac764ded573ba58ed0adbb",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-V01.json": "b79ed4127a9bc02e5fb4122e6c0785e0694b5c428ead4b57d32f0749b34920e1",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V01.forward.json": "5930d9076166c972c19c57df2cdd49e42a6470b5f5d8dc7fe8e6ff8988bb362d",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V01.reverse.json": "9b7abab525af1ca1e7eaaffe2f77effb2a4b493abf938bce86f61890473620e1",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-V02.json": "6c95ca71f0ed11b15f72ef65f0011f397446a594d864db724e6181187b634521",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-V02.json": "b80bd422d4ea20ec2cdd922842f70e8f200cdc87bae57c1e3f05712f857cbfdd",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V02.forward.json": "9db85925057e4c0e32551402adf034ed987ed1d7c8ecd01cf98f7684ed02f195",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V02.reverse.json": "280faabb5c80dae2d9d21f02f722ee048739933103373e25196663b8651cdde4",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-V03.json": "54fd49bcb841ea7556d30ab75e705d9c8c7429d08682637a7fcca8ac9698d92e",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-V03.json": "6fdb180e9c136a51cbdb48e530956003d2ccd4f9d5422c8854c675c9a58c01d9",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V03.forward.json": "d9f7c37b439f344d131351f89312e549279cd5a2031505f67d7419e0b67d29bd",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V03.reverse.json": "c78469235496f7983bd5888a5f97f50083b3b77df4e09e29e59e12fc9e29cde1",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-V04.json": "6f00bddfcc93b517adde5a376513e59b74e6667c4693db123fb4d8995a033773",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-V04.json": "35b9cbdca925c2fade1bed282fc0ecb9042f35f2786249c1cc38aae3fa886eb0",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V04.forward.json": "54f2832d598634d2e59588283db873a54c3e599a9e0006e1a79607a95b64a343",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V04.reverse.json": "2bb02638bf7e1fd8bb71a7097056e75c9be7fb8e0049adfd7676a5fe4e2be0bd",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-V05.json": "78dc19eec22ab837f638a86f470a4e1a594437f70515a814c02d56534e16a0e0",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-V05.json": "a6f06287e0a614239d8ddcc42db628d2b4aaa3a4a7e1321148764d7436099842",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V05.forward.json": "c543a99a50d02cdaf56487e1e0a15865518ae3569dfbc8cc1b3352bb86df1b23",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V05.reverse.json": "750daf62c61c2b7f8cafe38ef04d135c29f471954cce9b19445e8383b7d4d969",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/baseline-run/baseline/cases/P0-FLOW-V06.json": "00d4f56ca789ad61d1fadc776ac40c3f515a13ba8fb544ff078d3f8ba6270519",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/candidate-run/candidate/cases/P0-FLOW-V06.json": "f555c2491b121de770bba8b66d43fe99ebc01b23814fb6850d10742c3cd1dfa7",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V06.forward.json": "5ec387be2cf1d842a49f536fc5606147d6a1909e2b8cbf08a8d6b2f8ffb5f904",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-20261102-v2/judging/judge/P0-FLOW-V06.reverse.json": "477ab6b1fa65b27cd8a44245ce70d969365caa6bca7e75f5b3d01e897ac9a576"
+      },
+      "portableReportSha256": "842f5b395fee4a734aeeb005ca1250742c73645210fe6391bcd7d521b13af677"
+    }
+  ],
+  "humanReview": "Pending, 0/2 independent reviewers; queue and separate mapping retained locally",
+  "actualCharge": null,
+  "limitations": [
+    "Product-authored 12 fixed Chinese four-turn scenes; no representative human satisfaction claim",
+    "Six development and six frozen validation scenes; no candidate reselection after validation",
+    "Same candidate rule across both batches; methodology recovery registered before first style scores were read",
+    "No automatic retries or score-based replacement; original failed campaigns remain immutable",
+    "p95 relative latency guard is not a replacement for existing Personal v7 absolute gates",
+    "Static no-external-connector setup does not establish live delegation/notification conversational behavior",
+    "One judge with correlated display orders; most scene outcomes tie; no statistical significance claim"
+  ],
+  "validation": {
+    "styleTypecheck": "passed",
+    "pythonTests": 17,
+    "coderFiles": 28,
+    "coderTests": 90,
+    "rootAndElectronTypecheck": "passed",
+    "logs": [
+      {
+        "path": ".xopc-evals/assistant-flow-check-initial-20261102.log",
+        "sha256": "a19860c23ae9a79527f5a4122808cea3fc57412fb5f95c4c97a74bab7a66094a"
+      },
+      {
+        "path": ".xopc-evals/assistant-flow-validation-20261102.log",
+        "sha256": "2950ccf892be968a33b2332dc924ad31db5d47a52d2a986f45671658720ad8ac"
+      },
+      {
+        "path": ".xopc-evals/assistant-flow-methodology-fix-check-20261102.log",
+        "sha256": "d0529c94a50e30d441dc273c2123540eff7158f7455317bae6872fad9c6e1eef"
+      },
+      {
+        "path": ".xopc-evals/assistant-flow-release-check-20261102.log",
+        "sha256": "0f95880f859e0ecf69c74de9f01a4cadb2947a9ed9f3009188512797d3f1b0fe"
+      },
+      {
+        "path": ".xopc-evals/assistant-flow-coder-final-20261102.log",
+        "sha256": "d9be7a5c6ece33d0603bc9f3d74bc2fc9e381b7d046b55749039cadfec16a9ea"
+      },
+      {
+        "path": ".xopc-evals/assistant-flow-root-typecheck-20261102.log",
+        "sha256": "2fb57c43cf14b45a32e475a265ee885442ef07b7076c38d51849a7c922db5b73"
+      }
+    ],
+    "dashboardBrowserVerified": true,
+    "blindABFourTurnPreviewVerified": true,
+    "sourceAndImmutableArtifactIntegrityVerified": true,
+    "productionStyleMatchesFrozenBaseline": true,
+    "dashboardUrl": "http://127.0.0.1:4310/#improvements/36dd798a-c1a3-46aa-b917-ff11f05734ee",
+    "artifacts": [
+      {
+        "path": ".xopc-evals/assistant-flow-dashboard-20261102.png",
+        "sha256": "b115d579720f63d03fc415fee31b15d7161a634642123f673a0b6ca98b04a89a"
+      },
+      {
+        "path": ".xopc-evals/assistant-flow-blind-preview-20261102.png",
+        "sha256": "0d35f06556637a6ba75155e9ad8b1109151e12879532092b7fbe1bb7a9341c62"
+      },
+      {
+        "path": ".xopc-evals/assistant-flow-control-export-20261102.json",
+        "sha256": "e925a4b682288198acb7194a3a90fb6437fcc23cc0a1413f90acabcfc3055f53"
+      },
+      {
+        "path": ".xopc-evals/assistant-flow-final-acceptance-check-20261102.log",
+        "sha256": "d0529c94a50e30d441dc273c2123540eff7158f7455317bae6872fad9c6e1eef"
+      }
+    ]
+  }
+}
