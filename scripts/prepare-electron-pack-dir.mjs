@@ -13,6 +13,7 @@ import { prepareNodePtyPackage, resolveNodePtyPackage } from './prepare-node-pty
 import { pruneElectronPdfjsRuntime } from './prune-electron-pdfjs-runtime.mjs';
 import { prepareCuaSdkRuntime } from './prepare-cua-sdk.mjs';
 import { COMPUTER_DRIVER_VERSION, computerDriverRelease } from './lib/computer-driver-release.mjs';
+import { createDesktopInventory } from './electron-dependency-inventory.mjs';
 import { createHash } from 'node:crypto';
 import { verifyStagedDesktopPackage } from './electron-package-layout.mjs';
 
@@ -195,6 +196,8 @@ export function prepareElectronPackDir(
   delete minimalPkg.dependencies[ripgrepPlatformPackage];
   writeFileSync(join(packDir, 'package.json'), `${JSON.stringify(minimalPkg, null, 2)}\n`);
 
+  writeFileSync(join(packDir, '_pack-resources/build-resources/desktop-privacy.utf16.txt'), '\ufeff' + readFileSync(join(repoRoot, 'electron/resources/desktop-privacy.txt'), 'utf8'), 'utf16le');
+  createDesktopInventory(packDir, repoRoot, target);
   console.log(`[prepare-electron-pack-dir] Staged ${packDir}`);
   return packDir;
 }

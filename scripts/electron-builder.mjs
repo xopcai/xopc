@@ -43,6 +43,9 @@ function shouldStripProxy(value) {
 const extra = process.argv.slice(2);
 const electronPlatform = extra.includes('--mac') ? 'darwin' : extra.includes('--win') ? 'win32' : extra.includes('--linux') ? 'linux' : process.platform;
 const env = loadElectronSigningEnv(root, process.env, electronPlatform);
+if (electronPlatform === 'win32' && env.XOPC_WINDOWS_SIGNING_PROVIDER === 'signpath') {
+  throw new Error('SignPath production signing is disabled until its artifact allowlist, reviewer approval and credentials are configured; no PFX fallback is allowed');
+}
 const yaml = requireRoot('js-yaml');
 const config = yaml.load(readFileSync(packConfig, 'utf8'));
 if (electronPlatform === 'win32' && env.WIN_CSC_LINK) {

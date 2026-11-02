@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { writeFinishedDesktopInventory } from './verify-desktop-inventory.mjs';
 import { ELECTRON_PACKAGED_DEPENDENCIES } from './electron-runtime-externals.mjs';
 import { supportedUpgradeFiles, verifyCanonicalSqlBytes, verifyDesktopArtifactBytes, verifyDesktopPackageLayout } from './electron-package-layout.mjs';
 
@@ -114,6 +115,10 @@ function main() {
     }
     verifyUnpackedRuntimeDeps(asarPath);
     verifyUnpackedAppLayout(asarPath);
+    const resources = dirname(asarPath);
+    const application = asarPath.includes('Contents/Resources/') ? resolve(resources, '../..') : dirname(resources);
+    const finished = writeFinishedDesktopInventory(resources, application, join(root, 'dist/release'));
+    console.log(`[verify-electron-asar-deps] OK — final artifact inventory: ${finished.files.length} files, ${finished.packages.length} dependency records`);
     // ASAR extraction uses host separators; logical manifest paths remain portable.
     const read = path => readFileSync(join(tmp, path));
     const manifest = verifyDesktopPackageLayout(read, supportedUpgradeFiles(root));

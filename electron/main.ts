@@ -933,7 +933,10 @@ function createWindow(): void {
     menuMessages,
   );
 
-  initAutoUpdater(win);
+  void import('./update-preferences.js').then(async ({ automaticDesktopUpdatesEnabled }) => {
+    const automaticUpdates = await automaticDesktopUpdatesEnabled();
+    if (!win.isDestroyed()) initAutoUpdater(win, { automaticUpdates });
+  });
 
   appendWindowLifecycleLog(win, 'created');
 

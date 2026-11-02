@@ -1,0 +1,53 @@
+name: Windows SignPath Readiness
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'electron/update-preferences.ts'
+      - 'electron/auto-updater.ts'
+      - 'electron/resources/**'
+      - 'scripts/*inventory*'
+      - 'scripts/*windows*readiness*'
+      - 'scripts/build-voice-hotkey-helper*'
+      - 'scripts/electron-builder*'
+      - '.github/workflows/windows-signpath-readiness.yml'
+permissions:
+  contents: read
+jobs:
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26.12.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build:ci
+      - run: pnpm run electron:build:artifacts
+      - name: Build unsigned readiness installer
+        run: node scripts/electron-builder.mjs --win --${{ matrix.arch }}
+      - name: Native installer and installed-app acceptance
+        run: node --import tsx scripts/verify-windows-signpath-readiness.mjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: signpath-readiness-${{ matrix.arch }}
+          path: |
+            reports/windows-signpath-*.json
+            dist/release/dependency-inventory-*.json
+          if-no-files-found: warn

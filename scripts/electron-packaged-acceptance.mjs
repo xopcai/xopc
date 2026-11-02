@@ -119,8 +119,14 @@ export async function launchInstalledApplication(target, args, env, cwd, timeout
       output: () => output,
       close: async () => {
         if (child.exitCode !== null || child.signalCode !== null) { await browser.close().catch(() => {}); return; }
-        const cdp = await browser.newBrowserCDPSession();
-        void cdp.send('Browser.close').catch(() => {});
+        try {
+          const cdp = await browser.newBrowserCDPSession();
+          void cdp.send('Browser.close').catch(() => {});
+        } catch (error) {
+          // A production menu handoff can close Chromium before the OS reports process exit.
+          // Still require the real process to exit within the existing shutdown budget.
+          if (!/closed/i.test(String(error?.message))) throw error;
+        }
         let timer;
         try { await Promise.race([exit, new Promise((_, reject) => { timer = setTimeout(() => { killAcceptanceApplication(adapter); reject(new Error('Installed application shutdown exceeded 15 seconds')); }, 15_000); })]); }
         finally { clearTimeout(timer); await browser.close().catch(() => {}); }
