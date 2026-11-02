@@ -4,6 +4,34 @@ import Testing
 
 @MainActor
 struct ProductStateTests {
+    @Test func actionApprovalPreferenceIsLocalAndScopedToAccountAndAgent() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "approval-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = ComposerDraftStore(baseDirectory: root)
+        let first = GatewayConfiguration(baseURL: URL(string: "https://one.example")!, token: "one")
+        let other = GatewayConfiguration(baseURL: first.baseURL, token: "other")
+        try store.rememberActionApproval(.full, configuration: first, agentID: "main")
+        #expect(try ComposerDraftStore(baseDirectory: root).actionApproval(configuration: first, agentID: "main") == .full)
+        #expect(try store.actionApproval(configuration: other, agentID: "main") == nil)
+        #expect(try store.actionApproval(configuration: first, agentID: "research") == nil)
+        var old = ConversationSelection.draft(agentId: "main")
+        old.actionApprovalMode = .ask
+        try store.saveSelection(old, configuration: first)
+        #expect(try store.actionApproval(configuration: first, agentID: "main") == .full)
+    }
+
+    @Test func actionApprovalSurvivesDraftModelChangesAndCreationEncoding() throws {
+        var draft = ConversationSelection.draft(agentId: "main")
+        draft.actionApprovalMode = .full
+        let restored = try JSONDecoder().decode(ConversationSelection.self, from: JSONEncoder().encode(draft))
+        #expect(restored.configured(model: "p/m", thinkingLevel: "off").actionApprovalMode == .full)
+        #expect(restored.materialized(transcriptId: "t").actionApprovalMode == .full)
+        let creation = SessionCreationCommand(agentId: "main", projectId: nil, execution: nil,
+            temporary: false, model: "p/m", thinkingLevel: "off", actionApprovalMode: .full)
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(creation)) as? [String: Any]
+        #expect(json?["actionApprovalMode"] as? String == "full")
+    }
+
     @Test func canonicalWavRemovesRecorderMetadataChunks() {
         let samples = Data(repeating: 0, count: 32000)
         var recorderWav = Data("RIFF".utf8)
@@ -372,6 +400,20 @@ extension ProductStateTests {
         #expect(state.visibleConversations.map(\.id) == ["parent", "history"])
         #expect(!state.hasMore)
         #expect(state.childrenByConversationID["parent"] == group)
+    }
+
+    @Test func permissionSaveFailureKeepsDisplayedModeAndAllowsRetry() async {
+        let conversation = ConversationSelection.existing(id: "session", title: "Options", agentId: "main")
+        let options = AssistantOptionsState()
+        await options.load(conversation, using: GatewayStub())
+        var failing = GatewayStub(); failing.modelSaveFails = true
+        #expect(await options.saveActionApproval(.full, conversation: conversation, using: failing) == nil)
+        #expect(options.actionApprovalMode == .ask)
+        #expect(options.errorMessage != nil)
+        let updated = await options.saveActionApproval(.full, conversation: conversation, using: GatewayStub())
+        #expect(updated?.actionApprovalMode == .full)
+        #expect(options.actionApprovalMode == .full)
+        #expect(options.errorMessage == nil)
     }
 
     @Test func sessionOptionSaveFailurePreservesSelectionAndAllowsRetry() async {

@@ -15,6 +15,9 @@ import {
 } from '../model/chat';
 import { XopcProjectResult } from '../model/workspace';
 
+interface XopcApprovalRuntime { actionApprovalMode?: string; }
+interface XopcApprovalDefaultsConfig { runtime?: XopcApprovalRuntime; }
+interface XopcApprovalDefaults { config?: XopcApprovalDefaultsConfig; }
 interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; }
 interface XopcQueuePatchCommand {
   version: number; content?: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; thinking?: string; position?: number;
@@ -99,6 +102,7 @@ export class XopcChatRepository {
   }
   async create(projectId?: string | null, agentId?: string, executionMode?: string): Promise<string> {
     const scope = localSessionStore.scope();
+    const connection = gatewaySession.connectionRevision();
     let effectiveAgentId = agentId || '';
     let effectiveExecutionMode = executionMode;
     if (projectId && (!effectiveAgentId || !effectiveExecutionMode)) {
@@ -123,7 +127,9 @@ export class XopcChatRepository {
     const id = this.uuid();
     const creation: XopcSessionCreation = { agentId: effectiveAgentId, projectId: projectId || null,
       execution: effectiveExecutionMode ? { mode: effectiveExecutionMode } : null, temporary: false,
-      model: body.initialAgentConfig?.model || '', thinkingLevel: body.initialAgentConfig?.thinkingLevel || 'off' };
+      model: body.initialAgentConfig?.model || '', thinkingLevel: body.initialAgentConfig?.thinkingLevel || 'off',
+      actionApprovalMode: await this.draftActionApproval(effectiveAgentId) };
+    gatewaySession.assertConnection(connection);
     await localSessionStore.save({ conversationId: id, creation, createdAt: new Date().toISOString() }, scope);
     return id;
   }
@@ -320,6 +326,7 @@ export class XopcChatRepository {
   async config(id: string): Promise<XopcAgentConfig> {
     const draft = await this.draft(id);
     if (draft) return { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel,
+      actionApprovalMode: draft.creation.actionApprovalMode || 'ask',
       workingDirectoryLocked: true, effectiveWorkspacePath: '' };
     const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config')) as XopcPayload<XopcAgentConfig>;
     if (!result.payload) throw new Error('INVALID_AGENT_CONFIG');
@@ -338,6 +345,45 @@ export class XopcChatRepository {
     }
     const body: XopcAgentConfig = { model, thinkingLevel };
     await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config', 'PATCH', JSON.stringify(body));
+  }
+  private async draftActionApproval(agentId: string): Promise<string> {
+    const connection = gatewaySession.connectionRevision();
+    const gatewayId = gatewaySession.currentProfile()?.gatewayId;
+    if (!gatewayId) return 'ask';
+    const remembered = gatewayId ? await this.store.read('chat-permissions.' + gatewayId + '.' + agentId) : '';
+    gatewaySession.assertConnection(connection);
+    if (remembered === 'ask' || remembered === 'full') return remembered;
+    let mode: string = 'ask';
+    try {
+      const result = JSON.parse(await gatewaySession.request('/api/agents/' + encodeURIComponent(agentId) + '/effective-config')) as XopcPayload<XopcApprovalDefaults>;
+      if (result.payload?.config?.runtime?.actionApprovalMode === 'full') mode = 'full';
+    } catch (_) { /* Missing defaults fall back to confirmation. */ }
+    gatewaySession.assertConnection(connection);
+    return mode;
+  }
+  async setActionApproval(id: string, agentId: string, mode: string, configVersion?: number): Promise<XopcAgentConfig> {
+    if (mode !== 'ask' && mode !== 'full') throw new Error('INVALID_ACTION_APPROVAL_MODE');
+    const scope = localSessionStore.scope();
+    const connection = gatewaySession.connectionRevision();
+    const gatewayId = gatewaySession.currentProfile()?.gatewayId;
+    const draft = await this.draft(id);
+    gatewaySession.assertConnection(connection);
+    let config: XopcAgentConfig;
+    if (draft) {
+      if (draft.command || draft.materialization) throw new Error('FIRST_INPUT_PENDING');
+      draft.creation.actionApprovalMode = mode;
+      await localSessionStore.save(draft, scope);
+      config = { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel, actionApprovalMode: mode };
+    } else {
+      if (configVersion === undefined) throw new Error('CONFIG_VERSION_REQUIRED');
+      const body: XopcAgentConfig = { actionApprovalMode: mode, configVersion };
+      const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config', 'PATCH', JSON.stringify(body))) as XopcPayload<XopcAgentConfig>;
+      if (!result.payload) throw new Error('INVALID_AGENT_CONFIG');
+      config = result.payload;
+    }
+    gatewaySession.assertConnection(connection);
+    if (gatewayId) await this.store.write('chat-permissions.' + gatewayId + '.' + (draft?.creation.agentId || agentId), mode);
+    return config;
   }
   async rememberModel(agentId: string, model: string, thinkingLevel?: string): Promise<void> {
     const gatewayId = gatewaySession.currentProfile()?.gatewayId;

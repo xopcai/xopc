@@ -2,17 +2,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { agents: vi.fn(), models: vi.fn(), config: vi.fn(), draft: vi.fn(), setModel: vi.fn(), queue: vi.fn(),
-    updateQueued: vi.fn(), cancelQueued: vi.fn(), retryPreparation: vi.fn(), rememberModel: vi.fn() };
+    updateQueued: vi.fn(), cancelQueued: vi.fn(), retryPreparation: vi.fn(), rememberModel: vi.fn(), setActionApproval: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
   agents = mock.agents; models = mock.models; config = mock.config; draft = mock.draft; setModel = mock.setModel; queue = mock.queue;
   updateQueued = mock.updateQueued; cancelQueued = mock.cancelQueued; retryPreparation = mock.retryPreparation;
-  rememberModel = mock.rememberModel;
+  rememberModel = mock.rememberModel; setActionApproval = mock.setActionApproval;
 } }));
 import { XopcChatOptionsViewModel } from '../entry/src/main/ets/viewmodel/chatOptionsViewModel.ets';
 const input = (id: string, position: number, status = 'queued') => ({ id, clientMessageId: id, content: id, version: 4, position,
   kind: 'message', status, requestedDelivery: 'next', effectiveDelivery: 'next' });
 describe('chat options and queue', () => {
+  it('only updates permission state after a successful save and retains CAS version', async () => {
+    mock.config.mockResolvedValue({ model: 'p/a', actionApprovalMode: 'ask', configVersion: 4 });
+    const model = new XopcChatOptionsViewModel(); await model.load('one', 'main');
+    mock.setActionApproval.mockRejectedValueOnce(new Error('HTTP_403'));
+    expect(await model.selectActionApproval('full')).toBe(false);
+    expect(model.actionApprovalMode).toBe('ask');
+    mock.setActionApproval.mockResolvedValueOnce({ actionApprovalMode: 'full', configVersion: 5 });
+    expect(await model.selectActionApproval('full')).toBe(true);
+    expect(mock.setActionApproval).toHaveBeenLastCalledWith('one', 'main', 'full', 4);
+    expect(model.actionApprovalMode).toBe('full'); model.dispose();
+  });
+
   beforeEach(() => {
     vi.resetAllMocks(); vi.useFakeTimers(); mock.agents.mockResolvedValue({ agents: [{ id: 'main', name: 'Main' }], defaultId: 'main' });
     mock.models.mockResolvedValue({ models: [{ id: 'p/a', name: 'A' }, { id: 'p/b', name: 'B' }] });

@@ -21,7 +21,7 @@ describe('session agent config route', () => {
   });
 });
 
-it('rejects permission changes from a device without owner authority', async () => {
+it('rejects permission changes from a device without a permission-management grant', async () => {
   const patchAgentConfig = vi.fn();
   const app = new Hono();
   app.use('*', async (c, next) => { setGatewayPrincipal(c, { kind: 'device', principalId: 'device-1', scopes: [] }); await next(); });
@@ -31,4 +31,22 @@ it('rejects permission changes from a device without owner authority', async () 
   });
   expect(response.status).toBe(403);
   expect(patchAgentConfig).not.toHaveBeenCalled();
+});
+
+for (const mode of ['ask', 'full']) it(`accepts ${mode} with a narrow device grant`, async () => {
+  const patchAgentConfig = vi.fn(async () => ({ ok: true }));
+  const app = new Hono();
+  app.use('*', async (c, next) => {
+    setGatewayPrincipal(c, { kind: 'device', principalId: 'phone', scopes: ['sessions.write', 'sessions.permissions'] });
+    await next();
+  });
+  registerSessionsRoutes(app, { service: { sessions: { patchAgentConfig,
+    getAgentConfig: async () => ({ actionApprovalMode: mode, configVersion: 2 }),
+  } } as unknown as GatewayService });
+  const response = await app.request('/api/sessions/3d5c8525-8ad6-4d89-bbc6-e73651679b86/agent-config', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actionApprovalMode: mode, configVersion: 1 }),
+  });
+  expect(response.status).toBe(200);
+  expect(patchAgentConfig).toHaveBeenCalledWith(expect.any(String), { actionApprovalMode: mode, configVersion: 1 });
 });

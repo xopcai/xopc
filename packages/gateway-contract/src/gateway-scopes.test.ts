@@ -15,6 +15,8 @@ describe('gateway scopes', () => {
 
   it('grants mobile voice configuration without granting admin access', () => {
     expect(DEFAULT_MOBILE_SCOPES).toContain('voice.configure');
+    expect(DEFAULT_MOBILE_SCOPES).toContain('sessions.permissions');
+    expect(DEFAULT_BROWSER_EXTENSION_SCOPES).not.toContain('sessions.permissions');
     expect(DEFAULT_MOBILE_SCOPES).not.toContain('gateway.admin');
     expect(DEFAULT_BROWSER_EXTENSION_SCOPES).not.toContain('voice.configure');
   });

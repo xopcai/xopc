@@ -79,6 +79,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onRetryPendingInput = gateway::retryPendingInput, onStopRun = gateway::stopRun,
             onReloadModels = gateway::loadModels, onSelectModel = gateway::selectModel,
             onSelectThinking = gateway::selectThinking,
+            onSelectActionApproval = gateway::selectActionApproval,
             onLoadQueuedInputs = gateway::loadQueuedInputs,
             onUpdateQueuedInput = gateway::updateQueuedInput,
             onCancelQueuedInput = gateway::cancelQueuedInput,

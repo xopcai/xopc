@@ -870,4 +870,7 @@
     <string name="intake_adding">正在加入…</string>
     <string name="intake_wrong_connection">请切换回原网关和账号继续。</string>
     <string name="intake_capture_failed">文件接收失败，请重试分享。</string>
+    <string name="action_approval_ask">每次确认</string>
+    <string name="action_approval_full">完全访问</string>
+    <string name="action_approval_error">设置未能更新。请刷新重试；更改权限可能需要重新配对。</string>
 </resources>

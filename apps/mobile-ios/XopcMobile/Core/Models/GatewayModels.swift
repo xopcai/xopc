@@ -115,6 +115,11 @@ struct ConversationSummary: Decodable, Equatable, Identifiable, Sendable {
     }
 }
 
+enum ActionApprovalMode: String, Codable, CaseIterable, Sendable {
+    case ask, full
+    var title: String { AppLocalization.string(self == .ask ? "每次确认" : "完全访问", locale: AppLocalization.selectedLocale) }
+}
+
 struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
     let id: String
     let title: String
@@ -125,6 +130,7 @@ struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
     let thinkingLevel: String?
     let projectId: String?
     let executionMode: String?
+    var actionApprovalMode: ActionApprovalMode? = nil
 
     private init(
         id: String,
@@ -213,7 +219,7 @@ struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
     }
 
     func materialized(transcriptId: String) -> ConversationSelection {
-        ConversationSelection(
+        var result = ConversationSelection(
             id: id,
             title: title,
             agentId: agentId,
@@ -224,10 +230,12 @@ struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
             projectId: projectId,
             executionMode: executionMode
         )
+        result.actionApprovalMode = actionApprovalMode
+        return result
     }
 
     func configured(model: String, thinkingLevel: String) -> ConversationSelection {
-        ConversationSelection(
+        var result = ConversationSelection(
             id: id,
             title: title,
             agentId: agentId,
@@ -238,6 +246,8 @@ struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
             projectId: projectId,
             executionMode: executionMode
         )
+        result.actionApprovalMode = actionApprovalMode
+        return result
     }
 }
 
@@ -337,6 +347,7 @@ struct SessionAgentConfiguration: Decodable, Sendable {
     let configVersion: Int?
     let workingDirectoryLocked: Bool?
     let effectiveWorkspacePath: String?
+    var actionApprovalMode: ActionApprovalMode? = nil
 
     init(
         model: String?,

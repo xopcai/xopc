@@ -78,7 +78,7 @@ data class AgentCatalog(val agents: List<ConversationAgent>, val defaultId: Stri
 data class ConversationModel(val id: String, val name: String, val initialThinkingLevel: String,
   val thinkingMode: String = "none", val thinkingOptions: List<String> = emptyList())
 data class ModelSelection(val models: List<ConversationModel>, val selectedId: String,
-  val configVersion: Long?, val thinkingLevel: String = "off")
+  val configVersion: Long?, val thinkingLevel: String = "off", val actionApprovalMode: String? = null)
 data class QueuedInput(val id: String, val content: String, val version: Int, val position: Int,
   val attachmentCount: Int, val referenceCount: Int)
 data class QueuedInputState(val items: List<QueuedInput>, val positionOffset: Int,
@@ -91,6 +91,7 @@ data class LocalConversationDraft(
   val createdAt: String,
   val projectId: String? = null,
   val executionMode: String? = null,
+  val actionApprovalMode: String = "ask",
 )
 
 /** Assistant and Conversations read the same Gateway-backed conversation data. */
@@ -102,7 +103,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     UUID.fromString(gatewayId)
     val store = pendingStore ?: return
     listOf("composer.$gatewayId.", "composer-refs.$gatewayId.",
-      "pending-input.$gatewayId.", "draft.$gatewayId.").forEach(store::removeMatchingPrefix)
+      "pending-input.$gatewayId.", "draft.$gatewayId.", "chat-permissions.$gatewayId.").forEach(store::removeMatchingPrefix)
     store.remove("draft-index.$gatewayId")
     store.remove("quick-composer.$gatewayId")
     store.remove("quick-handoff.$gatewayId")
@@ -274,7 +275,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val resolvedMode = if (projectId != null && executionMode == null)
       defaultProjectExecutionMode(projectId) else executionMode
     val draft = LocalConversationDraft(UUID.randomUUID().toString(), agentId, "", "off", Instant.now().toString(),
-      projectId, resolvedMode)
+      projectId, resolvedMode, draftActionApproval(gatewayId, agentId))
+    check(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
     val store = pendingStore ?: throw IllegalStateException("NO_SECURE_STORE")
     store.write(draftKey(gatewayId, draft.conversationId), draftJson(draft).toString())
     val ids = draftIds(gatewayId).filterNot { it == draft.conversationId }
@@ -291,7 +293,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     return LocalConversationDraft(conversationId, json.getString("agentId"), json.getString("model"),
       json.getString("thinkingLevel"), json.getString("createdAt"),
       if (json.isNull("projectId")) null else json.optString("projectId").takeIf(String::isNotBlank),
-      if (json.isNull("executionMode")) null else json.optString("executionMode").takeIf(String::isNotBlank))
+      if (json.isNull("executionMode")) null else json.optString("executionMode").takeIf(String::isNotBlank),
+      json.optString("actionApprovalMode", "ask").takeIf { it in setOf("ask", "full") } ?: "ask")
   }
 
   fun projectDrafts(projectId: String): List<LocalConversationDraft> {
@@ -310,7 +313,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val creation = JSONObject().put("agentId", ready.agentId).put("projectId", ready.projectId ?: JSONObject.NULL)
       .put("execution", ready.executionMode?.let { JSONObject().put("mode", it) } ?: JSONObject.NULL)
       .put("temporary", false).put("model", ready.model)
-      .put("thinkingLevel", ready.thinkingLevel)
+      .put("thinkingLevel", ready.thinkingLevel).put("actionApprovalMode", ready.actionApprovalMode)
     val body = JSONObject().put("commandId", conversationId).put("purpose", purpose)
       .put("creation", creation)
     val raw = gateway.request("/api/sessions/$conversationId/materialize", "POST", body.toString())
@@ -378,6 +381,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     .put("thinkingLevel", draft.thinkingLevel).put("createdAt", draft.createdAt)
     .put("projectId", draft.projectId ?: JSONObject.NULL)
     .put("executionMode", draft.executionMode ?: JSONObject.NULL)
+    .put("actionApprovalMode", draft.actionApprovalMode)
 
   private fun defaultProjectExecutionMode(projectId: String): String? {
     val result = JSONObject(gateway.request("/api/projects/${encode(projectId)}"))
@@ -591,11 +595,12 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val query = effectiveAgent?.takeIf(String::isNotBlank)?.let { "?agentId=${encode(it)}" } ?: ""
     val models = parseModels(gateway.request("/api/models$query"))
     if (local != null) return models.copy(selectedId = local.model.ifBlank { models.selectedId },
-      thinkingLevel = local.thinkingLevel)
+      thinkingLevel = local.thinkingLevel, actionApprovalMode = local.actionApprovalMode)
     val raw = gateway.request("/api/sessions/$conversationId/agent-config")
     val config = parseModelConfig(raw)
     return models.copy(selectedId = config.first, configVersion = config.second,
-      thinkingLevel = JSONObject(raw).getJSONObject("payload").optString("thinkingLevel", "off"))
+      thinkingLevel = JSONObject(raw).getJSONObject("payload").optString("thinkingLevel", "off"),
+      actionApprovalMode = JSONObject(raw).getJSONObject("payload").optString("actionApprovalMode", "ask"))
   }
 
   fun agentAvatar(agent: ConversationAgent): ByteArray? {
@@ -671,6 +676,39 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       payload.getString("thinkingLevel"))
   }
 
+  private fun draftActionApproval(gatewayId: String, agentId: String): String {
+    val remembered = pendingStore?.read("chat-permissions.$gatewayId.$agentId")
+    if (remembered in setOf("ask", "full")) return remembered!!
+    return try {
+      val payload = JSONObject(gateway.request("/api/agents/${encode(agentId)}/effective-config"))
+        .getJSONObject("payload").getJSONObject("config")
+      payload.optJSONObject("runtime")?.optString("actionApprovalMode")
+        ?.takeIf { it in setOf("ask", "full") } ?: "ask"
+    } catch (_: Exception) { "ask" }
+  }
+
+  @Synchronized
+  fun setActionApproval(conversationId: String, agentId: String, mode: String, configVersion: Long?): Long? {
+    require(mode in setOf("ask", "full")) { "INVALID_ACTION_APPROVAL_MODE" }
+    require(pendingInput(conversationId) == null) { "INPUT_PENDING" }
+    val profile = gateway.currentProfile() ?: throw IllegalStateException("NOT_PAIRED")
+    val local = draft(conversationId)
+    val version = if (local != null) {
+      pendingStore?.write(draftKey(profile.gatewayId, conversationId),
+        draftJson(local.copy(actionApprovalMode = mode)).toString())
+      null
+    } else {
+      require(configVersion != null) { "CONFIG_VERSION_REQUIRED" }
+      val body = JSONObject().put("actionApprovalMode", mode).put("configVersion", configVersion)
+      val result = JSONObject(gateway.request("/api/sessions/$conversationId/agent-config", "PATCH", body.toString()))
+      require(result.optBoolean("ok")) { "ACTION_APPROVAL_UPDATE_FAILED" }
+      result.getJSONObject("payload").getLong("configVersion")
+    }
+    check(gateway.currentProfile()?.gatewayId == profile.gatewayId) { "GATEWAY_CHANGED" }
+    pendingStore?.write("chat-permissions.${profile.gatewayId}.${local?.agentId ?: agentId}", mode)
+    return version
+  }
+
   fun queuedInputs(conversationId: String): QueuedInputState {
     if (draft(conversationId) != null) return QueuedInputState(emptyList(), 0, false)
     return parseQueuedInputs(conversationId,
@@ -731,7 +769,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         .put("creation", JSONObject().put("agentId", local.agentId).put("projectId", local.projectId ?: JSONObject.NULL)
           .put("execution", local.executionMode?.let { JSONObject().put("mode", it) } ?: JSONObject.NULL)
           .put("temporary", false).put("model", local.model)
-          .put("thinkingLevel", local.thinkingLevel))
+          .put("thinkingLevel", local.thinkingLevel).put("actionApprovalMode", local.actionApprovalMode))
         .put("input", JSONObject().put("content", content)
           .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) })
     } ?: run {

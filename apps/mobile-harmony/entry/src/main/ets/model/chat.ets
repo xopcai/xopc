@@ -101,7 +101,7 @@ export interface XopcAgentEffective { skills?: XopcAgentSkillConfig; }
 export interface XopcChatAgent { id: string; name?: string; description?: string; avatar?: string; effective?: XopcAgentEffective; }
 export interface XopcChatAgents { defaultId: string; agents: XopcChatAgent[]; }
 export interface XopcActivityDetail { default: string; override: string | null; effective: string; source: string; }
-export interface XopcAgentConfig { model?: string; thinkingLevel?: string; activityDetail?: XopcActivityDetail; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }
+export interface XopcAgentConfig { actionApprovalMode?: string; model?: string; thinkingLevel?: string; activityDetail?: XopcActivityDetail; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }
 export interface XopcQueuedInput {
   id: string; clientMessageId: string; content: string; version: number; position: number;
   kind: string; status: string; requestedDelivery: string; effectiveDelivery: string;

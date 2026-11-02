@@ -10,6 +10,8 @@ final class AssistantOptionsState {
     private(set) var errorMessage: String?
     var selectedModelID = ""
     var thinkingLevel = "off"
+    private(set) var actionApprovalMode: ActionApprovalMode = .ask
+    private var configVersion: Int?
 
     var selectedModel: ChatModel? {
         models.first { $0.id == selectedModelID }
@@ -29,10 +31,14 @@ final class AssistantOptionsState {
             if conversation.isDraft {
                 selectedModelID = conversation.model ?? catalog.defaultId ?? models.first?.id ?? ""
                 selectThinking(conversation.thinkingLevel)
+                if let mode = conversation.actionApprovalMode { actionApprovalMode = mode }
+                else { actionApprovalMode = try await gateway.draftActionApproval(agentID: conversation.agentId) }
             } else {
                 let configuration = try await gateway.fetchAgentConfiguration(conversationID: conversation.id)
                 selectedModelID = configuration.model ?? catalog.defaultId ?? models.first?.id ?? ""
                 selectThinking(configuration.thinkingLevel)
+                actionApprovalMode = configuration.actionApprovalMode ?? .ask
+                configVersion = configuration.configVersion
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -59,12 +65,28 @@ final class AssistantOptionsState {
                     model: selectedModelID,
                     thinkingLevel: thinkingLevel
                 )
+                configVersion = try await gateway.fetchAgentConfiguration(conversationID: conversation.id).configVersion
             }
             return conversation.configured(model: selectedModelID, thinkingLevel: thinkingLevel)
         } catch {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    func saveActionApproval(_ mode: ActionApprovalMode, conversation: ConversationSelection,
+                            using gateway: any GatewayServing) async -> ConversationSelection? {
+        guard !isLoading, !isSaving else { return nil }
+        isSaving = true; errorMessage = nil
+        defer { isSaving = false }
+        do {
+            let updatedVersion = try await gateway.saveActionApproval(mode, conversation: conversation, configVersion: configVersion)
+            var updated = conversation
+            updated.actionApprovalMode = mode
+            actionApprovalMode = mode
+            configVersion = updatedVersion
+            return updated
+        } catch { errorMessage = error.localizedDescription; return nil }
     }
 
     private func selectThinking(_ preferred: String?) {

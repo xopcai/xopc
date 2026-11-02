@@ -24,7 +24,7 @@ vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: c
 import { XopcChatRepository } from '../entry/src/main/ets/repository/chatRepository.ets';
 import { XopcHttpError } from '../entry/src/main/ets/service/transport.ets';
 
-const creation = { agentId: 'main', projectId: null, execution: null, temporary: false, model: 'provider/model', thinkingLevel: 'off' };
+const creation = { agentId: 'main', projectId: null, execution: null, temporary: false, model: 'provider/model', thinkingLevel: 'off', actionApprovalMode: 'full' };
 const draft = () => ({ conversationId: 'draft-1', creation: { ...creation }, createdAt: '2026-09-27T00:00:00.000Z' });
 const response = (clientMessageId: string, activeRunId = 'run-1') => JSON.stringify({ payload: {
   receipt: { conversationId: 'draft-1', clientMessageId, transcriptId: 'transcript-1', lifecycle: 'ready' },
@@ -144,7 +144,7 @@ describe('local-first session creation', () => {
     const id = await new XopcChatRepository().create('project-1', 'writer', 'worktree');
     expect(id).toBe('draft-1');
     expect(mock.save).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'draft-1', creation: {
-      agentId: 'writer', projectId: 'project-1', execution: { mode: 'worktree' }, temporary: false, model: '', thinkingLevel: 'off',
+      agentId: 'writer', projectId: 'project-1', execution: { mode: 'worktree' }, temporary: false, model: '', thinkingLevel: 'off', actionApprovalMode: 'ask',
     } }), 'gateway:device');
     expect(mock.request).not.toHaveBeenCalled();
   });
@@ -157,7 +157,7 @@ describe('local-first session creation', () => {
     expect(mock.request).toHaveBeenCalledWith('/api/projects/project-1');
     expect(mock.save).toHaveBeenCalledWith(expect.objectContaining({ creation: {
       agentId: 'coder', projectId: 'project-1', execution: { mode: 'managed_worktree' }, temporary: false,
-      model: '', thinkingLevel: 'off',
+      model: '', thinkingLevel: 'off', actionApprovalMode: 'ask',
     } }), 'gateway:device');
   });
 
@@ -195,6 +195,7 @@ describe('local-first session creation', () => {
       materialization: { commandId: 'materialize-1', purpose: 'voice' },
     }), 'gateway:device');
     expect(mock.request).toHaveBeenCalledWith('/api/sessions/draft-1/materialize', 'POST', expect.any(String));
+    expect(JSON.parse(mock.request.mock.calls[0][2]).creation.actionApprovalMode).toBe('full');
     expect(mock.remove).toHaveBeenCalledWith('draft-1', 'gateway:device');
   });
 

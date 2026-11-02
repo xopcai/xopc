@@ -870,4 +870,7 @@
     <string name="intake_adding">Adding…</string>
     <string name="intake_wrong_connection">Switch to the original Gateway and account to continue.</string>
     <string name="intake_capture_failed">Unable to receive files. Please share again.</string>
+    <string name="action_approval_ask">Ask for approval</string>
+    <string name="action_approval_full">Full access</string>
+    <string name="action_approval_error">Unable to update settings. Refresh and try again; changing permissions may require pairing again.</string>
 </resources>
