@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ClarificationWizard } from '../clarification/clarification-wizard';
-import { Check } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
+import { ClarificationChoice } from '../clarification/clarification-choice';
 import {
   CLARIFICATION_ANSWER_LIMIT,
   normalizeClarificationSubmission,
@@ -61,6 +62,7 @@ function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, 
   const [editing, setEditing] = useState(false);
   const [now, setNow] = useState(Date.now);
   const [busy, setBusy] = useState(false);
+  const [localError, setLocalError] = useState('');
   const sending = useRef(false);
   const region = useRef<HTMLElement>(null);
   const errorRegion = useRef<HTMLDivElement>(null);
@@ -70,9 +72,8 @@ function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, 
   const expired = remaining === 0;
   const disabled = submitting || busy || expired;
   const approval = prompt.kind === 'approval';
-  const compose = prompt.interactionMode === 'compose' || editing;
+  const compose = editing || !prompt.choiceDetails?.length;
   const choices = prompt.choiceDetails ?? [];
-  const selectedChoice = choices.find(choice => choice.id === selected);
   const tooLong = draft.trim().length > CLARIFICATION_ANSWER_LIMIT;
   const inputId = `clarify-answer-${prompt.requestId}`;
   const errorId = `clarify-error-${prompt.requestId}`;
@@ -81,8 +82,9 @@ function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, 
 
   useEffect(() => { region.current?.focus(); }, []);
   useEffect(() => {
-    if (submitError) errorRegion.current?.focus();
-  }, [submitError]);
+    if (submitError || localError) errorRegion.current?.focus();
+  }, [submitError, localError]);
+  useEffect(() => { if (editing) input.current?.focus(); }, [editing]);
   useEffect(() => {
     if (!prompt.expiresAt) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -96,28 +98,29 @@ function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, 
 
   const submit = async (submission: ClarificationSubmission) => {
     if (disabled || sending.current) return;
-    normalizeClarificationSubmission(prompt, submission);
     sending.current = true;
     setBusy(true);
-    try { await onSubmit(submission); }
+    setLocalError('');
+    try { normalizeClarificationSubmission(prompt, submission); await onSubmit(submission); }
+    catch (error) { setLocalError(error instanceof Error ? error.message : String(error)); }
     finally { sending.current = false; setBusy(false); }
   };
   const pick = (id: string) => {
     if (disabled) return;
-    if (compose || draft.length) { setEditing(true); setSelected(id); }
-    else void submit({ response: { choiceId: id } });
+    setSelected(id);
+    void submit({ response: { choiceId: id } });
   };
   const sendDraft = () => {
-    if (tooLong || (!selectedChoice && !draft.trim())) return;
-    void submit({ response: { choiceId: selectedChoice?.id, text: draft.trim() || undefined } });
+    if (tooLong || !draft.trim()) return;
+    void submit({ response: { text: draft.trim() || undefined } });
   };
 
   return <section ref={region} tabIndex={-1} data-clarification-id={prompt.requestId}
     aria-label={approval ? labels.clarifyApprovalTitle : labels.clarifyRegionAria}
     aria-busy={submitting || busy}
     className={cn('mb-4 rounded-lg border border-edge bg-surface-overlay px-4 py-3 text-sm text-fg outline-none', interaction.focusRingPanel)}>
-    <p className="mb-2 font-medium">{approval ? labels.clarifyApprovalTitle : labels.clarifyResumeHint}</p>
-    <MarkdownView content={prompt.question} compact className="mb-3" />
+    <p className="mb-2 text-xs font-medium text-fg-muted">{approval ? labels.clarifyApprovalTitle : labels.clarifyRegionAria}</p>
+    <MarkdownView content={prompt.question} compact className="mb-3 text-fg [&_p]:font-medium" />
     {approval && prompt.approval ? <dl className="mb-3 space-y-2">
       {([[labels.clarifyOperation, prompt.approval.operation], [labels.clarifyTarget, prompt.approval.target],
         [labels.clarifyImpact, prompt.approval.impact]] as const).map(([label, value]) => value ? <div key={label}>
@@ -130,36 +133,31 @@ function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, 
     </details> : null}
     <div className="mb-3 space-y-1 text-xs text-fg-muted">
       {approval ? <><p>{labels.clarifyOnce}</p><p>{labels.clarifyApprovalTimeout}</p></>
-        : prompt.durable !== false ? <p>{labels.clarifyDurableNote}</p> : null}
+        : null}
       {remaining !== null ? <p role="status">{expired ? labels.clarifyExpired
         : labels.clarifyTimeRemaining.replace('{{time}}', `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`)}</p> : null}
     </div>
-    {submitError ? <div ref={errorRegion} tabIndex={-1} id={errorId} role="alert" className="mb-3 rounded-md border border-edge p-3 text-red-600">{submitError}</div> : null}
+    {submitError || localError ? <div ref={errorRegion} tabIndex={-1} id={errorId} role="alert" className="mb-3 rounded-md border border-edge p-3 text-red-600">{submitError || localError}</div> : null}
     {submitting || busy ? <p role="status" className="mb-2 text-xs text-fg-muted">{labels.clarifySubmitting}</p> : null}
     {approval ? <div className="flex flex-wrap gap-2">
       <Button variant="secondary" disabled={disabled} onClick={() => void submit({ decision: 'deny' })}>{labels.clarifyDeny}</Button>
       <Button variant="primary" disabled={disabled} onClick={() => void submit({ decision: 'approve' })}>{labels.clarifyApprove}</Button>
     </div> : <>
       {choices.length ? <>
-        {!compose ? <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
-          <span>{labels.clarifyQuickHint}</span><Button variant="ghost" disabled={disabled} onClick={() => { setEditing(true); input.current?.focus(); }}>{labels.clarifyCompose}</Button>
-        </div> : null}
-        <div role="group" aria-label={labels.clarifyChoicesGroupAria} className="max-h-64 space-y-2 overflow-y-auto">
-          {choices.map(choice => <Button key={choice.id} type="button" variant="secondary"
-            aria-pressed={compose ? selected === choice.id : undefined} disabled={disabled}
-            className={cn('min-h-11 w-full justify-start whitespace-normal px-3 py-2 text-left font-normal shadow-none', selected === choice.id && 'border-accent bg-surface-active')}
-            onClick={() => pick(choice.id)}>
-            {selected === choice.id ? <Check aria-hidden="true" className="size-4 shrink-0" /> : null}
-            <span className="min-w-0 break-words"><span className="font-medium">{choice.label}</span>
-              {recommended === choice.id ? <span className="ml-2 text-xs text-accent">{labels.clarifyRecommended}</span> : null}
-              {choice.description ? <span className="mt-1 block text-xs text-fg-muted">{choice.description}</span> : null}
-            </span>
-          </Button>)}
+        <p className="mb-2 text-xs text-fg-muted">{labels.clarifyQuickHint}</p>
+        <div role="group" aria-label={labels.clarifyChoicesGroupAria} className="max-h-64 space-y-0.5 overflow-y-auto rounded-lg border border-edge p-1">
+          {choices.map((choice, index) => <ClarificationChoice key={choice.id} {...choice} index={index}
+            recommended={recommended === choice.id} recommendedLabel={labels.clarifyRecommended}
+            selected={selected === choice.id} disabled={disabled} onClick={() => pick(choice.id)} />)}
         </div>
-        {selected ? <Button variant="ghost" disabled={disabled} onClick={() => setSelected(undefined)}>{labels.clarifyClearChoice}</Button> : null}
+        <Button variant="ghost" disabled={disabled} aria-expanded={compose} aria-controls={inputId}
+          className="mt-1 min-h-11 justify-start gap-1 px-1 text-xs"
+          onClick={() => { setEditing(!editing); }}>
+          <ChevronRight aria-hidden="true" className={cn('size-3.5', compose && 'rotate-90')} />{labels.clarifyCustomLabel}
+        </Button>
       </> : null}
-      <form className="mt-3 space-y-2 border-t border-edge-subtle pt-3" onSubmit={event => { event.preventDefault(); sendDraft(); }}>
-        <label htmlFor={inputId} className="block text-xs font-medium text-fg-muted">{selected ? labels.clarifySupplement : labels.clarifyCustomLabel}</label>
+      {compose ? <form className="mt-2 space-y-2" onSubmit={event => { event.preventDefault(); sendDraft(); }}>
+        <label htmlFor={inputId} className="block text-xs font-medium text-fg-muted">{labels.clarifyCustomLabel}</label>
         <textarea id={inputId} ref={input} value={draft} rows={2} disabled={disabled}
           placeholder={labels.clarifyPlaceholder} aria-invalid={tooLong} aria-describedby={`${hintId}${submitError ? ` ${errorId}` : ''}`}
           onChange={event => { setDraft(event.target.value); if (event.target.value) setEditing(true); }}
@@ -172,10 +170,10 @@ function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, 
           <span aria-live={tooLong ? 'polite' : 'off'}>{draft.trim().length}/{CLARIFICATION_ANSWER_LIMIT}</span>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button type="submit" variant="primary" disabled={disabled || tooLong || (!selectedChoice && !draft.trim())}>{labels.clarifySend}</Button>
+          <Button type="submit" variant="primary" disabled={disabled || tooLong || !draft.trim()}>{labels.clarifySend}</Button>
         </div>
-      </form>
-      <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-edge-subtle pt-3">
+      </form> : null}
+      <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-edge-subtle pt-2">
         {onAgentDecide ? <Button variant="ghost" disabled={disabled} onClick={() => void onAgentDecide()}>{labels.clarifyAgentDecide}</Button> : null}
         <Button variant="ghost" disabled={submitting || busy} onClick={() => void onCancel()}>{labels.clarifyCancel}</Button>
       </div>
