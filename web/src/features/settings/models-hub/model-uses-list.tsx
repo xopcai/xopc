@@ -25,7 +25,11 @@ function ModelUsePicker({ label, value, currentLabel, options, loading, disabled
 }) {
   const [query, setQuery] = useState('');
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const filtered = [...options].sort((left, right) => compareModelNamesDescending(left.label, right.label) || compareModelNamesDescending(left.value, right.value)).filter(option => {
+  const filtered = [...options].sort((left, right) =>
+    (left.group ?? '').localeCompare(right.group ?? '', 'en', { numeric: true, sensitivity: 'base' })
+    || compareModelNamesDescending(left.label, right.label)
+    || compareModelNamesDescending(left.value, right.value),
+  ).filter(option => {
     const text = `${option.label} ${option.group} ${option.value} ${option.searchText ?? ''}`.toLowerCase();
     return terms.every(term => text.includes(term));
   });
