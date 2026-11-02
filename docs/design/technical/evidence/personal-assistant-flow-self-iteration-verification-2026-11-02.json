@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "improvementId": "0cf8d3f2-3f5c-47e3-b497-3ba175336284",
+  "automaticPassConfirmedInBrowser": true,
+  "humanReviewPending": true,
+  "originalFirstStageHashesUnchanged": true,
+  "productionModulesUnchanged": true,
+  "artifacts": {
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/assistant-flow-auto-pass-20261102.png": "665ad90dc92dd72042c01164630d8429260b0ccb18f94dcb89c1a193256409ed",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/assistant-flow-iteration5-style-check-20261102.log": "246b7bfd1e7c8c2c0a83d531ae464fc3da7b48e0bf7345478499e25adb0fb42b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/assistant-flow-iteration2-coder-check-20261102.log": "ce7608becf08eb1b5a6e2ce6bfd845f32e17c020e87a346f512e4759ecc14e53"
+  }
+}

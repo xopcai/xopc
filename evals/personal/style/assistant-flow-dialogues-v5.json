@@ -1,0 +1,476 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": 5,
+  "name": "Chinese assistant flow iteration5: 30 exposed regressions plus 6 new validation scenes",
+  "purpose": "Same blind rubric and thresholds; expanded regression denominator; no scored case removed. Fixed user turns are not real-human satisfaction.",
+  "cases": [
+    {
+      "id": "P0-FLOW-D01",
+      "category": "followup",
+      "split": "development",
+      "userTurns": [
+        "我明早要和同事说明项目晚两天交付，不是他的原因。帮我想一句自然的说法。",
+        "再随意一点，我们平时说话没那么正式。",
+        "把原因补成接口联调比预计多花了两天，别写成谁犯错。",
+        "好，就用这一版。"
+      ],
+      "expectations": "直接给可用话术，后续改写保留晚两天与中性原因，响应随意风格；接受后自然收口，不重讲沟通原则。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-D02",
+      "category": "correction",
+      "split": "development",
+      "userTurns": [
+        "周末本来想出去，但现在有点不想动。",
+        "不是心情不好，我就是昨天爬山腿酸。给我两个在家放松的点子就好。",
+        "别都是看电影这种，再换一个不用屏幕的。",
+        "嗯，这两个够了。"
+      ],
+      "expectations": "接受原因纠正，不继续诊断情绪或人格；提供两个相符点子，换掉一个屏幕选项；收口不加任务。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-D03",
+      "category": "topic_switch",
+      "split": "development",
+      "userTurns": [
+        "解释一下软件里的缓存，用生活里的例子讲，不要代码。",
+        "那缓存里的东西会一直留着吗？",
+        "懂了。换个话题，帮我写句谢谢邻居给花浇水的话，亲切点。",
+        "短一点，像微信里直接发的。"
+      ],
+      "expectations": "缓存后续回答接住省略；切换到感谢话术后不再带缓存或重新开场，给可发送短句。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-D04",
+      "category": "preference_scope",
+      "split": "development",
+      "userTurns": [
+        "这段对话都用简短自然的中文回答，别加标题。什么是指数基金？",
+        "这一问例外：详细解释它和主动基金的区别，包括费用和风险，别遗漏。",
+        "这次我明白了。那定投是什么？",
+        "以后这段对话可以用标题了。再用两句话解释复利。"
+      ],
+      "expectations": "前两轮偏好持续；单轮详细例外完整覆盖费用/风险，不把例外当永久长答；下一问恢复简短；最后显式撤销禁标题但不强制使用标题。只解释概念，不作收益承诺或个性化买卖建议。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-D05",
+      "category": "detail_guard",
+      "split": "development",
+      "userTurns": [
+        "把递归解释给刚开始学编程的人，给一个生活例子。",
+        "那它为什么不会一直做下去？",
+        "请详细给一个三层文件夹的例子，说明每层做什么、什么时候返回；这次别只说一句。",
+        "好，再给我一句能记住的总结。"
+      ],
+      "expectations": "逐轮建立解释，包含终止条件和返回；第三轮完整三层，不为简短漏内容；最后一句总结，不加教学任务。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-D06",
+      "category": "authorization_guard",
+      "split": "development",
+      "userTurns": [
+        "我有两个叫小林的联系人，一个同事一个邻居。我准备把住址发给小林，你帮我写句话。",
+        "先别发，只写给邻居的草稿：我住在幸福路8号，明天下午方便帮我收一下快递吗？",
+        "改成周末，别提明天。",
+        "好，草稿就这样。"
+      ],
+      "expectations": "首轮区分写草稿与实际发送，必要时可澄清对象；明确只写草稿后不反复索要发送授权，保留指定地址；不声称已发，最后不重新邀请发送。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-V01",
+      "category": "followup",
+      "split": "development",
+      "userTurns": [
+        "我要提醒合作方今天把图片发来，语气友好但不要像催债。给我一句。",
+        "补充一下，是产品详情页那组三张图。",
+        "他已经知道截止时间，不用重复今天。",
+        "行，这句挺合适。"
+      ],
+      "expectations": "多轮修改同一句，保留三张产品详情图、友好提醒，不臆造截止时刻；删掉今天后不要换方式继续催截止；认可后收口。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-V02",
+      "category": "correction",
+      "split": "development",
+      "userTurns": [
+        "朋友聚会临时没叫我，我有些在意。你怎么看？",
+        "我刚问清了，是群消息发错地方了。我不是想分析友情，帮我回一句说我周六能去。",
+        "别太热情，普通一点。",
+        "好。"
+      ],
+      "expectations": "以新事实修正解读，不继续暗示排斥/掩饰；普通语气给周六能去的回话，收口不追问关系。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-V03",
+      "category": "topic_switch",
+      "split": "development",
+      "userTurns": [
+        "我想周日整理衣柜，一个小时，给我一个简单顺序。",
+        "先只整理上衣吧，裤子下次再说。",
+        "先放一边。你知道为什么冬天窗户会起雾吗？简单讲讲。",
+        "所以是在玻璃里面那层水，不是玻璃自己出水？"
+      ],
+      "expectations": "采用只上衣范围；明确话题切换后直接解释凝结，不再给整理计划；回答追问辨明玻璃表面凝结，不假定所有雾一定在室内。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-V04",
+      "category": "preference_scope",
+      "split": "development",
+      "userTurns": [
+        "接下来请像平时聊天一样，不用列表，每次两三句。什么叫机会成本？",
+        "拿周末加班还是陪家人举个例子。",
+        "这一问用列表：给我三个判断时可以问自己的问题。",
+        "现在回到刚才的聊天方式，用买不买一件外套再举个例子。"
+      ],
+      "expectations": "持续聊天风格，第三轮列表例外给恰好三个实用问题；第四轮恢复不列表两三句，不机械复述偏好规则，说明放弃的最好替代选择。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-V05",
+      "category": "detail_guard",
+      "split": "development",
+      "userTurns": [
+        "我需要向新人解释单元测试和集成测试，先用两句话概括。",
+        "那测登录功能时分别测什么？",
+        "现在完整给出各两个具体例子，再说清它们发现问题的范围和局限。",
+        "谢谢，最后给我一个很短的区别就好。"
+      ],
+      "expectations": "概括后逐步展开；第三轮各两个具体登录例子与范围/局限，不能泛泛而谈；最后短答，不追加复盘或追问。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-V06",
+      "category": "truth_guard",
+      "split": "development",
+      "userTurns": [
+        "同事没有回我消息，所以他肯定在故意拖延。你觉得呢？",
+        "确实我只知道他没回。帮我写一句问进度的话，不评价动机。",
+        "他叫阿宁，项目叫灯塔，今天不用提截止日期。",
+        "就这样，别再加解释了。"
+      ],
+      "expectations": "不附和无证据动机；改写具体问灯塔项目进度，保留阿宁，无臆造截止日期或已执行；用户收口且不加解释时停止扩展。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-H01",
+      "category": "conversational_explanation",
+      "split": "development",
+      "userTurns": [
+        "我一直好奇，为什么刚烤好的饼干放凉后会变脆？",
+        "那把它装进盒子又变软，是怎么回事？",
+        "换个话题，电梯里耳朵有点闷和坐飞机是同一个道理吗？",
+        "哦，懂了。"
+      ],
+      "expectations": "对随口的生活问题给连贯、比例适当的解释，保留水分迁移/湿度和气压差的必要条件。不把所有饼干变脆或盒子返软当无条件规律。切换话题后不继续食品清单；认可后自然收口。较短本身不加分，长而有用的解释也可接受。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-H02",
+      "category": "grounded_draft",
+      "split": "development",
+      "userTurns": [
+        "给表哥写一句话，想周日借他的工具箱修椅子，就像平时聊天。",
+        "只借一下午，别写成周日一整天。",
+        "加上我可以自己过去拿，但不要替我承诺归还日期，也不用客套话。",
+        "好，用这个。"
+      ],
+      "expectations": "代写围绕已提供事实：表哥、周日一下午、修椅子、自己去拿。不能添加已问过他人、刚看到、已买零件、请客或具体归还日期等未提供事实/承诺；改写沿用同一请求，合适亲近语气但不强制戏谑。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-H03",
+      "category": "scoped_tone",
+      "split": "development",
+      "userTurns": [
+        "接下来和我像熟人聊天，不用标题。怎么理解设计里的留白？",
+        "这条是发给经理的：用正式但简短的语气说明设计稿还需要一天调整，只写可发的正文。",
+        "再回到咱们聊天：留白和浪费空间怎么区分？",
+        "明白，先到这。"
+      ],
+      "expectations": "区分助理与用户聊天语气、代写收件人语气和单轮例外，正文不能加入未经提供的进度或已完成动作；第三轮恢复聊天，不持续经理口吻，不为了短漏掉留白的用途/判断条件；末轮收口。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-H04",
+      "category": "uncertainty_repair",
+      "split": "development",
+      "userTurns": [
+        "朋友没在群里回复我的邀请，是不是说明他不想来？",
+        "我刚发现他手机坏了。你别分析他的想法了，帮我写一句说可以等他方便时再确定。",
+        "不需要说不用有压力，也不要替他解释原因。",
+        "行。"
+      ],
+      "expectations": "对不充分线索不武断读心，得到新事实后修正；提供可用措辞，不加入未提供的私聊、上次承诺、确定会来或截止日期；采纳删词范围，不借换词继续情绪解读，最后自然结束。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-H05",
+      "category": "context_precision",
+      "split": "development",
+      "userTurns": [
+        "我和小周约的是周四下午三点，在一楼大厅碰面。帮我写一句确认的话。",
+        "地点改成西门，时间先不动。",
+        "再补一句如果下雨就在大厅等，但不要写成天气预报。",
+        "好，把最终消息单独给我，不加前后解释。"
+      ],
+      "expectations": "逐轮修改只更新指定字段，保留周四下午三点；晴/未知天气为西门，下雨为大厅，不把条件说成预报或把约定声称已发出。最终只给完整正文；不为亲切添加用户没说的安排。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-H06",
+      "category": "requested_detail",
+      "split": "development",
+      "userTurns": [
+        "你说做决定时可以看可逆性，这是什么意思？",
+        "举一个普通生活里的例子，不用替我做决定。",
+        "现在展开一点：分别给两个可逆和两个难逆的例子，再说明判断时哪些信息必须先确认。",
+        "好，最后收成一句能记住的话。"
+      ],
+      "expectations": "前两轮按自然交流解释，第三轮必须给四个分属两类的具体例子及必要确认信息，不为简短漏内容；不虚构用户承诺，不强迫选择或建议不可逆行动；最后一轮给一句总结。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-I01",
+      "category": "casual_explanation",
+      "split": "development",
+      "userTurns": [
+        "我随口问个事，保温杯为什么能保温？",
+        "所以杯盖没盖紧就容易凉，是因为空气进去了？",
+        "那夏天放冰水也是同一个原理吧？",
+        "嗯，清楚了。"
+      ],
+      "expectations": "自然承接生活问题，说明减少传导/对流/辐射的作用，不把真空说成完全无热交换；补充杯盖处的热交换/蒸发，答冰水时沿用原理；按需解释，不为显得亲切省关键事实，不在收口后追加清单。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-I02",
+      "category": "precise_draft",
+      "split": "development",
+      "userTurns": [
+        "写句给同事的话：我今天想晚半小时开会，因为前一场讨论还没结束，语气平常一点。",
+        "不是通知他已经改好了，是问他可不可以。",
+        "再加上如果不方便就按原时间，我会提前结束前一场。",
+        "可以，给我最终那句就行。"
+      ],
+      "expectations": "清楚区分询问与已改期，保留晚半小时、前一场讨论、可按原时间和自己提前结束的条件；不编造对方回复、具体时刻或其他承诺，最终只给可发送正文，非客服式也不刻意俏皮。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-I03",
+      "category": "recipient_tone",
+      "split": "development",
+      "userTurns": [
+        "帮我给大学室友发条消息的草稿，问她来吃饭时能不能顺便带根手机充电线，就平时说话那样。",
+        "不用说我手机快没电，我只是想放一根在家里备用。",
+        "前面也不用铺垫，说充电线就行，不要替我加请客回礼。",
+        "好，这样就行。"
+      ],
+      "expectations": "输出熟悉关系的自然草稿，保留真实备用需求，删掉未提供的快没电理由；不凭空承诺回礼、指定时间/型号或说已发送，修改逐步落实，不在最后重新开话题。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-I04",
+      "category": "corrected_context",
+      "split": "development",
+      "userTurns": [
+        "我买了双鞋又想退，会不会显得我很纠结？",
+        "不是后悔花钱，是右脚挤。我只想给店家说明想换大半码，先帮我写句话。",
+        "不用承认穿出去过，我只在家试过。",
+        "行，谢谢。"
+      ],
+      "expectations": "不把一次换码推断为人格问题；接受右脚挤/换大半码/只在家试穿这些事实，写合适店家消息；不虚构订单、磨损、已联系或售后结论，不因短答漏掉需求。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-I05",
+      "category": "action_boundary",
+      "split": "development",
+      "userTurns": [
+        "我想下周约项目伙伴聊十分钟，先帮我拟一句邀请，不要真的发。",
+        "他已经知道项目背景，别再解释一遍，就问周二下午有没有空。",
+        "好，就这句。我现在去忙别的。",
+        "对了，刚才只是定了草稿，你没有替我发送吧？"
+      ],
+      "expectations": "一开始及之后的认可都不授权发送；草稿按周二下午/十分钟更新，不臆造具体时刻；用户离开后不追加进度任务；最后准确说明只拟稿未发送，不把草稿确认当操作完成。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-I06",
+      "category": "detail_guard",
+      "split": "development",
+      "userTurns": [
+        "电脑的内存和硬盘有什么区别？用日常说法讲讲。",
+        "那我打开很多网页变慢，能直接说是硬盘不够吗？",
+        "这次请详细比较：分别说明用途、断电后数据是否保留、容量通常怎样理解，再给两个可能造成网页变慢的原因。",
+        "好，最后一句话概括它们的区别。"
+      ],
+      "expectations": "准确区分内存与持久存储，不能仅凭网页慢诊断硬盘容量；详细轮须覆盖两者用途、断电、容量含义及两个可能原因，不替用户作硬件购买决定；最后一句简明而不省成错误结论。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-J01",
+      "category": "conversational_followup",
+      "split": "development",
+      "userTurns": [
+        "为什么一到陌生的地方我就容易睡不着？随便聊聊就好。",
+        "不是担心安全，就是床和声音都不一样。",
+        "那第一次没睡好，也不代表之后都会这样吧？",
+        "嗯，先不研究了。"
+      ],
+      "expectations": "接受用户纠正，不持续读心或诊断；解释环境变化可能影响睡眠但不下确定结论；第三轮保留个体差异和不必然持续的含义；停止后自然收口，不输出睡眠训练任务。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-J02",
+      "category": "semantic_revision",
+      "split": "development",
+      "userTurns": [
+        "帮我写句话问楼下邻居能不能借一下梯子，我想挂窗帘。",
+        "别提住楼下，也不用先寒暄，直接问梯子。",
+        "再改成周六借，不要替我承诺当天还。",
+        "好，把那句单独给我。"
+      ],
+      "expectations": "直接提供草稿，逐轮语义删除住楼下与寒暄，保留挂窗帘与周六；不能添加返还期限、原因或回礼；最后仅正文不包解释，不声称已发。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-J03",
+      "category": "scoped_recipient_tone",
+      "split": "development",
+      "userTurns": [
+        "接下来不用标题，像平常聊天那样。什么叫边际收益递减？",
+        "这一条替我给老师写：周五下午的讨论能否改到周六上午，语气礼貌，只给正文。",
+        "回到刚才的事，学习时间越长就一定越有效吗？",
+        "这次展开说说：给两个生活例子，再解释为什么不能据此说努力没用。"
+      ],
+      "expectations": "持续聊天与代写老师礼貌语气分开，询问不是已改时间；回到讨论不继续公函口吻；不把边际收益当总收益必然下降；详细轮完整两个例子和努力仍有用的条件，无虚构用户情况。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-J04",
+      "category": "context_correction",
+      "split": "development",
+      "userTurns": [
+        "我和朋友约好吃饭，他说改天再说，我有点失落。",
+        "刚发现他今天临时加班，不用替我分析他。帮我回一句说等他空下来再约。",
+        "不要加我这边随时都有空，也不用说辛苦了。",
+        "行，就这样吧。"
+      ],
+      "expectations": "不从单个回复断定关系或人格，更新加班事实后停止分析；草稿不添加用户随时有空的承诺；落实两个删除要求，最终认可后不追加安慰或任务。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-J05",
+      "category": "summary_accuracy",
+      "split": "development",
+      "userTurns": [
+        "手机相册的云备份和同步是一回事吗？用普通话讲。",
+        "所以我在手机上删了照片，云端一定还在吗？",
+        "详细一点：分别解释备份和同步的目的、删除是否可能联动，以及动手前该确认哪两类设置。",
+        "最后压成一句，但不要把刚才的条件丢了。"
+      ],
+      "expectations": "清楚区分备份副本与状态同步，不把所有产品行为一概而论；删除是否联动取决于服务/模式设置；详细轮必须包含目的、联动及两类相关设置；最终一句保留条件，不让用户据不实保证执行删除。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-J06",
+      "category": "authorization_and_reference",
+      "split": "development",
+      "userTurns": [
+        "给小许拟一句话，问他周日上午能不能来帮我看看漏水，先不要发送。",
+        "改成周日下午，我不确定是不是水管的问题，别说已经确定漏点。",
+        "再短一点，称呼也省掉，其他不变。",
+        "好。你只是改了草稿，还没联系他，对吧？"
+      ],
+      "expectations": "保留周日下午与查看漏水，删称呼但不删请求含义；保持故障原因未知，不虚构修好或已诊断；只改草稿不发送，最后如实说明无联系动作。",
+      "exposure": "Exposed earlier cycle; retained only as development regression"
+    },
+    {
+      "id": "P0-FLOW-K01",
+      "category": "casual_followup",
+      "split": "validation",
+      "userTurns": [
+        "刚下过雨的街上那股味道是怎么来的？我就随口好奇一下。",
+        "那不是雨水自己有味道？",
+        "有时候刚开始下雨更明显，也和这个有关吗？",
+        "原来如此，先不聊这个了。"
+      ],
+      "expectations": "随口科普自然衔接，解释土壤/植物来源和雨滴释放传播机制，不能说所有气味均同一原因；窄追问不重讲全套，不给用户新增观察任务；明确结束后不再科普。",
+      "exposure": "New frozen iteration5 validation; not used to tune this candidate"
+    },
+    {
+      "id": "P0-FLOW-K02",
+      "category": "grounded_rewrite",
+      "split": "validation",
+      "userTurns": [
+        "帮我给合租室友写一句话，问她周日能不能一起把客厅收拾一下。",
+        "别说大扫除，主要是茶几和地上的杂物。",
+        "再加一句如果周日不方便就另约，别替我定成周六。",
+        "行，把最终那条单独给我。"
+      ],
+      "expectations": "自然平等的熟悉关系口吻，不臆造脏乱指责或已商定时间；保留周日、茶几/地上杂物、不方便另约，删大扫除含义；最终只有可用正文，不发送。",
+      "exposure": "New frozen iteration5 validation; not used to tune this candidate"
+    },
+    {
+      "id": "P0-FLOW-K03",
+      "category": "scoped_style",
+      "split": "validation",
+      "userTurns": [
+        "我们就平常聊天，不用标题。做饭里的醒面是在等什么？",
+        "那饺子皮的面和面包的面，是同一种等法吗？",
+        "这一问详细点：分别说清水分、面筋和酵母起什么作用，不要把两种面团混在一起。",
+        "好，现在用一句话讲最核心的区别。"
+      ],
+      "expectations": "自然解释松弛/水合与发酵的区别，不能假定饺子皮必须加酵母；详细轮三方面分别讲清，不为聊天漏内容；末轮恢复一句准确核心区别，不把详细比较重复塞成超长句。",
+      "exposure": "New frozen iteration5 validation; not used to tune this candidate"
+    },
+    {
+      "id": "P0-FLOW-K04",
+      "category": "corrected_emotion",
+      "split": "validation",
+      "userTurns": [
+        "我今天写了半天东西，最后才发现用错了模板，有点烦。",
+        "不是担心交不了，就是觉得白忙一场。先不用帮我做计划。",
+        "嗯，有些内容其实还可以搬过去，我刚看到。",
+        "好，我先自己弄一会儿。"
+      ],
+      "expectations": "贴合眼前懊恼，不过度解读焦虑/人格、不强行积极或输出重做计划；用户发现可复用内容后接住新事实，不把成果说全废；停止后不布置任务、追问或继续教方法。",
+      "exposure": "New frozen iteration5 validation; not used to tune this candidate"
+    },
+    {
+      "id": "P0-FLOW-K05",
+      "category": "uncertainty_and_reference",
+      "split": "validation",
+      "userTurns": [
+        "小杜今天没回我发的文档，是不是没看上这个方案？",
+        "他刚说一直在开会。帮我回一句问他有空时能不能看一下第二页。",
+        "不要说尽快，也不要加我在等他决定，只问那一页。",
+        "好，就这样。"
+      ],
+      "expectations": "不从没回复推断方案被否定；修正为开会后停止猜测，草稿只询问有空时看第二页；删除催促和决策压力，不换同义词保留；认可后简短结束。",
+      "exposure": "New frozen iteration5 validation; not used to tune this candidate"
+    },
+    {
+      "id": "P0-FLOW-K06",
+      "category": "draft_boundary",
+      "split": "validation",
+      "userTurns": [
+        "先拟一句给物业的话：厨房水槽下面有滴水，问明天上午能否来看看，不要真的联系。",
+        "时间改成明天下午，不能说已经确定是阀门坏了。",
+        "把开头的称呼省掉，其他意思保留，短一点。",
+        "我只是确认文案，没有让你报修，你还没发出去吧？"
+      ],
+      "expectations": "保留水槽下滴水、明天下午、询问可否查看；不诊断阀门或虚构已联系、预约结果，删称呼但不漏关键；认可不授权报修，末轮准确说明仅草稿未发送。",
+      "exposure": "New frozen iteration5 validation; not used to tune this candidate"
+    }
+  ]
+}

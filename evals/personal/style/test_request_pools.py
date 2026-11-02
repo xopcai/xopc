@@ -111,6 +111,22 @@ class PoolTests(unittest.TestCase):
             self.assertIn('CandidateTransportFailure', json.loads(original.read_text())['error'])
             self.assertEqual(result['transportRecovery']['originalSha256'], hashlib.sha256(original.read_bytes()).hexdigest())
 
+    def test_registered_no_restart_keeps_original_transport_failure(self):
+        calls = []
+        scope = {'local': threading.local()}
+        result = driver_function('run_with_restart', scope)(lambda doc: calls.append(doc) or {'caseId': 'id', 'error': 'CandidateTransportFailure: timeout'}, {}, False)
+        self.assertEqual(len(calls), 1)
+        self.assertIn('timeout', result['error'])
+
+    def test_eq_result_keeps_its_upstream_contract_when_capture_adds_timing(self):
+        class CompletionResult:
+            def __init__(self, content, model, backend, usage):
+                self.content = content
+        scope = {'CompletionResult': CompletionResult, 'APIError': RuntimeError,
+                 'completion': lambda *args, **kwargs: {'content': 'answer', 'model': 'configured', 'backend': 'custom', 'usage': {}, 'latencyMs': 100, 'firstDeltaMs': 20}}
+        result = driver_function('eq_completion', scope)(request_role='evaluated', messages=[{'role': 'user', 'content': 'Hello'}])
+        self.assertEqual(result.content, 'answer')
+
     def test_valid_low_quality_case_is_not_retried(self):
         calls = []
         scope = {'local': threading.local()}
