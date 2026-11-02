@@ -14,8 +14,11 @@ export const sessionCreationSchema = z.strictObject({
   temporary: z.boolean(),
   model: z.string().trim().min(1),
   thinkingLevel: z.string().min(1),
+  workingDirectory: z.string().trim().min(1).optional(),
 }).refine(value => value.projectId !== null || value.execution === null, {
   message: 'An execution environment requires a project', path: ['execution'],
+}).refine(value => !value.workingDirectory || value.projectId === null, {
+  message: 'A project controls the working directory', path: ['workingDirectory'],
 });
 
 const attachmentSchema = z.strictObject({

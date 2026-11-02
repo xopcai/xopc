@@ -5,6 +5,7 @@ import { resolveProjectAgentId } from '../../projects/index.js';
 import { resolveModel } from '../../providers/index.js';
 import { getModelThinking } from '../../providers/model-thinking.js';
 import { withModelConfigLock } from '../../session/model-config-lock.js';
+import { normalizeWorkingDirectoryInput } from '../../session/session-workspace.js';
 import {
   acceptSessionCommand, getSessionPreparation, matchSessionInputReceipt, sessionCommandHash,
   SessionCommandError, type SessionInputReceipt,
@@ -15,6 +16,11 @@ import { getPersonalAgentByConversation } from '../../personal-agent/repository.
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 
 function validateCreation(service: GatewayService, creation: SessionCreation): void {
+  if (creation.workingDirectory !== undefined) {
+    if (creation.projectId) throw new Error('A project controls the working directory');
+    const normalized = normalizeWorkingDirectoryInput(creation.workingDirectory);
+    if (normalized.ok === false) throw new Error(normalized.error);
+  }
   const project = creation.projectId ? service.projects.get(creation.projectId) : null;
   if (creation.projectId && !project) throw new Error('Project not found');
   const agentId = resolveProjectAgentId({ config: service.currentConfig, projects: service.projects,

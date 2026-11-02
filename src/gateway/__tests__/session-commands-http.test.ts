@@ -16,6 +16,7 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { getSessionMetadata, deleteSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { getSessionConfig } from '../../storage/sqlite/config-repository.js';
 import { SessionInputCoordinator } from '../service/session-input-coordinator.js';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
@@ -83,15 +84,18 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     expect(review.status, await review.clone().text()).toBe(200);
     expect(getSessionMetadata(id)).toBeNull();
     const command = { kind: 'start', clientMessageId: randomUUID(),
-      creation: { agentId: 'main', projectId: null, execution: null, model: 'test/model', thinkingLevel: 'off', temporary: false },
+      creation: { agentId: 'main', projectId: null, execution: null, model: 'test/model', thinkingLevel: 'off', temporary: false, workingDirectory: dir },
       input: { content: 'hello', endpointContext: { version: 1, capturedAt: Date.now(), timezone: 'Asia/Shanghai', locale: 'zh-CN' } },
       origin: { type: 'endpoint', endpointId: hello.endpointId, token: registration.turnToken } };
     const post = (body: object) => fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body) });
     expect((await fetch(base + path, { method: 'POST', body: JSON.stringify(command) })).status).toBe(401);
     expect((await post({ content: 'old flat request', clientMessageId: 'old', delivery: 'next' })).status).toBe(400);
     expect((await fetch(`${base}/api/sessions`, { method: 'POST', headers, body: '{}' })).status).toBe(404);
+    expect((await post({ ...command, creation: { ...command.creation, workingDirectory: '/' } })).status).toBe(400);
+    expect(getSessionMetadata(id)).toBeNull();
     const accepted = await post(command);
     expect(accepted.status, await accepted.clone().text()).toBe(202);
+    expect(getSessionConfig(id)?.workingDirectoryOverride).toBe(dir);
     const first = await accepted.json();
     expect(first.payload.receipt.conversationId).toBe(id);
     const frozen = getSessionInputById(id, first.payload.receipt.inputId)!;

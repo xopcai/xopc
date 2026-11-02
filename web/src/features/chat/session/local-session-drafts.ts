@@ -181,8 +181,8 @@ export function draftAgentConfig(draft: LocalSessionDraft): SessionAgentConfig {
     model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel,
     fixedModel: false,
     activityDetail: { default: 'on', override: null, effective: 'on', source: 'default' },
-    effectiveWorkspacePath: '', workingDirectoryLocked: Boolean(draft.creation.projectId),
-    workspaceSource: draft.creation.projectId ? 'project' : 'agent_default_root',
+    effectiveWorkspacePath: draft.creation.workingDirectory ?? '', workingDirectoryLocked: Boolean(draft.creation.projectId),
+    workspaceSource: draft.creation.projectId ? 'project' : draft.creation.workingDirectory ? 'session_override' : 'agent_default_root',
     userContextMode: draft.creation.temporary ? 'temporary' : 'enabled',
   };
 }
