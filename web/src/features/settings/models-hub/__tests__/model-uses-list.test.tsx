@@ -18,7 +18,7 @@ vi.mock('@/features/settings/global-defaults-api', () => ({ fetchGlobalDefaults:
 vi.mock('@/features/gateway/gateway-config-swr', () => ({ useGatewayConfigSwr: () => ({ data: api.voiceConfig() }) }));
 vi.mock('@/components/ui/popover-select', () => ({ PopoverSelect: ({ options, value, disabled, ariaLabel, selectedLabel, onChange }: {
   options: Array<{ value: string; label: string }>; value: string; disabled: boolean; ariaLabel: string; selectedLabel?: string; onChange: (ref: string) => void;
-}) => <fieldset aria-label={ariaLabel} data-value={value}><legend>{selectedLabel}</legend>{options.map(option => <button key={option.value} disabled={disabled} onClick={() => onChange(option.value)}>{option.label}</button>)}</fieldset> }));
+}) => <fieldset aria-label={ariaLabel} data-value={value}><legend>{selectedLabel}</legend>{options.map(option => <button key={option.value} data-value={option.value} disabled={disabled} onClick={() => onChange(option.value)}>{option.label}</button>)}</fieldset> }));
 
 import { ModelUsesList, modelUseOptions } from '../model-uses-list';
 import type { ConnectedProvidersData } from '../connected-providers-grid';
@@ -59,6 +59,24 @@ it('uses server capabilities for every use, including background restrictions', 
   expect(background.textContent).toContain(`${cloud} background`);
   expect(background.textContent).not.toContain(plan);
   expect(modelUseOptions([preview(plan)], 'speech')[0]?.value).toBe(`${plan}/speech`);
+});
+
+it('keeps each provider together and sorts model versions naturally within the provider', async () => {
+  api.fetch.mockImplementation(async provider => {
+    const result = preview(provider);
+    result.uses.find(row => row.id === 'chat')!.choices = [
+      { id: `${provider}/gpt-6`, name: 'GPT-6' },
+      { id: `${provider}/gpt-10`, name: 'GPT-10' },
+      { id: `${provider}/gpt-6.1`, name: 'GPT-6.1' },
+    ];
+    return result;
+  });
+  await render();
+  const options = [...container.querySelectorAll('[aria-label="选择 对话与任务"] button')];
+  expect(options.map(option => option.getAttribute('data-value'))).toEqual([
+    `${cloud}/gpt-10`, `${cloud}/gpt-6.1`, `${cloud}/gpt-6`,
+    `${plan}/gpt-10`, `${plan}/gpt-6.1`, `${plan}/gpt-6`,
+  ]);
 });
 
 it('honors server restrictions for a model alias even when provider metadata looks unrestricted', async () => {
