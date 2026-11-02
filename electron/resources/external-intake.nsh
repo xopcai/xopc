@@ -29,7 +29,6 @@ Var XopcUpdateCheckbox
 
 !macro customPageAfterChangeDir
   Page custom XopcPrivacyPage XopcPrivacyLeave
-!macroend
 
 Function XopcPrivacyPage
   !insertmacro MUI_HEADER_TEXT "Privacy and desktop updates / 隐私与桌面更新" "Choose automatic updates; model and tool permissions remain separate."
@@ -78,6 +77,7 @@ FunctionEnd
 Function XopcPrivacyLeave
   ${NSD_GetState} $XopcUpdateCheckbox $XopcAutomaticUpdates
 FunctionEnd
+!macroend
 
 ; Register as an Open With candidate without changing the user's default application.
 !macro xopcOpenWithExtension EXT

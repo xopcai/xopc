@@ -152,4 +152,12 @@ describe('Electron auto updater', () => {
     expect(mocks.updater.autoInstallOnAppQuit).toBe(false);
   });
 
+  it('cannot check or download before installer consent has been loaded or after stopping', () => {
+    updater.stopAutoUpdater();
+    mocks.updater.checkForUpdates.mockClear();
+    updater.checkForUpdates(true);
+    updater.checkForUpdates(false);
+    expect(mocks.updater.checkForUpdates).not.toHaveBeenCalled();
+  });
+
 });
