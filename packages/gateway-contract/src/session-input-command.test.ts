@@ -33,6 +33,13 @@ describe('session input commands', () => {
   it('rejects environment selection without a project', () => {
     expect(sessionInputCommandSchema.safeParse({ ...start, creation: { ...start.creation, execution: { mode: 'managed_worktree' } } }).success).toBe(false);
   });
+  it('carries a projectless folder selection in the first-input identity', () => {
+    const command = { ...start, creation: { ...start.creation, workingDirectory: '/tmp/chosen' } };
+    expect(sessionInputCommandSchema.parse(command)).toMatchObject({ creation: { workingDirectory: '/tmp/chosen' } });
+    expect(sessionCommandIdentity(command)).not.toBe(sessionCommandIdentity(start));
+    expect(sessionInputCommandSchema.safeParse({ ...command, creation: { ...command.creation, projectId: 'project' } }).success).toBe(false);
+    expect(sessionInputCommandSchema.safeParse({ ...command, creation: { ...command.creation, workingDirectory: ' ' } }).success).toBe(false);
+  });
 });
 
 describe('session input command references', () => {

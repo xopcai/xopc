@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readPendingSessionCommand, confirmSessionCommand, type LocalSessionDraft } from '@/features/chat/session/local-session-drafts';
+import { readPendingSessionCommand, confirmSessionCommand, draftAgentConfig, type LocalSessionDraft } from '@/features/chat/session/local-session-drafts';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
@@ -16,9 +16,10 @@ vi.mock('@/lib/gateway-startup-retry', () => ({
   apiFetchWithStartupRetry: vi.fn(),
 }));
 const drafts = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn() }));
-vi.mock('@/features/chat/session/local-session-drafts', () => ({
+vi.mock('@/features/chat/session/local-session-drafts', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/features/chat/session/local-session-drafts')>(),
   readLocalSessionDraft: drafts.read, saveLocalSessionDraft: drafts.save,
-  rememberSessionTranscript: vi.fn(), draftAgentConfig: vi.fn(),
+  rememberSessionTranscript: vi.fn(),
   readPendingSessionCommand: vi.fn(async () => undefined), confirmSessionCommand: vi.fn(),
 }));
 
@@ -96,6 +97,7 @@ describe('SessionManager agent config', () => {
 });
 
 describe('SessionManager local drafts', () => {
+  afterEach(() => drafts.read.mockResolvedValue(undefined));
   beforeEach(() => {
     mockedApiFetch.mockReset();
   });
@@ -105,6 +107,32 @@ describe('SessionManager local drafts', () => {
     expect(session.key).toMatch(/^[a-f0-9-]{36}$/);
     expect(drafts.save).toHaveBeenCalledWith(expect.objectContaining({ conversationId: session.key }));
     expect(mockedApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('persists the chosen folder and restores it before the first input', async () => {
+    const draft: LocalSessionDraft = {
+      conversationId: 'folder-draft', createdAt: new Date().toISOString(),
+      creation: { agentId: 'main', projectId: null, execution: null, temporary: false, model: 'test/model', thinkingLevel: 'off' },
+    };
+    drafts.read.mockResolvedValue(structuredClone(draft));
+    const config = await new SessionManager().patchSessionAgentConfig(draft.conversationId, {
+      workingDirectory: '  /tmp/chosen  ',
+    });
+    const saved = drafts.save.mock.lastCall![0] as LocalSessionDraft;
+    expect(saved.creation.workingDirectory).toBe('/tmp/chosen');
+    expect(config).toMatchObject({ effectiveWorkspacePath: '/tmp/chosen', workspaceSource: 'session_override' });
+    drafts.read.mockResolvedValue(structuredClone(saved));
+    expect(await new SessionManager().loadSessionAgentConfig(draft.conversationId)).toMatchObject({
+      effectiveWorkspacePath: '/tmp/chosen', workspaceSource: 'session_override',
+    });
+    expect(draftAgentConfig(saved).workingDirectoryLocked).toBe(false);
+    expect(mockedApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects folder changes for a project draft', async () => {
+    drafts.read.mockResolvedValue({ creation: { projectId: 'project' } });
+    await expect(new SessionManager().patchSessionAgentConfig('project-draft', { workingDirectory: '/tmp/chosen' }))
+      .rejects.toThrow('A project controls the working directory');
   });
 });
 
