@@ -1,3 +1,4 @@
+import { compareModelsDescending } from '@/lib/model-sort';
 import { openCapabilitySettings } from '@/features/settings/models-hub/open-capability-settings';
 import { modelDisplayName } from '@/lib/model-display-name';
 import * as Popover from '@radix-ui/react-popover';
@@ -304,7 +305,7 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
         {[...groups].filter(([, entries]) => entries.length > 0).map(([provider, entries]) => <div key={provider} role={groupByProvider ? 'group' : undefined} aria-label={groupByProvider ? provider : undefined}
           className={groupByProvider ? 'border-t border-edge-subtle pb-1 first:border-t-0' : undefined}>
           {groupByProvider && <p className="sticky top-0 z-10 bg-surface-overlay px-3 pb-1 pt-3 text-xs font-medium text-fg-muted">{provider}</p>}
-          {entries.map((model) => (
+          {entries.sort(compareModelsDescending).map((model) => (
           <button key={model.id} type="button" disabled={disabled} title={model.id}
             ref={model.id === value ? selectedOption : undefined}
             aria-pressed={model.id === value}

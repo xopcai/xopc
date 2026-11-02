@@ -151,6 +151,7 @@ export default defineConfig({
             text: 'Community',
             items: [
               { text: 'Join the community', link: '/community' },
+              { text: 'Code signing policy', link: '/code-signing' },
               { text: 'Code of Conduct', link: 'https://github.com/xopcai/xopc/blob/main/CODE_OF_CONDUCT.md' },
               { text: 'Contributing', link: 'https://github.com/xopcai/xopc/blob/main/CONTRIBUTING.md' }
             ]
@@ -273,6 +274,7 @@ export default defineConfig({
             text: '社区',
             items: [
               { text: '加入社区', link: '/zh/community' },
+              { text: '代码签名政策', link: '/zh/code-signing' },
               { text: '行为准则', link: 'https://github.com/xopcai/xopc/blob/main/CODE_OF_CONDUCT.md' },
               { text: '参与贡献', link: 'https://github.com/xopcai/xopc/blob/main/CONTRIBUTING.md' }
             ]

@@ -42,4 +42,4 @@ xopc channels pairing approve weixin <code> --account default
 
 MCP 安全回流需要可从手机访问的 HTTPS `gateway.publicUrl`，以及 `session.dmScope=per-account-channel-peer` 的独立路由；不支持共享会话、身份合并或群聊配置。安全入口不能替换／删除其他服务，也不授予微信用户通用管理权限。连接保存为网关共享能力，沿用助手工具权限。
 
-普通提醒可要求“60秒后只在当前微信提醒我一次，不要现在试运行”。结果通过绑定原账号和私聊的持久 outbox 投递。支持范围与真实客户端验收状态见[实施记录](../../design/technical/weixin-conversation-configuration-2026-10-28.md)。
+普通提醒可要求“60秒后只在当前微信提醒我一次，不要现在试运行”。结果通过绑定原账号和私聊的持久 outbox 投递。支持范围与真实客户端验收状态见[实施记录](https://github.com/xopcai/xopc/blob/main/docs/design/technical/weixin-conversation-configuration-2026-10-28.md)。

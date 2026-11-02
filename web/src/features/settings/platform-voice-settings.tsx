@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { voiceSettingsCatalogSchema, voiceSupportsMode, type VoiceSelection } from '@xopcai/realtime-protocol/voice';
+import { compareModelsDescending } from '@/lib/model-sort';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,7 +38,7 @@ export function PlatformVoiceSettings({ disabled = false, modes, onPendingChange
   };
   const renderMode = (mode: VoiceSelection['mode']) => {
       const selected = data!.selections.find(item => item.mode === mode);
-      const models = data!.models.filter(model => model.voice.modes.includes(mode));
+      const models = data!.models.filter(model => model.voice.modes.includes(mode)).sort(compareModelsDescending);
       const model = models.find(item => item.id === selected?.model);
       const voices = model?.voice.voices.filter(voice => voiceSupportsMode(voice, mode)) ?? [];
       const selectedVoice = selected?.voice ?? voices.find(voice => voice.id === model?.voice.defaultVoice)?.id ?? voices[0]?.id ?? '';

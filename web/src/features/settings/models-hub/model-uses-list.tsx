@@ -1,3 +1,4 @@
+import { compareModelNamesDescending } from '@/lib/model-sort';
 import { modelDisplayName } from '@/lib/model-display-name';
 import useSWR from 'swr';
 import { fetchVoiceProviders, fetchVoiceSttProviders } from '@/features/settings/voice-config-api';
@@ -24,7 +25,7 @@ function ModelUsePicker({ label, value, currentLabel, options, loading, disabled
 }) {
   const [query, setQuery] = useState('');
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const filtered = options.filter(option => {
+  const filtered = [...options].sort((left, right) => compareModelNamesDescending(left.label, right.label) || compareModelNamesDescending(left.value, right.value)).filter(option => {
     const text = `${option.label} ${option.group} ${option.value} ${option.searchText ?? ''}`.toLowerCase();
     return terms.every(term => text.includes(term));
   });

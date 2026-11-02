@@ -42,4 +42,4 @@ A paired, explicitly approved private chat can request Skill installation and us
 
 Secure MCP return requires a phone-accessible HTTPS `gateway.publicUrl`, `session.dmScope=per-account-channel-peer`, and no identity merging. Shared chats and group configuration are outside this scope. Connections join shared Gateway capabilities under the assistant's tool policies; pairing does not grant general administration rights.
 
-Self-contained reminders use the original account and peer through the durable automation delivery outbox. See the [implementation and acceptance record](../design/technical/weixin-conversation-configuration-2026-10-28.md) for exact scope; local protocol acceptance does not imply official WeChat or physical-phone acceptance.
+Self-contained reminders use the original account and peer through the durable automation delivery outbox. See the [implementation and acceptance record](https://github.com/xopcai/xopc/blob/main/docs/design/technical/weixin-conversation-configuration-2026-10-28.md) for exact scope; local protocol acceptance does not imply official WeChat or physical-phone acceptance.

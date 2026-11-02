@@ -8,7 +8,7 @@ xopc 使用 pi 1.1.0 的公开 `createMcpExtension` 连接出站 MCP 服务。pi
 
 也可以要求查看、停用、重新启用或移除自定义连接。移除本地配置不等于撤销远端授权。明确的配置请求无需再次确认；保存、待重启生效和实际读取成功分别报告。服务地址中的 `localhost` 指 Gateway 所在主机。
 
-当前对话入口支持 HTTP MCP；任意 stdio 包安装、原生移动端和其他渠道授权回流需要各自实现。验收范围及本地 OAuth 测试服务见[实施记录](../design/technical/conversation-configuration-implementation-2026-10-28.md)。
+当前对话入口支持 HTTP MCP；任意 stdio 包安装、原生移动端和其他渠道授权回流需要各自实现。验收范围及本地 OAuth 测试服务见[实施记录](https://github.com/xopcai/xopc/blob/main/docs/design/technical/conversation-configuration-implementation-2026-10-28.md)。
 
 ## 配置
 
@@ -114,4 +114,4 @@ Web 授权通过原生 pi MCP 扩展完成，凭据与 CLI 共用。浏览器和
 
 参考：[pi 原生 MCP 文档](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/mcp.md)。
 
-微信私聊可发起绑定原目标的安全配置请求。需要独立账号私聊路由、明确批准的发送者，以及手机可访问的 HTTPS Gateway 地址。owner 在安全页核准具体服务与私聊身份后，再填写 Token 或授权；结果自动发回原微信会话。此入口不授予通用管理权限，范围与验收状态见[微信对话配置记录](../design/technical/weixin-conversation-configuration-2026-10-28.md)。
+微信私聊可发起绑定原目标的安全配置请求。需要独立账号私聊路由、明确批准的发送者，以及手机可访问的 HTTPS Gateway 地址。owner 在安全页核准具体服务与私聊身份后，再填写 Token 或授权；结果自动发回原微信会话。此入口不授予通用管理权限，范围与验收状态见[微信对话配置记录](https://github.com/xopcai/xopc/blob/main/docs/design/technical/weixin-conversation-configuration-2026-10-28.md)。

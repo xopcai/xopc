@@ -2,6 +2,7 @@ import { ArrowUpRight, CheckCircle2, ImageIcon, KeyRound, Loader2, Plus, Setting
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
+import { compareModelNamesDescending } from '@/lib/model-sort';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -227,7 +228,7 @@ export function ImageModelsSettingsPanel({ connectOnly = false, onConnected, onP
       ?? getOrderedApiKeyLinks(selectedProvider.id, language)[0]?.href
     : undefined;
   const modelOptions = useMemo(
-    () => (selectedProvider?.models ?? []).map((model) => ({ value: model, label: model })),
+    () => [...(selectedProvider?.models ?? [])].sort(compareModelNamesDescending).map((model) => ({ value: model, label: model })),
     [selectedProvider?.models],
   );
   const currentRef = defaultConfig?.model?.primary;

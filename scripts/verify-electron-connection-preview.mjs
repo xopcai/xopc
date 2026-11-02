@@ -43,13 +43,51 @@ try {
   assert.equal(await page.evaluate(() => window.electronAPI), undefined);
   assert.deepEqual(await page.evaluate(() => Object.keys(window.gatewayConnections).sort()), ['snapshot', 'save', 'connect', 'select', 'remove', 'enrollDesktop', 'checkDesktop', 'disableDesktop', 'reenrollDesktop', 'startObservation', 'startScreenObservation', 'listLocalOperations', 'reviewLocalOperation', 'listOperations', 'reviewOperation', 'startExecution', 'startWorkspace', 'startComputer', 'startBrowser', 'flushStopReceipts', 'startContainer', 'startTerminal', 'listContainers', 'stopExecution', 'stopObservation', 'useLocal', 'quit'].sort());
   report.checks.restrictedPreload = true;
+  const editRoles = await application.evaluate(({ Menu }) => Menu.getApplicationMenu()?.items
+    .flatMap(item => item.submenu?.items.map(child => child.role) ?? []) ?? []);
+  for (const role of ['undo', 'redo', 'cut', 'copy', 'paste', 'selectall']) {
+    assert(editRoles.includes(role), `Connection window is missing native editing role: ${role}`);
+  }
+  report.checks.nativeEditingMenu = true;
   const secret = `test-only-${randomUUID()}`;
   await page.getByRole('button', { name: '添加服务器', exact: false }).click();
   await page.getByText('更多选项', { exact: true }).click();
   await page.getByLabel('连接名称', { exact: true }).fill('Server A');
-  await page.getByLabel('服务器地址', { exact: true }).fill(origin);
+  if (process.platform === 'darwin') {
+    await application.evaluate(async ({ clipboard, ClipboardItem }) => {
+      // Materialize every format before writing; read items cannot be written back directly.
+      const items = await clipboard.read();
+      globalThis.__connectionClipboardBefore = await Promise.all(items.map(async item =>
+        new ClipboardItem(Object.fromEntries(await Promise.all(item.types.map(async type => [type, await item.getType(type)]))))));
+    });
+    try {
+      for (const [label, value] of [['服务器地址', origin], ['访问令牌', secret]]) {
+        await application.evaluate(async ({ BrowserWindow, clipboard }, value) => {
+          await clipboard.writeText(value);
+          globalThis.__connectionClipboardTestValue = value;
+          BrowserWindow.getAllWindows()[0].focus();
+        }, value);
+        const input = page.getByLabel(label, { exact: true });
+        await input.fill('');
+        await input.focus();
+        await page.keyboard.press('Meta+V');
+        assert.equal(await input.inputValue(), value, `${label}: Cmd+V did not paste`);
+        await page.keyboard.press('Meta+A');
+        assert.equal(await input.evaluate(input => input.selectionStart === 0 && input.selectionEnd === input.value.length), true);
+      }
+      report.checks.macNativePasteAndSelectAll = { address: true, credential: true };
+    } finally {
+      await application.evaluate(async ({ clipboard }) => {
+        if (await clipboard.readText() === globalThis.__connectionClipboardTestValue) await clipboard.write(globalThis.__connectionClipboardBefore);
+        delete globalThis.__connectionClipboardBefore;
+        delete globalThis.__connectionClipboardTestValue;
+      });
+    }
+  } else {
+    await page.getByLabel('服务器地址', { exact: true }).fill(origin);
+    await page.getByLabel('访问令牌', { exact: false }).fill(secret);
+  }
   await page.getByRole('button', { name: '已有 SSH loopback 转发' }).click();
-  await page.getByLabel('访问令牌', { exact: false }).fill(secret);
   await page.getByRole('button', { name: '仅保存连接' }).click();
   await page.getByText('Server A', { exact: false }).first().waitFor({ timeout: 20_000 });
   let snapshot = await page.evaluate(() => window.gatewayConnections.snapshot());

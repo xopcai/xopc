@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
+import { compareModelsDescending } from '@/lib/model-sort';
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -51,7 +52,7 @@ export function MediaServiceConnections({ zh, kind, modelServiceIds, onSaved, on
     {entry ? <>
       <p className="text-xs text-fg-muted">{entry.diagnostics.requiresApiKey ? (zh ? '此服务使用独立的 API Key。保存连接后，可在“模型与参数”中选用。' : 'This service uses its own API key. Save the connection, then choose it in Model and parameters.') : (zh ? '此来源无需 API Key，可返回能力设置选择。' : 'No API key needed. Choose this source in capability settings.')}</p>
       {connectionFields.map((field: VoiceConfigFieldMetadata) => <label key={field.key} className="block space-y-1 text-sm text-fg"><span>{field.label}</span>
-        {field.secret || field.type === 'password' ? <SecretInput labels={DEFAULT_SECRET_INPUT_LABELS} value={fields[field.key] ?? ''} onChange={value => setFields(current => ({ ...current, [field.key]: value }))} disabled={busy} /> : field.options?.length ? <Select value={fields[field.key] ?? ''} disabled={busy} onChange={event => setFields(current => ({ ...current, [field.key]: event.target.value }))}><SelectOption value="">{zh ? '保留现有值' : 'Keep existing'}</SelectOption>{field.options.map(option => <SelectOption key={option.id} value={option.id}>{option.name}</SelectOption>)}</Select> : <input className="w-full rounded-lg border border-edge bg-surface-panel p-2" value={fields[field.key] ?? ''} disabled={busy} placeholder={field.placeholder} onChange={event => setFields(current => ({ ...current, [field.key]: event.target.value }))} />}
+        {field.secret || field.type === 'password' ? <SecretInput labels={DEFAULT_SECRET_INPUT_LABELS} value={fields[field.key] ?? ''} onChange={value => setFields(current => ({ ...current, [field.key]: value }))} disabled={busy} /> : field.options?.length ? <Select value={fields[field.key] ?? ''} disabled={busy} onChange={event => setFields(current => ({ ...current, [field.key]: event.target.value }))}><SelectOption value="">{zh ? '保留现有值' : 'Keep existing'}</SelectOption>{(field.key === 'model' ? [...field.options].sort(compareModelsDescending) : field.options).map(option => <SelectOption key={option.id} value={option.id}>{option.name}</SelectOption>)}</Select> : <input className="w-full rounded-lg border border-edge bg-surface-panel p-2" value={fields[field.key] ?? ''} disabled={busy} placeholder={field.placeholder} onChange={event => setFields(current => ({ ...current, [field.key]: event.target.value }))} />}
       </label>)}
       {failure ? <p role="alert" className="text-sm text-danger">{failure}</p> : null}
       <Button disabled={busy || (!entry.configured && entry.diagnostics.requiresApiKey && !Object.values(fields).some(value => value.trim()))} onClick={() => void save()}>{busy ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存连接' : 'Save connection')}</Button>

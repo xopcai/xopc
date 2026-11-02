@@ -79,3 +79,15 @@ xopc 默认把配置、本地数据库、Agent 和工作区保存在 `~/.xopc/`�
 | 消息通道或手机无法连接 | 先确认本地聊天正常，再查看[消息通道](./channels/index.md)或[远程访问](./remote-access.md) |
 
 仍然无法解决时，在终端运行 `xopc doctor`，并查看[故障排查](./how-to/diagnose-broken-setup.md)。
+
+## Code signing policy（代码签名政策）
+
+签名申请状态与联网说明见[代码签名政策](./code-signing.md)。Windows v0.0.439 安装包仍未签名，尚未启用 SignPath。
+
+## 卸载
+
+Windows：退出 xopc，进入 **设置 → 应用 → 安装的应用 → xopc → 卸载**。macOS：退出后从 Applications 移除应用。Linux：`.deb` 使用包管理器卸载；AppImage 删除文件及自行创建的快捷方式。
+
+卸载程序不一定删除数据。默认 `~/.xopc` 与 CLI 共享，也可能仍由其他 Gateway 使用；先备份并停止其他使用者，再决定是否移除。卸载桌面程序不会删除远端服务器数据库或撤销外部服务凭据。
+
+安装会注册 `xopc` URL 协议、快捷方式和 Windows Open With 项；可选登录启动、后台服务与远端访问设置也可能改变系统配置，启用前应检查。Windows Open With 注册不会修改现有文件默认打开方式。

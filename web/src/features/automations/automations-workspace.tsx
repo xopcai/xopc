@@ -475,6 +475,10 @@ export function AutomationsWorkspace({
     () => userRuns.filter((run) => !isActiveRun(run) && run.readAtMs == null),
     [userRuns],
   );
+  const unreadRunCount = userAutomations.reduce(
+    (count, automation) => count + (automationsSwr.data?.executionSummaries?.[automation.id]?.unreadCount ?? 0),
+    0,
+  );
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
   const ownershipAutomations = ownership === 'system' ? systemAutomations : userAutomations;
   const ownershipRuns = ownership === 'system' ? systemRuns : userRuns;
@@ -1052,7 +1056,7 @@ export function AutomationsWorkspace({
               <div className="shrink-0 p-3">
                 <AutomationListToolbar language={language} labels={labels} filter={filter} ownership={ownership} source={sourceFilter}
                   projectId={projectIdParam} projects={projects} projectLocked={projectLocked} query={searchQuery}
-                  unreadCount={ownership === 'user' ? unreadRuns.length : 0} markReadBusy={busyAction === 'runs:read-all'}
+                  unreadCount={ownership === 'user' ? unreadRunCount : 0} markReadBusy={busyAction === 'runs:read-all'}
                   onFilter={setFilter} onOwnership={setOwnership} onSource={setSourceFilter} onProject={selectProject} onQuery={setSearchQuery}
                   onClear={() => { clearListFilters(); setOwnership('user'); if (!projectLocked) selectProject(''); }} onMarkAllRead={() => void markAllRead()} />
                 <button type="button" onClick={() => setSimpleCreateOpen(true)} className="mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><Plus className="size-4" aria-hidden />{language === 'zh' ? '新建任务' : 'New task'}</button>

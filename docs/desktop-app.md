@@ -69,6 +69,18 @@ xopc stores its configuration, local database, Agents, and workspaces under `~/.
 
 Read [Data and file locations](./workspace.md) for backup and path details. Local storage does not prevent selected context from being sent to a configured cloud model. Use a local model when a task must remain on-device. Do not include keys, tokens, private chats, or personal paths in screenshots.
 
+## Code signing policy
+
+Windows signing application status and network disclosures are in the [Code signing policy](./code-signing.md). Windows v0.0.439 installers are unsigned. SignPath signing is not yet active.
+
+## Uninstall
+
+On Windows, close xopc and open **Settings → Apps → Installed apps → xopc → Uninstall**. On macOS, quit xopc and remove it from Applications. On Linux, use your package manager for a `.deb` installation, or remove the AppImage and shortcuts you created.
+
+Removing the app does not necessarily remove its data. The default `~/.xopc` directory is shared with the CLI and can also be used by another Gateway process. Back it up and stop other owners before deliberately removing data. Uninstalling this desktop app does not delete a remote server's database or revoke its external service credentials.
+
+Installation registers the `xopc` URL protocol, shortcuts, and Windows Open With entries. Optional login/background service settings and remote access can affect system configuration; review those settings before enabling them. The Windows Open With registration does not change existing default file associations.
+
 ## Troubleshooting
 
 | Symptom | What to do |

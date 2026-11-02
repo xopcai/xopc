@@ -93,7 +93,7 @@ No application-specific parsing, shortcuts or execution rules are used.
 An opt-in macOS native candidate can execute a segment in one driver RPC when
 the driver advertises `input.batch.exact.v1`. Older drivers and Windows keep the
 existing guarded path; submitted native batches are never retried through it.
-See [native batch implementation and local build](design/technical/computer-use-native-batch.md).
+See [native batch implementation and local build](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-native-batch.md).
 
 Initial macOS validation completed two real fixture inputs using a fixed script. It does not establish real-model task performance or certify the new mode on Windows. See the [validation record](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-programmable-ui-validation-2026-10-27.md).
 
@@ -226,7 +226,7 @@ preview card. Expand the card for a larger view, hide it to pause capture, or us
 use a separate native capture pipeline and do not add model observations or
 intermediate screenshots to input batches. Frames remain ephemeral and local;
 browser-only and remote viewing are not included. See the
-[technical design and validation](design/technical/computer-use-window-preview.md).
+[technical design and validation](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-window-preview.md).
 
 ## Native text editing
 

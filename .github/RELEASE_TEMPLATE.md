@@ -21,4 +21,8 @@ Use this structure for a human-readable release summary. Remove empty sections a
 
 Use the website for current installer selection and the release assets for exact historical versions. Include checksums when supplied.
 
+## Code signing policy
+
+Link to the [Code signing policy](https://github.com/xopcai/xopc/blob/main/docs/code-signing.md). State the signature status of this release's actual artifacts. Do not claim SignPath support before approval and verified signing; include its required attribution only when the service is active.
+
 **Full Changelog**: link to the comparison between the actual previous tag and this tag.

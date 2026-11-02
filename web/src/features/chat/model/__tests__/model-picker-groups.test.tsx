@@ -21,10 +21,10 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 const render = (groupByProvider=true) => act(async()=>root.render(<ModelPickerList models={models} value="cloud/beta" groupByProvider={groupByProvider} showSearch searchPlaceholder="Search" noMatches="No matches" onChange={change}/>));
 const search = (value:string) => act(async()=>{const input=container.querySelector('input')!;Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
 const groups = () => [...container.querySelectorAll('[role="group"]')].map(group=>group.getAttribute('aria-label'));
-it('collects interleaved models under one provider while preserving provider and model order',async()=>{
+it('collects interleaved models under one provider while preserving provider order and sorting models descending',async()=>{
   await render();
   expect(groups()).toEqual(['cloud','bailian']);
-  expect([...container.querySelectorAll('[aria-label="cloud"] button')].map(button=>button.getAttribute('title'))).toEqual(['cloud/alpha','cloud/beta']);
+  expect([...container.querySelectorAll('[aria-label="cloud"] button')].map(button=>button.getAttribute('title'))).toEqual(['cloud/beta','cloud/alpha']);
   expect(container.querySelector('[title="cloud/beta"]')?.getAttribute('aria-pressed')).toBe('true');
 });
 it('filters by model name, provider and ID without leaving empty groups',async()=>{
