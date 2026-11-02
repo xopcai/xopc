@@ -1,6 +1,11 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
+import type { ImageContent } from '@earendil-works/pi-ai';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { AgentRunCancelledError } from '../orchestration/run-termination.js';
+import { registerSteeringTranscript, type TranscriptUserMessage } from '../inbound/attachment-pipeline.js';
+
+export type EmbeddedSteerOptions = { images?: ImageContent[]; transcriptMessage?: TranscriptUserMessage };
 
 export type EmbeddedRunIdentity = {
   conversationId: string;
@@ -16,6 +21,8 @@ export type EmbeddedRunHandle = EmbeddedRunIdentity & {
 type PendingEmbeddedRun = EmbeddedRunIdentity & {
   handle?: EmbeddedRunHandle;
   abortController: AbortController;
+  steeringCleanup: Array<() => void>;
+  steeringImages: Map<TranscriptUserMessage, ImageContent[]>;
 };
 
 export class EmbeddedRunConflictError extends Error {
@@ -56,7 +63,7 @@ export class EmbeddedRunRegistry {
     if (active) throw new EmbeddedRunConflictError(identity.conversationId, active.runId);
 
     const controller = this.prepared.get(JSON.stringify([identity.conversationId, identity.runId]));
-    const entry: PendingEmbeddedRun = { ...identity, abortController: controller ?? new AbortController() };
+    const entry: PendingEmbeddedRun = { ...identity, abortController: controller ?? new AbortController(), steeringCleanup: [], steeringImages: new Map() };
     this.byConversationId.set(identity.conversationId, entry);
 
     return {
@@ -66,6 +73,9 @@ export class EmbeddedRunRegistry {
         if (entry.abortController.signal.aborted) await abort();
       },
       release: () => {
+        for (const cleanup of entry.steeringCleanup) cleanup();
+        entry.steeringCleanup.length = 0;
+        entry.steeringImages.clear();
         if (this.byConversationId.get(identity.conversationId) === entry) {
           this.byConversationId.delete(identity.conversationId);
         }
@@ -90,14 +100,50 @@ export class EmbeddedRunRegistry {
     return true;
   }
 
-  async steerByConversationId(conversationId: string, text: string, expectedRunId?: string): Promise<boolean> {
+  async steerByConversationId(conversationId: string, text: string, expectedRunId?: string, options?: EmbeddedSteerOptions): Promise<boolean> {
     const handle = this.getByConversationId(conversationId);
     if (!handle || (expectedRunId !== undefined && handle.runId !== expectedRunId)
       || this.byConversationId.get(conversationId)?.abortController.signal.aborted) {
       return false;
     }
-    await handle.session.steer(text);
+    const entry = this.byConversationId.get(conversationId)!;
+    const transcript = options?.transcriptMessage;
+    const unregister = transcript ? registerSteeringTranscript(conversationId, transcript) : undefined;
+    if (transcript && options?.images?.length) entry.steeringImages.set(transcript, options.images);
+    const cleanup = () => { unregister?.(); if (transcript) entry.steeringImages.delete(transcript); };
+    entry.steeringCleanup.push(cleanup);
+    try {
+      const disposition = options?.images?.length
+        ? await handle.session.steer(text, options.images)
+        : await handle.session.steer(text);
+      if (disposition === 'handled') cleanup();
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
     return true;
+  }
+
+  restoreSteeringImages(conversationId: string, runId: string, messages: AgentMessage[]): AgentMessage[] {
+    const entry = this.byConversationId.get(conversationId);
+    if (!entry || entry.runId !== runId || entry.steeringImages.size === 0) return messages;
+    let next = messages;
+    let after = -1;
+    for (const [transcript, images] of entry.steeringImages) {
+      const text = userMessageText(transcript);
+      const index = messages.findIndex((message, index) => index > after && message.role === 'user'
+        && (!(message as { turnId?: string }).turnId || (message as { turnId?: string }).turnId === runId)
+        && (transcript.timestamp === undefined || (message as { timestamp?: number }).timestamp === transcript.timestamp)
+        && userMessageText(message) === text);
+      if (index < 0) continue;
+      after = index;
+      const user = messages[index] as Extract<AgentMessage, { role: 'user' }>;
+      const content = typeof user.content === 'string' ? [{ type: 'text' as const, text: user.content }] : user.content;
+      if (content.some(part => part.type === 'image')) continue;
+      if (next === messages) next = [...messages];
+      next[index] = { ...user, content: [...content, ...images] };
+    }
+    return next;
   }
 
   size(): number {
@@ -106,6 +152,16 @@ export class EmbeddedRunRegistry {
 }
 
 const embeddedRunRegistry = new EmbeddedRunRegistry();
+
+function userMessageText(message: AgentMessage): string {
+  const content = (message as { content?: unknown }).content;
+  return typeof content === 'string' ? content.trim() : Array.isArray(content)
+    ? content.filter(part => part?.type === 'text').map(part => part.text).join('\n').trim() : '';
+}
+
+export function restoreEmbeddedSteeringImages(conversationId: string, runId: string, messages: AgentMessage[]): AgentMessage[] {
+  return embeddedRunRegistry.restoreSteeringImages(conversationId, runId, messages);
+}
 
 export function acquireEmbeddedRunLease(identity: EmbeddedRunIdentity): EmbeddedRunLease {
   return embeddedRunRegistry.acquire(identity);
@@ -123,6 +179,6 @@ export function abortEmbeddedRun(conversationId: string, reason: 'user_cancelled
   return embeddedRunRegistry.abortByConversationId(conversationId, reason, expectedRunId);
 }
 
-export function queueEmbeddedSteer(conversationId: string, text: string, expectedRunId?: string): Promise<boolean> {
-  return embeddedRunRegistry.steerByConversationId(conversationId, text, expectedRunId);
+export function queueEmbeddedSteer(conversationId: string, text: string, expectedRunId?: string, options?: EmbeddedSteerOptions): Promise<boolean> {
+  return embeddedRunRegistry.steerByConversationId(conversationId, text, expectedRunId, options);
 }

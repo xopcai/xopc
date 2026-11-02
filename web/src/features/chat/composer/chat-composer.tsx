@@ -178,7 +178,7 @@ export const ChatComposer = memo(function ChatComposer({
   onPersonalSendDispatched?: (receipt: ComposerDispatchReceipt, source: DOMRect, draft: ComposerDraft) => void;
   onAbort: () => void;
   onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], interrupt?: boolean, delivery?: 'next' | 'steer') => void | Promise<void>;
-  onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
+  onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | boolean | Promise<void | boolean>;
   pendingFollowUps: PendingFollowUp[];
   editingFollowUpId: string | null;
   onBeginEditFollowUp: (id: string) => void;
@@ -624,6 +624,9 @@ export const ChatComposer = memo(function ChatComposer({
     onCommitEditFollowUp,
     onPendingFollowUpRemove,
     pendingFollowUpsCount: pendingFollowUps.length,
+    firstPendingFollowUpId: pendingFollowUps[0]?.id,
+    onSteerPendingFollowUp: onPendingFollowUpSteer,
+    steeringPending: Boolean(steeringFollowUpId),
     resetEditor: () => {
       editor.resetEditor();
     },
@@ -675,6 +678,7 @@ export const ChatComposer = memo(function ChatComposer({
     pendingFollowUpsCount: pendingFollowUps.length,
     flushSteeringDraft: submitFollowUp,
     steerDraft: () => actions.flushSteeringDraft(false, 'steer'),
+    steerCurrentReply: actions.steerCurrentReply,
     interruptDraft: actions.interruptDraft,
     editingFollowUpId,
     editingUserTurnId, onCancelUserMessageEdit,
@@ -702,6 +706,8 @@ export const ChatComposer = memo(function ChatComposer({
     : editingUserTurnId ? m.chat.userMessageReplaceSend : inputControl?.paused ? m.chat.sendThisMessage : m.chat.sendMessage };
   const hasDraft =
     Boolean(editor.value.trim()) || att.attachments.length > 0 || contextRefs.length > 0;
+  const steerDisabled = !runBusyState || Boolean(steeringFollowUpId) || inputControl?.phase === 'stopping'
+    || (!hasDraft && pendingFollowUps.length === 0);
   const showSteeringInterrupt = hasDraft && Boolean(onSteeringInterrupt);
   const hasFinePointer = useMediaQuery('(hover: hover) and (pointer: fine)');
   const contextualPlaceholder =
@@ -950,7 +956,7 @@ export const ChatComposer = memo(function ChatComposer({
               ?? placeholder ?? contextualPlaceholder ?? (runBusyState
                 ? editingFollowUpId
                   ? m.chat.inputPlaceholderSteeringEdit
-                  : m.chat.inputPlaceholderSteering
+                  : personal ? m.chat.inputPlaceholderImmediate : m.chat.inputPlaceholderSteering
                 : m.chat.inputPlaceholder)
             }
             onWireInput={onComposerWireInput}
@@ -975,6 +981,8 @@ export const ChatComposer = memo(function ChatComposer({
           onDefer={onAddPendingFollowUp ? () => actions.flushSteeringDraft(false) : undefined}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
+          onSteer={actions.steerCurrentReply}
+          steerDisabled={steerDisabled}
         /> : <ComposerToolbar
           disabled={disabled}
           sendDisabled={sendDisabled || editNeedsPause}
@@ -1002,7 +1010,6 @@ export const ChatComposer = memo(function ChatComposer({
               .finally(() => { preparingCallRef.current = false; });
           }}
           onSend={actions.send}
-          onQueue={onAddPendingFollowUp ? actions.send : undefined}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
           sessionModel={sessionModel}

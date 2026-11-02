@@ -322,7 +322,8 @@ export function KeyboardShortcutsSettingsPanel() {
     shortcuts: [
       { keys: ['Enter'], label: k.chatSend },
       { keys: ['Shift', 'Enter'], label: k.chatNewLine },
-      { keys: [MOD, 'Enter'], label: k.chatForceSend },
+      { keys: ['Alt', 'Enter'], label: k.chatSteer },
+      { keys: [MOD, 'Enter'], label: k.chatSteerFirst },
       { keys: shortcutDisplayKeys(voiceInputShortcut), label: k.chatVoiceInput },
       { keys: sideChatShortcutKeys(window.electronAPI?.platform), label: k.chatToggleSideChat },
     ],

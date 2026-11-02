@@ -1386,7 +1386,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                   await followUp.addPendingFollowUp(text, atts, contextRefs, pageContextDraft?.envelope, interrupt, delivery);
                   if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
                 }}
-                onSteeringInterrupt={pageContextDraft ? undefined : (text, atts, contextRefs) => void stream.interruptAndSend(text, atts, undefined, contextRefs)}
+                onSteeringInterrupt={pageContextDraft ? undefined : (text, atts, contextRefs) => stream.interruptAndSend(text, atts, undefined, contextRefs)}
                 pendingFollowUps={followUp.pendingFollowUps}
                 editingFollowUpId={followUp.editingFollowUpId}
                 onBeginEditFollowUp={followUp.beginEditFollowUp}

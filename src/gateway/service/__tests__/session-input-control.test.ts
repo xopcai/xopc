@@ -175,13 +175,31 @@ describe('durable session input control', () => {
     expect(getSessionInputState(id).inputs.find(input => input.id === row.id)?.status).toBe('injecting');
   });
 
-  it.each(['note', 'other-endpoint'])('rejects steering with %s context', async kind => {
+  it('steers a queued attachment and frozen note snapshot without cloning the input', async () => {
     enqueue('active'); claimNextSessionInput(id, 'active-run');
-    const context = { kind: kind === 'note' ? 'note' as const : 'device_context' as const,
+    const context = { kind: 'note' as const, sourceId: 'note', version: 'v1', title: 'Note', text: 'Frozen source' };
+    const attachments = [{ type: 'image', uri: 'media://inbound/photo.png', mimeType: 'image/png' }];
+    const row = insertSessionInput({ id: 'rich', conversationId: id, clientMessageId: 'rich', status: 'queued',
+      content: '', attachments, requestedDelivery: 'next', effectiveDelivery: 'next', origin,
+      contextRefs: [context], contextSnapshots: [context] });
+    const steer = vi.fn(async () => true);
+    const service = coordinator({ steer });
+    const request = { ...command('steer'), inputId: row.id, inputVersion: row.version };
+    await service.control(id, request);
+    await service.control(id, request);
+    expect(steer).toHaveBeenCalledExactlyOnceWith(id, expect.stringContaining('Frozen source'), 'active-run', {
+      attachments, sourceContexts: [context],
+    });
+    expect(getSessionInputState(id).inputs.find(input => input.id === row.id)?.status).toBe('injecting');
+  });
+
+  it('rejects steering with automatic device context from another endpoint', async () => {
+    enqueue('active'); claimNextSessionInput(id, 'active-run');
+    const context = { kind: 'device_context' as const,
       sourceId: 'source', version: '1', title: 'Source', text: 'Context' };
     const row = insertSessionInput({ id: 'guide', conversationId: id, clientMessageId: 'guide', status: 'queued',
       content: 'Change course', requestedDelivery: 'next', effectiveDelivery: 'next',
-      origin: kind === 'other-endpoint' ? { type: 'endpoint', endpointId: 'other' } : origin,
+      origin: { type: 'endpoint', endpointId: 'other' },
       contextRefs: [context], contextSnapshots: [context] });
     const steer = vi.fn(async () => true);
     await expect(coordinator({ steer }).control(id, {

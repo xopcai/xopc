@@ -6,6 +6,15 @@ import { restoreCurrentTurnImages } from '../current-turn-images.js';
 const image = { type: 'image' as const, data: 'aW1hZ2U=', mimeType: 'image/png' };
 
 describe('restoreCurrentTurnImages', () => {
+  it('keeps original turn images on the initiating user message when steers share its run id', () => {
+    const messages = [
+      { role: 'user', content: 'Original attachment', turnId: 'current', timestamp: 1 },
+      { role: 'user', content: 'Steering attachment', turnId: 'current', timestamp: 2 },
+    ] as AgentMessage[];
+    const restored = restoreCurrentTurnImages(messages, [image], 'current');
+    expect(restored[0]).toMatchObject({ content: [{ type: 'text', text: 'Original attachment' }, image] });
+    expect(restored[1]).toBe(messages[1]);
+  });
   it('restores an image omitted by the persisted session projection', () => {
     const messages = [
       { role: 'user', content: 'Earlier turn', timestamp: 1 },

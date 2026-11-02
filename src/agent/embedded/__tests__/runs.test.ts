@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { EmbeddedRunConflictError, EmbeddedRunRegistry } from '../runs.js';
+import { transformUserMessageForPersistence } from '../../inbound/attachment-pipeline.js';
 
 const identity = {
   conversationId: 'agent:main:test',
@@ -9,6 +10,50 @@ const identity = {
 };
 
 describe('EmbeddedRunRegistry', () => {
+  it('steers image bytes while persisting media metadata for multiple queued messages', async () => {
+    const registry = new EmbeddedRunRegistry();
+    const lease = registry.acquire(identity);
+    const steer = vi.fn(async () => 'queued' as const);
+    await lease.attach({ steer } as never, vi.fn());
+    const image = { type: 'image' as const, data: 'image-bytes', mimeType: 'image/png' };
+    const messages = ['first', 'second'].map(content => ({ role: 'user' as const, content,
+      media: [{ id: content, bucket: 'inbound' as const, type: 'image', mimeType: 'image/png', name: `${content}.png`,
+        size: 10, uri: `media://inbound/${content}.png`, path: `/tmp/${content}.png` }] }));
+    try {
+      for (const message of messages) {
+        expect(await registry.steerByConversationId(identity.conversationId, message.content, identity.runId, {
+          images: [image], transcriptMessage: message,
+        })).toBe(true);
+      }
+      expect(steer).toHaveBeenNthCalledWith(1, 'first', [image]);
+      expect(steer).toHaveBeenNthCalledWith(2, 'second', [image]);
+      for (const message of messages) {
+        const persisted = transformUserMessageForPersistence(identity.conversationId, {
+          role: 'user', content: [{ type: 'text', text: message.content }, image], timestamp: Date.now(),
+        });
+        expect(persisted).toEqual(message);
+        expect(JSON.stringify(persisted)).not.toContain('image-bytes');
+      }
+    } finally { lease.release(); }
+  });
+
+  it.each(['failed', 'released', 'handled'])('cleans unconsumed steering metadata when %s', async mode => {
+    const registry = new EmbeddedRunRegistry();
+    const lease = registry.acquire(identity);
+    await lease.attach({ steer: async () => {
+      if (mode === 'failed') throw new Error('Steer failed');
+      return mode === 'handled' ? 'handled' : 'queued';
+    } } as never, vi.fn());
+    const message = { role: 'user' as const, content: 'unique cleanup check', metadata: { sourceContexts: ['snapshot'] } };
+    try {
+      const request = registry.steerByConversationId(identity.conversationId, message.content, identity.runId, { transcriptMessage: message });
+      if (mode === 'failed') await expect(request).rejects.toThrow('Steer failed');
+      else await request;
+      lease.release();
+      const fresh = { role: 'user' as const, content: message.content, timestamp: 1 };
+      expect(transformUserMessageForPersistence(identity.conversationId, fresh)).toEqual(fresh);
+    } finally { lease.release(); }
+  });
   it('keeps an execution cancellation requested before its lease exists', async () => {
     const registry = new EmbeddedRunRegistry();
     const control = registry.reserveCancellation(identity);

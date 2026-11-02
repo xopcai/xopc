@@ -9,7 +9,7 @@ export function restoreCurrentTurnImages(
 ): AgentMessage[] {
   if (images.length === 0) return messages;
 
-  let userIndex = messages.findLastIndex(message =>
+  let userIndex = messages.findIndex(message =>
     message.role === 'user' && (message as { turnId?: string }).turnId === turnId);
   if (userIndex < 0) userIndex = messages.findLastIndex(message => message.role === 'user');
   if (userIndex < 0) return messages;

@@ -70,7 +70,8 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
         const removable = mutable || item.status === 'interrupted';
         const queuedIndex = queuedItems.findIndex((row) => row.id === item.id);
         const sendSingle = queueIdle && (queuePaused || item.status === 'interrupted');
-        const canSteer = removable && !item.attachments?.length && !item.contextRefs?.length && item.text.trim().length > 0;
+        const canSteer = removable && Boolean(item.text.trim() || item.attachments?.length || item.contextRefs?.length);
+        const canOpenSideChat = removable && !item.attachments?.length && !item.contextRefs?.length && item.text.trim().length > 0;
         const isSteering = steeringBusyId === item.id;
         const statusText = item.status === 'interrupted' ? m.chat.followUpStatusInterrupted : null;
         const document = parseUserTurnDocument(item.text);
@@ -182,7 +183,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                       }}>
                       <Pencil className="size-4" aria-hidden />{m.chat.followUpQueueClickToEdit}
                     </DropdownMenu.Item>
-                    {onOpenSideChat ? <DropdownMenu.Item className={menuItemClass} disabled={!canSteer}
+                    {onOpenSideChat ? <DropdownMenu.Item className={menuItemClass} disabled={!canOpenSideChat}
                       onSelect={() => onOpenSideChat(item, preview)}>
                       <MessageCirclePlus className="size-4" aria-hidden />{m.chat.followUpQueueOpenSideChat}
                     </DropdownMenu.Item> : null}
@@ -204,11 +205,6 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
           </div>
         );
       })}
-      {items.some((i) => i.attachments?.length || i.contextRefs?.length) ? (
-        <p className="px-1 pt-0.5 text-[0.65rem] leading-tight text-fg-muted">
-          {m.chat.followUpQueueAttachmentsNote}
-        </p>
-      ) : null}
     </div>
   );
 });

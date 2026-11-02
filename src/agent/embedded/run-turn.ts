@@ -29,7 +29,7 @@ import {
 } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
-import { acquireEmbeddedRunLease, EmbeddedRunConflictError } from './runs.js';
+import { acquireEmbeddedRunLease, EmbeddedRunConflictError, restoreEmbeddedSteeringImages } from './runs.js';
 import { projectSourceContextsForLlm } from '../source-context/source-context-projection.js';
 import { projectRepeatedReadResults, retainReadProjectionDetails } from '../memory/repeated-read-projection.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
@@ -515,7 +515,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       const prepared = await basePrepareRequest?.(request, signal) as AgentRequestUpdate | undefined;
       const currentContext = prepared?.context ?? request.context;
       const imagesForModel = resolvedModel.input?.includes('image') === false ? [] : params.images ?? [];
-      const restoreImages = (messages: AgentMessage[]) => restoreCurrentTurnImages(messages, imagesForModel, runId);
+      const restoreImages = (messages: AgentMessage[]) => {
+        const restored = restoreCurrentTurnImages(messages, imagesForModel, runId);
+        return resolvedModel.input?.includes('image') === false ? restored
+          : restoreEmbeddedSteeringImages(conversationId, runId, restored);
+      };
       if (!useAuthoritativeProjection) return {
         ...prepared,
         context: { ...currentContext, messages: restoreImages(currentContext.messages as AgentMessage[]) },
