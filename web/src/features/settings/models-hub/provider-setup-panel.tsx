@@ -3,6 +3,7 @@ import { CheckCircle2, ChevronLeft, Loader2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ModelSetupPreview, ModelSetupRequest, ModelSetupUse } from '@xopcai/gateway-contract';
 
+import { compareModelsDescending } from '@/lib/model-sort';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -126,7 +127,7 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
             {keyUrl ? <a className="inline-flex min-h-10 items-center text-sm text-accent-fg hover:underline" href={keyUrl} target="_blank" rel="noopener noreferrer">{zh ? '获取 API Key' : 'Get an API key'}</a> : null}
           </>}
         </div> : null}
-        {use ? <div className="space-y-2"><label className="block text-sm font-medium text-fg">{zh ? '选择模型' : 'Model'}</label><Select value={chosen ?? ''} disabled={busy || !use.choices.length} aria-label={zh ? '选择模型' : 'Model'} onChange={event => setRequest({ ...request, selected: [use.id], overrides: { ...request.overrides, [use.id]: event.target.value } })}>{use.choices.map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}</Select></div> : null}
+        {use ? <div className="space-y-2"><label className="block text-sm font-medium text-fg">{zh ? '选择模型' : 'Model'}</label><Select value={chosen ?? ''} disabled={busy || !use.choices.length} aria-label={zh ? '选择模型' : 'Model'} onChange={event => setRequest({ ...request, selected: [use.id], overrides: { ...request.overrides, [use.id]: event.target.value } })}>{[...use.choices].sort(compareModelsDescending).map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}</Select></div> : null}
         <p className="text-sm leading-relaxed text-fg-muted">{zh ? '只更改当前能力使用的模型。' : 'Changes the model for this capability only.'}{preview.profile.interactiveOnly ? (zh ? ' 后台任务继续使用原服务。' : ' Background tasks keep their current service.') : ''}</p>
       </> : null}
       {error ? <div role="alert" className="space-y-2 rounded-xl border border-edge p-3"><p className="text-sm text-danger">{credentialSaved ? (zh ? '连接信息已保存，模型尚未切换。请重试。' : 'Connection saved. The model has not switched; please retry.') : (zh ? '未能应用配置，请重试。' : 'Could not apply settings. Please retry.')}</p><details className="text-xs text-fg-muted"><summary className="cursor-pointer">{zh ? '查看详情' : 'Show details'}</summary><p className="mt-2 break-words">{error}</p></details></div> : null}
@@ -169,7 +170,7 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
               <label className="flex min-h-10 items-start gap-3"><input hidden={inline} type="checkbox" className="ui-checkbox mt-1" checked={selected.includes(use.id)} disabled={inline || busy || done || !chosen || !use.choices.length} onChange={event => setRequest({ ...request, selected: event.target.checked ? [...selected, use.id] : selected.filter(id => id !== use.id) })} />
                 <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{labels[use.id][zh ? 0 : 1]}</span><span className="mt-1 block break-all text-xs text-fg-muted">{selected.includes(use.id) ? `${use.current ? `${use.current} → ` : ''}${choice?.name ?? chosen ?? ''}` : use.current ? `${zh ? '保留：' : 'Keep: '}${use.current}` : use.reason === 'interactive_only' ? (zh ? '此套餐不用于后台任务' : 'This plan is not used for background tasks') : choice?.name ?? (zh ? '暂无可自动配置的模型' : 'No automatic model selection available')}</span></span>
               </label>
-              {!done && use.choices.length > 1 ? <details open={inline || undefined} className="pl-7"><summary className="text-xs text-accent-fg">{zh ? '选择具体模型' : 'Choose a model'}</summary><Select value={chosen ?? ''} disabled={busy} aria-label={labels[use.id][zh ? 0 : 1]} onChange={event => setRequest({ ...request, selected: [...new Set([...selected, use.id])], overrides: { ...request.overrides, [use.id]: event.target.value } })}>{use.choices.map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}</Select></details> : null}
+              {!done && use.choices.length > 1 ? <details open={inline || undefined} className="pl-7"><summary className="text-xs text-accent-fg">{zh ? '选择具体模型' : 'Choose a model'}</summary><Select value={chosen ?? ''} disabled={busy} aria-label={labels[use.id][zh ? 0 : 1]} onChange={event => setRequest({ ...request, selected: [...new Set([...selected, use.id])], overrides: { ...request.overrides, [use.id]: event.target.value } })}>{[...use.choices].sort(compareModelsDescending).map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}</Select></details> : null}
             </div>;
           })}
         </div>

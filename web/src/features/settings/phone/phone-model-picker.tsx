@@ -1,12 +1,13 @@
 import useSWR from 'swr';
 
+import { compareModelsDescending } from '@/lib/model-sort';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchPhoneModels } from './phone-api';
 
 export function PhoneModelPicker({ value, onChange, zh, disabled = false }: { value: string; onChange(value: string): void; zh: boolean; disabled?: boolean }) {
   const models = useSWR('phone-models', fetchPhoneModels);
-  const availableModels = models.data?.models.filter(model => model.configured) ?? [];
+  const availableModels = models.data?.models.filter(model => model.configured).sort(compareModelsDescending) ?? [];
   if (!models.data && !models.error) return <Skeleton className="h-11 w-full rounded-lg" />;
   return <div className="space-y-2">
     <Select aria-label={zh ? '手机模型' : 'Phone model'} value={value} disabled={disabled || Boolean(models.error)} onChange={event => onChange(event.target.value)}>

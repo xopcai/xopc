@@ -368,7 +368,10 @@ export async function startGatewayConnectionPreview(entryUrl: string): Promise<v
     },
   });
   policy.register(window.webContents, documentUrl);
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'xopc', submenu: [{ label: '立即停止本机执行', click: () => { stopCapabilities(); } }, { role: 'quit' }] }]));
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: 'xopc', submenu: [{ label: '立即停止本机执行', click: () => { stopCapabilities(); } }, { role: 'quit' }] },
+    { role: 'editMenu' },
+  ]));
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.on('will-frame-navigate', event => event.preventDefault());

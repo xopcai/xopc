@@ -22,3 +22,7 @@ hero:
 ---
 
 <DocsHome />
+
+## Code signing policy
+
+See the [code signing policy and desktop privacy disclosure](./code-signing.md). SignPath application preparation is in progress; no Foundation signing is active.

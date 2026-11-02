@@ -3,6 +3,7 @@ import { Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 
+import { compareModelsDescending } from '@/lib/model-sort';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -1015,7 +1016,7 @@ function VoiceProviderConfigFields({
               ...(resetVoiceOnModelChange ? { voice: undefined } : {}),
             })}
           >
-            {models.map((model) => (
+            {[...models].sort(compareModelsDescending).map((model) => (
               <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>
             ))}
           </Select>

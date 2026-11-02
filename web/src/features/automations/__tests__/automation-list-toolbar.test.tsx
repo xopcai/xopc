@@ -10,20 +10,36 @@ let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const labels = messages('zh').automations;
 const changeFilter = vi.fn();
-function Harness({ initialQuery = '' }: { initialQuery?: string }) {
+const markAllRead = vi.fn();
+function Harness({ initialQuery = '', unreadCount = 0, markReadBusy = false }: { initialQuery?: string; unreadCount?: number; markReadBusy?: boolean }) {
   const [query, setQuery] = useState(initialQuery);
   const [filter, setFilter] = useState<'all' | 'paused' | 'completed'>('all');
-  return <AutomationListToolbar language="zh" labels={labels} filter={filter} ownership="user" source="all" projectId="" projects={[]} projectLocked={false} query={query} unreadCount={0} markReadBusy={false}
-    onQuery={setQuery} onFilter={value => { changeFilter(value); setFilter(value as 'all' | 'paused' | 'completed'); }} onOwnership={vi.fn()} onSource={vi.fn()} onProject={vi.fn()} onClear={vi.fn()} onMarkAllRead={vi.fn()} />;
+  return <AutomationListToolbar language="zh" labels={labels} filter={filter} ownership="user" source="all" projectId="" projects={[]} projectLocked={false} query={query} unreadCount={unreadCount} markReadBusy={markReadBusy}
+    onQuery={setQuery} onFilter={value => { changeFilter(value); setFilter(value as 'all' | 'paused' | 'completed'); }} onOwnership={vi.fn()} onSource={vi.fn()} onProject={vi.fn()} onClear={vi.fn()} onMarkAllRead={markAllRead} />;
 }
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   changeFilter.mockClear();
+  markAllRead.mockClear();
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 
 describe('compact task list tools', () => {
+  it('marks all results read directly from the list and hides the action once read', async () => {
+    await act(async () => root.render(<Harness unreadCount={250} initialQuery="report" />));
+    const button = Array.from(container.querySelectorAll('button')).find(item => item.textContent === labels.filters.markAllRead)!;
+    expect(button).toBeDefined();
+    await act(async () => button.click());
+    expect(markAllRead).toHaveBeenCalledTimes(1);
+    await act(async () => root.render(<Harness unreadCount={250} markReadBusy />));
+    expect(button.disabled).toBe(true);
+    await act(async () => button.click());
+    expect(markAllRead).toHaveBeenCalledTimes(1);
+    await act(async () => root.render(<Harness unreadCount={0} />));
+    expect(container.textContent).not.toContain(labels.filters.markAllRead);
+  });
+
   it('keeps search hidden by default and clears and closes it with Escape', async () => {
     await act(async () => root.render(<Harness />));
     expect(container.querySelector('input')).toBeNull();

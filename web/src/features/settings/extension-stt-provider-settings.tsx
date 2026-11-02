@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 
+import { compareModelsDescending } from '@/lib/model-sort';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { FieldLabel } from '@/features/settings/channels/field-primitives';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
@@ -147,7 +148,7 @@ function ExtensionSttProviderSettingsBody({
   const autosave = useAutosave({ value: credDraft, dirty, onSave: handleSave });
 
   const displayedModelOptions = modelOptions.length > 0
-    ? modelOptions
+    ? [...modelOptions].sort(compareModelsDescending)
     : credDraft.model
       ? [{ id: credDraft.model, name: credDraft.model }]
       : [];

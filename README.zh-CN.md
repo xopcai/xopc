@@ -195,3 +195,7 @@ pnpm run build && pnpm run test:all && pnpm run lint
 ---
 
 <p align="center"><sub>由 <a href="https://github.com/xopcai">xopcai</a> 维护 · <a href="https://xopc.ai">xopc.ai</a></sub></p>
+
+## Code signing policy（代码签名政策）
+
+Windows 签名申请状态、拟定职责和桌面隐私说明见[代码签名政策](./docs/zh/code-signing.md)。当前下载尚未由 SignPath 签名。

@@ -195,3 +195,7 @@ pnpm run build && pnpm run test:all && pnpm run lint
 ---
 
 <p align="center"><sub>Made with care by <a href="https://github.com/xopcai">xopcai</a> · <a href="https://xopc.ai">xopc.ai</a></sub></p>
+
+## Code signing policy
+
+Windows signing application status, proposed roles, and desktop privacy disclosures are documented in the [Code signing policy](./docs/code-signing.md). Current downloads are not SignPath-signed.

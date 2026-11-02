@@ -35,3 +35,7 @@ hero:
 ---
 
 <DocsHome locale="zh" />
+
+## Code signing policy（代码签名政策）
+
+[代码签名政策与桌面隐私说明](./code-signing.md)。正在准备 SignPath 申请，尚未启用基金会签名。

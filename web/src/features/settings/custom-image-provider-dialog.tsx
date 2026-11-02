@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowUpRight, Eye, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { compareModelsDescending } from '@/lib/model-sort';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -151,7 +152,7 @@ export function CustomImageProviderDialog({
   }, [configured, open, provider]);
 
   const modelOptions = useMemo(
-    () => models.filter((model) => model.id.trim()).map((model) => ({ value: model.id.trim(), label: model.name.trim() || model.id.trim() })),
+    () => models.filter((model) => model.id.trim()).sort(compareModelsDescending).map((model) => ({ value: model.id.trim(), label: model.name.trim() || model.id.trim() })),
     [models],
   );
 
@@ -305,7 +306,7 @@ export function CustomImageProviderDialog({
 
             <section className="space-y-3">
               <div className="flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{text.models}</h3><Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => setModels((current) => [...current, modelDraft()])}><Plus className="size-4" />{text.addModel}</Button></div>
-              <label className="block text-xs font-medium text-fg-muted">{text.defaultModel}<PopoverSelect value={defaultModel || modelOptions[0]?.value || ''} options={modelOptions} placeholder={text.defaultModel} allowEmpty={false} onChange={setDefaultModel} triggerClassName="mt-1.5 max-w-sm" /></label>
+              <label className="block text-xs font-medium text-fg-muted">{text.defaultModel}<PopoverSelect value={defaultModel || models.find(model => model.id.trim())?.id.trim() || ''} options={modelOptions} placeholder={text.defaultModel} allowEmpty={false} onChange={setDefaultModel} triggerClassName="mt-1.5 max-w-sm" /></label>
               {models.map((model, index) => <div key={index} className="rounded-lg border border-edge bg-surface-base p-3"><div className="grid gap-3 md:grid-cols-2"><label className="text-xs font-medium text-fg-muted">{text.modelId}<input value={model.id} onChange={(event) => updateModel(index, { id: event.target.value })} placeholder="image-1" className={inputClass} /></label><label className="text-xs font-medium text-fg-muted">{text.modelName}<input value={model.name} onChange={(event) => updateModel(index, { name: event.target.value })} className={inputClass} /></label></div><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="text-xs font-medium text-fg-muted">{text.maxCount}<input type="number" min={1} value={model.maxCount} onChange={(event) => updateModel(index, { maxCount: event.target.value })} className={inputClass} /></label><label className="text-xs font-medium text-fg-muted">{text.defaultCount}<input type="number" min={1} value={model.defaultCount} onChange={(event) => updateModel(index, { defaultCount: event.target.value })} className={inputClass} /></label><label className="text-xs font-medium text-fg-muted">{text.defaultSize}<input value={model.defaultSize} onChange={(event) => updateModel(index, { defaultSize: event.target.value })} placeholder="1024x1024" className={inputClass} /></label><label className="text-xs font-medium text-fg-muted">{text.format}<PopoverSelect value={model.outputFormat} options={[{ value: 'png', label: 'PNG' }, { value: 'jpeg', label: 'JPEG' }, { value: 'webp', label: 'WebP' }]} placeholder={text.format} allowEmpty onChange={(value) => updateModel(index, { outputFormat: value as ModelDraft['outputFormat'] })} triggerClassName="mt-1.5" /></label></div><div className="mt-3 flex flex-wrap items-center gap-4"><label className="flex items-center gap-2 text-sm text-fg-muted"><input type="checkbox" checked={model.supportsSize} onChange={(event) => updateModel(index, { supportsSize: event.target.checked })} />{text.supportsSize}</label><label className="flex items-center gap-2 text-sm text-fg-muted"><input type="checkbox" checked={model.editEnabled} onChange={(event) => updateModel(index, { editEnabled: event.target.checked })} />{text.edit}</label><button type="button" disabled={models.length === 1} onClick={() => setModels((current) => current.filter((_, modelIndex) => modelIndex !== index))} className="ml-auto inline-flex items-center gap-1 text-xs text-red-600 disabled:opacity-40 dark:text-red-400"><Trash2 className="size-3.5" />{text.remove}</button></div></div>)}
             </section>
 
