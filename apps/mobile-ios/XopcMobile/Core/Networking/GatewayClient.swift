@@ -37,8 +37,11 @@ protocol GatewayServing: Sendable {
 }
 
 extension GatewayServing {
-    func draftActionApproval(agentID: String) async throws -> ActionApprovalMode { .ask }
-    func saveActionApproval(_ mode: ActionApprovalMode, conversation: ConversationSelection, configVersion: Int?) async throws -> Int? {
+    func draftActionApproval(agentID _: String) async throws -> ActionApprovalMode {
+        .ask
+    }
+
+    func saveActionApproval(_: ActionApprovalMode, conversation _: ConversationSelection, configVersion _: Int?) async throws -> Int? {
         throw GatewayClientError.server("当前连接不支持权限设置")
     }
 

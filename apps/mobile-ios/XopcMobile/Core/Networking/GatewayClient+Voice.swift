@@ -27,9 +27,11 @@ extension GatewayClient {
         guard let model = conversation.model ?? catalog.defaultId ?? catalog.models.first?.id else {
             throw GatewayClientError.server("当前助手没有可用模型")
         }
-        let approvalMode: ActionApprovalMode
-        if let mode = conversation.actionApprovalMode { approvalMode = mode }
-        else { approvalMode = try await draftActionApproval(agentID: conversation.agentId) }
+        let approvalMode: ActionApprovalMode = if let mode = conversation.actionApprovalMode {
+            mode
+        } else {
+            try await draftActionApproval(agentID: conversation.agentId)
+        }
         let thinking = conversation.thinkingLevel
             ?? catalog.models.first(where: { $0.id == model })?.thinking?.initialValue
             ?? "off"

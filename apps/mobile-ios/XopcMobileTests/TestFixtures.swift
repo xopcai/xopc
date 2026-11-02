@@ -156,8 +156,10 @@ struct GatewayStub: GatewayServing {
         }
     }
 
-    func saveActionApproval(_ mode: ActionApprovalMode, conversation: ConversationSelection, configVersion: Int?) async throws -> Int? {
-        if modelSaveFails { throw GatewayClientError.server("Save failed") }
+    func saveActionApproval(_: ActionApprovalMode, conversation _: ConversationSelection, configVersion: Int?) async throws -> Int? {
+        if modelSaveFails {
+            throw GatewayClientError.server("Save failed")
+        }
         return configVersion.map { $0 + 1 }
     }
 

@@ -1482,7 +1482,7 @@ export class AgentManager implements AgentInstanceGateway {
       },
       authorizeToolCall: async (context, signal) => {
         const { toolCall, args } = context;
-        if (waitingForApproval) return { block: true, terminate: true, reason: 'Waiting for user approval. No further tools were executed.' };
+        if (waitingForApproval) return { block: true, terminate: true, reason: '正在等待你确认，操作尚未执行。' };
         signal?.throwIfAborted();
         const toolName = toolCall.name;
         const operation = ({
@@ -1510,7 +1510,7 @@ export class AgentManager implements AgentInstanceGateway {
           const hookResult = await this.config.hookRunner.runBeforeToolCall(toolName, (args ?? {}) as Record<string, unknown>, { conversationId });
           if (!hookResult.allowed) return { block: true, reason: hookResult.reason ?? 'Tool call blocked by policy hook.' };
         }
-        if (waitingForApproval) return { block: true, terminate: true, reason: 'Waiting for user approval.' };
+        if (waitingForApproval) return { block: true, terminate: true, reason: '正在等待你确认，操作尚未执行。' };
         const mode = resolveSessionActionApprovalMode(conversationId);
         const workspace = this.getResolvedWorkspaceForSession(conversationId);
         const origin = this.config.getCurrentContext();
@@ -1546,7 +1546,7 @@ export class AgentManager implements AgentInstanceGateway {
             const approved = await this.requestToolConfirmation(conversationId, action.toolRef,
               { arguments: action.arguments, target: action.binding }, accepted, toolCall.id);
             signal?.throwIfAborted();
-            if (!approved || accepted !== key()) return false;
+            if (approved !== 'approved' || accepted !== key()) return false;
             bindDispatch();
             waitingForApproval = false;
             return true;
@@ -1569,8 +1569,14 @@ export class AgentManager implements AgentInstanceGateway {
           const approvalKey = keyForCurrentPolicy();
           const approved = await this.requestToolConfirmation(conversationId, toolName, args, approvalKey, toolCall.id);
           signal?.throwIfAborted();
-          if (!approved || keyForCurrentPolicy() !== approvalKey) {
-            return { block: true, terminate: true, reason: 'The action was not approved, is waiting for approval, or its authorization changed. Do not retry the same action through another tool.' };
+          if (approved !== 'approved') {
+            const reason = approved === 'waiting' ? '正在等待你确认，操作尚未执行。'
+              : approved === 'denied' ? '这次操作未获批准，未执行。'
+                : '暂时无法发起操作确认，操作未执行。请稍后重试。';
+            return { block: true, terminate: true, reason };
+          }
+          if (keyForCurrentPolicy() !== approvalKey) {
+            return { block: true, terminate: true, reason: '操作内容或授权已变化，本次未执行。请重新确认后继续。' };
           }
           bindActionDispatchGuard(toolCall.id, () => {
             signal?.throwIfAborted();
@@ -1606,22 +1612,24 @@ export class AgentManager implements AgentInstanceGateway {
 
   private async requestToolConfirmation(
     conversationId: string, toolName: string, args: unknown, approvalKey: string, toolCallId: string,
-  ): Promise<boolean> {
+  ): Promise<'approved' | 'denied' | 'waiting' | 'unavailable'> {
     const request = this.config.gatewayClarify?.requestClarification;
-    if (!request) return false;
+    if (!request) return 'unavailable';
     const existing = consumeClarificationApproval(conversationId, approvalKey);
-    if (existing) return existing === 'approved';
+    if (existing) return existing;
     const embeddedRunId = getEmbeddedExecutionRunId();
     const runId = getSessionInputState(conversationId).activeRunId ?? embeddedRunId;
-    if (!runId) return false;
+    if (!runId) return 'unavailable';
     const argumentsPreview = connectorArgumentsPreview((args ?? {}) as Record<string, unknown>);
     const result = await request({ conversationId, runId, toolCallId: `approval:${embeddedRunId ?? runId}:${toolCallId}` }, {
       kind: 'approval',
       approval: { operation: toolName, argumentsPreview },
       question: `Allow ${toolName} to run once?\n${JSON.stringify(argumentsPreview)}`,
       approvalKey,
-    }).catch(() => ({ status: 'answered' as const, answer: 'deny' }));
-    return result.status === 'answered' && result.answer === 'approve';
+    }).catch(() => undefined);
+    if (!result) return 'unavailable';
+    if (result.status === 'waiting') return 'waiting';
+    return result.answer === 'approve' ? 'approved' : 'denied';
   }
 
   private refreshDynamicContextIfChanged(instance: AgentInstance, force = false): void {

@@ -781,8 +781,10 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       const decision = await params.turnPolicy?.beforeToolCall(externalPolicyContext(context, tools), signal);
       if (decision?.block) {
         clarificationStopped ||= isClarificationSuspended(conversationId, runId);
-        policyStopped ||= decision.terminate === true;
-        if (decision.terminate) policyStopReason = decision.reason;
+        if (decision.terminate && !clarificationStopped) {
+          policyStopped = true;
+          policyStopReason = decision.reason;
+        }
         return decision;
       }
       const tool = tools.find(candidate => candidate.name === context.toolCall.name);
@@ -1051,15 +1053,17 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (runAbortSignal.aborted) {
         return { ok: false, retryable: false, terminationReason: resolveAgentAbortReason(runAbortSignal.reason), errorMessage: 'aborted' };
       }
-      if (isAssistantTurnAborted(session.agent)) {
+      // A durable user wait is a suspension, even if the tool loop also hit a limit.
+      const suspended = phoneStopped || connectionStopped || clarificationStopped;
+      if (!suspended && isAssistantTurnAborted(session.agent)) {
         return { ok: false, retryable: false, terminationReason: 'provider_error', errorMessage: `Model request was interrupted while the agent run was still active; automatic recovery could not complete. ${getAssistantTurnErrorMessage(session.agent) ?? 'Provider returned an aborted stream.'}`, lastAssistantText: lastAssistantPlainText(session) };
       }
-      if ((policyStopped && !policyCompleted) || lengthRecoveryExhausted || lastAssistantMessage(session.agent.state.messages)?.stopReason === 'length') {
+      if (!suspended && ((policyStopped && !policyCompleted) || lengthRecoveryExhausted || lastAssistantMessage(session.agent.state.messages)?.stopReason === 'length')) {
         return { ok: false, retryable: false, errorMessage: policyStopReason ?? 'Assistant response was truncated before completion',
           stopReason: policyStopped ? 'policy_limit' : 'response_truncated',
           lastAssistantText: lastAssistantPlainText(session) };
       }
-      if (isAssistantTurnFailed(session.agent)) {
+      if (!suspended && isAssistantTurnFailed(session.agent)) {
         return {
           ok: false,
           retryable: canResumeAfterModelFailure(session.agent.state.messages,
@@ -1072,7 +1076,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         };
       }
 
-      if (params.requireVisibleReply && !sentVisibleMessage
+      if (!suspended && params.requireVisibleReply && !sentVisibleMessage
         && lastAssistantPlainText(session).trim() === NO_REPLY) {
         return { ok: false, retryable: false, errorMessage: 'Assistant did not produce a visible reply' };
       }

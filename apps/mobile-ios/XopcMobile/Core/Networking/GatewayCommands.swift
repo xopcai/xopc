@@ -7,7 +7,7 @@ struct SessionCreationCommand: Encodable {
     let temporary: Bool
     let model: String
     let thinkingLevel: String
-    var actionApprovalMode: ActionApprovalMode? = nil
+    var actionApprovalMode: ActionApprovalMode?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)

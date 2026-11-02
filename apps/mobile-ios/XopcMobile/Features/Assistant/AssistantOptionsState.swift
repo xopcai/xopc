@@ -31,8 +31,11 @@ final class AssistantOptionsState {
             if conversation.isDraft {
                 selectedModelID = conversation.model ?? catalog.defaultId ?? models.first?.id ?? ""
                 selectThinking(conversation.thinkingLevel)
-                if let mode = conversation.actionApprovalMode { actionApprovalMode = mode }
-                else { actionApprovalMode = try await gateway.draftActionApproval(agentID: conversation.agentId) }
+                if let mode = conversation.actionApprovalMode {
+                    actionApprovalMode = mode
+                } else {
+                    actionApprovalMode = try await gateway.draftActionApproval(agentID: conversation.agentId)
+                }
             } else {
                 let configuration = try await gateway.fetchAgentConfiguration(conversationID: conversation.id)
                 selectedModelID = configuration.model ?? catalog.defaultId ?? models.first?.id ?? ""
@@ -75,7 +78,8 @@ final class AssistantOptionsState {
     }
 
     func saveActionApproval(_ mode: ActionApprovalMode, conversation: ConversationSelection,
-                            using gateway: any GatewayServing) async -> ConversationSelection? {
+                            using gateway: any GatewayServing) async -> ConversationSelection?
+    {
         guard !isLoading, !isSaving else { return nil }
         isSaving = true; errorMessage = nil
         defer { isSaving = false }

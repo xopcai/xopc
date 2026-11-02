@@ -49,7 +49,7 @@ struct ComposerDraftStore {
 
     func rememberActionApproval(_ mode: ActionApprovalMode, configuration: GatewayConfiguration, agentID: String) throws {
         try JSONEncoder().encode(mode).write(to: url(Self.accountScope(configuration) + ":permissions:" + agentID),
-                                            options: [.atomic, .completeFileProtection])
+                                             options: [.atomic, .completeFileProtection])
     }
 
     func saveSelection(_ selection: ConversationSelection, configuration: GatewayConfiguration) throws {

@@ -64,14 +64,17 @@ struct AssistantSessionActionsView: View {
                             Button {
                                 Task {
                                     if let updated = await options.saveActionApproval(mode, conversation: conversation,
-                                        using: GatewayClient(configuration: configuration)) { onConversationUpdated(updated) }
+                                                                                      using: GatewayClient(configuration: configuration))
+                                    {
+                                        onConversationUpdated(updated)
+                                    }
                                 }
                             } label: {
                                 Label(mode.title, systemImage: options.actionApprovalMode == mode ? "checkmark" : "shield")
                             }
                         }
                     } label: { optionRow("操作权限", value: options.actionApprovalMode.title, symbol: "shield") }
-                    .disabled(options.isLoading || options.isSaving || state.isSending || state.runID != nil)
+                        .disabled(options.isLoading || options.isSaving || state.isSending || state.runID != nil)
                     if !state.pendingInputs.isEmpty {
                         NavigationLink {
                             ScrollView {

@@ -117,7 +117,9 @@ struct ConversationSummary: Decodable, Equatable, Identifiable, Sendable {
 
 enum ActionApprovalMode: String, Codable, CaseIterable, Sendable {
     case ask, full
-    var title: String { AppLocalization.string(self == .ask ? "每次确认" : "完全访问", locale: AppLocalization.selectedLocale) }
+    var title: String {
+        AppLocalization.string(self == .ask ? "每次确认" : "完全访问", locale: AppLocalization.selectedLocale)
+    }
 }
 
 struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
@@ -130,7 +132,7 @@ struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
     let thinkingLevel: String?
     let projectId: String?
     let executionMode: String?
-    var actionApprovalMode: ActionApprovalMode? = nil
+    var actionApprovalMode: ActionApprovalMode?
 
     private init(
         id: String,
@@ -347,7 +349,7 @@ struct SessionAgentConfiguration: Decodable, Sendable {
     let configVersion: Int?
     let workingDirectoryLocked: Bool?
     let effectiveWorkspacePath: String?
-    var actionApprovalMode: ActionApprovalMode? = nil
+    var actionApprovalMode: ActionApprovalMode?
 
     init(
         model: String?,

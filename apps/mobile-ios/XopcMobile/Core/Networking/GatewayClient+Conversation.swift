@@ -1,5 +1,17 @@
 import Foundation
 
+private struct ActionApprovalDefaults: Decodable {
+    let config: ActionApprovalDefaultsConfig
+}
+
+private struct ActionApprovalDefaultsConfig: Decodable {
+    let runtime: ActionApprovalDefaultsRuntime?
+}
+
+private struct ActionApprovalDefaultsRuntime: Decodable {
+    let actionApprovalMode: ActionApprovalMode?
+}
+
 extension GatewayClient {
     func ensureTaskConversation(taskID: String) async throws -> String {
         let response: TaskConversationCreation = try await request(
@@ -97,15 +109,9 @@ extension GatewayClient {
         if let remembered = try ComposerDraftStore().actionApproval(configuration: configuration, agentID: agentID) {
             return remembered
         }
-        struct Defaults: Decodable {
-            struct Config: Decodable {
-                struct Runtime: Decodable { let actionApprovalMode: ActionApprovalMode? }
-                let runtime: Runtime?
-            }
-            let config: Config
-        }
-        let envelope: GatewayEnvelope<Defaults>? = try? await request(
-            path: "/api/agents/\(agentID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? agentID)/effective-config")
+        let envelope: GatewayEnvelope<ActionApprovalDefaults>? = try? await request(
+            path: "/api/agents/\(agentID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? agentID)/effective-config"
+        )
         try Task.checkCancellation()
         return envelope?.payload?.config.runtime?.actionApprovalMode ?? .ask
     }
@@ -117,7 +123,8 @@ extension GatewayClient {
             struct Command: Encodable { let actionApprovalMode: ActionApprovalMode; let configVersion: Int }
             let envelope: GatewayEnvelope<SessionAgentConfiguration> = try await request(
                 path: "/api/sessions/\(conversation.id)/agent-config", method: "PATCH",
-                body: encoder.encode(Command(actionApprovalMode: mode, configVersion: configVersion)))
+                body: encoder.encode(Command(actionApprovalMode: mode, configVersion: configVersion))
+            )
             guard envelope.isSuccessful, let version = envelope.payload?.configVersion else {
                 throw GatewayClientError.server(envelope.error?.message ?? "无法更新权限")
             }

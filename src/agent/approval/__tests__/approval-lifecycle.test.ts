@@ -150,3 +150,33 @@ it('clamps a persistent Task worker to its originating conversation approval mod
   new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId: worker, agentId: 'main' });
   expect(resolveSessionActionApprovalMode(worker)).toBe('ask');
 });
+
+it('distinguishes pending approval, denial, and unavailable confirmation without exposing retry instructions', async () => {
+  begin();
+  const pending = await runWithEmbeddedExecutionSession(id, () => manager.createAgentTurnPolicy(id).beforeToolCall(context()), 'origin');
+  expect(pending).toMatchObject({ block: true, terminate: true, reason: '正在等待你确认，操作尚未执行。' });
+  const wait = getActiveClarification(id)!;
+  finishSessionInputRun(id, 'origin', 'suspended');
+  expect(resolveClarification({ id: wait.id, action: 'answer', decision: 'deny', expectedVersion: wait.version, idempotencyKey: 'deny' }).ok).toBe(true);
+  const resume = claimNextSessionInput(id, 'successor')!;
+  expect(consumeClarificationResume(resume)).toBe(true);
+  const denied = await runWithEmbeddedExecutionSession(id, () => manager.createAgentTurnPolicy(id).beforeToolCall(context()), 'successor');
+  expect(denied).toMatchObject({ block: true, terminate: true, reason: '这次操作未获批准，未执行。' });
+  expect(request).toHaveBeenCalledOnce();
+  request.mockRejectedValueOnce(new Error('transport failed'));
+  const unavailable = await runWithEmbeddedExecutionSession(id, () => manager.createAgentTurnPolicy(id).beforeToolCall(context()), 'successor');
+  expect(unavailable).toMatchObject({ block: true, terminate: true, reason: '暂时无法发起操作确认，操作未执行。请稍后重试。' });
+});
+
+it('reports changed authorization separately and never binds an execution guard', async () => {
+  begin();
+  request.mockImplementationOnce(async () => {
+    setSessionConfig(id, { actionApprovalMode: 'full' }, dir);
+    return { status: 'answered', answer: 'approve' };
+  });
+  await runWithEmbeddedExecutionSession(id, async () => {
+    const result = await manager.createAgentTurnPolicy(id).beforeToolCall(context());
+    expect(result).toMatchObject({ block: true, terminate: true, reason: '操作内容或授权已变化，本次未执行。请重新确认后继续。' });
+    expect(getActionDispatchGuard('call')).toBeUndefined();
+  }, 'origin');
+});
