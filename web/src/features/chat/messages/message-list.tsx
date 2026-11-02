@@ -144,7 +144,9 @@ export const MessageList = memo(function MessageList({
   rows.push(...timelineEntries.map((entry, offset) => ({ key: entry.id, index: list.length + offset, aliases: [] })));
   let lastTranscriptTime = 0;
   const transcriptTimes = list.map(message => {
-    lastTranscriptTime = message.timestamp ?? lastTranscriptTime;
+    // Server-confirmed inputs can be newer than a client-created reply shell.
+    // Timeline interleaving must preserve the authoritative transcript order.
+    lastTranscriptTime = Math.max(message.timestamp ?? lastTranscriptTime, lastTranscriptTime);
     return lastTranscriptTime;
   });
   if (timelineEntries.length) rows.sort((a, b) => {
