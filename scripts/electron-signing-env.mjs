@@ -29,7 +29,7 @@ export function loadElectronSigningEnv(root, inherited = process.env, platform =
     // Generic CSC_* may contain a macOS Developer ID certificate.
     delete env.CSC_LINK;
     delete env.CSC_KEY_PASSWORD;
-    for (const key of ['WIN_CSC_LINK', 'WIN_CSC_KEY_PASSWORD', 'XOPC_WINDOWS_PUBLISHER']) {
+    for (const key of ['WIN_CSC_LINK', 'WIN_CSC_KEY_PASSWORD', 'XOPC_WINDOWS_PUBLISHER', 'XOPC_WINDOWS_SIGNING_PROVIDER']) {
       const alias = key.startsWith('XOPC_') ? key : `XOPC_${key}`;
       const value = inherited[key] ?? inherited[alias] ?? local[key] ?? local[alias];
       if (value !== undefined) env[key] = value;

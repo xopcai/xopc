@@ -1,0 +1,38 @@
+xopc desktop privacy and updates / 桌面隐私与更新
+
+Configuration, conversations and files live on the Gateway host you choose.
+Cloud models, voice providers, enabled channels and tools can receive selected
+context, attachments and tool output. Local storage does not imply local inference.
+Desktop, screenshot, file, browser and microphone permissions are separate choices;
+not every authorized tool action asks again. Local tracing is enabled by default;
+remote Langfuse export is disabled unless configured by the operator.
+
+Automatic desktop updates contact https://xopc.ai/api/download and GitHub.
+These services receive ordinary network metadata (IP address and client headers).
+When enabled, the desktop checks periodically, downloads updates and may install
+on quit. Automatic updates are off by default on a fresh Windows installation.
+Unchecking the installer option prevents background desktop update checks,
+downloads and installation on quit. Manual checks remain explicit user actions
+and may download an update; installation then requires your explicit action.
+Running the installer again lets you change the choice. Silent installations
+preserve existing consent, default off if absent, and accept /AUTOMATICUPDATES=0
+or /AUTOMATICUPDATES=1. This setting does not disable configured Gateway services,
+models, extensions or other networking you separately enable.
+
+Installation registers xopc URL handling, shortcuts and Open With entries;
+existing file defaults are preserved. Uninstall via Windows Settings > Apps.
+Application removal does not necessarily remove shared ~/.xopc data and does not
+delete remote Gateway data or revoke external credentials. Back up shared data
+and stop other users of it before deliberately deleting it.
+
+配置、对话与文件位于你选择的 Gateway 主机；云模型及已启用的工具可能接收所选数据。
+新安装默认关闭桌面自动更新，可在安装器中选择，升级保留已有选择。
+关闭后不会进行后台桌面更新检查、下载或退出安装，手动检查与安装仍需明确操作。
+可重跑安装器修改选择。此选项不关闭另行配置的模型、Gateway 服务或扩展联网。
+卸载应用不会自动删除共享数据或远端数据。
+
+Full policy: https://xopcai.github.io/xopc/code-signing#desktop-privacy-disclosure
+GitHub downloads privacy: https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
+Optional Langfuse cloud export: https://langfuse.com/privacy
+Other configured providers/operators have their own policies; review them before use.
+SignPath application preparation does not mean current releases are Foundation-signed.

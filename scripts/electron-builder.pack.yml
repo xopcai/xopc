@@ -50,6 +50,10 @@ extraMetadata:
   main: out/main/index.js
 
 extraResources:
+  - from: _pack-resources/compliance
+    to: compliance
+    filter:
+      - "**/*"
   - from: _pack-resources/desktop-workspace
     to: bin
     filter:
@@ -217,6 +221,10 @@ win:
     - nsis
 
 nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  runAfterFinish: false
   buildUniversalInstaller: false
   include: _pack-resources/build-resources/external-intake.nsh
 

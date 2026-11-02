@@ -7,6 +7,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+import { dependencyInventoryPlugin } from '../scripts/electron-dependency-inventory.mjs';
+
 import webPkg from './package.json' with { type: 'json' };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,6 +30,7 @@ export default defineConfig(({ mode }) => ({
     __XOPC_WEB_BUILD_TIME__: JSON.stringify(process.env.VITE_XOPC_WEB_BUILD_TIME ?? new Date().toISOString()),
   },
   plugins: [
+    dependencyInventoryPlugin(repoRoot),
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),

@@ -33,6 +33,7 @@ let checkTimer: ReturnType<typeof setInterval> | null = null;
 let checkDelayTimer: ReturnType<typeof setTimeout> | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 let lastCheckWasManual = false;
+let automaticUpdates = true;
 
 /**
  * True after `update-downloaded` until process exit. Further `checkForUpdates` calls are skipped to avoid
@@ -50,13 +51,14 @@ const DEFAULT_UPDATE_FEED_BASE = 'https://xopc.ai/api/download';
 /**
  * Initialize the auto-updater. Must be called after app.whenReady() and only in packaged builds.
  */
-export function initAutoUpdater(mainWindow: BrowserWindow): void {
+export function initAutoUpdater(mainWindow: BrowserWindow, options: { automaticUpdates?: boolean } = {}): void {
   if (!app.isPackaged) {
     log.info('Auto-updater disabled: app is not packaged');
     return;
   }
 
   mainWindowRef = mainWindow;
+  automaticUpdates = options.automaticUpdates ?? true;
   if (process.platform === 'win32') {
     (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = verifyWindowsUpdateSignature;
     try {
@@ -90,8 +92,8 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   });
   log.info({ feedBase: effectiveFeedBase }, 'electron-updater generic feed');
 
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = automaticUpdates;
+  autoUpdater.autoInstallOnAppQuit = automaticUpdates;
   autoUpdater.allowPrerelease = false;
   // NSIS: avoid web-installer path; not used for our generic full .exe feed.
   autoUpdater.disableWebInstaller = true;
@@ -206,6 +208,11 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     setStatus({ state: 'error', message: err.message });
   });
 
+  if (!automaticUpdates) {
+    log.info('Automatic desktop updates disabled; explicit manual checks remain available');
+    return;
+  }
+
   checkDelayTimer = setTimeout(() => {
     checkForUpdates(false);
   }, CHECK_DELAY_MS);
@@ -227,7 +234,7 @@ export function hasPendingInstall(): boolean {
 }
 
 export function checkForUpdates(manual = false): void {
-  if (!app.isPackaged) {
+  if (!app.isPackaged || (!manual && !automaticUpdates)) {
     return;
   }
   if (updateDownloadedPendingInstall) {
@@ -242,6 +249,8 @@ export function checkForUpdates(manual = false): void {
     return;
   }
   lastCheckWasManual = manual;
+  // Explicit manual checks may download; opting out still prevents installation on quit.
+  autoUpdater.autoDownload = automaticUpdates || manual;
   void autoUpdater.checkForUpdates().catch((err) => {
     log.warn({ err, manual }, 'Update check failed');
   });

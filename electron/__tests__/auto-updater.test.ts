@@ -137,4 +137,19 @@ describe('Electron auto updater', () => {
     expect(mocks.updater.checkForUpdates).toHaveBeenCalled();
     expect(mocks.updater.autoInstallOnAppQuit).toBe(true);
   });
+  it('does no background traffic or quit installation after opting out, while preserving explicit manual updates', () => {
+    updater.stopAutoUpdater();
+    mocks.updater.checkForUpdates.mockClear();
+    updater.initAutoUpdater({ isDestroyed: () => false, webContents: { send: vi.fn() } } as never, { automaticUpdates: false });
+    vi.advanceTimersByTime(24 * 3600_000);
+    updater.checkForUpdates(false);
+    expect(mocks.updater.checkForUpdates).not.toHaveBeenCalled();
+    expect(mocks.updater.autoDownload).toBe(false);
+    expect(mocks.updater.autoInstallOnAppQuit).toBe(false);
+    updater.checkForUpdates(true);
+    expect(mocks.updater.checkForUpdates).toHaveBeenCalledOnce();
+    expect(mocks.updater.autoDownload).toBe(true);
+    expect(mocks.updater.autoInstallOnAppQuit).toBe(false);
+  });
+
 });

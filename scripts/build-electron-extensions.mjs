@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Build Electron-only bundled extensions as self-contained ESM modules. */
 import * as esbuild from 'esbuild';
+import { writeDependencyRecords } from './electron-dependency-inventory.mjs';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { dirname, join, relative } from 'node:path';
@@ -46,6 +47,7 @@ const manifests = readdirSync(srcRoot, { withFileTypes: true })
   })
   .filter(Boolean);
 
+const dependencyInputs = [];
 for (const { id, extensionDir, manifest } of manifests) {
   const entry = join(extensionDir, manifest.main);
   if (!existsSync(entry)) {
@@ -55,7 +57,8 @@ for (const { id, extensionDir, manifest } of manifests) {
   const outDir = join(outRoot, id);
   mkdirSync(outDir, { recursive: true });
 
-  await esbuild.build({
+  const result = await esbuild.build({
+    metafile: true,
     entryPoints: [entry],
     outfile: join(outDir, 'index.js'),
     bundle: true,
@@ -78,8 +81,11 @@ for (const { id, extensionDir, manifest } of manifests) {
     },
   });
 
+  dependencyInputs.push(...Object.keys(result.metafile.inputs));
   writeFileSync(join(outDir, 'xopc.extension.json'), `${JSON.stringify({ ...manifest, main: 'index.js' }, null, 2)}\n`);
   const packageJson = join(extensionDir, 'package.json');
   if (existsSync(packageJson)) cpSync(packageJson, join(outDir, 'package.json'));
   console.log(`[build-electron-extensions] Bundled ${id}`);
 }
+
+writeDependencyRecords(join(outRoot, 'dependency-records.json'), dependencyInputs, root);

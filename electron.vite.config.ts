@@ -8,6 +8,8 @@ import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'electron-vite';
 import { build as buildBrowserScript } from 'esbuild';
 
+import { dependencyInventoryPlugin, writeDependencyRecords } from './scripts/electron-dependency-inventory.mjs';
+
 import webPkg from './web/package.json' with { type: 'json' };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,7 +35,7 @@ const skipRenderer = process.env['ELECTRON_VITE_SKIP_RENDERER'] === '1';
 
 export default defineConfig({
   main: {
-    plugins: [{
+    plugins: [dependencyInventoryPlugin(__dirname), {
       name: 'xopc:explicit-esm-shim',
       configResolved(config) {
         // The banner supplies the shim without scanning bundled strings as imports.
@@ -76,9 +78,10 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [{ name: 'computer-preview-document', async generateBundle() {
+    plugins: [dependencyInventoryPlugin(__dirname), { name: 'computer-preview-document', async generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'computer-preview.html', source: readFileSync(resolve(__dirname, 'electron/computer/preview-worker.html'), 'utf8') });
-      const chat = await buildBrowserScript({ entryPoints: [resolve(__dirname, 'electron/chat/view.ts')], bundle: true, write: false, platform: 'browser', format: 'iife', target: 'chrome140', minify: true });
+      const chat = await buildBrowserScript({ entryPoints: [resolve(__dirname, 'electron/chat/view.ts')], bundle: true, write: false, platform: 'browser', format: 'iife', target: 'chrome140', minify: true, metafile: true });
+      writeDependencyRecords(resolve(__dirname, 'out/preload/chat-dependency-records.json'), Object.keys(chat.metafile!.inputs), __dirname);
       this.emitFile({ type: 'asset', fileName: 'remote-shell.js', source: chat.outputFiles[0]!.text });
       for (const fileName of ['gateway-connections.html', 'gateway-connections.js', 'remote-shell.html', 'remote-shell.css', 'screen-capture.html']) {
         this.emitFile({ type: 'asset', fileName, source: readFileSync(resolve(__dirname, 'electron/gateway', fileName), 'utf8') });

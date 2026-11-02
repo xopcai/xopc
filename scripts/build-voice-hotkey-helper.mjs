@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -44,6 +44,7 @@ if (process.platform === 'darwin') {
     '-File', join(root, 'scripts/build-voice-hotkey-helper.ps1'),
     '-Source', join(root, 'electron/native/voice-hotkey-windows.cs'),
     '-Output', output,
+    '-Version', JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
   ]);
   console.log(`[build-voice-hotkey-helper] Built ${output}`);
 } else {

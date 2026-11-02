@@ -19,6 +19,7 @@ find "$ROOT" -type f \( \
   -name '*.deb' -o \
   -name '*.rpm' -o \
   -name '*.snap' -o \
+  -name 'dependency-inventory-*.json' -o \
   -name 'latest*.yml' \
 \) \
   ! -path '*/win-unpacked/*' \

@@ -5,6 +5,7 @@
  * Run after `pnpm run build` for generated runtime assets. Invoked by electron:server:build.
  */
 import * as esbuild from 'esbuild';
+import { writeDependencyRecords } from './electron-dependency-inventory.mjs';
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,6 +64,8 @@ const gatewayBuild = await esbuild.build({
   sourcemap: false,
   metafile: true,
 });
+
+writeDependencyRecords(join(root, 'out/server/dependency-records.json'), Object.keys(gatewayBuild.metafile.inputs), root);
 
 for (const module of ['extensions/mcp/oauth.js', 'core/auth-storage.js']) {
   if (!Object.keys(gatewayBuild.metafile.inputs).some(input =>
