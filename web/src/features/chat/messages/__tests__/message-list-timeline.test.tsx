@@ -39,6 +39,26 @@ describe('task results in conversation timeline', () => {
     expect(container.textContent).not.toContain('Welcome');
   });
 
+  it('preserves user and reply order when confirmation advances the user timestamp past the reply shell', () => {
+    const user: Message = { role: 'user', timestamp: 30, content: [{ type: 'text', text: 'Export the result' }] };
+    const reply: Message = { role: 'assistant', timestamp: 31, content: [], pendingResponseStatus: 'sending' };
+    const render = (input: Message, response: Message, streaming: boolean, sending: boolean) => {
+      act(() => root.render(<MessageList messages={[input, response]}
+        timelineEntries={[{ id: 'run-1', timestamp: 20, content: 'Run result' }]}
+        streaming={streaming} sending={sending} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />));
+      expect([...container.querySelectorAll('[data-chat-message-index], [data-chat-timeline-entry]')]
+        .map(node => node.getAttribute('data-chat-message-index') ?? node.getAttribute('data-chat-timeline-entry')))
+        .toEqual(['run-1', '0', '1']);
+    };
+
+    render(user, reply, false, true);
+    const confirmed = { ...user, timestamp: 32 };
+    render(confirmed, { ...reply, pendingResponseStatus: 'waiting' }, false, true);
+    render(confirmed, { ...reply, pendingResponseStatus: undefined, content: [{ type: 'text', text: 'Exporting' }] }, true, false);
+    render(confirmed, { ...reply, timestamp: 33, pendingResponseStatus: undefined,
+      content: [{ type: 'text', text: 'Exported' }] }, false, false);
+  });
+
   it('keeps an undated streaming reply after its user message instead of above past results', () => {
     const list: Message[] = [
       { role: 'user', timestamp: 30, content: [{ type: 'text', text: 'Repair the task' }] },
