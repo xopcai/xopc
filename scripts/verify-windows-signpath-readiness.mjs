@@ -18,7 +18,7 @@ const version = JSON.parse(await readFile(join(root, 'package.json'))).version;
 const installer = resolve(process.argv[2] ?? `dist/release/xopc-${version}-${process.arch}.exe`);
 const output = process.argv[3] ?? `reports/windows-signpath-${process.arch}.json`;
 const ps = join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
-const run = (file, args, timeout = 180_000) => { const r = spawnSync(file, args, { encoding: 'utf8', windowsHide: true, timeout }); assert.equal(r.status, 0, r.error?.message ?? r.stderr); return r.stdout; };
+const run = (file, args, timeout = 180_000) => { const r = spawnSync(file, args, { encoding: 'utf8', windowsHide: true, timeout }); assert.equal(r.status, 0, r.error?.message ?? `${r.stderr}\n${r.stdout}`); return r.stdout; };
 const psRun = code => run(ps, ['-NoProfile', '-NonInteractive', '-Command', code]);
 // Production NSIS identity must never replace an existing user's installation or consent.
 psRun("if ((Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object DisplayName -EQ 'xopc') -or (Get-Process xopc -ErrorAction SilentlyContinue) -or (Test-Path 'HKCU:\\Software\\xopc\\Desktop')) { exit 9 }");
