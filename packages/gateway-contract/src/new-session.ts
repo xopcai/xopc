@@ -1,3 +1,5 @@
+import type { ActionApprovalMode } from './action-approval.js';
+
 export const NEW_SESSION_PREFERENCES_VERSION = 1 as const;
 
 export type ChatProjectScope =
@@ -21,6 +23,7 @@ export type NewSessionPreferences = {
   version: typeof NEW_SESSION_PREFERENCES_VERSION;
   selectedAgentId?: string;
   modelByAgent: Record<string, AgentModelPreference>;
+  actionApprovalByAgent?: Record<string, ActionApprovalMode>;
   executionModeByProject: Record<string, NewSessionExecutionMode>;
   lastChatScope: ChatProjectScope;
 };
@@ -132,8 +135,13 @@ export function parseNewSessionPreferences(value: unknown): NewSessionPreference
   const selectedAgentId = typeof record.selectedAgentId === 'string'
     ? normalizedAgentId(record.selectedAgentId)
     : undefined;
+  const actionApprovalByAgent = record.actionApprovalByAgent && typeof record.actionApprovalByAgent === 'object'
+    && !Array.isArray(record.actionApprovalByAgent)
+    ? Object.fromEntries(Object.entries(record.actionApprovalByAgent).filter((entry): entry is [string, ActionApprovalMode] => entry[1] === 'ask' || entry[1] === 'full'))
+    : {};
   return {
     version: NEW_SESSION_PREFERENCES_VERSION,
+    ...(Object.keys(actionApprovalByAgent).length ? { actionApprovalByAgent } : {}),
     ...(selectedAgentId ? { selectedAgentId } : {}),
     modelByAgent: parseModelPreferences(record.modelByAgent),
     executionModeByProject: parseExecutionModePreferences(record.executionModeByProject),
@@ -267,4 +275,24 @@ export function newSessionCacheKey(
     normalizedAgentId(spec.agentId) ?? 'main',
     normalized(spec.projectId) ?? 'none',
   ].join(':');
+}
+
+/** Permission preferences belong to one authenticated Gateway context and Agent. */
+export function actionApprovalPreferenceForAgent(
+  preferences: NewSessionPreferences, agentId: string, gatewayId: string,
+): ActionApprovalMode | undefined {
+  const id = normalizedAgentId(agentId);
+  return id ? preferences.actionApprovalByAgent?.[JSON.stringify([gatewayId, id])] : undefined;
+}
+
+export function withAgentActionApprovalPreference(
+  preferences: NewSessionPreferences, agentId: string, gatewayId: string, mode: ActionApprovalMode | null,
+): NewSessionPreferences {
+  const id = normalizedAgentId(agentId);
+  if (!id) return preferences;
+  const actionApprovalByAgent = { ...preferences.actionApprovalByAgent };
+  const key = JSON.stringify([gatewayId, id]);
+  if (mode === 'ask' || mode === 'full') actionApprovalByAgent[key] = mode;
+  else delete actionApprovalByAgent[key];
+  return { ...preferences, actionApprovalByAgent };
 }

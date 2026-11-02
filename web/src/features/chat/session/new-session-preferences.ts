@@ -2,6 +2,8 @@ import {
   createDefaultNewSessionPreferences,
   parseNewSessionPreferences,
   withAgentModelPreference,
+  withAgentActionApprovalPreference,
+  type ActionApprovalMode,
   withLastChatScope,
   withProjectExecutionModePreference,
   withSelectedAgent,
@@ -9,6 +11,8 @@ import {
   type NewSessionExecutionMode,
   type NewSessionPreferences,
 } from '@xopcai/gateway-contract';
+
+import { useGatewayStore } from '@/stores/gateway-store';
 
 const STORAGE_KEY = 'xopc.webchat.newSessionPreferences';
 
@@ -57,4 +61,14 @@ export function rememberProjectExecutionMode(
   return writePreferences(
     withProjectExecutionModePreference(readNewSessionPreferences(), projectId, mode),
   );
+}
+
+export function actionApprovalPreferenceScope(): string {
+  const gateway = useGatewayStore.getState();
+  return JSON.stringify([gateway.baseUrl, gateway.conversationId ?? '']);
+}
+
+/** Only call after a user selection was successfully saved, never on session load. */
+export function rememberAgentActionApproval(agentId: string, mode: ActionApprovalMode): NewSessionPreferences {
+  return writePreferences(withAgentActionApprovalPreference(readNewSessionPreferences(), agentId, actionApprovalPreferenceScope(), mode));
 }

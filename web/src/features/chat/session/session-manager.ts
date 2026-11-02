@@ -1,4 +1,5 @@
 import {
+  actionApprovalPreferenceForAgent,
   buildSessionForkAtTurnPath,
   buildSessionHistoryPath,
   parseSessionForkAtTurnResponse,
@@ -22,6 +23,7 @@ import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { readLocalSessionDraft, saveLocalSessionDraft, draftAgentConfig, rememberSessionTranscript, readPendingSessionCommand, confirmSessionCommand, type LocalSessionDraft } from './local-session-drafts';
+import { actionApprovalPreferenceScope, readNewSessionPreferences } from './new-session-preferences';
 import { fetchConfiguredModelsCached } from '../api/registry-api';
 import { fetchGatewayAgentEffectiveConfig } from '@/features/settings/agents-admin-api';
 
@@ -112,9 +114,9 @@ const _agentConfigInflight = new Map<string, Promise<SessionAgentConfig>>();
 const _materializationInflight = new Map<string, Promise<void>>();
 
 function captureScope(): () => void {
-  const identity = useGatewayStore.getState().conversationId;
+  const identity = actionApprovalPreferenceScope();
   return () => {
-    if (useGatewayStore.getState().conversationId !== identity) throw new Error('Active Gateway identity changed');
+    if (actionApprovalPreferenceScope() !== identity) throw new Error('Active Gateway identity changed');
   };
 }
 
@@ -419,16 +421,22 @@ export class SessionManager {
     initialAgentConfig?: SessionInitialAgentConfig;
     executionMode?: LocalSessionOptions['executionMode'];
   }): Promise<SessionInfo> {
+    const assertScope = captureScope();
+    const agentId = options?.agentId?.trim().toLowerCase() || 'main';
+    const rememberedMode = actionApprovalPreferenceForAgent(readNewSessionPreferences(), agentId, actionApprovalPreferenceScope());
+    const mode = options?.initialAgentConfig?.actionApprovalMode ?? rememberedMode
+      ?? (await fetchGatewayAgentEffectiveConfig(agentId).catch(() => undefined))?.config.runtime?.actionApprovalMode ?? 'ask';
+    assertScope();
     const conversationId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const creation = {
-      agentId: options?.agentId?.trim().toLowerCase() || 'main',
+      agentId,
       projectId: options?.projectId?.trim() || null,
       execution: options?.executionMode ? { mode: options.executionMode } : null,
       temporary: options?.temporary === true,
       model: options?.initialAgentConfig?.model ?? '',
       thinkingLevel: options?.initialAgentConfig?.thinkingLevel ?? 'off',
-      actionApprovalMode: options?.initialAgentConfig?.actionApprovalMode ?? 'ask',
+      actionApprovalMode: mode,
     };
     await saveLocalSessionDraft({ conversationId, creation, createdAt });
     return { key: conversationId, agentId: creation.agentId, projectId: creation.projectId ?? undefined,

@@ -850,7 +850,7 @@ export const ChatComposer = memo(function ChatComposer({
       {pageContextPreview}
 
 
-      {personal && conversationId ? <div className="px-3 pb-1"><ActionApprovalControl key={conversationId} conversationId={conversationId} disabled={disabled || runBusyState || modelDisabled} /></div> : null}
+      {personal && conversationId ? <div className="px-3 pb-1"><ActionApprovalControl key={conversationId} conversationId={conversationId} agentId={currentAgentId} disabled={disabled || runBusyState || modelDisabled} /></div> : null}
       <div className={personal ? 'flex min-h-0 shrink-0 items-end gap-1 px-1.5 py-1.5 sm:px-2' : 'flex min-h-0 shrink-0 flex-col'}>
         <input
           ref={fileInputRef}
@@ -986,6 +986,7 @@ export const ChatComposer = memo(function ChatComposer({
           onSteer={actions.steerCurrentReply}
           steerDisabled={steerDisabled}
         /> : <ComposerToolbar
+          agentId={currentAgentId}
           conversationId={conversationId}
           disabled={disabled}
           sendDisabled={sendDisabled || editNeedsPause}

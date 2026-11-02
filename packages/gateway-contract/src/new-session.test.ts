@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createDefaultNewSessionPreferences,
+  actionApprovalPreferenceForAgent,
+  withAgentActionApprovalPreference,
   executionModePreferenceForProject,
   modelPreferenceForAgent,
   newSessionCacheKey,
@@ -167,4 +169,23 @@ describe('new session contract', () => {
     expect(newSessionCacheKey('gateway-a', { agentId: 'Coder', projectId: null }))
       .toBe('gateway-a:coder:none');
   });
+});
+
+it('remembers action permissions per authenticated gateway and normalized agent without changing model or project context', () => {
+  let preferences = withAgentModelPreference(createDefaultNewSessionPreferences(), 'coder', { modelRef: 'test/model' });
+  preferences = withLastChatScope(preferences, 'project-a');
+  preferences = withAgentActionApprovalPreference(preferences, ' Coder ', 'gateway-a', 'full');
+  expect(actionApprovalPreferenceForAgent(preferences, 'coder', 'gateway-a')).toBe('full');
+  expect(actionApprovalPreferenceForAgent(preferences, 'research', 'gateway-a')).toBeUndefined();
+  expect(actionApprovalPreferenceForAgent(preferences, 'coder', 'gateway-b')).toBeUndefined();
+  expect(preferences.lastChatScope).toEqual({ kind: 'project', projectId: 'project-a' });
+  expect(modelPreferenceForAgent(preferences, 'coder')?.modelRef).toBe('test/model');
+  expect(actionApprovalPreferenceForAgent(parseNewSessionPreferences(preferences), 'coder', 'gateway-a')).toBe('full');
+  preferences = withAgentActionApprovalPreference(preferences, 'coder', 'gateway-a', null);
+  expect(actionApprovalPreferenceForAgent(preferences, 'coder', 'gateway-a')).toBeUndefined();
+});
+
+it('ignores unsupported stored permission modes while preserving existing preference records', () => {
+  const preferences = parseNewSessionPreferences({ ...createDefaultNewSessionPreferences(), actionApprovalByAgent: { valid: 'ask', invalid: 'auto' } });
+  expect(preferences.actionApprovalByAgent).toEqual({ valid: 'ask' });
 });

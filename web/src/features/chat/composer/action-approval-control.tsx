@@ -4,6 +4,7 @@ import useSWR from 'swr';
 
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { actionApprovalPreferenceScope, rememberAgentActionApproval } from '@/features/chat/session/new-session-preferences';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 import { SessionManager } from '@/features/chat/session/session-manager';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
@@ -12,7 +13,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 const manager = new SessionManager();
 
-export function ActionApprovalControl({ conversationId, disabled }: { conversationId: string; disabled: boolean }) {
+export function ActionApprovalControl({ conversationId, agentId, disabled }: { conversationId: string; agentId?: string; disabled: boolean }) {
   const zh = useLocaleStore(state => state.language) === 'zh';
   const gatewayScope = useGatewayStore(state => state.conversationId);
   const [saving, setSaving] = useState(false);
@@ -31,11 +32,14 @@ export function ActionApprovalControl({ conversationId, disabled }: { conversati
 
   async function save(value: string) {
     if (saving || disabled || (value !== 'ask' && value !== 'full')) return;
+    const preferenceScope = actionApprovalPreferenceScope();
     setSaving(true);
     setError('');
     try {
       const current = await manager.loadSessionAgentConfig(conversationId);
       const config = await manager.patchSessionAgentConfig(conversationId, { actionApprovalMode: value, configVersion: current.configVersion });
+      if (actionApprovalPreferenceScope() !== preferenceScope) throw new Error('Active Gateway identity changed');
+      if (agentId && config.actionApprovalMode === value) rememberAgentActionApproval(agentId, value);
       patchSessionAgentConfigView(conversationId, config);
       await mutate(config, false);
     } catch (cause) {
@@ -47,7 +51,7 @@ export function ActionApprovalControl({ conversationId, disabled }: { conversati
   if (isLoading && !selected) return <Skeleton className="h-8 w-24 rounded-lg" />;
   return <div className="min-w-0 max-w-full">
     <PopoverSelect value={selected ?? ''} allowEmpty={false} placeholder={label} ariaLabel={label}
-      title={disabled ? (zh ? '停止任务后可更改行动授权' : 'Stop the task before changing permissions') : description}
+      title={disabled ? (zh ? '停止任务后可更改行动授权' : 'Stop the task before changing permissions') : `${description}${agentId ? (zh ? ' 同一 Agent 的新对话会沿用你保存的选择。' : ' New chats with this agent reuse your saved choice.') : ''}`}
       disabled={disabled || saving || !selected}
       triggerIcon={selected === 'full' ? <ShieldAlert className="size-3.5" /> : <Hand className="size-3.5" />}
       triggerClassName="h-8 max-w-40 border-transparent bg-surface-hover/70 text-xs text-fg-muted"

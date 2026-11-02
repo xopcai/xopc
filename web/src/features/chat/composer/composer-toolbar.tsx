@@ -11,6 +11,7 @@ import type { MessageBundle } from '@/i18n/messages';
 
 export interface ComposerToolbarProps {
   conversationId?: string | null;
+  agentId?: string;
   disabled: boolean;
   sendDisabled?: boolean;
   sending: boolean;
@@ -158,6 +159,7 @@ export function ComposerToolbarRow({ className, ...props }: HTMLAttributes<HTMLD
 
 export const ComposerToolbar = memo(function ComposerToolbar({
   conversationId,
+  agentId,
   disabled,
   sendDisabled = false,
   runBusy,
@@ -193,7 +195,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         onPickFiles={onPickFiles}
       />
 
-      {conversationId ? <ActionApprovalControl key={conversationId} conversationId={conversationId} disabled={disabled || runBusy || modelDisabled} /> : null}
+      {conversationId ? <ActionApprovalControl key={conversationId} conversationId={conversationId} agentId={agentId} disabled={disabled || runBusy || modelDisabled} /> : null}
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {showModelSelector ? (
           <ComposerModelConfigControl

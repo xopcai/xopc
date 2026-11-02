@@ -5,7 +5,9 @@ Chats support two action approval modes:
 - **Ask for approval**: trusted reads inside the workspace and ordinary workspace patches can proceed. Network access, shell commands, destructive patches and unknown tools require approval. Workspace writes without a trusted containment contract also require approval.
 - **Full access**: ordinary action prompts are skipped. Explicit tool `ask`/`deny` rules, connector confirmation policies, account scopes, filesystem restrictions, device consent and OS permissions remain effective.
 
-The composer shows the current mode. New Web chat drafts start with Ask for approval, and the selection is included in their first creation command. Existing sessions and clients that omit the mode preserve the previous behavior. AI review is not available; `auto` is rejected.
+The composer shows the current mode. New Web chat drafts inherit action permissions, and the resolved selection is included in their first creation command. Existing sessions and clients that omit the mode preserve the previous behavior. AI review is not available; `auto` is rejected.
+
+The last successfully saved choice is remembered per Agent in the current authenticated Gateway context, using the same browser preference record as model and project context. New chats resolve an explicit handoff choice first, then the remembered choice, then the Agent default, then Ask for approval. Project context continues to inherit normally; the same Agent can reuse its permission choice across projects. Different Agents, Gateways and login contexts do not share this preference. Loading an older chat does not change it, and existing chats retain their own saved permissions. Browser preferences are local; set the Agent default for a shared fallback across devices.
 
 To set an agent default, use `agents.defaults.runtime.actionApprovalMode` (`ask` or `full`), or the corresponding `agents.list` runtime override. A session can override it through the composer or the authenticated `PATCH /api/sessions/:id/agent-config` API:
 
