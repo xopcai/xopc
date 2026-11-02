@@ -9,6 +9,7 @@ on:
       - 'electron/resources/**'
       - 'scripts/*inventory*'
       - 'scripts/*windows*readiness*'
+      - 'scripts/verify-windows-installer-ui.ps1'
       - 'scripts/build-voice-hotkey-helper*'
       - 'scripts/electron-builder*'
       - '.github/workflows/windows-signpath-readiness.yml'
