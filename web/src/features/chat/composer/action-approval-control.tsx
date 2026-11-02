@@ -4,6 +4,7 @@ import useSWR from 'swr';
 
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/cn';
 import { actionApprovalPreferenceScope, rememberAgentActionApproval } from '@/features/chat/session/new-session-preferences';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 import { SessionManager } from '@/features/chat/session/session-manager';
@@ -54,10 +55,12 @@ export function ActionApprovalControl({ conversationId, agentId, disabled }: { c
       title={disabled ? (zh ? '停止任务后可更改行动授权' : 'Stop the task before changing permissions') : `${description}${agentId ? (zh ? ' 同一 Agent 的新对话会沿用你保存的选择。' : ' New chats with this agent reuse your saved choice.') : ''}`}
       disabled={disabled || saving || !selected}
       triggerIcon={selected === 'full' ? <ShieldAlert className="size-3.5" /> : <Hand className="size-3.5" />}
-      triggerClassName="h-8 max-w-40 border-transparent bg-surface-hover/70 text-xs text-fg-muted"
+      triggerClassName={cn('h-8 w-auto max-w-40 gap-1.5 border-transparent bg-transparent text-xs text-fg-muted hover:border-transparent hover:bg-surface-hover',
+        selected === 'full' && 'text-danger hover:bg-danger-soft focus-visible:ring-danger [&>svg:last-child]:text-danger')}
+      contentClassName="w-44 min-w-0 max-w-[calc(100vw-1rem)]"
       side="top" options={[
         { value: 'ask', label: zh ? '每次确认' : 'Ask for approval' },
-        { value: 'full', label: zh ? '完全访问' : 'Full access' },
+        { value: 'full', label: zh ? '完全访问' : 'Full access', tone: 'danger' },
       ]} onChange={value => void save(value)} />
     {error || loadError ? <p role="alert" className="mt-1 max-w-72 text-xs text-danger-fg">{error || (loadError instanceof Error ? loadError.message : String(loadError))}</p> : null}
   </div>;
