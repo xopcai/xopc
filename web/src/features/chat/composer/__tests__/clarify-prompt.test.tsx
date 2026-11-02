@@ -37,30 +37,30 @@ describe('clarify prompt', () => {
     await click('Stage');
     expect(props.onSubmit).toHaveBeenCalledWith({ response: { choiceId: 'stage' } });
   });
-  it('submits selection and multiline details together, preserves drafts on refresh/error', async () => {
-    props.prompt!.interactionMode = 'compose'; await render(); await click('Prod'); await type('After 22:00\nVerify first');
-    expect(props.onSubmit).not.toHaveBeenCalled();
-    props = { ...props, prompt: { ...props.prompt!, version: 2 }, submitError: 'Network failed' }; await render();
+  it('keeps choices immediate even when compose mode is requested', async () => {
+    props.prompt!.interactionMode = 'compose';
+    await render();
+    expect(container.querySelector('textarea')).toBeNull();
+    await click('Prod');
+    expect(props.onSubmit).toHaveBeenCalledWith({ response: { choiceId: 'prod' } });
+  });
+  it('reveals custom input on demand and preserves it after a failed submission', async () => {
+    await render();
+    expect(container.querySelector('textarea')).toBeNull();
+    await click(labels.clarifyCustomLabel); await type('After 22:00\nVerify first');
+    props = { ...props, submitError: 'Network failed' }; await render();
     expect(container.querySelector('textarea')!.value).toBe('After 22:00\nVerify first');
-    expect(container.querySelector('[aria-pressed="true"]')?.textContent).toBe('Prod');
     await click(labels.clarifySend);
-    expect(props.onSubmit).toHaveBeenCalledWith({ response: { choiceId: 'prod', text: 'After 22:00\nVerify first' } });
+    expect(props.onSubmit).toHaveBeenCalledWith({ response: { text: 'After 22:00\nVerify first' } });
   });
-  it('typing switches quick choices to selection and supports clearing to custom text', async () => {
-    await render(); await type('My own answer'); await click('Prod'); expect(props.onSubmit).not.toHaveBeenCalled();
-    await click(labels.clarifyClearChoice); await click(labels.clarifySend);
-    expect(props.onSubmit).toHaveBeenCalledWith({ response: { choiceId: undefined, text: 'My own answer' } });
-  });
-  it('supports an explicit edit mode and resets state for another question', async () => {
-    await render(); await click(labels.clarifyCompose); await click('Prod'); await type('Condition');
+  it('resets the custom editor for another question', async () => {
+    await render(); await click(labels.clarifyCustomLabel); await type('Condition');
     props = { ...props, prompt: { ...props.prompt!, requestId: 'q2' } }; await render();
-    expect(container.querySelector('textarea')!.value).toBe('');
+    expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('[aria-pressed="true"]')).toBeNull();
-    await act(async () => container.querySelector('section')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-    expect(props.onCancel).not.toHaveBeenCalled();
   });
   it('does not send on Enter or while composing, sends on Ctrl+Enter', async () => {
-    await render(); await type('Line 1\nLine 2');
+    await render(); await click(labels.clarifyCustomLabel); await type('Line 1\nLine 2');
     for (const options of [{ key: 'Enter' }, { key: 'Enter', ctrlKey: true, isComposing: true }]) {
       await act(async () => container.querySelector('textarea')!.dispatchEvent(new KeyboardEvent('keydown', { ...options, bubbles: true })));
     }
@@ -69,25 +69,40 @@ describe('clarify prompt', () => {
     expect(props.onSubmit).toHaveBeenCalledOnce();
   });
   it('blocks empty and overlong answers', async () => {
-    await render(); expect(button(labels.clarifySend).disabled).toBe(true);
+    await render(); await click(labels.clarifyCustomLabel); expect(button(labels.clarifySend).disabled).toBe(true);
     await type('a'.repeat(8001)); expect(button(labels.clarifySend).disabled).toBe(true);
     expect(container.querySelector('textarea')!.getAttribute('aria-invalid')).toBe('true');
   });
-  it('collects three questions without auto-selecting the recommendation or submitting early', async () => {
+  it('advances choices automatically, restores earlier answers and submits the full batch', async () => {
     props.prompt = { ...props.prompt!, ...clarifyToolInputV2Schema.parse(batchFixture), choiceDetails: undefined, recommendedChoiceId: undefined };
     await render();
     expect(container.textContent).toContain('0/3 answered');
-    expect(button('Next').disabled).toBe(true);
-    await click('Blog'); await type('Include diagrams');
-    await click('Next'); await click('Weekly'); await click('Next'); await type('Engineering notes');
+    expect(container.querySelector('textarea')).toBeNull();
     expect(props.onSubmit).not.toHaveBeenCalled();
-    await click('Previous'); await click('Previous');
-    expect(container.querySelector('textarea')!.value).toBe('Include diagrams');
-    await click('Next'); await click('Next'); await click('Submit and continue');
+    await click('Blog');
+    expect(container.textContent).toContain('1/3 answered');
+    await click('Weekly'); await type('Engineering notes');
+    expect(props.onSubmit).not.toHaveBeenCalled();
+    await click('Previous');
+    expect(container.querySelector('[aria-pressed="true"]')?.textContent).toContain('Weekly');
+    await click('Previous');
+    expect(container.querySelector('[aria-pressed="true"]')?.textContent).toContain('Blog');
+    await click('Blog');
     expect(props.onSubmit).toHaveBeenCalledWith({ schemaVersion: 2, answers: [
-      { questionId: 'channel', choiceId: 'blog', text: 'Include diagrams' },
+      { questionId: 'channel', choiceId: 'blog' },
       { questionId: 'frequency', choiceId: 'weekly' }, { questionId: 'direction', text: 'Engineering notes' },
     ] });
+  });
+  it('submits a single v2 choice immediately and blocks duplicate clicks while saving', async () => {
+    const fixture = clarifyToolInputV2Schema.parse(batchFixture);
+    props.prompt = { ...props.prompt!, ...fixture, questions: [fixture.questions[0]] };
+    let finish!: () => void;
+    props.onSubmit = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    await render();
+    await act(async () => { button('Blog').click(); button('Blog').click(); });
+    expect(props.onSubmit).toHaveBeenCalledOnce();
+    expect(props.onSubmit).toHaveBeenCalledWith({ schemaVersion: 2, answers: [{ questionId: 'channel', choiceId: 'blog' }] });
+    await act(async () => finish());
   });
   it('shows only explicit decisions for approval and expires without approving', async () => {
     vi.useFakeTimers();

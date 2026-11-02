@@ -100,11 +100,9 @@ try {
   await composer.press('Enter');
   await page.getByText('0/3 answered', { exact: true }).waitFor();
   assert.equal(await page.locator('[aria-pressed="true"]').count(), 0);
+  await page.screenshot({ path: join(evidence, 'desktop-question.png') });
   await page.getByRole('button', { name: /Blog.*Long-form content/ }).click();
-  await page.getByLabel('Additional information', { exact: false }).fill('Include diagrams');
-  await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await page.getByRole('button', { name: 'Weekly', exact: true }).click();
-  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('button', { name: /Weekly/ }).click();
   await page.locator('section[data-clarification-id] textarea').fill('Engineering notes');
   await page.waitForTimeout(450);
   const waitingId = await page.locator('section[data-clarification-id]').getAttribute('data-clarification-id');
@@ -113,9 +111,9 @@ try {
   await page.getByText('3/3 answered', { exact: true }).waitFor();
   assert.equal(await page.locator('section[data-clarification-id] textarea').inputValue(), 'Engineering notes');
   await page.getByRole('button', { name: 'Previous', exact: true }).click();
-  assert.equal(await page.getByRole('button', { name: 'Weekly', exact: true }).getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.getByRole('button', { name: /Weekly/ }).getAttribute('aria-pressed'), 'true');
   await page.getByRole('button', { name: 'Previous', exact: true }).click();
-  assert.equal(await page.getByLabel('Additional information', { exact: false }).inputValue(), 'Include diagrams');
+  assert.equal(await page.getByRole('button', { name: /Blog.*Long-form content/ }).getAttribute('aria-pressed'), 'true');
   const collapse = page.getByRole('button', { name: 'Collapse sidebar', exact: true }).first();
   if (await collapse.isVisible()) await collapse.click();
   await page.setViewportSize({ width: 375, height: 812 });
@@ -127,7 +125,7 @@ try {
   assert(panel && panel.x >= 0 && panel.x + panel.width <= 375);
   await page.screenshot({ path: join(evidence, 'narrow-question.png') });
   await page.setViewportSize({ width: 1365, height: 1000 });
-  await page.getByRole('button', { name: 'Next', exact: true }).click(); await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.locator('nav button').filter({ hasText: /^3\./ }).click();
   const accepted = page.waitForResponse(r => /\/clarifications\/.+\/responses$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Submit and continue', exact: true }).dblclick();
   assert.equal((await accepted).status(), 202);

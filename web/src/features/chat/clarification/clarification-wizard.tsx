@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { normalizeClarificationSubmission, type ClarificationQuestionAnswer } from '@xopcai/gateway-contract';
 
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,8 @@ import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
+import { ClarificationChoice } from './clarification-choice';
 import type { ClarifyPromptProps } from '../composer/clarify-prompt';
 import { clarificationDraftStorage } from './clarification-draft-storage';
 
@@ -21,8 +24,11 @@ export function ClarificationWizard({ prompt, submitting, submitError, labels, o
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
   const edited = useRef(false);
+  const sending = useRef(false);
+  const [customQuestion, setCustomQuestion] = useState<string>();
   const currentDraft = useRef(draft);
   const section = useRef<HTMLElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   const questions = prompt?.questions ?? [];
   const question = questions[Math.min(draft.index, questions.length - 1)];
   const answer = question ? draft.answers[question.id] : undefined;
@@ -65,6 +71,8 @@ export function ClarificationWizard({ prompt, submitting, submitError, labels, o
     return () => window.clearTimeout(timer);
   }, [draft, ready]);
 
+  useEffect(() => { if (customQuestion) input.current?.focus(); }, [customQuestion]);
+
   function update(next: Draft, flush = false) {
     edited.current = true;
     currentDraft.current = next;
@@ -76,56 +84,75 @@ export function ClarificationWizard({ prompt, submitting, submitError, labels, o
     update({ ...draft, index }, true);
     section.current?.focus();
   }
-  async function submit() {
-    if (disabled || !prompt) return;
+  async function submit(next = currentDraft.current) {
+    if (disabled || sending.current || !prompt) return;
+    sending.current = true;
+    setBusy(true);
     try {
-      const submission = { schemaVersion: 2 as const, answers: questions.map(q => draft.answers[q.id] ?? { questionId: q.id }) };
+      const submission = { schemaVersion: 2 as const, answers: questions.map(q => next.answers[q.id] ?? { questionId: q.id }) };
       normalizeClarificationSubmission(prompt, submission);
-      await storage.current.write(currentDraft.current);
-      setBusy(true);
+      await storage.current.write(next);
       await onSubmit(submission);
     } catch (error) { setLocalError(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
+    finally { sending.current = false; setBusy(false); }
+  }
+  function pick(choiceId: string) {
+    if (editingDisabled || sending.current || !question) return;
+    const next: Draft = { ...currentDraft.current, answers: { ...currentDraft.current.answers,
+      [question.id]: { questionId: question.id, choiceId } } };
+    update(next);
+    const unanswered = questions.findIndex(q => {
+      const a = next.answers[q.id];
+      return !a?.choiceId && !a?.text?.trim();
+    });
+    if (unanswered === -1) void submit(next);
+    else { update({ ...next, index: unanswered }, true); section.current?.focus(); }
   }
   if (!ready) return <div className="mb-4 space-y-3 rounded-lg border border-edge p-4"><Skeleton className="h-5 w-1/2" /><Skeleton className="h-24 w-full" /></div>;
   if (!question) return null;
   const validCurrent = Boolean(answer?.choiceId || answer?.text?.trim()) && (answer?.text?.length ?? 0) <= 2000;
+  const showCustom = question.type !== 'single_choice' || customQuestion === question.id || Boolean(answer?.text);
   const textareaId = `clarify-${prompt!.requestId}-${question.id}`;
   return <section ref={section} tabIndex={-1} aria-label={labels.clarifyRegionAria} aria-busy={disabled}
-    data-clarification-id={prompt!.requestId} className="mb-4 flex max-h-[min(36rem,75dvh)] min-h-0 flex-col overflow-hidden rounded-lg border border-edge bg-surface-overlay text-sm outline-none">
+    data-clarification-id={prompt!.requestId} className={cn("mb-4 flex max-h-[min(36rem,75dvh)] min-h-0 flex-col overflow-hidden rounded-lg border border-edge bg-surface-overlay text-sm text-fg outline-none", interaction.focusRingPanel)}>
     <header className="shrink-0 border-b border-edge-subtle px-4 py-3">
-      <div className="flex items-center justify-between gap-2"><span className="font-medium">{labels.clarifyResumeHint}</span><span role="status" className="text-xs text-fg-muted">{t.clarifyProgress.replace('{{answered}}', String(answered)).replace('{{total}}', String(questions.length))}</span></div>
-      <nav aria-label={t.clarifyQuestions} className="mt-2 flex flex-wrap gap-1">
-        {questions.map((q, index) => <Button key={q.id} variant={index === draft.index ? 'secondary' : 'ghost'} disabled={disabled} aria-current={index === draft.index ? 'step' : undefined}
+      <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-fg-muted">{labels.clarifyRegionAria}</span><span role="status" className="text-xs text-fg-muted">{disabled ? labels.clarifySubmitting : t.clarifyProgress.replace('{{answered}}', String(answered)).replace('{{total}}', String(questions.length))}</span></div>
+      {questions.length > 1 ? <nav aria-label={t.clarifyQuestions} className="mt-2 flex flex-wrap gap-1">
+        {questions.map((q, index) => <Button key={q.id} variant={index === draft.index ? 'secondary' : 'ghost'} disabled={editingDisabled} aria-current={index === draft.index ? 'step' : undefined}
           onClick={() => move(index)}>{index + 1}. {q.header}{draft.answers[q.id]?.choiceId || draft.answers[q.id]?.text?.trim() ? ' ✓' : ''}</Button>)}
-      </nav>
+      </nav> : null}
     </header>
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
-      <MarkdownView content={question.question} compact />
-      {question.type === 'single_choice' ? <div role="group" aria-label={question.header} className="space-y-2">
-        {question.choices.map(choice => <Button key={choice.id} disabled={editingDisabled} variant="secondary" aria-pressed={answer?.choiceId === choice.id}
-          className={cn('min-h-11 w-full justify-start whitespace-normal px-3 py-2 text-left font-normal', answer?.choiceId === choice.id && 'border-accent bg-surface-active')}
-          onClick={() => update({ ...draft, answers: { ...draft.answers, [question.id]: { ...answer, questionId: question.id, choiceId: choice.id } } })}>
-          <span><span className="font-medium">{choice.label}</span>{question.recommendedChoiceId === choice.id ? <span className="ml-2 text-xs text-accent">{labels.clarifyRecommended}</span> : null}
-            {choice.description ? <span className="mt-1 block text-xs text-fg-muted">{choice.description}</span> : null}</span>
-        </Button>)}
-        <Button variant="ghost" disabled={editingDisabled} aria-pressed={Boolean(answer && !answer.choiceId)} onClick={() => update({ ...draft, answers: { ...draft.answers, [question.id]: { questionId: question.id, text: answer?.text } } })}>{labels.clarifyCustomLabel}</Button>
-      </div> : null}
-      <label htmlFor={textareaId} className="block text-xs text-fg-muted">{answer?.choiceId ? labels.clarifySupplement : labels.clarifyCustomLabel}</label>
-      <textarea id={textareaId} rows={3} disabled={editingDisabled} value={answer?.text ?? ''} aria-invalid={(answer?.text?.length ?? 0) > 2000}
-        onChange={event => update({ ...draft, answers: { ...draft.answers, [question.id]: { ...answer, questionId: question.id, text: event.target.value } } })}
+      <MarkdownView content={question.question} compact className="text-fg [&_p]:font-medium" />
+      {question.type === 'single_choice' ? <p className="text-xs text-fg-muted">{questions.length > 1 ? t.clarifyBatchQuickHint : labels.clarifyQuickHint}</p> : null}
+      {question.type === 'single_choice' ? <>
+        <div role="group" aria-label={question.header} className="space-y-0.5 rounded-lg border border-edge p-1">
+          {question.choices.map((choice, index) => <ClarificationChoice key={choice.id} {...choice} index={index}
+            recommended={question.recommendedChoiceId === choice.id} recommendedLabel={labels.clarifyRecommended}
+            selected={answer?.choiceId === choice.id} disabled={editingDisabled} onClick={() => pick(choice.id)} />)}
+        </div>
+        <Button variant="ghost" disabled={editingDisabled} aria-expanded={showCustom} aria-controls={textareaId}
+          className="min-h-11 justify-start gap-1 px-1 text-xs" onClick={() => setCustomQuestion(showCustom ? undefined : question.id)}>
+          <ChevronRight aria-hidden="true" className={cn('size-3.5', showCustom && 'rotate-90')} />{labels.clarifyCustomLabel}
+        </Button>
+      </> : null}
+      {showCustom ? <div className="space-y-2">
+      <label htmlFor={textareaId} className="sr-only">{labels.clarifyCustomLabel}</label>
+      <textarea ref={input} id={textareaId} rows={3} disabled={editingDisabled} value={answer?.text ?? ''} aria-invalid={(answer?.text?.length ?? 0) > 2000}
+        onChange={event => update({ ...draft, answers: { ...draft.answers, [question.id]: { questionId: question.id, text: event.target.value } } })}
         onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) { event.preventDefault(); if (draft.index === questions.length - 1) void submit(); else if (validCurrent) move(draft.index + 1); } }}
         className="min-h-20 w-full resize-y rounded-md border border-edge bg-surface-panel px-3 py-2 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
-      <p className="text-right text-xs text-fg-muted">{answer?.text?.length ?? 0}/2000</p>
+      <p className="flex justify-between gap-2 text-xs text-fg-muted"><span>{labels.clarifyKeyboardHint}</span><span>{answer?.text?.length ?? 0}/2000</span></p>
+      </div> : null}
       {submitError || localError ? <p role="alert" className="text-red-600">{submitError || localError}</p> : null}
     </div>
     <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge-subtle px-4 py-3">
       <Button variant="ghost" disabled={editingDisabled} onClick={() => void onCancel()}>{labels.clarifyCancel}</Button>
       {onAgentDecide ? <Button variant="ghost" disabled={editingDisabled} onClick={() => void onAgentDecide()}>{labels.clarifyAgentDecide}</Button> : null}
-      <Button variant="secondary" disabled={disabled || draft.index === 0} onClick={() => move(draft.index - 1)}>{t.clarifyPrevious}</Button>
-      {draft.index < questions.length - 1
-        ? <Button disabled={disabled || !validCurrent} onClick={() => move(draft.index + 1)}>{t.clarifyNext}</Button>
-        : <Button disabled={disabled || answered !== questions.length || !validCurrent} onClick={() => void submit()}>{disabled ? labels.clarifySubmitting : pending ? t.clarifyRetrySubmission : t.clarifySubmitAll}</Button>}
+      {questions.length > 1 ? <Button variant="secondary" disabled={editingDisabled || draft.index === 0} onClick={() => move(draft.index - 1)}>{t.clarifyPrevious}</Button> : null}
+      {showCustom || pending || submitError || localError || answered === questions.length ? (draft.index < questions.length - 1 && !pending
+        ? <Button variant="primary" disabled={editingDisabled || !validCurrent} onClick={() => move(draft.index + 1)}>{t.clarifyNext}</Button>
+        : <Button variant="primary" disabled={disabled || answered !== questions.length || !validCurrent} onClick={() => void submit()}>{disabled ? labels.clarifySubmitting : pending ? t.clarifyRetrySubmission : t.clarifySubmitAll}</Button>) : null}
     </footer>
   </section>;
 }
