@@ -234,7 +234,7 @@ describe('task model recovery over the real execution chain', () => {
     mode = scenario;
     const created = new TaskApplicationService().create({ idempotencyKey: 'recovery-task', title: 'Commit once',
       priority: 'normal', contract: { objective: 'Commit once and finish', acceptanceCriteria: [], expectedOutputs: [],
-        constraints: [], assumptions: [], risks: [], approvalRequired: [], acceptancePolicy: 'verified_auto', outputDestinations: [] },
+        constraints: [], assumptions: [], risks: [], approvalRequired: [], acceptancePolicy: 'manual', outputDestinations: [] },
       dependencies: [], context: [], authorityGrants: [], activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } } });
     if (!created.ok || !created.runId) throw new Error('TaskRun was not created');
     const runs = new TaskRunRepository();const runId = created.runId;
