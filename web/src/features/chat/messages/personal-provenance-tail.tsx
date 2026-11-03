@@ -3,6 +3,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ChevronRight, Sparkles, X } from 'lucide-react';
 import { PersonalProvenanceDetailSchema, type PersonalFeedback, type PersonalProvenance, type PersonalProvenanceDetail } from '@xopcai/gateway-contract';
 
+import { assistantCapsuleClassName, AssistantCapsuleContent } from './assistant-capsule';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -61,10 +63,10 @@ export function PersonalProvenanceTail({ provenance }: { provenance: PersonalPro
   }
   const ended = detail && ['completed', 'expired'].includes(detail.thread.status);
   return <Dialog.Root open={open} onOpenChange={value => { setOpen(value); setAdjust(false); }}>
-    <Dialog.Trigger asChild><button type="button" className="mt-2 flex max-w-full items-center gap-1.5 rounded text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    <Dialog.Trigger asChild><button type="button" className={`${assistantCapsuleClassName} mt-2`}
       aria-label={zh ? '查看主动联系的缘由' : 'Why this message'}>
-      <Sparkles className="size-3.5 shrink-0" strokeWidth={1.5} aria-hidden />
-      <span className="truncate">{labels[provenance.reasonKind]}</span><ChevronRight className="size-3.5 shrink-0" aria-hidden />
+      <AssistantCapsuleContent icon={<Sparkles strokeWidth={1.5} />} title={labels[provenance.reasonKind]}
+        trailing={<ChevronRight className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />} />
     </button></Dialog.Trigger>
     <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/20" />
       <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 flex h-[min(28rem,75dvh)] flex-col overflow-hidden rounded-t-2xl border border-edge bg-surface-overlay sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(25rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">

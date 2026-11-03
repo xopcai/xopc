@@ -43,6 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Card
+import androidx.compose.material3.Surface
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -179,10 +180,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       }
       if (!isUser && (message.outcome?.artifacts?.isNotEmpty() == true ||
         message.targets.isNotEmpty() || message.outcome?.status == "failed")) Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-          .clip(RoundedCornerShape(14.dp))
-          .background(MaterialTheme.colorScheme.surfaceContainer)
-          .padding(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         MessageOutcome(message.outcome?.artifacts.orEmpty(), message.outcome?.status,
           message.outcome?.summary, loadMedia, { item, gallery ->
             onOpenPreview(item, if (mediaPreviewKind(item) == "image") messageImages else gallery)
@@ -356,50 +355,70 @@ private fun MessageOutcome(items: List<ConversationArtifact>, status: String?, s
   if (images.isNotEmpty()) MessageImageGrid(images, load) { onPreview(it, images) }
   items.filterNot { item -> images.any { it.id == item.artifactId } }.forEach { item ->
     val enabled = item.availability == "available" && (item.uri != null || item.shareUrl != null)
-    Card(onClick = {
-      if (item.uri != null) onPreview(ConversationMedia(item.artifactId, item.title, item.kind,
-        item.mimeType.orEmpty(), item.sizeBytes ?: 0, item.uri, item.workspaceRelativePath), emptyList())
-      else item.shareUrl?.let(onOpenLink)
-    }, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-      .testTag("message-artifact-${item.artifactId}"),
-      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-      Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(painterResource(R.drawable.tab_notes), contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-          Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-          if (item.availability != "available") Text(item.availability.replace('_', ' '),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (enabled) ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 16.dp)
-      }
-    }
+    MessageResultCapsule(
+      title = item.title,
+      icon = R.drawable.tab_notes,
+      metadata = if (item.availability != "available") item.availability.replace('_', ' ')
+        else item.sizeBytes?.let { mediaDetail("", it) },
+      enabled = enabled,
+      modifier = Modifier.testTag("message-artifact-${item.artifactId}"),
+      onClick = {
+        if (item.uri != null) onPreview(ConversationMedia(item.artifactId, item.title, item.kind,
+          item.mimeType.orEmpty(), item.sizeBytes ?: 0, item.uri, item.workspaceRelativePath), emptyList())
+        else item.shareUrl?.let(onOpenLink)
+      },
+    )
   }
 }
 
 @Composable
 private fun MessageTargets(items: List<ConversationTarget>, onOpen: (ConversationTarget) -> Unit) {
   items.take(6).forEach { item ->
-    Card(onClick = { onOpen(item) }, enabled = "open" in item.capabilities,
-      modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-        .testTag("message-target-${item.kind}-${item.id}"),
-      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-      Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(painterResource(if (item.kind == "task") R.drawable.tab_progress else R.drawable.tab_notes),
-          contentDescription = null, tint = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.size(20.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-          Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-          item.summary?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        if ("open" in item.capabilities) ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 16.dp)
-      }
+    MessageResultCapsule(
+      title = item.title,
+      icon = if (item.kind == "task") R.drawable.tab_progress else R.drawable.tab_notes,
+      metadata = when (item.status) {
+        "running" -> stringResource(R.string.conversations_task_running)
+        "completed" -> stringResource(R.string.conversations_task_completed)
+        else -> null
+      },
+      enabled = "open" in item.capabilities,
+      modifier = Modifier.testTag("message-target-${item.kind}-${item.id}"),
+      onClick = { onOpen(item) },
+    )
+  }
+}
+
+@Composable
+private fun MessageResultCapsule(
+  title: String,
+  icon: Int,
+  metadata: String?,
+  enabled: Boolean,
+  modifier: Modifier = Modifier,
+  onClick: () -> Unit,
+) {
+  Surface(
+    onClick = onClick,
+    enabled = enabled,
+    modifier = modifier.heightIn(min = 44.dp),
+    shape = RoundedCornerShape(18.dp),
+    color = MaterialTheme.colorScheme.surfaceContainerLow,
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Icon(painterResource(icon), contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+      Text(title, modifier = Modifier.weight(1f, fill = false), maxLines = 2,
+        overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+      if (!metadata.isNullOrBlank()) Text("· $metadata", modifier = Modifier.widthIn(max = 110.dp),
+        maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (enabled) ActionIcon(R.drawable.action_chevron_right,
+        color = MaterialTheme.colorScheme.onSurfaceVariant, size = 14.dp)
     }
   }
 }

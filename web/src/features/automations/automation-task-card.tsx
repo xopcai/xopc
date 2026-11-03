@@ -5,6 +5,8 @@ import { CalendarClock, ChevronDown, ChevronRight, MessageCircle, Pencil, X } fr
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 
+import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleDetailClassName } from '@/features/chat/messages/assistant-capsule';
+
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { Button } from '@/components/ui/button';
@@ -161,19 +163,22 @@ export function AutomationTaskCard({ automationId, runId, language, inConfigurat
   const task = data?.automation;
   const labels = messages(language);
   const frameClass = embedded ? undefined : 'my-3 rounded-xl border border-edge';
-  if (isLoading && !task) return <div className={cn(frameClass, 'p-3')}><Skeleton className="h-12 w-full rounded-lg" /></div>;
+  if (isLoading && !task) return <div className={cn(frameClass, !embedded && 'p-3')}><Skeleton className={embedded ? "h-11 w-48 max-w-full rounded-[1.125rem]" : "h-12 w-full rounded-lg"} /></div>;
   if (loadError || !task) return <div className={cn(frameClass, 'p-3 text-sm text-fg-muted')}><p>{zh ? '任务已删除或暂时无法读取。' : 'This task was deleted or is unavailable.'}</p><button type="button" className="mt-2 underline" onClick={() => void reload()}>{zh ? '重试' : 'Retry'}</button></div>;
   if (runId) return <Link
-    className={cn(frameClass, 'flex min-h-14 min-w-0 items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover/65 active:bg-surface-active/70 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent')}
+    className={cn(embedded ? assistantCapsuleClassName : frameClass, !embedded && 'flex min-h-14 min-w-0 items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover/65 active:bg-surface-active/70 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent')}
     data-product-delivery="automation"
     to={chatProductHref(`${location.pathname}${location.search}`, `/automations?automation=${encodeURIComponent(task.id)}&view=run&run=${encodeURIComponent(runId)}`)}
   >
+    {embedded ? <AssistantCapsuleContent icon={<CalendarClock />} title={task.name} meta={zh ? '查看运行情况' : 'View run'}
+      trailing={<ChevronRight className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />} /> : <>
     <CalendarClock className="size-4 shrink-0 text-fg-muted" aria-hidden />
     <span className="min-w-0 flex-1">
       <span className="block break-words text-sm font-medium text-fg">{task.name}</span>
       <span className="mt-0.5 block text-xs leading-5 text-fg-muted">{zh ? '查看运行情况' : 'View run'}</span>
     </span>
     <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+    </>}
   </Link>;
   const continueChat = async () => {
     setBusy(true); setError('');
@@ -181,6 +186,25 @@ export function AutomationTaskCard({ automationId, runId, language, inConfigurat
     catch (err) { setError(err instanceof Error ? err.message : String(err)); }
     finally { setBusy(false); }
   };
+  if (embedded) return <details className="group min-w-0 max-w-full" data-product-delivery="automation">
+    <summary className={cn(assistantCapsuleClassName, 'cursor-pointer list-none')} title={task.name}>
+      <AssistantCapsuleContent icon={<CalendarClock />} title={task.name}
+        meta={isCompletedOneTimeTask(task) ? (zh ? '已完成' : 'Completed') : !task.enabled ? labels.automations.paused : automationTriggerLabel(task.trigger, labels.automations, labels.cron, language)}
+        trailing={<ChevronRight className="size-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden />} />
+    </summary>
+    <div className={assistantCapsuleDetailClassName}>
+      <p className="text-xs text-fg-muted">{automationTriggerLabel(task.trigger, labels.automations, labels.cron, language)}{task.trigger.kind === 'schedule' && task.trigger.schedule.kind === 'cron' && task.trigger.schedule.tz ? ` · ${task.trigger.schedule.tz}` : ''} · {isCompletedOneTimeTask(task) ? (zh ? '已完成' : 'Completed') : task.enabled ? labels.automations.enabled : labels.automations.paused}</p>
+      <p className="mt-1 text-xs text-fg-muted">{task.enabled ? `${zh ? '下次：' : 'Next: '}${automationNextRunLabel(task, labels.automations, language)}` : isCompletedOneTimeTask(task) ? (zh ? '这项一次性任务已完成' : 'This one-time task is complete') : (zh ? '恢复后将按计划运行' : 'Resume to run on schedule')}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {!task.management && task.action.kind === 'agent' ? <Button variant="ghost" onClick={() => setEditing(true)}><Pencil className="size-4" aria-hidden />{zh ? '编辑' : 'Edit'}</Button> : null}
+        {!inConfiguration && !task.management && task.action.kind !== 'system' ? <Button variant="ghost" disabled={busy} onClick={() => void continueChat()}><MessageCircle className="size-4" aria-hidden />{zh ? '继续对话' : 'Continue in chat'}</Button> : null}
+        <Link className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs text-accent-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" to={`/automations?automation=${encodeURIComponent(task.id)}`}>{zh ? '打开' : 'Open'}</Link>
+      </div>
+      {['failed', 'timeout'].includes(task.state.lastRunStatus ?? '') ? <p className="mt-2 text-xs text-fg-muted">{zh ? '上次运行未完成。可以在对话中说明“帮我修复”，再试运行。' : 'The last run did not finish. Ask in chat to fix it, then try again.'}</p> : null}
+      {error ? <p role="alert" className="mt-2 text-sm text-danger">{error}</p> : null}
+    </div>
+    {editing ? <AutomationEditDialog automation={task} language={language} onClose={() => setEditing(false)} /> : null}
+  </details>;
   return <div className={cn(frameClass, 'overflow-hidden', !embedded && 'bg-surface-panel')} data-product-delivery="automation">
     <div className="flex flex-wrap items-center gap-3 p-3"><CalendarClock className="size-6 shrink-0 text-fg-muted" aria-hidden /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-fg">{task.name}</p><p className="mt-1 text-xs text-fg-muted">{automationTriggerLabel(task.trigger, labels.automations, labels.cron, language)}{task.trigger.kind === 'schedule' && task.trigger.schedule.kind === 'cron' && task.trigger.schedule.tz ? ` · ${task.trigger.schedule.tz}` : ''} · {isCompletedOneTimeTask(task) ? (zh ? '已完成' : 'Completed') : task.enabled ? labels.automations.enabled : labels.automations.paused}</p><p className="mt-1 text-xs text-fg-subtle">{task.enabled ? `${zh ? '下次：' : 'Next: '}${automationNextRunLabel(task, labels.automations, language)}` : isCompletedOneTimeTask(task) ? (zh ? '这项一次性任务已完成' : 'This one-time task is complete') : (zh ? '恢复后将按计划运行' : 'Resume to run on schedule')}</p></div>
       {!task.management && task.action.kind === 'agent' ? <Button variant="ghost" onClick={() => setEditing(true)}><Pencil className="size-4" aria-hidden />{zh ? '编辑' : 'Edit'}</Button> : null}
