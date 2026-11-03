@@ -413,3 +413,17 @@ and physical-request/usage reconciliation as well as every original style gate.
 Stopping automated iteration does not adopt production defaults. Continuous selection
 until pass induces selection bias; disclose every attempt and retain a separate human
 adoption gate. See [iteration evidence and results](../../../docs/design/personal-dialogue-style-self-iteration-2026-11-02.md).
+
+For an already-applied prompt change spanning several modules, a candidate spec can
+supply `baselineRef` (an exact commit) and `changes: [{ module, replacements }]`.
+Preparation restores only those declared modules from that ref in both snapshots,
+then applies exact replacements to the candidate. All other sources stay identical;
+per-module hashes and the baseline ref are registered before any model call. This
+allows testing the actual working-tree change without layering it onto itself.
+Reports distinguish a working-tree default-prompt change from deployment or adoption.
+
+A suite may declare `evaluationFocus` to clarify its scoring emphasis. The blind
+judge freezes this focus in its rubric; existing dimensions and acceptance gates
+remain mandatory. The ownership suite uses explicit user-supplied hypothetical
+status drafts. It tests wording and status fidelity, not actual tool state changes
+or background delivery. See [ownership benchmark](../../../docs/design/personal-ownership-benchmark-2026-11-03.md).
