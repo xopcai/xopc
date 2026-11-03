@@ -1,3 +1,4 @@
+import { internalMessageLink } from './messageLink';
 import { markdownSpans, XopcMarkdownBlock, XopcMarkdownSpan } from './markdown';
 
 export function markdownBlockGap(block: XopcMarkdownBlock, previous?: XopcMarkdownBlock): number {
@@ -33,4 +34,18 @@ export function markdownPreviewBlockLines(blocks: XopcMarkdownBlock[], index: nu
   let remaining = lineLimit;
   for (let position = 0; position < index; position++) remaining -= markdownEstimatedLines(blocks[position]);
   return Math.max(1, Math.min(remaining, markdownEstimatedLines(blocks[index])));
+}
+
+/** Collapse only an adjacent generic view link to the exact same image. */
+export function markdownReadingBlocks(blocks: XopcMarkdownBlock[]): XopcMarkdownBlock[] {
+  return blocks.filter((block: XopcMarkdownBlock, index: number): boolean => {
+    const next = blocks[index + 1];
+    if (block.kind !== 'paragraph' || next?.kind !== 'image') return true;
+    const spans = markdownSpans(block.text);
+    if (spans.length !== 1 || spans[0].kind !== 'link'
+      || !/^(查看(?:高清|原|大)?图片|查看大图|查看原图|view(?: (?:full[- ]size|original|hd))? image)$/i.test(spans[0].text)) return true;
+    const left = internalMessageLink(spans[0].href || '')?.path || spans[0].href;
+    const right = internalMessageLink(next.href || '')?.path || next.href;
+    return left !== right;
+  });
 }

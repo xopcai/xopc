@@ -114,7 +114,7 @@ export function markdownSpans(source: string): XopcMarkdownSpan[] {
       const target = (token.startsWith('<') ? token.slice(1, -1) : token.slice(split + 2, -1).replace(/\\([()])/g, '$1')).replace(/\s+"[^"]*"$/, '');
       const href = markdownLink(target) || (internalMessageLink(target) ? target : '');
       const label = token.startsWith('<') ? target : token.slice(token.startsWith('!') ? 2 : 1, split);
-      if (token.startsWith('![') && ((href && target.startsWith('https://')) || /^(media:\/\/|xopc-file:|xopc-attachment:\/\/notes\/|data:image\/)/.test(target))) {
+      if (token.startsWith('![') && ((href && (target.startsWith('https://') || !!internalMessageLink(target)?.path)) || /^(media:\/\/|xopc-file:|xopc-attachment:\/\/notes\/|data:image\/)/.test(target))) {
         result.push({ id: result.length.toString(), kind: 'image', text: label, href: target, start: match.index, end: match.index + token.length });
       } else if (href) push('link', label || href, href); else push('text', token);
     } else if (token.startsWith('~~')) push('strike', token.slice(2, -2));

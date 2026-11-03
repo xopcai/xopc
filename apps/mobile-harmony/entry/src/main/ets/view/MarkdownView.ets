@@ -12,7 +12,7 @@ import { XopcHistoryMedia } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { internalMessageLink } from '../common/messageLink';
 import { normalizedFileMimeType } from '../common/filePreview';
-import { markdownBlockGap, markdownPreviewBlocks, markdownPreviewBlockLines } from '../common/markdownLayout';
+import { markdownReadingBlocks, markdownBlockGap, markdownPreviewBlocks, markdownPreviewBlockLines } from '../common/markdownLayout';
 import { markdownCodePreview } from '../common/markdownStreamParser';
 
 @ComponentV2
@@ -173,7 +173,7 @@ export struct XopcMarkdownView {
     this.previewRequest++;
   }
   @Computed get blocks(): XopcMarkdownBlock[] {
-    const blocks = this.projection.blocks;
+    const blocks = markdownReadingBlocks(this.projection.blocks);
     return this.previewLineLimit > 0 ? markdownPreviewBlocks(blocks, this.previewLineLimit) : blocks;
   }
   @Computed get mathAllowed(): boolean { return mathCandidateCount(this.content) <= 256; }
@@ -184,7 +184,11 @@ export struct XopcMarkdownView {
     return markdownPreviewBlockLines(this.blocks, index, this.previewLineLimit);
   }
   private imageFile(block: XopcMarkdownBlock): XopcHistoryMedia {
-    return { id: block.id, name: block.text || 'image', type: 'image', mimeType: 'image/png', size: 0, uri: block.href || '' };
+    const target = internalMessageLink(block.href || '');
+    const path = target?.path || '';
+    return { id: block.id, name: block.text || 'image', type: 'image',
+      mimeType: normalizedFileMimeType(path || block.href || '', 'image/png'), size: 0,
+      uri: path ? '' : block.href || '', workspaceRelativePath: path || undefined };
   }
   private codeText(block: XopcMarkdownBlock): string { return this.expandedBlocks.has(block.id) ? block.text : markdownCodePreview(block.text); }
   private listMarker(block: XopcMarkdownBlock): string { return block.text.match(/^(?:[•☐☑]|\d+\.)\s+/)?.[0] || ''; }
@@ -217,7 +221,7 @@ export struct XopcMarkdownView {
             onPreviewTap: (): void => { this.onPreviewTap(); } })
             .width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 })
         } else if (item.item.kind === 'image') { XopcChatMediaView({ file: this.imageFile(item.item), conversationId: this.conversationId,
-          noteInlineImage: this.inlineNoteImages }) }
+          noteInlineImage: this.inlineNoteImages, readingImage: !this.inlineNoteImages }) }
         else if (item.item.kind === 'rule') {
           Column().width('100%').height(1).backgroundColor(this.colors.border)
             .margin({ top: 8, bottom: 8 })

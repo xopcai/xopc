@@ -1,5 +1,5 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { Type } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 
 import { boundedPersonalResult } from './personal-result-budget.js';
 import type { Config } from '../../config/schema.js';
@@ -35,7 +35,7 @@ export function createPersonalAttentionTool(deps: {
   return { name: 'personal_attention', label: 'Personal follow-up',
     description: 'Persist or inspect attention in this personal conversation. An explicit request such as "check tomorrow afternoon and proactively tell me if useful" authorizes follow. The running Gateway automatically checks saved attention while the user is away and posts useful developments in this chat; no separate user automation is required. Prefer nextCheckLocal over epoch arithmetic. Checks are not guaranteed notifications. No action authorization is granted. Only claim saved after a successful result; an error means it was not saved, not that background checks are unsupported. Use pause/end/resume only for an explicit user instruction; do not duplicate an existing automation. Query list to verify whether follow-up is saved or active; query settings for current mode and timezone. Use current tool results rather than historical assistant claims. Valid commands: follow, list, settings, pause, end, resume, interests, feedback, rollback. interests reads silent candidates, not authorization. feedback saves an explicit topic preparation/stop/defer preference; rollback undoes the latest version on explicit request. Query list for IDs and versions. settings reads or explicitly changes off, follow_up, balanced.',
     parameters: schema,
-    async execute(_toolId, input) {
+    async execute(_toolId, input: Static<typeof schema>) {
       const conversationId = deps.getConversationId();
       const personal = conversationId ? getPersonalAgentByConversation(conversationId) : null;
       const config = deps.getConfig();

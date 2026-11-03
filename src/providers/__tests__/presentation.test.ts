@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { getAllProviders, getModelsByProvider, PROVIDER_META } from '../index.js';
 import { getOnboardingFeaturedProviders, getRecommendedModelsForProvider, modelToCatalogView, sortModelsForPicker } from '../presentation.js';
 import { getDomesticProviderPreset } from '../domestic-presets.js';
+import { getModels as getPiModels } from '@earendil-works/pi-ai/compat';
 
 describe('provider presentation catalog', () => {
   it('preserves recommendation order and limits when filtering before sorting', () => {
@@ -12,11 +13,10 @@ describe('provider presentation catalog', () => {
       for (const limit of [1, 4, 20]) expect(getRecommendedModelsForProvider(provider, limit)).toEqual(previousOrder.slice(0, limit));
     }
   });
-  it.each(['xiaomi', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-sgp'])('keeps %s presets and recommendations in the current catalog', provider => {
+  it.each(['xiaomi', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-sgp'])('uses pi models and keeps %s recommendations in the current catalog', provider => {
     const ids = new Set(getModelsByProvider(provider).map(model => model.id));
-    const preset = getDomesticProviderPreset(provider)!;
-    expect(ids.has(preset.defaultModel)).toBe(true);
-    for (const model of preset.models) expect(ids.has(model.id), `${provider}/${model.id}`).toBe(true);
+    expect(getDomesticProviderPreset(provider)).toBeUndefined();
+    for (const model of getPiModels(provider as never)) expect(ids.has(model.id)).toBe(true);
     const recommendations = getRecommendedModelsForProvider(provider);
     expect(recommendations.length).toBeGreaterThan(0);
     expect(recommendations[0]).toMatchObject({ id: 'mimo-v2.6-pro', vision: true });

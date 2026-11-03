@@ -18,6 +18,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import '@/components/markdown/markdown.css';
 import 'katex/dist/katex.min.css';
 
+import { ChatImageThumbnail } from '../../messages/chat-image-thumbnail';
 import { PartErrorBoundary } from '../part-error-boundary';
 import { createChatBlockParser, parseChatMarkdownBlocks } from './chat-math-blocks';
 import { MathElement } from '@/components/markdown/math-element';
@@ -40,6 +41,7 @@ const BlockSourceContext = createContext('');
 function ChatLink({ node, href = '', children, className, ...props }: ComponentProps<'a'> & { node?: Element }) {
   const environment = useContext(EnvironmentContext)!;
   const runBindings = useContext(AutomationRunLinkContext);
+  const { openImage } = useImageLightbox();
   const language = useLocaleStore(s => s.language);
   const labels = messages(language).chat.contentLinks;
   const fragment = href.startsWith('#') && !href.startsWith('#/');
@@ -83,48 +85,32 @@ function ChatLink({ node, href = '', children, className, ...props }: ComponentP
         destination.focus({ preventScroll: true });
         return;
       }
+      const matchingImage = Array.from(event.currentTarget.closest('.markdown-render-boundary')?.querySelectorAll<HTMLImageElement>('img[data-chat-image-source]') ?? [])
+        .find(image => image.dataset.chatImageSource === href && image.getAttribute('src'));
+      if (matchingImage?.src && !/下载|download/i.test(text)) { openImage(matchingImage.src, matchingImage.alt); return; }
       if (target) { environment.openFile?.(target); return; }
       environment.openLink(effectiveHref);
     }}>{visibleLabel}</a>;
 }
 
-function ChatImage({ node: _node, src = '', alt, className, ...props }: ComponentProps<'img'> & { node?: Element }) {
+function ChatImage({ node: _node, src = '', alt, ...props }: ComponentProps<'img'> & { node?: Element }) {
   const environment = useContext(EnvironmentContext)!;
-  const { openImage } = useImageLightbox();
-  const locale = useLocaleStore(s => s.language);
-  const [loaded, setLoaded] = useState<{ source: string; url: string } | null>(null);
   const target = parseWorkspaceFileLinkTarget(src);
   const path = target?.path;
   const line = target?.line;
   const kind = target?.kind;
-  useEffect(() => {
-    if (!path || !kind || !environment.loadImage) return;
-    let current = true;
-    let url: string | undefined;
-    void environment.loadImage({ path, line, kind }).then(blob => {
-      if (!current) return;
-      url = URL.createObjectURL(blob);
-      setLoaded({ source: src, url });
-    }).catch(() => {});
-    return () => { current = false; if (url) URL.revokeObjectURL(url); };
-  }, [environment.loadImage, path, line, kind, src]);
-  const finalSrc = target ? loaded?.source === src ? loaded.url : undefined : src;
-  return <img {...props} src={finalSrc} alt={alt} loading="lazy" decoding="async"
-    className={[className, finalSrc ? 'cursor-zoom-in focus-visible:outline-2 focus-visible:outline-accent' : ''].filter(Boolean).join(' ') || undefined}
-    role={finalSrc ? 'button' : undefined} tabIndex={finalSrc ? 0 : undefined}
-    aria-label={finalSrc ? `${messages(locale).chat.attachmentPreviewOpen}${alt ? `: ${alt}` : ''}` : undefined}
-    onClick={event => {
-      if (!finalSrc) return;
-      event.preventDefault();
-      event.stopPropagation();
-      openImage(finalSrc, alt);
-    }}
-    onKeyDown={event => {
-      if (!finalSrc || (event.key !== 'Enter' && event.key !== ' ')) return;
-      event.preventDefault();
-      event.stopPropagation();
-      openImage(finalSrc, alt);
-    }} />;
+  const load = useCallback(() => {
+    if (!path || !kind || !environment.loadImage) return Promise.reject(new Error('Image unavailable'));
+    return environment.loadImage({ path, line, kind });
+  }, [environment.loadImage, path, line, kind]);
+  return <ChatImageThumbnail {...props} source={src} alt={alt} load={target ? load : undefined} />;
+}
+
+function ChatParagraph({ node, ...props }: ComponentProps<'p'> & { node?: Element }) {
+  const mediaOnly = node?.children.some(child => child.type === 'element') && node.children.every(child =>
+    child.type === 'text' ? !child.value.trim() : child.type === 'element' && (child.tagName === 'img' ||
+      (child.tagName === 'a' && child.children.every(item => item.type === 'element' && item.tagName === 'img'))));
+  return <p {...props} data-chat-media={mediaOnly || undefined} />;
 }
 
 function textIn(node: Element): string {
@@ -170,7 +156,7 @@ const passthrough = <T extends keyof JSX.IntrinsicElements>(tag: T) => {
 };
 const components: Components = {
   a: ChatLink, img: ChatImage, pre: ChatPre, span: MathSpan, div: MathDiv,
-  p: passthrough('p'), h1: passthrough('h1'), h2: passthrough('h2'), h3: passthrough('h3'), h4: passthrough('h4'),
+  p: ChatParagraph, h1: passthrough('h1'), h2: passthrough('h2'), h3: passthrough('h3'), h4: passthrough('h4'),
   h5: passthrough('h5'), h6: passthrough('h6'), ul: passthrough('ul'), ol: passthrough('ol'), li: passthrough('li'),
   strong: passthrough('strong'), em: passthrough('em'), blockquote: passthrough('blockquote'),
   code: passthrough('code'), table: ChatTable, thead: passthrough('thead'), tbody: passthrough('tbody'),
@@ -286,7 +272,19 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
     const blocks = host.current?.querySelectorAll('.markdown-stream-block');
     recordStreamingShape(streamingMetricsKey, Math.max(0, (blocks?.length ?? 0) - 1), blocks?.item((blocks.length ?? 1) - 1)?.textContent?.length ?? 0);
   }, [content, streamingMetricsKey]);
-  return <ImageLightboxProvider closeLabel={messages(locale).chat.attachmentPreviewClose}><EnvironmentContext.Provider value={environment}><BlockSourceContext.Provider value={content}><RevealBudgetContext.Provider value={budget}>
+  useLayoutEffect(() => {
+    const paragraphs = host.current?.querySelectorAll<HTMLParagraphElement>('p') ?? [];
+    for (const paragraph of paragraphs) {
+      paragraph.hidden = false;
+      const link = paragraph.querySelector<HTMLAnchorElement>('a');
+      if (!link || paragraph.textContent?.trim() !== link.textContent?.trim() ||
+        !/^(?:查看(?:高清|原|大)?图片|查看大图|查看原图|view(?: (?:full[- ]size|original|hd))? image)$/i.test(link.textContent?.trim() ?? '')) continue;
+      const next = paragraph.nextElementSibling ?? paragraph.closest('.markdown-stream-block')?.nextElementSibling?.firstElementChild;
+      const images = next?.querySelectorAll<HTMLImageElement>('img[data-chat-image-source]');
+      if (next?.matches('[data-chat-media]') && images?.length === 1 && images[0].dataset.chatImageSource === link.getAttribute('href')) paragraph.hidden = true;
+    }
+  }, [content]);
+  return <ImageLightboxProvider interactive closeLabel={messages(locale).chat.attachmentPreviewClose}><EnvironmentContext.Provider value={environment}><BlockSourceContext.Provider value={content}><RevealBudgetContext.Provider value={budget}>
     <div ref={host} className="markdown-render-boundary" data-chat-markdown={id}>
       <PartErrorBoundary content={content}>
         <Streamdown className={['markdown-body xopc-chat-markdown', compact ? 'markdown-compact' : '',

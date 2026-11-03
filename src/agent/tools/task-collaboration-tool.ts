@@ -1,5 +1,5 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { Type } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 
 import { taskResearchEvidence } from '../../tasks/task-research-result.js';
 import { parseResultReferenceId } from '@xopcai/gateway-contract';
@@ -44,7 +44,7 @@ export function createTaskCollaborationTool(deps: XopcUseToolDeps): AgentTool<ty
   return { name: 'task_collaboration', label: 'Task collaboration', parameters: Schema,
     description: 'Coordinate the current Task with its originating conversation. get section brief reads the full task body in 4000-character pages (offset/nextOffset); section handoff lists the host-captured original request and selected versioned sources, Read the CURRENT handoff first; source indices can change across work revisions. Only entries marked materializable support materialize=true, with an explicit sourceIndex. section source with materialize=true copies a selected pinned workspace file OR published result artifact into your Task input directory; use the returned executionInputRoot as cwd and readOnlyPath as input, never the owner workspace path. Result body text uses read; materialize requires an exact artifact source. The returned copies are read-only: write revised outputs elsewhere and publish those new files. It grants no wider root access. Otherwise section source reads one sourceIndex (query for result search, revision for pinned extracted text). section evidence lists real successful tool reads, or reads a toolCallId in 4000-character pages. Evidence excerpts must cite that original toolCallId. get with section task reads constraints and waits; default get reads complete ordered messages (afterSequence/limit) or one entryId. post progress for meaningful changes; post question then stop this turn until answered. Initial handoff and source/tool IDs require no ack. Before continuing, post ack only for a user/main_agent collaboration entry of kind answer or instruction, with causationId equal to that entry ID and explain how the result will incorporate it. Confirmation is receipt and intent, not completed verification. Reuse the same Task and executor. Account authorization stays in the main connection UI; answers and instructions cannot change the selected connector/account or permit writes. Preserve idempotencyKey on retries.',
     mutatesWorkspace: true, mutationScope: 'external', requiresExclusiveWorkspaceLock: false,
-    async execute(toolCallId, input, signal) {
+    async execute(toolCallId, input: Static<typeof Schema>, signal) {
       const conversationId = getEmbeddedExecutionSession() ?? deps.getCurrentConversationId?.();
       const active = conversationId ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId) : undefined;
       if (!active || (deps.getCurrentAgentId?.() && active.agentId !== deps.getCurrentAgentId())) throw new Error('No active Task execution');

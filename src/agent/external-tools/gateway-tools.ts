@@ -1,5 +1,5 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { Type } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 
 import type { Config } from '../../config/schema.js';
 import {
@@ -85,7 +85,7 @@ export function createExternalToolGatewayTools(
     label: '🔎 External Tool Search',
     description: `Search external tools from these sources: ${gatewaySources.join(', ')}.${nativeSources.length ? ` Use tool_search for native ${nativeSources.join(', ')} tools.` : ''} CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. When no executable tool exists but a connection or install candidate is returned, use xopc_require_connection instead of falling back to browser automation. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
     parameters: ToolSearchSchema,
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params: Static<typeof ToolSearchSchema>) {
       return textResult(await discoverExternalTools(discoveryDeps, params));
     },
   };
@@ -94,7 +94,7 @@ export function createExternalToolGatewayTools(
     label: '📋 External Tool Contract',
     description: 'Load exact contracts for up to three external tools returned by tool_search.',
     parameters: ToolDescribeSchema,
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params: Static<typeof ToolDescribeSchema>) {
       params.toolRefs.forEach(assertGatewayRef);
       const result = await service.describe(params.toolRefs);
       return textResult({ ...result, ...(result.notFound.length ? { instruction: 'These exact tool contracts are unavailable. Do not execute them, invent revisions, or reconnect the account. Use a different available tool or explain the capability failure.' } : {}) });
@@ -105,7 +105,7 @@ export function createExternalToolGatewayTools(
     label: '▶️ External Tool Execute',
     description: 'Execute one external tool using its exact reference, contract revision, and validated arguments.',
     parameters: ToolExecuteSchema,
-    async execute(toolCallId, params, signal, onUpdate) {
+    async execute(toolCallId, params: Static<typeof ToolExecuteSchema>, signal, onUpdate) {
       const conversationId = getExecutionConversationId?.() ?? getContext?.()?.conversationId;
       const request = conversationId ? personalRequestForExecution(conversationId) : undefined;
       let authorize: (() => void) | undefined;
@@ -150,7 +150,7 @@ export function createExternalToolGatewayTools(
     },
   };
   const nativeExecute = executeTool.execute.bind(executeTool);
-  executeTool.execute = async (id, params, signal, update) => {
+  executeTool.execute = async (id, params: Static<typeof ToolExecuteSchema>, signal, update) => {
     assertGatewayRef(params.toolRef);
     return nativeExecute(id, params, signal, update);
   };
@@ -172,7 +172,7 @@ export function createExternalToolGatewayTools(
   const requireTool: AgentTool<typeof requireSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.requireConnection, label: 'Connect app', parameters: requireSchema,
     description: 'Use only when a requested read cannot proceed because authorization, installation or account selection is required. Available authorized tools should be executed directly without asking the user to confirm the read. Request an exact connectionCandidates or installCandidates entry returned by tool_search. Explain the verified need once before calling. This saves and pauses the objective, displays one action area above the input, and lets the host resume automatically after the required user action. Stop this turn after connection_required; never ask the user to reply continue after authorization. Never invent a candidate reference, return OAuth URLs, or repeat a skipped request. If another objective is waiting, do not create a duplicate objective.',
-    async execute(_id, params) {
+    async execute(_id, params: Static<typeof requireSchema>) {
       const context = getContext?.();
       if (!context) throw new Error('No active conversation.');
       const range = params.checkpoint.timeRange;
@@ -245,7 +245,7 @@ export function createExternalToolGatewayTools(
   const reviseTool: AgentTool<typeof reviseSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.updateConnectionObjective, label: 'Update waiting objective', parameters: reviseSchema,
     description: 'Use when the user supplements or explicitly cancels the objective waiting for a connection. Update with the complete revised objective including the requested time range. For unrelated work leave the waiting objective unchanged. Cancellation does not disconnect the account.',
-    async execute(_id, params) {
+    async execute(_id, params: Static<typeof reviseSchema>) {
       const context = getContext?.();
       if (!context) throw new Error('No active conversation.');
       if (params.action === 'update' && !params.objective) throw new Error('The revised objective is required.');

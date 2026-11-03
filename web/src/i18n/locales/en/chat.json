@@ -773,6 +773,7 @@
     "attachmentPreviewDownloadFull": "Download file",
     "attachmentPreviewOpenLocal": "Open in local app",
     "attachmentPreviewOpenLocalFailed": "Could not open this spreadsheet in a local application",
+    "imageDownloadFailed": "Could not download the image. Please try again.",
     "attachmentPreviewImage": "Preview image",
     "turnOutcome": {
     "evidenceCount": "{{count}} checks",

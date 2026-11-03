@@ -14,7 +14,7 @@ export interface XopcToolMetadata {
   finalGuardRelevant?: boolean;
 }
 
-export type AgentToolWithMetadata<TParams = any, TDetails = any> = AgentTool<TParams, TDetails> & XopcToolMetadata;
+export type AgentToolWithMetadata<TParams extends object = any, TDetails = any> = AgentTool<TParams, TDetails> & XopcToolMetadata;
 
 export const DEFAULT_TOOL_METADATA: Required<XopcToolMetadata> = {
   mutatesWorkspace: false,

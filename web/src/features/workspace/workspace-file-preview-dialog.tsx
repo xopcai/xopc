@@ -216,6 +216,7 @@ export function WorkspaceFilePreviewPanel({
           onRetrySave: state.saveStatus === 'error' ? () => void state.flushSource() : undefined,
           onToggleExpanded: canExpandPreview ? () => setExpanded((value) => !value) : undefined,
           hideClose: Boolean(tabId),
+          hideExpand: Boolean(tabId),
           onClose: handleClose,
           edit: isEditableText ? {
             active: state.sourceEditMode,

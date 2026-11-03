@@ -3,29 +3,21 @@ import { cn } from '@/lib/cn';
 const skelBar =
   'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
 
-/** Matches marketplace skill cards (title row actions + meta). */
+/** Matches the compact icon, title, action, description, and source layout. */
 export function MarketplaceSkillCardSkeleton() {
   return (
     <div
-      className="flex h-full min-h-[10.5rem] flex-col rounded-xl bg-surface-panel p-4 shadow-surface"
+      className="flex min-w-0 flex-col gap-3 rounded-lg border border-edge bg-surface-panel p-4"
       aria-hidden
     >
-      <div className="flex min-h-0 flex-1 items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className={cn('h-4 min-w-0 flex-1', skelBar)} />
-            <div className="flex shrink-0 gap-1">
-              <div className={cn('size-8 shrink-0 rounded-lg', skelBar)} />
-              <div className={cn('h-8 w-[4.5rem] shrink-0 rounded-lg', skelBar)} />
-            </div>
-          </div>
-          <div className={cn('h-3 w-full', skelBar)} />
-          <div className={cn('h-3 w-[92%]', skelBar)} />
-          <div className="mt-auto space-y-1 pt-0.5">
-            <div className={cn('h-3 w-full', skelBar)} />
-            <div className={cn('h-2.5 w-4/5', skelBar)} />
-          </div>
-        </div>
+      <div className="flex h-8 items-center gap-2">
+        <div className={cn('size-7 shrink-0', skelBar)} />
+        <div className={cn('h-4 min-w-0 flex-1', skelBar)} />
+        <div className={cn('h-8 w-12 shrink-0', skelBar)} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex h-5 items-center"><div className={cn('h-3 w-full', skelBar)} /></div>
+        <div className="flex h-4 items-center"><div className={cn('h-3 w-16', skelBar)} /></div>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { getProviders as getPiProviders } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it } from 'vitest';
 
 import { validateModelsConfig, type ModelsJsonConfig } from '../../config/models-json.js';
@@ -12,33 +13,13 @@ describe('domestic provider presets', () => {
   it('cover the supported domestic providers with valid models.json configs', () => {
     const ids = DOMESTIC_PROVIDER_PRESETS.map((preset) => preset.id);
 
-    expect(ids).toEqual(
-      expect.arrayContaining([
-        'dashscope-cn',
-        'dashscope-intl',
-        'volcengine-ark',
-        'volcengine-plan',
-        'byteplus-plan',
-        'deepseek',
-        'moonshotai',
-        'moonshotai-cn',
-        'kimi-coding',
-        'stepfun-cn',
-        'stepfun-intl',
-        'stepfun-plan-cn',
-        'stepfun-plan-intl',
-        'xiaomi',
-        'xiaomi-token-plan-cn',
-        'xiaomi-token-plan-ams',
-        'xiaomi-token-plan-sgp',
-        'zhipu-cn',
-        'zai',
-        'zai-coding-global',
-        'zhipu-coding-cn',
-        'minimax',
-        'minimax-cn',
-      ]),
-    );
+    expect(ids).toEqual(expect.arrayContaining([
+      'dashscope-cn', 'dashscope-intl', 'volcengine-ark', 'volcengine-plan', 'byteplus-plan',
+      'stepfun-cn', 'stepfun-intl', 'stepfun-plan-cn', 'stepfun-plan-intl', 'zhipu-cn', 'zai-api',
+    ]));
+    for (const provider of getPiProviders()) expect(ids).not.toContain(provider);
+    expect(ids).not.toContain('zai-coding-global');
+    expect(ids).not.toContain('zhipu-coding-cn');
 
     const config: ModelsJsonConfig = {
       providers: Object.fromEntries(
@@ -53,15 +34,13 @@ describe('domestic provider presets', () => {
   });
 
   it('preserves provider-specific endpoint choices', () => {
-    const minimax = getDomesticProviderPreset('minimax');
+    const zai = getDomesticProviderPreset('zai-api');
     const ark = getDomesticProviderPreset('volcengine-ark');
 
-    expect(minimax).toBeDefined();
+    expect(getDomesticProviderPreset('minimax')).toBeUndefined();
     expect(getDomesticProviderPreset('xopc-cloud')).toBeUndefined();
-    expect(providerConfigFromDomesticPreset(minimax!, { apiKey: 'MINIMAX_API_KEY' })).toMatchObject({
-      baseUrl: 'https://api.minimax.io/anthropic',
-      api: 'anthropic-messages',
-      authHeader: true,
+    expect(providerConfigFromDomesticPreset(zai!, { apiKey: 'ZAI_API_KEY' })).toMatchObject({
+      baseUrl: 'https://api.z.ai/api/paas/v4', api: 'openai-completions',
     });
 
     expect(ark?.defaultModel).toBe('ep-your-endpoint-id');
@@ -94,7 +73,6 @@ describe('domestic provider presets', () => {
         'stepfun-plan-cn',
         'ant-ling',
         'zai-coding-cn',
-        'zhipu-coding-cn',
       ]),
     );
     expect(getRecommendedModelsForProvider('dashscope-cn').map((model) => model.ref)).toContain(
@@ -103,9 +81,6 @@ describe('domestic provider presets', () => {
     expect(getRecommendedModelsForProvider('ant-ling').map((model) => model.ref)).toContain('ant-ling/Ling-2.6-1T');
     expect(getRecommendedModelsForProvider('zai-coding-cn').map((model) => model.ref)).toContain(
       'zai-coding-cn/glm-5.3',
-    );
-    expect(getRecommendedModelsForProvider('zhipu-coding-cn').map((model) => model.ref)).toContain(
-      'zhipu-coding-cn/glm-5.2',
     );
   });
 });

@@ -74,6 +74,61 @@ describe('React chat Markdown', () => {
     expect(revoke).toHaveBeenCalledWith('blob:workspace-chart');
   });
 
+  it('merges only a standalone generic link beside the same image and preserves download links', async () => {
+    await act(async () => root.render(<MemoryRouter><ChatMarkdownRenderer onWorkspaceFileOpen={vi.fn()} content={'[查看高清图片](xopc://workspace/file?path=cat.jpg)\n\n![橘猫](xopc://workspace/file?path=cat.jpg)\n\n[下载图片](xopc://workspace/file?path=cat.jpg)\n\n[查看大图](xopc://workspace/file?path=other.jpg)'} /></MemoryRouter>));
+    const links = Array.from(container.querySelectorAll('a'));
+    expect(links[0].closest('p')?.hidden).toBe(true);
+    expect(links[1].closest('p')?.hidden).toBe(false);
+    expect(links[2].closest('p')?.hidden).toBe(false);
+  });
+
+  it('retries an authenticated image after a load failure', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:retry-cat');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(new Blob(['cat']));
+    await act(async () => root.render(<MemoryRouter><ChatMarkdownRenderer
+      content="![Cat](xopc://workspace/file?path=cat.jpg)" onWorkspaceImageLoad={load}
+    /></MemoryRouter>));
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>('[role="status"] button')?.click());
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:retry-cat');
+    expect(container.querySelector('[role="status"]')).toBeNull();
+  });
+
+  it('uses the same image viewer for a descriptive file link and resets zoom when reopening', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:cat');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const openFile = vi.fn();
+    await act(async () => root.render(<MemoryRouter><ChatMarkdownRenderer
+      content="[猫咪照片](xopc://workspace/file?path=cat.jpg)\n\n![Cat](xopc://workspace/file?path=cat.jpg)\n\n[下载图片](xopc://workspace/file?path=cat.jpg)"
+      onWorkspaceImageLoad={async () => new Blob(['cat'])} onWorkspaceFileOpen={openFile}
+    /></MemoryRouter>));
+    await act(async () => container.querySelector<HTMLAnchorElement>('a')?.click());
+    expect(document.querySelector('[role="dialog"] img')?.getAttribute('src')).toBe('blob:cat');
+    expect(openFile).not.toHaveBeenCalled();
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const buttons = dialog.querySelectorAll('button');
+    await act(async () => buttons[2].click());
+    expect(dialog.textContent).toContain('150%');
+    await act(async () => buttons[0].click());
+    await act(async () => container.querySelector<HTMLImageElement>('img')?.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('100%');
+    await act(async () => document.querySelector<HTMLButtonElement>('[role="dialog"] button')?.click());
+    await act(async () => container.querySelectorAll<HTMLAnchorElement>('a')[1].click());
+    expect(openFile).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('marks only image paragraphs as media and keeps small images at their natural size', async () => {
+    render('![Cat](https://example.com/cat.jpg)\n![Dog](https://example.com/dog.jpg)\n\nDescription ![icon](https://example.com/icon.png)');
+    expect(container.querySelectorAll('p[data-chat-media]')).toHaveLength(1);
+    const image = container.querySelector<HTMLImageElement>('img')!;
+    Object.defineProperties(image, { naturalWidth: { value: 64 }, naturalHeight: { value: 48 } });
+    await act(async () => image.dispatchEvent(new Event('load')));
+    expect(image.closest<HTMLElement>('.chat-image-thumbnail')?.style.width).toBe('64px');
+  });
+
   it('keeps complete paragraphs and the renderer mounted through tail growth and completion', () => {
     render('Stable.\n\nGrowing', true);
     const renderer = container.querySelector('.xopc-chat-markdown');

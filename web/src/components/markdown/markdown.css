@@ -688,3 +688,49 @@ html.dark .markdown-body .hljs-deletion {
   .markdown-math-actions, .markdown-code-copy-btn, .markdown-mermaid-actions { transition: none; }
   .markdown-mermaid-actions { transform: none; }
 }
+
+/* Chat media previews preserve the image and the surrounding reading rhythm. */
+.chat-image-thumbnail {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+.chat-image-thumbnail[data-image-loading] {
+  width: min(320px, 100%);
+  min-height: min(180px, 30vh);
+  background: var(--color-surface-hover);
+}
+.chat-image-thumbnail .chat-reading-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(280px, 45vh);
+  object-fit: contain;
+  border-radius: inherit;
+  cursor: zoom-in;
+}
+.chat-reading-image:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+.xopc-chat-markdown p[data-chat-media] {
+  display: inline-flex;
+  max-width: 100%;
+  vertical-align: top;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-block: 8px;
+  margin-inline-end: 8px;
+}
+.xopc-chat-markdown > .markdown-stream-block:has(> p[data-chat-media]) {
+  display: inline-block;
+  max-width: 100%;
+  margin-inline-end: 8px;
+  vertical-align: top;
+}
+.xopc-chat-markdown p[hidden] { display: none; }

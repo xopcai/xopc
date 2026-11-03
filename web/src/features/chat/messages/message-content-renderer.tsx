@@ -43,6 +43,7 @@ import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-pr
 import { recordResponseVisible } from '@/features/chat/messages/response-latency';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { ChatImageThumbnail } from './chat-image-thumbnail';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { isElectron } from '@/lib/electron-env';
 import { interaction } from '@/lib/interaction';
@@ -483,37 +484,8 @@ function renderTextOrImageBlock(
   }
   if (block.type === 'image' && block.source?.data) {
     const idx = contentIndex ?? 0;
-    if (onImagePreview) {
-      return (
-        <button
-          key={key}
-          type="button"
-          className={cn(
-            'inline-block max-w-full rounded-lg p-0 text-left',
-            interaction.press,
-            interaction.focusRingPanel,
-            'cursor-pointer',
-          )}
-          onClick={() => onImagePreview(block, idx)}
-          title={imagePreviewLabel}
-          aria-label={imagePreviewLabel}
-        >
-          <img
-            src={block.source.data}
-            className="max-h-48 max-w-64 rounded-lg align-top object-contain"
-            alt=""
-          />
-        </button>
-      );
-    }
-    return (
-      <img
-        key={key}
-        src={block.source.data}
-        className="max-h-48 max-w-64 rounded-lg object-contain"
-        alt=""
-      />
-    );
+    return <ChatImageThumbnail key={key} source={block.source.data} alt="" title={imagePreviewLabel}
+      onOpen={onImagePreview ? () => onImagePreview(block, idx) : undefined} />;
   }
   if (block.type === 'review') {
     return <ReviewBlock key={key} review={block} />;

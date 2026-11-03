@@ -144,7 +144,7 @@ describe('common file preview header', () => {
     expect(container.querySelector('[data-shell-surface]')?.querySelector('[data-file-preview-expanded]')).toBeNull();
   });
 
-  it('keeps only tree, fullscreen and more actions outside the menu', async () => {
+  it('keeps only tree and more actions when the workspace owns fullscreen', async () => {
     useLocaleStore.setState({ language: 'en' });
     const toggleTree = vi.fn();
     const openFile = vi.fn();
@@ -154,7 +154,7 @@ describe('common file preview header', () => {
           descriptor={{ id: 'nested-file', context: 'workspace', fileName: 'browser.ts', mimeType: 'text/typescript', type: 'code', source: { kind: 'workspace', path: 'project/src/browser.ts' } }}
           loading={false} loadError={null} textContent="export {};" binaryBuffer={null}
           actions={{ canDownload: true, onDownload: vi.fn() }}
-          header={{ expanded: false, hideClose: true, onClose: vi.fn(), openWithSystemApp: { onClick: openFile } }}
+          header={{ expanded: false, hideClose: true, hideExpand: true, onClose: vi.fn(), openWithSystemApp: { onClick: openFile } }}
         />
       </WorkspaceTreeControlContext.Provider>
     </MemoryRouter>));
@@ -162,7 +162,7 @@ describe('common file preview header', () => {
     const labels = messages('en').workspace;
     const toolbar = container.querySelector('[data-workspace-toolbar]')!;
     expect([...toolbar.querySelectorAll('button')].map((button) => button.getAttribute('aria-label')))
-      .toEqual(['Hide file tree', labels.expandPreview, labels.moreActions]);
+      .toEqual(['Hide file tree', labels.moreActions]);
     expect(toolbar.textContent).not.toContain('browser.ts');
     const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="Hide file tree"]')!;
     expect(toggle.getAttribute('aria-pressed')).toBe('true');

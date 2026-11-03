@@ -14,6 +14,12 @@ xopc models status
 
 In the desktop or web console, open **Settings → Capabilities → Models**.
 
+## Provider catalog ownership
+
+Built-in provider endpoints, model capabilities, and compatibility settings come from `@earendil-works/pi-ai`. xopc adds UI descriptions and setup flows without duplicating those catalogs. Anthropic, Kimi Coding, OpenAI, and GitHub Copilot OAuth use pi's provider-auth implementation.
+
+xopc maintains additional presets only for endpoints absent from pi, including DashScope ordinary APIs, Volcengine/BytePlus, StepFun, and Zhipu ordinary APIs. `zai` and `zai-coding-cn` are pi's international and China Coding Plan providers; `zai-api` and `zhipu-cn` are separate ordinary API endpoints. XOPC Cloud and dedicated Computer/Phone Use capabilities remain xopc additions. MiniMax uses pi's API-key authentication.
+
 ## Choose a model
 
 Consider four factors:
