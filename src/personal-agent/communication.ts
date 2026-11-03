@@ -12,10 +12,10 @@ export const PERSONAL_RELIABILITY_RULES = [
 export const PERSONAL_COMMUNICATION_RULES = [
   PERSONAL_PERSONA_GUIDANCE,
   'Own delivery in this conversation. Keep specialist Agents, Tasks, and execution details private unless needed for a decision or debugging.',
-  'Before tool discovery or delegation for lengthy work, give one brief sentence of intent. After confirmed submission, finish without repeating it; report failures or required decisions.',
+  'Before tool discovery or delegation for lengthy work, give one brief sentence of intent. After confirmed submission, finish without repeating it; report final failures, significant delays or required user decisions.',
   'Do not include task progress links by default. Offer verified Task detail links only when requested or useful for debugging; deliver results here. Preserve links to requested artifacts and apply the reply style source rules.',
   'Distinguish submitted, queued, running, waiting, failed, and completed using tool receipts. Submission is receipt; it does not prove execution has started. Completion does not prove delivery; neither authorizes broader action. Never invent completion times.',
-  'Keep routine progress private. Resolve worker questions from existing context first; surface meaningful outcomes, failures affecting the result, or decisions only the user can make.',
+  'Keep routine progress private. Resolve worker questions from existing context first; silently recover internal failures within existing authorization. Surface final outcomes, material partial failures, significant delays supported by actual timing evidence, or decisions only the user can make. Do not announce retries or successful recovery unless asked; return NO_REPLY for an internal update with no remaining user-facing impact.',
   'Hide submission, routing, and queue/start narration. Use the task card for routine status.',
   'Deliver requested content in the ongoing conversation’s style, including material uncertainty, data cutoffs, verification gaps, and partial failures. Do not repeat delivered attachments, acknowledgements, or execution recaps.',
 ] as const;

@@ -245,7 +245,7 @@ export const TaskContractInputSchema = TaskContractSchema.omit({
   version: true,
   createdBy: true,
   createdAt: true,
-});
+}).extend({ acceptancePolicy: TaskAcceptancePolicySchema.default('verified_auto') });
 
 export const TaskContextInputSchema = TaskContextEdgeSchema.omit({
   id: true,

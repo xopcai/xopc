@@ -21,6 +21,8 @@ import { TaskConversationRepository } from '../../tasks/task-conversation-reposi
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
+import { submitTaskResearchResult, type ResearchReviewer } from '../../tasks/task-research-result.js';
+import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
 import { cancelPersonalTask } from '../task-cancel.js';
 import { TaskAllocationDispatcher } from '../../tasks/task-allocation-service.js';
@@ -102,8 +104,8 @@ describe('Personal connected-app requests', () => {
     return upsertConnectorConnection({ id, connectorId: 'composio-gmail', provider: 'composio', principalId: 'local-owner',
       providerConnectionId: id, status: 'active', identity: { email: `${id}@example.test` }, isDefault: false, metadata: {} });
   };
-  const submit = (accountId?: string) => submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', agentId: 'mail-worker',
-    objective: '查一下最近的重要邮件，给出需要回复的事项', accountId, idempotencyKey: 'request-1',
+  const submit = (accountId?: string, acceptancePolicy?: 'verified_auto' | 'manual') => submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', agentId: 'mail-worker',
+    objective: '查一下最近的重要邮件，给出需要回复的事项', accountId, acceptancePolicy, idempotencyKey: 'request-1',
     timeRange: { from: '2026-10-01T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', timezone: 'Asia/Shanghai', expression: '最近一周' } });
 
   it('requires a complete brief in model submissions and returns a compact acknowledgement', async () => {
@@ -141,6 +143,7 @@ describe('Personal connected-app requests', () => {
     const request = submit();
     expect(request).toMatchObject({ state: 'queued', accountId: account.accountId });
     const task = new TaskRepository().get(request.taskId!);
+    expect(task?.contract?.acceptancePolicy).toBe('verified_auto');
     expect(task?.body).toContain(request.objective);
     expect(task?.body).toContain('## Result for the originating conversation');
     expect(task?.body).toContain('Never substitute a progress page');
@@ -283,6 +286,17 @@ describe('Personal connected-app requests', () => {
     expect(new TaskRunRepository().listByTask(resumed.taskId!)).toHaveLength(1);
   });
 
+  it('retains explicit manual acceptance while waiting for account authorization', () => {
+    const request = submit(undefined, 'manual');
+    expect(request.state).toBe('waiting_connection');
+    const account = connection();
+    const wait = getActiveConnectionWait(conversationId)!;
+    const ready = updateConnectionWait({ ...wait, needs: wait.needs.map(need => ({ ...need, accountId: account.accountId, connectionId: account.id })) }, wait.version);
+    queueConnectionResolution(ready, 'continued', resolvePersonalRequestConnection);
+    const resumed = getPersonalRequest(request.requestId)!;
+    expect(new TaskRepository().require(resumed.taskId!).contract?.acceptancePolicy).toBe('manual');
+  });
+
   it('keeps authorization in the main chat and resumes without another main-model input', () => {
     const request = submit();
     expect(request.state).toBe('waiting_connection');
@@ -388,9 +402,9 @@ describe('Personal connected-app requests', () => {
     expect(() => submitPersonalRequest({ conversationId: other.key, connectorId: 'composio-gmail', objective: 'read', agentId: 'mail-worker', idempotencyKey: 'other' })).toThrow('Personal conversation');
   });
 
-  function worker() {
+  function worker(acceptancePolicy: 'manual' | 'verified_auto' = 'manual') {
     const account = connection();
-    const request = submit(account.accountId);
+    const request = submit(account.accountId, acceptancePolicy);
     const run = new TaskRunRepository().getLatestRoot(request.taskId!)!;
     const worker = createConversation({ agentId: 'mail-worker', sourceChannel: 'webchat' });
     new TaskConversationRepository().activateExecutionSession({ taskId: request.taskId!, conversationId: worker.key, agentId: 'mail-worker', runId: run.id });
@@ -398,6 +412,75 @@ describe('Personal connected-app requests', () => {
       context: { runId: run.id, conversationId: worker.key, agentId: 'mail-worker', taskId: request.taskId!, channel: 'webchat', origin: 'task', triggerKind: 'user' } })!;
     return { account, request, worker, coordinator };
   }
+
+  async function reviewConnectedResult(x: ReturnType<typeof worker>, partial = false, reviewer?: ResearchReviewer) {
+    const result = { summary: 'One important message requires a reply.', items: [{ messageId: 'mail-1', subject: 'Deadline',
+      sender: 'colleague@example.test', receivedAt: '2026-10-07T09:00:00Z', importanceReason: 'Reply required' }],
+      coverage: { from: x.request.parameters.timeRange!.from, to: x.request.parameters.timeRange!.to, scannedCount: 1, partial } };
+    const body = JSON.stringify(result);
+    appendTranscriptEntry(x.worker.key, { role: 'toolResult', toolCallId: 'mail-read', toolName: 'xopc_tool_execute',
+      content: [{ type: 'text', text: body }], isError: false, timestamp: Date.now() });
+    await createPersonalRequestResultTool(() => x.worker.key).execute('save-result', result);
+    const judge: ResearchReviewer = reviewer ?? (async ({ criteria, artifacts }) => {
+      expect(artifacts?.[0]?.contentReviewed).toBe(true);
+      expect(JSON.parse(artifacts![0].content!)).toEqual(result);
+      return { claims: [{ id: 'mail', support: 'supported', note: 'Matches the actual app read.' }],
+        checks: criteria.map((_criterion, criterionIndex) => ({ criterionIndex, status: 'passed', claimIds: ['mail'], note: 'Supported by saved result and original read.' })) };
+    });
+    const reviewed = await submitTaskResearchResult(x.worker.key, 'accept-mail', {
+      sources: [{ id: 'app', toolCallId: 'mail-read', excerpt: body }],
+      claims: [{ id: 'mail', statement: result.summary, kind: 'fact', sourceIds: ['app'] }],
+    }, undefined, judge);
+    return { result, reviewed };
+  }
+
+  it.each(['verified_auto', 'manual'] as const)('finishes evidence-backed connected work according to %s acceptance', async policy => {
+    const x = worker(policy);
+    const { reviewed } = await reviewConnectedResult(x);
+    expect(reviewed.checks.every(check => check.status === 'passed')).toBe(true);
+    expect(reviewed.personalResultHash).toMatch(/^[a-f0-9]{64}$/);
+    x.coordinator.finalize({ status: 'succeeded', summary: 'Mail summarized', assistantText: 'Result published' });
+    expect(new TaskRepository().require(x.request.taskId!)).toMatchObject(policy === 'manual'
+      ? { phase: 'review' } : { phase: 'closed', resolution: 'done' });
+    drainPersonalRequestResults();
+    expect(getPersonalRequest(x.request.requestId)?.state).toBe('completed');
+  });
+
+  it('repairs partial mail coverage even when a reviewer returns passing checks', async () => {
+    const x = worker('verified_auto');
+    const { reviewed } = await reviewConnectedResult(x, true);
+    expect(reviewed.checks.every(check => check.status === 'unverified')).toBe(true);
+    x.coordinator.finalize({ status: 'succeeded', summary: 'Partial result', assistantText: 'Still missing mail' });
+    const run = new TaskRunRepository().getLatestRoot(x.request.taskId!)!;
+    expect(run).toMatchObject({ status: 'waiting', policySnapshot: { continuation: { reason: 'acceptance_repair' } } });
+    expect(new TaskRepository().require(x.request.taskId!).phase).toBe('active');
+    drainPersonalRequestResults();
+    expect(getPersonalRequest(x.request.requestId)?.state).toBe('queued');
+  });
+
+  it('invalidates acceptance when the saved connected result changes after review', async () => {
+    const x = worker('verified_auto');
+    const { result } = await reviewConnectedResult(x);
+    await createPersonalRequestResultTool(() => x.worker.key).execute('changed-result', { ...result, summary: 'A different conclusion' });
+    x.coordinator.finalize({ status: 'succeeded', summary: 'Changed result', assistantText: 'Changed result' });
+    expect(new TaskRunRepository().getLatestRoot(x.request.taskId!)?.status).toBe('waiting');
+    expect(new TaskRepository().require(x.request.taskId!).phase).toBe('active');
+  });
+
+  it('repairs a missing acceptance ledger before delivering an automatic connected result', async () => {
+    const x = worker('verified_auto');
+    x.coordinator.finalize({ status: 'succeeded', summary: 'Claimed success', assistantText: 'Done' });
+    const runs = new TaskRunRepository();
+    const run = runs.getLatestRoot(x.request.taskId!)!;
+    expect(run.status).toBe('waiting');
+    runs.setStatus({ runId: run.id, expectedVersion: run.version, from: ['waiting'], to: 'running' });
+    const resumed = TaskRunCoordinator.start({ runId: run.id, fallbackObjective: x.request.objective,
+      context: { runId: run.id, conversationId: x.worker.key, agentId: 'mail-worker', taskId: x.request.taskId!, channel: 'webchat', origin: 'task', triggerKind: 'user' } })!;
+    resumed.finalize({ status: 'succeeded', summary: 'Claimed success', assistantText: 'Done' });
+    expect(runs.require(run.id).status).toBe('failed');
+    expect(runs.getReceipt(run.id)?.failure?.code).toBe('acceptance_incomplete');
+    expect(new TaskRepository().require(x.request.taskId!).phase).toBe('active');
+  });
 
   it.each(['late', 'reject'] as const)('keeps a pre-lease Task cancellation and processes the next main-chat message when SDK acknowledgement is %s', async outcome => {
     const { request, worker: chat } = worker();
@@ -615,7 +698,11 @@ describe('Personal connected-app requests', () => {
     expect(compose).toHaveBeenCalledTimes(1);
     const rows = loadTranscriptRowsForSession(conversationId);
     expect(rows.filter(row => 'customType' in row && row.customType === 'task_result_delivery')).toHaveLength(1);
-    expect(JSON.stringify(rows)).toContain('查询尚未覆盖全部邮件');
+    expect(compose).toHaveBeenCalledWith(expect.objectContaining({
+      report: expect.stringContaining('查询尚未覆盖全部邮件'),
+      delivery: expect.objectContaining({ outcome: expect.objectContaining({ status: 'partial' }) }),
+    }), expect.any(AbortSignal));
+    expect(JSON.stringify(rows)).toContain('这次只完成了部分内容');
     expect(notify).toHaveBeenCalledTimes(1);
     expect(getPersonalRequest(request.requestId)?.state).toBe('completed');
     expect(JSON.stringify(buildSessionContextForLlm(rows))).toContain('有一封邮件值得先看');
@@ -914,9 +1001,14 @@ describe('Personal connected-app requests', () => {
     drainPersonalRequestResults();
     const compose = vi.fn(async () => result.summary);
     await new PersonalReplyComposer(compose).drain(vi.fn());
-    expect(compose).toHaveBeenCalledWith(expect.objectContaining({ report: result.summary,
-      preservedText: expect.stringContaining('Urgent deadline'), delivery: expect.objectContaining({ outcome: expect.objectContaining({ status: 'succeeded' }) }) }), expect.any(AbortSignal));
-    expect(JSON.stringify(loadTranscriptRowsForSession(conversationId))).toContain('Urgent deadline');
+    expect(compose).toHaveBeenCalledWith(expect.objectContaining({ report: expect.stringContaining('Urgent deadline'),
+      delivery: expect.objectContaining({ outcome: expect.objectContaining({ status: 'succeeded' }) }) }), expect.any(AbortSignal));
+    expect(compose.mock.calls[0]?.[0]).not.toHaveProperty('preservedText');
+    const delivered = loadTranscriptRowsForSession(conversationId)
+      .filter(row => 'customType' in row && row.customType === 'task_result_delivery');
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]?.content).toBe(result.summary);
+    expect(getPersonalRequest(request.requestId)?.result?.items[0]?.subject).toBe('Urgent deadline');
   });
 
   it('limits worker discovery and describe to its connector, selected account and curated reads', async () => {

@@ -73,10 +73,10 @@ afterEach(() => {
   rmSync(stateDirectory, { recursive: true, force: true });
 });
 
-function submit(key = 'submit') {
+function submit(key = 'submit', acceptancePolicy: 'manual' | 'verified_auto' = 'manual') {
   const result = new TaskApplicationService().create(TaskCreateRequestSchema.parse({ idempotencyKey: key,
     title: 'Analyze sales', body: 'Read media://inbound/sales.csv and report monthly totals.', originConversationId: conversationId,
-    contract: { ...defineTaskContract('Analyze sales'), acceptancePolicy: 'manual', outputDestinations: [] },
+    contract: { ...defineTaskContract('Analyze sales'), acceptancePolicy, outputDestinations: [] },
     activation: { mode: 'allocate', requirements } }));
   if (!result.ok) throw new Error('Expected submission');
   return result.model.task;
@@ -155,6 +155,15 @@ describe('background task allocation', () => {
     expect(transcript).toContain('由 Data Analyst 开始执行。');
     expect(transcript).not.toContain('Task submitted;');
     expect(transcript).not.toContain('started by analyst');
+  });
+
+  it('retains the human acceptance requirement discovered in the original brief during planning', async () => {
+    const task = submit('planned-manual', 'verified_auto');
+    await new TaskAllocationDispatcher({ context, decide, wake: vi.fn(), planner: { plan: async () => ({
+      ...defineTaskContract('Analyze sales'), acceptancePolicy: 'manual',
+    }) } }).drain();
+    expect(new TaskRepository().require(task.id).contract?.acceptancePolicy).toBe('manual');
+    expect(new TaskRunRepository().getActiveRoot(task.id)).toBeDefined();
   });
 
   it('blocks rather than executing after background capability planning fails', async () => {

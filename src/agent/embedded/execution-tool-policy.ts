@@ -11,7 +11,7 @@ export const TASK_EXECUTION_TOOL_IDS: readonly string[] = ['task_collaboration',
 
 export const PERSONAL_REQUEST_TOOL_IDS = [
   'tool_search', 'xopc_tool_describe', 'xopc_tool_execute',
-  'personal_request_result', 'personal_request_connection', 'task_collaboration',
+  'personal_request_result', 'personal_request_connection', 'task_collaboration', 'publish_task_result',
 ] as const;
 
 export type ExecutionToolPolicy = Readonly<{

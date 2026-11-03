@@ -1,6 +1,10 @@
 # Review, accept, or retry a Task
 
-An execution can stop before its result is acceptable. Review the artifacts and evidence, then decide whether the Task meets its completion criteria.
+New delegated Tasks, including Personal Agent connected-app requests, use automatic acceptance by default. The system checks the current result against every acceptance criterion, repairs supported gaps within the same execution, and closes the Task when verification passes with no remaining work or pending user decisions.
+
+Explicitly ask for human acceptance when you want to approve the finished result yourself; API and tool callers can set `acceptancePolicy: "manual"`. Missing input, account authorization, and unresolved external effects still require your decision. Incomplete evidence or query coverage triggers bounded repair; if it cannot be resolved, the execution reports failure and the recorded gaps rather than requesting routine manual acceptance.
+
+The following review controls remain available for Tasks that require your decision.
 
 ## Move tasks freely
 

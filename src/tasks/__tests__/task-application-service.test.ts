@@ -546,6 +546,20 @@ describe('TaskApplicationService', () => {
     } });
   });
 
+  it('keeps an automatic task open when a current human review rejects its result', () => {
+    const { service, task, run } = createRunningTask('human-rejected-auto');
+    new TaskCriterionReviewRepository().set({ task, expectedVersion: task.version, criterionIndex: 0,
+      status: 'failed', actor: { kind: 'user', id: 'owner' } });
+    expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'review' } } });
+  });
+
+  it('defaults new repository tasks to automatic acceptance and preserves explicit manual acceptance', () => {
+    const tasks = new TaskRepository();
+    expect(tasks.create({ title: 'Automatic task', objective: 'Deliver work' }).contract?.acceptancePolicy).toBe('verified_auto');
+    expect(tasks.create({ title: 'Manual task', objective: 'Deliver work', acceptancePolicy: 'manual' }).contract?.acceptancePolicy).toBe('manual');
+  });
+
   it.each([
     { completionVerdict: 'partial' as const },
     { remainingWork: ['Record narration'] },

@@ -310,7 +310,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const created = new TaskApplicationService().create({
       idempotencyKey: randomUUID(), title, projectId: project.id, delegateAgentId: agentId,
       priority: body.priority === 'low' || body.priority === 'normal' || body.priority === 'high' ? body.priority : 'high',
-      contract: { ...contract, acceptancePolicy: 'manual', outputDestinations: [] },
+      contract: { ...contract, acceptancePolicy: 'verified_auto', outputDestinations: [] },
       dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'ready' },
     });
     if (created.ok === false) return c.json({ ok: false, error: created.reason }, 409);

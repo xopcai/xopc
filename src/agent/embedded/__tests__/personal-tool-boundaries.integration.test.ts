@@ -82,7 +82,7 @@ it.each(['direct', 'deferred', 'codemode'] as const)('blocks native %s exposure 
     const acquired = await f.pool.acquire({ ...f.params, mcp: { servers: [{ name: 'must_not_start',
       config: { command: process.execPath, args: ['-e', 'throw new Error("Forbidden MCP startup")'], exposure },
       source: 'fixture' }], errors: [], autoEnableCodemode: true } });
-    const allowed = surface === 'personal_main' ? PERSONAL_MAIN_TOOL_IDS : PERSONAL_REQUEST_TOOL_IDS.filter(name => name !== 'task_collaboration');
+    const allowed = surface === 'personal_main' ? PERSONAL_MAIN_TOOL_IDS : PERSONAL_REQUEST_TOOL_IDS.filter(name => !['task_collaboration', 'publish_task_result'].includes(name));
     expect(acquired.session.getAllTools().map(t => t.name).toSorted()).toEqual([...allowed].toSorted());
     expect(acquired.session.agent.state.tools.map(t => t.name).toSorted()).toEqual([...allowed].toSorted());
     expect(acquired.session.agent.state.systemPrompt).not.toContain('must_not_start');

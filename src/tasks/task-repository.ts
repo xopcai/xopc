@@ -200,7 +200,7 @@ export class TaskRepository {
         approvalRequired: input.approvalRequired ?? [],
         assumptions: input.assumptions ?? [],
         risks: input.risks ?? [],
-        acceptancePolicy: input.acceptancePolicy ?? 'verified_then_review',
+        acceptancePolicy: input.acceptancePolicy ?? 'verified_auto',
         outputDestinations: input.outputDestinations ?? [],
         createdBy: input.createdBy ?? { kind: 'system' },
         createdAt: now,

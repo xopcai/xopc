@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  TaskContractInputSchema,
   TaskCreateRequestSchema,
   TaskChangedEventSchema,
   TaskDeletedEventSchema,
@@ -8,6 +9,13 @@ import {
 } from './tasks.js';
 
 describe('Task contracts', () => {
+  it('defaults contract input to automatic acceptance while retaining explicit human acceptance', () => {
+    const contract = { objective: 'Deliver report', expectedOutputs: ['report.md'], acceptanceCriteria: ['Report verified'],
+      constraints: [], approvalRequired: [], assumptions: [], risks: [], outputDestinations: [] };
+    expect(TaskContractInputSchema.parse(contract).acceptancePolicy).toBe('verified_auto');
+    expect(TaskContractInputSchema.parse({ ...contract, acceptancePolicy: 'manual' }).acceptancePolicy).toBe('manual');
+  });
+
   it('allows capture without creating an execution contract alias', () => {
     const request = TaskCreateRequestSchema.parse({
       idempotencyKey: '70ef31fc-cb6c-4c5e-986f-85693256c74b',

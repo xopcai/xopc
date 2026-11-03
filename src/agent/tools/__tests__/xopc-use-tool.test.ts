@@ -66,6 +66,14 @@ describe('xopc_use tool', () => {
     activity = new ActivityService();
   });
 
+  it.each([undefined, 'manual', 'verified_auto'] as const)('preserves %s acceptance when dispatching a task', async acceptancePolicy => {
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'main', dispatchTaskRuns: vi.fn() });
+    const result = parseToolJson(await tool.execute('acceptance-policy', { mode: 'task', command: 'create', args: {
+      objective: 'Deliver a report', createMode: 'start', acceptancePolicy,
+    } }));
+    expect(result.task.contract.acceptancePolicy).toBe(acceptancePolicy ?? 'verified_auto');
+  });
+
   it('creates and updates an Agent through durable capabilities', async () => {
     const tool = createXopcUseTool({ getCurrentAgentId: () => 'main' });
     const workspace = join(stateDir, 'coder-workspace');

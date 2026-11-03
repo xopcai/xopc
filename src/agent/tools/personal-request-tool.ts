@@ -30,6 +30,7 @@ const RequestSchema = Type.Object({
   connectorId: Type.Optional(Type.String()),
   accountId: Type.Optional(Type.String()),
   description: Type.Optional(Type.String({ minLength: 1, maxLength: 16000, description: 'Complete task brief preserving all user requirements, stages, inputs, outputs and constraints. Do not replace exact specifications with a short objective or a reference to an unspecified process.' })),
+  acceptancePolicy: Type.Optional(Type.Union([Type.Literal('verified_auto'), Type.Literal('manual')], { description: 'Default automatic verification and completion. Use manual only for an explicit user requirement for human acceptance.' })),
   objective: Type.Optional(Type.String({ minLength: 1, maxLength: 4000 })),
   idempotencyKey: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
   timeRange: Type.Optional(Type.Object({ from: Type.String(), to: Type.String(), timezone: Type.String(), expression: Type.String() })),
@@ -82,8 +83,8 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
       if (input.command === 'submit') {
         if (!input.objective?.trim() || !input.connectorId ) throw new Error('objective and connectorId are required');
         const request = submitPersonalRequest({ conversationId, connectorId: input.connectorId,
-          accountId: input.accountId, objective: input.objective.trim(), description: input.description?.trim(), timeRange: input.timeRange,
-          idempotencyKey: input.idempotencyKey ?? `personal-request-submit:${selectionRequestHash({ inputId: getSessionInputState(conversationId).activeInputId ?? toolCallId, objective: input.objective.trim(), description: input.description?.trim(), connectorId: input.connectorId, accountId: input.accountId, timeRange: input.timeRange })}` });
+          accountId: input.accountId, objective: input.objective.trim(), description: input.description?.trim(), timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy,
+          idempotencyKey: input.idempotencyKey ?? `personal-request-submit:${selectionRequestHash({ inputId: getSessionInputState(conversationId).activeInputId ?? toolCallId, objective: input.objective.trim(), description: input.description?.trim(), connectorId: input.connectorId, accountId: input.accountId, timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy })}` });
         publishPersonalRequest(request);
         deps.dispatchTaskRuns?.();
         return result({ ...compactSnapshot(request), guidance: request.state === 'waiting_connection'

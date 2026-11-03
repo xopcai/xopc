@@ -28,6 +28,13 @@ describe('parseTaskContractResponse', () => {
     });
   });
 
+  it('preserves an explicit human acceptance policy while keeping automatic acceptance as the default', () => {
+    const base = { objective: 'Deliver files', expectedOutputs: ['report.md'], acceptanceCriteria: ['Report bytes verified'] };
+    expect(parseTaskContractResponse(JSON.stringify({ ...base, acceptancePolicy: 'manual' }))?.acceptancePolicy).toBe('manual');
+    expect(parseTaskContractResponse(JSON.stringify({ ...base, acceptancePolicy: 'verified_auto' }))?.acceptancePolicy).toBe('verified_auto');
+    expect(parseTaskContractResponse(JSON.stringify({ ...base, acceptancePolicy: 'unknown' }))).toBeUndefined();
+  });
+
   it('rejects nested result objects and unknown operation names instead of dropping requirements', () => {
     const base = { objective: 'Deliver files', expectedOutputs: ['report.md'], acceptanceCriteria: ['Report bytes verified'] };
     expect(parseTaskContractResponse(JSON.stringify({ ...base, expectedOutputs: [{ path: 'report.md' }] }))).toBeUndefined();

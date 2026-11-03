@@ -42,7 +42,7 @@ export function createPersonalRequestResultTool(conversationId: () => string | u
         getSqliteDatabase().prepare('UPDATE personal_requests SET result_json = ?, result_run_id = ?, updated_at = ? WHERE request_id = ?')
           .run(JSON.stringify(result), run.id, Date.now(), request.requestId);
       });
-      return { content: [{ type: 'text', text: 'Result saved for delivery to the originating chat after this Task completes.' }], details: {} };
+      return { content: [{ type: 'text', text: 'Result saved for delivery to the originating chat after this Task completes. Now call publish_task_result with source excerpts from successful xopc_tool_execute reads and claims supporting this saved summary, items and coverage. Correct any failed checks before finishing.' }], details: {} };
     } };
 }
 
