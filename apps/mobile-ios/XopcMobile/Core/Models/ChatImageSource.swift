@@ -21,12 +21,7 @@ enum ChatImageSource: Equatable, Sendable {
             return .workspace(path: path, conversationID: conversationID)
         }
         if raw.hasPrefix("data:image/") {
-            guard let separator = raw.range(of: ";base64,"),
-                  raw[..<separator.lowerBound].range(of: #"^data:image/[A-Za-z0-9.+-]+$"#, options: .regularExpression) != nil,
-                  raw.distance(from: separator.upperBound, to: raw.endIndex) <= byteLimit * 4 / 3 + 4,
-                  let bytes = Data(base64Encoded: String(raw[separator.upperBound...])), bytes.count <= byteLimit
-            else { return nil }
-            return .embedded(bytes)
+            return embeddedImage(raw)
         }
         if raw.hasPrefix("xopc-file:") {
             guard let id = encodedSegment(String(raw.dropFirst("xopc-file:".count))) else { return nil }
@@ -54,6 +49,15 @@ enum ChatImageSource: Equatable, Sendable {
               let url = components.url
         else { return nil }
         return .external(url)
+    }
+
+    private static func embeddedImage(_ raw: String) -> ChatImageSource? {
+        guard let separator = raw.range(of: ";base64,"),
+              raw[..<separator.lowerBound].range(of: #"^data:image/[A-Za-z0-9.+-]+$"#, options: .regularExpression) != nil,
+              raw.distance(from: separator.upperBound, to: raw.endIndex) <= byteLimit * 4 / 3 + 4,
+              let bytes = Data(base64Encoded: String(raw[separator.upperBound...])), bytes.count <= byteLimit
+        else { return nil }
+        return .embedded(bytes)
     }
 
     func request(configuration: GatewayConfiguration) -> URLRequest? {
