@@ -43,7 +43,7 @@ function AttachmentPreviewContent({
   onAttachmentChange,
   authToken,
   conversationId,
-  layerClassName = 'z-[81]',
+  layerClassName = 'z-[115]',
   onClose,
 }: {
   open: boolean;
