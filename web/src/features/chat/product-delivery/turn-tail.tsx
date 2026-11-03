@@ -13,7 +13,7 @@ export function TurnTail({
 }) {
   return (
     <section
-      className={cn('mt-2 min-w-0 max-w-full self-start', className)}
+      className={cn('mt-2 w-full min-w-0 max-w-full self-start', className)}
       aria-label={label}
       data-turn-tail
     >
