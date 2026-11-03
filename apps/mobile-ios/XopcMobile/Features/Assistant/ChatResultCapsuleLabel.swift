@@ -58,5 +58,4 @@ struct ChatResultCapsuleLabel: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
-
 }
