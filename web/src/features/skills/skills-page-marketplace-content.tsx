@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { CheckCircle2, Layers, Star } from 'lucide-react';
 
 import { FindSkillsButton } from '@/features/skills/find-skills-button';
 import { Button } from '@/components/ui/button';
@@ -11,9 +10,7 @@ import {
   marketplacePackageRequestName,
 } from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
-import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
-import { CapabilityIcon } from '@/features/capabilities/capability-icon';
+import { SkillGridCard, skillCardActionClassName } from '@/features/skills/skill-grid-card';
 
 type Props = Pick<
   SkillsPageVm,
@@ -81,7 +78,6 @@ export function SkillsPageMarketplaceContent(p: Props) {
     { id: '', label: sk.marketplaceCategoryAll },
     ...mpCategories.map((c) => ({ id: c.id, label: c.label, title: c.label })),
   ];
-  const categoryLabels = new Map(mpCategories.map((category) => [category.id, category.label]));
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -104,9 +100,9 @@ export function SkillsPageMarketplaceContent(p: Props) {
           ariaLabel={sk.marketplaceCategoriesAria}
           tabIdPrefix="skills-marketplace-category-tab"
           className="min-h-[2.75rem] items-center gap-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          buttonClassName="max-w-[14rem] truncate rounded-full border px-3 py-1.5 text-xs"
-          selectedClassName="border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base"
-          unselectedClassName="border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40"
+          buttonClassName="max-w-[14rem] truncate rounded-md px-3 py-1.5 text-xs"
+          selectedClassName="bg-surface-active font-medium text-fg"
+          unselectedClassName="text-fg-muted hover:bg-surface-hover hover:text-fg"
         />
       ) : mpCategoriesLoading ? (
         <div className="-mx-1 flex min-h-[2.75rem] items-center gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-hidden>
@@ -178,155 +174,49 @@ export function SkillsPageMarketplaceContent(p: Props) {
               ) : null}
             </div>
           ) : (
-            <div
-              className={cn(
-                'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3',
-
-              )}
-            >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {mpPayload.items.map((row) => {
                 const presentation = marketplacePresentation(row);
                 const provider = row.providerId ?? marketBrowseProvider;
                 const packageName = marketplacePackageRequestName(row, provider);
                 const installed = isSkillInstalledByName(packageName);
                 const categoryId = row.category ?? row.categories?.[0];
-                const categoryLabel = categoryId ? categoryLabels.get(categoryId) ?? categoryId : null;
                 return (
-                  <article
+                  <SkillGridCard
                     key={row.id}
-                    className={cn(
-                      'group flex h-full flex-col rounded-xl bg-surface-panel p-4 shadow-surface',
-                      'transition-colors hover:bg-surface-hover [content-visibility:auto] [contain-intrinsic-size:auto_220px]',
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <CapabilityIcon iconUrl={row.branding?.iconUrl} fallback={Layers} />
-                      <button
+                    name={presentation.displayName}
+                    description={presentation.description}
+                    category={categoryId ?? undefined}
+                    iconUrl={row.branding?.iconUrl}
+                    metadata={
+                      <span title={`${sk.marketplaceAuthor}: ${row.author.username} · ${sk.marketplaceDownloads}: ${row.downloads}${row.latestVersion ? ` · ${sk.marketplaceVersion}: ${row.latestVersion}` : ''}${row.stars ? ` · ${sk.marketplaceStars}: ${row.stars}` : ''}`}>
+                        {row.author.username} · {sk.marketplaceDownloads} {row.downloads.toLocaleString()}
+                      </span>
+                    }
+                    onOpen={() => void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined)}
+                    action={
+                      <Button
                         type="button"
-                        className={cn(
-                          'min-w-0 flex-1 rounded-lg text-left outline-none',
-                          interaction.focusRingPanel,
-                        )}
-                        onClick={() =>
-                          void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined)
-                        }
-                      >
-                        <h3
-                          id={`mp-skill-title-${row.id}`}
-                          className="truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
-                        >
-                          {presentation.displayName}
-                        </h3>
-                      </button>
-                      {!installed ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                          disabled={installingMarketName === packageName}
-                          onClick={() =>
-                            void onMarketInstall(packageName, {
-                              providerOverride: row.providerId ?? null,
-                            })
+                        variant="secondary"
+                        className={skillCardActionClassName}
+                        aria-label={`${installed ? sk.previewUseInChat : sk.marketplaceInstall} ${presentation.displayName}`}
+                        disabled={installingMarketName === packageName || usingSkillInChatName === packageName}
+                        onClick={() => {
+                          if (installed) {
+                            void onUseSkillInChat({ name: packageName, source: 'store', providerOverride: row.providerId ?? null });
+                          } else {
+                            void onMarketInstall(packageName, { providerOverride: row.providerId ?? null });
                           }
-                        >
-                          {installingMarketName === packageName ? sk.uploading : sk.marketplaceInstall}
-                        </Button>
-                      ) : (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                          <CheckCircle2 className="size-3" aria-hidden />
-                          {sk.marketplaceInstalled}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className={cn(
-                        'mt-2 flex min-h-0 w-full flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
-                        interaction.focusRingPanel,
-                      )}
-                      aria-labelledby={`mp-skill-title-${row.id}`}
-                      onClick={() =>
-                        void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined)
-                      }
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex min-w-0 flex-1 flex-col gap-2">
-                          <p
-                            className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
-                            title={presentation.description || undefined}
-                          >
-                            {presentation.description || '—'}
-                          </p>
-                          {categoryLabel ? (
-                            <span className="w-fit max-w-full truncate rounded-full bg-surface-inset px-2 py-0.5 text-[10px] font-medium text-fg-muted">
-                              {categoryLabel}
-                            </span>
-                          ) : null}
-                          <div className="mt-auto min-h-[2.625rem] space-y-1 text-[11px] leading-snug text-fg-muted">
-                            <p
-                              className="line-clamp-1"
-                              title={`${sk.marketplaceAuthor}: ${row.author.username} · ${sk.marketplaceDownloads}: ${row.downloads}${
-                                row.stars != null && row.stars > 0 ? ` · ★${row.stars}` : ''
-                              }${installed ? ` · ${sk.marketplaceInstalled}` : ''}`}
-                            >
-                              <span className="text-fg-subtle">{sk.marketplaceAuthor}</span>{' '}
-                              <span className="text-fg">{row.author.username}</span>
-                              <span className="text-fg-subtle"> · </span>
-                              <span>
-                                {sk.marketplaceDownloads}: {row.downloads}
-                              </span>
-                              {row.stars != null && row.stars > 0 ? (
-                                <>
-                                  <span className="text-fg-subtle"> · </span>
-                                  <span className="inline-flex items-center gap-0.5 text-fg-muted">
-                                    <Star
-                                      className="size-3 shrink-0 text-amber-600 dark:text-amber-400"
-                                      strokeWidth={2}
-                                      aria-hidden
-                                    />
-                                    {row.stars}
-                                  </span>
-                                </>
-                              ) : null}
-                            </p>
-                            {row.latestVersion ? (
-                              <p
-                                className="line-clamp-1 min-h-[1.125rem] font-mono text-[10px] text-fg-subtle"
-                                title={`${sk.marketplaceVersion}: ${row.latestVersion}`}
-                              >
-                                {sk.marketplaceVersion}: {row.latestVersion}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                    {installed ? (
-                      <div
-                        role="group"
-                        className="mt-3 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3"
+                        }}
                       >
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                          disabled={usingSkillInChatName === packageName}
-                          onClick={() =>
-                            void onUseSkillInChat({
-                              name: packageName,
-                              source: 'store',
-                              providerOverride: row.providerId ?? null,
-                            })
-                          }
-                        >
-                          {usingSkillInChatName === packageName
+                        {installingMarketName === packageName
+                          ? sk.uploading
+                          : usingSkillInChatName === packageName
                             ? sk.previewUseInChatBusy
-                            : sk.previewUseInChat}
-                        </Button>
-                      </div>
-                    ) : null}
-                  </article>
+                            : installed ? sk.previewUseInChat : sk.marketplaceInstall}
+                      </Button>
+                    }
+                  />
                 );
               })}
             </div>

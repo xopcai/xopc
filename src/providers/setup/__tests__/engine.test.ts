@@ -86,7 +86,7 @@ describe('shared model setup', () => {
 });
 
 
-it.each(['qwen-token-plan-cn', 'qwen-token-plan', 'qwen-token-plan-individual', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'zai-coding-global', 'zhipu-coding-cn', 'kimi-coding', 'volcengine-plan', 'byteplus-plan', 'stepfun-plan', 'stepfun-plan-cn', 'stepfun-plan-intl'])('keeps %s as subscription access without interactive-only restrictions', provider => {
+it.each(['qwen-token-plan-cn', 'qwen-token-plan', 'qwen-token-plan-individual', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'zai', 'kimi-coding', 'volcengine-plan', 'byteplus-plan', 'stepfun-plan', 'stepfun-plan-cn', 'stepfun-plan-intl'])('keeps %s as subscription access without interactive-only restrictions', provider => {
   expect(getProviderSetupProfile(provider)).toMatchObject({ access: 'subscription', interactiveOnly: false });
 });
 it('offers and applies Bailian background models without changing the chat route', () => {

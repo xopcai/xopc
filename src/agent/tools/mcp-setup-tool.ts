@@ -1,4 +1,4 @@
-import { Type } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
@@ -15,6 +15,6 @@ export function createMcpSetupTool(deps: XopcUseToolDeps): AgentTool<typeof sche
   return {
     name: 'mcp_setup', label: 'Connect MCP service', parameters: schema,
     description: 'Discover and configure a requested MCP service from its name or explicit address on the Gateway host. For a name, discover official integration references and preserve evidence; do not guess the URL or ask the user for technical configuration. Read tool_manual xopc_use topic mcp. Explicit localhost addresses remain supported. Only connect means objective connect_only; a requested task means complete_task. Token/OAuth uses the exact host interaction link, never chat input. stdio execution and unverified publishers require owner review. The host resumes the original objective after verification; tool counts are not business results.',
-    execute: (id, params, signal, update) => product.execute(id, { mode: 'mcp_setup', command: params.command, args: params.args }, signal, update),
+    execute: (id, params: Static<typeof schema>, signal, update) => product.execute(id, { mode: 'mcp_setup', command: params.command, args: params.args }, signal, update),
   };
 }

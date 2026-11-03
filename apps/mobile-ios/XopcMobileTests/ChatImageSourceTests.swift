@@ -8,6 +8,22 @@ struct ChatImageSourceTests {
         token: "secret-token"
     )
 
+    @Test func workspaceImagesRetainConversationScopeAndRejectTraversal() {
+        let source = ChatImageSource.resolve(ChatImageSource.workspaceURL("照片/橘猫 & 高清.jpg"), conversationID: "chat-1")
+        #expect(source == .workspace(path: "照片/橘猫 & 高清.jpg", conversationID: "chat-1"))
+        #expect(ChatImageSource.resolve("/xopc/workspace/file?path=cat.jpg", conversationID: "chat-1") == .workspace(path: "cat.jpg", conversationID: "chat-1"))
+        #expect(ChatImageSource.resolve("xopc://workspace/file?path=cat.jpg", conversationID: nil) == nil)
+        #expect(ChatImageSource.resolve("xopc://workspace/file?path=../cat.jpg", conversationID: "chat-1") == nil)
+    }
+
+    @Test func readingImagesCollapseOnlyTheMatchingGenericLink() {
+        let image = MarkdownBlock.image(alt: "Cat", source: "xopc://workspace/file?path=cat.jpg")
+        #expect(MarkdownBlock.redundantImageLink(.paragraph("[查看高清图片](/xopc/workspace/file?path=cat.jpg)"), followedBy: image))
+        #expect(!MarkdownBlock.redundantImageLink(.paragraph("[下载图片](xopc://workspace/file?path=cat.jpg)"), followedBy: image))
+        #expect(!MarkdownBlock.redundantImageLink(.paragraph("[查看大图](xopc://workspace/file?path=other.jpg)"), followedBy: image))
+        #expect(!MarkdownBlock.redundantImageLink(.paragraph("说明 [查看大图](xopc://workspace/file?path=cat.jpg)"), followedBy: image))
+    }
+
     @Test func gatewayImagesUseAuthenticatedRoutes() throws {
         let references = [
             ("xopc-file:file%2Fone", "/api/files/file%2Fone/content"),

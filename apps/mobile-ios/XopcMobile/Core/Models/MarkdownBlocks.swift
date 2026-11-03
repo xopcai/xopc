@@ -43,6 +43,15 @@ enum MarkdownBlock: Equatable, Sendable {
     case table(rows: [MarkdownTableRow], alignments: [MarkdownTableAlignment])
     case divider
 
+    static func redundantImageLink(_ block: MarkdownBlock, followedBy next: MarkdownBlock) -> Bool {
+        guard case let .paragraph(text) = block, case let .image(_, source) = next,
+              let match = text.range(of: #"^\[(?:查看(?:高清|原|大)?图片|查看大图|查看原图|(?i:view(?: (?:full[- ]size|original|hd))? image))\]\(([^\s]+)\)$"#, options: .regularExpression),
+              String(text[match]) == text,
+              let start = text.range(of: "]("), text.hasSuffix(")") else { return false }
+        let href = String(text[start.upperBound..<text.index(before: text.endIndex)])
+        return (ChatMessageLink.resolve(href)?.id ?? href) == (ChatMessageLink.resolve(source)?.id ?? source)
+    }
+
     // swiftlint:disable:next function_body_length
     static func parse(_ markdown: String) -> [MarkdownBlock] {
         let lines = markdown.replacingOccurrences(of: "\r\n", with: "\n")

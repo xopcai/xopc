@@ -170,7 +170,15 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         } else if (showPreview) MessageTextPreview(message.id, message.text,
           messagePreviewLineLimit(message.role))
         else MarkdownContent(rememberAnswerText(message.text, revealAnswer), modifier = Modifier.fillMaxWidth(),
-          onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming, selectable = textSelectable)
+          onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming, selectable = textSelectable,
+          renderImage = { source, alt ->
+            val target = remember(source) { messageLinkTarget(source) }
+            val media = remember(source, alt) { ConversationMedia(source, alt.ifBlank { target?.title ?: "Image" },
+              "image", if (source.startsWith("data:image/")) source.substringAfter("data:").substringBefore(';') else "image/*", 0,
+              if (target?.kind == "workspace_file") "" else source,
+              workspaceRelativePath = target?.takeIf { it.kind == "workspace_file" }?.id) }
+            MessageReadingImage(media, loadMedia) { onOpenPreview(media, listOf(media)) }
+          })
       }
       if (isUser) MessageReferences(message.references, onOpenTarget)
       if (message.media.isNotEmpty()) MessageMedia(message.id, message.media, isUser,
@@ -299,7 +307,11 @@ private fun MessageMedia(messageId: String, items: List<ConversationMedia>, isUs
 @Composable
 private fun MessageImageGrid(images: List<ConversationMedia>, load: (suspend (ConversationMedia) -> ByteArray)?,
   onOpen: (ConversationMedia) -> Unit) {
-  val columns = when (images.size) { 1 -> 1; 2, 4 -> 2; else -> 3 }
+  if (images.size == 1) {
+    MessageReadingImage(images.first(), load) { onOpen(images.first()) }
+    return
+  }
+  val columns = when (images.size) { 2, 4 -> 2; else -> 3 }
   BoxWithConstraints(Modifier.fillMaxWidth().testTag("message-image-grid")) {
     val tileSize = ((maxWidth - 6.dp * (columns - 1)) / columns).value.toInt().coerceAtLeast(1)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -307,6 +319,34 @@ private fun MessageImageGrid(images: List<ConversationMedia>, load: (suspend (Co
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           row.forEach { image -> key(image.id) { MessageImageThumbnail(image, tileSize, load) { onOpen(image) } } }
         }
+      }
+    }
+  }
+}
+
+@Composable
+private fun MessageReadingImage(item: ConversationMedia, load: (suspend (ConversationMedia) -> ByteArray)?, onOpen: () -> Unit) {
+  var attempt by remember(item) { mutableStateOf(0) }
+  val result by produceState<Result<android.graphics.Bitmap>?>(null, item, load, attempt) {
+    value = null
+    value = runCatching {
+      val bytes = load?.invoke(item) ?: error("MEDIA_UNAVAILABLE")
+      withContext(Dispatchers.Default) { decodeChatThumbnail(bytes, 960) ?: error("INVALID_IMAGE") }
+    }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+  }
+  BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val bitmap = result?.getOrNull()
+    val ratio = bitmap?.let { it.width.toFloat() / it.height.coerceAtLeast(1) } ?: (320f / 180f)
+    val width = minOf(maxWidth.value, 320f, 280f * ratio, bitmap?.width?.toFloat() ?: 320f)
+    val height = width / ratio
+    Card(onClick = onOpen, modifier = Modifier.width(width.dp).height(height.dp).testTag("message-image-${item.id}"),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+      if (bitmap != null) androidx.compose.foundation.Image(bitmap.asImageBitmap(), item.name,
+        modifier = Modifier.fillMaxWidth().height(height.dp).testTag("message-image-thumbnail-${item.id}"), contentScale = ContentScale.Fit)
+      else if (result == null) Box(Modifier.fillMaxWidth().height(height.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh))
+      else Column(Modifier.padding(12.dp)) {
+        Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = { attempt++ }) { Text(stringResource(R.string.assistant_context_retry)) }
       }
     }
   }

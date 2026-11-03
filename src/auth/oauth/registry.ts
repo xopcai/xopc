@@ -3,8 +3,6 @@ import { githubCopilotOAuthProvider } from './github-copilot.js';
 import { googleAntigravityOAuthProvider } from './google-antigravity.js';
 import { googleGeminiCliOAuthProvider } from './google-gemini-cli.js';
 import { kimiCodingOAuthProvider } from './kimi-coding.js';
-import { minimaxCnOAuthProvider } from './minimax-cn.js';
-import { minimaxOAuthProvider } from './minimax.js';
 import { openaiOAuthProvider } from './openai.js';
 import { xopcCloudOAuthProvider, xopcShareOAuthProvider, xopcTunnelOAuthProvider } from './xopc-cloud.js';
 import type { OAuthProviderInterface } from './types.js';
@@ -37,11 +35,6 @@ export const OAUTH_PROVIDER_DEFINITIONS: Readonly<Record<string, OAuthProviderDe
   'xopc-tunnel': { ...definition(xopcTunnelOAuthProvider, 'tunnel'), oauthOnly: true },
   'xopc-share': { ...definition(xopcShareOAuthProvider, 'share'), oauthOnly: true },
   anthropic: definition(anthropicOAuthProvider, 'models', 'Anthropic (Claude)'),
-  minimax: definition(minimaxOAuthProvider, 'models', 'MiniMax (幂维智能)'),
-  'minimax-cn': {
-    ...definition(minimaxCnOAuthProvider, 'models', 'MiniMax CN'),
-    urlPrompt: '🌐 请在浏览器中打开以下 URL:\n',
-  },
   'kimi-coding': definition(kimiCodingOAuthProvider, 'models', 'Kimi For Coding (月之暗面)'),
   'github-copilot': definition(githubCopilotOAuthProvider, 'models'),
   'google-gemini-cli': definition(googleGeminiCliOAuthProvider, 'models'),

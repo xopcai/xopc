@@ -52,6 +52,8 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
     aggregatedTabCounts,
     aggregatedProviderStatus,
     recoveryReturnPath,
+    searchQuery,
+    setSearchQuery,
   } = vm;
   const visibleSkillDiagnostics = displayableSkillDiagnostics(skillDiagnostics);
 
@@ -147,7 +149,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
           </div>
         ) : null}
         <section className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 dark:border-edge-subtle sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-4">
             <PageTabs
               items={mainTabItems}
               activeTab={mainTab}
@@ -155,9 +157,16 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
               ariaLabel={sk.skillsNavAria}
               tabIdPrefix="skills-tab"
               panelIdPrefix="skills-panel"
-              className="flex-wrap"
+              className="flex-wrap border-b border-edge-subtle pb-3"
             />
-            <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+                <CapabilityHeaderSearch
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder={mainTab === 'marketplace' ? sk.marketplaceSearchPackages : sk.searchPlaceholder}
+                />
+              </div>
               {mainTab === 'installed' ? (
                 <>
                   <PopoverSelect
@@ -165,7 +174,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
                     placeholder={sk.filterAll}
                     ariaLabel={sk.sourceFilterAria}
                     options={[
-                      { value: 'all', label: sk.filterAll },
+                      { value: 'all', label: sk.allSources },
                       { value: 'builtin', label: sk.tabBuiltin },
                       { value: 'installed', label: sk.filterInstalled },
                       { value: 'workspace', label: sk.filterWorkspace },
@@ -174,7 +183,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
                       { value: 'extra', label: sk.filterExtra },
                     ]}
                     allowEmpty={false}
-                    triggerClassName="h-9 w-auto min-w-[9rem] bg-surface-panel text-xs shadow-surface"
+                    triggerClassName="h-9 w-auto min-w-[7rem] bg-surface-panel text-xs shadow-none"
                     align="end"
                     onChange={(value) => setSourceFilter(value as SourceFilter)}
                   />
@@ -183,7 +192,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
                     placeholder={sk.filterAll}
                     ariaLabel={sk.statusFilterAria}
                     options={[
-                      { value: 'all', label: sk.filterAll },
+                      { value: 'all', label: sk.allStatuses },
                       { value: 'enabled', label: sk.filterEnabled },
                       {
                         value: 'disabled',
@@ -191,7 +200,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
                       },
                     ]}
                     allowEmpty={false}
-                    triggerClassName="h-9 w-auto min-w-[9rem] bg-surface-panel text-xs shadow-surface"
+                    triggerClassName="h-9 w-auto min-w-[7rem] bg-surface-panel text-xs shadow-none"
                     align="end"
                     onChange={(value) => setCatalogStatusFilter(value as CatalogStatusFilter)}
                   />
@@ -208,7 +217,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
                         label: provider.displayName,
                       }))}
                       allowEmpty={false}
-                      triggerClassName="h-9 w-auto min-w-[9rem] bg-surface-panel text-xs shadow-surface"
+                      triggerClassName="h-9 w-auto min-w-[7rem] bg-surface-panel text-xs shadow-none"
                       align="end"
                       onChange={setMarketBrowseProvider}
                     />
@@ -222,7 +231,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
                       { value: 'newest', label: sk.marketplaceSortNewest },
                     ]}
                     allowEmpty={false}
-                    triggerClassName="h-9 w-auto min-w-[9rem] bg-surface-panel text-xs shadow-surface"
+                    triggerClassName="h-9 w-auto min-w-[7rem] bg-surface-panel text-xs shadow-none"
                     align="end"
                     onChange={(value) => setMarketSort(value as 'downloads' | 'newest')}
                   />
@@ -276,9 +285,6 @@ function SkillsPageHeaderRegistration({
     hasToken,
     loading,
     onReloadClick,
-    searchQuery,
-    setSearchQuery,
-    mainTab,
     setPendingFile,
     setInstallOpen,
     inSettingsShell,
@@ -289,14 +295,6 @@ function SkillsPageHeaderRegistration({
 
   const headerContribution = useMemo<CapabilityHeaderContribution | null>(
     () => hasToken ? ({
-      searchLabel: mainTab === 'marketplace' ? sk.marketplaceSearchPackages : sk.searchPlaceholder,
-      search: (
-        <CapabilityHeaderSearch
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder={mainTab === 'marketplace' ? sk.marketplaceSearchPackages : sk.searchPlaceholder}
-        />
-      ),
       primary: (
         <FindSkillsButton
           sk={sk}
@@ -315,7 +313,7 @@ function SkillsPageHeaderRegistration({
         />
       ),
     }) : null,
-    [hasToken, loading, mainTab, onReloadClick, searchQuery, setInstallOpen, setPendingFile, setSearchQuery, sk, vm.findingSkills, vm.onFindSkills],
+    [hasToken, loading, onReloadClick, setInstallOpen, setPendingFile, sk, vm.findingSkills, vm.onFindSkills],
   );
 
   useLayoutEffect(() => {

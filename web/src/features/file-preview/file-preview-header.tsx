@@ -30,6 +30,7 @@ export type FilePreviewHeaderProps = {
   actions: PreviewActions;
   expanded: boolean;
   onToggleExpanded?: () => void;
+  hideExpand?: boolean;
   hideClose?: boolean;
   onClose: () => void;
   edit?: { active: boolean; onToggle: () => void };
@@ -105,7 +106,7 @@ function PreviewMenuItem({
 /** Shared file header, using the workspace preview's existing layout and actions. */
 export function FilePreviewHeader({
   referenceActions = [], onRefresh, onRetrySave, subtitle, controller, actions, expanded, onToggleExpanded, onClose,
-  hideClose, edit, wordWrap, editInNewChat, share, openWithSystemApp, chooseApp,
+  hideClose, hideExpand, edit, wordWrap, editInNewChat, share, openWithSystemApp, chooseApp,
   recommendedApps = [], recentApps = [], onOpenWithApp, onRevealInFolder, copyPath, textView, openInBrowser,
 }: FilePreviewHeaderProps) {
   const language = useLocaleStore((s) => s.language);
@@ -161,9 +162,9 @@ export function FilePreviewHeader({
           {treeControl ? <HeaderButton label={treeControl.label} active={treeControl.active} onClick={treeControl.onToggle}>
             <Folders className="size-4" strokeWidth={1.75} aria-hidden />
           </HeaderButton> : null}
-          <HeaderButton label={expanded ? m.collapsePreview : m.expandPreview} active={expanded} disabled={!onToggleExpanded} onClick={onToggleExpanded}>
+          {!hideExpand ? <HeaderButton label={expanded ? m.collapsePreview : m.expandPreview} active={expanded} disabled={!onToggleExpanded} onClick={onToggleExpanded}>
             {expanded ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}
-          </HeaderButton>
+          </HeaderButton> : null}
           <div className="relative shrink-0">
             {moreMenuOpen ? <button type="button" className="fixed inset-0 z-40 cursor-default bg-transparent" aria-hidden tabIndex={-1}
               onPointerDown={(event) => { event.preventDefault(); setMoreMenuOpen(false); }} /> : null}

@@ -31,7 +31,7 @@ export type WorkspacePane = { open: boolean; tabs: WorkspaceTab[]; activeId: str
 export const EMPTY_WORKSPACE_PANE: WorkspacePane = { open: false, tabs: [], activeId: null };
 
 type Stored = { panes: Record<string, WorkspacePane>; width: number; treeWidth: number; fileTreeOpen: boolean; sideTreeOpen: boolean };
-const defaults: Stored = { panes: {}, width: 0, treeWidth: 240, fileTreeOpen: true, sideTreeOpen: false };
+const defaults: Stored = { panes: {}, width: 0, treeWidth: 240, fileTreeOpen: false, sideTreeOpen: false };
 function read(): Stored {
   try {
     const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');

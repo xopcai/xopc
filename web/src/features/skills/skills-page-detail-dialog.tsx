@@ -1,4 +1,3 @@
-import { useLocaleStore } from '@/stores/locale-store';
 import { PluginSkillOwner, pluginSkillUnavailable } from './plugin-skill-owner';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertTriangle, ExternalLink, Trash2, X } from 'lucide-react';
@@ -44,6 +43,7 @@ type Props = Pick<
   | 'detailDirectoryId'
   | 'detailManaged'
   | 'detailFromCatalog'
+  | 'sourceLabel'
   | 'detailExternalUrl'
   | 'usingSkillInChatName'
   | 'installingMarketName'
@@ -57,9 +57,8 @@ type Props = Pick<
 >;
 
 export function SkillsPageDetailDialog(p: Props) {
-  const zh = useLocaleStore(state => state.language).startsWith('zh');
   const unavailable = p.detailFromCatalog && pluginSkillUnavailable(p.detailFromCatalog);
-  const actionLabel = unavailable ? (p.detailFromCatalog?.plugin?.authorizationStatus === 'required' ? (zh ? '去授权' : 'Connect account') : (zh ? '管理插件' : 'Manage plugin')) : p.sk.previewUseInChat;
+  const actionLabel = unavailable ? (p.detailFromCatalog?.plugin?.authorizationStatus === 'required' ? p.sk.authorize : p.sk.managePlugin) : p.sk.previewUseInChat;
   const {
     sk,
     detailOpen,
@@ -134,6 +133,33 @@ export function SkillsPageDetailDialog(p: Props) {
           </div>
           <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4">
             {detailFromCatalog ? <PluginSkillOwner skill={detailFromCatalog} detail /> : null}
+            {detailSource === 'catalog' && detailFromCatalog ? (
+              <details className="mb-4 rounded-lg border border-edge p-3 text-sm">
+                <summary className="cursor-pointer text-fg-muted">{sk.detailTechnicalInfo}</summary>
+                <dl className="mt-3 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
+                  <dt className="text-fg-muted">{sk.col.name}</dt>
+                  <dd className="break-all text-fg">{detailFromCatalog.name}</dd>
+                  <dt className="text-fg-muted">{sk.col.source}</dt>
+                  <dd className="break-words text-fg">{p.sourceLabel(detailFromCatalog)}</dd>
+                  <dt className="text-fg-muted">{sk.detailPath}</dt>
+                  <dd className="break-all font-mono text-fg">{detailFromCatalog.path}</dd>
+                  <dt className="text-fg-muted">{sk.col.managed}</dt>
+                  <dd className="text-fg">{detailFromCatalog.managed ? sk.yes : sk.no}</dd>
+                  {detailFromCatalog.hub ? (
+                    <>
+                      <dt className="text-fg-muted">{sk.hubRemote}</dt>
+                      <dd className="break-all text-fg">
+                        {detailFromCatalog.hub.kind === 'git' ? sk.hubKindGit : sk.hubKindArchive} · {detailFromCatalog.hub.source}
+                        {detailFromCatalog.hub.ref ? <span className="mt-1 block font-mono">{detailFromCatalog.hub.ref}</span> : null}
+                        <time className="mt-1 block text-fg-muted" dateTime={detailFromCatalog.hub.updatedAt}>
+                          {new Date(detailFromCatalog.hub.updatedAt).toLocaleString()}
+                        </time>
+                      </dd>
+                    </>
+                  ) : null}
+                </dl>
+              </details>
+            ) : null}
             {detailLoading ? (
               <div className="flex h-full min-h-[14rem] flex-col gap-2.5 py-1" aria-busy="true" aria-label={sk.loading}>
                 {SKELETON_LINE_WIDTHS.map((entry) => (

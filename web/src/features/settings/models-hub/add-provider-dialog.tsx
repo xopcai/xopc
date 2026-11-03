@@ -305,7 +305,7 @@ function PickProviderStep({
       return true;
     });
   }, [matchedRows]);
-  const quickStartRows = filteredRows.filter(row => row.onboardingFeatured && ['subscription', 'account'].includes(row.setupProfile?.access ?? '')).slice(0, 6);
+  const quickStartRows = filteredRows.filter(row => row.id === 'xopc-cloud');
   const quickStartIds = quickStartRows.map(row => row.id);
   const connectedRows = filteredRows.filter(
     (row) => row.configured && !quickStartIds.includes(row.id),

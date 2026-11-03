@@ -1,7 +1,16 @@
+import { markdownReadingBlocks } from '../entry/src/main/ets/common/markdownLayout';
 import { describe, expect, it } from 'vitest';
 import { markdownBlocks, markdownSpans, markdownLink } from '../entry/src/main/ets/common/markdown';
 
 describe('native Markdown subset', () => {
+  it('renders workspace images and collapses only a matching standalone view link', () => {
+    const source = '[查看高清图片](xopc://workspace/file?path=cat.jpg)\n\n![Cat](xopc://workspace/file?path=cat.jpg)\n\n[下载图片](xopc://workspace/file?path=cat.jpg)';
+    expect(markdownReadingBlocks(markdownBlocks(source)).map(block => block.kind)).toEqual(['image', 'paragraph']);
+    expect(markdownBlocks('![Cat](/xopc/workspace/file?path=cat.jpg)')[0].kind).toBe('image');
+    expect(markdownReadingBlocks(markdownBlocks(source.replace('[查看高清图片](xopc://workspace/file', '[查看高清图片](/xopc/workspace/file')))).toHaveLength(2);
+    expect(markdownBlocks('![Cat](xopc://workspace/file?path=../cat.jpg)')[0].kind).not.toBe('image');
+    expect(markdownReadingBlocks(markdownBlocks(source.replace('path=cat.jpg)', 'path=other.jpg)')))).toHaveLength(3);
+  });
   it('renders headings, lists, quotes, fences, and rules without HTML', () => {
     const blocks = markdownBlocks('# Title\n\n- item\n2. second\n> quote\n\n```ts\nconst value = 1;\n```\n\n---');
     expect(blocks.map((block) => block.kind)).toEqual(['heading', 'list', 'list', 'quote', 'code', 'rule']);

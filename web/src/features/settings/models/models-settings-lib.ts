@@ -29,15 +29,6 @@ export const PROVIDER_PRESETS: Record<string, ProviderPresetOption> = {
       apiKey: 'lmstudio',
     },
   },
-  openrouter: {
-    label: 'OpenRouter',
-    providerId: 'openrouter',
-    config: {
-      baseUrl: 'https://openrouter.ai/api/v1',
-      api: 'openai-completions',
-      apiKey: '',
-    },
-  },
   zhipuCn: {
     label: 'Zhipu GLM China',
     providerId: 'zhipu-cn',
@@ -51,8 +42,8 @@ export const PROVIDER_PRESETS: Record<string, ProviderPresetOption> = {
     },
   },
   zaiGeneral: {
-    label: 'Zhipu GLM International',
-    providerId: 'zai',
+    label: 'Zhipu GLM API (International)',
+    providerId: 'zai-api',
     config: {
       baseUrl: 'https://api.z.ai/api/paas/v4',
       api: 'openai-completions',
@@ -163,60 +154,6 @@ export const PROVIDER_PRESETS: Record<string, ProviderPresetOption> = {
       ],
     },
   },
-  deepseek: {
-    label: 'DeepSeek',
-    providerId: 'deepseek',
-    config: {
-      baseUrl: 'https://api.deepseek.com',
-      api: 'openai-completions',
-      apiKey: 'DEEPSEEK_API_KEY',
-      models: [
-        { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', contextWindow: 1000000, maxTokens: 393216, reasoning: true, input: ['text'] },
-        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', contextWindow: 1000000, maxTokens: 393216, reasoning: true, input: ['text'] },
-      ],
-    },
-  },
-  moonshotCn: {
-    label: 'Kimi / Moonshot China',
-    providerId: 'moonshotai-cn',
-    config: {
-      baseUrl: 'https://api.moonshot.cn/v1',
-      api: 'openai-completions',
-      apiKey: 'MOONSHOT_API_KEY',
-      models: [
-        { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
-        { id: 'kimi-k2.6', name: 'Kimi K2.6', contextWindow: 128000, input: ['text'] },
-      ],
-    },
-  },
-  moonshotIntl: {
-    label: 'Kimi / Moonshot International',
-    providerId: 'moonshotai',
-    config: {
-      baseUrl: 'https://api.moonshot.ai/v1',
-      api: 'openai-completions',
-      apiKey: 'MOONSHOT_API_KEY',
-      models: [
-        { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
-        { id: 'kimi-k2.6', name: 'Kimi K2.6', contextWindow: 128000, input: ['text'] },
-      ],
-    },
-  },
-  kimiCoding: {
-    label: 'Kimi Coding',
-    providerId: 'kimi-coding',
-    description: 'Dedicated Kimi coding endpoint',
-    config: {
-      baseUrl: 'https://api.kimi.com/coding',
-      api: 'anthropic-messages',
-      apiKey: 'KIMI_API_KEY',
-      headers: { 'User-Agent': 'KimiCLI/1.5' },
-      models: [
-        { id: 'k2p7', name: 'Kimi K2.7 Code', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
-        { id: 'kimi-for-coding', name: 'Kimi For Coding', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
-      ],
-    },
-  },
   stepfunIntl: {
     label: 'StepFun International',
     providerId: 'stepfun-intl',
@@ -273,117 +210,6 @@ export const PROVIDER_PRESETS: Record<string, ProviderPresetOption> = {
       ],
     },
   },
-  xiaomi: {
-    label: 'Xiaomi MiMo',
-    providerId: 'xiaomi',
-    config: {
-      baseUrl: 'https://api.xiaomimimo.com/v1',
-      api: 'openai-completions',
-      apiKey: 'XIAOMI_API_KEY',
-      models: [
-        { id: 'mimo-v2.5-pro', name: 'MiMo V2.5 Pro', contextWindow: 1000000, reasoning: true, input: ['text'] },
-        { id: 'mimo-v2.5-pro-ultraspeed', name: 'MiMo V2.5 Pro UltraSpeed', contextWindow: 1000000, reasoning: true, input: ['text'] },
-        { id: 'mimo-v2.5', name: 'MiMo V2.5', contextWindow: 1000000, reasoning: true, input: ['text', 'image'] },
-      ],
-    },
-  },
-  xiaomiTokenPlanCn: {
-    label: 'Xiaomi MiMo Token Plan China',
-    providerId: 'xiaomi-token-plan-cn',
-    config: {
-      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
-      api: 'openai-completions',
-      apiKey: 'XIAOMI_TOKEN_PLAN_CN_API_KEY',
-      models: [
-        { id: 'mimo-v2.5-pro', name: 'MiMo V2.5 Pro', contextWindow: 1000000, reasoning: true, input: ['text'] },
-        { id: 'mimo-v2.5-pro-ultraspeed', name: 'MiMo V2.5 Pro UltraSpeed', contextWindow: 1000000, reasoning: true, input: ['text'] },
-        { id: 'mimo-v2.5', name: 'MiMo V2.5', contextWindow: 1000000, reasoning: true, input: ['text', 'image'] },
-      ],
-    },
-  },
-  xiaomiTokenPlanAms: {
-    label: 'Xiaomi MiMo Token Plan Amsterdam',
-    providerId: 'xiaomi-token-plan-ams',
-    config: {
-      baseUrl: 'https://token-plan-ams.xiaomimimo.com/v1',
-      api: 'openai-completions',
-      apiKey: 'XIAOMI_TOKEN_PLAN_AMS_API_KEY',
-      models: [
-        { id: 'mimo-v2.5-pro', name: 'MiMo V2.5 Pro', contextWindow: 1000000, reasoning: true, input: ['text'] },
-        { id: 'mimo-v2.5-pro-ultraspeed', name: 'MiMo V2.5 Pro UltraSpeed', contextWindow: 1000000, reasoning: true, input: ['text'] },
-        { id: 'mimo-v2.5', name: 'MiMo V2.5', contextWindow: 1000000, reasoning: true, input: ['text', 'image'] },
-      ],
-    },
-  },
-  xiaomiTokenPlanSgp: {
-    label: 'Xiaomi MiMo Token Plan Singapore',
-    providerId: 'xiaomi-token-plan-sgp',
-    config: {
-      baseUrl: 'https://token-plan-sgp.xiaomimimo.com/v1',
-      api: 'openai-completions',
-      apiKey: 'XIAOMI_TOKEN_PLAN_SGP_API_KEY',
-      models: [
-        { id: 'mimo-v2.5-pro', name: 'MiMo V2.5 Pro', contextWindow: 1000000, reasoning: true, input: ['text'] },
-        { id: 'mimo-v2.5-pro-ultraspeed', name: 'MiMo V2.5 Pro UltraSpeed', contextWindow: 1000000, reasoning: true, input: ['text'] },
-        { id: 'mimo-v2.5', name: 'MiMo V2.5', contextWindow: 1000000, reasoning: true, input: ['text', 'image'] },
-      ],
-    },
-  },
-  minimax: {
-    label: 'MiniMax',
-    providerId: 'minimax',
-    description: 'Anthropic-compatible endpoint preferred for agent workflows',
-    config: {
-      baseUrl: 'https://api.minimax.io/anthropic',
-      api: 'anthropic-messages',
-      apiKey: 'MINIMAX_API_KEY',
-      authHeader: true,
-      models: [
-        { id: 'MiniMax-M3', name: 'MiniMax M3', contextWindow: 1000000, reasoning: true, input: ['text', 'image'] },
-        { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed', contextWindow: 204800, input: ['text'] },
-        { id: 'MiniMax-M2.7', name: 'MiniMax M2.7', contextWindow: 204800, input: ['text'] },
-      ],
-    },
-  },
-  zhipuCodingCn: {
-    label: 'Zhipu GLM Coding Plan China',
-    providerId: 'zhipu-coding-cn',
-    config: {
-      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
-      api: 'openai-completions',
-      apiKey: 'ZHIPU_API_KEY',
-      models: [
-        { id: 'glm-5.2', name: 'GLM 5.2', contextWindow: 1000000, maxTokens: 65536, reasoning: true, input: ['text'] },
-      ],
-    },
-  },
-  zaiCodingGlobal: {
-    label: 'Zhipu GLM Coding Plan International',
-    providerId: 'zai-coding-global',
-    config: {
-      baseUrl: 'https://api.z.ai/api/coding/paas/v4',
-      api: 'openai-completions',
-      apiKey: 'ZAI_API_KEY',
-      models: [
-        { id: 'glm-5.2', name: 'GLM 5.2', contextWindow: 1000000, maxTokens: 65536, reasoning: true, input: ['text'] },
-      ],
-    },
-  },
-  minimaxCn: {
-    label: 'MiniMax China',
-    providerId: 'minimax-cn',
-    config: {
-      baseUrl: 'https://api.minimaxi.com/anthropic',
-      api: 'anthropic-messages',
-      apiKey: 'MINIMAX_CN_API_KEY',
-      authHeader: true,
-      models: [
-        { id: 'MiniMax-M3', name: 'MiniMax M3', contextWindow: 1000000, reasoning: true, input: ['text', 'image'] },
-        { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed', contextWindow: 204800, input: ['text'] },
-        { id: 'MiniMax-M2.7', name: 'MiniMax M2.7', contextWindow: 204800, input: ['text'] },
-      ],
-    },
-  },
 };
 
 export const PROVIDER_PRESET_OPTIONS = Object.entries(PROVIDER_PRESETS).map(([key, preset]) => ({
@@ -412,8 +238,7 @@ const MODELS_JSON_PROVIDER_PRESET_IDS = new Set([
   'stepfun-plan-cn',
   'stepfun-plan-intl',
   'zhipu-cn',
-  'zai-coding-global',
-  'zhipu-coding-cn',
+  'zai-api',
 ]);
 
 export function modelsJsonPresetKeyForProviderId(providerId: string): string | undefined {
