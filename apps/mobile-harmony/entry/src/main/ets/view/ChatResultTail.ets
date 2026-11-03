@@ -4,6 +4,7 @@ import { XopcArtifact, XopcHistoryMedia, XopcChatRow, XopcProductDelivery, XopcP
 import { XopcMobileRoute } from '../model/home';
 import { artifactMedia, chatDeliveries, chatProductCapability } from '../common/chatRichContent';
 import { markdownLink } from '../common/markdown';
+import { XopcChatResultCapsule } from './ChatResultCapsule';
 import { XopcChatImageGrid } from './ChatImageGrid';
 import { XopcChatMediaView } from './ChatMediaView';
 import { appSettings } from '../service/settings';
@@ -92,7 +93,7 @@ export struct XopcChatResultTail {
   }
   build() {
     if (!this.row.live && (this.artifacts.length || this.deliveries.length)) {
-      Column({ space: 4 }) {
+      Column({ space: 8 }) {
           if (this.imageArtifacts.length) {
             XopcChatImageGrid({ files: this.imageArtifacts.map((artifact: XopcArtifact): XopcHistoryMedia => artifactMedia(artifact)),
               gallery: this.imageGallery, conversationId: this.conversationId })
@@ -100,55 +101,29 @@ export struct XopcChatResultTail {
           Repeat<XopcArtifact>(this.visibleArtifacts).each((item: RepeatItem<XopcArtifact>) => {
             if (item.item.availability === 'available' && (item.item.uri || item.item.workspaceRelativePath)) {
               XopcChatMediaView({ file: artifactMedia(item.item), conversationId: this.conversationId, compact: true,
-                embedded: true, compactAvailable: true })
+                embedded: true, compactAvailable: true, resultCapsule: true })
             } else if (item.item.availability === 'available' && markdownLink(item.item.shareUrl || '')) {
-              Button({ type: ButtonType.Normal }) {
-                Row({ space: 10 }) {
-                  SymbolGlyph($r('sys.symbol.doc')).fontSize(20).fontColor([this.colors.secondary])
-                  Text(item.item.title).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-                    .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-                }.width('100%')
-              }.id('chat-artifact-' + item.item.artifactId).constraintSize({ minHeight: 48 }).padding({ left: 12, right: 12 })
-                .width('100%').borderRadius(10).backgroundColor(Color.Transparent)
-                .accessibilityText(item.item.title).onClick((): void => { this.openLink(item.item.shareUrl || ''); })
+              XopcChatResultCapsule({ title: item.item.title, symbol: $r('sys.symbol.doc'),
+                entryId: 'chat-artifact-' + item.item.artifactId,
+                onOpen: (): void => { this.openLink(item.item.shareUrl || ''); } })
             } else {
-              Row({ space: 10 }) {
-                SymbolGlyph($r('sys.symbol.doc')).fontSize(20).fontColor([this.colors.secondary])
-                Column({ space: 2 }) {
-                  Text(item.item.title).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(this.status(item.item)).fontSize(12).fontColor(this.colors.secondary).maxLines(1)
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              }.id('chat-artifact-' + item.item.artifactId).width('100%').constraintSize({ minHeight: 48 })
-                .padding({ left: 12, right: 12 }).borderRadius(10)
+              XopcChatResultCapsule({ title: item.item.title, subtitle: this.status(item.item),
+                symbol: $r('sys.symbol.doc'), canOpen: false, entryId: 'chat-artifact-' + item.item.artifactId })
             }
           }).key((artifact: XopcArtifact): string => artifact.artifactId)
           Repeat<XopcProductDelivery>(this.visibleDeliveries).each((item: RepeatItem<XopcProductDelivery>) => {
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 10 }) {
-                SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(20).fontColor([this.colors.accent])
-                Column({ space: 2 }) {
-                  Text(item.item.primary?.title || '').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(this.productState(item.item)).fontSize(12).fontColor(this.colors.secondary).maxLines(1)
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                if (this.canOpenProduct(item.item.primary)) {
-                  SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-                }
-              }.width('100%')
-            }.id('chat-product-' + item.item.primary?.id).constraintSize({ minHeight: 48 }).padding({ left: 12, right: 12 })
-              .width('100%').borderRadius(10).backgroundColor(Color.Transparent).enabled(this.canOpenProduct(item.item.primary))
-              .accessibilityText((item.item.primary?.title || '')).onClick((): void => { this.openProduct(item.item.primary); })
+            XopcChatResultCapsule({ title: item.item.primary?.title || '', subtitle: this.productState(item.item),
+              canOpen: this.canOpenProduct(item.item.primary), entryId: 'chat-product-' + item.item.primary?.id,
+              onOpen: (): void => { this.openProduct(item.item.primary); } })
           }).key((delivery: XopcProductDelivery): string => delivery.operation + ':' + delivery.primary?.kind + ':' + delivery.primary?.id)
           if (this.hiddenCount > 0) {
             Button(this.expanded ? $r('app.string.chat_fewer_deliverables') : $r('app.string.chat_more_deliverables', this.hiddenCount))
-              .id('chat-result-toggle-' + this.row.id).height(44).width('100%').fontSize(13)
+              .id('chat-result-toggle-' + this.row.id).height(44).constraintSize({ maxWidth: '100%' }).fontSize(13)
               .fontWeight(FontWeight.Medium).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
               .onClick((): void => { this.expanded = !this.expanded; })
           }
-      }.id('chat-result-tail-' + this.row.id).width('100%').constraintSize({ maxWidth: 420 }).padding(4)
-        .borderRadius(14).backgroundColor(this.colors.input)
+      }.id('chat-result-tail-' + this.row.id).width('100%').constraintSize({ maxWidth: 420 })
+        .alignItems(HorizontalAlign.Start)
         .margin({ top: 8, bottom: 4 }).accessibilityText($r('app.string.chat_deliverables'))
     }
   }

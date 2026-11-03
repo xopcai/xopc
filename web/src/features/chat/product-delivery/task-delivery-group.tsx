@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ChevronRight, X } from 'lucide-react';
+import { ChevronRight, Target, X } from 'lucide-react';
 import { useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { TASK_DETAIL_MODAL_PARAM } from '@/features/tasks/task-detail-route';
 import { messages } from '@/i18n/messages';
 
+import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleListClassName } from '../messages/assistant-capsule';
 import type { productDeliveryReferences } from './product-delivery-model';
 
 type Entry = ReturnType<typeof productDeliveryReferences>[number];
@@ -25,21 +26,17 @@ export function TaskDeliveryGroup({ entries, language, renderEntry }: {
   const showingTask = new URLSearchParams(location.search).has(TASK_DETAIL_MODAL_PARAM);
   const labels = messages(language).chat.productDelivery;
   const title = labels.relatedTaskCount.replace('{{count}}', String(entries.length));
-  const viewAll = labels.viewAllTasks.replace('{{count}}', String(entries.length));
 
-  return <li data-product-task-group>
-    <div className="px-3 pb-1 pt-2.5 text-xs font-medium text-fg-muted">{title}</div>
-    <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
-      {entries.slice(0, 3).map(entry => renderEntry(entry, false))}
-    </ul>
+  return <li className="min-w-0 max-w-full" data-product-task-group>
     <Dialog.Root open={open && !showingTask} onOpenChange={next => {
       returnFocusRef.current = !next;
       setOpen(next);
     }}>
       <Dialog.Trigger asChild>
         <button ref={triggerRef} type="button"
-          className="flex min-h-11 w-full items-center justify-between gap-3 border-t border-edge-subtle px-3 py-2 text-left text-sm text-accent-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
-          {viewAll}<ChevronRight className="size-4 shrink-0" aria-hidden />
+          className={assistantCapsuleClassName}>
+          <AssistantCapsuleContent icon={<Target />} title={title}
+            trailing={<ChevronRight className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />} />
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -66,7 +63,7 @@ export function TaskDeliveryGroup({ entries, language, renderEntry }: {
           <div data-task-delivery-list className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
             ref={element => { if (element) element.scrollTop = listScrollTopRef.current; }}
             onScroll={event => { listScrollTopRef.current = event.currentTarget.scrollTop; }}>
-            <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
+            <ul className={`${assistantCapsuleListClassName} p-3`}>
               {entries.map(entry => renderEntry(entry, true))}
             </ul>
           </div>

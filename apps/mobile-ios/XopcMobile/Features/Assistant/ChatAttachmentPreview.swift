@@ -6,6 +6,7 @@ struct ChatAttachmentPreview: View {
     let attachment: HistoryAttachment
     let configuration: GatewayConfiguration
     let conversationID: String?
+    var capsule = false
 
     @State private var previewURL: URL?
     @State private var temporaryDirectory: URL?
@@ -44,12 +45,16 @@ struct ChatAttachmentPreview: View {
         Button {
             Task { await open() }
         } label: {
+            if capsule {
+                ChatResultCapsuleLabel(title: attachment.name ?? String(localized: "附件"), systemImage: "doc")
+            } else {
             Label(attachment.name ?? "附件", systemImage: "doc")
                 .font(.caption)
                 .lineLimit(1)
                 .padding(.horizontal, 9)
                 .frame(minHeight: 44)
                 .background(Color.secondary.opacity(0.1), in: .capsule)
+            }
         }
         .buttonStyle(.plain)
         .disabled(isLoading)

@@ -13,11 +13,11 @@ export function TurnTail({
 }) {
   return (
     <section
-      className={cn('mt-2 w-full max-w-[28rem] self-start', className)}
+      className={cn('mt-2 min-w-0 max-w-full self-start', className)}
       aria-label={label}
       data-turn-tail
     >
-      <div className="overflow-hidden rounded-xl border border-edge bg-surface-inset shadow-surface">
+      <div className="min-w-0">
         {children}
       </div>
     </section>

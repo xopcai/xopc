@@ -36,10 +36,10 @@ import { InlineLocalApp } from '@/features/chat/product-delivery/inline-local-ap
 import { InlineChatPreview } from '@/features/chat/product-delivery/inline-chat-preview';
 import { TurnTail } from '@/features/chat/product-delivery/turn-tail';
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
+import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleDetailClassName, assistantCapsuleListClassName } from './assistant-capsule';
 import type { AssistantTurnViewModel } from './assistant-turn-view-model';
 
 type ResultAttachment = {
@@ -105,48 +105,20 @@ function ResultAttachmentRow({
   const Icon = resultAttachmentIcon(item.attachment);
   const canPreview = canPreviewAttachment(item.attachment, conversationId, projectId);
   const canOpen = canPreview || Boolean(item.href);
-  const content = (
-    <>
-      {image.src ? (
-        <img
-          src={image.src}
-          alt=""
-          className="size-8 shrink-0 rounded-lg object-cover"
-          decoding="async"
-          loading="lazy"
-        />
-      ) : (
-        <span
-          className={cn(
-            'flex size-8 shrink-0 items-center justify-center rounded-lg',
-            item.failed ? 'bg-danger-soft text-danger' : 'bg-accent-soft/70 text-accent-fg',
-          )}
-          aria-hidden
-        >
-          <Icon className="size-4" strokeWidth={1.75} />
-        </span>
-      )}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-fg" title={item.attachment.name ?? fileLabel}>
-          {item.attachment.name ?? fileLabel}
-        </span>
-        <span className="mt-0.5 block truncate text-xs leading-5 text-fg-muted" title={item.meta}>{item.meta}</span>
-      </span>
-      {canOpen ? <ChevronRight className="size-4 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden /> : null}
-    </>
-  );
-  const className = cn(
-    'flex min-h-14 w-full min-w-0 items-center gap-3 px-3 py-2 text-left',
-    canOpen && 'cursor-pointer hover:bg-surface-hover/65 active:bg-surface-active/70',
-    interaction.transition,
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-    !canOpen && 'cursor-default',
-  );
+  const content = <AssistantCapsuleContent
+    icon={image.src ? <img src={image.src} alt="" className="size-[18px] rounded object-cover" decoding="async" loading="lazy" /> : <Icon strokeWidth={1.75} className={item.failed ? 'text-danger' : undefined} />}
+    title={item.attachment.name ?? fileLabel}
+    meta={item.meta}
+    trailing={canOpen ? <ChevronRight className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden /> : null}
+  />;
+  const className = cn(assistantCapsuleClassName, canOpen ? 'cursor-pointer' : 'cursor-default');
+  const title = [item.attachment.name ?? fileLabel, item.meta].join(' · ');
 
   if (!canPreview && item.href) {
     return (
-      <li data-result-attachment>
+      <li className="min-w-0 max-w-full" data-result-attachment>
         <a
+          title={title}
           href={item.href}
           target="_blank"
           rel="noreferrer"
@@ -167,10 +139,11 @@ function ResultAttachmentRow({
   }
 
   return (
-    <li data-result-attachment>
+    <li className="min-w-0 max-w-full" data-result-attachment>
       <button
         type="button"
         className={className}
+        title={title}
         onClick={() => onOpen(item.attachment)}
       >
         {content}
@@ -198,30 +171,13 @@ function ResultAttachmentGroup({
     .replace('{{count}}', String(attachments.length));
 
   return (
-    <li data-result-attachment-group>
+    <li className="min-w-0 max-w-full" data-result-attachment-group>
       <details className="group">
-        <summary
-          className={cn(
-            'flex min-h-14 cursor-pointer list-none items-center gap-3 px-3 py-2 text-left',
-            'hover:bg-surface-hover/65 active:bg-surface-active/70',
-            interaction.transition,
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-          )}
-        >
-          <span
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft/70 text-accent-fg"
-            aria-hidden
-          >
-            <Files className="size-4" strokeWidth={1.75} />
-          </span>
-          <span className="min-w-0 flex-1 text-sm font-medium text-fg">{label}</span>
-          <ChevronRight
-            className="size-4 shrink-0 text-fg-subtle transition-transform duration-150 ease-out group-open:rotate-90 motion-reduce:transition-none"
-            strokeWidth={1.75}
-            aria-hidden
-          />
+        <summary className={cn(assistantCapsuleClassName, 'cursor-pointer list-none')}>
+          <AssistantCapsuleContent icon={<Files strokeWidth={1.75} />} title={label}
+            trailing={<ChevronRight className="size-3.5 shrink-0 text-fg-subtle transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" aria-hidden />} />
         </summary>
-        <ul className="m-0 list-none divide-y divide-edge-subtle border-t border-edge-subtle p-0">
+        <ul className={cn(assistantCapsuleListClassName, assistantCapsuleDetailClassName)}>
           {attachments.map((item) => (
             <ResultAttachmentRow
               key={item.key}
@@ -266,7 +222,6 @@ function standaloneAttachments(
     attachment,
     meta: [
       t.generatedFile,
-      attachment.mimeType,
       typeof attachment.size === 'number' ? formatFileSize(attachment.size) : null,
     ].filter(Boolean).join(' · '),
   }));
@@ -357,7 +312,7 @@ export function AssistantResultTail({
       ))}
       {hasTail ? (
         <TurnTail label={messages(language).chat.productDelivery.heading}>
-          <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
+          <ul className={assistantCapsuleListClassName}>
             <ProductDeliveryRows
               deliveries={visibleDeliveries}
               language={language}
@@ -388,7 +343,7 @@ export function AssistantResultTail({
             )}
           </ul>
           {queryState.truncated ? (
-            <p role="status" className="border-t border-edge-subtle px-3 py-2 text-xs text-fg-muted">
+            <p role="status" className="mt-2 text-xs text-fg-muted">
               {messages(language).chat.productDelivery.partialResults}
             </p>
           ) : null}
