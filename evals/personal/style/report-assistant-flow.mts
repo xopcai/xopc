@@ -14,6 +14,7 @@ const write=(p:string,v:unknown)=>writeFileSync(p,JSON.stringify(v,null,2)+'\n',
 const registrationPath=join(root,'registration.json'),reg=read(registrationPath);
 assert.deepEqual(reg.gate,{validationOverallMinNetWins:1,validationNaturalnessMinNetWins:1,noCandidateMajorEitherOrder:true,validationViolationsNonincrease:true,validationP95LatencyRatio:1.2,minIndependentHumanReviewers:2,completeDenominatorRequired:true});
 const fixtures=read(reg.fixture),cases:FlowCase[]=fixtures.cases;
+const workingTreeCandidateAlreadyApplied=Boolean(reg.baselineRef);
 assert.equal(hash(readFileSync(reg.fixture)),reg.fixtureSha256);
 assert.equal(cases.length,reg.expectedScenes);assert.deepEqual(cases.filter(c=>c.split==='validation').map(c=>c.id),reg.validation);assert.deepEqual(cases.filter(c=>c.split==='development').map(c=>c.id),reg.development);assert.ok(reg.validation.length>=6&&reg.development.length>=6);
 const dirs=[join(root,'baseline-run/baseline'),join(root,'candidate-run/candidate')];
@@ -26,6 +27,8 @@ for(const [i,manifest] of manifests.entries()){
 }
 const judgeDir=join(root,'judging/judge'),judgeRegistration=read(join(judgeDir,'registration.json'));
 assert.equal(judgeRegistration.judge,reg.judge);assert.equal(judgeRegistration.assistantFlow,true);
+assert.equal(hash(judgeRegistration.rubric),judgeRegistration.rubricSha256);
+if(fixtures.evaluationFocus)assert.ok(judgeRegistration.rubric.includes('Additional preregistered suite focus: '+fixtures.evaluationFocus),'Judge omitted frozen suite focus');
 assert.deepEqual(judgeRegistration.sourceManifests,dirs.map(d=>hash(readFileSync(join(d,'manifest.json')))));
 const captures:Record<string,any>={},judgments:Record<string,any[]>={};
 const artifactHashes:Record<string,string>={};
@@ -70,10 +73,10 @@ const related=store.list({limit:100}).items.filter(e=>dirs.some(d=>e.source.star
 const id=store.improvement({problem:'Personal 中文多轮助理风格 '+reg.suite+(reg.methodologyRecoveryOf?'（方法修复复验）':'（首批）')+'：流畅衔接与偏好作用域',hypothesis:'Experimental shared style module versus unchanged production baseline; same specified GPT-5.6 Sol model and GPT-6.1 Sol blind judge, all fixed protections retained.',budget:reg.budget,protection:['Completeness, grounded facts, necessary authorization, scoped preferences, latency and original failures'],preregistration:registrationPath});
 const styleAcceptance={expected:analysis.expected,completed:analysis.completed,cohorts:analysis.cohorts,automatedPassed:analysis.automatedPassed&&reasons.length===1,humanReview:{status:'pending',expectedReviewers:2,completedReviewers:0,queue:join(root,'human-blind-review.json')},
  model:reg.model,judge:reg.judge,pairs:analysis.pairs,examples:humanQueue.map(c=>({caseId:c.caseId,A:c.A,B:c.B})),limitations:reg.limitations};
-const decision={schemaVersion:1,decidedAt:new Date().toISOString(),promotion:'rejected',scope:'Pilot candidate not adopted; single-judge disclosed Chinese fixed-trajectory regression, human review remains pending',reasons,preregistrationHash:hash(readFileSync(registrationPath)),audit,evidenceIds:related,
- reports:[{id:'双序评审覆盖（不代表风格质量通过）',passed:analysis.completed,expected:analysis.expected}],styleAcceptance,productionDefaultsChanged:false};
+const decision={schemaVersion:1,decidedAt:new Date().toISOString(),promotion:'rejected',scope:workingTreeCandidateAlreadyApplied?'Working-tree prompt change compared with declared pre-change baseline; benchmark result is not deployment or human adoption approval':'Pilot candidate not adopted; single-judge disclosed Chinese fixed-trajectory regression, human review remains pending',reasons,preregistrationHash:hash(readFileSync(registrationPath)),audit,evidenceIds:related,
+ reports:[{id:'双序评审覆盖（不代表风格质量通过）',passed:analysis.completed,expected:analysis.expected}],styleAcceptance,productionDefaultsChanged:workingTreeCandidateAlreadyApplied,workingTreeCandidateAlreadyApplied,deploymentPerformed:false};
 write(join(root,'analysis.json'),analysis);write(join(root,'decision.json'),decision);store.decideImprovement(id,decision);write(join(root,'improvement-id.json'),{id});store.close();
-const report={schemaVersion:1,date:'2026-11-02',phaseOneComplete:false,improvementId:id,promotion:decision.promotion,scope:decision.scope,registration:reg,sourceManifests:manifests,sourceCompletions:completions,analysis,audit,artifactHashes,
- humanReview:styleAcceptance.humanReview,decisionSha256:hash(readFileSync(join(root,'decision.json'))),actualCharge:null,productionDefaultsChanged:false,limitations:reg.limitations};
+const report={schemaVersion:1,date:reg.runDate??reg.registeredAt.slice(0,10),phaseOneComplete:false,improvementId:id,promotion:decision.promotion,scope:decision.scope,registration:reg,sourceManifests:manifests,sourceCompletions:completions,analysis,audit,artifactHashes,
+ humanReview:styleAcceptance.humanReview,decisionSha256:hash(readFileSync(join(root,'decision.json'))),actualCharge:null,productionDefaultsChanged:workingTreeCandidateAlreadyApplied,workingTreeCandidateAlreadyApplied,deploymentPerformed:false,limitations:reg.limitations};
 write(join(root,'portable-report.json'),report);
 console.log(JSON.stringify({id,reasons,automatedPassed:analysis.automatedPassed,cohorts:analysis.cohorts,physicalRequests:audit.reduce((n,a)=>n+a.physicalRequests,0)},null,2));

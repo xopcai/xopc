@@ -170,6 +170,10 @@ if (values['assistant-flow']) {
     .replaceAll('"didactic_expression":[]}', '"didactic_expression":[],"conversation_flow":[],"preference_scope":[]}');
   system += '\nEvaluate a practical Chinese assistant across the whole four-turn exchange, not a therapist persona. Keep naturalness separate from factual completeness and permissions. These are fixed continuations, not observed human satisfaction. Task requests to draft text do not authorize external sending. References to earlier assistant text must actually fit its generated history.';
 }
+if (values['assistant-flow'] && values.fixtures) {
+  const focus = read(resolve(values.fixtures)).evaluationFocus;
+  if (typeof focus === 'string' && focus.trim()) system += '\nAdditional preregistered suite focus: ' + focus;
+}
 const dimensions = ['overinterpretation', 'unnecessary_question', 'repeated_closing', 'premature_resolution', 'required_content_or_boundary'];
 if (values['style-focus']) dimensions.push('didactic_expression');
 if (values['assistant-flow']) dimensions.push('conversation_flow', 'preference_scope');

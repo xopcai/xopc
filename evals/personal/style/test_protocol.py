@@ -56,6 +56,18 @@ class ProtocolTests(unittest.TestCase):
             self.assertTrue(all(len(c['userTurns']) == 4 for c in new))
             old = new
 
+    def test_ownership_suite_retains_all_prior_scenes_and_freezes_new_states(self):
+        root = Path(__file__).parent
+        old = validate_dialogue_fixtures(json.loads((root / 'assistant-flow-dialogues-v5.json').read_text()))
+        fixture = json.loads((root / 'assistant-flow-ownership-dialogues-v1.json').read_text())
+        new = validate_dialogue_fixtures(fixture)
+        self.assertEqual({c['id'] for c in old}, {c['id'] for c in new if c['split'] == 'development'})
+        validation = [c for c in new if c['split'] == 'validation']
+        self.assertEqual(len(validation), 8)
+        self.assertFalse({c['id'] for c in old} & {c['id'] for c in validation})
+        self.assertTrue(all(len(c['userTurns']) == 4 for c in new))
+        self.assertIn('hypothetical', fixture['evaluationFocus'])
+
     def test_grading_rejects_missing_extra_uncertain_and_executable_output(self):
         for text in ["['YES']", "['YES','NO','YES']", "['YES','MAYBE']", "__import__('os').system('false')", "['YES', True]"]:
             with self.assertRaises(ValueError):
