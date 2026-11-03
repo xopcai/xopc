@@ -30,12 +30,6 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     model: z.string().optional(),
     timeoutSeconds: z.number().positive().optional(),
   }),
-  z.object({
-    kind: z.literal('browser_automation'),
-    automationId: z.string(),
-    inputs: z.record(z.string(), z.unknown()).optional(),
-    timeoutSeconds: z.number().positive().optional(),
-  }),
   z.object({ kind: z.literal('task_command'), taskId: z.string(), command: TaskCommandSchema }),
   z.object({
     kind: z.literal('system'),

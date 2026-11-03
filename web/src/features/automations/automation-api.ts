@@ -28,11 +28,6 @@ export type AutomationAction =
       model?: string;
       timeoutSeconds?: number;
     } | {
-      kind: 'browser_automation';
-      automationId: string;
-      inputs?: Record<string, unknown>;
-      timeoutSeconds?: number;
-    } | {
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;

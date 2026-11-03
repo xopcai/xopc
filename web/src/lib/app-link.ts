@@ -9,7 +9,6 @@ const INTERNAL_ROUTE_ROOTS = new Set([
   'personal',
   'user-model',
   'automations',
-  'browser-automations',
   'channels',
   'chat',
   'connectors',

@@ -1,5 +1,7 @@
 # 浏览器自动化录制与重放：实现说明
 
+> Retired on 2026-11-03. Browser recording, saved workflows, replay, and the dedicated management page have been removed. This document is historical; see [removal notes](./browser-workflow-removal.md).
+
 日期：2026-10-10。状态：P0 稳定性基础与 P1 单标签页录制已实现。
 
 产品调研见 [产品方案](./browser-automation-record-replay.md)。本次按 KISS、SOLID 和奥卡姆剃刀收敛实现：沿用现有工具、执行服务、SQLite、Realtime 和页面，不新增执行引擎、模型编译任务、版本兼容适配器或必需 skill。

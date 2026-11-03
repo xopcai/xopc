@@ -290,7 +290,6 @@ export class AgentService {
       verboseLevel: config.verboseLevel,
       gatewayClarify: config.gatewayClarify,
       getAutomationService: config.getAutomationService,
-      getBrowserAutomationService: config.getBrowserAutomationService,
       getBrowserSetupService: config.getBrowserSetupService,
       getMcpSetupService: config.getMcpSetupService,
       getPhoneSetupService: config.getPhoneSetupService,

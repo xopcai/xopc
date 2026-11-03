@@ -1,6 +1,6 @@
 export type BrowserVisualMode = 'never' | 'auto' | 'always';
-export * from './automation.js';
-import type { BrowserSemanticTarget } from './automation.js';
+export * from './dom.js';
+import type { BrowserSemanticTarget } from './dom.js';
 export type BrowserRiskLevel = 'read' | 'draft' | 'external_effect' | 'destructive' | 'sensitive';
 
 export type BrowserTarget =
@@ -55,18 +55,6 @@ export const BROWSER_CONTROL_ENDPOINT_DESCRIPTOR = {
   supportsCancellation: true,
   idempotent: false,
   resultKinds: ['json'],
-} as const;
-
-export const BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['operation'],
-  properties: { operation: { type: 'string', enum: ['start', 'pause', 'resume', 'finish', 'status'] } },
-} as const;
-export const BROWSER_RECORDING_ENDPOINT_DESCRIPTOR = {
-  ...BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
-  name: 'browser.recording', title: 'Browser workflow recording',
-  description: 'Record a workflow in the active browser tab and save it as an automation.',
-  inputSchema: BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA,
-  maxConcurrency: 1,
 } as const;
 
 export interface BrowserExpectation {

@@ -1,7 +1,7 @@
 export type ProductDomainId = 'work' | 'automation' | 'capabilities' | 'apps' | 'me';
 
 export type ProductSectionId =
-  'work-overview' | 'work-projects' | 'work-notes' | 'automation-triggers' | 'automation-browser' | 'capabilities-agents' | 'capabilities-skills' | 'capabilities-connectors' | 'capabilities-channels' | 'capabilities-extensions' | 'apps-library' | 'me-overview';
+  'work-overview' | 'work-projects' | 'work-notes' | 'automation-triggers' | 'capabilities-agents' | 'capabilities-skills' | 'capabilities-connectors' | 'capabilities-channels' | 'capabilities-extensions' | 'apps-library' | 'me-overview';
 
 type ProductSectionDefinition = {
   id: ProductSectionId;
@@ -23,7 +23,6 @@ const workSections = [
 
 const automationSections = [
   { id: 'automation-triggers', domain: 'automation', path: '/automations' },
-  { id: 'automation-browser', domain: 'automation', path: '/browser-automations' },
 ] as const satisfies readonly ProductSectionDefinition[];
 
 export const CAPABILITY_SECTIONS = ['extensions', 'skills', 'connectors', 'agents', 'channels'] as const;
@@ -64,7 +63,7 @@ export function productDomainAtPath(pathname: string): ProductDomainId | null {
     return 'work';
   }
 
-  if (isPath(pathname, '/automations') || isPath(pathname, '/browser-automations')) return 'automation';
+  if (isPath(pathname, '/automations')) return 'automation';
   if (isPath(pathname, '/capabilities')) {
     return 'capabilities';
   }
@@ -83,7 +82,6 @@ export function productSectionAtLocation(pathname: string, _search = ''): Produc
   if (isPath(pathname, '/notes')) return 'work-notes';
   if (isPath(pathname, '/automations')) return 'automation-triggers';
 
-  if (isPath(pathname, '/browser-automations')) return 'automation-browser';
   if (isPath(pathname, '/local-apps') || isPath(pathname, '/open')) return 'apps-library';
   if (isPath(pathname, '/user-model')) return 'me-overview';
   if (isPath(pathname, '/capabilities')) {

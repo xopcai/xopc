@@ -212,22 +212,6 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
-    id: 'browser-recordings',
-    match: (path) => path.startsWith('/api/browser/recordings/'),
-    load: async () => {
-      const { registerBrowserRecordingRoutes } = await import('./browser-recordings.js');
-      return { register: registerBrowserRecordingRoutes };
-    },
-  },
-  {
-    id: 'browser-automations',
-    match: (path) => startsWithAny(path, ['/api/browser/automations', '/api/browser/automation-runs']),
-    load: async () => {
-      const { registerBrowserAutomationRoutes } = await import('./browser-automations.js');
-      return { register: registerBrowserAutomationRoutes };
-    },
-  },
-  {
     id: 'browser-setup',
     match: path => path === '/api/browser/setup',
     load: async () => {

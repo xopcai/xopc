@@ -144,42 +144,6 @@ CREATE TABLE activity_related_projects (
   PRIMARY KEY (activity_id, project_id, reason)
 );
 
-CREATE TABLE browser_automations (
-  automation_id TEXT PRIMARY KEY,
-  revision INTEGER NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('enabled', 'disabled')),
-  definition_json TEXT NOT NULL,
-  created_at_ms INTEGER NOT NULL,
-  updated_at_ms INTEGER NOT NULL
-);
-
-CREATE TABLE browser_automation_runs (
-  run_id TEXT PRIMARY KEY,
-  automation_id TEXT NOT NULL,
-  automation_revision INTEGER NOT NULL,
-  definition_json TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
-  inputs_json TEXT NOT NULL,
-  result_json TEXT,
-  error TEXT,
-  created_at_ms INTEGER NOT NULL,
-  started_at_ms INTEGER,
-  ended_at_ms INTEGER,
-  duration_ms INTEGER, client_request_id TEXT, business_outcome TEXT,
-  FOREIGN KEY (automation_id) REFERENCES browser_automations(automation_id) ON DELETE CASCADE
-);
-
-CREATE TABLE browser_action_audit (
-  event_id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  type TEXT NOT NULL,
-  data_json TEXT,
-  created_at_ms INTEGER NOT NULL,
-  UNIQUE(run_id, seq),
-  FOREIGN KEY (run_id) REFERENCES browser_automation_runs(run_id) ON DELETE CASCADE
-);
-
 CREATE TABLE projects (
   project_id         TEXT PRIMARY KEY,
   name               TEXT NOT NULL,
@@ -2508,43 +2472,6 @@ CREATE TABLE personal_strategy_versions (
   UNIQUE(thread_id, revision)
 );
 
-CREATE TABLE browser_automation_versions (
-  automation_id TEXT NOT NULL REFERENCES browser_automations(automation_id) ON DELETE CASCADE,
-  revision INTEGER NOT NULL,
-  definition_json TEXT NOT NULL,
-  created_at_ms INTEGER NOT NULL,
-  PRIMARY KEY (automation_id, revision)
-);
-
-CREATE TABLE browser_automation_verifications (
-  automation_id TEXT NOT NULL,
-  revision INTEGER NOT NULL,
-  run_id TEXT NOT NULL REFERENCES browser_automation_runs(run_id) ON DELETE CASCADE,
-  verified_at_ms INTEGER NOT NULL,
-  PRIMARY KEY (automation_id, revision),
-  FOREIGN KEY (automation_id, revision) REFERENCES browser_automation_versions(automation_id, revision) ON DELETE CASCADE
-);
-
-CREATE TABLE browser_recordings (
-  recording_id TEXT PRIMARY KEY,
-  principal_id TEXT NOT NULL,
-  state TEXT NOT NULL,
-  ack_seq INTEGER NOT NULL DEFAULT 0,
-  final_seq INTEGER,
-  automation_id TEXT REFERENCES browser_automations(automation_id) ON DELETE CASCADE,
-  error TEXT,
-  created_at_ms INTEGER NOT NULL,
-  updated_at_ms INTEGER NOT NULL
-);
-
-CREATE TABLE browser_recording_events (
-  recording_id TEXT NOT NULL REFERENCES browser_recordings(recording_id) ON DELETE CASCADE,
-  seq INTEGER NOT NULL,
-  event_id TEXT NOT NULL UNIQUE,
-  payload_json TEXT NOT NULL,
-  PRIMARY KEY (recording_id, seq)
-);
-
 CREATE TABLE clarification_notification_outbox (
   wait_id TEXT PRIMARY KEY REFERENCES session_clarification_waits(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'settled')),
@@ -2978,12 +2905,6 @@ CREATE INDEX idx_object_links_to
 
 CREATE INDEX idx_activity_related_projects_project
   ON activity_related_projects(project_id, activity_id);
-
-CREATE INDEX idx_browser_automation_runs_automation_created
-  ON browser_automation_runs(automation_id, created_at_ms DESC);
-
-CREATE INDEX idx_browser_action_audit_run_seq
-  ON browser_action_audit(run_id, seq ASC);
 
 CREATE INDEX idx_projects_status
   ON projects(status, updated_at DESC);
@@ -3573,8 +3494,6 @@ CREATE INDEX personal_wakeups_due ON personal_wakeups(status, next_attempt_at, n
 CREATE INDEX personal_outreach_pending ON personal_outreach(state, created_at);
 
 CREATE INDEX personal_strategy_versions_thread ON personal_strategy_versions(thread_id, revision DESC);
-
-CREATE UNIQUE INDEX idx_browser_run_request ON browser_automation_runs(client_request_id) WHERE client_request_id IS NOT NULL;
 
 CREATE INDEX idx_clarification_notification_pending ON clarification_notification_outbox(status, created_at);
 

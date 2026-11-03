@@ -108,7 +108,6 @@ export {
 
 
 export { createAutomationTool, type AutomationToolDeps } from './automation-tool.js';
-export { createBrowserAutomationTool } from './browser-automation-tool.js';
 export { createXopcUseTool, type XopcUseToolDeps, type XopcUseToolInput } from './xopc-use-tool.js';
 
 export { createSkillsListTool, createSkillViewTool, type SkillsToolsDeps } from './skills-tools.js';

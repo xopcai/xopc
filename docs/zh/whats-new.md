@@ -1,5 +1,7 @@
 # 近期变化
 
+> 2026-11-03 起已移除浏览器录制、步骤保存、回放及独立管理页面。基础浏览器控制继续保留。
+
 以下是截至 2026 年 10 月 25 日的用户使用入口。具体版本与安装包见 [GitHub Releases](https://github.com/xopcai/xopc/releases)，更新方法见[升级指南](./update.md)。桌面、网关、手机和浏览器扩展独立分发，更新主程序不会自动更新所有客户端。
 
 ## v0.0.419：Windows 打包修复
@@ -35,7 +37,7 @@ Windows x64 桌面构建改用系统归档工具解压经过校验的电脑控�
 - 原生移动端源码补充个人 Agent 资料设置和聊天显示改善；实际可用性取决于各平台客户端分发版本。
 - 浏览器控制移除了旧的逐步批准流程。先明确操作范围，并在回放前检查真实网站和输入。
 
-[录制与回放指南](./browser-automations.md) · [移动端](./mobile-app.md) · [版本变更](https://github.com/xopcai/xopc/compare/v0.0.368...v0.0.369)。
+[移动端](./mobile-app.md) · [版本变更](https://github.com/xopcai/xopc/compare/v0.0.368...v0.0.369)。
 
 ## 模型、语音与图像
 

@@ -17,10 +17,9 @@ describe('product navigation', () => {
     ]);
   });
 
-  it('keeps automation destinations focused on distinct top-level tools', () => {
+  it('keeps the general automations destination without the removed browser page', () => {
     expect(PRODUCT_DOMAINS.find((domain) => domain.id === 'automation')?.sections.map((section) => section.id)).toEqual([
       'automation-triggers',
-      'automation-browser',
     ]);
   });
 
@@ -45,7 +44,6 @@ describe('product navigation', () => {
     ['/notes/note-1', 'work'],
     ['/automations', 'automation'],
     ['/scenes/inbox', null],
-    ['/browser-automations', 'automation'],
     ['/capabilities/connectors', 'capabilities'],
     ['/extensions/example/page', null],
     ['/local-apps/example', 'apps'],

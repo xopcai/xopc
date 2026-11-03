@@ -54,6 +54,15 @@ describe('AutomationService', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
+  it('rejects unsupported browser workflow actions', async () => {
+    const action = { kind: 'browser_automation' as const, automationId: 'removed-flow' };
+    await expect(service.create({ name: 'Removed workflow', trigger: { kind: 'manual' }, action: action as never }))
+      .rejects.toThrow();
+    const current = await service.create({ name: 'Current task', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Read a page' } });
+    await expect(service.update(current.id, { action: action as never })).rejects.toThrow();
+    expect((await service.get(current.id))?.action.kind).toBe('agent');
+  });
+
   it('keeps an accepted run on its original assistant and hands off future continuous runs', async () => {
     const calls: { message: string; conversationId: string }[] = [];
     let release!: () => void;
@@ -568,33 +577,6 @@ describe('AutomationService', () => {
     });
   });
 
-  it('runs an enabled browser automation action and records its task', async () => {
-    const runAndWait = vi.fn(async () => ({
-      id: 'recipe-run-1',
-      status: 'succeeded' as const,
-      result: { title: 'Example' },
-    }));
-    service.setDeps({ browserAutomationService: { runAndWait, get: () => ({ revision: 1, verified: true }), versions: () => [{ revision: 1, verified: true }] } });
-    const automation = await service.create({
-      name: 'Collect page title',
-      trigger: { kind: 'manual' },
-      action: { kind: 'browser_automation', automationId: 'collect-title', inputs: { query: 'xopc' } },
-    });
-
-    const queued = await service.runNow(automation.id);
-    const runs = await waitFor(
-      () => service.listRuns({ automationId: automation.id, limit: 5 }),
-      (items) => items.some((item) => item.id === queued.id && item.status === 'succeeded'),
-    );
-
-    expect(runAndWait).toHaveBeenCalledWith(
-      'collect-title',
-      { query: 'xopc' },
-      expect.any(AbortSignal),
-      expect.objectContaining({ revision: 1, clientRequestId: expect.stringContaining('schedule:'), triggerEvent: expect.objectContaining({ type: 'automation.manual.requested' }) }),
-    );
-    expect(runs.find((item) => item.id === queued.id)?.summary).toContain('"title":"Example"');
-  });
 
   it('trims more than two thousand completed runs without orphaning result delivery state', async () => {
     const automation = await service.create({

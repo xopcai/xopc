@@ -65,15 +65,9 @@ describe('ProductSectionHeader', () => {
     expect(container.querySelector('[aria-selected="true"]')?.textContent).toBe('Connections');
   });
 
-  it('offers the same sections in the compact picker', () => {
+  it('does not offer the removed browser automation section', () => {
     renderAt('/automations');
-    const picker = container.querySelector<HTMLButtonElement>('button[aria-label="Page sections"]')!;
-    act(() => picker.click());
-    const option = [...document.body.querySelectorAll<HTMLButtonElement>('[data-radix-popper-content-wrapper] button')]
-      .find(button => button.textContent === 'Browser automation')!;
-    act(() => option.click());
-    expect(container.querySelector('output')?.textContent).toBe('/browser-automations');
-    expect(picker.getAttribute('aria-expanded')).toBe('false');
+    expect(container.textContent).not.toContain('Browser automation');
   });
 
   it('preserves dedicated conversation chrome', () => {
