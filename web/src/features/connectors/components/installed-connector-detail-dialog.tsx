@@ -182,7 +182,7 @@ function StandardInstalledConnectorDetailDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             {error ? <p className="mb-4 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
 
-            {instance.enabled && (health ? health.ok : instance.connectionStatus === 'connected' || instance.status === 'connected' || instance.usage.lastHealthStatus === 'ok') ? <div className="mb-5"><ConnectionUsageGuide target={{ kind: 'connector', id: instance.connectorId, name: instance.displayName }} serverId={instance.materialized.type === 'mcp' ? instance.materialized.serverId : undefined} onStart={onClose} /></div> : null}
+            {instance.enabled && (health ? health.ok : instance.connectionStatus === 'connected' || instance.status === 'connected' || instance.usage.lastHealthStatus === 'ok') ? <div className="mb-5"><ConnectionUsageGuide target={{ kind: 'connector', id: instance.connectorId, name: instance.displayName }} onStart={onClose} /></div> : null}
 
             {isMcp ? (
               <div className="space-y-3 rounded-xl border border-edge bg-surface-base p-3 text-sm">
