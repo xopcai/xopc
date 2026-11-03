@@ -48,7 +48,7 @@ enum MarkdownBlock: Equatable, Sendable {
               let match = text.range(of: #"^\[(?:查看(?:高清|原|大)?图片|查看大图|查看原图|(?i:view(?: (?:full[- ]size|original|hd))? image))\]\(([^\s]+)\)$"#, options: .regularExpression),
               String(text[match]) == text,
               let start = text.range(of: "]("), text.hasSuffix(")") else { return false }
-        let href = String(text[start.upperBound..<text.index(before: text.endIndex)])
+        let href = String(text[start.upperBound ..< text.index(before: text.endIndex)])
         return (ChatMessageLink.resolve(href)?.id ?? href) == (ChatMessageLink.resolve(source)?.id ?? source)
     }
 
