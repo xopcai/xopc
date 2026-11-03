@@ -25,6 +25,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -429,6 +431,7 @@ private fun MessageTargets(items: List<ConversationTarget>, onOpen: (Conversatio
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MessageResultCapsule(
   title: String,
@@ -452,11 +455,17 @@ private fun MessageResultCapsule(
     ) {
       Icon(painterResource(icon), contentDescription = null,
         tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-      Text(title, modifier = Modifier.weight(1f, fill = false), maxLines = 2,
-        overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-      if (!metadata.isNullOrBlank()) Text("· $metadata", modifier = Modifier.widthIn(max = 110.dp),
-        maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      FlowRow(
+        modifier = Modifier.weight(1f, fill = false),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+      ) {
+        Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis,
+          style = MaterialTheme.typography.bodyMedium)
+        if (!metadata.isNullOrBlank()) Text("· $metadata",
+          maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
       if (enabled) ActionIcon(R.drawable.action_chevron_right,
         color = MaterialTheme.colorScheme.onSurfaceVariant, size = 14.dp)
     }

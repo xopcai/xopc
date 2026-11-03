@@ -61,7 +61,7 @@ describe('task detail action-first layout', () => {
 
   it('puts current action before results, goal and management and keeps start actionable', async () => {
     await render();
-    const text = container.textContent;
+    const text = container.querySelector('.task-detail-scroll > section')!.textContent;
     expect(text.indexOf('当前进展')).toBeLessThan(text.indexOf('交付结果'));
     expect(text.indexOf('交付结果')).toBeLessThan(text.indexOf('任务目标'));
     expect(text.indexOf('任务目标')).toBeLessThan(text.indexOf('任务管理'));
@@ -72,6 +72,44 @@ describe('task detail action-first layout', () => {
     expect(container.textContent).toContain(copy.taskProperties);
     expect(container.textContent).toContain(copy.taskRelations);
     expect(container.querySelector('textarea[aria-label="任务留言"]')).not.toBeNull();
+  });
+
+  it('opens a collapsed section from navigation and supports repeated clicks', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    try {
+      await render();
+      const report = container.querySelector<HTMLDetailsElement>('[data-task-section="report"]')!;
+      report.scrollIntoView = vi.fn();
+      act(() => report.querySelector('summary')!.click());
+      expect(report.open).toBe(false);
+      const nav = container.querySelector('nav[aria-label="任务详情分区"]')!;
+      const reportButton = [...nav.querySelectorAll('button')].find(item => item.textContent === '执行报告')!;
+      act(() => reportButton.click());
+      expect(report.open).toBe(true);
+      expect(report.scrollIntoView).toHaveBeenLastCalledWith({ block: 'start', behavior: 'instant' });
+      expect(reportButton.getAttribute('aria-current')).toBe('location');
+      act(() => reportButton.click());
+      expect(report.scrollIntoView).toHaveBeenCalledTimes(2);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('tracks manual scrolling without scrolling the section again', async () => {
+    let frame: FrameRequestCallback | undefined;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frame = callback; return 1; });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    try {
+      await render();
+      const pane = container.querySelector<HTMLElement>('.task-detail-scroll')!;
+      const targets = [...pane.querySelectorAll<HTMLElement>('[data-task-section]')];
+      targets.forEach((target, index) => {
+        target.getBoundingClientRect = () => ({ top: index <= 3 ? -10 : 500 }) as DOMRect;
+        target.scrollIntoView = vi.fn();
+      });
+      act(() => { pane.dispatchEvent(new Event('scroll')); frame?.(0); });
+      const current = container.querySelector('nav [aria-current="location"]');
+      expect(current?.textContent).toBe('目标说明');
+      targets.forEach(target => expect(target.scrollIntoView).not.toHaveBeenCalled());
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('shows questions and submit controls inline without a competing chat link', async () => {
@@ -153,7 +191,7 @@ describe('task detail action-first layout', () => {
     expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'close', resolution: 'done' }, 3);
   });
 
-  it('keeps delivery and unresolved decisions visible while collapsing reports and evidence', async () => {
+  it('keeps main sections readable while collapsing detailed evidence', async () => {
     state.detail.task.phase = 'review';
     state.detail.allowedCommands = ['close', 'add_wait', 'start'];
     state.detail.task.contract!.acceptanceCriteria = ['Report saved', 'Evidence checked'];
@@ -166,11 +204,11 @@ describe('task detail action-first layout', () => {
         status: 'unverified', evidenceTitles: ['Research claim: c-file'], method: 'model_reviewed', note })) } }] as TaskDetail['receipts'];
     await render();
     const report = [...container.querySelectorAll('summary')].find((item) => item.textContent === '完整执行报告')!.parentElement as HTMLDetailsElement;
-    expect(report.open).toBe(false);
+    expect(report.open).toBe(true);
     expect(report.textContent).toContain('Full report with detailed reasoning');
     expect(report.textContent).toContain(copy.doneWell);
     const management = container.querySelector<HTMLDetailsElement>('[aria-label="任务管理"]')!;
-    expect(management.open).toBe(false);
+    expect(management.open).toBe(true);
     const followUp = container.querySelector('[aria-label="执行待办"]')!;
     expect(followUp.textContent).toContain('Confirm the public release scope');
     expect(followUp.textContent).toContain('Choose internal or public release');
