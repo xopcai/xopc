@@ -269,7 +269,8 @@ private extension MessageBubble {
             VStack(alignment: .leading, spacing: 6) {
                 let images = message.attachments.filter(\.isImage)
                 if images.count == 1, let attachment = images.first,
-                   let source = attachment.uri ?? attachment.workspaceRelativePath.map(ChatImageSource.workspaceURL) {
+                   let source = attachment.uri ?? attachment.workspaceRelativePath.map(ChatImageSource.workspaceURL)
+                {
                     MarkdownImageView(alt: attachment.name ?? AppLocalization.string("图片", locale: locale), source: source,
                                       configuration: configuration, conversationID: conversationID, gallery: images)
                 } else if !images.isEmpty {
@@ -495,7 +496,7 @@ private final class ChatAudioPlayback: NSObject, AVAudioPlayerDelegate {
 struct ChatResultCapsuleLabel: View {
     let title: String
     let systemImage: String
-    var status: String? = nil
+    var status: String?
     var canOpen = true
 
     var body: some View {

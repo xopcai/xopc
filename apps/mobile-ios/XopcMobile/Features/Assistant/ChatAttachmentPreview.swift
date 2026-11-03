@@ -48,12 +48,12 @@ struct ChatAttachmentPreview: View {
             if capsule {
                 ChatResultCapsuleLabel(title: attachment.name ?? String(localized: "附件"), systemImage: "doc")
             } else {
-            Label(attachment.name ?? "附件", systemImage: "doc")
-                .font(.caption)
-                .lineLimit(1)
-                .padding(.horizontal, 9)
-                .frame(minHeight: 44)
-                .background(Color.secondary.opacity(0.1), in: .capsule)
+                Label(attachment.name ?? "附件", systemImage: "doc")
+                    .font(.caption)
+                    .lineLimit(1)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 44)
+                    .background(Color.secondary.opacity(0.1), in: .capsule)
             }
         }
         .buttonStyle(.plain)
