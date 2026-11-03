@@ -252,6 +252,8 @@ the user's intent is ambiguous.
 
 \`createMode\` defaults to \`capture\`, which creates a backlog Task without executing it.
 Use \`start\` only when immediate execution is intended.
+Task acceptance defaults to \`verified_auto\`: verify the results and close automatically when all criteria pass.
+Pass \`acceptancePolicy: "manual"\` only when the user explicitly requires human acceptance.
 
 For an immediate delegated task, use the minimal call below. The objective can include the
 worker instructions and constraints; optional lists are unnecessary for a simple delegation.
@@ -271,6 +273,7 @@ worker instructions and constraints; optional lists are unnecessary for a simple
     "priority": "high",
     "expectedOutputs": ["Research report"],
     "acceptanceCriteria": ["Sources are cited"],
+    "acceptancePolicy": "verified_auto",
     "constraints": ["Do not contact customers without approval"],
     "dependsOnTaskIds": []
   }

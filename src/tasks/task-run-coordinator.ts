@@ -4,7 +4,7 @@ import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 
 import type { ExecutionContext } from './execution-context.js';
-import { personalRequestForTask } from '../personal-agent/request-repository.js';
+import { personalRequestReviewSnapshot } from '../personal-agent/request-verification.js';
 import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { TaskApplicationService } from './task-application-service.js';
@@ -162,12 +162,15 @@ export class TaskRunCoordinator {
     const summary = emptySuccess ? (zh ? '助手执行未返回结果或证据' : 'Agent run returned no result or evidence')
       : zh ? systemSummaries[resultSummary] ?? resultSummary : resultSummary;
     const research = currentTaskResearchResult(run.id);
-    const currentResearch = research && research.contractVersion === task.latestContractVersion
+    const personalSnapshot = personalRequestReviewSnapshot(task.id, run.id);
+    const currentResearch = research && (!personalSnapshot || (personalSnapshot.hash && personalSnapshot.hash === research.personalResultHash))
+      && research.contractVersion === task.latestContractVersion
       && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
     const publications = inspectTaskPublications(run.id, currentResearch);
     const repair = buildResearchRepair({ research: currentResearch, stale: Boolean(research && !currentResearch),
       instructionSequence: taskInstructionSequence(task.id), publications, criteria: task.contract?.acceptanceCriteria ?? [],
-      requiresReview: !personalRequestForTask(task.id) && Boolean(task.body?.includes('publish_task_result')) });
+      resultFingerprint: personalSnapshot?.hash,
+      requiresReview: task.contract?.acceptancePolicy === 'verified_auto' || (!personalSnapshot && Boolean(task.body?.includes('publish_task_result'))) });
     const repairBlocked = Boolean(repair && run.conversationId && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId),
       { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS }));
     if (status === 'failed' && isTransientProviderErrorMessage(input.summary) && !unconfirmedEffects
@@ -190,13 +193,17 @@ export class TaskRunCoordinator {
     const instructionChecks = (currentResearch?.instructionChecks ?? []).map(check => ({ criterion: check.instruction,
       status: check.status, evidenceTitles: check.claimIds.map(id => `Research claim: ${id}`), note: check.note, method: 'model_reviewed' as const }));
     const achieved = status === 'succeeded' && checks.length > 0 && checks.length === task.contract?.acceptanceCriteria.length
-      && checks.every(check => check.status === 'passed') && !repair && currentResearch!.claims.every(claim => claim.support === 'supported');
+      && (!personalSnapshot || personalSnapshot.complete)
+      && [...checks, ...instructionChecks].every(check => check.status === 'passed') && !repair && currentResearch!.claims.every(claim => claim.support === 'supported');
+    const acceptanceFailed = status === 'succeeded' && Boolean(repair)
+      && task.contract?.acceptancePolicy === 'verified_auto' && !repairBlocked && !unconfirmedEffects;
+    const finalStatus = acceptanceFailed ? 'failed' : status;
     this.#application.completeRun({
       runId: run.id,
       expectedRunVersion: run.version,
       resultText: input.assistantText,
       receipt: {
-        status,
+        status: finalStatus,
         summary,
         changes: this.#evidence.filter((item) => item.kind === 'state'),
         evidence: [...this.#evidence, ...researchEvidence],
@@ -209,8 +216,9 @@ export class TaskRunCoordinator {
         needsUser: unconfirmedEffects || repairBlocked,
         ...(repairBlocked ? { nextAction: zh ? '先确认上次未确认操作的实际影响，再继续补查。' : 'Confirm the effects of the unconfirmed operation before repair.' } : {}),
         completionVerdict: achieved ? 'achieved' : status === 'succeeded' ? 'partial' : 'not_achieved',
-        ...(status === 'failed' ? { failure: { code: unconfirmedEffects ? 'tool_outcome_unconfirmed' : emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: 'execution',
-          recoveryAction: unconfirmedEffects ? (zh ? '检查上次操作的实际影响后再恢复任务' : 'Confirm the previous operation effects before resuming')
+        ...(finalStatus === 'failed' ? { failure: { code: acceptanceFailed ? 'acceptance_incomplete' : unconfirmedEffects ? 'tool_outcome_unconfirmed' : emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: 'execution',
+          recoveryAction: acceptanceFailed ? (zh ? '自动补做后仍有未核验项；检查已记录的缺口后重试任务' : 'Automatic repair left unverified requirements; inspect the recorded gaps and retry')
+            : unconfirmedEffects ? (zh ? '检查上次操作的实际影响后再恢复任务' : 'Confirm the previous operation effects before resuming')
             : zh ? '使用其他可用助手或模型重试任务' : 'Retry the task run with another available Agent or model' } } : {}),
       },
     });

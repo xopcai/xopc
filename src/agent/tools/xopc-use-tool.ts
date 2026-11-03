@@ -1008,6 +1008,10 @@ async function handleTask(
         `Write ${field} in Simplified Chinese to match the task language. Preserve all requirements, paths, URLs and proper nouns; translate only explanatory prose.` };
       contract[field] = value;
     }
+    const acceptancePolicy = args.acceptancePolicy ?? 'verified_auto';
+    if (!['verified_auto', 'verified_then_review', 'manual'].includes(String(acceptancePolicy))) {
+      return { ok: false, error: 'Invalid acceptancePolicy' };
+    }
     const originConversationId = deps.getCurrentConversationId?.();
     const conversationId = trimString(args.conversationId) ?? originConversationId;
     const config = deps.getConfig?.();
@@ -1045,7 +1049,7 @@ async function handleTask(
       locale: taskLocale,
       contract: {
         ...contract,
-        acceptancePolicy: 'verified_auto' as const,
+        acceptancePolicy: acceptancePolicy as 'verified_auto' | 'verified_then_review' | 'manual',
         outputDestinations: [],
       },
       dependencies: dependsOnTaskIds,

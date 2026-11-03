@@ -61,6 +61,7 @@ export function assertPersonalRequestTimeRange(range: NonNullable<PersonalReques
 
 export function submitPersonalRequest(input: {
   conversationId: string; connectorId: string; objective: string; agentId?: string;
+  acceptancePolicy?: 'verified_auto' | 'manual';
   accountId?: string; description?: string; selectionReason?: string; timeRange?: PersonalRequest['parameters']['timeRange']; idempotencyKey: string;
 }): PersonalRequest {
   if (!isPersonalConversation(input.conversationId)) throw new Error('Personal conversation is required');
@@ -73,7 +74,7 @@ export function submitPersonalRequest(input: {
     const state = getSessionInputState(input.conversationId);
     if (!transcriptId || !state.activeInputId || !state.activeRunId) throw new Error('An active chat execution is required');
     const hash = createHash('sha256').update(JSON.stringify({ connectorId: input.connectorId, objective: input.objective,
-      agentId: input.agentId, accountId: input.accountId, description: input.description, timeRange: input.timeRange })).digest('hex');
+      agentId: input.agentId, accountId: input.accountId, description: input.description, timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy })).digest('hex');
     const previous = db.prepare(`SELECT request_id, request_hash FROM personal_requests
       WHERE conversation_id = ? AND transcript_id = ? AND idempotency_key = ?`)
       .get(input.conversationId, transcriptId, input.idempotencyKey) as { request_id: string; request_hash: string } | undefined;
@@ -107,7 +108,7 @@ export function submitPersonalRequest(input: {
       idempotency_key, request_hash, objective, connector_id, executor_agent_id, account_id, parameters_json,
       state, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'preflighting',?,?)`).run(requestId,
       input.conversationId, transcriptId, state.activeInputId, input.idempotencyKey, hash, input.objective,
-      input.connectorId, input.agentId ?? 'task-router', selected ?? null, JSON.stringify({ brief: input.description?.trim(), timeRange: range, ...(!input.agentId ? { allocate: true } : {}) }), now, now);
+      input.connectorId, input.agentId ?? 'task-router', selected ?? null, JSON.stringify({ acceptancePolicy: input.acceptancePolicy, brief: input.description?.trim(), timeRange: range, ...(!input.agentId ? { allocate: true } : {}) }), now, now);
     const request = getPersonalRequest(requestId)!;
     if (input.agentId) {
       const selection = requestAssessment(request, selected);
@@ -129,6 +130,16 @@ export function submitPersonalRequest(input: {
   });
 }
 
+function connectedRequestCriteria(request: PersonalRequest, locale: 'zh' | 'en'): string[] {
+  const criteria = locale === 'zh'
+    ? [`已保存的摘要直接回答用户请求及补充要求：${request.objective}`, '摘要中的事实和建议有本次已连接应用的成功读取结果支持，来源标识准确且未超出只读范围。']
+    : [`The saved summary answers the request and applicable directions: ${request.objective}`, 'Facts and recommendations in the saved result are supported by successful connected-app reads, with accurate source identifiers and read-only scope.'];
+  if (['composio-gmail', 'composio-outlook'].includes(request.connectorId)) criteria.push(locale === 'zh'
+    ? '邮件查询完整覆盖约定的时间范围；已保存的 coverage 非 partial，邮件条目的 ID、发件人、时间及链接与实际读取一致。'
+    : 'Mail search fully covers the requested time range; saved coverage is not partial and message IDs, senders, dates and links match actual reads.');
+  return criteria;
+}
+
 function startPersonalRequest(request: PersonalRequest, accountId: string): PersonalRequest {
   if (request.taskId) return request;
   if (['cancelled', 'completed', 'failed'].includes(request.state)) throw new Error('Request is no longer active');
@@ -148,6 +159,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
   if (request.parameters.allocate) {
     const contract = defineTaskContract(request.objective, locale);
     contract.constraints = constraints;
+    contract.acceptanceCriteria = connectedRequestCriteria(request, locale);
     contract.expectedOutputs = [locale === 'zh' ? '摘要包含来源链接、查询范围、覆盖情况和部分失败说明。'
       : 'Summary with source links, query range, coverage and partial failures.'];
     const body = [request.objective, brief, ...contract.constraints, `Preserved query parameters: ${JSON.stringify(queryParameters)}.`,
@@ -157,7 +169,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
       idempotencyKey: `personal-request:${request.requestId}`, title: request.objective.slice(0, 60), body,
       originConversationId: request.conversationId,
       locale,
-      contract: { ...contract, acceptancePolicy: 'manual', outputDestinations: [] },
+      contract: { ...contract, acceptancePolicy: request.parameters.acceptancePolicy ?? 'verified_auto', outputDestinations: [] },
       activation: { mode: 'allocate', requirements: { version: 1, summary: request.objective.slice(0, 300),
         requiredTools: ['tool_search', 'xopc_tool_describe', 'xopc_tool_execute'],
         connector: { connectorId: request.connectorId, accountId } } },
@@ -177,6 +189,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
     previousSelectionId: submitted?.id, requestId: request.requestId, status: 'task_linked' });
   const contract = defineTaskContract(request.objective, locale);
   contract.constraints = constraints;
+  contract.acceptanceCriteria = connectedRequestCriteria(request, locale);
   contract.expectedOutputs = [locale === 'zh' ? '简明摘要包含来源链接、重要性说明和建议行动，并披露查询范围、覆盖情况和部分失败。'
     : 'A concise summary with source links, importance reasons and suggested actions; disclose query range, coverage and partial failures.'];
   const body = [request.objective, brief, `Selected connector: ${request.connectorId}; xopcAccountId: ${accountId}.`,
@@ -187,7 +200,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
     idempotencyKey: `personal-request:${request.requestId}`, title: request.objective.slice(0, 60), body: deliveryBody,
     originConversationId: request.conversationId, delegateAgentId: request.executorAgentId,
     locale,
-    contract: { ...contract, acceptancePolicy: 'manual', outputDestinations: [] },
+    contract: { ...contract, acceptancePolicy: request.parameters.acceptancePolicy ?? 'verified_auto', outputDestinations: [] },
     activation: { mode: 'start', executor: { kind: 'agent', agentId: request.executorAgentId } },
   }), { kind: 'system' });
   selections.link(record.id, { taskId: result.model?.task.id, runId: result.ok ? result.runId : undefined,

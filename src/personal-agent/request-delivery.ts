@@ -118,8 +118,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
         const personal = getPersonalAgentByConversation(request.conversationId);
         if (personal) warmPersonalResult(request.conversationId, delivery.deliveryId);
         if (personal) enqueuePersonalReply({ delivery, objective: request.objective, requestId: request.requestId,
-          report: parsed?.success ? parsed.data.summary : [adoptionWarning, content].filter(Boolean).join('\n\n'),
-          ...(parsed?.success ? { preservedText: renderPersonalRequestResult({ ...parsed.data, summary: '' }).trim() } : {}) });
+          report: [adoptionWarning, content].filter(Boolean).join('\n\n') });
         const entry = personal ? undefined : appendTranscriptEntry(request.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
           content: display, details: delivery, display: true, timestamp: now });
         updatePersonalRequest(request, { state: run.status === 'cancelled' ? 'cancelled' : failed ? 'failed' : 'completed' });

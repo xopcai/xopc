@@ -32,11 +32,11 @@ describe('personal repair benchmark v1', () => {
   beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'xopc-repair-')); vi.stubEnv('XOPC_STATE_DIR', root);
     resetXopcDatabaseSingletonForTest(); seedTestDatabase(join(root, 'xopc.db')); openXopcDatabase({ path: join(root, 'xopc.db') }); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
-  function execution() {
+  function execution(acceptancePolicy: 'manual' | 'verified_auto' = 'manual') {
     const main = createConversation({ agentId: 'main' }); const worker = createConversation({ agentId: 'worker' });
     const result = new TaskApplicationService().create({ idempotencyKey: main.key, title: 'Research', originConversationId: main.key,
       contract: { objective: 'Check price', expectedOutputs: ['Report'], acceptanceCriteria: ['Check actual price'],
-        constraints: [], assumptions: [], risks: [], approvalRequired: [], acceptancePolicy: 'manual', outputDestinations: [] },
+        constraints: [], assumptions: [], risks: [], approvalRequired: [], acceptancePolicy, outputDestinations: [] },
       dependencies: [], context: [], authorityGrants: [], activation: { mode: 'start', executor: { kind: 'agent', agentId: 'worker' } } });
     if (!result.ok || !result.runId) throw new Error('Expected execution');
     const runId = result.runId; const taskId = result.model.task.id;
@@ -53,6 +53,18 @@ describe('personal repair benchmark v1', () => {
   const finish = (coordinator: TaskRunCoordinator) => coordinator.finalize({ status: 'succeeded', summary: 'Report', assistantText: 'Result with limitations.' });
   const failed: ResearchReviewer = async () => ({ claims: [{ id: 'price', support: 'unsupported', note: 'Wrong price' }],
     checks: [{ criterionIndex: 0, status: 'failed', claimIds: ['price'], note: 'Correct the price' }] });
+
+  it('automatically completes ordinary work after missing evidence is repaired on the same run', async () => {
+    const x = execution('verified_auto');
+    finish(x.coordinator);
+    expect(new TaskRunRepository().require(x.runId).status).toBe('waiting');
+    const resumed = x.resume();
+    await submitTaskResearchResult(x.worker.key, 'verified', submission, undefined, review);
+    finish(resumed);
+    expect(getSqliteDatabase().prepare('SELECT phase, resolution FROM tasks WHERE task_id = ?').get(x.taskId))
+      .toMatchObject({ phase: 'closed', resolution: 'done' });
+    expect(new TaskRunRepository().getReceipt(x.runId)?.verification.status).toBe('passed');
+  });
 
   it('A01-same-run: repairs unsupported conclusions before any delivery and succeeds after fresh review', async () => {
     const x = execution(); await submitTaskResearchResult(x.worker.key, 'bad', submission, undefined, failed); finish(x.coordinator);

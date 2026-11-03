@@ -934,7 +934,7 @@ export function ProjectDetailPage() {
         approvalRequired: [],
         assumptions: [],
         risks: [],
-        acceptancePolicy: 'manual',
+        acceptancePolicy: 'verified_auto',
         outputDestinations: [],
       },
       dependencies: input.dependsOnTaskIds,

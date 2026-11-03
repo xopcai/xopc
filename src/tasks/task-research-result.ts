@@ -9,6 +9,7 @@ import { completeTaskModelCall } from './task-model-call.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { readCurrentTranscriptId } from '../storage/sqlite/session-instance-repository.js';
+import { personalRequestReviewSnapshot } from '../personal-agent/request-verification.js';
 import { createLogger } from '../utils/logger.js';
 import { readMediaReference } from '../media/media-reference.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
@@ -221,8 +222,11 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
   const task = new TaskRepository().require(link.taskId);
   const criteria = task.contract?.acceptanceCriteria ?? [];
   if (criteria.length > 40) throw new Error('Research acceptance exceeds 40 criteria');
+  const personalSnapshot = personalRequestReviewSnapshot(task.id, run.id);
+  if (personalSnapshot && !personalSnapshot.content) throw new Error('Save the connected-app result with personal_request_result before submitting acceptance evidence.');
   const { rows, tools } = taskResearchEvidence(conversationId);
   let result = TaskResearchResultSchema.parse({ version: 1, contractVersion: task.latestContractVersion,
+    ...(personalSnapshot?.hash ? { personalResultHash: personalSnapshot.hash } : {}),
     instructionSequence: taskInstructionSequence(task.id), sources: bindResearchSources(input, tools),
     claims: input.claims.map(claim => ({ ...claim, support: 'unreviewed' })),
     checks: criteria.map((criterion, criterionIndex) => ({ criterionIndex, criterion, status: 'unverified', claimIds: [], note: 'Review unavailable.' })),
@@ -231,7 +235,7 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
       .map(entry => ({ sequence: entry.sequence, instruction: entry.body, status: 'unverified', claimIds: [], note: 'Review unavailable.' })),
     review: 'unavailable' });
   if ((result.instructionChecks?.length ?? 0) > 40) throw new Error('Instruction review exceeds 40 applicable directions; explicitly supersede obsolete directions before continuing');
-  if (JSON.stringify(result).length + (task.body?.length ?? 0) > 48_000) throw new Error('Research review exceeds context budget; shorten excerpts without dropping required findings');
+  if (JSON.stringify(result).length + (task.body?.length ?? 0) + (personalSnapshot?.content?.length ?? 0) > 48_000) throw new Error('Research review exceeds context budget; shorten excerpts without dropping required findings');
   const published = new Map<string, ReturnType<typeof TurnOutcomeDeliverableSchema.parse>>();
   for (const row of rows) for (const rawArtifact of JSON.parse(row.payload_json).details?.artifacts ?? []) {
     const artifact = TurnOutcomeDeliverableSchema.safeParse(rawArtifact);
@@ -247,6 +251,8 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
     result.finalArtifactIds = submitted.finalArtifactIds;
   }
   const artifacts: Array<{ title: string; content?: string; contentReviewed: boolean }> = [];
+  if (personalSnapshot?.content) artifacts.push({ title: 'Saved connected-app result (summary, items and coverage)',
+    content: personalSnapshot.content, contentReviewed: true });
   result.inspectedArtifactIds = [...published.values()].map(artifact => artifact.artifactId);
   let contentBudget = 24_000;
   for (const artifact of published.values()) {
@@ -278,7 +284,12 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
     result = { ...result, checks: result.checks.map(check => ({ ...check, status: 'unverified',
       note: 'Default criteria were not expanded into concrete acceptance items; broad completion cannot certify item coverage.' })) };
   }
+  if (personalSnapshot && !personalSnapshot.complete) result = { ...result, checks: result.checks.map(check => ({
+    ...check, status: 'unverified', note: 'Connected-app query coverage is incomplete; finish the requested range before automatic acceptance.' })) };
   signal?.throwIfAborted();
+  if (personalSnapshot && personalRequestReviewSnapshot(task.id, run.id)?.hash !== personalSnapshot.hash) {
+    throw new Error('Connected-app result changed during review; resubmit evidence for the current saved result.');
+  }
   const current = new TaskRepository().require(task.id);
   if (current.latestContractVersion !== result.contractVersion || taskInstructionSequence(task.id) !== result.instructionSequence
     || new TaskRunRepository().getActiveRoot(task.id)?.id !== run.id || current.phase === 'closed') throw new Error('Task requirements changed during review; resubmit the current result');

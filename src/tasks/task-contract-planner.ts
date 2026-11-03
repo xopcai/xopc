@@ -66,6 +66,7 @@ export function parseTaskContractResponse(raw: string): TaskContractDefinition |
   if (!parsed) return undefined;
   if (['expectedOutputs', 'acceptanceCriteria', 'constraints', 'approvalRequired', 'assumptions', 'risks'].some(key =>
     parsed[key] !== undefined && (!Array.isArray(parsed[key]) || (parsed[key] as unknown[]).some(value => typeof value !== 'string')))) return undefined;
+  if (parsed.acceptancePolicy !== undefined && !['verified_auto', 'manual'].includes(String(parsed.acceptancePolicy))) return undefined;
   const objective = typeof parsed.objective === 'string' ? parsed.objective.trim() : '';
   const expectedOutputs = strings(parsed.expectedOutputs, 8);
   const plannedCriteria = strings(parsed.acceptanceCriteria, 40);
@@ -87,6 +88,7 @@ export function parseTaskContractResponse(raw: string): TaskContractDefinition |
     || parsed.requiredCapabilities.some(name => typeof name !== 'string' || !Object.hasOwn(EXECUTION_CAPABILITIES, name)))) return undefined;
   return {
     objective,
+    ...(parsed.acceptancePolicy === undefined ? {} : { acceptancePolicy: parsed.acceptancePolicy as 'verified_auto' | 'manual' }),
     ...(parsed.requiredCapabilities === undefined ? {} : { requiredCapabilities: strings(parsed.requiredCapabilities, 6) as ExecutionCapability[] }),
     expectedOutputs,
     acceptanceCriteria,
@@ -109,6 +111,7 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
       const prompt = [
         'Define the smallest complete, verifiable contract for the user task.',
         'Preserve the user intent. Do not invent requirements or ask for optional preferences.',
+        'acceptancePolicy defaults to verified_auto. Return manual only if the human explicitly requires personal acceptance or sign-off. A generic approval for an external action is not a request for manual task acceptance.',
         'Acceptance criteria must describe externally checkable finished states, not activities.',
         'Write boundaries and prohibitions on unrelated actions belong in constraints, not criteria requiring proof that no unobserved action ever occurred. Criteria may check the actual delivered output paths and unchanged supplied input bytes. Never remove an explicit scope restriction.',
         'Keep each criterion concise and concrete; do not repeat the full brief. Include all required deliverable conditions without splitting trivial wording into unnecessary items.',

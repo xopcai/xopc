@@ -1,6 +1,7 @@
 import type { ExecutionCapability } from './task-execution-capabilities.js';
 
 export interface TaskContractDefinition {
+  acceptancePolicy?: 'verified_auto' | 'manual';
   objective: string;
   expectedOutputs: string[];
   acceptanceCriteria: string[];
