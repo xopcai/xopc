@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from 'react';
+import { act, useEffect, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskDetailPage } from '../task-detail-page';
@@ -91,6 +91,45 @@ describe('task detail action-first layout', () => {
       act(() => reportButton.click());
       expect(report.scrollIntoView).toHaveBeenCalledTimes(2);
     } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('keeps the clicked label stable and waits for scrolling to finish before navigating', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    let frame: FrameRequestCallback | undefined;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frame = callback; return 1; });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const locations: string[] = [];
+    function LocationProbe() {
+      const location = useLocation();
+      useEffect(() => { locations.push(location.search); }, [location]);
+      return null;
+    }
+    try {
+      await act(async () => root.render(<MemoryRouter initialEntries={['/tasks/task-1']}><LocationProbe /><Routes><Route path="/tasks/:taskId" element={<TaskDetailPage />} /></Routes></MemoryRouter>));
+      const pane = container.querySelector<HTMLElement>('.task-detail-scroll')!;
+      const targets = [...pane.querySelectorAll<HTMLElement>('[data-task-section]')];
+      targets.forEach((target, index) => {
+        target.getBoundingClientRect = () => ({ top: index === 0 ? -10 : 500 }) as DOMRect;
+        target.scrollIntoView = vi.fn();
+      });
+      const nav = container.querySelector('nav[aria-label="任务详情分区"]')!;
+      const goal = [...nav.querySelectorAll('button')].find(item => item.textContent === '目标说明')!;
+      act(() => goal.click());
+      expect(locations).toEqual(['']);
+      act(() => { pane.dispatchEvent(new Event('scroll')); frame?.(0); });
+      expect(goal.getAttribute('aria-current')).toBe('location');
+      expect(locations).toEqual(['']);
+      act(() => pane.dispatchEvent(new Event('scrollend')));
+      expect(locations).toHaveLength(2);
+      expect(locations[1]).toContain('taskSection=goal');
+      act(() => { pane.dispatchEvent(new Event('scroll')); frame?.(0); });
+      expect(nav.querySelector('[aria-current="location"]')?.textContent).toBe('交付结果');
+      expect(locations).toHaveLength(2);
+      act(() => vi.advanceTimersByTime(160));
+      expect(locations).toHaveLength(3);
+      expect(locations[2]).toContain('taskSection=results');
+    } finally { vi.useRealTimers(); vi.unstubAllGlobals(); }
   });
 
   it('tracks manual scrolling without scrolling the section again', async () => {

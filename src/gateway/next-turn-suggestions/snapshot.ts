@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 
+import { PERSONAL_PROACTIVE_MESSAGE_TYPE, TASK_RESULT_DELIVERY_TYPE } from '@xopcai/gateway-contract';
+
 import { getSessionMetadata, getCurrentTranscriptId } from '../../storage/sqlite/session-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { getActiveConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import { getActiveClarification } from '../../storage/sqlite/clarification-wait-repository.js';
-import { buildSessionContextForLlm, type TranscriptStoredRow } from '../../session/session-context-for-llm.js';
+import { buildSessionContextForLlm, buildSessionDisplayMessages, isTranscriptCustomMessageEntry, type TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 
 export type SuggestionSnapshot = {
   conversationId: string; transcriptId: string; sourceRunId: string; inputRevision: number;
@@ -32,9 +34,15 @@ export function readSuggestionSnapshot(conversationId: string): SuggestionSnapsh
   const cursor = db.prepare('SELECT COALESCE(MAX(seq), 0) AS seq FROM transcript_entries WHERE transcript_id = ?')
     .get(transcriptId) as { seq: number };
   const rows = db.prepare(`SELECT payload_json FROM transcript_entries WHERE transcript_id = ?
-    AND entry_kind = 'message' AND role IN ('user','assistant') ORDER BY seq DESC LIMIT 12`)
-    .all(transcriptId) as Array<{ payload_json: string }>;
-  const messages = buildSessionContextForLlm(rows.reverse().map(row => JSON.parse(row.payload_json) as TranscriptStoredRow))
+    AND (entry_kind = 'message' AND role IN ('user','assistant')
+      OR json_extract(payload_json, '$.customType') IN (?, ?)) ORDER BY seq DESC LIMIT 12`)
+    .all(transcriptId, TASK_RESULT_DELIVERY_TYPE, PERSONAL_PROACTIVE_MESSAGE_TYPE) as Array<{ payload_json: string }>;
+  // Predict from what the user saw: background replies are assistant responses, not task reference prompts.
+  const contextRows = rows.reverse().flatMap<TranscriptStoredRow>(row => {
+    const stored = JSON.parse(row.payload_json) as TranscriptStoredRow;
+    return isTranscriptCustomMessageEntry(stored) ? buildSessionDisplayMessages([stored]) : [stored];
+  });
+  const messages = buildSessionContextForLlm(contextRows)
     .flatMap(message => {
       if (message.role !== 'user' && message.role !== 'assistant') return [];
       const text = typeof message.content === 'string' ? message.content : message.content
@@ -49,5 +57,5 @@ export function readSuggestionSnapshot(conversationId: string): SuggestionSnapsh
 
 export function suggestionSnapshotKey(snapshot: SuggestionSnapshot, locale: string, modelRef: string | undefined): string {
   const { messages: _messages, ...identity } = snapshot;
-  return createHash('sha256').update(JSON.stringify({ ...identity, locale, modelRef, version: 1 })).digest('hex');
+  return createHash('sha256').update(JSON.stringify({ ...identity, locale, modelRef, version: 2 })).digest('hex');
 }
