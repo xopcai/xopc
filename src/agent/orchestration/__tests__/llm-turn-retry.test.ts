@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
   classifyLlmFailure,
+  recordLlmRetryOutcome,
   getAssistantTurnErrorMessage,
   isTransientLlmErrorMessage,
   stripTrailingErrorAssistantMessages,
@@ -12,6 +13,25 @@ import {
 
 describe('llm-turn-retry', () => {
   afterEach(() => vi.useRealTimers());
+
+  it('renews retries after model progress but bounds consecutive failures', async () => {
+    const failure = { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'Connection error.' };
+    const budget = { continues: 2 };
+    recordLlmRetryOutcome(budget, 'error');
+    expect(budget.continues).toBe(2);
+    recordLlmRetryOutcome(budget, 'aborted');
+    expect(budget.continues).toBe(2);
+    recordLlmRetryOutcome(budget, 'toolUse');
+    expect(budget.continues).toBe(0);
+    const agent = { state: { messages: [{ role: 'user', content: 'Continue', timestamp: 1 }, failure] },
+      continue: vi.fn(async () => { agent.state.messages.push(failure); }), waitForIdle: vi.fn() } as any;
+    const log = { warn: vi.fn() };
+    await maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test', budget, log, baseDelayMs: 0 });
+    expect(agent.continue).toHaveBeenCalledTimes(2);
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ recoveryBlockedReason: 'retry_budget_exhausted' }), expect.any(String));
+    recordLlmRetryOutcome(budget, 'stop');
+    expect(budget.continues).toBe(0);
+  });
 
   it('cancels during backoff without issuing another model request', async () => {
     vi.useFakeTimers();

@@ -98,6 +98,11 @@ export interface RetryTransientTurnOptions {
   };
 }
 
+/** A completed model response ends a consecutive failure streak, including tool-use responses. */
+export function recordLlmRetryOutcome(budget: { continues: number }, stopReason: string): void {
+  if (stopReason === 'stop' || stopReason === 'toolUse') budget.continues = 0;
+}
+
 async function waitForRetryDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
   signal?.throwIfAborted();
   if (delayMs <= 0) return;
@@ -184,5 +189,11 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
     agent.state.messages = trimmed;
     await agent.continue();
     await agent.waitForIdle();
+  }
+  const errorMessage = getAssistantTurnErrorMessage(agent);
+  if (budget.continues >= maxContinues && errorMessage) {
+    options.log.warn({ conversationId: options.conversationId, errorMessage,
+      phase: 'model_request_recovery', recoveryBlockedReason: 'retry_budget_exhausted',
+      continueAttempts: budget.continues, maxContinues }, 'Model recovery stopped after consecutive retry failures');
   }
 }

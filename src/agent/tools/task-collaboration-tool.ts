@@ -87,7 +87,11 @@ export function createTaskCollaborationTool(deps: XopcUseToolDeps): AgentTool<ty
           const { tools } = taskResearchEvidence(conversationId!);
           if (input.toolCallId) {
             const tool = tools.find(item => item.toolCallId === input.toolCallId);
-            if (!tool) throw new Error('Successful evidence read not found in this execution');
+            if (!tool) throw new Error(JSON.stringify({ code: 'evidence_read_not_found',
+              message: 'Successful evidence read not found in this execution',
+              toolCallId: input.toolCallId,
+              recovery: 'List section=evidence without toolCallId and use an exact returned ID. Only successful source reads from the current TaskRun qualify; evidence listing/replay calls are not new sources. Older Codemode call metadata may have no persisted output; use an available original source read instead. Do not retry the same missing ID.',
+              availableReads: tools.slice(-10).map(({ toolCallId, toolName }) => ({ toolCallId, toolName })) }));
             return reply({ toolCallId: tool.toolCallId, toolName: tool.toolName, ...page(tool.body) });
           }
           const offset = input.offset ?? 0;

@@ -40,6 +40,7 @@ import {
   isAssistantTurnAborted,
   isAssistantTurnFailed,
   maybeRetryTurnAfterTransientLlmFailure,
+  recordLlmRetryOutcome,
   stripTrailingErrorAssistantMessages,
 } from '../orchestration/llm-turn-retry.js';
 import {
@@ -899,6 +900,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         'Embedded first response text ready');
       }
       if (event.type === 'message_end' && event.message.role === 'assistant') {
+        recordLlmRetryOutcome(requestRetryBudget, event.message.stopReason);
         recordPromptCacheTouch(conversationId, resolvedModel, event.message.usage);
         if (event.message.stopReason === 'error' || event.message.stopReason === 'aborted') {
           log.warn({ conversationId, runId, modelRef: latencyModelRef, modelRequestNumber,

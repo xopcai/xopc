@@ -48,6 +48,14 @@ describe('Task source identity', () => {
     const tool = { name: 'personal_task' };
     expect(withTaskEvidenceIdentity(tool as never)).toBe(tool);
   });
+  it('does not advertise collaboration listings or evidence replays as new source reads', async () => {
+    const content = [{ type: 'text' as const, text: '{"toolCallId":"original-read","text":"Observed fact"}' }];
+    const tool = { name: 'task_collaboration', label: 'Task', parameters: {} as never, description: '',
+      execute: async () => ({ content, details: {} }) };
+    expect((await withTaskEvidenceIdentity(tool).execute('replay-call', {})).content).toEqual(content);
+    const sourceTool = { ...tool, execute: async () => ({ content, details: { taskSourceRead: { taskId: 'task' } } }) };
+    expect(JSON.stringify((await withTaskEvidenceIdentity(sourceTool).execute('source-call', {})).content)).toContain('Task source toolCallId: source-call');
+  });
   it('offers ranges for completed managed jobs but never for running or failed job status', async () => {
     for (const status of ['running', 'failed', 'cancelled', 'success']) {
       const tool = { name: 'managed_job', label: 'Job', parameters: {} as never, description: '',
