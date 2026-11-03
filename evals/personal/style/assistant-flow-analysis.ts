@@ -53,3 +53,12 @@ export function analyzeFlow(cases:FlowCase[], captures:Record<string,[Capture|un
     validationP95Within120Percent:validation.latency.baselineP95Ms!==null&&validation.latency.candidateP95Ms!==null&&validation.latency.candidateP95Ms<=validation.latency.baselineP95Ms*1.2};
   return {expected:cases.length,completed:pairs.filter(p=>p.complete).length,pairs,cohorts,gates,automatedPassed:Object.values(gates).every(Boolean)};
 }
+
+/** Mandatory exposed failure regressions supplement, never replace, validation gates. */
+export function analyzeTargetedRegressions(analysis:ReturnType<typeof analyzeFlow>,caseIds:string[]) {
+  return caseIds.map(caseId=>{
+    const pair=analysis.pairs.find(p=>p.caseId===caseId);
+    const candidateIssueCount=pair?FLOW_DIMENSIONS.reduce((n,dim)=>n+(pair.violations[dim]?.[1]?.eitherOrder.length??0),0):null;
+    return {caseId,complete:pair?.complete??false,candidateIssueCount,passed:!!pair?.complete&&candidateIssueCount===0};
+  });
+}

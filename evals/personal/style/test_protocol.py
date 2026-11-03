@@ -68,6 +68,22 @@ class ProtocolTests(unittest.TestCase):
         self.assertTrue(all(len(c['userTurns']) == 4 for c in new))
         self.assertIn('hypothetical', fixture['evaluationFocus'])
 
+    def test_ownership_repair_preserves_exposed_failures_and_requires_clean_targets(self):
+        root = Path(__file__).parent
+        old = validate_dialogue_fixtures(json.loads((root / 'assistant-flow-ownership-dialogues-v1.json').read_text()))
+        fixture = json.loads((root / 'assistant-flow-ownership-dialogues-v2.json').read_text())
+        new = validate_dialogue_fixtures(fixture)
+        self.assertEqual({c['id'] for c in old}, {c['id'] for c in new if c['split'] == 'development'})
+        self.assertEqual(len([c for c in new if c['split'] == 'validation']), 8)
+        self.assertEqual(fixture['targetedCleanCases'], ['P0-FLOW-O05', 'P0-FLOW-O08'])
+        self.assertTrue(set(fixture['targetedCleanCases']).issubset({c['id'] for c in new if c['split'] == 'development'}))
+        self.assertTrue(all(len(c['userTurns']) == 4 for c in new))
+        third = json.loads((root / 'assistant-flow-ownership-dialogues-v3.json').read_text())
+        third_cases = validate_dialogue_fixtures(third)
+        self.assertEqual({c['id'] for c in new}, {c['id'] for c in third_cases if c['split'] == 'development'})
+        self.assertEqual(len([c for c in third_cases if c['split'] == 'validation']), 8)
+        self.assertEqual(third['targetedCleanCases'], ['P0-FLOW-O05', 'P0-FLOW-O08', 'P0-FLOW-R02'])
+
     def test_grading_rejects_missing_extra_uncertain_and_executable_output(self):
         for text in ["['YES']", "['YES','NO','YES']", "['YES','MAYBE']", "__import__('os').system('false')", "['YES', True]"]:
             with self.assertRaises(ValueError):
