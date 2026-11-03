@@ -463,6 +463,7 @@ export class AgentToolsFactory {
     if (personalExecution || personalExecutionMarker) {
       allowed = new Set(PERSONAL_REQUEST_TOOL_IDS.slice(0, 3)
         .filter(name => !allowed || allowed.has(name)));
+      allowed.add('publish_task_result');
       allowed.add('personal_request_result');
       allowed.add('personal_request_connection');
       allowed.add('task_collaboration');

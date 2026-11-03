@@ -15,8 +15,15 @@ import { createConversation } from '../../storage/sqlite/conversation-repository
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { resetSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
-import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
+import * as modelCall from '../../providers/model-call.js';
+import * as providers from '../../providers/index.js';
+import { TaskMainUpdateDecisionService } from '../../tasks/task-main-update-decision-service.js';
+import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
+import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
+import { TaskMainUpdateDelivery } from '../../tasks/task-main-update-delivery.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { allowsPersonalTaskNotification } from '../notifications.js';
 import { personalAgentId, personalConversationId } from '../repository.js';
@@ -41,12 +48,63 @@ beforeEach(() => {
   createConversation({ agentId: personalAgentId('local-owner'), customData: { personalAgent: true } }, '', conversationId);
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   closeXopcDatabase();
   resetXopcDatabaseSingletonForTest();
   rmSync(directory, { recursive: true, force: true });
 });
 
 describe('Personal AI unread replies', () => {
+  it.each(['queued', 'running', 'failed', 'waiting', 'no_run'] as const)(
+    'handles an old allocation failure with current execution state %s', async status => {
+      const task = new TaskRepository().create({ title: 'Shanghai weather', objective: 'Look up tomorrow’s weather' });
+      const db = getSqliteDatabase();
+      db.prepare('INSERT INTO task_origin_links (task_id, conversation_id, created_at) VALUES (?, ?, ?)')
+        .run(task.id, conversationId, Date.now());
+      runSqliteWriteTransaction(() => new TaskAllocationRepository().create(task.id, conversationId, task.version,
+        { version: 1, summary: 'Look up weather' }));
+      const board = new TaskCollaborationRepository();
+      const failure = board.append({ taskId: task.id, authorKind: 'system', authorId: 'task-router',
+        kind: 'failure', body: 'Temporary allocation failure', idempotencyKey: 'allocation-failure' });
+      db.prepare("UPDATE task_allocations SET status = 'assigned', updated_at = ? WHERE task_id = ?")
+        .run(Date.now(), task.id);
+      if (status !== 'no_run') {
+        const run = new TaskRunRepository().create({ taskId: task.id, executorKind: 'agent',
+          executorRef: { agentId: 'worker' }, trigger: { kind: 'test' }, correlationId: 'recovery',
+          idempotencyKey: 'recovery', contractVersion: 1 });
+        db.prepare('UPDATE task_runs SET status = ? WHERE run_id = ?').run(status, run.id);
+      }
+      const submitAndConfirm = vi.fn(async () => true);
+      await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide: vi.fn(), submitAndConfirm });
+      const recovered = status === 'queued' || status === 'running';
+      expect(submitAndConfirm).toHaveBeenCalledTimes(recovered ? 0 : 1);
+      expect(board.get(failure.id)?.body).toBe('Temporary allocation failure');
+      expect(db.prepare('SELECT decision, status FROM task_main_update_deliveries WHERE entry_id = ?')
+        .get(failure.id)).toMatchObject({ decision: recovered ? 'silent' : 'notify', status: 'delivered' });
+      if (!recovered) expect(submitAndConfirm).toHaveBeenCalledWith(expect.objectContaining({
+        content: expect.stringContaining('A failure entry requires private handling, not necessarily a user notification'),
+      }));
+    },
+  );
+
+  it.each([false, true])('evaluates Personal progress for significant delay (notify: %s)', async notify => {
+    const task = new TaskRepository().create({ title: 'Shanghai weather', objective: 'Look up weather' });
+    const entry = new TaskCollaborationRepository().append({ taskId: task.id,
+      authorKind: 'worker_agent', authorId: 'worker', kind: 'progress',
+      body: notify ? 'Weather provider remains unavailable after ten minutes; deadline missed.' : 'Query started.',
+      idempotencyKey: 'progress' });
+    vi.spyOn(providers, 'resolveModel').mockReturnValue({} as never);
+    const complete = vi.spyOn(modelCall, 'completeWithResolvedCredentials').mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ notify, userPreference: 'unspecified',
+        reason: notify ? 'Significant delay' : 'Routine progress' }) }], stopReason: 'stop',
+    } as never);
+    const service = new TaskMainUpdateDecisionService({ getModelRef: () => 'test', loadHistory: async () => [] });
+    expect(await service.decide({ conversationId, entry })).toMatchObject({ notify });
+    expect(complete).toHaveBeenCalledOnce();
+    expect(complete.mock.calls[0][1].messages[0].content).toContain('significant delays supported by actual timing evidence');
+    expect(complete.mock.calls[0][1].messages[0].content).toContain('keep routine progress, milestones and recoverable internal failures private');
+  });
+
   it('counts replies rather than tool activity or artifact cards', () => {
     reply();
     appendTranscriptEntry(conversationId, { role: 'custom', customType: 'task_result_delivery', display: true,

@@ -69,7 +69,7 @@ export class HomeOpportunityApplicationService {
             : [],
           approvalRequired: [], assumptions: [],
           risks: [opportunity.risk],
-          acceptancePolicy: 'verified_then_review',
+          acceptancePolicy: 'verified_auto',
           outputDestinations: [],
         },
         dependencies: [],

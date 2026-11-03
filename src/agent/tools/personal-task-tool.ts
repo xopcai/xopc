@@ -59,6 +59,7 @@ const PersonalTaskSchema = Type.Object({
   section: Type.Optional(Type.Union(['revision', 'task', 'waits', 'runs', 'receipts', 'context', 'conversation', 'sessions', 'authorityGrants', 'dependencies', 'dependents', 'criterionReviews'].map(value => Type.Literal(value)))),
   questionId: Type.Optional(Type.String({ description: 'Collaboration question ID to answer.' })),
   expectedOutputs: Type.Optional(Type.Array(Type.String())),
+  acceptancePolicy: Type.Optional(Type.Union([Type.Literal('verified_auto'), Type.Literal('manual')], { description: 'Defaults to automatic verification and completion. Use manual only when the user explicitly requests human acceptance.' })),
   acceptanceCriteria: Type.Optional(Type.Array(Type.String())),
   constraints: Type.Optional(Type.Array(Type.String())),
   requiredSkills: Type.Optional(Type.Array(Type.String({ minLength: 1, description: 'Only Skill names explicitly requested by the user. Forward them to the background router for validation; omit otherwise.' }))),
@@ -189,11 +190,11 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         const brief = buildPersonalTaskBrief({ title: input.title, objective, description });
         const submissionKey = input.idempotencyKey?.trim() || selectionRequestHash({
           sourceInput: inputId ?? toolCallId, brief, requirements, sourceRefs: modelInput.sourceRefs,
-          expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, constraints: input.constraints,
+          expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy, constraints: input.constraints,
         });
         command = 'create';
         args = { ...brief, createMode: 'allocate', requirements, sourceRefs: modelInput.sourceRefs, includeConversationContext: false,
-          expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria,
+          expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
           constraints: input.constraints, idempotencyKey: `personal-submit:${conversationId}:${selectionRequestHash(submissionKey)}` };
         if (requirements.requiredSkills?.length) args.body = `${brief.body}\n\nRequired Skills: ${requirements.requiredSkills.join(', ')}. Read and follow these Skills before execution.`;
       } else if (command === 'create') {
@@ -246,7 +247,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           agentId, createMode: 'start',
           includeConversationContext: false,
           expectedOutputs: input.expectedOutputs,
-          acceptanceCriteria: input.acceptanceCriteria,
+          acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
           constraints: input.constraints,
           idempotencyKey: key,
         };

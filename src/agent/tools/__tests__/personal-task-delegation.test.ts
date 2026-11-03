@@ -21,6 +21,17 @@ vi.mock('../../../personal-agent/specialist-capabilities.js', async importOrigin
 describe('Personal AI durable delegation', () => {
   afterEach(() => closeXopcDatabase());
 
+  it.each([undefined, 'manual'] as const)('forwards %s acceptance through Personal Agent submission', async acceptancePolicy => {
+    const agentId = personalAgentId('local-owner');
+    initializeTestAgentCatalog({ agents: [{ id: agentId }, { id: 'researcher' }] });
+    const conversation = createConversation({ agentId, customData: { personalAgent: true } }, '/tmp');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversation.key,
+      getCurrentAgentId: () => agentId, dispatchTaskRuns: vi.fn() });
+    await tool.execute('submit-policy', { command: 'submit', objective: 'Analyze the report',
+      description: 'Read the report and give a supported conclusion.', acceptancePolicy });
+    expect(new TaskRepository().list()[0]?.contract?.acceptancePolicy).toBe(acceptancePolicy ?? 'verified_auto');
+  });
+
   it('persists the requested specialist, Skill and materials and queues execution once', async () => {
     const agentId = personalAgentId('local-owner');
     initializeTestAgentCatalog({ agents: [{ id: agentId }, { id: 'researcher' }] });

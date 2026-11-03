@@ -163,14 +163,16 @@ export class TaskAllocationDispatcher {
       }
       inferred = planned.requiredCapabilities ?? [];
       if (signal.aborted || this.#stopped) throw new Error('Task contract planning interrupted');
-      if ((JSON.stringify(task.contract.acceptanceCriteria) === JSON.stringify(fallback.acceptanceCriteria)
+      const expandCriteria = (JSON.stringify(task.contract.acceptanceCriteria) === JSON.stringify(fallback.acceptanceCriteria)
         || Boolean(getSqliteDatabase().prepare('SELECT 1 FROM task_work_revisions WHERE task_id = ? AND contract_version = ?').get(task.id, task.latestContractVersion)))
-        && JSON.stringify(planned.acceptanceCriteria) !== JSON.stringify(fallback.acceptanceCriteria)) {
+        && JSON.stringify(planned.acceptanceCriteria) !== JSON.stringify(fallback.acceptanceCriteria);
+      if (expandCriteria || (planned.acceptancePolicy === 'manual' && task.contract.acceptancePolicy !== 'manual')) {
         const updated = runSqliteWriteTransaction(db => {
           if (!this.#allocations.owns(row) || tasks.require(task.id).version !== task.version) return undefined;
           const result = new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version,
             idempotencyKey: `allocation:${row.id}:criteria`, actor: { kind: 'system', id: 'task-router' },
-            command: { type: 'revise_contract', contract: { ...task.contract!, acceptanceCriteria: planned.acceptanceCriteria,
+            command: { type: 'revise_contract', contract: { ...task.contract!, acceptanceCriteria: expandCriteria ? planned.acceptanceCriteria : task.contract!.acceptanceCriteria,
+              acceptancePolicy: planned.acceptancePolicy === 'manual' ? 'manual' : task.contract!.acceptancePolicy,
               constraints: [...new Set([...task.contract!.constraints, ...planned.constraints])],
               expectedOutputs: Boolean(db.prepare('SELECT 1 FROM task_work_revisions WHERE task_id = ? AND contract_version = ?').get(task.id, task.latestContractVersion)) || JSON.stringify(task.contract!.expectedOutputs) === JSON.stringify(fallback.expectedOutputs)
                 ? planned.expectedOutputs : task.contract!.expectedOutputs } } });

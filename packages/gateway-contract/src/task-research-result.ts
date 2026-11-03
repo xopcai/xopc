@@ -20,6 +20,7 @@ export const TaskResearchCheckSchema = z.object({
 export const TaskResearchResultSchema = z.object({
   version: z.literal(1), contractVersion: z.number().int().positive(),
   instructionSequence: z.number().int().nonnegative(),
+  personalResultHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   sources: z.array(TaskResearchSourceSchema).max(40), claims: z.array(TaskResearchClaimSchema).min(1).max(40),
   checks: z.array(TaskResearchCheckSchema).max(40),
   review: z.enum(['model_reviewed', 'unavailable']),

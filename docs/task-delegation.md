@@ -34,7 +34,7 @@ Updates may be queued; a finished execution is not a guarantee of immediate noti
 
 Open the delivered file or related task. Verify that the artifact exists, uses the intended sources, and meets the brief. Then ask: `Revise this file: shorten the introduction and add an owner for each next action. Keep the original figures.` Reference the existing result or Task so the change has clear context.
 
-A delivered result, a stopped execution, and an accepted Task are different states. For durable work, use [Task review and acceptance](./task-review.md).
+Delegated Tasks use automatic acceptance by default: verified results close the Task automatically, while fixable gaps trigger bounded repair. Explicitly request human acceptance when you want to decide whether the result is accepted. See [Task review and acceptance](./task-review.md).
 
 ## Recover without repeating side effects
 
