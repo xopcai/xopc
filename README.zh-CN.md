@@ -108,7 +108,7 @@ xopc
 
 核心状态默认存储在本机 `~/.xopc/`。可使用云模型或本地模型；选择云服务时，相关请求上下文、图片或音频会由对应提供商处理。连接 XOPC Cloud 不会自动上传整个本地数据库或工作空间。
 
-数据源、工具和频道按需授权。执行确认取决于工具策略和你的授权范围；浏览器控制不会为每次点击弹出确认。先明确任务范围，涉及发送、删除、购买或账号变更时，要求先展示结果并等待你确认。[隐私与记忆](https://xopcai.github.io/xopc/zh/user-understanding) · [浏览器自动化](https://xopcai.github.io/xopc/zh/browser-automations)。
+数据源、工具和频道按需授权。执行确认取决于工具策略和你的授权范围；浏览器控制不会为每次点击弹出确认。先明确任务范围，涉及发送、删除、购买或账号变更时，要求先展示结果并等待你确认。[隐私与记忆](https://xopcai.github.io/xopc/zh/user-understanding)。
 
 ## 找到对应指南
 
@@ -118,7 +118,6 @@ xopc
 | 交办并修改成果 | [任务交付](https://xopcai.github.io/xopc/zh/task-delegation) |
 | 处理文件与项目 | [工作空间](https://xopcai.github.io/xopc/zh/workspace-guide) |
 | 检查结果与重试 | [任务验收](https://xopcai.github.io/xopc/zh/task-review) |
-| 保存可重复的网页操作 | [浏览器录制与自动化](https://xopcai.github.io/xopc/zh/browser-automations) |
 | 增加服务和能力 | [模型](https://xopcai.github.io/xopc/zh/models) · [技能](https://xopcai.github.io/xopc/zh/skills) · [MCP](https://xopcai.github.io/xopc/zh/mcp) · [连接器](https://xopcai.github.io/xopc/zh/connectors/) |
 | 配置实例与扩展 | [配置](https://xopcai.github.io/xopc/zh/configuration) · [扩展](https://xopcai.github.io/xopc/zh/extensions) · [XOPC Platform](https://xopcai.github.io/xopc/zh/platform) |
 | 查看更新 | [近期变化](https://xopcai.github.io/xopc/zh/whats-new) · [GitHub Releases](https://github.com/xopcai/xopc/releases) |

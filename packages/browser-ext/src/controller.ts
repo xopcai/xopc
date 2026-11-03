@@ -1,4 +1,3 @@
-import { recordings } from './recording/store';
 import { browserDom } from '@xopcai/browser-control-contract';
 import type {
   BrowserActionInput,
@@ -132,10 +131,6 @@ async function execute(
   if (!sessionId) return fail('INVALID_INPUT', 'Extension actions require a session id.');
   const attached = await resolveAttachedTarget(input);
   if (attached && !('binding' in attached)) return attached;
-  if (attached && !['observe', 'resolve', 'wait', 'close'].includes(input.action)) {
-    const activeRecording = (await recordings()).some((item) => item.tabId === attached.tabId && ['recording', 'paused'].includes(item.state));
-    if (activeRecording) return fail('INVALID_INPUT', 'This page is being recorded. Finish recording before running an automation.');
-  }
   if (signal?.aborted) return fail('ABORTED', 'Operation was cancelled.');
   const stateKey = attached?.stateKey ?? sessionId;
   if (input.action === 'close') {

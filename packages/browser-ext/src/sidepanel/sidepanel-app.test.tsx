@@ -6,7 +6,6 @@ import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('../i18n', () => ({ t: (key: string) => key }));
 vi.mock('./auth', () => ({ readProfile: async () => ({ gatewayId: 'test', gatewayUrl: 'http://localhost', deviceId: 'device' }) }));
 vi.mock('./chat-panel', () => ({ ChatPanel: () => null }));
-vi.mock('./recording-panel', () => ({ RecordingPanel: () => null }));
 import { SidePanelApp } from './sidepanel-app';
 
 afterEach(() => vi.unstubAllGlobals());

@@ -28,12 +28,6 @@ export type AutomationAction =
       model?: string;
       timeoutSeconds?: number;
     } | {
-      kind: 'browser_automation';
-      automationId: string;
-      revision?: number;
-      inputs?: Record<string, unknown>;
-      timeoutSeconds?: number;
-    } | {
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;
@@ -348,21 +342,6 @@ export interface AutomationDeps {
   getDefaultAgentId?: () => string;
   isAgentAvailable?: (agentId: string) => boolean;
   prepareAgentSession?: (input: PrepareAutomationAgentSessionInput) => Promise<void>;
-  browserAutomationService?: {
-    get(id: string): { revision: number; verified: boolean } | null;
-    versions(id: string): { revision: number; verified: boolean }[];
-    runAndWait(
-      automationId: string,
-      inputs: Record<string, unknown>,
-      signal?: AbortSignal,
-      context?: { triggerEvent?: AutomationEvent; revision?: number; clientRequestId?: string },
-    ): Promise<{
-      id: string;
-      status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-      result?: unknown;
-      error?: string;
-    }>;
-  };
   onWeixinRunCompleted?: (conversationId: string, principalId: string, run: AutomationRun) => Promise<void>;
   onRunCompleted?: (run: AutomationRun, context: AutomationRunDeliveryContext) => void | Promise<void>;
   onEvent?: (event: AutomationEventEnvelope, signal?: AbortSignal) => void | Promise<void>;

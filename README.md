@@ -61,7 +61,7 @@ File work requires the relevant access, tools, or skills. Voice, image generatio
 | **Context and memory** | Keep conversations, project background, and understanding you can review, correct, or delete |
 | **Delegation and delivery** | Delegate tasks, answer follow-up questions, receive artifacts, and check acceptance criteria |
 | **Files and projects** | Work with authorized material and retain files, notes, execution records, and next actions |
-| **Tools and connections** | Enable skills, MCP, connectors, browser automations, images, and voice as needed |
+| **Tools and connections** | Enable skills, MCP, connectors, browser control, images, and voice as needed |
 | **Access across devices** | Desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark |
 
 [Computer Use](https://xopcai.github.io/xopc/computer-use) is currently a macOS desktop preview requiring a compatible GUI model and native permissions. Mobile capabilities vary by platform and version; the Agent runs on the connected computer.
@@ -108,7 +108,7 @@ See [distribution channels and pairing](https://xopcai.github.io/xopc/mobile-app
 
 Core state lives under `~/.xopc/` on your machine by default. Use cloud or local models; cloud services process the request context, images, or audio sent to them. Connecting to XOPC Cloud does not automatically upload your entire local database or workspace.
 
-Authorize sources, tools, and channels as needed. Execution confirmation depends on tool policy and the scope you authorize; browser control does not prompt for every click. Define boundaries and ask to review before sending, deleting, purchasing, or changing an account. [Privacy and memory](https://xopcai.github.io/xopc/user-understanding) · [Browser automations](https://xopcai.github.io/xopc/browser-automations).
+Authorize sources, tools, and channels as needed. Execution confirmation depends on tool policy and the scope you authorize; browser control does not prompt for every click. Define boundaries and ask to review before sending, deleting, purchasing, or changing an account. [Privacy and memory](https://xopcai.github.io/xopc/user-understanding).
 
 ## Find your guide
 
@@ -118,7 +118,6 @@ Authorize sources, tools, and channels as needed. Execution confirmation depends
 | Delegate and refine a result | [Task delivery](https://xopcai.github.io/xopc/task-delegation) |
 | Work with files and projects | [Workspace](https://xopcai.github.io/xopc/workspace-guide) |
 | Review results and retry | [Task acceptance](https://xopcai.github.io/xopc/task-review) |
-| Save reusable website actions | [Browser recording and automations](https://xopcai.github.io/xopc/browser-automations) |
 | Add services and capabilities | [Models](https://xopcai.github.io/xopc/models) · [Skills](https://xopcai.github.io/xopc/skills) · [MCP](https://xopcai.github.io/xopc/mcp) · [Connectors](https://xopcai.github.io/xopc/connectors/) |
 | Configure and extend an instance | [Configuration](https://xopcai.github.io/xopc/configuration) · [Extensions](https://xopcai.github.io/xopc/extensions) · [XOPC Platform](https://xopcai.github.io/xopc/platform) |
 | See recent changes | [What's new](https://xopcai.github.io/xopc/whats-new) · [GitHub Releases](https://github.com/xopcai/xopc/releases) |

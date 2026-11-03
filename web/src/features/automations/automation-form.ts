@@ -17,7 +17,7 @@ import {
 export type TriggerMode =
   'manual' | 'once' | 'daily' | 'weekly' | 'interval' | 'cron' | 'webhook' | 'taskBlocked' | 'noteCreated' | 'sessionUpdated' | 'event';
 
-export type ActionMode = 'agent' | 'browser_automation' | 'task_command';
+export type ActionMode = 'agent' | 'task_command';
 
 export interface FormState {
   name: string;
@@ -40,8 +40,6 @@ export interface FormState {
   model: string;
   instruction: string;
   taskId: string;
-  browserAutomationId: string;
-  browserAutomationInputs: Record<string, unknown>;
   safetyMode: AutomationSafetyMode;
   timeoutSeconds: string;
   conversationMode: AutomationConversationMode;
@@ -72,8 +70,6 @@ export const initialForm: FormState = {
   model: '',
   instruction: '',
   taskId: '',
-  browserAutomationId: '',
-  browserAutomationInputs: {},
   safetyMode: 'suggest_only',
   timeoutSeconds: '1800',
   conversationMode: 'new_session',
@@ -171,17 +167,11 @@ export function buildInput(
       schedule: { kind: 'cron', ...(form.timezone?.trim() ? { tz: form.timezone.trim() } : {}), expr: `${minute} ${hour} * * *` },
     };
   }
-  const safetyMode = form.actionMode === 'browser_automation' || form.actionMode === 'task_command'
+  const safetyMode = form.actionMode === 'task_command'
     ? 'auto_apply'
     : form.safetyMode;
   let action: AutomationAction;
-  if (form.actionMode === 'browser_automation') {
-    action = {
-      kind: 'browser_automation',
-      automationId: form.browserAutomationId.trim(),
-      inputs: form.browserAutomationInputs,
-    };
-  } else if (form.actionMode === 'task_command') {
+  if (form.actionMode === 'task_command') {
     action = {
       kind: 'task_command',
       taskId: form.taskId.trim(),
@@ -375,7 +365,7 @@ export function formFromAutomation(
   const timeoutSeconds =
     automation.reliability?.executionTimeoutSeconds
     ?? ('timeoutSeconds' in action ? action.timeoutSeconds : undefined)
-    ?? (action.kind === 'browser_automation' ? 600 : 1800);
+    ?? 1800;
 
   return {
     ...initialForm,
@@ -383,15 +373,13 @@ export function formFromAutomation(
     name: automation.name,
     description: automation.description ?? '',
     projectId: automation.projectId ?? '',
-    actionMode: action.kind === 'system' ? 'agent' : action.kind,
+    actionMode: action.kind === 'task_command' ? 'task_command' : 'agent',
     agentId: action.kind === 'agent' ? (action.agentId ?? '') : action.kind === 'task_command' && action.command.type === 'start' && action.command.executor.kind === 'agent'
         ? action.command.executor.agentId
         : '',
     model: action.kind === 'agent' ? (action.model ?? '') : '',
     instruction: action.kind === 'agent' ? action.instruction : '',
     taskId: action.kind === 'task_command' ? action.taskId : '',
-    browserAutomationId: action.kind === 'browser_automation' ? action.automationId : '',
-    browserAutomationInputs: action.kind === 'browser_automation' ? action.inputs ?? {} : {},
     safetyMode: automation.safety?.mode ?? 'auto_apply',
     timeoutSeconds: String(timeoutSeconds),
     conversationMode: automation.conversationMode ?? 'new_session',
@@ -432,11 +420,6 @@ export function buildAutomationEditInput(
       agentId: input.action.agentId,
       model: input.action.model,
     };
-  } else if (
-    automation.action.kind === 'browser_automation' &&
-    input.action.kind === 'browser_automation'
-  ) {
-    action = { ...automation.action, ...input.action };
   } else if (
     automation.action.kind === 'task_command' &&
     input.action.kind === 'task_command'

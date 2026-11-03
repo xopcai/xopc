@@ -67,7 +67,6 @@ import {
   createClarifyTool,
   createToolManualTool,
   createAutomationTool,
-  createBrowserAutomationTool,
   createXopcUseTool,
   createMcpSetupTool,
   createDesktopPetTool,
@@ -112,7 +111,6 @@ import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { createNoninteractiveToolPolicy } from './noninteractive-tool-policy.js';
 import type { AutomationService } from '../../automations/index.js';
-import type { BrowserAutomationService } from '../../browser/automations/index.js';
 import type { NotesService } from '../../notes/index.js';
 import type { ProjectService } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
@@ -171,7 +169,6 @@ export interface ToolFactoryDeps {
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('../mcp/conversation-setup.js').McpConversationSetup | undefined;
-  getBrowserAutomationService?: () => BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: enables the `xopc_use` product-object tool. */
   getNotesService?: () => NotesService | undefined;
@@ -769,9 +766,6 @@ export class AgentToolsFactory {
         ? [
             createAutomationTool(productToolDeps),
           ]
-        : []),
-      ...(browserEnabled && this.deps.getBrowserAutomationService
-        ? [createBrowserAutomationTool({ getBrowserAutomationService: this.deps.getBrowserAutomationService })]
         : []),
       ...(this.deps.getPhoneSetupService
         || this.deps.getBrowserSetupService

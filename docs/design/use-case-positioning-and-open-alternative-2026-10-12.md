@@ -21,7 +21,7 @@
 - [工作空间](../zh/workspace-guide.md)、[任务交办](../zh/task-delegation.md)、[任务验收](../zh/task-review.md)：文件交付、修改、证据和验收基础。
 - [模型](../zh/models.md)：云、本地、自定义接口；能接入不等于场景质量达标。
 - [连接器](../zh/connectors/index.md)：飞书、企业微信、WPS 365 Beta，以及钉钉 MCP、腾讯会议灰度能力；服务能力不能相互类推。
-- [浏览器自动化](../zh/browser-automations.md)：成功执行一次后保存、参数化和定时复用。
+- 浏览器录制与回放（2026-11-03 已移除）：历史取舍见[移除记录](./browser-workflow-removal.md)。
 - [Coder Evals](../../evals/coder/README.md)：已有黑盒评测工具、版本化任务和 grader，可用于建立编码质量证据；文档本身不是得分。
 
 外部依据（2026-10-12 查阅）：

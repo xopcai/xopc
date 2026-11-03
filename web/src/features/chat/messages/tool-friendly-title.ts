@@ -80,7 +80,6 @@ function normalizedToolId(name: string): string {
 
 const BUILTIN_SEMANTICS: Readonly<Record<string, keyof ToolExecutionLabels['builtins']>> = {
   automation: 'automation',
-  browser_automation: 'browser',
   browser_use: 'browser',
   clarify: 'clarification',
   codemode: 'codeExecution',
