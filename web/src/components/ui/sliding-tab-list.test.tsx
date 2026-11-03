@@ -105,3 +105,24 @@ it('tracks selection inside independently rendered children and skips disabled o
     container.remove();
   }
 });
+
+
+it('can leave scrolling to a section navigator when changing tabs with the keyboard', () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const change = vi.fn();
+  try {
+    act(() => root.render(<SlidingTabList scrollFocusedItemIntoView={false}><button aria-pressed>One</button><button aria-pressed={false} onClick={change}>Two</button></SlidingTabList>));
+    const buttons = container.querySelectorAll('button');
+    buttons[1].scrollIntoView = vi.fn();
+    const focus = vi.spyOn(buttons[1], 'focus');
+    act(() => buttons[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    expect(change).toHaveBeenCalledOnce();
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(buttons[1].scrollIntoView).not.toHaveBeenCalled();
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+});

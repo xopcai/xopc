@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TASK_RESULT_DELIVERY_TYPE, TaskResultDeliverySchema } from '@xopcai/gateway-contract';
 
 import { NextTurnSuggestionService } from '../service.js';
 import { readSuggestionSnapshot } from '../snapshot.js';
@@ -115,6 +116,30 @@ describe('next turn suggestions', () => {
     await vi.waitFor(() => expect(service.get(conversationId, 'zh').status).toBe('none'));
     expect(generate).toHaveBeenCalledOnce();
     expect(service.get(conversationId, 'zh').status).toBe('none');
+  });
+
+  it('regenerates from a delivered personal reply and discards the prediction made before it arrived', async () => {
+    completed();
+    let resolve!: (prompt: string) => void;
+    generate.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    expect(service.get(conversationId, 'zh').status).toBe('pending');
+    const text = '泉州明天晴天，最高28°C，最低22°C。';
+    const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId: 'reply:weather', taskId: 'weather',
+      taskRunId: 'weather-run', taskTitle: '查询泉州明天天气', conversationId,
+      originTranscriptId: getCurrentTranscriptId(conversationId), assignmentEpoch: 0, text, createdAt: Date.now(),
+      outcome: { version: 1, outcomeId: 'weather-outcome', runId: 'weather-run', turnId: 'weather-turn',
+        status: 'succeeded', summary: text, deliverables: [], evidence: [], createdAt: new Date().toISOString() } });
+    appendTranscriptEntry(conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
+      content: text, details: delivery, display: true, timestamp: Date.now() });
+    appendTranscriptEntry(conversationId, { role: 'custom', customType: 'personal_request_status',
+      content: 'STATUS_SECRET', display: true });
+    resolve('泉州明天天气查到了吗？');
+    await vi.waitFor(() => expect(service.get(conversationId, 'zh').status).toBe('ready'));
+    expect(generate).toHaveBeenCalledTimes(2);
+    const snapshot = generate.mock.calls[1][0];
+    expect(snapshot.messages.at(-1)).toEqual({ role: 'assistant', text });
+    expect(JSON.stringify(snapshot)).not.toContain('STATUS_SECRET');
+    expect(service.get(conversationId, 'zh').suggestion?.prompt).toBe('把第一阶段拆成可评审的任务');
   });
 
   it('drops a late prediction when a new input arrives and reclaims the cancelled slot', async () => {
