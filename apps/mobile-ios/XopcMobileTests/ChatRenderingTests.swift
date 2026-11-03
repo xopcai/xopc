@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import UIKit
 import Testing
 @testable import XopcMobile
 
@@ -157,5 +159,26 @@ struct ChatRenderingTests {
     private func delta(_ text: String, offset: Int) -> RunStreamEvent {
         .init(name: "assistant_delta", sequence: 1, messageId: "answer", delta: text, offset: offset,
               status: nil, errorMessage: nil, toolName: nil, stage: nil)
+    }
+}
+
+
+@MainActor
+struct ChatCapsuleLayoutTests {
+    @Test func fitsNarrowWidthsWithLongTextAndAccessibilityFonts() {
+        for width in [160.0, 240.0, 320.0] {
+            for size in [DynamicTypeSize.large, .accessibility3, .accessibility5] {
+                let controller = UIHostingController(rootView:
+                    ChatResultCapsuleLabel(
+                        title: String(repeating: "LongUnbrokenFilename", count: 12) + ".pdf",
+                        systemImage: "doc",
+                        status: String(repeating: "正在核对结果", count: 8)
+                    ).environment(\.dynamicTypeSize, size)
+                )
+                let fitted = controller.sizeThatFits(in: CGSize(width: width, height: 10000))
+                #expect(fitted.width <= width + 1)
+                #expect(fitted.height >= 44)
+            }
+        }
     }
 }

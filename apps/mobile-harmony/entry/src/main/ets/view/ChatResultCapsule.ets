@@ -14,13 +14,14 @@ export struct XopcChatResultCapsule {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 8 }) {
         SymbolGlyph(this.symbol).fontSize(18).fontColor([this.colors.accent]).flexShrink(0)
-        Text(this.title).fontSize(14).fontColor(this.colors.foreground)
-          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).flexShrink(1)
-        if (this.subtitle) {
-          Text('·').fontSize(12).fontColor(this.colors.secondary).flexShrink(0)
-          Text(this.subtitle).fontSize(12).fontColor(this.colors.secondary)
-            .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).flexShrink(1)
-        }
+        Column({ space: 2 }) {
+          Text(this.title).fontSize(14).fontColor(this.colors.foreground)
+            .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (this.subtitle) {
+            Text(this.subtitle).fontSize(12).fontColor(this.colors.secondary)
+              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }.alignItems(HorizontalAlign.Start).flexShrink(1).constraintSize({ maxWidth: '100%' })
         if (this.canOpen) {
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary]).flexShrink(0)
         }
