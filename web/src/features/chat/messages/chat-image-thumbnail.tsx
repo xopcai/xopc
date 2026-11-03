@@ -47,7 +47,7 @@ export function ChatImageThumbnail({ source, load, onOpen, alt = '', className, 
   return <span className="chat-image-thumbnail" data-image-loading={ready !== source && !error || undefined}
     style={size ? { width: size.width * scale, aspectRatio: `${size.width} / ${size.height}` } : undefined}>
     {ready !== source && !error && <Skeleton as="span" className="pointer-events-none absolute inset-0" />}
-    {!error && <img {...props} ref={imageRef} key={`${source}:${attempt}`} src={src} alt={alt} loading="lazy" decoding="async"
+    {!error && <img key={`${source}:${attempt}`} {...props} ref={imageRef} src={src} alt={alt} loading="lazy" decoding="async"
       data-chat-image-source={source} title={props.title ?? labels.attachmentPreviewImage}
       className={['chat-reading-image', className].filter(Boolean).join(' ')}
       role={src ? 'button' : undefined} tabIndex={src ? 0 : undefined}
