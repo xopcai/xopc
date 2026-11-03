@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
-import UIKit
 import Testing
+import UIKit
 @testable import XopcMobile
 
 struct ChatRenderingTests {
@@ -162,7 +162,6 @@ struct ChatRenderingTests {
     }
 }
 
-
 @MainActor
 struct ChatCapsuleLayoutTests {
     @Test func fitsNarrowWidthsWithLongTextAndAccessibilityFonts() {
@@ -173,8 +172,7 @@ struct ChatCapsuleLayoutTests {
                         title: String(repeating: "LongUnbrokenFilename", count: 12) + ".pdf",
                         systemImage: "doc",
                         status: String(repeating: "正在核对结果", count: 8)
-                    ).environment(\.dynamicTypeSize, size)
-                )
+                    ).environment(\.dynamicTypeSize, size))
                 let fitted = controller.sizeThatFits(in: CGSize(width: width, height: 10000))
                 #expect(fitted.width <= width + 1)
                 #expect(fitted.height >= 44)
