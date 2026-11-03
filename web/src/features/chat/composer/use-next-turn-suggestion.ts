@@ -81,12 +81,14 @@ export function useNextTurnSuggestion(options: {
       attempts = 0;
       if (timer) clearTimeout(timer);
       setSelection(null);
-      void fetchSuggestion();
+      // Transcript events can arrive in a burst as an asynchronous reply is persisted.
+      if (event.type === 'session-transcript-updated') timer = setTimeout(() => { void fetchSuggestion(); }, 150);
+      else void fetchSuggestion();
     };
     const reconnect = () => { generation++; attempts = 0; if (timer) clearTimeout(timer); setSelection(null); void fetchSuggestion(); };
     const gap = (event: Event) => { if ((event as CustomEvent<{ topic?: string }>).detail?.topic === 'sessions') reconnect(); };
     void fetchSuggestion();
-    const events = ['session-next-turn-suggestion-changed', 'session-input-state', 'session-updated'];
+    const events = ['session-next-turn-suggestion-changed', 'session-input-state', 'session-updated', 'session-transcript-updated'];
     events.forEach(name => window.addEventListener(name, invalidate));
     window.addEventListener('gateway-realtime-connected', reconnect);
     window.addEventListener('config-reload', reconnect);

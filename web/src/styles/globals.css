@@ -2079,6 +2079,23 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   overscroll-behavior: none;
 }
 
+/* Nested task content hands scrolling to the task viewport; its outer boundary
+ * still contains scrolling inside the dialog. */
+.task-detail-scroll :where(
+  textarea,
+  .markdown-body pre,
+  .markdown-body table,
+  .markdown-table-scroll,
+  [class*="overflow-auto"],
+  [class*="overflow-y-auto"],
+  [class*="overflow-x-auto"],
+  [class*="overflow-scroll"],
+  [class*="overflow-y-scroll"],
+  [class*="overflow-x-scroll"]
+) {
+  overscroll-behavior-y: auto;
+}
+
 /* Opening animations should release their opacity/transform after settling,
  * rather than retain an animation stacking context while content scrolls. */
 .xopc-dialog-overlay[data-state="open"] {

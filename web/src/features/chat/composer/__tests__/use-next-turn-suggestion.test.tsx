@@ -125,6 +125,29 @@ describe('useNextTurnSuggestion', () => {
     expect(current.accept()).toBeNull();
   });
 
+  it('clears an old suggestion immediately and coalesces asynchronous transcript updates before refreshing', async () => {
+    vi.useFakeTimers();
+    try {
+      await render();
+      expect(current.suggestion?.id).toBe(suggestion.id);
+      apiFetch.mockResolvedValue({ ok: true, json: async () => ({ status: 'ready', suggestion: {
+        ...suggestion, id: crypto.randomUUID(), transcriptCursor: 5, prompt: '后天的天气呢？',
+      } }) });
+      act(() => window.dispatchEvent(new CustomEvent('session-transcript-updated', { detail: { key: 'other' } })));
+      expect(current.suggestion?.id).toBe(suggestion.id);
+      act(() => window.dispatchEvent(new CustomEvent('session-transcript-updated', { detail: { key: id } })));
+      expect(current.suggestion).toBeNull();
+      expect(current.accept()).toBeNull();
+      act(() => vi.advanceTimersByTime(100));
+      act(() => window.dispatchEvent(new CustomEvent('session-transcript-updated', { detail: { conversationId: id } })));
+      await act(async () => { await vi.advanceTimersByTimeAsync(149); });
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(apiFetch).toHaveBeenCalledTimes(2);
+      expect(current.suggestion?.prompt).toBe('后天的天气呢？');
+    } finally { vi.useRealTimers(); }
+  });
+
   it('expires a hidden cached suggestion before the accepted draft is cleared', async () => {
     vi.useFakeTimers();
     try {

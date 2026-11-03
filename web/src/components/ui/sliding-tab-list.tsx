@@ -14,8 +14,9 @@ export function SlidingTabList({
   indicatorClassName = 'rounded-lg bg-surface-active',
   ref,
   onKeyDown,
+  scrollFocusedItemIntoView = true,
   ...props
-}: ComponentPropsWithoutRef<'div'> & { as?: 'div' | 'nav'; ref?: Ref<HTMLElement>; indicatorClassName?: string }) {
+}: ComponentPropsWithoutRef<'div'> & { as?: 'div' | 'nav'; ref?: Ref<HTMLElement>; indicatorClassName?: string; scrollFocusedItemIntoView?: boolean }) {
   const trackRef = useRef<HTMLElement>(null);
   const bounds = useSlidingIndicator(trackRef, itemSelector, selectedSelector);
   const navigate = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -30,9 +31,9 @@ export function SlidingTabList({
     const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
       : (index + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
     const next = items[nextIndex];
-    next.focus();
+    next.focus({ preventScroll: !scrollFocusedItemIntoView });
     next.click();
-    next.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    if (scrollFocusedItemIntoView) next.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   };
   return (
     <Tag
