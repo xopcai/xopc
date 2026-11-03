@@ -60,7 +60,7 @@ describe('product primary navigation', () => {
     openMore();
     expect(document.body.textContent).toContain('Apps');
     expect(document.body.querySelector('a[href="/local-apps"]')).not.toBeNull();
-    for (const path of ['/projects', '/notes', '/browser-automations', '/capabilities/connectors', '/capabilities/skills']) {
+    for (const path of ['/projects', '/notes', '/capabilities/connectors', '/capabilities/skills']) {
       expect(document.body.querySelector(`a[href="${path}"]`)).toBeNull();
     }
   });
@@ -71,7 +71,7 @@ describe('product primary navigation', () => {
     expect(container.querySelector('a[href="/capabilities/extensions"]')?.textContent).toBe('Capabilities');
   });
 
-  it.each([ '/browser-automations/example'])('keeps Automations active for %s', (path) => {
+  it.each([ '/automations/example'])('keeps Automations active for %s', (path) => {
     renderAt(path, <SidebarNavItems />);
     expect(container.querySelector('a[href="/automations"]')?.getAttribute('aria-current')).toBe('page');
   });

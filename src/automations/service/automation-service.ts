@@ -204,7 +204,6 @@ export class AutomationService {
     }) as Automation;
     this.assertExecutionAgent(automation);
     this.prepareSchedule(automation, now);
-    this.pinBrowserVersion(automation);
     this.assertMcpSource(automation);
     if (getAutomation(automation.id)) throw new AutomationAlreadyExistsError(automation.id);
     automation.updatedAtMs = Math.max(automation.updatedAtMs, (getDeletedAutomationRevision(automation.id) ?? -1) + 1);
@@ -242,18 +241,6 @@ export class AutomationService {
       catch { throw new AutomationInvalidScheduleError('Choose a valid timezone, such as Asia/Shanghai or America/New_York.'); }
       if (computeNextAutomationRunAtMs({ enabled: true, trigger: automation.trigger }, now) === undefined) throw new AutomationInvalidScheduleError('The schedule has no upcoming run. Check its time rule.');
     }
-  }
-
-  private pinBrowserVersion(automation: Automation): void {
-    if (automation.action.kind !== 'browser_automation') return;
-    const browser = this.deps.browserAutomationService;
-    if (!browser) throw new Error('Browser automation service is unavailable.');
-    const action = automation.action;
-    const version = action.revision === undefined ? browser.get(action.automationId)
-      : browser.versions(action.automationId).find((item) => item.revision === action.revision);
-    if (!version) throw new Error('Browser automation version not found.');
-    if (automation.enabled && !version.verified) throw new Error('Run and verify this browser automation before scheduling it.');
-    action.revision = version.revision;
   }
 
   async list(options?: { projectId?: string }): Promise<Automation[]> {
@@ -304,7 +291,6 @@ export class AutomationService {
     }
     if (parsed.action) this.assertExecutionAgent(next);
     if (parsed.trigger || (parsed.enabled === true && next.trigger.kind === 'schedule' && next.trigger.schedule.kind === 'once')) this.prepareSchedule(next, now);
-    this.pinBrowserVersion(next);
     this.assertMcpSource(next);
     if ('enabled' in parsed || 'trigger' in parsed) {
       next.state.nextRunAtMs = computeNextAutomationRunAtMs(next, now);
@@ -740,7 +726,7 @@ export class AutomationService {
       .map(readAutomationEventFromRunEvent)
       .find((item): item is AutomationEvent => item !== null);
     try {
-      const maxAttempts = automation.action.kind === 'browser_automation' ? 1 : Math.max(1, (automation.reliability?.retryCount ?? 0) + 1);
+      const maxAttempts = Math.max(1, (automation.reliability?.retryCount ?? 0) + 1);
       let task: Awaited<ReturnType<AutomationActionExecutor['execute']>>;
       for (let attempt = 1; ; attempt += 1) {
         run = { ...run, attemptNumber: attempt };

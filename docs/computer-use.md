@@ -194,7 +194,7 @@ A model saying it finished is not proof that a save or remote transaction succee
 
 For failure diagnosis, ask for the current Computer Use report (`computer_use` with `op: "report"`). This reads local metadata without touching the desktop or model. It separates failure stage, actual model calls, completed or uncertain inputs and native condition checks. Errors and close also include the available report. Reports contain no screenshots or window/input text and expire from memory after thirty minutes; restarting clears them. See [diagnostics and paired evaluation](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-diagnostics-evaluation.md) for metrics, comparison commands and tested limits.
 
-For website-only work, see [Browser automations](./browser-automations.md). For provider connection, see [Models and providers](./models.md).
+For website-only work, see [browser control](./tools.md). For provider connection, see [Models and providers](./models.md).
 
 ## Native semantic controls
 

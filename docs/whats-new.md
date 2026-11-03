@@ -1,5 +1,7 @@
 # What's new
 
+> Browser recording, saved workflows, replay, and the dedicated management page were removed on 2026-11-03. Basic browser control remains available.
+
 These are user-facing entry points as of October 25, 2026. See [GitHub Releases](https://github.com/xopcai/xopc/releases) for exact versions and artifacts, and [Update xopc](./update.md) for upgrade steps. Desktop, Gateway, mobile, and browser extension builds are distributed separately; updating the core package does not update every client.
 
 ## v0.0.419: Windows packaging fixes
@@ -35,7 +37,7 @@ Follow selected topics, inspect why an update arrived, delay or stop attention, 
 - Native mobile sources add personal Agent profile controls and chat display improvements; availability depends on each platform's distributed client version.
 - Browser control removes the older step-by-step approval flow. Define the permitted scope and inspect the real website and inputs before replay.
 
-[Recording and replay](./browser-automations.md) · [Mobile app](./mobile-app.md) · [Version diff](https://github.com/xopcai/xopc/compare/v0.0.368...v0.0.369).
+[Mobile app](./mobile-app.md) · [Version diff](https://github.com/xopcai/xopc/compare/v0.0.368...v0.0.369).
 
 ## Models, voice, and images
 

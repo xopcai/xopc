@@ -220,8 +220,6 @@ describe('automation buildInput', () => {
       actionMode: 'agent',
       agentId: '',
       instruction: 'Prepare a recommendation.',
-      browserAutomationId: '',
-      browserAutomationInputs: {},
       safetyMode: 'ask_before_apply',
       timeoutSeconds: '300',
       resultWebhookEndpoint: 'https://example.com/hook',
@@ -254,8 +252,6 @@ describe('automation buildInput', () => {
       actionMode: 'agent',
       agentId: '',
       instruction: 'Prepare a recommendation.',
-      browserAutomationId: '',
-      browserAutomationInputs: {},
       safetyMode: 'suggest_only',
       timeoutSeconds: '300',
     });

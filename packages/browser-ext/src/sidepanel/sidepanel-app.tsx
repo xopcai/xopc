@@ -15,7 +15,6 @@ import {
   setAutoConnectEnabled,
   type BrowserGatewayProfile,
 } from './auth';
-import { RecordingPanel } from './recording-panel';
 import { ChatPanel } from './chat-panel';
 import {
   CheckIcon,
@@ -73,8 +72,6 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
   const [nextOrigin, setNextOrigin] = useState<string>();
   const [locale, setLocale] = useState(initialLocale);
   const [theme, setTheme] = useState(initialTheme);
-  const [recordingOpen, setRecordingOpen] = useState(false);
-  const [recordingRequired, setRecordingRequired] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const initializationStarted = useRef(false);
   const pairingStarted = useRef(false);
@@ -183,7 +180,6 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
   async function disconnect() {
     await revokeAndForgetProfile();
     setProfile(undefined);
-    setRecordingOpen(false);
     setLocalInvitation('');
     setState('unpaired');
   }
@@ -226,15 +222,6 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
           {state === 'pairing' ? t('statusPairing') : state === 'loading' ? t('statusStarting') : t('statusSetupRequired')}
         </div> : null}
         <div className="header-actions">
-          {state === 'online' && <button
-            className="header-icon-button"
-            onClick={() => setRecordingOpen((open) => !open)}
-            title={t('recordingTitle')}
-            aria-label={t('recordingTitle')}
-            aria-expanded={recordingOpen || recordingRequired}
-            aria-controls="browser-recording-panel"
-            disabled={recordingRequired}
-          ><PageIcon /></button>}
           <button
             ref={settingsTrigger}
             className="header-icon-button"
@@ -320,7 +307,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
             </div>
           </div>
         ) : null}
-      </section> : <><RecordingPanel open={recordingOpen} onClose={() => setRecordingOpen(false)} onRequiredChange={setRecordingRequired} /><ChatPanel key={JSON.stringify([profile!.gatewayId, profile!.gatewayUrl, profile!.deviceId])} gatewayId={profile!.gatewayId} deviceId={profile!.deviceId} /></>}
+      </section> : <><ChatPanel key={JSON.stringify([profile!.gatewayId, profile!.gatewayUrl, profile!.deviceId])} gatewayId={profile!.gatewayId} deviceId={profile!.deviceId} /></>}
     </main>
   );
 }

@@ -6,8 +6,6 @@ import {
   BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
   BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA,
   BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA,
-  BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA,
-  BROWSER_RECORDING_ENDPOINT_DESCRIPTOR,
 } from '@xopcai/browser-control-contract';
 import {
   personalDescriptor,
@@ -111,7 +109,6 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   'mobile.clipboard.write': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-write']),
   'mobile.app.open_url': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['open-external-url']),
   'browser.control': contract('browser.control', BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA, ['json'], ['browser-control'], BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA),
-  'browser.recording': contract('browser.control', BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA, ['json'], ['browser-control'], BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA),
 };
 
 export class EndpointToolPolicy {
@@ -205,8 +202,7 @@ export class EndpointToolPolicy {
         if (descriptor.requiredPermissions.length !== 1
           || descriptor.requiredPermissions[0] !== 'browser-control'
           || descriptor.timeoutMs !== 120_000
-          || descriptor.maxConcurrency !== (descriptor.name === BROWSER_RECORDING_ENDPOINT_DESCRIPTOR.name
-            ? BROWSER_RECORDING_ENDPOINT_DESCRIPTOR.maxConcurrency : BROWSER_CONTROL_ENDPOINT_DESCRIPTOR.maxConcurrency)
+          || descriptor.maxConcurrency !== BROWSER_CONTROL_ENDPOINT_DESCRIPTOR.maxConcurrency
           || descriptor.supportsCancellation !== true
           || descriptor.idempotent !== false) {
           throw new EndpointToolPolicyError(`Browser tool ${descriptor.name} violates its trusted policy`);

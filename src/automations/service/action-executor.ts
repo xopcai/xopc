@@ -128,9 +128,6 @@ export class AutomationActionExecutor {
     this.register('agent', { mode: 'never' }, (input, action) => this.executeAgent(
       input.automation, action, input.run, input.signal, input.hooks, input.deadlineAtMs, input.context,
     ));
-    this.register('browser_automation', { mode: 'never' }, (input, action) => this.executeBrowserAutomation(
-      input.automation, action, input.signal, input.hooks, input.context, input.run.id,
-    ));
     this.register('task_command', { mode: 'idempotent', key: 'run_id' },
       (input, action) => this.executeTaskCommand(input, action));
     this.register('system', {
@@ -262,43 +259,6 @@ export class AutomationActionExecutor {
       runId: input.run.id,
     });
     return { status: 'succeeded', summary: result.summary ?? 'System action completed' };
-  }
-
-  private async executeBrowserAutomation(
-    automation: Automation,
-    action: Extract<AutomationAction, { kind: 'browser_automation' }>,
-    signal: AbortSignal,
-    hooks: AutomationActionExecutionHooks,
-    context: AutomationActionExecutionContext,
-    executionRunId: string,
-  ): Promise<AutomationActionTask> {
-    await hooks.onRunPatch?.({ currentPhase: 'action' });
-    const safetyMode = automation.safety?.mode ?? 'auto_apply';
-    if (safetyMode !== 'auto_apply') {
-      return {
-        status: 'succeeded',
-        summary: `${safetyMode === 'suggest_only' ? 'Suggest only' : 'Ask before applying'}: Browser automation ${action.automationId} was not run.`,
-      };
-    }
-    const service = this.deps.browserAutomationService;
-    if (!service) return { status: 'failed', error: 'Browser automation is not available' };
-    if (action.revision === undefined || !service.versions(action.automationId).some((item) => item.revision === action.revision && item.verified)) {
-      return { status: 'failed', error: 'The scheduled browser automation version has not been verified.' };
-    }
-    const run = await service.runAndWait(action.automationId, action.inputs ?? {}, signal, {
-      revision: action.revision, clientRequestId: `schedule:${executionRunId}:${action.revision}`,
-      ...(context.triggerEvent ? { triggerEvent: context.triggerEvent } : {}),
-    });
-    if (run.status === 'succeeded') {
-      return {
-        status: 'succeeded',
-        summary: `Browser automation ${action.automationId} completed: ${JSON.stringify(run.result ?? null).slice(0, 3_500)}`,
-      };
-    }
-    return {
-      status: run.status === 'cancelled' ? 'cancelled' : 'failed',
-      error: run.error ?? `Browser automation ${action.automationId} ${run.status}`,
-    };
   }
 
   private async executeAgent(

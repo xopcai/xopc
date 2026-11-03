@@ -78,8 +78,7 @@
     },
     "sources": {
       "agent": "Agent",
-      "task": "Task",
-      "browser": "Browser"
+      "task": "Task"
     },
     "system": {
       "title": "System automations"
@@ -342,7 +341,7 @@
       "createFlowHint": "Describe what you want done, then choose when to run it.",
       "rulePreview": "Current rule",
       "triggerStepDescription": "Choose when this automation starts: on a schedule, event, webhook, or manually.",
-      "actionStepDescription": "Choose what an agent, task, or browser automation does after the trigger.",
+      "actionStepDescription": "Choose what an agent or task does after the trigger.",
       "name": "Name",
       "description": "Description",
       "project": "Project",

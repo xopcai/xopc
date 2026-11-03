@@ -197,7 +197,6 @@ export interface AgentManagerConfig {
   getPhoneSetupService?: () => import('../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('./mcp/conversation-setup.js').McpConversationSetup | undefined;
-  getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
   getNotesService?: () => NotesService | undefined;
@@ -493,7 +492,6 @@ export class AgentManager implements AgentInstanceGateway {
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getAutomationService: this.config.getAutomationService,
-      getBrowserAutomationService: this.config.getBrowserAutomationService,
       getBrowserSetupService: this.config.getBrowserSetupService,
       getMcpSetupService: this.config.getMcpSetupService,
       getPhoneSetupService: this.config.getPhoneSetupService,

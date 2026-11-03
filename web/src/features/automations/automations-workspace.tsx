@@ -53,12 +53,6 @@ import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
-import { browserAutomationApi, type BrowserAutomation } from '@/features/browser-automations/browser-automation-api';
-import {
-  browserAutomationInputsComplete,
-  defaultBrowserAutomationInputs,
-} from '@/features/browser-automations/browser-automation-input-utils';
-import { BrowserAutomationInputFields } from '@/features/browser-automations/browser-automation-inputs';
 import {
   automationApi,
   type Automation,
@@ -142,14 +136,12 @@ function actionLabel(action: AutomationAction, labels: AutomationsMessages): str
     return 'Memory weekly knowledge maintenance';
   }
 
-  if (action.kind === 'browser_automation') return `Browser automation: ${action.automationId}`;
   if (action.kind === 'task_command') return labels.action.taskWithId.replace('{id}', action.taskId);
   return action.agentId ? labels.action.agentWithId.replace('{id}', action.agentId) : labels.action.agent;
 }
 
 function actionModeLabel(mode: ActionMode, labels: AutomationsMessages): string {
 
-  if (mode === 'browser_automation') return labels.sources.browser;
   if (mode === 'task_command') return labels.action.runTask;
   return labels.action.runAgent;
 }
@@ -302,7 +294,7 @@ export function AutomationsWorkspace({
   const filter: AutomationFilter = filterParam === 'active' || filterParam === 'paused' || filterParam === 'completed' || filterParam === 'running' || filterParam === 'attention' ? filterParam : 'all';
   const ownership: AutomationOwnership = searchParams.get('ownership') === 'system' ? 'system' : 'user';
   const sourceParam = searchParams.get('source');
-  const sourceFilter: AutomationSourceFilter = sourceParam === 'agent' || sourceParam === 'task_command' || sourceParam === 'browser_automation' ? sourceParam : 'all';
+  const sourceFilter: AutomationSourceFilter = sourceParam === 'agent' || sourceParam === 'task_command' ? sourceParam : 'all';
   const searchQuery = searchParams.get('q') ?? '';
   const setFilter = (value: AutomationFilter) => setSearchParams((previous) => {
     const next = new URLSearchParams(previous);
@@ -397,7 +389,6 @@ export function AutomationsWorkspace({
     () => automationApi.getRun(selectedRunId!),
     { refreshInterval: 3000 },
   );
-  const browserAutomationsSwr = useSWR('automation-browser-automations', () => browserAutomationApi.list());
   const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
   const tasksSwr = useSWR('automation-tasks', automationApi.tasks);
   const projectsSwr = useSWR('automation-projects', () => fetchProjects({ sortBy: 'name', sortOrder: 'asc', limit: 200 }));
@@ -501,20 +492,12 @@ export function AutomationsWorkspace({
       automationTriggerLabel(automation.trigger, labels, cronLabels, language),
     ].some((value) => value.toLocaleLowerCase().includes(normalizedSearch));
   }), [cronLabels, filter, labels, language, normalizedSearch, ownershipAutomations, ownershipRuns, runningAutomationIds, sourceFilter]);
-  const browserAutomations = useMemo(
-    () => (browserAutomationsSwr.data?.automations ?? []).filter((automation) => automation.enabled),
-    [browserAutomationsSwr.data],
-  );
   const agentOptions = chatAgentsSwr.data?.items ?? [];
   const taskOptions = useMemo(
     () => (tasksSwr.data?.items ?? []).map((item) => item.task),
     [tasksSwr.data],
   );
   const projects = projectsSwr.data?.items ?? [];
-  const selectedBrowserAutomation = useMemo(
-    () => browserAutomations.find((automation) => automation.id === form.browserAutomationId.trim()) ?? null,
-    [browserAutomations, form.browserAutomationId],
-  );
   const managedTriggerEdit = Boolean(editingAutomation?.management?.editable.includes('trigger'));
   const managedTriggerValid = ['daily', 'weekly', 'interval', 'cron'].includes(form.triggerMode)
     && (!['daily', 'weekly'].includes(form.triggerMode) || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.time))
@@ -526,9 +509,7 @@ export function AutomationsWorkspace({
     (form.triggerMode !== 'once' || (Number.isFinite(new Date(form.onceAt).getTime()) && (Boolean(editingAutomation) || new Date(form.onceAt).getTime() > Date.now()))) &&
     (!['daily', 'weekly'].includes(form.triggerMode) || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.time)) &&
     (form.triggerMode !== 'event' || (Boolean(form.eventType.trim()) && payloadMatchIsValid(form.eventPayloadMatch))) &&
-    (form.actionMode === 'browser_automation'
-        ? selectedBrowserAutomation !== null && browserAutomationInputsComplete(selectedBrowserAutomation, form.browserAutomationInputs)
-        : form.actionMode === 'task_command'
+    (form.actionMode === 'task_command'
           ? Boolean(form.taskId.trim() && form.agentId.trim())
         : Boolean(form.instruction.trim()));
   let scheduleValid = true;
@@ -1205,9 +1186,6 @@ export function AutomationsWorkspace({
                   labels={labels}
                   setForm={setForm}
                   projects={projects}
-                  browserAutomations={browserAutomations}
-                  selectedBrowserAutomation={selectedBrowserAutomation}
-                  browserAutomationsLoading={browserAutomationsSwr.isLoading}
                   agentOptions={agentOptions}
                   agentsLoading={chatAgentsSwr.isLoading}
                   defaultAgentId={chatAgentsSwr.data?.defaultId ?? ''}
@@ -2193,9 +2171,7 @@ function AutomationOverview({
           descriptionTitle={nextRunExact}
         />
         <OverviewItem
-          icon={automation.action.kind === 'browser_automation'
-              ? <ListTree className="size-4" aria-hidden />
-              : automation.action.kind === 'task_command'
+          icon={automation.action.kind === 'task_command'
                 ? <CheckCircle2 className="size-4" aria-hidden />
               : <Zap className="size-4" aria-hidden />}
           label={labels.info.action}
@@ -2349,9 +2325,6 @@ function AutomationForm({
   labels,
   setForm,
   projects,
-  browserAutomations,
-  selectedBrowserAutomation,
-  browserAutomationsLoading,
   agentOptions,
   agentsLoading,
   defaultAgentId,
@@ -2364,9 +2337,6 @@ function AutomationForm({
   labels: AutomationsMessages;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   projects: Project[];
-  browserAutomations: BrowserAutomation[];
-  selectedBrowserAutomation: BrowserAutomation | null;
-  browserAutomationsLoading: boolean;
   agentOptions: ChatAgentOption[];
   agentsLoading: boolean;
   defaultAgentId: string;
@@ -2393,20 +2363,6 @@ function AutomationForm({
     if (form.actionMode !== 'task_command' || form.agentId.trim() || !defaultAgentId) return;
     setForm((prev) => ({ ...prev, agentId: defaultAgentId }));
   }, [defaultAgentId, form.actionMode, form.agentId, setForm]);
-
-
-
-  useEffect(() => {
-    if (form.actionMode !== 'browser_automation') return;
-    if (form.browserAutomationId.trim()) return;
-    const first = browserAutomations[0];
-    if (!first) return;
-    setForm((prev) => ({
-      ...prev,
-      browserAutomationId: first.id,
-      browserAutomationInputs: defaultBrowserAutomationInputs(first),
-    }));
-  }, [browserAutomations, form.actionMode, form.browserAutomationId, setForm]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -2607,25 +2563,18 @@ function AutomationForm({
           value={form.actionMode}
           onChange={(e) => {
             const actionMode = e.target.value as ActionMode;
-            const currentTimeout = Number.parseInt(form.timeoutSeconds, 10);
-            const usesActionDefault = currentTimeout === 600 || currentTimeout === 1800;
             update({
               actionMode,
-              ...(usesActionDefault
-                ? { timeoutSeconds: actionMode === 'browser_automation' ? '600' : '1800' }
-                : {}),
-              ...(actionMode === 'browser_automation' || actionMode === 'task_command'
+              ...(actionMode === 'task_command'
                 ? { safetyMode: 'auto_apply' as const }
                 : {}),
-              ...({}),
             });
           }}
         >
           <SelectOption value="agent">{labels.action.runAgent}</SelectOption>
           <SelectOption value="task_command">{labels.action.runTask}</SelectOption>
-          <SelectOption value="browser_automation">{language === 'zh' ? '浏览器自动化' : 'Browser automation'}</SelectOption>
         </Select>
-        {form.actionMode !== 'browser_automation' ? <Field label={labels.form.agent}>
+        <Field label={labels.form.agent}>
           <Select
             className={inputClass}
             value={form.agentId}
@@ -2638,7 +2587,7 @@ function AutomationForm({
               </SelectOption>
             ))}
           </Select>
-        </Field> : null}
+        </Field>
         {form.actionMode === 'agent' ? (
           <>
             <Field label={labels.form.model}>
@@ -2681,28 +2630,7 @@ function AutomationForm({
               <p className="mt-1 text-xs leading-5 text-fg-muted">{labels.form.taskContextHint}</p>
             </Field>
           </>
-        ) : (
-          <>
-            <Field label={language === 'zh' ? '浏览器自动化' : 'Browser automation'}>
-              <Select
-                className={inputClass}
-                value={form.browserAutomationId}
-                onChange={(event) => {
-                  const selected = browserAutomations.find((item) => item.id === event.target.value);
-                  update({
-                    browserAutomationId: event.target.value,
-                    browserAutomationInputs: selected ? defaultBrowserAutomationInputs(selected) : {},
-                  });
-                }}
-                disabled={browserAutomationsLoading || browserAutomations.length === 0}
-              >
-                {browserAutomations.length === 0 ? <SelectOption value="">{language === 'zh' ? '没有已启用的浏览器自动化' : 'No enabled browser automations'}</SelectOption> : null}
-                {browserAutomations.map((automation) => <SelectOption key={automation.id} value={automation.id}>{automation.name}</SelectOption>)}
-              </Select>
-            </Field>
-            {selectedBrowserAutomation && Object.keys(selectedBrowserAutomation.inputs).length > 0 ? <Field label={language === 'zh' ? '运行时填写' : 'Run inputs'}><BrowserAutomationInputFields automation={selectedBrowserAutomation} values={form.browserAutomationInputs} language={language} onChange={(browserAutomationInputs) => update({ browserAutomationInputs })} /></Field> : null}
-          </>
-        )}
+        ) : null}
 
           </div>
         </details>
@@ -2719,7 +2647,7 @@ function AutomationForm({
             <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
           </summary>
           <div className="grid gap-4 border-t border-edge-subtle p-4">
-        {form.actionMode !== 'browser_automation' && form.actionMode !== 'task_command' ? <><Section title={labels.form.safety} />
+        {form.actionMode === 'agent' ? <><Section title={labels.form.safety} />
         <Field label={labels.form.safety}>
           <Select
             className={inputClass}

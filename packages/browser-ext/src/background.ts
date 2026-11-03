@@ -1,5 +1,3 @@
-import { recordingCommand, acceptRecordingEvent, setRecordingClaim, syncRecordings } from './recording/controller';
-import { BROWSER_RECORDING_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
 import {
   BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
   BROWSER_EXTENSION_PROTOCOL_VERSION,
@@ -78,9 +76,6 @@ const browserToolRegistry = new EndpointToolRegistry([{
     }, context.signal);
     return { content: [{ type: 'json', value: fitBrowserControlResultToFrame(result.result) }] };
   },
-}, {
-  descriptor: BROWSER_RECORDING_ENDPOINT_DESCRIPTOR as unknown as EndpointToolDescriptor,
-  execute: async (args) => ({ content: [{ type: 'json', value: await recordingCommand(String(args.operation)) }] }),
 }]);
 
 const endpointHost = new EndpointToolHostController({
@@ -145,7 +140,6 @@ async function connect(generation: number): Promise<void> {
     onReady: ({ endpointId, turnToken }) => {
       endpointClaim = { endpointId, token: turnToken };
       if (environmentSupported) contextPublisher.start(endpointClaim);
-      setRecordingClaim(endpointClaim);
       lastConnectionError = undefined;
       clearReconnectAlarm();
       endpointHost.connect((message) => client.sendEndpointMessage(message));
@@ -156,7 +150,6 @@ async function connect(generation: number): Promise<void> {
     onDisconnected: () => {
       contextPublisher.stop();
       endpointClaim = undefined;
-      setRecordingClaim(undefined);
       endpointHost.disconnect();
       scheduleReconnectAlarm();
     },
@@ -207,11 +200,6 @@ chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, se
     else contextViewers.delete(id);
     void contextPublisher.tick();
     sendResponse({ ok: true });
-  } else if (message.type === 'browser/recording-event') {
-    void acceptRecordingEvent(message as never, sender).then(() => sendResponse({ ok: true })).catch((error) => sendResponse({ ok: false, error: String(error) }));
-  } else if (message.type === 'browser/recording-command') {
-    if (!sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`) || sender.tab) { sendResponse({ ok: false, error: 'Invalid recording control source.' }); return true; }
-    void recordingCommand(message.operation ?? 'status', message.tabId).then((value) => sendResponse({ ok: true, value })).catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) }));
   } else if (message.type === 'browser/get-status') {
     void isControlPaused().then(controlPaused => sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError, controlPaused }));
   } else if (message.type === 'browser/get-endpoint-claim') {
@@ -280,6 +268,3 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 connectWithLogging();
-
-chrome.alarms.create('xopc-recording-sync', { periodInMinutes: 0.5 });
-chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === 'xopc-recording-sync') void syncRecordings(); });

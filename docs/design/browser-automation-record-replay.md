@@ -1,5 +1,7 @@
 # 浏览器自动化：录制、生成与可靠重放
 
+> Retired on 2026-11-03. Browser recording, saved workflows, replay, and the dedicated management page have been removed. This document is historical; see [removal notes](./browser-workflow-removal.md).
+
 日期：2026-10-10。状态：调研与建议方案，尚未实施本文新增功能。
 
 实施细节见：[录制与重放技术方案](./browser-automation-record-replay-technical.md)。

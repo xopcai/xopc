@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROWSER_CONTROL_ENDPOINT_DESCRIPTOR, BROWSER_RECORDING_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
+import { BROWSER_CONTROL_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
 import { REMOTE_BROWSER_DESCRIPTOR } from '@xopcai/browser-control-contract/remote';
 import { COMPUTER_DESCRIPTOR, REMOTE_COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 
@@ -36,24 +36,23 @@ describe('EndpointToolPolicy', () => {
     expect(BROWSER_CONTROL_ENDPOINT_DESCRIPTOR.confirmation).toBe('never');
     expect(BROWSER_CONTROL_ENDPOINT_DESCRIPTOR.maxConcurrency).toBe(4);
   });
-  it('registers the real browser control and recording catalog with their individual concurrency limits', () => {
+  it('registers the browser control catalog with its concurrency limit', () => {
     const registry = new EndpointRegistry();
     const hello = endpointHelloPayloadSchema.parse({
       principalId: 'chrome-device', endpointId: 'chrome-extension',
       connectionInstanceId: '11111111-1111-4111-8111-111111111111',
       displayName: 'Chrome', kind: 'browser', platform: 'chrome', appVersion: 'test',
       availability: 'foreground', nonce: 'test-nonce', signedAt: Date.now(), signature: 'test-signature-placeholder',
-      tools: [BROWSER_CONTROL_ENDPOINT_DESCRIPTOR, BROWSER_RECORDING_ENDPOINT_DESCRIPTOR],
+      tools: [BROWSER_CONTROL_ENDPOINT_DESCRIPTOR],
     });
     const registered = registry.register(hello, 'connection', { readyState: 1, send: () => {}, close: () => {} });
     expect(registered.connection.tools.map((tool) => [tool.descriptor.name, tool.descriptor.maxConcurrency]))
-      .toEqual([['browser.control', 4], ['browser.recording', 1]]);
+      .toEqual([['browser.control', 4]]);
     expect(registry.verifyTurnClaim(hello.endpointId, registered.turnToken)).toBe(true);
   });
 
   it.each([
     { descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR, maxConcurrency: 1 },
-    { descriptor: BROWSER_RECORDING_ENDPOINT_DESCRIPTOR, maxConcurrency: 4 },
   ])('rejects modified concurrency for $descriptor.name', ({ descriptor, maxConcurrency }) => {
     expect(() => policy.validateDescriptor('browser', { ...descriptor, maxConcurrency } as never)).toThrow('violates its trusted policy');
   });

@@ -42,6 +42,18 @@ it('reaches Browser setup via real authenticated lazy Gateway routes and owner-s
     const base = `http://127.0.0.1:${address.port}`;
     const request = (body: unknown, authenticated = true) => fetch(`${base}/api/browser/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(authenticated ? { Authorization: `Bearer ${auth.token}` } : {}) }, body: JSON.stringify(body) });
     expect((await request({ conversationId: conversation.key, action: 'inspect' }, false)).status).toBe(401);
+    const ownerHeaders = { Authorization: `Bearer ${auth.token}` };
+    for (const [path, method] of [
+      ['/api/browser/automations', 'GET'], ['/api/browser/automations', 'POST'],
+      ['/api/browser/automations/id/run', 'POST'], ['/api/browser/automations/id/versions', 'GET'],
+      ['/api/browser/automation-runs', 'GET'], ['/api/browser/automation-runs/id/cancel', 'POST'],
+      ['/api/browser/recordings/availability', 'GET'], ['/api/browser/recordings/control', 'POST'],
+      ['/api/browser/recordings/id/events', 'POST'], ['/api/browser/recordings/id/finish', 'POST'],
+    ]) {
+      expect((await fetch(`${base}${path}`, { method, headers: ownerHeaders })).status, `${method} ${path}`).toBe(404);
+    }
+    expect((await fetch(`${base}/api/browser/automations`)).status).toBe(401);
+    expect((await fetch(`${base}/api/browser/status`, { headers: ownerHeaders })).status).toBe(200);
     const demo = await fetch(`${base}/browser-setup-test.html`);
     expect(demo.status).toBe(200);
     expect(demo.headers.get('Content-Type')).toContain('text/html');

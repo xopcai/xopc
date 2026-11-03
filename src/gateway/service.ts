@@ -118,7 +118,6 @@ import { onTaskResultQueued } from '../tasks/task-result-delivery-repository.js'
 import { TaskResultDeliveryService } from '../tasks/task-result-delivery-service.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
-import { createRuntimeBrowserAutomationService, type BrowserAutomationService } from '../browser/automations/index.js';
 
 import { evictAllEmbeddedSessionRunners, drainEmbeddedSessionRunnerShutdowns } from '../agent/embedded/session-runner.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
@@ -207,7 +206,6 @@ export class GatewayService {
   private _agentService: AgentService | null = null;
   private channelManager: ChannelManager;
   private automationService: AutomationService;
-  private browserAutomationService: BrowserAutomationService | null = null;
   private notesService: NotesService;
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
@@ -352,17 +350,6 @@ export class GatewayService {
       },
       open: async action => (await import('../browser/providers/browser-ext-install.js')).openBrowserExtensionInstallUi({ action }),
     });
-  }
-
-  get browserAutomations(): BrowserAutomationService {
-    if (!this.browserAutomationService) {
-      this.browserAutomationService = createRuntimeBrowserAutomationService({
-        getConfig: () => this.config,
-        endpointTools: this.endpointTools,
-        emit: (type, payload) => this.emit(type, payload),
-      });
-    }
-    return this.browserAutomationService;
   }
 
   private stopGatewayUpdateCheck: (() => void) | null = null;
@@ -799,7 +786,6 @@ export class GatewayService {
       extensionRegistry: this.extensionLoader?.getRegistry(),
       endpointTools: this.endpointTools,
       getAutomationService: () => this.automationService,
-      getBrowserAutomationService: () => this.browserAutomations,
       getBrowserSetupService: () => this.browserSetup,
       getMcpSetupService: () => this.mcpSetup,
       getPhoneSetupService: () => this.phoneSetup,
@@ -857,7 +843,6 @@ export class GatewayService {
         this.projects,
         input,
       ),
-      browserAutomationService: this.browserAutomations,
       executeTaskCommand: ({ taskId, idempotencyKey, command, triggerEvent }) => {
         const task = new TaskRepository().get(taskId);
         if (!task) return { ok: false, reason: 'not_found' };
@@ -1587,7 +1572,6 @@ export class GatewayService {
         this.projects,
         input,
       ),
-      browserAutomationService: this.browserAutomations,
       executeTaskCommand: ({ taskId, idempotencyKey, command, triggerEvent }) => {
         const task = new TaskRepository().get(taskId);
         if (!task) return { ok: false, reason: 'not_found' };
@@ -1873,8 +1857,6 @@ export class GatewayService {
     this.managedComposioEventPoller = undefined;
     this.connectedKnowledgeCoordinator?.stop();
     this.connectedKnowledgeCoordinator = null;
-
-    await this.browserAutomationService?.shutdown();
 
     registerClarificationChannelRuntime(null);
     this.connectionRecovery.stop();
