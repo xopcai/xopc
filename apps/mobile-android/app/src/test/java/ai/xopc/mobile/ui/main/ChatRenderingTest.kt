@@ -6,6 +6,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChatRenderingTest {
+  @Test fun workspaceImagesCollapseOnlyMatchingViewLinks() {
+    val nodes = projectMarkdown("[查看高清图片](/xopc/workspace/file?path=cat.jpg)\n\n![Cat](xopc://workspace/file?path=cat.jpg)", emptyList())
+    assertTrue(redundantMarkdownImageLink(nodes[0].node, nodes[1].node))
+    val download = projectMarkdown("[下载图片](/xopc/workspace/file?path=cat.jpg)\n\n![Cat](xopc://workspace/file?path=cat.jpg)", emptyList())
+    assertTrue(!redundantMarkdownImageLink(download[0].node, download[1].node))
+    val other = projectMarkdown("[查看大图](/xopc/workspace/file?path=other.jpg)\n\n![Cat](xopc://workspace/file?path=cat.jpg)", emptyList())
+    assertTrue(!redundantMarkdownImageLink(other[0].node, other[1].node))
+  }
+
   @Test fun stagesStayOrderedWhileDraftsArePendingAndDisappearWithTheFinalAnswer() {
     var progress = AssistantRunProgress("run")
     (1..4).forEach { progress = progress.record("stage-$it", "阶段 $it") }

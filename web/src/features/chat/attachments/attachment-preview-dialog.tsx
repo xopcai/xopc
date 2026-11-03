@@ -155,6 +155,7 @@ function AttachmentPreviewContent({
                 expanded,
                 onToggleExpanded: canExpandPreview ? () => setExpanded((value) => !value) : undefined,
                 hideClose: embedded,
+                hideExpand: Boolean(tabId),
                 onClose: handleClose,
                 share: canShare ? { onClick: handleShare, loading: share.loading } : undefined,
                 openWithSystemApp: canOpenWithLocalApp ? {

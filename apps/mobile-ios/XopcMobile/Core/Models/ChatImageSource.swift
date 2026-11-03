@@ -3,11 +3,23 @@ import Foundation
 enum ChatImageSource: Equatable, Sendable {
     static let byteLimit = 16 * 1024 * 1024
 
+    case workspace(path: String, conversationID: String)
     case embedded(Data)
     case gateway(path: String, query: [URLQueryItem])
     case external(URL)
 
+    static func workspaceURL(_ path: String) -> String {
+        var components = URLComponents()
+        components.scheme = "xopc"; components.host = "workspace"; components.path = "/file"
+        components.queryItems = [URLQueryItem(name: "path", value: path)]
+        return components.string ?? ""
+    }
+
     static func resolve(_ raw: String, conversationID: String?) -> ChatImageSource? {
+        if case let .workspaceFile(path)? = ChatMessageLink.resolve(raw) {
+            guard let conversationID, !conversationID.isEmpty else { return nil }
+            return .workspace(path: path, conversationID: conversationID)
+        }
         if raw.hasPrefix("data:image/") {
             guard let separator = raw.range(of: ";base64,"),
                   raw[..<separator.lowerBound].range(of: #"^data:image/[A-Za-z0-9.+-]+$"#, options: .regularExpression) != nil,
@@ -46,7 +58,7 @@ enum ChatImageSource: Equatable, Sendable {
 
     func request(configuration: GatewayConfiguration) -> URLRequest? {
         switch self {
-        case .embedded:
+        case .embedded, .workspace:
             return nil
         case let .gateway(path, query):
             guard var components = URLComponents(url: configuration.baseURL, resolvingAgainstBaseURL: false) else { return nil }

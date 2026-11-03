@@ -773,6 +773,7 @@
     "attachmentPreviewDownloadFull": "下载文件",
     "attachmentPreviewOpenLocal": "用本地应用查看",
     "attachmentPreviewOpenLocalFailed": "无法使用本地应用打开此表格",
+    "imageDownloadFailed": "图片下载失败，请重试。",
     "attachmentPreviewImage": "预览图片",
     "turnOutcome": {
     "evidenceCount": "{{count}} 项验证",

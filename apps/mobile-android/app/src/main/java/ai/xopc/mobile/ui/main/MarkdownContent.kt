@@ -19,6 +19,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -122,12 +124,26 @@ private fun StringBuilder.appendMarkdownFingerprint(node: Node) {
   append('\u0001')
 }
 
+private val LocalMarkdownImageRenderer = staticCompositionLocalOf<(@Composable (String, String) -> Unit)?> { null }
+
+internal fun redundantMarkdownImageLink(node: Node, next: Node): Boolean {
+  if (node !is Paragraph || next !is Paragraph) return false
+  val link = node.firstChild as? Link ?: return false
+  val image = next.firstChild as? Image ?: return false
+  if (link.next != null || image.next != null) return false
+  val label = buildString { link.children().forEach { if (it is MarkdownTextNode) append(it.literal) } }
+  if (!Regex("^(查看(?:高清|原|大)?图片|查看大图|查看原图|view(?: (?:full[- ]size|original|hd))? image)$", RegexOption.IGNORE_CASE).matches(label)) return false
+  fun identity(value: String) = messageLinkTarget(value)?.let { "${it.kind}:${it.id}" } ?: value
+  return identity(link.destination) == identity(image.destination)
+}
+
 /** Shared native Markdown renderer for messages, previews, and document content. */
 @Composable
 internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
   maxLines: Int? = null, onOpenLink: ((String) -> Unit)? = null,
-  onCopyCode: ((String) -> Unit)? = null, streaming: Boolean = false, selectable: Boolean = true) {
-  androidx.compose.runtime.CompositionLocalProvider(LocalMarkdownSelection provides selectable) {
+  onCopyCode: ((String) -> Unit)? = null, streaming: Boolean = false, selectable: Boolean = true,
+  renderImage: (@Composable (String, String) -> Unit)? = null) {
+  CompositionLocalProvider(LocalMarkdownSelection provides selectable, LocalMarkdownImageRenderer provides renderImage) {
     MarkdownDocument(markdown, modifier, maxLines, onOpenLink, onCopyCode, streaming)
   }
 }
@@ -163,7 +179,11 @@ private fun MarkdownDocument(markdown: String, modifier: Modifier, maxLines: Int
   } else {
     Column(modifier = modifier.testTag("markdown-content"),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      document.forEach { block ->
+      val imageRenderer = LocalMarkdownImageRenderer.current
+      val visible = if (imageRenderer == null) document else document.filterIndexed { index, block ->
+        index + 1 >= document.size || !redundantMarkdownImageLink(block.node, document[index + 1].node)
+      }
+      visible.forEach { block ->
         key(block.id) {
           androidx.compose.runtime.CompositionLocalProvider(LocalMarkdownSource provides markdown, LocalMathEnabled provides mathEnabled, LocalStreamingMarkdown provides
             (streaming && block.id == document.lastOrNull()?.id && block.node !is TableBlock)) {
@@ -180,8 +200,7 @@ private fun MarkdownBlock(node: Node, linkColor: Color,
   onOpenLink: ((String) -> Unit)?, onCopyCode: ((String) -> Unit)?) {
   when (node) {
     is MathSourceBlock -> MathMarkdownView(node.source, LocalStreamingMarkdown.current, display = true, enabled = LocalMathEnabled.current, onCopy = onCopyCode)
-    is Paragraph -> MarkdownInlineText(node, linkColor, onOpenLink,
-      modifier = Modifier.fillMaxWidth().testTag("markdown-paragraph"))
+    is Paragraph -> MarkdownParagraph(node, linkColor, onOpenLink)
     is Heading -> MarkdownInlineText(node, linkColor, onOpenLink,
       modifier = Modifier.fillMaxWidth().testTag("markdown-heading"),
       style = when (node.level) {
@@ -211,6 +230,43 @@ private fun MarkdownBlock(node: Node, linkColor: Color,
     is HtmlBlock -> MarkdownSelection { Text(node.literal) }
     else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
       node.children().forEach { MarkdownBlock(it, linkColor, onOpenLink, onCopyCode) }
+    }
+  }
+}
+
+@Composable
+private fun MarkdownParagraph(node: Paragraph, linkColor: Color, onOpenLink: ((String) -> Unit)?) {
+  val renderImage = LocalMarkdownImageRenderer.current
+  val children = node.children().toList()
+  if (renderImage == null || children.none { it is Image }) {
+    MarkdownInlineText(node, linkColor, onOpenLink, modifier = Modifier.fillMaxWidth().testTag("markdown-paragraph"))
+    return
+  }
+  val groups = remember(node) {
+    val result = mutableListOf<List<Node>>()
+    var pending = mutableListOf<Node>()
+    children.forEach { child ->
+      if (child is Image) {
+        if (pending.isNotEmpty()) result.add(pending.toList())
+        pending = mutableListOf(); result.add(listOf(child))
+      } else pending.add(child)
+    }
+    if (pending.isNotEmpty()) result.add(pending)
+    result
+  }
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    groups.forEach { group ->
+      val image = group.singleOrNull() as? Image
+      if (image != null) {
+        val alt = buildString { image.children().forEach { if (it is MarkdownTextNode) append(it.literal) } }
+        renderImage(image.destination, alt)
+      } else {
+        val text = buildAnnotatedString { group.forEach { appendInline(it, linkColor, onOpenLink) } }
+        if (text.text.isNotBlank()) MarkdownSelection {
+          StreamingMarkdownText(text, LocalStreamingMarkdown.current, Modifier.fillMaxWidth(),
+            MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp), null)
+        }
+      }
     }
   }
 }

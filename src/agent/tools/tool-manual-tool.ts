@@ -1,4 +1,4 @@
-import { Type } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { xopcConfigurationTopics } from '../tool-manuals/xopc-configuration.js';
@@ -16,7 +16,7 @@ export function createToolManualTool(): AgentTool<typeof ToolManualSchema, {}> {
     description:
       'Focused xopc_use workflows are available as topic agent, settings, automation or connections; omit topic for full parameters. Load built-in usage manuals for complex tools. Use before non-trivial use of tools such as browser_use or xopc_use.',
     parameters: ToolManualSchema,
-    async execute(_toolCallId, params): Promise<AgentToolResult<{}>> {
+    async execute(_toolCallId, params: Static<typeof ToolManualSchema>): Promise<AgentToolResult<{}>> {
       const toolName = params.tool.trim();
       if (params.topic) {
         if (toolName !== 'xopc_use') return { content: [{ type: 'text', text: 'Topics are supported only for xopc_use; omit topic for other manuals.' }], details: {} };

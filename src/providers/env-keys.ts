@@ -31,6 +31,7 @@ export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 	opencode: ['OPENCODE_API_KEY'],
 	'opencode-go': ['OPENCODE_API_KEY'],
 	zai: ['ZAI_API_KEY', 'Z_AI_API_KEY'],
+	'zai-api': ['ZAI_API_KEY', 'Z_AI_API_KEY'],
 	together: ['TOGETHER_API_KEY'],
 	xiaomi: ['XIAOMI_API_KEY'],
 	'xiaomi-token-plan-cn': ['XIAOMI_TOKEN_PLAN_CN_API_KEY', 'XIAOMI_TOKEN_PLAN_API_KEY'],
@@ -63,9 +64,7 @@ export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 	'stepfun-plan-intl': ['STEPFUN_API_KEY'],
 	'ant-ling': ['ANT_LING_API_KEY', 'LING_API_KEY'],
 	'zhipu-cn': ['ZHIPU_API_KEY', 'BIGMODEL_API_KEY'],
-	'zai-coding-cn': ['ZHIPU_API_KEY', 'BIGMODEL_API_KEY', 'ZAI_API_KEY'],
-	'zai-coding-global': ['ZAI_API_KEY', 'Z_AI_API_KEY'],
-	'zhipu-coding-cn': ['ZHIPU_API_KEY', 'BIGMODEL_API_KEY', 'ZAI_API_KEY'],
+	'zai-coding-cn': ['ZAI_CODING_CN_API_KEY', 'ZHIPU_API_KEY', 'BIGMODEL_API_KEY', 'ZAI_API_KEY'],
 };
 
 /**

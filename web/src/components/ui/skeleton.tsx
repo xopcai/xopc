@@ -2,9 +2,9 @@ import type { ComponentProps } from 'react';
 
 import { cn } from '@/lib/cn';
 
-export function Skeleton({ className, ...props }: ComponentProps<'div'>) {
+export function Skeleton({ as: Component = 'div', className, ...props }: ComponentProps<'div'> & { as?: 'div' | 'span' }) {
   return (
-    <div
+    <Component
       aria-hidden="true"
       className={cn('animate-pulse rounded-md bg-surface-hover/70 motion-reduce:animate-none', className)}
       {...props}

@@ -268,7 +268,11 @@ private extension MessageBubble {
         if !message.attachments.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 let images = message.attachments.filter(\.isImage)
-                if !images.isEmpty {
+                if images.count == 1, let attachment = images.first,
+                   let source = attachment.uri ?? attachment.workspaceRelativePath.map(ChatImageSource.workspaceURL) {
+                    MarkdownImageView(alt: attachment.name ?? AppLocalization.string("图片", locale: locale), source: source,
+                                      configuration: configuration, conversationID: conversationID, gallery: images)
+                } else if !images.isEmpty {
                     let columnCount = images.count == 1 ? 1 : images.count == 2 || images.count == 4 ? 2 : 3
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: columnCount), spacing: 6) {
                         ForEach(images) { attachment in

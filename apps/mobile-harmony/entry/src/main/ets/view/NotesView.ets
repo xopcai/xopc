@@ -91,8 +91,9 @@ export struct XopcNotesView {
 
   private back(): void {
     if (this.model.editing) { void this.model.closeEditor(); return; }
+    // Direct detail/create routes return to their caller instead of exposing another note list.
+    if (this.embedded || this.initialId || this.createOnAppear) { this.onExit(); return; }
     if (this.model.openingId) { this.model.backToList(); return; }
-    if (this.embedded) { this.onExit(); return; }
     if (this.model.selected || this.model.draft) { this.model.backToList(); return; }
     this.onExit();
   }
@@ -121,7 +122,7 @@ export struct XopcNotesView {
       });
       if (result.index === 1) {
         await this.model.remove();
-        if (this.embedded && !this.model.selected) this.onExit();
+        if ((this.embedded || this.initialId || this.createOnAppear) && !this.model.selected) this.onExit();
       }
     } catch (error) { this.model.error = (error as Error).message; }
   }

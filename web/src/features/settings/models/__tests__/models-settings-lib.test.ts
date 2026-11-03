@@ -1,3 +1,4 @@
+import { getProviders as getPiProviders } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -39,26 +40,19 @@ describe('models settings provider presets', () => {
         'volcengine-ark',
         'volcengine-plan',
         'byteplus-plan',
-        'deepseek',
-        'moonshotai',
-        'moonshotai-cn',
-        'kimi-coding',
         'stepfun-cn',
         'stepfun-intl',
         'stepfun-plan-cn',
         'stepfun-plan-intl',
-        'xiaomi',
-        'xiaomi-token-plan-cn',
-        'xiaomi-token-plan-ams',
-        'xiaomi-token-plan-sgp',
         'zhipu-cn',
-        'zai',
-        'zai-coding-global',
-        'zhipu-coding-cn',
-        'minimax',
-        'minimax-cn',
+        'zai-api',
       ]),
     );
+  });
+
+  it('only defines presets for providers absent from pi', () => {
+    const ids = PROVIDER_PRESET_OPTIONS.map(option => option.providerId);
+    for (const provider of getPiProviders()) expect(ids).not.toContain(provider);
   });
 
   it('preserves preset model metadata when constructing defaults', () => {
@@ -66,11 +60,9 @@ describe('models settings provider presets', () => {
     expect(providerPresetKeyForProviderId('dashscope-cn')).toBe('dashscopeCn');
     expect(modelsJsonPresetKeyForProviderId('dashscope-cn')).toBe('dashscopeCn');
     expect(modelsJsonPresetKeyForProviderId('openrouter')).toBeUndefined();
-    expect(PROVIDER_PRESETS.minimax.config).toMatchObject({
-      baseUrl: 'https://api.minimax.io/anthropic',
-      api: 'anthropic-messages',
-      authHeader: true,
-    });
+    expect(PROVIDER_PRESETS.minimax).toBeUndefined();
+    expect(PROVIDER_PRESETS.kimiCoding).toBeUndefined();
+    expect(PROVIDER_PRESETS.zaiCodingGlobal).toBeUndefined();
     expect(PROVIDER_PRESETS.dashscopeCn.config).toMatchObject({
       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       api: 'openai-completions',
@@ -83,8 +75,8 @@ describe('models settings provider presets', () => {
       id: 'qwen3.7-max',
       contextWindow: 1000000,
     });
-    expect(PROVIDER_PRESETS.zhipuCodingCn.config).toMatchObject({
-      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    expect(PROVIDER_PRESETS.zaiGeneral.config).toMatchObject({
+      baseUrl: 'https://api.z.ai/api/paas/v4',
       api: 'openai-completions',
     });
   });

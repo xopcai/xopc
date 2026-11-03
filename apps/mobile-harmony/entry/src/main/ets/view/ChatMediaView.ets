@@ -26,6 +26,7 @@ export struct XopcChatMediaView {
   @Param compact: boolean = false;
   @Param embedded: boolean = false;
   @Param noteInlineImage: boolean = false;
+  @Param readingImage: boolean = false;
   @Param compactThumbnail: boolean = false;
   @Param compactAvailable: boolean = false;
   @Param resultCapsule: boolean = false;
@@ -42,6 +43,11 @@ export struct XopcChatMediaView {
   @Param imageGallery: XopcHistoryMedia[] = [];
   @Local picture?: image.PixelMap;
   @Local pictureRatio: number = 1;
+  @Local pictureWidth: number = 320;
+  @Local readingAvailableWidth: number = 320;
+  @Computed get readingWidth(): number {
+    return Math.min(this.readingAvailableWidth, this.pictureWidth, 320, 280 * this.pictureRatio);
+  }
   @Local expanded: boolean = false;
   @Local error: string = '';
   @Local busy: boolean = false;
@@ -312,6 +318,7 @@ export struct XopcChatMediaView {
       const source = image.createImageSource(bytes);
       try {
         const info = await source.getImageInfo();
+        this.pictureWidth = info.size.width;
         this.pictureRatio = info.size.width / Math.max(1, info.size.height);
         const thumbnailExtent = Math.max(this.compactThumbnailWidth || 48, this.compactThumbnailHeight || 48);
         const maxDimension = this.compactThumbnail ? Math.min(512, Math.max(128, thumbnailExtent * 3)) : 1024;
@@ -444,15 +451,23 @@ export struct XopcChatMediaView {
           .enabled(!this.busy && this.previewable())
           .accessibilityText($r('app.string.chat_preview_file', this.file.name)).onClick((): void => { this.openPreview(); })
       } else if (this.picture) {
-        Image(this.picture).width(this.draftPreview ? 120 : '100%')
-          .height(this.noteInlineImage ? Math.max(220, Math.min(420, 320 / Math.max(0.2, this.pictureRatio))) : this.draftPreview ? 100 : 200)
+        Image(this.picture).width(this.readingImage ? this.readingWidth : this.draftPreview ? 120 : '100%')
+          .constraintSize({ maxWidth: '100%' })
+          .height(this.readingImage ? this.readingWidth / Math.max(0.01, this.pictureRatio) : this.noteInlineImage ? Math.max(220, Math.min(420, 320 / Math.max(0.2, this.pictureRatio))) : this.draftPreview ? 100 : 200)
           .objectFit(this.noteInlineImage ? ImageFit.Cover : ImageFit.Contain).borderRadius(12)
           .id('chat-image-' + this.file.id).accessibilityText(this.file.name).onClick((): void => { this.openPreview(); })
+      } else if (this.readingImage && this.error) {
+        Column({ space: 8 }) {
+          Text(this.file.name).fontSize(13).fontColor(this.colors.secondary).maxLines(2)
+          Button($r('app.string.retry')).height(44).onClick((): void => { this.load(); })
+        }.width(320).constraintSize({ maxWidth: '100%' }).height(180).padding(12)
+          .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.grouped).borderRadius(10)
       } else if (this.file.mimeType.startsWith('image/') && !this.error) {
-        Column() {}.width('100%').height(160).borderRadius(12).backgroundColor(this.colors.grouped)
+        Column() {}.width(this.readingImage ? 320 : '100%').constraintSize({ maxWidth: '100%' })
+          .height(this.readingImage ? 180 : 160).borderRadius(10).backgroundColor(this.colors.grouped)
           .accessibilityText($r('app.string.chat_media_loading'))
       }
-      if (!this.inlineVoice && !this.compact && !this.noteInlineImage) {
+      if (!this.inlineVoice && !this.compact && !this.noteInlineImage && !this.readingImage) {
         Row({ space: 8 }) {
           Text(this.file.name || this.file.type).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1).maxLines(2)
           if (this.previewable()) {
@@ -477,7 +492,9 @@ export struct XopcChatMediaView {
         }
       }
       }
-    }.width('100%').onVisibleAreaChange([0.1], (visible: boolean): void => {
+    }.width('100%').onAreaChange((_old: Area, area: Area): void => {
+      if (this.readingImage) this.readingAvailableWidth = Math.max(1, Math.min(320, Number(area.width)));
+    }).onVisibleAreaChange([0.1], (visible: boolean): void => {
       if (!visible || this.previewOnly || this.inlineVoice || this.attempted) return;
       if (this.compact && this.previewKind() === 'html') this.prefetchHtml();
       else if (!this.compact || this.compactThumbnail) this.load();

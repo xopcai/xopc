@@ -25,7 +25,7 @@ struct MarkdownImageView: View {
 
     private var requestIdentity: RequestIdentity {
         RequestIdentity(source: source, configuration: configuration, conversationID: conversationID,
-                        maxPixel: Int((tileSize ?? (compact ? 108 : 360)) * displayScale))
+                        maxPixel: Int((tileSize ?? (compact ? 108 : 320)) * displayScale))
     }
 
     var body: some View {
@@ -38,17 +38,18 @@ struct MarkdownImageView: View {
                         .resizable()
                         .aspectRatio(contentMode: tileSize == nil ? .fit : .fill)
                         .frame(width: tileSize ?? (compact ? 108 : nil), height: tileSize ?? (compact ? 108 : nil))
-                        .frame(maxWidth: tileSize ?? (compact ? 108 : 360), maxHeight: tileSize ?? (compact ? 108 : 300))
-                        .frame(minWidth: tileSize ?? (compact ? 108 : 96), minHeight: tileSize ?? (compact ? 108 : 72))
+                        .frame(maxWidth: tileSize ?? (compact ? 108 : min(320, image.size.width)), maxHeight: tileSize ?? (compact ? 108 : min(280, image.size.height)))
                         .clipShape(.rect(cornerRadius: 10))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(previewAccessibilityLabel)
                 .accessibilityIdentifier("markdown-image-preview")
             } else if isLoading {
-                Label("正在加载图片…", systemImage: "photo")
-                    .foregroundStyle(.secondary)
-                    .frame(width: tileSize ?? (compact ? 108 : nil), height: tileSize ?? (compact ? 108 : 72))
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(.quaternary)
+                    .frame(maxWidth: tileSize ?? (compact ? 108 : 320))
+                    .frame(height: tileSize ?? (compact ? 108 : 180))
+                    .accessibilityLabel("正在加载图片…")
             } else if failed {
                 HStack {
                     Label("图片无法显示", systemImage: "photo.badge.exclamationmark")
@@ -56,7 +57,7 @@ struct MarkdownImageView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(width: tileSize ?? (compact ? 108 : nil), height: tileSize ?? (compact ? 108 : 72))
+                .frame(width: tileSize ?? (compact ? 108 : nil), height: tileSize ?? (compact ? 108 : 180))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -66,7 +67,9 @@ struct MarkdownImageView: View {
                 items: gallery.isEmpty
                     ? [ChatImageGalleryItem(title: alt, source: source)]
                     : gallery.compactMap { file in
-                        file.uri.map { ChatImageGalleryItem(title: file.name ?? "图片", source: $0) }
+                        (file.uri ?? file.workspaceRelativePath.map(ChatImageSource.workspaceURL)).map {
+                            ChatImageGalleryItem(title: file.name ?? "图片", source: $0)
+                        }
                     },
                 initialSource: source,
                 configuration: configuration,

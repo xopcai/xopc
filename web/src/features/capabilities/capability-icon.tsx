@@ -17,14 +17,14 @@ export function CapabilityIcon({
   useEffect(() => setFailed(false), [iconUrl]);
 
   return (
-    <span className={cn('flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-edge bg-white', className)}>
+    <span className={cn('flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl', className)}>
       {iconUrl && !failed ? (
         <img
           src={iconUrl}
           alt=""
           loading="lazy"
           draggable={false}
-          className="size-8 object-contain"
+          className="size-full object-cover"
           onError={() => setFailed(true)}
         />
       ) : (

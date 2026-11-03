@@ -10,7 +10,10 @@ struct MarkdownBodyView: View {
     @State private var projectedParts: [MarkdownPart] = []
 
     var body: some View {
-        let displayedParts = markdown == nil || projectedParts.isEmpty ? parts : projectedParts
+        let allParts = markdown == nil || projectedParts.isEmpty ? parts : projectedParts
+        let displayedParts = allParts.enumerated().filter { index, part in
+            index + 1 >= allParts.count || !MarkdownBlock.redundantImageLink(part.block, followedBy: allParts[index + 1].block)
+        }.map(\.element)
         let mathEnabled = displayedParts.reduce(0) { $0 + MathMarkdownSyntax.candidateCount($1.block) } <= 256
         VStack(alignment: .leading, spacing: 10) {
             ForEach(displayedParts) { part in

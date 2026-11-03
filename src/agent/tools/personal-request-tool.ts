@@ -1,5 +1,5 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { Type } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 
 import { personalCapabilities } from '../../personal-agent/capability-service.js';
 import { selectionRequestHash } from '../../agent-matching/selection-repository.js';
@@ -62,12 +62,12 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
   const capabilityTool: AgentTool<typeof CapabilitySchema> = {
     name: 'personal_capability', label: 'Connected app availability', parameters: CapabilitySchema,
     description: 'Check connected-app capabilities, account connection state and specialist Agents locally. The background Task Router selects an executor within account permissions; do not compare executor profiles in the main conversation. For Gmail or other supported apps, check here before delegating. ready is a local preflight; the worker still validates live tools. No remote search or authorization is performed.',
-    async execute(_id, input) { return result(personalCapabilities(conversation(), input.query, input.accountId).map(({ executorProfiles: _profiles, executorAgentIds, accounts, ...capability }) => ({ ...capability, eligibleExecutorCount: executorAgentIds.length, accounts: accounts.map(({ executorAgentIds: _ids, ...account }) => account) }))); },
+    async execute(_id, input: Static<typeof CapabilitySchema>) { return result(personalCapabilities(conversation(), input.query, input.accountId).map(({ executorProfiles: _profiles, executorAgentIds, accounts, ...capability }) => ({ ...capability, eligibleExecutorCount: executorAgentIds.length, accounts: accounts.map(({ executorAgentIds: _ids, ...account }) => account) }))); },
   };
   const requestTool: AgentTool<typeof RequestSchema> = {
     name: 'personal_request', label: 'Connected app request', parameters: RequestSchema,
     description: 'Submit a read-only connected-app request with a short objective and complete description using the exact connectorId from personal_capability. The background Task Router chooses an executor after account authorization. Preserves the objective, displays connection or account selection in this main chat, and starts a specialist Task automatically once connected. Return quickly after submission. Never claim data was read until the Task result arrives. Resolve absolute query dates and include timeRange. If mail has no user-specified range, the host returns an explicit last-7-days default; state that range and proceed without asking for confirmation. get includes complete Task coordination state; collaboration/entry read the same board and full questions. answer forwards the exact questionId; instruct forwards new requirements to the existing Task. Answers and instructions cannot change the connector/account, grant access or allow writes; reconnection stays in the existing connection UI. Saved, delivered, executor-confirmed and verified are distinct states. Use get/list for status without polling; preserve idempotencyKey on uncertain retries; cancel only when the user requests it.',
-    async execute(toolCallId, input) {
+    async execute(toolCallId, input: Static<typeof RequestSchema>) {
       const conversationId = conversation();
       if (input.command === 'list') {
         const offset = input.offset ?? 0;

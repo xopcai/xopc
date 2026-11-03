@@ -10,6 +10,16 @@ struct ChatImageLoader: Sendable {
     }
 
     func load(_ source: ChatImageSource) async throws -> Data {
+        if case let .workspace(path, conversationID) = source {
+            let attachment = HistoryAttachment(mediaID: nil, type: "image", name: path, mimeType: nil,
+                                               size: nil, uri: nil, duration: nil, workspaceRelativePath: path, extractedText: nil)
+            let file = try await ChatAttachmentLoader(configuration: configuration, session: session)
+                .resolveManagedFile(attachment, conversationID: conversationID)
+            guard let resolved = ChatImageSource.resolve("xopc-file:\(file.id)", conversationID: conversationID) else {
+                throw ChatImageError.invalidSource
+            }
+            return try await load(resolved)
+        }
         if case let .embedded(data) = source {
             return data
         }

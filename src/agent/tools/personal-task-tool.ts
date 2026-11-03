@@ -129,7 +129,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
     mutationScope: 'external',
     requiresExclusiveWorkspaceLock: false,
     finalGuardRelevant: true,
-    async execute(toolCallId, modelInput, signal) {
+    async execute(toolCallId, modelInput: Static<typeof PersonalTaskModelSchema>, signal) {
       if (!PersonalTaskSchema.properties.command.anyOf.some(command => command.const === modelInput.command)) throw new Error('Unsupported personal_task command; completed work uses atomic revise, not manual start/reopen');
       const input = modelInput as Static<typeof PersonalTaskSchema>;
       if (modelInput.sourceRefs?.length && !['submit', 'revise'].includes(input.command)) throw new Error('sourceRefs is supported only by submit/revise; it cannot be silently ignored by a coordination command');

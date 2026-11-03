@@ -3,7 +3,7 @@ import type { ProviderSetupProfile } from '@xopcai/gateway-contract';
 const subscriptionProviders = new Set([
   'qwen-token-plan-cn', 'qwen-token-plan', 'qwen-token-plan-individual',
   'xiaomi-token-plan-cn', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-sgp',
-  'zai-coding-cn', 'zai-coding-global', 'zhipu-coding-cn', 'kimi-coding',
+  'zai-coding-cn', 'zai', 'kimi-coding',
   'volcengine-plan', 'byteplus-plan', 'stepfun-plan', 'stepfun-plan-cn', 'stepfun-plan-intl',
 ]);
 
