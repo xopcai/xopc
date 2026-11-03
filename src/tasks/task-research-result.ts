@@ -197,9 +197,12 @@ export function taskResearchEvidence(conversationId: string): { rows: { payload_
   if (!link || !run || run.conversationId !== conversationId || !['running', 'verifying'].includes(run.status)) throw new Error('No active Task execution');
   const transcriptId = readCurrentTranscriptId(getSqliteDatabase(), conversationId);
   const rows = getSqliteDatabase().prepare(`SELECT payload_json, created_at FROM transcript_entries
-    WHERE transcript_id = ? AND role = 'toolResult' AND created_at >= ? ORDER BY seq`).all(transcriptId, run.startedAt ?? 0) as { payload_json: string; created_at: number }[];
+    WHERE transcript_id = ? AND (role = 'toolResult' OR
+      (role IS NULL AND json_extract(payload_json, '$.customType') = 'codemode-tool-result'))
+      AND created_at >= ? ORDER BY seq`).all(transcriptId, run.startedAt ?? 0) as { payload_json: string; created_at: number }[];
   const tools: ToolRecord[] = rows.flatMap(row => {
-    const value = JSON.parse(row.payload_json);
+    const stored = JSON.parse(row.payload_json);
+    const value = stored.customType === 'codemode-tool-result' ? stored.data : stored;
     if (!RESEARCH_READ_TOOLS.has(value.toolName) || value.toolName === 'managed_job' && (value.details?.status !== 'success' || value.details?.exitCode !== 0)
       || value.toolName === 'task_collaboration' && value.details?.taskSourceRead?.taskId !== link.taskId || value.isError || value.details?.error || ['failed', 'blocked', 'error', 'running', 'queued', 'timed_out', 'cancelled'].includes(value.details?.status) || value.details?.timedOut === true
       || typeof value.details?.exitCode === 'number' && value.details.exitCode !== 0 || !Array.isArray(value.content)) return [];

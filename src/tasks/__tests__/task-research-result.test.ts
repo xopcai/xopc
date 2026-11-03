@@ -150,6 +150,25 @@ describe('personal research benchmark v1', () => {
     const listing = JSON.parse((await tool.execute('list-jobs', { command: 'get', section: 'evidence' })).content[0].text);
     expect(listing.items.map(item => item.toolCallId)).toContain('job-complete');
   });
+  it('reads host-persisted nested outputs even when sandbox output was omitted or failed', async () => {
+    const { worker } = execution();
+    for (const [id, isError, details] of [
+      ['nested/1', false, { url: 'https://example.test/pricing' }],
+      ['nested/2', true, {}], ['nested/3', false, { status: 'failed' }],
+    ] as const) appendTranscriptEntry(worker.key, { type: 'custom', customType: 'codemode-tool-result',
+      data: { parentToolCallId: 'nested', toolCallId: id, toolName: 'web_fetch', isError, details,
+        content: [{ type: 'text', text: 'Price is 1.00 per hour.' }] } });
+    appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId: 'nested', toolName: 'codemode', isError: true,
+      content: [{ type: 'text', text: 'Script failed after reads; fabricated quote' }], timestamp: Date.now() });
+    const tool = createTaskCollaborationTool({ getCurrentConversationId: () => worker.key, getCurrentAgentId: () => 'worker' });
+    const listing = JSON.parse((await tool.execute('list', { command: 'get', section: 'evidence' })).content[0].text);
+    expect(listing.items.map(item => item.toolCallId)).toEqual(['read-1', 'nested/1']);
+    const read = JSON.parse((await tool.execute('read', { command: 'get', section: 'evidence', toolCallId: 'nested/1' })).content[0].text);
+    expect(read.text).toBe('Price is 1.00 per hour.');
+    const result = await submitTaskResearchResult(worker.key, 'nested-result', { ...input,
+      sources: [{ ...input.sources[0], toolCallId: 'nested/1', url: 'https://example.test/pricing' }] }, undefined, reviewer);
+    expect(result.sources[0]).toMatchObject({ toolCallId: 'nested/1', url: 'https://example.test/pricing' });
+  });
   it('R04-missing-criterion: omitted and unexpanded criteria remain unverified', async () => {
     const result = applyResearchReview(seedResult(), { claims: [{ id: 'price', support: 'supported', note: 'Quote supports rate' }], checks: [] }, ['Use hourly units']);
     expect(result.checks[0].status).toBe('unverified');

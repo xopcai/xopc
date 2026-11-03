@@ -8,6 +8,8 @@ export function withTaskEvidenceIdentity<T extends AgentTool>(tool: T): T {
   if (!names.has(tool.name)) return tool;
   return { ...tool, execute: async (...args: Parameters<T['execute']>) => {
     const result = await tool.execute(args[0], args[1], args[2], args[3]);
+    // Evidence listings/replays and progress messages are not new source observations.
+    if (tool.name === 'task_collaboration' && !(result.details as { taskSourceRead?: unknown })?.taskSourceRead) return result;
     const artifacts = tool.name === 'publish_artifacts' ? (result.details as { artifacts?: Array<{ artifactId: string; title: string; availability: string }> })?.artifacts : undefined;
     const receipt = artifacts ? [{ type: 'text' as const, text: JSON.stringify({ publishedArtifacts: artifacts.map(({ artifactId, title, availability }) => ({ artifactId, title, availability })),
       guidance: 'Use exact artifactId values in publish_task_result.finalArtifactIds to select final deliverables.' }) }] : [];

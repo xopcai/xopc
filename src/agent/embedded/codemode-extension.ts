@@ -66,11 +66,21 @@ export function createXopcCodemodeExtension(
         return { content: [{ type: 'text', text: 'Codemode execution is no longer active' }], isError: true };
       }
       try {
-        return await getSession()?.agent.afterToolCall?.({
+        const override = await getSession()?.agent.afterToolCall?.({
           ...contextFor(event.toolCallId, event.toolName, event.input),
           result: { content: event.content, details: event.details, structuredContent: event.structuredContent, usage: event.usage },
           isError: event.isError,
         }, active.signal);
+        // The parent transcript retains call metadata, but not individual observed outputs.
+        // Persist host results separately so sandbox text/store values cannot forge evidence.
+        pi.appendEntry('codemode-tool-result', {
+          parentToolCallId: event.parentToolCallId,
+          toolCallId: event.toolCallId, toolName: event.toolName,
+          content: override?.content ?? event.content,
+          details: override?.details ?? event.details,
+          isError: override?.isError ?? event.isError,
+        });
+        return override;
       } catch {
         return { content: [{ type: 'text', text: 'Codemode result policy failed' }], details: {}, isError: true };
       }

@@ -219,6 +219,29 @@ it('inherits Personal boundaries in an ephemeral run and blocks guessed tools be
   expect(execute).not.toHaveBeenCalled();
 }, 15000);
 
+it('renews retries after successful tool turns within the same execution', async () => {
+  const { params } = await fixture();
+  let round = 0;
+  scripted.stream.mockImplementation(() => {
+    const index = round++;
+    const failed = index % 2 === 0;
+    const reading = !failed && index < 5;
+    const message = { role: 'assistant', api: model.api, provider: model.provider, model: model.id,
+      content: failed ? [] : reading ? [{ type: 'toolCall', id: `read-${index}`, name: 'read_file', arguments: { path: 'note.txt' } }]
+        : [{ type: 'text', text: 'Finished' }],
+      stopReason: failed ? 'error' : reading ? 'toolUse' : 'stop', timestamp: Date.now(),
+      ...(failed ? { errorMessage: 'Connection error.' } : {}),
+      usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { ...model.cost, total: 0 } },
+    } as AssistantMessage;
+    const stream = createAssistantMessageEventStream();
+    if (failed) stream.push({ type: 'error', reason: 'error', error: message });
+    else stream.push({ type: 'done', reason: reading ? 'toolUse' : 'stop', message });
+    return stream;
+  });
+  expect(await runXopcEmbeddedTurn({ ...params, codemode: undefined })).toMatchObject({ ok: true });
+  expect(round).toBe(6);
+}, 15_000);
+
 it('runs real QuickJS reads through xopc hooks, retains nested records and restores store on rebuild', async () => {
   const { params, runtime } = await fixture();
   const executeRead = params.tools[0].execute.bind(params.tools[0]);
@@ -241,6 +264,9 @@ it('runs real QuickJS reads through xopc hooks, retains nested records and resto
   expect(events.some(event => 'parentToolCallId' in event)).toBe(true);
   const rows = runtime.openSessionManager('').getBranch();
   expect(rows.some(entry => entry.type === 'custom' && entry.customType === 'codemode-store')).toBe(true);
+  expect(rows).toContainEqual(expect.objectContaining({ type: 'custom', customType: 'codemode-tool-result',
+    data: expect.objectContaining({ toolName: 'read_file', toolCallId: expect.stringContaining('/1'),
+      content: expect.arrayContaining([expect.objectContaining({ type: 'text', text: expect.stringContaining('bounded read evidence') })]) }) }));
   expect(rows.filter(entry => entry.type === 'message' && entry.message.role === 'toolResult')).toHaveLength(1);
   evictEmbeddedSessionRunner(params.conversationId);
   const second = await runScript({ ...params, runId: crypto.randomUUID() }, 'text(load("note"));');
