@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-03T01:40:08.361Z",
+  "status": "paused_by_user",
+  "userInstruction": "能否先暂停，保留当前的进展，我想要commit 下",
+  "registration": {
+    "schemaVersion": 1,
+    "runDate": "2026-11-03",
+    "registeredAt": "2026-11-03T01:35:52.048Z",
+    "suite": "personal-assistant-flow-zh-vownership-v3",
+    "previousCycle": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated",
+    "candidateSpec": "/Users/micjoyce/develop/github/xopc/.xopc-evals/ownership-repair-worktree-20261103/evals/personal/style/assistant-flow-ownership-candidate-v3.json",
+    "candidateSpecSha256": "323b40cfeaab2ee9af512e9930e4e2e43a1e925d70cf566ff303bcf3467cf03a",
+    "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+    "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+    "reasoning": "off",
+    "evaluatorReasoning": "low",
+    "personalProfile": "fresh-production-default",
+    "concurrency": 2,
+    "transportRetries": 0,
+    "targetedCleanCases": [
+      "P0-FLOW-O05",
+      "P0-FLOW-O08",
+      "P0-FLOW-R02"
+    ],
+    "expectedScenes": 60,
+    "expectedUserInputs": 480,
+    "expectedJudgeCalls": 120,
+    "development": [
+      "P0-FLOW-D01",
+      "P0-FLOW-D02",
+      "P0-FLOW-D03",
+      "P0-FLOW-D04",
+      "P0-FLOW-D05",
+      "P0-FLOW-D06",
+      "P0-FLOW-V01",
+      "P0-FLOW-V02",
+      "P0-FLOW-V03",
+      "P0-FLOW-V04",
+      "P0-FLOW-V05",
+      "P0-FLOW-V06",
+      "P0-FLOW-H01",
+      "P0-FLOW-H02",
+      "P0-FLOW-H03",
+      "P0-FLOW-H04",
+      "P0-FLOW-H05",
+      "P0-FLOW-H06",
+      "P0-FLOW-I01",
+      "P0-FLOW-I02",
+      "P0-FLOW-I03",
+      "P0-FLOW-I04",
+      "P0-FLOW-I05",
+      "P0-FLOW-I06",
+      "P0-FLOW-J01",
+      "P0-FLOW-J02",
+      "P0-FLOW-J03",
+      "P0-FLOW-J04",
+      "P0-FLOW-J05",
+      "P0-FLOW-J06",
+      "P0-FLOW-K01",
+      "P0-FLOW-K02",
+      "P0-FLOW-K03",
+      "P0-FLOW-K04",
+      "P0-FLOW-K05",
+      "P0-FLOW-K06",
+      "P0-FLOW-O01",
+      "P0-FLOW-O02",
+      "P0-FLOW-O03",
+      "P0-FLOW-O04",
+      "P0-FLOW-O05",
+      "P0-FLOW-O06",
+      "P0-FLOW-O07",
+      "P0-FLOW-O08",
+      "P0-FLOW-R01",
+      "P0-FLOW-R02",
+      "P0-FLOW-R03",
+      "P0-FLOW-R04",
+      "P0-FLOW-R05",
+      "P0-FLOW-R06",
+      "P0-FLOW-R07",
+      "P0-FLOW-R08"
+    ],
+    "validation": [
+      "P0-FLOW-S01",
+      "P0-FLOW-S02",
+      "P0-FLOW-S03",
+      "P0-FLOW-S04",
+      "P0-FLOW-S05",
+      "P0-FLOW-S06",
+      "P0-FLOW-S07",
+      "P0-FLOW-S08"
+    ],
+    "fixture": "/Users/micjoyce/develop/github/xopc/.xopc-evals/ownership-repair-worktree-20261103/evals/personal/style/assistant-flow-ownership-dialogues-v3.json",
+    "fixtureSha256": "ef16e5510c8aa34e86584e173f520979fada9340d3c35a56236e7ae527404cb0",
+    "baselineRef": "1c0f54e79731434fa433b7f03e75ea90c4af5cfc",
+    "candidateRuleSha256": "72d2f5c707ec3ed3df8d45087b69e43b65248269f1daa9ee6ef283d2e7bd367a",
+    "conditions": [
+      {
+        "path": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-source",
+        "commit": "f4c9c50e9f472cc6477a5215f7bc19525f3d5637",
+        "moduleSha256": "a0b8e134518eba102889046caeffeb67a062128bd4627b710e7340b8c8bc13c4",
+        "moduleHashes": {
+          "src/personal-agent/reply-style.ts": "a0b8e134518eba102889046caeffeb67a062128bd4627b710e7340b8c8bc13c4"
+        }
+      },
+      {
+        "path": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/candidate-source",
+        "commit": "25fbdbf066896fe9b21f7fb01d48093967236fc2",
+        "moduleSha256": "03a00e4dbea4e7cd8813dc245ffab5adcb02548cbc0586905d1b9ca8846bac6a",
+        "moduleHashes": {
+          "src/personal-agent/reply-style.ts": "03a00e4dbea4e7cd8813dc245ffab5adcb02548cbc0586905d1b9ca8846bac6a"
+        }
+      }
+    ],
+    "onlyChangedModule": "src/personal-agent/reply-style.ts",
+    "changedModules": [
+      "src/personal-agent/reply-style.ts"
+    ],
+    "gate": {
+      "validationOverallMinNetWins": 1,
+      "validationNaturalnessMinNetWins": 1,
+      "noCandidateMajorEitherOrder": true,
+      "validationViolationsNonincrease": true,
+      "validationP95LatencyRatio": 1.2,
+      "minIndependentHumanReviewers": 2,
+      "completeDenominatorRequired": true
+    },
+    "budget": {
+      "generationMaxRequests": 510,
+      "judgeMaxRequests": 128,
+      "totalWallMs": 1800000,
+      "requestTimeoutMs": 240000
+    },
+    "limitations": [
+      "Product-authored fixed continuations, not observed adaptive human behavior",
+      "Single judge, swapped orders correlated",
+      "No paid unchanged rerun, no score-based replacement",
+      "No production adoption before human review; task execution transitions require stage two live-tool fixtures"
+    ]
+  },
+  "baselineStatus": "interrupted",
+  "candidateStarted": false,
+  "judgeStarted": false,
+  "automatedPassed": null,
+  "targetedRegressionVerdicts": null,
+  "completeBaselineCaptureFiles": 4,
+  "plannedScenesPerCondition": 60,
+  "audit": {
+    "id": "baseline",
+    "taskEventsAvailable": false,
+    "knownPerRequestUsageMatched": false,
+    "knownUsageRequests": 0,
+    "perRequestMatched": false,
+    "settledChargeCreditMicro": null,
+    "billingUnit": "credit-micro",
+    "physicalRequests": 23,
+    "completedRequests": 23,
+    "runtimeRequests": 0,
+    "taskResponses": 0,
+    "auxiliaryRequests": 0,
+    "auxiliaryOperations": [],
+    "observedRuntimeTokens": null,
+    "observedProviderMinusRuntimeTokens": null,
+    "unknownRequests": 2,
+    "observedWireTokens": 235567,
+    "wireTokens": null,
+    "runtimeTokens": null,
+    "taskTokens": null,
+    "auxiliaryTokens": 0,
+    "providerMinusRuntimeTokens": null,
+    "requestInventoryMatched": false,
+    "requestCountMatched": false,
+    "usageMatched": false,
+    "requestedModels": [
+      "openai-codex/gpt-5.6-sol",
+      "openai-codex/gpt-6.1-sol"
+    ],
+    "responseModels": [
+      "openai-codex/gpt-5.6-sol",
+      "openai-codex/gpt-6.1-sol"
+    ],
+    "ledgerMode": null,
+    "ledgerFinalSnapshotGuaranteed": false,
+    "actualCharge": null,
+    "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+    "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+    "files": {
+      "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline-model-requests.jsonl",
+      "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline-runtime-usage.json"
+    },
+    "hashes": {
+      "wire": "d0803c880f8faa24d6579199a34844d07da8fd0394acb76468931b1561a5b800",
+      "ledger": null
+    }
+  },
+  "runtimeLedgerAvailable": false,
+  "finalRuntimeSnapshotGuaranteed": false,
+  "limitations": [
+    "Incomplete and unjudged; not a quality pass or rejection",
+    "Owner-dead request tails keep unknown usage; missing ledger is not zero usage",
+    "Candidate v3 has not run; v2 targeted passes do not make v3 verified",
+    "Resume requires an explicit user request and append-only evidence; never overwrite this interrupted run"
+  ],
+  "artifactHashes": {
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/registration.json": "a2b1333eafa94c7eead622bcbd02dd823fe1bbdbca8695f42d142ff526360680",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-plan.json": "171e4fbf1fdb6fce720e2e7e8ffbf9dd4310c72e73a78de153c447c561abb0da",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/candidate-plan.json": "72379ca41af2eb32f1bfe17163ae3712deef91e2d261e0a86b6a34a90cd758bf",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/judge-plan.json": "2690b800022e190707f580552db7db64374456f9b1d8070b9ed372986a882b2b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/campaign.json": "6e6a95e117843fbeed9a47ae1b670021b240b5c620edfc3601937a07d6d665ff",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline-model-requests.jsonl": "d0803c880f8faa24d6579199a34844d07da8fd0394acb76468931b1561a5b800",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline/completion.json": "f6c9664565e327752574c34ca000302ff54f786fddba7a9ab2016b39762643b0",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline/manifest.json": "5481cf6d18886f01a03ac89fc4a40b216aa98bde6de6856d72bbf32f591f69c2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline/scripted-summary.json": "b656b40c31604dbe5889e8333ed724355983b309f4d70e810e1eed35c9956c74",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline/cases/P0-FLOW-D01.json": "d53dafb9a43ecf5d5ea7e07dd9318ddd78966c9d8dfbb7860de623b402f92bad",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline/cases/P0-FLOW-D02.json": "1584a1a87d47d0b69a4703b6a02a099e9f89a62ac160d44f56d3b5d5955b810c",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline/cases/P0-FLOW-D03.json": "e23d70bade8c407b32c3b8ef5520df5bc09d3501dd7266f818726703519e78ce",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-v3-20261103/baseline-run/baseline/cases/preflight.json": "42949f0d80114d837cf3be758e869f1ddc47427de282a2c70795972a50e1cc68"
+  }
+}
