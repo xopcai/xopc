@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {isDeepStrictEqual} from 'node:util';
-import {analyzeFlow,type FlowCase} from './assistant-flow-analysis.js';
+import {analyzeFlow,analyzeTargetedRegressions,type FlowCase} from './assistant-flow-analysis.js';
 import {hash} from '../../control/evidence.js';
 import {ControlStore} from '../../control/store.js';
 import {reconcileJob} from '../../control/reconciliation.js';
@@ -37,9 +37,12 @@ for(const c of cases){
  judgments[c.id]=['forward','reverse'].flatMap(order=>{const p=join(judgeDir,`${c.id}.${order}.json`);if(!existsSync(p))return [];artifactHashes[p]=hash(readFileSync(p));return [read(p)];});
 }
 const analysis=analyzeFlow(cases,captures,judgments);
+assert.deepEqual(reg.targetedCleanCases??[],fixtures.targetedCleanCases??[]);
+const targetedRegressions=analyzeTargetedRegressions(analysis,reg.targetedCleanCases??[]);
 const campaignDirs=[join(root,'baseline-run'),join(root,'candidate-run'),join(root,'judging')];
 const audit=campaignDirs.map((d,i)=>reconcileJob(d,['baseline','candidate','judge'][i]!));
 const reasons:string[]=[];
+for(const target of targetedRegressions)if(!target.passed)reasons.push('Targeted failure regression not clean: '+target.caseId);
 for(const [i,d] of campaignDirs.entries()){
  const campaign=read(join(d,'campaign.json'));
  assert.ok(Date.parse(reg.registeredAt)<Date.parse(campaign.startedAt),'Preregistration did not precede execution');
@@ -71,12 +74,12 @@ for(const [index,d] of dirs.entries()){
 }
 const related=store.list({limit:100}).items.filter(e=>dirs.some(d=>e.source.startsWith(d+'/'))).map(e=>e.id);
 const id=store.improvement({problem:'Personal 中文多轮助理风格 '+reg.suite+(reg.methodologyRecoveryOf?'（方法修复复验）':'（首批）')+'：流畅衔接与偏好作用域',hypothesis:'Experimental shared style module versus unchanged production baseline; same specified GPT-5.6 Sol model and GPT-6.1 Sol blind judge, all fixed protections retained.',budget:reg.budget,protection:['Completeness, grounded facts, necessary authorization, scoped preferences, latency and original failures'],preregistration:registrationPath});
-const styleAcceptance={expected:analysis.expected,completed:analysis.completed,cohorts:analysis.cohorts,automatedPassed:analysis.automatedPassed&&reasons.length===1,humanReview:{status:'pending',expectedReviewers:2,completedReviewers:0,queue:join(root,'human-blind-review.json')},
+const styleAcceptance={targetedRegressions,expected:analysis.expected,completed:analysis.completed,cohorts:analysis.cohorts,automatedPassed:analysis.automatedPassed&&reasons.length===1,humanReview:{status:'pending',expectedReviewers:2,completedReviewers:0,queue:join(root,'human-blind-review.json')},
  model:reg.model,judge:reg.judge,pairs:analysis.pairs,examples:humanQueue.map(c=>({caseId:c.caseId,A:c.A,B:c.B})),limitations:reg.limitations};
 const decision={schemaVersion:1,decidedAt:new Date().toISOString(),promotion:'rejected',scope:workingTreeCandidateAlreadyApplied?'Working-tree prompt change compared with declared pre-change baseline; benchmark result is not deployment or human adoption approval':'Pilot candidate not adopted; single-judge disclosed Chinese fixed-trajectory regression, human review remains pending',reasons,preregistrationHash:hash(readFileSync(registrationPath)),audit,evidenceIds:related,
  reports:[{id:'双序评审覆盖（不代表风格质量通过）',passed:analysis.completed,expected:analysis.expected}],styleAcceptance,productionDefaultsChanged:workingTreeCandidateAlreadyApplied,workingTreeCandidateAlreadyApplied,deploymentPerformed:false};
 write(join(root,'analysis.json'),analysis);write(join(root,'decision.json'),decision);store.decideImprovement(id,decision);write(join(root,'improvement-id.json'),{id});store.close();
-const report={schemaVersion:1,date:reg.runDate??reg.registeredAt.slice(0,10),phaseOneComplete:false,improvementId:id,promotion:decision.promotion,scope:decision.scope,registration:reg,sourceManifests:manifests,sourceCompletions:completions,analysis,audit,artifactHashes,
+const report={schemaVersion:1,automatedPassed:styleAcceptance.automatedPassed,targetedRegressions,date:reg.runDate??reg.registeredAt.slice(0,10),phaseOneComplete:false,improvementId:id,promotion:decision.promotion,scope:decision.scope,registration:reg,sourceManifests:manifests,sourceCompletions:completions,analysis,audit,artifactHashes,
  humanReview:styleAcceptance.humanReview,decisionSha256:hash(readFileSync(join(root,'decision.json'))),actualCharge:null,productionDefaultsChanged:workingTreeCandidateAlreadyApplied,workingTreeCandidateAlreadyApplied,deploymentPerformed:false,limitations:reg.limitations};
 write(join(root,'portable-report.json'),report);
-console.log(JSON.stringify({id,reasons,automatedPassed:analysis.automatedPassed,cohorts:analysis.cohorts,physicalRequests:audit.reduce((n,a)=>n+a.physicalRequests,0)},null,2));
+console.log(JSON.stringify({id,reasons,automatedPassed:styleAcceptance.automatedPassed,targetedRegressions,cohorts:analysis.cohorts,physicalRequests:audit.reduce((n,a)=>n+a.physicalRequests,0)},null,2));

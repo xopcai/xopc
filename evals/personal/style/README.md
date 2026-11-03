@@ -427,3 +427,10 @@ judge freezes this focus in its rubric; existing dimensions and acceptance gates
 remain mandatory. The ownership suite uses explicit user-supplied hypothetical
 status drafts. It tests wording and status fidelity, not actual tool state changes
 or background delivery. See [ownership benchmark](../../../docs/design/personal-ownership-benchmark-2026-11-03.md).
+
+Suites can additionally register `targetedCleanCases` for exposed failures that must
+be repaired. These scenes remain development regressions. Reporting requires complete
+captures and both judge orders, with zero candidate issues in either order for each
+target. A failed or missing target blocks automated acceptance even if aggregate
+validation gates pass. This supplements all existing thresholds; it never replaces
+fresh validation. The Dashboard shows each target separately.

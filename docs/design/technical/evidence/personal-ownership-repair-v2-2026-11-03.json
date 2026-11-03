@@ -1,0 +1,1586 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-03",
+  "artifactType": "compact-portable-summary",
+  "analysisEncoding": "Per-scene violations omit all-empty dimensions; cohort totals retain every dimension. Full original report remains immutable and hashed.",
+  "improvementId": "57506181-9334-43aa-9000-35f52b73a133",
+  "automatedPassed": false,
+  "targetedRegressions": [
+    {
+      "caseId": "P0-FLOW-O05",
+      "complete": true,
+      "candidateIssueCount": 0,
+      "passed": true
+    },
+    {
+      "caseId": "P0-FLOW-O08",
+      "complete": true,
+      "candidateIssueCount": 0,
+      "passed": true
+    }
+  ],
+  "humanReview": {
+    "status": "pending",
+    "expectedReviewers": 2,
+    "completedReviewers": 0,
+    "queue": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/human-blind-review.json"
+  },
+  "workingTreeCandidateAlreadyApplied": true,
+  "deploymentPerformed": false,
+  "registration": {
+    "schemaVersion": 1,
+    "runDate": "2026-11-03",
+    "registeredAt": "2026-11-03T01:11:54.380Z",
+    "suite": "personal-assistant-flow-zh-vownership-v2",
+    "previousCycle": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-20261103",
+    "candidateSpec": "/Users/micjoyce/develop/github/xopc/.xopc-evals/ownership-repair-worktree-20261103/evals/personal/style/assistant-flow-ownership-candidate-v2.json",
+    "candidateSpecSha256": "c2603e24580cfdd246e133e6d308c01b18810f2c64dc86e3dbdc65049add8b1a",
+    "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+    "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+    "reasoning": "off",
+    "evaluatorReasoning": "low",
+    "personalProfile": "fresh-production-default",
+    "concurrency": 2,
+    "transportRetries": 0,
+    "targetedCleanCases": [
+      "P0-FLOW-O05",
+      "P0-FLOW-O08"
+    ],
+    "expectedScenes": 52,
+    "expectedUserInputs": 416,
+    "expectedJudgeCalls": 104,
+    "development": [
+      "P0-FLOW-D01",
+      "P0-FLOW-D02",
+      "P0-FLOW-D03",
+      "P0-FLOW-D04",
+      "P0-FLOW-D05",
+      "P0-FLOW-D06",
+      "P0-FLOW-V01",
+      "P0-FLOW-V02",
+      "P0-FLOW-V03",
+      "P0-FLOW-V04",
+      "P0-FLOW-V05",
+      "P0-FLOW-V06",
+      "P0-FLOW-H01",
+      "P0-FLOW-H02",
+      "P0-FLOW-H03",
+      "P0-FLOW-H04",
+      "P0-FLOW-H05",
+      "P0-FLOW-H06",
+      "P0-FLOW-I01",
+      "P0-FLOW-I02",
+      "P0-FLOW-I03",
+      "P0-FLOW-I04",
+      "P0-FLOW-I05",
+      "P0-FLOW-I06",
+      "P0-FLOW-J01",
+      "P0-FLOW-J02",
+      "P0-FLOW-J03",
+      "P0-FLOW-J04",
+      "P0-FLOW-J05",
+      "P0-FLOW-J06",
+      "P0-FLOW-K01",
+      "P0-FLOW-K02",
+      "P0-FLOW-K03",
+      "P0-FLOW-K04",
+      "P0-FLOW-K05",
+      "P0-FLOW-K06",
+      "P0-FLOW-O01",
+      "P0-FLOW-O02",
+      "P0-FLOW-O03",
+      "P0-FLOW-O04",
+      "P0-FLOW-O05",
+      "P0-FLOW-O06",
+      "P0-FLOW-O07",
+      "P0-FLOW-O08"
+    ],
+    "validation": [
+      "P0-FLOW-R01",
+      "P0-FLOW-R02",
+      "P0-FLOW-R03",
+      "P0-FLOW-R04",
+      "P0-FLOW-R05",
+      "P0-FLOW-R06",
+      "P0-FLOW-R07",
+      "P0-FLOW-R08"
+    ],
+    "fixture": "/Users/micjoyce/develop/github/xopc/.xopc-evals/ownership-repair-worktree-20261103/evals/personal/style/assistant-flow-ownership-dialogues-v2.json",
+    "fixtureSha256": "1f77aeaff2d00a4387fffdd3e02ba0ede4105b84dc2620123cdcfec871b3b528",
+    "baselineRef": "1c0f54e79731434fa433b7f03e75ea90c4af5cfc",
+    "candidateRuleSha256": "efffc928209d1d2dcc8a98ea7cff9494a2e7208e60d1529377097e1de7d8b0ab",
+    "conditions": [
+      {
+        "path": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-source",
+        "commit": "c724c69fb499548e75225369ecd680654b6707b7",
+        "moduleSha256": "a0b8e134518eba102889046caeffeb67a062128bd4627b710e7340b8c8bc13c4",
+        "moduleHashes": {
+          "src/personal-agent/reply-style.ts": "a0b8e134518eba102889046caeffeb67a062128bd4627b710e7340b8c8bc13c4"
+        }
+      },
+      {
+        "path": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-source",
+        "commit": "a8f21da5e7f2c428c44ca30e60264657bec67559",
+        "moduleSha256": "fdbe2be2557ad4fd4db9641d29ac5f6a827ff7b4124830984056694f566c380d",
+        "moduleHashes": {
+          "src/personal-agent/reply-style.ts": "fdbe2be2557ad4fd4db9641d29ac5f6a827ff7b4124830984056694f566c380d"
+        }
+      }
+    ],
+    "onlyChangedModule": "src/personal-agent/reply-style.ts",
+    "changedModules": [
+      "src/personal-agent/reply-style.ts"
+    ],
+    "gate": {
+      "validationOverallMinNetWins": 1,
+      "validationNaturalnessMinNetWins": 1,
+      "noCandidateMajorEitherOrder": true,
+      "validationViolationsNonincrease": true,
+      "validationP95LatencyRatio": 1.2,
+      "minIndependentHumanReviewers": 2,
+      "completeDenominatorRequired": true
+    },
+    "budget": {
+      "generationMaxRequests": 446,
+      "judgeMaxRequests": 112,
+      "totalWallMs": 1800000,
+      "requestTimeoutMs": 240000
+    },
+    "limitations": [
+      "Product-authored fixed continuations, not observed adaptive human behavior",
+      "Single judge, swapped orders correlated",
+      "No paid unchanged rerun, no score-based replacement",
+      "No production adoption before human review; task execution transitions require stage two live-tool fixtures"
+    ]
+  },
+  "analysis": {
+    "expected": 52,
+    "completed": 52,
+    "pairs": [
+      {
+        "caseId": "P0-FLOW-D01",
+        "category": "followup",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "candidate",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [
+                1,
+                2
+              ],
+              "eitherOrder": [
+                1,
+                2,
+                3
+              ],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [
+                1,
+                2
+              ],
+              "eitherOrder": [
+                1,
+                2,
+                3
+              ],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-D02",
+        "category": "correction",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "discordant",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-D03",
+        "category": "topic_switch",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "discordant",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-D04",
+        "category": "preference_scope",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "candidate",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-D05",
+        "category": "detail_guard",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-D06",
+        "category": "authorization_guard",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-V01",
+        "category": "followup",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-V02",
+        "category": "correction",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "discordant",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-V03",
+        "category": "topic_switch",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-V04",
+        "category": "preference_scope",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-V05",
+        "category": "detail_guard",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-V06",
+        "category": "truth_guard",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "discordant",
+        "naturalness": "baseline",
+        "violations": {
+          "repeated_closing": [
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [
+                4
+              ],
+              "eitherOrder": [
+                4
+              ],
+              "majorEitherOrder": []
+            }
+          ],
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-H01",
+        "category": "conversational_explanation",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "candidate",
+        "naturalness": "tie",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [],
+              "eitherOrder": [
+                1
+              ],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-H02",
+        "category": "grounded_draft",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-H03",
+        "category": "scoped_tone",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "baseline",
+        "naturalness": "baseline",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [],
+              "eitherOrder": [
+                2
+              ],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-H04",
+        "category": "uncertainty_repair",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "candidate",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-H05",
+        "category": "context_precision",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "discordant",
+        "naturalness": "tie",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [],
+              "eitherOrder": [
+                3,
+                4
+              ],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-H06",
+        "category": "requested_detail",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-I01",
+        "category": "casual_explanation",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "discordant",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-I02",
+        "category": "precise_draft",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-I03",
+        "category": "recipient_tone",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "baseline",
+        "naturalness": "tie",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-I04",
+        "category": "corrected_context",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-I05",
+        "category": "action_boundary",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-I06",
+        "category": "detail_guard",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-J01",
+        "category": "conversational_followup",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-J02",
+        "category": "semantic_revision",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "baseline",
+        "naturalness": "discordant",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [
+                1,
+                2
+              ],
+              "eitherOrder": [
+                1,
+                2
+              ],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-J03",
+        "category": "scoped_recipient_tone",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-J04",
+        "category": "context_correction",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-J05",
+        "category": "summary_accuracy",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-J06",
+        "category": "authorization_and_reference",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-K01",
+        "category": "casual_followup",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-K02",
+        "category": "grounded_rewrite",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "baseline",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-K03",
+        "category": "scoped_style",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-K04",
+        "category": "corrected_emotion",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "discordant",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-K05",
+        "category": "uncertainty_and_reference",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "baseline",
+        "naturalness": "tie",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-K06",
+        "category": "draft_boundary",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "discordant",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-O01",
+        "category": "not_started",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "candidate",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-O02",
+        "category": "queued",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-O03",
+        "category": "running",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-O04",
+        "category": "unverified_leads",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-O05",
+        "category": "failure",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "candidate",
+        "naturalness": "tie",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-O06",
+        "category": "collaboration_disclosure",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-O07",
+        "category": "followup_capability",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-O08",
+        "category": "external_collaborator",
+        "split": "development",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "candidate",
+        "naturalness": "candidate",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-R01",
+        "category": "failure_rewrite",
+        "split": "validation",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-R02",
+        "category": "known_team",
+        "split": "validation",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "baseline",
+        "naturalness": "tie",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [],
+              "eitherOrder": [
+                1,
+                2
+              ],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-R03",
+        "category": "partial_failure",
+        "split": "validation",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-R04",
+        "category": "unsupported_notification",
+        "split": "validation",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-R05",
+        "category": "retry_transition",
+        "split": "validation",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "candidate",
+        "naturalness": "tie",
+        "violations": {
+          "required_content_or_boundary": [
+            {
+              "bothOrders": [
+                3
+              ],
+              "eitherOrder": [
+                3
+              ],
+              "majorEitherOrder": []
+            },
+            {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorEitherOrder": []
+            }
+          ]
+        },
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-R06",
+        "category": "authorized_followup",
+        "split": "validation",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-R07",
+        "category": "progress_truth",
+        "split": "validation",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "baseline",
+        "violations": {},
+        "errors": []
+      },
+      {
+        "caseId": "P0-FLOW-R08",
+        "category": "unverified_findings",
+        "split": "validation",
+        "captureComplete": true,
+        "complete": true,
+        "overall": "tie",
+        "naturalness": "tie",
+        "violations": {},
+        "errors": []
+      }
+    ],
+    "cohorts": {
+      "development": {
+        "expected": 44,
+        "complete": 44,
+        "overall": {
+          "baseline": 4,
+          "candidate": 3,
+          "tie": 33,
+          "discordant": 4,
+          "unresolved": 0
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 5,
+          "tie": 31,
+          "discordant": 5,
+          "unresolved": 0
+        },
+        "violationCounts": {
+          "overinterpretation": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "unnecessary_question": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "repeated_closing": {
+            "baseline": 0,
+            "candidate": 1
+          },
+          "premature_resolution": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "required_content_or_boundary": {
+            "baseline": 8,
+            "candidate": 10
+          },
+          "didactic_expression": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "conversation_flow": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "preference_scope": {
+            "baseline": 0,
+            "candidate": 0
+          }
+        },
+        "majorCandidateEitherOrder": [],
+        "latency": {
+          "baselineP95Ms": 7274.215167000002,
+          "candidateP95Ms": 5823.349124999993,
+          "baselineSamples": 176,
+          "candidateSamples": 176,
+          "expectedSamples": 176
+        }
+      },
+      "validation": {
+        "expected": 8,
+        "complete": 8,
+        "overall": {
+          "baseline": 1,
+          "candidate": 1,
+          "tie": 6,
+          "discordant": 0,
+          "unresolved": 0
+        },
+        "naturalness": {
+          "baseline": 1,
+          "candidate": 0,
+          "tie": 7,
+          "discordant": 0,
+          "unresolved": 0
+        },
+        "violationCounts": {
+          "overinterpretation": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "unnecessary_question": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "repeated_closing": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "premature_resolution": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "required_content_or_boundary": {
+            "baseline": 1,
+            "candidate": 2
+          },
+          "didactic_expression": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "conversation_flow": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "preference_scope": {
+            "baseline": 0,
+            "candidate": 0
+          }
+        },
+        "majorCandidateEitherOrder": [],
+        "latency": {
+          "baselineP95Ms": 3882.255332999979,
+          "candidateP95Ms": 4657.753417,
+          "baselineSamples": 32,
+          "candidateSamples": 32,
+          "expectedSamples": 32
+        }
+      }
+    },
+    "gates": {
+      "allExpectedScenesCapturedAndJudged": true,
+      "validationOverallNetPositive": false,
+      "validationNaturalnessNetPositive": false,
+      "noCandidateMajorEitherOrder": true,
+      "validationViolationsNonincrease": false,
+      "validationLatencyComplete": true,
+      "validationP95Within120Percent": true
+    },
+    "automatedPassed": false
+  },
+  "audit": [
+    {
+      "id": "baseline",
+      "taskEventsAvailable": false,
+      "knownPerRequestUsageMatched": true,
+      "knownUsageRequests": 211,
+      "perRequestMatched": true,
+      "settledChargeCreditMicro": null,
+      "billingUnit": "credit-micro",
+      "physicalRequests": 211,
+      "completedRequests": 211,
+      "runtimeRequests": 211,
+      "taskResponses": 0,
+      "auxiliaryRequests": 2,
+      "auxiliaryOperations": [
+        "personal_style_evaluator"
+      ],
+      "observedRuntimeTokens": 2572987,
+      "observedProviderMinusRuntimeTokens": 0,
+      "unknownRequests": 0,
+      "observedWireTokens": 2572987,
+      "wireTokens": 2572987,
+      "runtimeTokens": 2572987,
+      "taskTokens": null,
+      "auxiliaryTokens": 56,
+      "providerMinusRuntimeTokens": 0,
+      "requestInventoryMatched": true,
+      "requestCountMatched": true,
+      "usageMatched": true,
+      "requestedModels": [
+        "openai-codex/gpt-5.6-sol",
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "responseModels": [
+        "openai-codex/gpt-5.6-sol",
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "ledgerMode": null,
+      "ledgerFinalSnapshotGuaranteed": true,
+      "actualCharge": null,
+      "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+      "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+      "files": {
+        "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline-model-requests.jsonl",
+        "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/runtime-usage.json"
+      },
+      "hashes": {
+        "wire": "c57a91382a5f219af3d5d30b5c0e2b210344d6ff386789fca5f97b114f1e73fb",
+        "ledger": "bed867641b4168135a2da8116065b0ed4b10eec39175f63f5454584c3b78c812"
+      }
+    },
+    {
+      "id": "candidate",
+      "taskEventsAvailable": false,
+      "knownPerRequestUsageMatched": true,
+      "knownUsageRequests": 211,
+      "perRequestMatched": true,
+      "settledChargeCreditMicro": null,
+      "billingUnit": "credit-micro",
+      "physicalRequests": 211,
+      "completedRequests": 211,
+      "runtimeRequests": 211,
+      "taskResponses": 0,
+      "auxiliaryRequests": 2,
+      "auxiliaryOperations": [
+        "personal_style_evaluator"
+      ],
+      "observedRuntimeTokens": 2619401,
+      "observedProviderMinusRuntimeTokens": 0,
+      "unknownRequests": 0,
+      "observedWireTokens": 2619401,
+      "wireTokens": 2619401,
+      "runtimeTokens": 2619401,
+      "taskTokens": null,
+      "auxiliaryTokens": 56,
+      "providerMinusRuntimeTokens": 0,
+      "requestInventoryMatched": true,
+      "requestCountMatched": true,
+      "usageMatched": true,
+      "requestedModels": [
+        "openai-codex/gpt-5.6-sol",
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "responseModels": [
+        "openai-codex/gpt-5.6-sol",
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "ledgerMode": null,
+      "ledgerFinalSnapshotGuaranteed": true,
+      "actualCharge": null,
+      "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+      "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+      "files": {
+        "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate-model-requests.jsonl",
+        "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/runtime-usage.json"
+      },
+      "hashes": {
+        "wire": "828580bf57bf670357227bd57211fa38eaa06a6b94663339da0e721f7c53886e",
+        "ledger": "4fc4a35620b100edd42f26dc37d1d52763ad6dda3ce250382d78ad6f9019a7f0"
+      }
+    },
+    {
+      "id": "judge",
+      "taskEventsAvailable": false,
+      "knownPerRequestUsageMatched": true,
+      "knownUsageRequests": 104,
+      "perRequestMatched": true,
+      "settledChargeCreditMicro": null,
+      "billingUnit": "credit-micro",
+      "physicalRequests": 104,
+      "completedRequests": 104,
+      "runtimeRequests": 104,
+      "taskResponses": 0,
+      "auxiliaryRequests": 104,
+      "auxiliaryOperations": [
+        "personal_p0_blind_judge"
+      ],
+      "observedRuntimeTokens": 248072,
+      "observedProviderMinusRuntimeTokens": 0,
+      "unknownRequests": 0,
+      "observedWireTokens": 248072,
+      "wireTokens": 248072,
+      "runtimeTokens": 248072,
+      "taskTokens": null,
+      "auxiliaryTokens": 248072,
+      "providerMinusRuntimeTokens": 0,
+      "requestInventoryMatched": true,
+      "requestCountMatched": true,
+      "usageMatched": true,
+      "requestedModels": [
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "responseModels": [
+        "openai-codex/gpt-6.1-sol"
+      ],
+      "ledgerMode": null,
+      "ledgerFinalSnapshotGuaranteed": true,
+      "actualCharge": null,
+      "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+      "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+      "files": {
+        "wire": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge-model-requests.jsonl",
+        "ledger": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/runtime-usage.json"
+      },
+      "hashes": {
+        "wire": "1390b9c659e65e9651e7f533821060c9f9bece80df19f6104260a4f25bdf488b",
+        "ledger": "f6bb755bf1eafe7a6ad0d8abe0a7adcf65ced99ff5da22519b5711358d5488ed"
+      }
+    }
+  ],
+  "reasons": [
+    "Style gate failed: validationOverallNetPositive",
+    "Style gate failed: validationNaturalnessNetPositive",
+    "Style gate failed: validationViolationsNonincrease",
+    "Human blind review pending: two independent reviewers required before adoption"
+  ],
+  "candidateIssueEvidence": [
+    {
+      "caseId": "P0-FLOW-R02",
+      "order": "forward",
+      "candidateIssues": {
+        "required_content_or_boundary": [
+          {
+            "turn": 1,
+            "quote": "维修组正在处理，目前还没有检查结论。",
+            "reason": "仅说正在处理，遗漏要求保留的正在检查状态。",
+            "severity": "minor"
+          },
+          {
+            "turn": 2,
+            "quote": "维修组正在处理，目前还没有检查结论。",
+            "reason": "再次未明确保留正在检查这一已知进展。",
+            "severity": "minor"
+          }
+        ]
+      },
+      "reason": "左侧始终保留维修组、正在检查及暂无结论；右侧前两次把检查状态泛化为处理，第三次才补全。双方均未虚构负责人、结论或后续联系承诺。"
+    }
+  ],
+  "priorFailureEvidencePath": "/Users/micjoyce/develop/github/xopc/docs/design/technical/evidence/personal-ownership-benchmark-2026-11-03.json",
+  "priorFailureEvidenceSha256": "05deea5fad34805e6148a4108548ba954cbc5dc69a379137b03c945eda71dff1",
+  "priorFailureEvidence": [
+    {
+      "caseId": "P0-FLOW-O05",
+      "order": "forward",
+      "candidateIssues": {
+        "required_content_or_boundary": [
+          {
+            "turn": 2,
+            "quote": "目前还没查到资料，也还没有启动重试。",
+            "reason": "未明确保留查询失败事实，没查到资料不能清楚区分调用失败与无结果。",
+            "severity": "minor"
+          },
+          {
+            "turn": 3,
+            "quote": "目前还没查到任何资料，也尚未重试。",
+            "reason": "最终拟稿仍省略查询失败事实；虽然没有虚构重试或自动继续，但进度说明不够完整。",
+            "severity": "minor"
+          }
+        ]
+      },
+      "reason": "左侧最终拟稿明确说明查询未成功、无资料且未重试；右侧最终稿仅说没查到，未保留失败事实。双方均未虚构执行或承诺主动反馈。"
+    },
+    {
+      "caseId": "P0-FLOW-O05",
+      "order": "reverse",
+      "candidateIssues": {
+        "required_content_or_boundary": [
+          {
+            "turn": 2,
+            "quote": "目前还没查到资料",
+            "reason": "仅说明尚无结果，省略查询调用失败这一重要进度事实；用户只要求不提内部 agent，并未要求隐藏失败。",
+            "severity": "minor"
+          },
+          {
+            "turn": 3,
+            "quote": "目前还没查到任何资料，也尚未重试。",
+            "reason": "保留了无资料、未重试，但仍未明确查询失败，可能被理解为查询尚在进行或尚无结果。",
+            "severity": "minor"
+          }
+        ]
+      },
+      "reason": "两边均未虚构重试、执行或自动反馈；右侧最终草稿恢复了查询未成功的事实，左侧最终草稿仍只说未查到，透明度稍弱。"
+    },
+    {
+      "caseId": "P0-FLOW-O08",
+      "order": "forward",
+      "candidateIssues": {
+        "required_content_or_boundary": [
+          {
+            "turn": 1,
+            "quote": "具体由谁负责核对，我确认后告诉你。",
+            "reason": "已知核对主体是财务同事，稿件却添加了另行确认具体负责人及后续通知的承诺，未有事实或跟进能力依据。",
+            "severity": "minor"
+          }
+        ]
+      },
+      "reason": "双方均保留财务主体，未谎称金额已确认，且自然结束；右侧首稿明确尚无结论，也没有在第二轮继续复制无依据的负责人状态和通知承诺。"
+    },
+    {
+      "caseId": "P0-FLOW-O08",
+      "order": "reverse",
+      "candidateIssues": {
+        "required_content_or_boundary": [
+          {
+            "turn": 1,
+            "quote": "具体由谁负责核对，我确认后告诉你。",
+            "reason": "已知核对主体是财务同事，却额外引入具体负责人待确认的流程，并在未说明后续跟进能力的情况下承诺告知。",
+            "severity": "minor"
+          }
+        ]
+      },
+      "reason": "双方都保留财务主体，未声称金额已经核实，结尾也恰当。左侧仅首轮加入多余的负责人确认及告知承诺；右侧在纠正后仍重复这些未经支持的内容。"
+    }
+  ],
+  "priorDecisionAndReportUnchanged": true,
+  "preparationFailure": {
+    "directory": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103",
+    "reason": "Unrelated concurrent Web changes caused undeclared source differences; rejected before model calls",
+    "liveCallsStarted": false,
+    "logSha256": "4129f56670449fc0979d06e8f7b0e7cb800bee3cd2c0cb46faa3134533302edc"
+  },
+  "artifactHashes": {
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-D01.json": "71a4f76c9e2d26ee49061f73124300d69b0eeb81a2b599007b3ab884cc9e06ac",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-D01.json": "6e296723e7a3f0bfd7f5c468db711e7c582ef4c6bc298d878858e4a233c58a06",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D01.forward.json": "a7b16ab5163867a4bc43a9b82fee65bc22e9cffbd904850c2657a54c3969f333",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D01.reverse.json": "f0adaeb87f2c44e44b53547b98a5938743e2e84023aa41d6533255e0acbe9571",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-D02.json": "eaebe05eb1e7fecf6462c0925970903cd85bc7546d13ebff328e971882f8dfa6",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-D02.json": "d29b9edb759ca5f3b386a4d760bb6e3e86ff6bcdc2a245ff6e3c8d80789d8cd2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D02.forward.json": "39ecc1fbd2cb3ab5366f0460f087247d175c602278a76011909166cfe7237f6e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D02.reverse.json": "f0fa60c37071c5228f68f0ae8320a2f885a8566558788d851f4075a5c789d3bd",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-D03.json": "0dfcd4bd7022a6438e514506e84a68c9cb03a0dd52c3ca56b3c321185bc38906",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-D03.json": "c51e3fbdd2844ea393513196a54ea426a85142020b3d20b4010090286dd68fa2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D03.forward.json": "043ad3fb3a7910619a29773c1e134ffb3341eb27e753f2d16f1e35387854f391",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D03.reverse.json": "c7edc182247eef82205edc971b480bc6f861d71bc326e4509c70bc9c7bd3653f",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-D04.json": "d3270dd81d0d8d076c6654294c640cc86a5ccee48eda44cd8f59e8686c9513f6",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-D04.json": "a0ea985aec0b8282f31eabd71f891b1417434ccdcf20ba5db3af91b6af5d605e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D04.forward.json": "30f1d3db4024eeeac8f7f74e5173cf4187535cf19843076aa2031efcb2736cc4",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D04.reverse.json": "6aa8a818ba26a852563db3063da405d203b04fb5bd900262650124b03d53955e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-D05.json": "4d388ce79d2ba807de670c8500df3b893d1c477118ed403a98d145806847a6b8",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-D05.json": "0fd370c44359f171e4d07eda9e79c11e3184bf6e773cabfb6e6534499bf56e54",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D05.forward.json": "f7b03d0ae03d5e1a5e9d4613ea074d8248fe91de40b23c3d59683fcc11cf3e9e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D05.reverse.json": "27742b8a854f908a44df29cd9c3b7324300d9ba9ae328e139a0a34d2914016f2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-D06.json": "61d8782d2b49be7415a91f32e4f3ea8b116379f98d0773e96038676294ce644b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-D06.json": "5c19b487abf9ecbb00dce2f2f535cc31fb83c089656c8436ff8ebf16d24190fd",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D06.forward.json": "b1635e4cb7cc92a12acd1c19bace8b3e501425769872124a5448658006d789c7",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-D06.reverse.json": "848a8e9cc9e743249577d425073e6559b6fc6529bbf837afbb407aded6405d58",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-V01.json": "03f78dd08982212f5b6de7bc2da8aa9c8a6807a1bd6b9f1eb56ab61bd81158cd",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-V01.json": "cb6d2987b4d2ee3ecdbf34567e93c37c6711d4b6fc727562a8849e2e4186453e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V01.forward.json": "df934d51b550b51abf04f22b5a05a3429c5f44e9097dbf0aa3338609798a0328",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V01.reverse.json": "edad9c156326db7ac81727c75edf2e999f383426f4b6de90b7ffd887ea97700e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-V02.json": "dcddd3e06fdbcc4ba76a821e67f916a891b959db800123da14b8a00d76dc7f70",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-V02.json": "073199176cb2e77a71c27b68fe43af04563f7f654afc9b4e158a90fa616664f7",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V02.forward.json": "6584aecb851e6d3b934835484b8059ab3a53e6e16b5ca297050ceed78e90faf9",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V02.reverse.json": "21e2c3513170952c69564b7084ead206be24b06b1077ec7c9a392ea1ff6c11f6",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-V03.json": "b736ea10f9b2d10e038da330b56bf72feeffd5bf00acd8b7f1ef0f4a1099ec90",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-V03.json": "f309064fbce8a87ce98d42d55402fd8940a25abd0cae709797e098b96df77440",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V03.forward.json": "a60b74dbe34f5a16d7e6dd9f8c52a12addce72e2f3918a12d9442f89cd8eb4d0",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V03.reverse.json": "f70da5eb8a3fd8ca7160cad38e50e1c89ec0e7b6d450f95d7cc2b9f4cf7c4549",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-V04.json": "d236da83c649c2169dc1b9ccfcb615421330a646e6a0194ea7ac4b0d79f0fc9e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-V04.json": "a0bb91f7e2cb631deb281b9a0d525d84ee6b6b51f6cbf385af0ac0126173f56b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V04.forward.json": "1816413ad1ba7fcf79373a96837767a4bee6b1bc6dfd74c85c3a4968b0ed79ba",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V04.reverse.json": "80ef6ac2f594f363e41a7b829ca4595649811302c4526a4f017ad2c9085dc24b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-V05.json": "ad2912341db7e3a652bf78707fceac881d0b16520880eb354cd08d4a71509ac7",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-V05.json": "2c38308b399619578874939f870d1a0ea452444047a7c27ef80c849dd066e0b5",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V05.forward.json": "5d26c3da7380d1ae0f69edfd120c80ec99be27e52afa1446fb48ded314ba8ab2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V05.reverse.json": "8964d3d397f047e18bd50dddb3e7db75be9d21d254288c2c128f3fef2be41ba9",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-V06.json": "96e0a50b39c4e1f85b6fac1a637776c87e3920c6a8ef31b4ffc11ede686933bc",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-V06.json": "3838ccfdbcf71f6f912e3609f80cef66b7ecb7c27f5eb4d3cdc524eacdc5ede3",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V06.forward.json": "3c3aeecb5ab1a702cd8c7c42949204d6d79346fb725552159d586335b10646a6",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-V06.reverse.json": "6d991eb711de1e69e33e15255f2e9a45b79119af9bc467ee581d281149337e5d",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-H01.json": "3594b96b9a8eb704d718e676870bb229117690cf0d8536bfd8f536aa237decd6",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-H01.json": "3aac75fa023021a1973815e25e391e34390ceb6942e3350472977d46b5e1f390",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H01.forward.json": "b294b02733548794c80832498f32fd5570530cc452a17d59ad6adc1abd191920",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H01.reverse.json": "fd0b99837c0b4fce4fa2d341d96c47f4ab27534444c6e0fb76fee15038ce1a61",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-H02.json": "41f549eeae6e0ace17d38be7c18e1892c1d7f579639af93bd8d518e0c83db1f9",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-H02.json": "4d652f068ffc19d23f34103eb07e14f498054dae9e12feeb670d629707b573f3",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H02.forward.json": "1aefd680a83df7e800f43b05246825778c6cfc407718f6378d902c66a61e1c04",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H02.reverse.json": "45f89cc029c81e330e50eaf4186564f66f96ed021542e82fab081094bb343085",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-H03.json": "454af05e6b13e0bbe48858c43bc23b038bac1409f1710f218c829b11250d1a66",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-H03.json": "fe21fb00ae7acfcaae06d335d5e46740ecec881ca6d48887550f002fa90f7c74",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H03.forward.json": "950fd16af47afcc50252758c0cfb4b3c0bb1a7fbb3a1aaad23b1ec2df7082232",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H03.reverse.json": "5e56ca11412ab7a11d02e2651e7f327017579fb07bc03e6d2cc84f6ac32c4e37",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-H04.json": "d4bc6ef547fc2213d118f0103e0bce2627b2721618f068b5285c5e8f1b46dcfe",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-H04.json": "c0c8bae6350872c7d3b4a42c34d169f22fc21d6ebdd6f889ec085fe1d4673fd3",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H04.forward.json": "b9a0f06446581c5632713c98a64aa55e8230f474bd9318a01a6b323743d10fc7",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H04.reverse.json": "23bab25ad33ec9d34da7a29ce117aad81cbe8c32c8588b3bb2e05a411ebc5a36",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-H05.json": "fb00d203e52aad1f5baa970d39efd362b8944dbd67e2c11424e0c29e0d661a91",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-H05.json": "f288dda989350010c7015265f1cb76e65e05405f432cdd4d8aedaf2de45ade7b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H05.forward.json": "4e45fb67f11afbdfb3c6cd903877956755f9a2cf48479ddb6d95f6b967613ff2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H05.reverse.json": "fc45611393a1ad44bcb54756760e592252a19ded58e7d5207da11dff799e7883",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-H06.json": "fd8785d0c8b8231915024fbefeb21380940f74efaaf79fda92a33fc94e57a671",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-H06.json": "10c601e8efe264ec4567340f7044c79ea420d0e0f3bef16599eac18c1ab1ee10",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H06.forward.json": "dfb1bdb48c32ebabac0a09c5b40f5e2b56b0dc0c241cbc3ac1fa786dc54aab25",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-H06.reverse.json": "7b88ee035702d04c0a4e738ca6196bd67b31f4b517fee963c46f9e1144e3c0ec",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-I01.json": "5f425f7fb0b3f37b54164637c155bb9e039ecca74bf2dd555250a5886d2f68ba",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-I01.json": "3c9d322da75b30d3eb61840a1615c377c2bd04a4ded00cb9708e819d0fcf88dc",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I01.forward.json": "5d2bf8bf50b30b70d673e25a1d438058fe2ae1799d267f7c037661985d9c6f85",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I01.reverse.json": "f3843ef4340b9d4cf78c08d89163a73c1dc2fb8d7fe0b2a5cbf98be41a44d0cc",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-I02.json": "93b22d95e736ea190e30189860e01606178ddcf38b2c191f0417d9486c0fb625",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-I02.json": "b05c2aff751262c60504529ec9324d38ada74d1affd18a1782ca8a68b46e6f99",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I02.forward.json": "10acdc273b86f10f46501d8b04362b898ddbd98d1f86185e5853635c85af2bbe",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I02.reverse.json": "aad6c4a326cec03868015518391acfb1d081e5a5f20a9a802828beff78b3e835",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-I03.json": "ef5fbf2117456897108e245aa7850d04ef1ceb100a30fa65e088f6906b2c5635",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-I03.json": "2fa307605134c0323b130435efdf260e9230fefab4a0f190d6f65ab2ffa72532",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I03.forward.json": "2fdf89d4b6ced98eb200427eddd228385a03fda609ed42a33121b44386bdb79f",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I03.reverse.json": "525c7c3d2457f7ca4a04dfe56d19df25cb84dd46cecd306d36af429dd31d9c94",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-I04.json": "389707ecdcfd5032b5e0cf6aae52b6f7586fc9145408f0b9c6a72950a895c1ac",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-I04.json": "8a809322035c5ce2ba874f30fb7c57407423fa3b84abd49bc4e4ebd9b44612aa",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I04.forward.json": "769190dd5bb6a91cfcc1037c58d9ec83693d21ee915ef06f5bb0f2ceb8bfb20d",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I04.reverse.json": "454e044a688da2e03e8d8fcdea0febb983788ea268d82e458eb7dfeb1d89ab04",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-I05.json": "e520c45523e698ee7be8e0597347899963bb72e0971bf1d07c43496c438a62e9",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-I05.json": "d3ff54515974d76eb37bd771e6a65964a02db3cceaef7af77f41bc91b79b9be2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I05.forward.json": "ca052afa5d0cfcb30742e67fe40f6f7725b9babffaa75dbc0bac3069c3818e80",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I05.reverse.json": "1c44740a0c09c84b593e254e2773b680272ae320beaf3cf6f9bba651c2a016b5",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-I06.json": "d8dbd3ca73c786c429da6eea2847a98d02977077e06ab4cda054b01a8af8e325",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-I06.json": "cae81820cdcdd045fec116a62967259ae1f7c4285d6094f2a2371c5e4e34ae38",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I06.forward.json": "75fbf46acf5f7e5e1c6c57254130d7ca14d54f9fd7acd577298f6925a529791e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-I06.reverse.json": "1938f8059400d7ba31561fa05637c8de6fdca877b0a7ca404c464a63d07923a5",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-J01.json": "5f05a9bff4c166858b02d0509124c5b72fbb7850b3e6e38b250e17617eb8936d",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-J01.json": "6c99f8aef278e7344b69b54988c3f201b808ac2d187970913a08988751605c6e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J01.forward.json": "2ecc5e5b3115e619a705a727ce5094a8a2eebd2bfde1b2ee482e0a7f69ed8ad1",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J01.reverse.json": "e7e16085e8df9ab9d93b90b93275dd779fe0a91053940b356658b56e37b7b039",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-J02.json": "9b4e8263f8919b47b8e3fdf55a88b0eca24472b88b8bf8a80c434b53d1d8e684",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-J02.json": "e81b9524f87c41e014692b71b892ff1063453ea6920acc63afcdd6baf1207054",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J02.forward.json": "5c0b6b6f78e25dc3620bea9afdeb2f9b4e93559f356e139293cc46857644c7f4",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J02.reverse.json": "0e47c1799f673ed830d0073e49d92ffa012fffe1fad2a3174f2ad40ed9459b47",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-J03.json": "6bddcaefac69b47c8f3350b8ac4ebbb842f6a9100b56fb490c1b1f5d3fe000bd",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-J03.json": "4d1a056b915ea9277aa96bcf156261728b747ec92fe1348997faa0ab56c7e5d3",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J03.forward.json": "94c802f3be4b98015cd8a854370a8e504a29dd226672c8bb80c3602cac63352d",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J03.reverse.json": "cb4ea692da0eeb1e839f32fbaa7779d0e27a0acd385bfe902df202b8cc88c394",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-J04.json": "15ae2bcda42c002a416b09c3a2abdb367ea77f6ce05b3a8323e27f66b80c0b31",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-J04.json": "09b326672b9a706773d5e894dd28c876a2075845a0cb69b1fa749aa93b226836",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J04.forward.json": "ca81183dc7606186929ac7f3817470d1d2b9fa79fedd234ecefe90ae7a74e4db",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J04.reverse.json": "c8e05f0e40b15ef4c1e948b2cac31404e61445c7227c63f5b2c3f54d6a78ae9a",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-J05.json": "7e71523a7fb417be56d71dfed62c61d7149e1d393166b4b11eff28208a243b8b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-J05.json": "52e47019f8f92297fdb6a8f53d3c51340c35d5b64fd3745d288bb366cfad45e9",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J05.forward.json": "c118be80a3db0b86e4504c82ff3d9a4ccac37ff3ec84999f9b3ba8294d872153",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J05.reverse.json": "92ae1e1d6a3330e926a463251fa2461c1ba3d478b4619a81ea9756f4d062bbf9",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-J06.json": "25e481c00784b31266f2b1d1eb30d5aa0fd995ad9b30772c0aaeac241d4a26f8",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-J06.json": "2aa7a0ecc1c5e65a43ec7c05cbe2772b572324fd8d7b4fd27715877686d214ea",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J06.forward.json": "82e7140cb7b2f9e235c9c52d7b61b34a686681725c768c0054c299e4aa3f105d",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-J06.reverse.json": "59da966e82dd49847127003be99aaafa6caa62f18dd96f5dddb2272b5bcf0bc4",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-K01.json": "7e42912ac34ac5a8788b8d4eafb073db5ef87ffc0ff9b789f32e378f6c178e17",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-K01.json": "04d601f0d0d4475ae021796740cfe3ee1d4152d0c3c0aa6a278559ca742393d9",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K01.forward.json": "370d04589c9f00780a095737b0ad0e38f3eca87c15c69f53e9501319978fd0a0",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K01.reverse.json": "39befc2e69ea5059b4861bfbd4ce110205c79cbd8fc1cd490c158cea74564849",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-K02.json": "abcd6a5293205a2923e7bf9fc9454ec959c21c489ae389c7dfbcb130564fdcb6",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-K02.json": "81850506e1c5323c28faa88f475c251e17588128760ecd8e0ddba1b91265dfe5",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K02.forward.json": "9a27e7508c9376a5f1831dbad8063939c87d6566a73d731242c51b5d18f7caf1",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K02.reverse.json": "852dd2d0afb80384969e3fe4cdedb2ed1920cab302172a4cdd87d825eb501a87",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-K03.json": "566bb25bd3ba081e23be37b2a3a75a8a67a2fea6c0eede2a5580f3fec8d15a40",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-K03.json": "7f3d6ffddbea391ad90653978c3e5a5dc9780427ef863f0f4f3349c96eaf9f94",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K03.forward.json": "05de431d39c53d0b811cff9c96c29165970a56e9d6b4f38418412e411ca4f0f8",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K03.reverse.json": "77b269589ac5db58365355fc338e51f51de8c587bb598bd2089b21833a8a8f26",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-K04.json": "36240a5965fad6278ddd8be541e53abcb6ea64585b2565b40172dadb924a5f78",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-K04.json": "02c40003ccb545fb5da3d5fafc782756fdb9e7b2883ed87e9054cfd534166630",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K04.forward.json": "dd0f37d29d320856248aa3b9f22c7fee7367c5418bddba993ae24ef67d834095",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K04.reverse.json": "f27c3aeeec3a27757c4b922d827f34dedce9627d0141c54af76cb004586c8603",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-K05.json": "b612a5c24d8fd90c18c56b814f1c1443e450cbf1f58809eee7e44f1a909a7d40",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-K05.json": "b2dfb2182a3d94efa7c689a40a8769e57c23e1f922143680ef0d99fb49373866",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K05.forward.json": "5d71aeeeac58e364aeb569b2cf39929d63343ad1fd70d23ccc6a5ff0f96eb44c",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K05.reverse.json": "799762fa545f5e8d43c6e37f222ea881fa4ac5fa0b319b43a5662b070c3c4c48",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-K06.json": "5772de2718fbe8e36c18076749f91b5042c4683d77a4ef8187c5f02d5032fead",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-K06.json": "b935a78a824a89b63650e86bfa044f6bde7a9f22c414c5ad01c3aae686610bf1",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K06.forward.json": "630b4ee66bbbadf7a6e0caf60e7c6ebce729ae0806d505e71b1ea888cd87b11f",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-K06.reverse.json": "537caad41350d09b95239c266c0b7ea4abf25794f0e8f4a69a7d5dcdb194f4ed",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-O01.json": "ab1b1029ff5a12cc867ac8ea7e19776ddaed66f2c4a3e2eadbdbed08a7d6f989",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-O01.json": "d3b8ac4027db3c7a8c92df09b45f487b89a41fbab6e5487e82c0015ecc903e6b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O01.forward.json": "8cb7b2224d364c52b4dea53903d6f9d634d069a6fb11f77ecd6a88bb3b35778f",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O01.reverse.json": "3af39f12c433a24bad46e3d4aedb170eeaa0ffe3d1cdeb1ef3b67bc0e16c2b41",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-O02.json": "b5cf18737d1c1f9723e4cb15eeb4bdd66a657178d65503e9d18408d83cdca605",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-O02.json": "a32b6d6c766485abde55138a2182e9f311a897897d2e92eb8a32aac5921f3ea8",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O02.forward.json": "e9e08ff80f4abdb4092845e63702b67535957ba784a961b380287ce2fb205e75",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O02.reverse.json": "aa4863a54bc8526d5571fe12b8acb7ef26bdf811420bd661e01f992ff8f12ba4",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-O03.json": "7088c510d0107961e84aecd75b2a462ee4ee23568fcc6f7bc589f86aafa831ff",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-O03.json": "eded94cbea726a2cf80d7308126473d27aaac7ed5c31a827e3630ba00b5c2d13",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O03.forward.json": "e9bda6f8d426d864381980edd46a553d577763abcbc399d3975e7959f1b003a3",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O03.reverse.json": "f1d0b06d2caf9807f418ee3c7f547bb178b4e1bb54caf2a7d30f6495c3f40c8f",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-O04.json": "226c8d86f6079c913394a5f38d81f940fb5fd46a4fc48ac15b3ac73effd24e41",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-O04.json": "21193c65f8a94f67b388ca156570a95f1948f0cb188485998372de150b459c72",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O04.forward.json": "23c92f87ca1e8a3564e2468d61c0cab82f6bb968692284dab562e12216b79875",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O04.reverse.json": "1816e38b7008f3406ff942ba92e6aaa87a3131f571c1dde18e0e3e8ee6bc8cf8",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-O05.json": "960836207adfccd42c080a8161e4c055173d28f6802ba2f678e42217d847463b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-O05.json": "0ca8dcfa42f616a687c342baf4cb93bc2059181487699fb0208c5660b65a2347",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O05.forward.json": "f43d14c0fd5f906943a34288f9bfd095c8297920a3185a2acf68d0b0af66bb83",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O05.reverse.json": "c9bac977227d697aa539357fe439740991a0a3d3f80996b0d07d02a80b1b0531",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-O06.json": "b997a27ab03a2817d8cb461f7f7b1f84aa6f68a55b360c87d71f614b0f57e709",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-O06.json": "18b8be8bfd897f932da8dba04077a7a6519baefd0be1dc14e1152d61107d7c0b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O06.forward.json": "e23e096e17200d4b86ed056d02e34b956638b854807d1e9df3b3babf77124560",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O06.reverse.json": "36667680768932f065bdcdb2d5c238025b1bb7181bc15c96a07c7321d78173a7",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-O07.json": "e3e2efe7a7ea337ce60fcb829929887e33d744f07637da955b040af6c8cc891b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-O07.json": "e8810b3b1ad2f5a3e434efdb5e3b4b1e894b0dc8dfc18eb397603dc2ccecf74b",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O07.forward.json": "1a0b40cec44549662343eaf580d478ff51bc86f9d72388eb723828a93adb5198",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O07.reverse.json": "7eb9286111598d0a833c6f64dae77e968d9cb344e0a6e53f2aa0fba1a46bd7fc",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-O08.json": "5c4819a7624a609ec36ca44a18628f2a828fad1c358a3f513e1096785c28cd54",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-O08.json": "ce14413c3e4413319641055647cb0a2d468245ac61bb9cade363ce3be712466c",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O08.forward.json": "ae72aa06a91889bbf7e94f93ff8675a1acef22c42e91dbeb5313b4ed6bdc3e29",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-O08.reverse.json": "d661a7725d4621a0f9189c486241ed1f5374af056b0b61d0261a64b010c2f4e3",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-R01.json": "f6010e20055313f0a3ef838f9209473ec67910b5c1e7232bce4bbb456c0fe62c",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-R01.json": "b8c5092b583edf5daa1e2adb82045b5f8e90e125e0b770039a944aa2644a07b2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R01.forward.json": "235fe6e64877804a7c30d4e745daddd8ca4e27a7ad3570f21bb999f8d06b0849",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R01.reverse.json": "89d0dccb76032830a51119e031361170b188acf8fc08b1ea4bcd44d555cfadf2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-R02.json": "604ffb52803be3da2e45897defb4e53825f2ea1c9f3ce1f03460d3e3a5424e51",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-R02.json": "1870bf809ce88beb50711d38cfff6e2d9b9b21a1599c16cd66b8adbaa682876c",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R02.forward.json": "f4ec0b9ff4e0625675d952814472e1883a68531d7d149f8d3e1e0f696965d873",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R02.reverse.json": "20a6598a5dc3d5cd3ed8e76896f29ba32525f998e6c2af71ecf50a00a88a8ae3",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-R03.json": "3cc4d75fcb9516b37cf8a612eec86a832c6c0088ece39463c3de6b5ea5f65e83",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-R03.json": "5cc3418a3a0ae71d5c4edf803c943e6f4375388c5433920b7cfad84cc1654d8f",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R03.forward.json": "1212f7590f15b1c8139ca97a29410e1820c5bbf06cedf49e6853c3a0dd0f5198",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R03.reverse.json": "ed927e4ed55a27d8f3c8bad87113f55db7d1eedba66df1b19ec05d746ef1afd7",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-R04.json": "fbf4f05679bbe5ccd6372181ee04c0432ee086015024a5a04e2f8aa5bf6fc4ac",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-R04.json": "eb1f7022efc351b5309a298c5efa4969d7541e12ee0f25817282747fd33a5c75",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R04.forward.json": "364d0071554cb8359a17b097409bd07e8f91741e6aa2516bf00cf0825ccd304f",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R04.reverse.json": "2d93018767f6f1ee7be8d6ae02d470cdac72ef73650811d63194d7355e68d1b7",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-R05.json": "c566540f134639ec51e794dabdae655564d3086195a09ae1808f203acd612c6e",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-R05.json": "81368a30f6609fb1ae00d51e591b2806c222f65fdfc4eae0852a33e9e349eb5d",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R05.forward.json": "4cf220f5f2bd4bb7f248561cc6f4e293c72b9daa3976da29e67ff7ae99ac9dd0",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R05.reverse.json": "3b6588cd4e1ec14ac2c9d9c203c866a1b06df3ac86a26a8b7121b9cef81a30be",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-R06.json": "8dfb7299e88705b99acd3ef1d216c3645bf68bd07d01ab0418f752068c6797b5",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-R06.json": "e480f5e3398ee52368bd48d9c4ac2df090bba9c1bf24950c002add37f1ccbab1",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R06.forward.json": "27948d1fa6e336dd18e5445121fe5fd1140859acca6139e6bbdb053f92eb3485",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R06.reverse.json": "fc09736fe530e7ed8349942d74e1da867e7244a370a3ebe112a841b7d6fe6b0d",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-R07.json": "68600ab2ba43caa8de2aecfbbf60342c50f8bf39ebdabc253af8c1bf8575c432",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-R07.json": "e1e7d5d64ee2269f30acf1002613d4a26fd56b342e089eaa2c870b6e65b97012",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R07.forward.json": "7ade945df5aff2bb9199f6b7a72a88854404ffa3333602bf874e18d3b28af5ee",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R07.reverse.json": "7dbcc588dff539018be8bcb39a6c540a55e7cb0662d5cc4150b24517a26e48c2",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/baseline-run/baseline/cases/P0-FLOW-R08.json": "c1841ba57b5dfe5ccb60a2859958051f30f17269333408ec551f2a935b3ecf8d",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-run/candidate/cases/P0-FLOW-R08.json": "d453c300ddee7288507b2f5b8f66ca590d0ec7204f08505ca08aa78dd8860435",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R08.forward.json": "be97100e29d9efff4b2996fdc0c75ce0c0a51cd6d13885e022df24246fb89487",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/judging/judge/P0-FLOW-R08.reverse.json": "a7f55c51d870d5fa7f72f4dc4810108126c2b526bc9f4343afc818abb3bfd49c"
+  },
+  "reportFiles": {
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/registration.json": "95f34f38b0250952864a7d494e0f77f930448d329cd8d141604cbddf472e3213",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/decision.json": "b9d08b2a666e8e14791ebde739b32214dcb8e6a30c36a8664607573d0cc24c43",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/portable-report.json": "6587d9baaca4ac828b762761a3692760f2c8627854a4bee44c29ec77e6621ff5",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/candidate-input-audit.json": "25686fc01ba2a641e9ab6bdb5761f4bcbea1256510562c0384683c6702027904",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/assistant-flow-ownership-repair-20261103-isolated/generation-usage-check.json": "ce74f3d3b58ac35123e5611127302d0312635c643a7cd7894d94d25b0a23664f"
+  },
+  "verificationArtifacts": {
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/ownership-repair-isolated-coder-check-20261103.log": "ce95f5fade37b54389689474c817e521ab895ac8a1a3f4a1c2be63d98c1378fd",
+    "/Users/micjoyce/develop/github/xopc/.xopc-evals/ownership-repair-isolated-style-check-20261103.log": "dd0fafc6d69ea9df8f00f0e2d5ad0b514361afe495da923a7c1271bde1bb6ff2"
+  },
+  "actualCharge": null,
+  "limitations": [
+    "New states are hypothetical status drafts, not actual tool receipts or real background delivery",
+    "One model judge, correlated swapped orders, small fresh validation set",
+    "Exposed O05/O08 clean checks supplement, never replace, all original gates",
+    "Human review remains pending; no deployment performed"
+  ]
+}
