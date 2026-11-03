@@ -295,7 +295,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
         <button type="button" disabled={phase === 'saving' || authorizing} onClick={close} className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover disabled:opacity-50" aria-label={cs.modalClose}><X className="size-5" aria-hidden /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
-        {committed ? <div className="space-y-4"><p role="status" className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" aria-hidden />{disabled ? t.setupDisabled : language === 'zh' ? '连接已保存，可以开始使用' : 'Connection saved and ready to use'}</p>{!disabled ? <ConnectionUsageGuide target={{ kind: 'mcp', id: row.id, name: row.displayName || row.id }} serverId={row.id} onStart={props.onClose} /> : null}</div> : importing ? <div className="space-y-4">
+        {committed ? <div className="space-y-4"><p role="status" className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" aria-hidden />{disabled ? t.setupDisabled : language === 'zh' ? '连接已保存，可以开始使用' : 'Connection saved and ready to use'}</p>{!disabled ? <ConnectionUsageGuide target={{ kind: 'mcp', id: row.id, name: row.displayName || row.id }} onStart={props.onClose} /> : null}</div> : importing ? <div className="space-y-4">
           <Button variant="ghost" onClick={() => setImporting(false)}>{t.setupImportBack}</Button>
           <p className="text-sm text-fg-muted">{t.setupImportEmpty}</p>
           <label className="block text-sm font-medium text-fg">{t.setupImport}<textarea className={cn(mcpInputClass, 'mt-1.5 min-h-40 font-mono text-xs')} value={importText}
@@ -341,7 +341,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
           {phase !== 'idle' ? <p role="status" className="flex items-center gap-2 text-sm text-fg-muted"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />{phase === 'saving' ? t.setupSaving : t.setupChecking}</p> : null}
           {phase === 'idle' && saved && !dirty && !probe && !error && !authorizing ? <p role="status" className="text-sm text-fg-muted">{disabled ? t.setupDisabled : props.lastCheck ? t.setupLastCheck.replace('{{count}}', String(props.lastCheck.toolCount)) : t.setupSavedUnchecked}</p> : null}
           {probe?.state === 'connected' ? <div className="space-y-2"><p role="status" className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4 shrink-0" aria-hidden />{probe.toolCount ? t.setupConnected.replace('{{count}}', String(probe.toolCount)) : t.setupZeroTools}</p>
-            <ConnectionUsageGuide preview target={{ kind: 'mcp', id: row.id, name: row.displayName || row.id }} serverId={row.id} draftId={draftId.current} />
+            <ConnectionUsageGuide preview target={{ kind: 'mcp', id: row.id, name: row.displayName || row.id }} />
             <Button ref={toolsTrigger} variant="secondary" onClick={() => setShowTools(true)}>{t.viewTools}</Button></div> : null}
           {probe?.state === 'token_required' ? <p role="status" className="text-sm text-fg-muted">{t.setupNeedsAuth}</p> : null}
           {probe?.state === 'auth_unknown' ? <p role="status" className="text-sm text-fg-muted">{language === 'zh' ? '认证方式尚未确定。请核实服务接入说明，选择 Token 或已确认支持的 OAuth。' : 'Authentication is undetermined. Check the integration guide and select a Token or verified OAuth method.'}</p> : null}
