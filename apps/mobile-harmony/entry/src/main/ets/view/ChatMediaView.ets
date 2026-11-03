@@ -1,3 +1,4 @@
+import { XopcChatResultCapsule } from './ChatResultCapsule';
 import { XopcChatImagePager } from './ChatImagePager';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
@@ -27,6 +28,7 @@ export struct XopcChatMediaView {
   @Param noteInlineImage: boolean = false;
   @Param compactThumbnail: boolean = false;
   @Param compactAvailable: boolean = false;
+  @Param resultCapsule: boolean = false;
   @Param compactDisclosure: boolean = true;
   @Param compactMetadata: boolean = true;
   @Param compactThumbnailWidth: number = 0;
@@ -387,6 +389,11 @@ export struct XopcChatMediaView {
           .backgroundColor(Color.Transparent).enabled(!this.busy && this.previewable())
           .accessibilityText(this.audioPlayer.state === 'playing' ? $r('app.string.stop') : $r('app.string.chat_media_play'))
           .onClick((): void => { this.toggleInlineAudio(); })
+      } else if (this.compact && this.resultCapsule) {
+        XopcChatResultCapsule({ title: this.file.name || this.file.type,
+          subtitle: this.file.size > 0 ? this.fileSizeLabel() : '', symbol: this.mediaSymbol(),
+          canOpen: !this.busy && this.previewable(), entryId: 'chat-preview-' + this.file.id,
+          onOpen: (): void => { this.openPreview(); } })
       } else if (this.compact) {
         Button({ type: ButtonType.Normal }) {
           Row({ space: 10 }) {

@@ -1,6 +1,8 @@
 import type { TurnOutcome } from '@xopcai/gateway-contract';
 import { Check, ChevronRight, CircleAlert, CircleX, ListChecks } from 'lucide-react';
 
+import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleDetailClassName } from './assistant-capsule';
+
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -35,25 +37,17 @@ export function TurnOutcomeDetails({ outcome }: { outcome: TurnOutcome }) {
   ].filter(Boolean).join(' · ');
 
   return (
-    <details className="group mt-2 max-w-[36rem] rounded-lg bg-surface-panel/15 text-sm">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-fg-muted transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
-        <span
-          className={outcome.status === 'succeeded'
-            ? 'grid size-5 shrink-0 place-items-center rounded-full bg-success/10 text-success'
-            : outcome.status === 'failed'
-              ? 'grid size-5 shrink-0 place-items-center rounded-full bg-danger/10 text-danger'
-              : 'grid size-5 shrink-0 place-items-center rounded-full bg-warning/10 text-warning'}
-        >
-          <StatusIcon className="size-3.5" strokeWidth={2} aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs font-medium text-fg">{statusLabel}</span>
-          <span className="block truncate text-xs text-fg-subtle">{summary}</span>
-        </span>
-        <ChevronRight className="size-4 shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none" strokeWidth={1.75} aria-hidden />
+    <details className="group mt-2 min-w-0 max-w-full text-sm">
+      <summary className={`${assistantCapsuleClassName} cursor-pointer list-none`} title={`${statusLabel} · ${summary}`}>
+        <AssistantCapsuleContent
+          icon={<StatusIcon className={outcome.status === 'succeeded' ? 'text-success' : outcome.status === 'failed' ? 'text-danger' : 'text-warning'} aria-hidden />}
+          title={statusLabel}
+          meta={summary}
+          trailing={<ChevronRight className="size-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-90 motion-reduce:transition-none" strokeWidth={1.75} aria-hidden />}
+        />
       </summary>
 
-      <div className="border-t border-edge-subtle px-3 py-2.5">
+      <div className={assistantCapsuleDetailClassName}>
         {outcome.changeSet ? (
           <section aria-label={t.changes}>
             <div className="flex items-baseline justify-between gap-3 text-xs">

@@ -106,27 +106,26 @@ describe('task delivery summary', () => {
     vi.unstubAllGlobals();
   });
 
-  it.each([0, 1, 2, 3, 4])('shows at most three inline tasks for %i entries', async count => {
+  it.each([0, 1, 2, 3, 4])('groups more than three tasks behind one capsule for %i entries', async count => {
     await render(deliveries(count));
-    expect(container.querySelectorAll('[data-product-delivery="task"]')).toHaveLength(Math.min(count, 3));
+    expect(container.querySelectorAll('[data-product-delivery="task"]')).toHaveLength(count > 3 ? 0 : count);
     expect(Boolean(container.querySelector('[data-product-task-group]'))).toBe(count > 3);
-    expect(container.textContent?.includes(`View all ${count} tasks`)).toBe(count > 3);
+    expect(container.textContent?.includes(`Related tasks · ${count}`)).toBe(count > 3);
   });
 
   it('loads hidden tasks only on opening the dialog and preserves order and full titles', async () => {
     const entries = deliveries(8);
     entries[7].delivery.primary!.title = 'A very long task title that must remain fully readable in the task list';
     await render(entries);
-    expect(vi.mocked(fetchTask).mock.calls.map(([id]) => id)).toEqual(['task-0', 'task-1', 'task-2']);
+    expect(fetchTask).not.toHaveBeenCalled();
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-haspopup="dialog"]')!.click());
     const dialog = document.querySelector('[role="dialog"]')!;
     expect(dialog.textContent).toContain('Related tasks · 8');
-    expect([...dialog.querySelectorAll('[data-product-delivery="task"] [title]')]
-      .filter(element => element.classList.contains('text-fg')).map(element => element.textContent))
+    expect([...dialog.querySelectorAll('[data-product-delivery="task"] button')].map(element => element.getAttribute('title')?.split(' · ')[0]))
       .toEqual(entries.map(entry => entry.delivery.primary!.title));
     expect(new Set(vi.mocked(fetchTask).mock.calls.map(([id]) => id)).size).toBe(8);
     expect(dialog.querySelector('[title^="A very long"]')?.classList.contains('truncate')).toBe(false);
-    expect(container.querySelectorAll('[data-product-delivery="task"]')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-product-delivery="task"]')).toHaveLength(0);
   });
 
   it.each([200, 600])('preserves chat scroll and following through list, details and close at scrollTop %i', async initialTop => {
@@ -182,14 +181,12 @@ describe('task delivery summary', () => {
     expect(container.querySelectorAll('[data-product-delivery="task"]')).toHaveLength(3);
   });
 
-  it('keeps the inline preview bounded as streamed deliveries grow and localizes the summary', async () => {
+  it('keeps the capsule summary bounded as streamed deliveries grow and localizes the count', async () => {
     await render(deliveries(3), undefined, 'zh');
     await render(deliveries(4), undefined, 'zh');
     expect(container.textContent).toContain('关联任务 · 4 项');
     await render(deliveries(20), undefined, 'zh');
-    expect(container.textContent).toContain('查看全部 20 项任务');
-    expect([...container.querySelectorAll('[data-product-delivery="task"] [title]')]
-      .filter(element => element.classList.contains('text-fg')).map(element => element.textContent))
-      .toEqual(['Task 0', 'Task 1', 'Task 2']);
+    expect(container.textContent).toContain('关联任务 · 20 项');
+    expect(container.querySelectorAll('[data-product-delivery="task"]')).toHaveLength(0);
   });
 });

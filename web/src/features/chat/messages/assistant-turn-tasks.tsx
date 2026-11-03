@@ -1,5 +1,8 @@
+import { ChevronRight, Globe } from 'lucide-react';
+
 import { SearchSourceList } from '@/features/chat/tool-results/search-source-list';
 
+import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleDetailClassName } from './assistant-capsule';
 import { AssistantResultTail } from './assistant-result-tail';
 import type { AssistantTurnViewModel } from './assistant-turn-view-model';
 import { TurnOutcomeDetails } from './turn-outcome-details';
@@ -31,12 +34,15 @@ export function AssistantTurnTasks({
       ) : null}
 
       {view.sources.length > 0 ? (
-        <section
-          className="rounded-lg bg-surface-panel/10 px-3 py-2.5"
-          aria-label={sourcesLabel}
-        >
-          <SearchSourceList sources={view.sources} className="" />
-        </section>
+        <details className="group min-w-0 max-w-full" aria-label={sourcesLabel}>
+          <summary className={`${assistantCapsuleClassName} cursor-pointer list-none`}>
+            <AssistantCapsuleContent icon={<Globe />} title={sourcesLabel}
+              trailing={<ChevronRight className="size-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden />} />
+          </summary>
+          <div className={assistantCapsuleDetailClassName}>
+            <SearchSourceList sources={view.sources} className="" />
+          </div>
+        </details>
       ) : null}
     </>
   );

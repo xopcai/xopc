@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 
+import { assistantCapsuleClassName } from './assistant-capsule';
+
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
@@ -69,7 +71,7 @@ export function useAssistantProcessDisclosure({ message, isStreaming, enabled, i
     collapsed: visible && !expanded,
     summary: visible ? <button type="button" data-assistant-process-toggle aria-expanded={expanded}
       onClick={() => setChoice(!expanded)}
-      className="flex min-h-11 w-full items-center gap-1.5 border-b border-edge-subtle py-2 text-left text-sm text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
+      className={assistantCapsuleClassName}>
       <span>{label}</span>
       <ChevronRight aria-hidden className={`size-4 shrink-0 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-90' : ''}`} />
     </button> : null,

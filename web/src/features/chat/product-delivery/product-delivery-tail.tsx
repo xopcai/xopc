@@ -1,3 +1,4 @@
+import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleDetailClassName, assistantCapsuleListClassName } from '@/features/chat/messages/assistant-capsule';
 import { AutomationTaskCard } from '@/features/automations/automation-task-card';
 import type {
   ProductDeliveryEnvelope,
@@ -65,7 +66,6 @@ function deliveryMeta(
   language: 'en' | 'zh',
 ): string {
   const labels = messages(language).chat.productDelivery;
-  const kind = labels.kinds[reference.kind];
   const operation = labels.operations[delivery.operation];
   const status = localizedStatus(reference.status, language);
   const state = status && delivery.operation === 'opened'
@@ -73,7 +73,7 @@ function deliveryMeta(
     : status && status.toLowerCase() !== operation.toLowerCase()
       ? `${operation} · ${status}`
       : status ?? operation;
-  return `${kind} · ${state}`;
+  return state;
 }
 
 function taskDeliveryMeta(
@@ -118,7 +118,6 @@ function DeliveryRow({
   conversationId,
   projectId,
   fullTitle = false,
-  compactTask = false,
 }: {
   delivery: ProductDeliveryEnvelope;
   reference: ProductReference;
@@ -126,7 +125,6 @@ function DeliveryRow({
   conversationId?: string | null;
   projectId?: string | null;
   fullTitle?: boolean;
-  compactTask?: boolean;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -163,9 +161,9 @@ function DeliveryRow({
       operationalState: taskDetail.data?.operationalState ?? reference.status,
       attention: taskDetail.data?.attention,
     }, language)
-    : [deliveryMeta(delivery, reference, language), reference.summary?.trim()].filter(Boolean).join(' · ');
+    : deliveryMeta(delivery, reference, language);
 
-  if (reference.kind === 'automation' && delivery.operation !== 'failed') return <li className="min-w-0"><AutomationTaskCard automationId={reference.id} runId={reference.runId} language={language} embedded /></li>;
+  if (reference.kind === 'automation' && delivery.operation !== 'failed') return <li className="min-w-0 max-w-full"><AutomationTaskCard automationId={reference.id} runId={reference.runId} language={language} embedded /></li>;
 
   const open = () => {
     if (filePath && canPreviewFile) {
@@ -189,48 +187,27 @@ function DeliveryRow({
   };
 
   return (
-    <li className="flex min-w-0 items-stretch" data-product-delivery={reference.kind}>
+    <li className="flex max-w-full min-w-0 flex-wrap items-center gap-2" data-product-delivery={reference.kind}>
       <button
         type="button"
         onClick={canOpen ? open : undefined}
         disabled={!canOpen}
-        className={cn(
-          'flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left',
-          compactTask ? 'min-h-11' : 'min-h-14',
-          canOpen && 'cursor-pointer hover:bg-surface-hover/65 active:bg-surface-active/70',
-          interaction.transition,
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-          !canOpen && 'cursor-default',
-        )}
+        title={[reference.title, description, reference.summary?.trim()].filter(Boolean).join(' · ')}
+        className={cn(assistantCapsuleClassName, canOpen ? 'cursor-pointer' : 'cursor-default', isFailure && 'text-danger')}
       >
-        <span
-          className={cn(
-            'flex shrink-0 items-center justify-center rounded-lg',
-            compactTask ? 'size-5' : 'size-8',
-            isFailure
-              ? 'bg-danger-soft text-danger'
-              : compactTask ? 'text-fg-muted' : 'bg-accent-soft/70 text-accent-fg',
-          )}
-          aria-hidden
-        >
-          <Icon className="size-4" strokeWidth={1.75} />
-        </span>
-        <span className={cn('min-w-0 flex-1', compactTask && 'flex flex-wrap items-center gap-x-3 gap-y-0.5 sm:flex-nowrap')}>
-          <span className={cn('block text-sm font-medium text-fg', fullTitle ? 'break-words' : compactTask ? 'line-clamp-2 sm:truncate' : 'truncate', compactTask && 'min-w-0 flex-1')} title={reference.title}>{reference.title}</span>
-          <span
-            className={cn('block text-xs leading-5 text-fg-muted', compactTask ? 'shrink-0' : 'mt-0.5 truncate')}
-            title={description}
-          >
-            {description}
-          </span>
-        </span>
-        {canOpen ? <ChevronRight className="size-4 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden /> : null}
+        <AssistantCapsuleContent
+          icon={<Icon strokeWidth={1.75} className={isFailure ? 'text-danger' : undefined} />}
+          title={reference.title}
+          meta={description}
+          fullTitle={fullTitle}
+          trailing={canOpen ? <ChevronRight className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden /> : null}
+        />
       </button>
       {canContinue ? (
         <button
           type="button"
           className={cn(
-            'm-2 inline-flex min-h-11 shrink-0 cursor-pointer items-center rounded-lg px-2.5 text-xs font-medium text-accent-fg',
+            'inline-flex min-h-11 max-w-full cursor-pointer items-center rounded-[1.125rem] px-3 text-xs text-accent-fg',
             'hover:bg-accent-soft active:bg-accent-soft/70',
             interaction.transition,
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
@@ -261,30 +238,13 @@ function FileDeliveryGroup({
     .replace('{{count}}', String(entries.length));
 
   return (
-    <li data-product-file-group>
+    <li className="min-w-0 max-w-full" data-product-file-group>
       <details className="group">
-        <summary
-          className={cn(
-            'flex min-h-14 cursor-pointer list-none items-center gap-3 px-3 py-2 text-left',
-            'hover:bg-surface-hover/65 active:bg-surface-active/70',
-            interaction.transition,
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-          )}
-        >
-          <span
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft/70 text-accent-fg"
-            aria-hidden
-          >
-            <Files className="size-4" strokeWidth={1.75} />
-          </span>
-          <span className="min-w-0 flex-1 text-sm font-medium text-fg">{label}</span>
-          <ChevronRight
-            className="size-4 shrink-0 text-fg-subtle transition-transform duration-150 ease-out group-open:rotate-90 motion-reduce:transition-none"
-            strokeWidth={1.75}
-            aria-hidden
-          />
+        <summary className={cn(assistantCapsuleClassName, 'cursor-pointer list-none')}>
+          <AssistantCapsuleContent icon={<Files strokeWidth={1.75} />} title={label}
+            trailing={<ChevronRight className="size-3.5 shrink-0 text-fg-subtle transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" aria-hidden />} />
         </summary>
-        <ul className="m-0 list-none divide-y divide-edge-subtle border-t border-edge-subtle p-0">
+        <ul className={cn(assistantCapsuleListClassName, assistantCapsuleDetailClassName)}>
           {entries.map(({ key, delivery, reference }) => (
             <DeliveryRow
               key={key}
@@ -330,7 +290,7 @@ export function ProductDeliveryRows({
             <TaskDeliveryGroup key="task-delivery-group" entries={taskReferences} language={language}
               renderEntry={(entry, fullTitle) => <DeliveryRow key={entry.key} delivery={entry.delivery}
                 reference={entry.reference} language={language} conversationId={conversationId}
-                projectId={projectId} fullTitle={fullTitle} compactTask />} />
+                projectId={projectId} fullTitle={fullTitle} />} />
           ) : null;
         }
         if (reference.kind !== 'file' || fileReferences.length === 1) {
@@ -342,7 +302,6 @@ export function ProductDeliveryRows({
               language={language}
               conversationId={conversationId}
               projectId={projectId}
-              compactTask={reference.kind === 'task' && taskReferences.length > 1}
             />
           );
         }

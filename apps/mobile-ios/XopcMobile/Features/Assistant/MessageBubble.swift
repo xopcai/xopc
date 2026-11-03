@@ -45,12 +45,11 @@ struct MessageBubble: View {
                     }
                 }
                 ForEach(message.resultLinks) { result in
-                    Link(destination: result.url) { Label(result.title, systemImage: "arrow.up.right.square") }
-                        .frame(minHeight: 44)
+                    Link(destination: result.url) { ChatResultCapsuleLabel(title: result.title, systemImage: "doc", canOpen: true) }
+                        .buttonStyle(.plain)
                 }
                 ForEach(message.unavailableOutputs, id: \.self) { title in
-                    Label(title, systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(.secondary)
+                    ChatResultCapsuleLabel(title: title, systemImage: "exclamationmark.triangle", canOpen: false)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -128,20 +127,15 @@ struct MessageBubble: View {
     }
 
     private func taskReceiptLabel(_ receipt: HistoryTaskReceipt) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "checklist")
-            VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: receipt.title).font(.subheadline.weight(.medium))
-                Text(receipt.operation == "started" || receipt.operation == "created"
-                    ? "已转入任务，可在进展中查看" : "查看任务")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            if receipt.canOpen {
-                Image(systemName: "chevron.right").font(.caption)
-            }
-        }
-        .frame(minHeight: 48)
+        ChatResultCapsuleLabel(
+            title: receipt.title,
+            systemImage: "checklist",
+            status: receipt.operation == "completed" ? String(localized: "已完成")
+                : receipt.operation == "failed" ? String(localized: "失败")
+                : receipt.operation == "started" ? String(localized: "正在进行")
+                : String(localized: "查看任务"),
+            canOpen: receipt.canOpen
+        )
         .accessibilityIdentifier("chat-task-receipt-\(receipt.id)")
     }
 
@@ -310,7 +304,8 @@ private extension MessageBubble {
                         ChatAttachmentPreview(
                             attachment: attachment,
                             configuration: configuration,
-                            conversationID: conversationID
+                            conversationID: conversationID,
+                            capsule: message.role == "assistant"
                         )
                     }
                 }
@@ -490,5 +485,46 @@ private final class ChatAudioPlayback: NSObject, AVAudioPlayerDelegate {
             guard self.player.map(ObjectIdentifier.init) == identity else { return }
             self.stop()
         }
+    }
+}
+
+struct ChatResultCapsuleLabel: View {
+    let title: String
+    let systemImage: String
+    var status: String? = nil
+    var canOpen = true
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.subheadline)
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+            Text(verbatim: title)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+            if let status, !status.isEmpty {
+                Text(verbatim: "· " + status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            if canOpen {
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(minHeight: 44)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+        .contentShape(.rect(cornerRadius: 18))
+        .accessibilityElement(children: .combine)
     }
 }

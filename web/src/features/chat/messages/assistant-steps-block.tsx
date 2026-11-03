@@ -52,6 +52,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
 import { groupAssistantActivity, publicAssistantProgress, summarizeToolActivity } from './assistant-activity-groups';
+import { assistantCapsuleClassName } from './assistant-capsule';
 import { CodemodeOutputLink } from './codemode-output-link';
 import { codemodeOutputPath } from './codemode-output-path';
 
@@ -387,7 +388,7 @@ export function AssistantStepsBlock({
         type="button"
         disabled={!showDisclosure}
         className={cn(
-          'flex max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
+          anyActive ? 'flex max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted' : assistantCapsuleClassName,
           anyActive ? 'h-11' : 'min-h-11',
           anyActive ? 'w-full' : 'w-fit',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
