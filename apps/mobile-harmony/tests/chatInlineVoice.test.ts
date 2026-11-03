@@ -12,7 +12,7 @@ describe('inline user voice messages', () => {
 
   it('plays inline without exposing attachment actions or opening the preview sheet', () => {
     const start = media.indexOf("if (this.inlineVoice && this.previewKind() === 'audio')");
-    const end = media.indexOf('} else if (this.compact)', start);
+    const end = media.indexOf('} else if (this.compact && this.resultCapsule)', start);
     const voiceBubble = media.slice(start, end);
 
     expect(voiceBubble).toContain(".id('chat-inline-voice-' + this.file.id)");
@@ -27,6 +27,6 @@ describe('inline user voice messages', () => {
     expect(voiceBubble).not.toContain('chat_preview');
     expect(voiceBubble).not.toContain('download');
     expect(voiceBubble).not.toContain('this.expanded = true');
-    expect(media).toContain('if (!this.inlineVoice && !this.compact && !this.noteInlineImage)');
+    expect(media).toContain('if (!this.inlineVoice && !this.compact && !this.noteInlineImage && !this.readingImage)');
   });
 });
