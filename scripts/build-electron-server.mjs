@@ -15,6 +15,7 @@ import { buildPersonalResultWorker } from './build-personal-result-worker.mjs';
 
 import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
 import { electronPiCredentialsPlugin } from './electron-pi-credentials.mjs';
+import { electronPiRuntimePlugin } from './electron-pi-runtime.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 mkdirSync(dirname(join(root, 'out/server/autoglm-upstream.LICENSE')), { recursive: true });
@@ -46,7 +47,7 @@ const gatewayBuild = await esbuild.build({
   target: 'node22',
   outfile,
   external,
-  plugins: [electronPiCredentialsPlugin()],
+  plugins: [electronPiCredentialsPlugin(), electronPiRuntimePlugin()],
   format: 'esm',
   define: { PI_BUNDLED_NODE: 'true' },
   // ESM bundle: dependents (e.g. @larksuiteoapi/node-sdk) use `__dirname` / CJS `require`.
@@ -81,12 +82,16 @@ await buildPersonalResultWorker(root, join(root, 'out/server/result-extraction.j
 const piEntry = fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'));
 cpSync(join(dirname(piEntry), 'bundle/chunks/codemode-worker.js'), join(root, 'out/server/codemode-worker.js'));
 
-const bundledOpenAiChatGPTOAuth = Object.keys(gatewayBuild.metafile.inputs).some((input) =>
-  input.endsWith('/@earendil-works/pi-ai/dist/auth/oauth/openai-chatgpt.js'),
-);
-if (!bundledOpenAiChatGPTOAuth) {
-  console.error('[build-electron-server] OpenAI ChatGPT OAuth flow was not bundled into the gateway.');
-  process.exit(1);
+const requiredPiRuntimeModules = [
+  ...['anthropic', 'openai-codex', 'openai-chatgpt', 'github-copilot', 'openrouter',
+    'kimi-coding', 'meta', 'xai', 'radius'].map(name => `auth/oauth/${name}.js`),
+  'api/bedrock-converse-stream.js',
+];
+for (const module of requiredPiRuntimeModules) {
+  if (!Object.keys(gatewayBuild.metafile.inputs).some(input =>
+    input.endsWith(`/@earendil-works/pi-ai/dist/${module}`))) {
+    throw new Error(`[build-electron-server] Required pi runtime module was not bundled: ${module}`);
+  }
 }
 
 console.log(`[build-electron-server] Wrote ${outfile}${minify ? ' (minified)' : ''}`);
