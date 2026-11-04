@@ -397,7 +397,7 @@ export function AssistantStepsBlock({
       >
         <Sparkles className={cn('size-4 shrink-0', anyActive && 'assistant-activity-busy')} aria-hidden />
         <div className="min-w-0 flex-1 overflow-hidden">
-          <span className="flex h-6 w-full min-w-0 items-center">
+          <span className={cn('flex w-full min-w-0 items-center', anyActive ? 'h-6' : 'min-h-6')}>
             {headerMain}
           </span>
         </div>
