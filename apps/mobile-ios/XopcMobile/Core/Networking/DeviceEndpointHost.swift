@@ -3,34 +3,6 @@ import Foundation
 import Security
 import UIKit
 
-struct DeviceEndpointOrigin: Encodable, Sendable {
-    let type = "endpoint"
-    let endpointId: String
-    let token: String
-}
-
-private struct DeviceCompatibility: Decodable {
-    let deviceId: String?
-    let turnDeviceContextV1: Bool?
-    let deviceLocationTasksV1: Bool?
-    let mobilePersonalToolsV1: Bool?
-    let deviceStateToolsV1: Bool?
-    let endpointEnvironmentV1: Bool?
-
-    var catalogJson: String {
-        if deviceStateToolsV1 != true {
-            return "[]"
-        }
-        if mobilePersonalToolsV1 == true {
-            return DeviceToolCatalog.personalJson
-        }
-        if deviceLocationTasksV1 == true {
-            return DeviceToolCatalog.json
-        }
-        return DeviceToolCatalog.stateJson
-    }
-}
-
 actor DeviceEndpointPool {
     static let shared = DeviceEndpointPool()
     private var hosts: [GatewayConfiguration: DeviceEndpointHost] = [:]
@@ -115,11 +87,7 @@ actor DeviceEndpointHost {
         let fallback = "ios-" + SHA256.hash(data: key.publicKey.derRepresentation).prefix(16).map { String(format: "%02x", $0) }.joined()
         let principalId = compatibility.payload?.deviceId ?? fallback
         let endpointId = "ios:\(principalId):\(instance)"
-        let registration: [String: Any] = ["principalId": principalId, "kind": "mobile", "platform": "ios",
-                                           "displayName": "xopc iOS", "publicKey": key.publicKey.derRepresentation.base64URL()]
-        let registered: GatewayEnvelope<IgnoredResponse> = try await client.request(path: "/api/endpoint-tools/principals",
-                                                                                    method: "POST", body: Self.json(registration))
-        guard registered.isSuccessful else { throw GatewayClientError.server("无法注册设备能力") }
+        try await registerPrincipal(principalId, key: key)
         let ticket: GatewayEnvelope<RealtimeTicket> = try await client.request(path: "/api/realtime/tickets", method: "POST",
                                                                                body: client.encoder.encode(RealtimeTicketCommand(clientId: endpointId, clientKind: "mobile", protocolVersion: 2)))
         guard let ticket = ticket.payload, ticket.realtime.minVersion <= 2, ticket.realtime.maxVersion >= 2,
@@ -160,6 +128,14 @@ actor DeviceEndpointHost {
             startLoops(socket)
             return claim
         } catch { stop(); throw error }
+    }
+
+    private func registerPrincipal(_ principalId: String, key: P256.Signing.PrivateKey) async throws {
+        let registration: [String: Any] = ["principalId": principalId, "kind": "mobile", "platform": "ios",
+                                           "displayName": "xopc iOS", "publicKey": key.publicKey.derRepresentation.base64URL()]
+        let registered: GatewayEnvelope<IgnoredResponse> = try await client.request(path: "/api/endpoint-tools/principals",
+                                                                                    method: "POST", body: Self.json(registration))
+        guard registered.isSuccessful else { throw GatewayClientError.server("无法注册设备能力") }
     }
 
     private func startLoops(_ socket: URLSessionWebSocketTask) {
@@ -258,36 +234,43 @@ actor DeviceEndpointHost {
         do {
             while !Task.isCancelled {
                 let frame = try await receive(socket)
-                if frame["kind"] as? String == "endpoint.message", let inner = frame["payload"] as? [String: Any],
-                   let request = inner["payload"] as? [String: Any]
-                {
-                    guard inner["protocolVersion"] as? Int == 3 else { break }
-                    if inner["type"] as? String == "provider.catalog.ack" {
-                        guard self.socket === socket else { break }
-                        appProviderAccepted = request["revision"] as? Int == 1 && request["accepted"] as? Bool == true
-                        try await publishAppProviderState(socket)
-                        continue
-                    }
-                    guard let id = request["invocationId"] as? String else { continue }
-                    if inner["type"] as? String == "tool.invoke" {
-                        guard invocations[id] == nil else { continue }
-                        let requestData = try Self.json(request)
-                        invocations[id] = Task { [weak self] in
-                            guard let self else { return }
-                            do { try await invoke(requestData) } catch {}
-                            await completedInvocation(id)
-                        }
-                    } else if inner["type"] as? String == "tool.cancel" {
-                        invocations.removeValue(forKey: id)?.cancel()
-                    }
-                } else if frame["kind"] as? String == "realtime.error" {
-                    break
-                }
+                guard try await handleFrame(frame, socket: socket) else { break }
             }
         } catch { /* The next input reconnects and obtains a fresh claim. */ }
         if self.socket === socket {
             stop()
         }
+    }
+
+    private func handleFrame(_ frame: [String: Any], socket: URLSessionWebSocketTask) async throws -> Bool {
+        guard frame["kind"] as? String == "endpoint.message" else {
+            return frame["kind"] as? String != "realtime.error"
+        }
+        guard let inner = frame["payload"] as? [String: Any], let request = inner["payload"] as? [String: Any] else { return true }
+        guard inner["protocolVersion"] as? Int == 3 else { return false }
+        if inner["type"] as? String == "provider.catalog.ack" {
+            return try await acceptProviderCatalog(request, socket: socket)
+        }
+        guard let id = request["invocationId"] as? String else { return true }
+        if inner["type"] as? String == "tool.invoke" {
+            guard invocations[id] == nil else { return true }
+            let requestData = try Self.json(request)
+            invocations[id] = Task { [weak self] in
+                guard let self else { return }
+                do { try await invoke(requestData) } catch {}
+                await completedInvocation(id)
+            }
+        } else if inner["type"] as? String == "tool.cancel" {
+            invocations.removeValue(forKey: id)?.cancel()
+        }
+        return true
+    }
+
+    private func acceptProviderCatalog(_ request: [String: Any], socket: URLSessionWebSocketTask) async throws -> Bool {
+        guard self.socket === socket else { return false }
+        appProviderAccepted = request["revision"] as? Int == 1 && request["accepted"] as? Bool == true
+        try await publishAppProviderState(socket)
+        return true
     }
 
     private func completedInvocation(_ id: String) {
@@ -492,12 +475,5 @@ private extension DeviceEndpointHost {
             try await send("tool.result", ["invocationId": id, "content": [["type": "json", "value": JSONSerialization.jsonObject(with: reading)]]])
         } catch let error as DeviceLocation.LocationFailure { try await fail(error.code) }
         catch { try await fail(Task.isCancelled ? "TOOL_CANCELLED" : "PROTOCOL_ERROR") }
-    }
-}
-
-private extension Data {
-    func base64URL() -> String {
-        base64EncodedString().replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
     }
 }
