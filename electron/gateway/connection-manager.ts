@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { ConnectionCredentialStore } from './credentials.js';
 import { ConnectionProfileStore, parseRemoteProfile, type RemoteProfile } from './profiles.js';
 
-/** S1 has no authenticated/ready state and performs no network or device work. */
+/** Stores remote connection profiles; opening the console owns authentication and networking. */
 export class GatewayConnectionPreview {
   private profiles: RemoteProfile[] = [];
   private selectedId?: string;
@@ -37,9 +37,9 @@ export class GatewayConnectionPreview {
   }
 
   snapshot() {
-    return { stage: 'S1' as const, epoch: this.epoch, mode: 'remote' as const,
-      status: this.storageError ? 'storage-error' : this.selectedId ? 'remote-chat-unavailable' : 'unselected',
-      reason: this.storageError ? 'PROFILE_STORAGE_UNAVAILABLE' : 'REMOTE_CHAT_NOT_IMPLEMENTED',
+    return { epoch: this.epoch, mode: 'remote' as const,
+      status: this.storageError ? 'storage-error' : this.selectedId ? 'configured' : 'unselected',
+      reason: this.storageError ? 'PROFILE_STORAGE_UNAVAILABLE' : undefined,
       selectedId: this.selectedId, localCapabilities: false as const,
       profiles: this.profiles.map(({ credentialRef, ...profile }) => ({ ...profile, hasCredential: Boolean(credentialRef) })) };
   }
