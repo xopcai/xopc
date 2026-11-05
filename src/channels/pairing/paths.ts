@@ -18,7 +18,7 @@ function safeAccountKey(accountId: string): string {
     .replace(/\.\./g, '_');
 }
 
-/** Same layout as `extensions/feishu` `resolveFeishuFrameworkAllowFromPath` for `feishu`. */
+/** Resolve the persisted allowlist path for a channel account. */
 export function resolveStandardAllowFromPath(
   channel: StandardPairingChannel,
   accountId: string,

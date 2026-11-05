@@ -8,7 +8,7 @@
 import type { WeixinApiOptions } from "../api/api.js";
 import { logger } from "../util/logger.js";
 
-import { toggleDebugMode, isDebugMode } from "./debug-mode.js";
+import { toggleDebugMode } from "./debug-mode.js";
 import { sendMessageWeixin } from "./send.js";
 
 export interface SlashCommandResult {

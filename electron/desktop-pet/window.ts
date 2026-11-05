@@ -3,7 +3,6 @@ import { join } from "node:path";
 
 import {
   BrowserWindow,
-  app,
   screen,
   shell,
   type BrowserWindowConstructorOptions,
@@ -266,7 +265,6 @@ export async function applyDesktopPetPrefs(
 }
 
 export async function resetDesktopPetPosition(): Promise<DesktopPetState> {
-  const prefs = await readDesktopPetPrefs();
   const anchor = desktopPetDefaultAnchor(screen.getPrimaryDisplay().workArea);
   const next = await patchDesktopPetPrefs({ anchor });
   if (petWindow && !petWindow.isDestroyed()) {

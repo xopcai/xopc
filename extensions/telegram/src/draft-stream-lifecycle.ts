@@ -2,7 +2,7 @@
  * Finalizable draft lifecycle helpers for draft streaming.
  */
 
-import { createDraftStreamLoop, type DraftStreamLoop } from './draft-stream-loop.js';
+import { createDraftStreamLoop } from './draft-stream-loop.js';
 
 export type FinalizableDraftStreamState = {
   stopped: boolean;

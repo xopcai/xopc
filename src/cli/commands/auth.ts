@@ -80,7 +80,6 @@ function createAuthCommand(_ctx: CLIContext): Command {
 			}
 
 			for (const profile of profiles) {
-				const _masked = '****';
 				const status = colorizeStatus(profile.hasKey);
 				console.log(`\nProvider: ${provider}`);
 				console.log(`Profile: ${profile.profileId}`);
