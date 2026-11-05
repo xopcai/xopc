@@ -108,7 +108,6 @@
 		9A4E1D712D7D9751DB045413 /* ExternalIntakeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB35E1B9D6D13305AA2E3C0A /* ExternalIntakeSheet.swift */; };
 		9AC871703AA31370ED1E2CDF /* PhoneRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F43FC9CB4D62D76AD60D32C /* PhoneRepository.swift */; };
 		9BC3836E08B47060F01E9735 /* GatewayClient+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41B4EF63C8712AA9EE957726 /* GatewayClient+Voice.swift */; };
-		9BE40403A8FDBFC39CBFF641 /* ConversationContextButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6ECBAB709ED6B714607F120 /* ConversationContextButton.swift */; };
 		9BF9C32A317B8A5E428B6945 /* MarkdownNoteInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28D3A761AB72069F8013A72 /* MarkdownNoteInput.swift */; };
 		9C36ECCD41748134A9CAEC03 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 531D335060F09BBFF5ECBCB0 /* NotesView.swift */; };
 		9C70CA382715DB04BD0EDA36 /* ChatAttachmentPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = C758AF7E274851B8EC276221 /* ChatAttachmentPreview.swift */; };
@@ -362,7 +361,6 @@
 		DFADEE49AC582A3AA6647297 /* ClarificationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClarificationCard.swift; sourceTree = "<group>"; };
 		E544E250A14760B5021EDF66 /* ConfirmedAnswerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmedAnswerView.swift; sourceTree = "<group>"; };
 		E6D2D2DBE5DD9C6438D67AF3 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
-		E6ECBAB709ED6B714607F120 /* ConversationContextButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContextButton.swift; sourceTree = "<group>"; };
 		E8D33D5255A8BCFF3E0B3116 /* AssistantState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantState.swift; sourceTree = "<group>"; };
 		E9C4B5F30CF6DFD4AA19B2AC /* AssistantView+Sending.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AssistantView+Sending.swift"; sourceTree = "<group>"; };
 		EC3936F05C8441B4E0C7A4E3 /* PhoneWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWorkspaceTests.swift; sourceTree = "<group>"; };
@@ -411,7 +409,6 @@
 				F4334EC0967CCE3842C57872 /* ChatStreamBuffer.swift */,
 				DFADEE49AC582A3AA6647297 /* ClarificationCard.swift */,
 				E544E250A14760B5021EDF66 /* ConfirmedAnswerView.swift */,
-				E6ECBAB709ED6B714607F120 /* ConversationContextButton.swift */,
 				F4C2A4FD49586D61A1532166 /* ConversationContextView.swift */,
 				BB35E1B9D6D13305AA2E3C0A /* ExternalIntakeSheet.swift */,
 				A1F15C8EFA31B41061F98EDD /* MarkdownBodyView.swift */,
@@ -897,7 +894,6 @@
 				DFCD7746D70C907AE1712BE4 /* ComposerDraftStore.swift in Sources */,
 				FD6CD0A3A8874B471BB33039 /* ComposerPaletteModels.swift in Sources */,
 				55655885580B957F064BDAE4 /* ConfirmedAnswerView.swift in Sources */,
-				9BE40403A8FDBFC39CBFF641 /* ConversationContextButton.swift in Sources */,
 				C584DE6838646B27073D38C2 /* ConversationContextView.swift in Sources */,
 				4EFBB47302B3D45026E5B952 /* ConversationsState.swift in Sources */,
 				0E04EDC4039351DFB9527F3F /* ConversationsView.swift in Sources */,

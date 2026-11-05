@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { historyRows } from '../entry/src/main/ets/common/chatProtocol.ets';
-import { chatActivities, chatAnswerStarted, chatDeliveries, chatOutcome, mergeAssistantRows, toolOutputText, chatReview, chatSearchLinks, chatAnswerText, chatProductCapability, chatAttachments, chatToolDisplayKind, chatToolFailed, chatToolFailureSummary, chatToolSemanticKind, chatToolPreview, chatToolReadGroupKey } from '../entry/src/main/ets/common/chatRichContent.ets';
+import { chatActivities, chatAnswerStarted, chatDeliveries, chatOutcome, mergeAssistantRows, toolOutputText, chatReview, chatSearchLinks, chatAnswerText, chatProductCapability, chatAttachments, chatToolDisplayKind } from '../entry/src/main/ets/common/chatRichContent.ets';
 import { reduceChatStream } from '../entry/src/main/ets/common/chatStream.ets';
 import type { XopcChatRow, XopcMessage } from '../entry/src/main/ets/model/chat.ets';
 
@@ -104,23 +104,10 @@ describe('rich live event reducer', () => {
     expect(chatActivities(row, 'off')).toEqual([]);
     expect(chatAnswerStarted({ ...row, blocks: row.blocks?.slice(0, 2) })).toBe(false);
   });
-  it('projects tool activity into compact semantic labels and bounded failure summaries', () => {
+  it('projects tool activity into compact categories', () => {
     expect(chatToolDisplayKind('mcp__web__search_query')).toBe('search');
     expect(chatToolDisplayKind('exec_command')).toBe('command');
     expect(chatToolDisplayKind('create_share')).toBe('share');
     expect(chatToolDisplayKind('unknown_action')).toBe('other');
-    expect(chatToolFailed({ id: 'ok', name: 'read_file', status: 'done' })).toBe(false);
-    const failed = { id: 'bad', name: 'exec_command', status: 'error', details: { errorMessage: 'permission denied\nstack' } };
-    expect(chatToolFailed(failed)).toBe(true);
-    expect(chatToolFailureSummary(failed)).toBe('permission denied');
-    expect(chatToolFailureSummary({ id: 'fallback', name: 'read_file', isError: true, result: 'missing file\ntrace' })).toBe('missing file');
-    expect(chatToolSemanticKind({ id: 'skill', name: 'skill_view' })).toBe('skill_view');
-    expect(chatToolSemanticKind({ id: 'note', name: 'xopc_use', input: { mode: 'note', command: 'get', noteId: 'note-1' } })).toBe('inspect_notes');
-    expect(chatToolPreview({ id: 'note', name: 'xopc_use', input: { mode: 'note', command: 'get', noteId: 'note-1' } })).toBe('note-1');
-    expect(chatToolReadGroupKey({ id: 'skill', name: 'skill_view', status: 'done' })).toBe('skill_view');
-    expect(chatToolReadGroupKey({ id: 'note', name: 'xopc_use', status: 'done', input: { mode: 'note', command: 'get' } })).toBe('inspect_notes');
-    expect(chatToolReadGroupKey({ id: 'write', name: 'xopc_use', status: 'done', input: { mode: 'note', command: 'update' } })).toBe('');
-    expect(chatToolReadGroupKey({ id: 'running', name: 'read_file', status: 'running' })).toBe('');
-    expect(chatToolReadGroupKey({ id: 'failed', name: 'read_file', status: 'error' })).toBe('');
   });
 });

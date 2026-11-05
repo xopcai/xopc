@@ -82,7 +82,7 @@ run_release_step "verify generated native iOS project is committed" \
   git diff --exit-code -- apps/mobile-ios/XopcMobile.xcodeproj/project.pbxproj
 run_release_step "native iOS unit tests" \
   bash -c "cd apps/mobile-ios && xcodebuild -project XopcMobile.xcodeproj -scheme XopcMobile -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:XopcMobileTests CODE_SIGNING_ALLOWED=NO test"
-run_release_step "shared agent stream tests" pnpm run mobile:test:stream
+run_release_step "shared realtime and Gateway contract tests" pnpm run mobile:test:stream
 
 RELEASE_VERSION="$(node scripts/apps/mobile-native/bump-patch-version.mjs)"
 if [[ "$RELEASE_VERSION" != "$NEXT_VERSION" ]]; then

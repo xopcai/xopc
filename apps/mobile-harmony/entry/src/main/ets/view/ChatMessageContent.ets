@@ -7,7 +7,6 @@ import { XopcChatImageGrid } from './ChatImageGrid';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatResultTail } from './ChatResultTail';
 import { chatAnswerText, chatAnswerStarted, artifactMedia } from '../common/chatRichContent';
-import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { filePreviewKind } from '../common/filePreview';
 import { chatMessageNeedsPreview, chatMessagePreviewLines, chatMessagePreviewText } from '../common/chatMessagePreview';
 
@@ -25,7 +24,6 @@ export struct XopcChatMessageContent {
   @Param showFailure: boolean = true;
   @Param textSelectable: boolean = false;
   @Param previewEligible: boolean = false;
-  @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onFillDraft: (text: string) => void = (_text: string): void => {};
   @Event onShowMore: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};

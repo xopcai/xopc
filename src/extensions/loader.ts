@@ -8,16 +8,14 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
-import { join, dirname, isAbsolute } from 'path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createJiti } from 'jiti';
+import { join, isAbsolute } from 'path';
+import { pathToFileURL } from 'node:url';
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import {
   resolveAgentWorkspaceDir,
   resolveExtensionsDir,
   resolveWorkspaceExtensionsDir,
   resolveBundledExtensionsDir,
-  resolveExtensionSdkPath,
 } from '../config/paths.js';
 import type { Config } from '../config/config-surface.js';
 import type { MessageBus } from '../infra/bus/index.js';
@@ -133,7 +131,6 @@ export class ExtensionLoader {
   private options: ExtensionLoaderOptions;
   private extensionInstances: Map<string, ExtensionApi> = new Map();
   private startedServiceIds = new Set<string>();
-  private jiti: ReturnType<typeof createJiti>;
   private _appConfig?: Config;
   private _runtimeContext?: {
     bus?: MessageBus;
@@ -185,38 +182,6 @@ export class ExtensionLoader {
     // Initialize cache and diagnostics 
     this.cache = getExtensionCache();
     this.diagnostics = getExtensionDiagnostics();
-
-    // Build jiti aliases for the public, host-provided extension SDK contract.
-    // Extensions must import from @xopcai/xopc/extension-sdk; private aliases
-    // are intentionally not registered.
-    const alias: Record<string, string> = {};
-    const sdkPath = resolveExtensionSdkPath();
-    if (sdkPath) {
-      const sdkDir = dirname(sdkPath);
-      const sdkSubpaths = [
-        'core',
-        'lazy',
-        'provider',
-        'channel',
-        'hooks',
-        'tools',
-        'testing',
-        'speech',
-        'media',
-      ];
-      const prefix = '@xopcai/xopc/extension-sdk';
-      alias[prefix] = sdkPath;
-      for (const subpath of sdkSubpaths) {
-        alias[`${prefix}/${subpath}`] = join(sdkDir, `${subpath}.ts`);
-      }
-    }
-
-    // Initialize jiti with TypeScript support and SDK alias
-    this.jiti = createJiti(fileURLToPath(import.meta.url), {
-      interopDefault: true,
-      extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.json'],
-      alias,
-    });
   }
 
   /**

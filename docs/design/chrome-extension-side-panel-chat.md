@@ -133,7 +133,7 @@ flowchart LR
 实现阶段遵循 KISS，没有为首版抽取新的通用 Chat UI 包。扩展直接复用现有协议包，并把可靠性逻辑保持在独立、可测试的 Side Panel 模块中：
 
 - `chat-client.ts` 与 `chat-outbox.ts`：session input、outbox idempotency、run resume、stream mapper。
-- `@xopcai/realtime-client`、`@xopcai/gateway-contract`、`@xopcai/agent-stream-client` 继续直接复用。
+- 复用 `@xopcai/realtime-client` 和 `@xopcai/gateway-contract`。
 
 Side Panel 的视觉组件可以先独立实现窄屏版本，后续只共享稳定的 message block renderer；不要为首版抽取整个 Web design system。
 

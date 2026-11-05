@@ -310,16 +310,6 @@ function buildSnapshotLinux(): ShellPermissionSnapshot {
   return base;
 }
 
-async function getPermissionSnapshot(): Promise<ShellPermissionSnapshot> {
-  if (process.platform === 'darwin') {
-    return buildSnapshotDarwin();
-  }
-  if (process.platform === 'win32') {
-    return buildSnapshotWin32();
-  }
-  return buildSnapshotLinux();
-}
-
 const LINUX_PANEL_COMMANDS: Partial<Record<PrivacyPaneKind, Array<{ cmd: string; args: string[] }>>> = {
   fullDisk: [{ cmd: 'gnome-control-center', args: ['privacy'] }],
   screen: [
