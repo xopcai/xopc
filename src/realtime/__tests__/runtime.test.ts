@@ -50,7 +50,7 @@ describe('RealtimeRuntime', () => {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   });
 
-  it.each(['compatible', 'non-admin', 'old-contract', 'bad-signature'])('handles desktop %s without confusing protocol and auth failures', async (variant) => {
+  it.each(['compatible', 'non-admin', 'old-contract', 'bad-signature', 'old-endpoint-version'])('handles desktop %s without confusing protocol and auth failures', async (variant) => {
     const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const principal = { id: 'desktop-test', kind: 'desktop' as const, displayName: 'Desktop', platform: 'darwin',
       publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64url'), createdAt: Date.now() };
@@ -83,13 +83,16 @@ describe('RealtimeRuntime', () => {
     try {
       socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
         kind: 'realtime.hello', sentAt: Date.now(), payload: {
-          ticket: issued.ticket, clientId: 'desktop-client', clientKind: 'desktop', subscriptions: [], endpoint: hello,
+          ticket: issued.ticket, clientId: 'desktop-client', clientKind: 'desktop', subscriptions: [], endpoint: hello, capabilities: variant === 'old-endpoint-version' ? [] : ['endpoint.tools.v3'],
         } }));
       if (variant === 'compatible' || variant === 'non-admin') {
         await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready', payload: { endpoint: { endpointId: hello.endpointId } } });
         expect(runtime.canConfigureEndpoint(hello.endpointId)).toBe(variant === 'compatible');
         socket.close(); await closed;
         expect(runtime.canConfigureEndpoint(hello.endpointId)).toBe(false);
+      } else if (variant === 'old-endpoint-version') {
+        await expect(closed).resolves.toEqual({ code: 4400, reason: 'CLIENT_UPDATE_REQUIRED' });
+        expect(endpoints.registry.get(hello.endpointId)).toBeUndefined();
       } else {
         await expect(closed).resolves.toEqual(variant === 'old-contract'
           ? { code: 4409, reason: 'GATEWAY_PROTOCOL_INCOMPATIBLE' }

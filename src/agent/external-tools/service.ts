@@ -79,6 +79,14 @@ export class ExternalToolService {
     for (const source of sources) {
       const provider = this.providerBySource.get(source);
       if (!provider) continue;
+      if (provider.catalog) {
+        for (const descriptor of await provider.catalog()) {
+          const versioned = versionDescriptor(descriptor);
+          if (Buffer.byteLength(JSON.stringify(versioned), 'utf8') > MAX_DESCRIPTOR_BYTES) throw new Error('Native tool contract exceeds its budget');
+          descriptors.push(versioned);
+        }
+        continue;
+      }
       const refs = [...new Set((await provider.search('')).map(hit => hit.toolRef))];
       for (const ref of refs) descriptors.push(...(await this.describe([ref])).tools);
     }

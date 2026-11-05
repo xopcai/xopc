@@ -73,6 +73,25 @@ function expectPreserved(db: DatabaseSync): void {
 }
 
 describe('supported installed database upgrades', () => {
+  it('preserves device identity and foreign-key dependents while adding bridge identities at v270', () => {
+    const db = historicalDatabase(269);
+    try {
+      db.exec(`INSERT INTO endpoint_principals(id,kind,display_name,platform,public_key,created_at)
+        VALUES ('keep-device','desktop','Mac','darwin','key',1);
+        INSERT INTO endpoint_instance_bindings(endpoint_id,principal_id,bound_at) VALUES ('keep-endpoint','keep-device',2);
+        INSERT INTO endpoint_device_settings(principal_id,nickname,revision) VALUES ('keep-device','My Mac',1);
+        INSERT INTO endpoint_session_bindings(conversation_id,endpoint_id,bound_at) VALUES ('conversation-1','keep-endpoint',3);
+        PRAGMA foreign_keys=ON;`);
+      const tables = ['endpoint_principals', 'endpoint_instance_bindings', 'endpoint_device_settings', 'endpoint_session_bindings'];
+      const before = tables.map(table => db.prepare(`SELECT * FROM ${table}`).all());
+      ensureXopcDatabaseSchema(db);
+      expect(tables.map(table => db.prepare(`SELECT * FROM ${table}`).all())).toEqual(before);
+      db.exec(`INSERT INTO endpoint_principals(id,kind,display_name,platform,public_key,created_at)
+        VALUES ('new-bridge','bridge','Sensors','linux','key',4)`);
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('preserves installed v265 invocation history when adding optional stable operation audit identity', () => {
     const db = historicalDatabase(265);
     try {

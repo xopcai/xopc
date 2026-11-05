@@ -10,7 +10,8 @@ import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from '../tool-sea
 import { setXopcToolMetadata } from '../tool-metadata.js';
 import { xopcToolsToDefinitions } from '../xopc-tools-bridge.js';
 
-function fixture(options: { nativeDiscovery?: boolean; externalDiscovery?: boolean; externalTimeoutMs?: number; external?: boolean } = {}) {
+function fixture(options: { nativeDiscovery?: boolean; externalDiscovery?: boolean; externalTimeoutMs?: number; external?: boolean;
+  refreshNative?: () => Promise<AgentTool[]> } = {}) {
   const tools: AgentTool[] = ['web_search', 'xopc_tool_describe', 'xopc_tool_execute'].map(name => setXopcToolMetadata({
     name, label: name, description: name === 'web_search' ? 'Search WeCom documentation on the web' : name,
     parameters: Type.Object({}), execute: vi.fn(),
@@ -24,7 +25,10 @@ function fixture(options: { nativeDiscovery?: boolean; externalDiscovery?: boole
   } as ExternalDiscoveryResult));
   const registry: ExternalToolRegistry = { service: new ExternalToolService([]), nativeSources: ['endpoint'], search, execute: vi.fn() };
   const api = {
-    registerTool: (definition: ToolDefinition) => definitions.push(definition),
+    registerTool: (definition: ToolDefinition) => {
+      const index = definitions.findIndex(tool => tool.name === definition.name);
+      if (index < 0) definitions.push(definition); else definitions[index] = definition;
+    },
     getAllTools: () => definitions as unknown as ToolInfo[],
     getActiveTools: () => [...active],
     setActiveTools: (names: string[]) => { active = [...new Set(names)].filter(name => definitions.some(tool => tool.name === name)); },
@@ -40,6 +44,22 @@ function fixture(options: { nativeDiscovery?: boolean; externalDiscovery?: boole
 }
 
 describe('unified tool_search', () => {
+  it('loads a newly admitted device in the same turn and withdraws stale declarations on the next search', async () => {
+    const device = setXopcToolMetadata({ name: 'device__temperature', label: 'Room temperature', description: 'Read room temperature sensor',
+      parameters: Type.Object({}), execute: vi.fn() }, { exposure: 'deferred',
+      external: { toolRef: 'endpoint:room:temperature', revision: 'revision-1', readOnly: false } });
+    let available = [device];
+    const f = fixture({ refreshNative: async () => available, external: false });
+    expect(f.api.getActiveTools()).not.toContain(device.name);
+    const first = await f.call({ query: 'room temperature', limit: 8 });
+    expect(first.loadedTools).toContainEqual(expect.objectContaining({ name: device.name }));
+    expect(f.api.getActiveTools()).toContain(device.name);
+    available = [];
+    const second = await f.call({ query: 'room temperature', limit: 8 });
+    expect(second.loadedTools).toEqual([]);
+    expect(f.api.getActiveTools()).not.toContain(device.name);
+    expect(f.api.getAllTools().find(tool => tool.name === device.name)?.exposure).toBe('hidden');
+  });
   it('loads native declarations, returns external references and makes describe/execute available', async () => {
     const f = fixture();
     const found = await f.call();

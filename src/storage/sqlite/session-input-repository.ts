@@ -449,6 +449,14 @@ export function recoverSessionInputState(): string[] {
       updated_at_ms = ? WHERE status = 'interrupted' AND kind = 'message'
       AND error = 'Gateway restarted during delivery'
       AND json_extract(payload_json, '$.connectionAction') IN ('continue','cancel')`).run(now);
+    db.prepare(`UPDATE session_inputs SET status = 'queued', error = NULL, version = version + 1,
+      updated_at_ms = ? WHERE status = 'interrupted' AND kind = 'clarification_resume'
+      AND error = 'Gateway restarted during delivery' AND EXISTS (
+        SELECT 1 FROM session_clarification_waits wait JOIN sessions session ON session.active_transcript_id = wait.transcript_id
+        WHERE wait.conversation_id = session_inputs.conversation_id AND wait.status = 'queued'
+        AND wait.id = json_extract(session_inputs.payload_json, '$.waitId')
+        AND session_inputs.id = json_extract(wait.data_json, '$.resumeInputId')
+        AND json_type(wait.data_json, '$.deviceInteraction') = 'object')`).run(now);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = NULL, active_input_id = NULL,
       revision = revision + 1, updated_at_ms = ?`).run(now);
     db.prepare('UPDATE session_input_control SET stop_run_id = NULL').run();

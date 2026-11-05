@@ -122,6 +122,30 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'device-hosts',
+    match: path => path === '/api/endpoint-tools/hosts/enrollment',
+    load: async () => {
+      const { registerDeviceHostRoutes } = await import('./device-hosts.js');
+      return { register: registerDeviceHostRoutes };
+    },
+  },
+  {
+    id: 'device-targets',
+    match: path => /^\/api\/endpoint-tools\/targets\/[^/]+$/.test(path),
+    load: async () => {
+      const { registerDeviceTargetRoutes } = await import('./device-targets.js');
+      return { register: registerDeviceTargetRoutes };
+    },
+  },
+  {
+    id: 'device-providers',
+    match: path => /^\/api\/endpoint-tools\/(?:providers(?:\/admission)?|(?:provider-operations|interactions)\/[^/]+|(?:artifact-transfers|delegations)(?:\/[^/]+)?|invocations\/[^/]+\/artifact)$/.test(path),
+    load: async () => {
+      const { registerDeviceProviderRoutes } = await import('./device-providers.js');
+      return { register: registerDeviceProviderRoutes };
+    },
+  },
+  {
     id: 'endpoint-compatibility',
     match: (path) => path === '/api/endpoint-tools/compatibility',
     load: async () => {

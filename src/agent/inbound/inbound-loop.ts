@@ -42,6 +42,7 @@ import { initSessionTurn } from '../../session/init-session-turn.js';
 import { shouldSkipResetOverlapCommand } from '../../session/reset-triggers.js';
 import type { StreamHandle } from '../service.types.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
+import { verifiedChannelInbound } from '../../channels/verified-inbound.js';
 import { inboundMessageLogRequestId } from '../service-inbound-utils.js';
 
 /** Initial back-off when bus consume fails. Doubles each consecutive failure. */
@@ -296,7 +297,7 @@ export class InboundLoop {
           this.cfg.sessionState.beginInboundTurn(sessionContext.conversationId);
           inboundTurnArmed = true;
           try {
-            await this.cfg.agentOrchestrator.process(inboundMsg, sessionContext);
+            await this.cfg.agentOrchestrator.process(inboundMsg, sessionContext, verifiedChannelInbound(msg));
           } catch (procErr) {
             busProcessFailed = procErr instanceof Error ? procErr.message : String(procErr);
             throw procErr;

@@ -95,7 +95,7 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
       const principalId = endpoints.registry.get(parsed.namespace)?.principalId;
       const releasePrincipal = principalId
         ? endpoints.registry.onPrincipalRevoked(principalId, () => listener('authorization')) : () => {};
-      const releaseBinding = endpoints.bindings.onChange(id => { if (id === conversationId) listener('authorization'); });
+      const releaseBinding = endpoints.targets.onChange(id => { if (id === conversationId) listener('catalog'); });
       return () => { releaseEndpoint(); releaseBinding(); releasePrincipal(); };
     };
   }

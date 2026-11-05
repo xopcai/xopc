@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { create: vi.fn(), request: vi.fn() };
+  return { create: vi.fn(), request: vi.fn(), foreground: true };
 });
 vi.mock('@kit.NetworkKit', () => ({ webSocket: { createWebSocket: mocks.create } }));
 vi.mock('../entry/src/main/ets/service/deviceLocation.ets', () => ({ invokeDeviceLocation: vi.fn(), cancelDeviceLocation: vi.fn(), cancelAllDeviceLocations: vi.fn() }));
@@ -19,11 +19,12 @@ vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCry
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
   currentProfile: () => ({ deviceId: 'device-1' }), request: mocks.request,
   activeOrigin: () => 'https://gateway.example', verifyRoute: async () => {},
+  isForeground: () => mocks.foreground,
 } }));
 vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error {
   constructor(public status: number, public body: string = '') { super('HTTP_' + status); }
 } }));
-import { DEVICE_TOOL_REVISIONS } from '../entry/src/main/ets/common/deviceToolCatalog';
+import { APP_TOOL_NAME, APP_TOOL_REVISION, DEVICE_TOOL_REVISIONS } from '../entry/src/main/ets/common/deviceToolCatalog';
 import { cancelDeviceLocation } from '../entry/src/main/ets/service/deviceLocation.ets';
 import { XopcRealtimeClient } from '../entry/src/main/ets/service/realtimeClient.ets';
 import { XopcHttpError } from '../entry/src/main/ets/service/transport.ets';
@@ -42,16 +43,35 @@ class FakeSocket {
 describe('Harmony realtime lifecycle', () => {
   let client: XopcRealtimeClient; let sockets: FakeSocket[];
   beforeEach(() => {
-    vi.useFakeTimers(); vi.clearAllMocks(); sockets = [];
+    vi.useFakeTimers(); vi.clearAllMocks(); sockets = []; mocks.foreground = true;
     mocks.create.mockImplementation(() => { const socket = new FakeSocket(); sockets.push(socket); return socket; });
     mocks.request.mockImplementation(async (path: string) => path.endsWith('/compatibility')
       ? JSON.stringify({ payload: { deviceStateToolsV1: true } }) : path.endsWith('/tickets')
-      ? JSON.stringify({ payload: { ticket: 'ticket', realtime: { minVersion: 2, maxVersion: 2, capabilities: [] } } })
+      ? JSON.stringify({ payload: { ticket: 'ticket', realtime: { minVersion: 2, maxVersion: 2, capabilities: ['endpoint.tools.v3'] } } })
       : '{}');
     client = new XopcRealtimeClient();
   });
   afterEach(() => { client.stop(); vi.useRealTimers(); });
   async function connect() { client.start(); await vi.advanceTimersByTimeAsync(0); sockets.at(-1)!.ready(); return sockets.at(-1)!; }
+  it('acknowledges the current Provider revision and refuses foreground-only execution in the background', async () => {
+    const socket = await connect();
+    expect(socket.frames().at(-1)?.payload).toMatchObject({ type: 'provider.catalog.replace', payload: { revision: 1 } });
+    const invoke = () => socket.frame('endpoint.message', { protocolVersion: 3, type: 'tool.invoke', payload: {
+      invocationId: randomUUID(), toolName: APP_TOOL_NAME, descriptorRevision: APP_TOOL_REVISION,
+      arguments: {}, confirmationRequired: false, deadlineAt: Date.now() + 10000,
+    } });
+    invoke();
+    expect(socket.frames().at(-1)?.payload.payload.code).toBe('ENDPOINT_NOT_FOREGROUND');
+    socket.frame('endpoint.message', { protocolVersion: 3, type: 'provider.catalog.ack', payload: { revision: 1, accepted: true } });
+    expect(socket.frames().at(-1)?.payload).toMatchObject({ type: 'provider.state.changed', payload: { reason: 'ready', sequence: 1 } });
+    invoke();
+    expect(socket.frames().at(-1)?.payload).toMatchObject({ type: 'tool.result', payload: { content: [{ type: 'json', value: { active: true } }] } });
+    mocks.foreground = false;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(socket.frames().at(-1)?.payload).toMatchObject({ type: 'provider.state.changed', payload: { reason: 'needs_foreground', sequence: 2 } });
+    invoke();
+    expect(socket.frames().at(-1)?.payload.payload.code).toBe('ENDPOINT_NOT_FOREGROUND');
+  });
   it('authenticates with v2 hello and reconnects with the last sequence without duplicate events', async () => {
     client.subscribe('run:r1'); const socket = await connect(); const events = vi.fn(); client.onEvent = events;
     expect(socket.connect).toHaveBeenCalledWith('wss://gateway.example/api/realtime/v1/ws', { header: { 'X-Xopc-Proof': 'test-proof' } });
@@ -68,12 +88,12 @@ describe('Harmony realtime lifecycle', () => {
   });
   it('round-trips endpoint envelopes and cancels location through the same realtime wire', async () => {
     const socket = await connect();
-    socket.frame('endpoint.message', { protocolVersion: 2, type: 'tool.invoke', payload: {
+    socket.frame('endpoint.message', { protocolVersion: 3, type: 'tool.invoke', payload: {
       invocationId: 'read-power', toolName: 'mobile.device.get_power', descriptorRevision: DEVICE_TOOL_REVISIONS[1],
       arguments: {}, confirmationRequired: false, deadlineAt: Date.now() + 10000,
     } });
-    expect(socket.frames().at(-1)).toMatchObject({ kind: 'endpoint.message', payload: { protocolVersion: 2, type: 'tool.result', payload: { invocationId: 'read-power' } } });
-    socket.frame('endpoint.message', { protocolVersion: 2, type: 'tool.cancel', payload: { invocationId: 'location' } });
+    expect(socket.frames().at(-1)).toMatchObject({ kind: 'endpoint.message', payload: { protocolVersion: 3, type: 'tool.result', payload: { invocationId: 'read-power' } } });
+    socket.frame('endpoint.message', { protocolVersion: 3, type: 'tool.cancel', payload: { invocationId: 'location' } });
     expect(cancelDeviceLocation).toHaveBeenCalledWith('location');
   });
   it('rebases restarted topic cursors and requests live subscription after an unrecoverable gap', async () => {

@@ -131,7 +131,8 @@
                 "android",
                 "harmonyos",
                 "chrome",
-                "desktop"
+                "desktop",
+                "bridge"
               ]
             },
             "publicKeyJwk": {
@@ -289,6 +290,7 @@
                     "desktop",
                     "mobile",
                     "browser_extension",
+                    "bridge",
                     "tui",
                     "mcp"
                   ]
@@ -359,7 +361,8 @@
                         "web",
                         "desktop",
                         "mobile",
-                        "browser"
+                        "browser",
+                        "bridge"
                       ]
                     },
                     "platform": {
@@ -402,8 +405,7 @@
                         "properties": {
                           "name": {
                             "type": "string",
-                            "maxLength": 120,
-                            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+                            "pattern": "^[A-Za-z0-9_.-]{1,202}$"
                           },
                           "title": {
                             "type": "string",
@@ -800,7 +802,471 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "provider.interaction.request"
+                    },
+                    "sentAt": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "invocationId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        },
+                        "inputSchema": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "invocationId",
+                        "requestId",
+                        "message",
+                        "inputSchema"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "protocolVersion",
+                    "messageId",
+                    "type",
+                    "sentAt",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "protocolVersion": {
+                      "type": "number",
+                      "const": 3
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "provider.catalog.replace"
+                    },
+                    "sentAt": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "providers": {
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "localId": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                              },
+                              "title": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              },
+                              "summary": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "instructions": {
+                                "type": "string",
+                                "maxLength": 8000
+                              },
+                              "durableOperations": {
+                                "type": "number",
+                                "const": 1
+                              },
+                              "gatewayFormInput": {
+                                "type": "number",
+                                "const": 1
+                              },
+                              "tools": {
+                                "maxItems": 100,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                                    },
+                                    "title": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 120
+                                    },
+                                    "description": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 2000
+                                    },
+                                    "inputSchema": {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {}
+                                    },
+                                    "outputSchema": {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {}
+                                    },
+                                    "artifactInput": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+                                    },
+                                    "resourceId": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z0-9_.-]{1,64}$"
+                                    },
+                                    "effect": {
+                                      "type": "string",
+                                      "enum": [
+                                        "read",
+                                        "write",
+                                        "destructive"
+                                      ]
+                                    },
+                                    "sensitivity": {
+                                      "type": "string",
+                                      "enum": [
+                                        "public",
+                                        "personal"
+                                      ]
+                                    },
+                                    "confirmation": {
+                                      "type": "string",
+                                      "enum": [
+                                        "never",
+                                        "always"
+                                      ]
+                                    },
+                                    "requiresForeground": {
+                                      "type": "boolean"
+                                    },
+                                    "requiredPermissions": {
+                                      "maxItems": 20,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      }
+                                    },
+                                    "timeoutMs": {
+                                      "type": "integer",
+                                      "minimum": 1000,
+                                      "maximum": 300000
+                                    },
+                                    "maxConcurrency": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 4
+                                    },
+                                    "supportsCancellation": {
+                                      "type": "boolean"
+                                    },
+                                    "idempotent": {
+                                      "type": "boolean"
+                                    },
+                                    "resultKinds": {
+                                      "minItems": 1,
+                                      "maxItems": 3,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "text",
+                                          "json",
+                                          "file"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "title",
+                                    "description",
+                                    "inputSchema",
+                                    "effect",
+                                    "sensitivity",
+                                    "confirmation",
+                                    "requiresForeground",
+                                    "requiredPermissions",
+                                    "timeoutMs",
+                                    "maxConcurrency",
+                                    "supportsCancellation",
+                                    "idempotent",
+                                    "resultKinds"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "localId",
+                              "title",
+                              "summary",
+                              "tools"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "revision",
+                        "providers"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "protocolVersion",
+                    "messageId",
+                    "type",
+                    "sentAt",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "protocolVersion": {
+                      "type": "number",
+                      "const": 3
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "provider.state.changed"
+                    },
+                    "sentAt": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "localId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                        },
+                        "catalogRevision": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sequence": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "ready",
+                            "needs_foreground",
+                            "permission_missing",
+                            "resource_busy",
+                            "unavailable"
+                          ]
+                        },
+                        "validForMs": {
+                          "type": "integer",
+                          "minimum": 1000,
+                          "maximum": 60000
+                        }
+                      },
+                      "required": [
+                        "localId",
+                        "catalogRevision",
+                        "sequence",
+                        "reason",
+                        "validForMs"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "protocolVersion",
+                    "messageId",
+                    "type",
+                    "sentAt",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "protocolVersion": {
+                      "type": "number",
+                      "const": 3
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "provider.operation.status"
+                    },
+                    "sentAt": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "operationId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "providerDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "receipt": {
+                          "type": "object",
+                          "properties": {
+                            "intent": {
+                              "type": "object",
+                              "properties": {
+                                "operationId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "providerDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "toolRevision": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "argumentsDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                }
+                              },
+                              "required": [
+                                "operationId",
+                                "providerDigest",
+                                "toolRevision",
+                                "argumentsDigest"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "succeeded",
+                                "unknown"
+                              ]
+                            },
+                            "resultDigest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "updatedAt": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "intent",
+                            "state",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "requestId",
+                        "operationId",
+                        "providerDigest"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "protocolVersion",
+                    "messageId",
+                    "type",
+                    "sentAt",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "protocolVersion": {
+                      "type": "number",
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -1082,7 +1548,7 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -1129,7 +1595,7 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -1174,7 +1640,7 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -1228,7 +1694,7 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -1393,6 +1859,63 @@
                             "executionStopped"
                           ],
                           "additionalProperties": false
+                        },
+                        "providerReceipt": {
+                          "type": "object",
+                          "properties": {
+                            "intent": {
+                              "type": "object",
+                              "properties": {
+                                "operationId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "providerDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "toolRevision": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "argumentsDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                }
+                              },
+                              "required": [
+                                "operationId",
+                                "providerDigest",
+                                "toolRevision",
+                                "argumentsDigest"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "succeeded",
+                                "unknown"
+                              ]
+                            },
+                            "resultDigest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "updatedAt": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "intent",
+                            "state",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -1416,7 +1939,7 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -1514,6 +2037,63 @@
                             "state",
                             "updatedAt",
                             "executionStopped"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "providerReceipt": {
+                          "type": "object",
+                          "properties": {
+                            "intent": {
+                              "type": "object",
+                              "properties": {
+                                "operationId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "providerDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "toolRevision": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "argumentsDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                }
+                              },
+                              "required": [
+                                "operationId",
+                                "providerDigest",
+                                "toolRevision",
+                                "argumentsDigest"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "succeeded",
+                                "unknown"
+                              ]
+                            },
+                            "resultDigest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "updatedAt": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "intent",
+                            "state",
+                            "updatedAt"
                           ],
                           "additionalProperties": false
                         },
@@ -1640,7 +2220,7 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -1714,6 +2294,63 @@
                             "executionStopped"
                           ],
                           "additionalProperties": false
+                        },
+                        "providerReceipt": {
+                          "type": "object",
+                          "properties": {
+                            "intent": {
+                              "type": "object",
+                              "properties": {
+                                "operationId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "providerDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "toolRevision": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "argumentsDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                }
+                              },
+                              "required": [
+                                "operationId",
+                                "providerDigest",
+                                "toolRevision",
+                                "argumentsDigest"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "succeeded",
+                                "unknown"
+                              ]
+                            },
+                            "resultDigest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "updatedAt": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "intent",
+                            "state",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -1774,7 +2411,471 @@
                       "properties": {
                         "protocolVersion": {
                           "type": "number",
-                          "const": 2
+                          "const": 3
+                        },
+                        "messageId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "provider.interaction.request"
+                        },
+                        "sentAt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "invocationId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "requestId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 1000
+                            },
+                            "inputSchema": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            }
+                          },
+                          "required": [
+                            "invocationId",
+                            "requestId",
+                            "message",
+                            "inputSchema"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "protocolVersion",
+                        "messageId",
+                        "type",
+                        "sentAt",
+                        "payload"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "protocolVersion": {
+                          "type": "number",
+                          "const": 3
+                        },
+                        "messageId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "provider.catalog.replace"
+                        },
+                        "sentAt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "providers": {
+                              "maxItems": 20,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "localId": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  },
+                                  "instructions": {
+                                    "type": "string",
+                                    "maxLength": 8000
+                                  },
+                                  "durableOperations": {
+                                    "type": "number",
+                                    "const": 1
+                                  },
+                                  "gatewayFormInput": {
+                                    "type": "number",
+                                    "const": 1
+                                  },
+                                  "tools": {
+                                    "maxItems": 100,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                                        },
+                                        "title": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 120
+                                        },
+                                        "description": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 2000
+                                        },
+                                        "inputSchema": {
+                                          "type": "object",
+                                          "propertyNames": {
+                                            "type": "string"
+                                          },
+                                          "additionalProperties": {}
+                                        },
+                                        "outputSchema": {
+                                          "type": "object",
+                                          "propertyNames": {
+                                            "type": "string"
+                                          },
+                                          "additionalProperties": {}
+                                        },
+                                        "artifactInput": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+                                        },
+                                        "resourceId": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z0-9_.-]{1,64}$"
+                                        },
+                                        "effect": {
+                                          "type": "string",
+                                          "enum": [
+                                            "read",
+                                            "write",
+                                            "destructive"
+                                          ]
+                                        },
+                                        "sensitivity": {
+                                          "type": "string",
+                                          "enum": [
+                                            "public",
+                                            "personal"
+                                          ]
+                                        },
+                                        "confirmation": {
+                                          "type": "string",
+                                          "enum": [
+                                            "never",
+                                            "always"
+                                          ]
+                                        },
+                                        "requiresForeground": {
+                                          "type": "boolean"
+                                        },
+                                        "requiredPermissions": {
+                                          "maxItems": 20,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 120
+                                          }
+                                        },
+                                        "timeoutMs": {
+                                          "type": "integer",
+                                          "minimum": 1000,
+                                          "maximum": 300000
+                                        },
+                                        "maxConcurrency": {
+                                          "type": "integer",
+                                          "minimum": 1,
+                                          "maximum": 4
+                                        },
+                                        "supportsCancellation": {
+                                          "type": "boolean"
+                                        },
+                                        "idempotent": {
+                                          "type": "boolean"
+                                        },
+                                        "resultKinds": {
+                                          "minItems": 1,
+                                          "maxItems": 3,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "enum": [
+                                              "text",
+                                              "json",
+                                              "file"
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "name",
+                                        "title",
+                                        "description",
+                                        "inputSchema",
+                                        "effect",
+                                        "sensitivity",
+                                        "confirmation",
+                                        "requiresForeground",
+                                        "requiredPermissions",
+                                        "timeoutMs",
+                                        "maxConcurrency",
+                                        "supportsCancellation",
+                                        "idempotent",
+                                        "resultKinds"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "localId",
+                                  "title",
+                                  "summary",
+                                  "tools"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "providers"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "protocolVersion",
+                        "messageId",
+                        "type",
+                        "sentAt",
+                        "payload"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "protocolVersion": {
+                          "type": "number",
+                          "const": 3
+                        },
+                        "messageId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "provider.state.changed"
+                        },
+                        "sentAt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "localId": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                            },
+                            "catalogRevision": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sequence": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "ready",
+                                "needs_foreground",
+                                "permission_missing",
+                                "resource_busy",
+                                "unavailable"
+                              ]
+                            },
+                            "validForMs": {
+                              "type": "integer",
+                              "minimum": 1000,
+                              "maximum": 60000
+                            }
+                          },
+                          "required": [
+                            "localId",
+                            "catalogRevision",
+                            "sequence",
+                            "reason",
+                            "validForMs"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "protocolVersion",
+                        "messageId",
+                        "type",
+                        "sentAt",
+                        "payload"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "protocolVersion": {
+                          "type": "number",
+                          "const": 3
+                        },
+                        "messageId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "provider.operation.status"
+                        },
+                        "sentAt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "requestId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "operationId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "providerDigest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "receipt": {
+                              "type": "object",
+                              "properties": {
+                                "intent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "operationId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "providerDigest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    },
+                                    "toolRevision": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    },
+                                    "argumentsDigest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    }
+                                  },
+                                  "required": [
+                                    "operationId",
+                                    "providerDigest",
+                                    "toolRevision",
+                                    "argumentsDigest"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "running",
+                                    "succeeded",
+                                    "unknown"
+                                  ]
+                                },
+                                "resultDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "updatedAt": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "intent",
+                                "state",
+                                "updatedAt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "requestId",
+                            "operationId",
+                            "providerDigest"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "protocolVersion",
+                        "messageId",
+                        "type",
+                        "sentAt",
+                        "payload"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "protocolVersion": {
+                          "type": "number",
+                          "const": 3
                         },
                         "messageId": {
                           "type": "string",
@@ -2056,7 +3157,7 @@
                       "properties": {
                         "protocolVersion": {
                           "type": "number",
-                          "const": 2
+                          "const": 3
                         },
                         "messageId": {
                           "type": "string",
@@ -2103,7 +3204,7 @@
                       "properties": {
                         "protocolVersion": {
                           "type": "number",
-                          "const": 2
+                          "const": 3
                         },
                         "messageId": {
                           "type": "string",
@@ -2148,7 +3249,7 @@
                       "properties": {
                         "protocolVersion": {
                           "type": "number",
-                          "const": 2
+                          "const": 3
                         },
                         "messageId": {
                           "type": "string",
@@ -2202,7 +3303,7 @@
                       "properties": {
                         "protocolVersion": {
                           "type": "number",
-                          "const": 2
+                          "const": 3
                         },
                         "messageId": {
                           "type": "string",
@@ -2367,6 +3468,63 @@
                                 "executionStopped"
                               ],
                               "additionalProperties": false
+                            },
+                            "providerReceipt": {
+                              "type": "object",
+                              "properties": {
+                                "intent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "operationId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "providerDigest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    },
+                                    "toolRevision": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    },
+                                    "argumentsDigest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    }
+                                  },
+                                  "required": [
+                                    "operationId",
+                                    "providerDigest",
+                                    "toolRevision",
+                                    "argumentsDigest"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "running",
+                                    "succeeded",
+                                    "unknown"
+                                  ]
+                                },
+                                "resultDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "updatedAt": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "intent",
+                                "state",
+                                "updatedAt"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -2390,7 +3548,7 @@
                       "properties": {
                         "protocolVersion": {
                           "type": "number",
-                          "const": 2
+                          "const": 3
                         },
                         "messageId": {
                           "type": "string",
@@ -2488,6 +3646,63 @@
                                 "state",
                                 "updatedAt",
                                 "executionStopped"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "providerReceipt": {
+                              "type": "object",
+                              "properties": {
+                                "intent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "operationId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "providerDigest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    },
+                                    "toolRevision": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    },
+                                    "argumentsDigest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    }
+                                  },
+                                  "required": [
+                                    "operationId",
+                                    "providerDigest",
+                                    "toolRevision",
+                                    "argumentsDigest"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "running",
+                                    "succeeded",
+                                    "unknown"
+                                  ]
+                                },
+                                "resultDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "updatedAt": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "intent",
+                                "state",
+                                "updatedAt"
                               ],
                               "additionalProperties": false
                             },
@@ -2614,7 +3829,7 @@
                       "properties": {
                         "protocolVersion": {
                           "type": "number",
-                          "const": 2
+                          "const": 3
                         },
                         "messageId": {
                           "type": "string",
@@ -2686,6 +3901,63 @@
                                 "state",
                                 "updatedAt",
                                 "executionStopped"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "providerReceipt": {
+                              "type": "object",
+                              "properties": {
+                                "intent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "operationId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "providerDigest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    },
+                                    "toolRevision": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    },
+                                    "argumentsDigest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    }
+                                  },
+                                  "required": [
+                                    "operationId",
+                                    "providerDigest",
+                                    "toolRevision",
+                                    "argumentsDigest"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "running",
+                                    "succeeded",
+                                    "unknown"
+                                  ]
+                                },
+                                "resultDigest": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                },
+                                "updatedAt": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "intent",
+                                "state",
+                                "updatedAt"
                               ],
                               "additionalProperties": false
                             }
@@ -3121,7 +4393,213 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "provider.interaction.response"
+                    },
+                    "sentAt": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "invocationId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "action": {
+                          "type": "string",
+                          "enum": [
+                            "accept",
+                            "decline",
+                            "cancel"
+                          ]
+                        },
+                        "content": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "invocationId",
+                        "requestId",
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "protocolVersion",
+                    "messageId",
+                    "type",
+                    "sentAt",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "protocolVersion": {
+                      "type": "number",
+                      "const": 3
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "provider.catalog.ack"
+                    },
+                    "sentAt": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "payload": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "accepted": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "accepted"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "accepted": {
+                              "type": "boolean",
+                              "const": false
+                            },
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PROVIDER_CATALOG_RATE_LIMITED",
+                                "PROVIDER_CATALOG_REVISION_CONFLICT",
+                                "PROVIDER_CONNECTION_CONFLICT",
+                                "PROVIDER_CATALOG_REJECTED"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "accepted",
+                            "code"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "protocolVersion",
+                    "messageId",
+                    "type",
+                    "sentAt",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "protocolVersion": {
+                      "type": "number",
+                      "const": 3
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "provider.operation.query"
+                    },
+                    "sentAt": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "operationId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "providerDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      },
+                      "required": [
+                        "requestId",
+                        "operationId",
+                        "providerDigest"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "protocolVersion",
+                    "messageId",
+                    "type",
+                    "sentAt",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "protocolVersion": {
+                      "type": "number",
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -3346,7 +4824,7 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",
@@ -3377,8 +4855,7 @@
                         },
                         "toolName": {
                           "type": "string",
-                          "maxLength": 120,
-                          "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+                          "pattern": "^[A-Za-z0-9_.-]{1,202}$"
                         },
                         "arguments": {
                           "type": "object",
@@ -3520,6 +4997,68 @@
                           ],
                           "additionalProperties": false
                         },
+                        "providerExecution": {
+                          "type": "object",
+                          "properties": {
+                            "operationId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "providerDigest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "toolRevision": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "argumentsDigest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            }
+                          },
+                          "required": [
+                            "operationId",
+                            "providerDigest",
+                            "toolRevision",
+                            "argumentsDigest"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "interactionAllowed": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "interactionRecoverable": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "artifact": {
+                          "type": "object",
+                          "properties": {
+                            "token": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "size": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8388608
+                            },
+                            "sha256": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            }
+                          },
+                          "required": [
+                            "token",
+                            "size",
+                            "sha256"
+                          ],
+                          "additionalProperties": false
+                        },
                         "uploadGrant": {
                           "type": "object",
                           "properties": {
@@ -3586,7 +5125,7 @@
                   "properties": {
                     "protocolVersion": {
                       "type": "number",
-                      "const": 2
+                      "const": 3
                     },
                     "messageId": {
                       "type": "string",

@@ -4,8 +4,14 @@ import { createToolSearchExtension, type ExtensionFactory } from '@earendil-work
 import type { ExternalDiscoveryResult } from '../external-tools/discovery.js';
 import { getExternalToolRegistry, type ExternalToolRegistry } from '../external-tools/tool-registry.js';
 import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
+import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 
 export const TOOL_DISCOVERY_STATE = 'xopc-tool-discovery';
+
+function exactIdentifiers(text: string): string[] {
+  const words = text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{M}\p{N}]+/gu) ?? [];
+  return words.filter(word => /\p{L}/u.test(word) && /\p{N}/u.test(word));
+}
 
 /** One model-facing discovery entry; execution and connection permissions remain host-owned. */
 export function createXopcToolSearchExtension(tools: readonly AgentTool[], options: {
@@ -13,8 +19,9 @@ export function createXopcToolSearchExtension(tools: readonly AgentTool[], optio
   externalDiscovery?: boolean;
   registry?: ExternalToolRegistry;
   externalTimeoutMs?: number;
+  refreshNative?: () => Promise<AgentTool[]>;
 } = {}): ExtensionFactory {
-  const deferred = tools.filter(tool => getXopcToolMetadata(tool)?.exposure === 'deferred');
+  let deferred = tools.filter(tool => getXopcToolMetadata(tool)?.exposure === 'deferred');
   const registry = options.externalDiscovery === false ? undefined : options.registry ?? getExternalToolRegistry(tools);
   const nativeDiscovery = options.nativeDiscovery !== false;
   return pi => {
@@ -37,6 +44,26 @@ export function createXopcToolSearchExtension(tools: readonly AgentTool[], optio
               throw new Error('Tool search requires a nonempty query of at most 2000 characters and a limit from 1 to 20');
             }
             signal?.throwIfAborted();
+            if (nativeDiscovery && options.refreshNative) {
+              const fresh = await options.refreshNative();
+              signal?.throwIfAborted();
+              const names = new Set(fresh.map(tool => tool.name));
+              const previous = deferred.filter(tool => getXopcToolMetadata(tool)?.external);
+              for (const tool of previous) {
+                if (names.has(tool.name)) continue;
+                pi.registerTool({ ...xopcToolsToDefinitions([tool])[0], exposure: 'hidden' });
+              }
+              const previousByName = new Map(previous.map(tool => [tool.name, tool]));
+              const refreshed = fresh.map(tool => {
+                const old = previousByName.get(tool.name);
+                if (old && getXopcToolMetadata(old)?.external?.revision === getXopcToolMetadata(tool)?.external?.revision) return old;
+                pi.registerTool(xopcToolsToDefinitions([tool])[0]);
+                return tool;
+              });
+              deferred = [...deferred.filter(tool => !getXopcToolMetadata(tool)?.external), ...refreshed];
+              const removed = new Set(previous.filter(tool => !names.has(tool.name)).map(tool => tool.name));
+              setActiveTools(pi.getActiveTools().filter(name => !removed.has(name)));
+            }
             // Rank within each directory: pi BM25 scores and connector scores are not comparable.
             const nativeLimit = nativeDiscovery ? registry ? Math.max(1, Math.floor(limit / 2)) : limit : 0;
             const externalLimit = nativeDiscovery ? Math.max(1, limit - nativeLimit) : limit;
@@ -58,8 +85,14 @@ export function createXopcToolSearchExtension(tools: readonly AgentTool[], optio
               setActiveTools([...active, 'xopc_tool_describe', 'xopc_tool_execute']);
             }
             const all = new Map(pi.getAllTools().map(tool => [tool.name, tool]));
+            // BM25 can separate a numeric suffix from its label. Preserve exact identifier matches within its shortlist.
+            const identifiers = new Set(exactIdentifiers(input.query));
+            const ranked = identifiers.size === 0 ? loaded : loaded.map(name => {
+              const matches = new Set(exactIdentifiers(`${name} ${all.get(name)?.description ?? ''}`).filter(term => identifiers.has(term)));
+              return { name, matches: matches.size };
+            }).sort((a, b) => b.matches - a.matches).map(item => item.name);
             const payload = {
-              loadedTools: loaded.map(name => ({ name, description: all.get(name)?.description, nextAction: 'call' })),
+              loadedTools: ranked.map(name => ({ name, description: all.get(name)?.description, nextAction: 'call' })),
               alreadyLoaded,
               externalTools: externalTools.map(tool => ({ ...tool, nextAction: 'describe' })),
               connectionCandidates: external?.result?.connectionCandidates ?? [],

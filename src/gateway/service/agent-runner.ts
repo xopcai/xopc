@@ -20,10 +20,13 @@ import {
   createClarificationWait,
   getClarification,
   getClarificationSnapshot,
+  reopenDeviceInteraction,
   resolveClarification,
   supersedeActiveClarification,
 } from '../../storage/sqlite/clarification-wait-repository.js';
 import type { ClarifyRequestPayload, ClarifyRequestResult } from '../../agent/tools/clarify-tool.js';
+import type { GatewayPrincipal } from '../security/gateway-principal.js';
+import { currentDeviceExecutionActor, deviceExecutionPrincipalId } from '../../endpoint-tools/execution-actor.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
 import { NextTurnSuggestionService } from '../next-turn-suggestions/service.js';
 import { describeActiveExecution, type ActiveExecution, type ActiveExecutionKind } from './active-execution.js';
@@ -53,6 +56,7 @@ import {
 const log = createLogger('Gateway:AgentRunner');
 
 export interface GatewayAgentRunnerOptions {
+  canResumeDeviceInteraction?: (conversationId: string, checkpoint: import('@xopcai/gateway-contract').DeviceInteractionCheckpoint) => boolean;
   afterConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput, status: string) => Promise<void>;
   validateConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput) => Promise<boolean>;
   continueConnection?: (wait: import('@xopcai/gateway-contract').ConnectionWait, idempotencyKey: string) => Promise<void>;
@@ -104,7 +108,16 @@ export class GatewayAgentRunner {
       opts.publishRealtime('sessions', 'session.connection-wait.changed', { conversationId, revision });
     });
     this.inputs = new SessionInputCoordinator({
-      beforeExecute: async input => (await opts.validateConnectionResume?.(input) ?? true) && await preparePhoneContinuation(input, opts.getConfig()),
+      beforeExecute: async input => {
+        const wait = input.kind === 'clarification_resume' && input.payload ? getClarification(input.payload.waitId) : undefined;
+        if (wait?.deviceInteraction && (currentDeviceExecutionActor(input.conversationId)?.principalId !== wait.deviceInteraction.actorPrincipalId
+          || !opts.canResumeDeviceInteraction?.(input.conversationId, wait.deviceInteraction))) {
+          const reopened = reopenDeviceInteraction(input);
+          if (reopened) opts.emit('clarification.updated', reopened);
+          return false;
+        }
+        return (await opts.validateConnectionResume?.(input) ?? true) && await preparePhoneContinuation(input, opts.getConfig());
+      },
       continueConnection: opts.continueConnection,
       cancelConnection: opts.cancelConnection,
       completePhone: wait => completePhoneAssistanceFromUser(wait, opts.getConfig()),
@@ -401,7 +414,14 @@ export class GatewayAgentRunner {
     expectedVersion: number;
     idempotencyKey: string;
     action: ClarificationResponseAction;
+    responseActor?: GatewayPrincipal;
   }) {
+    const wait = getClarification(input.id);
+    if (wait?.deviceInteraction && wait.status === 'open' && input.action === 'answer' && input.responseActor
+      && deviceExecutionPrincipalId(input.responseActor) === wait.deviceInteraction.actorPrincipalId
+      && !this.opts.canResumeDeviceInteraction?.(wait.conversationId, wait.deviceInteraction)) {
+      return { ok: false as const, code: 'CONFLICT' as const, clarification: wait };
+    }
     const result = resolveClarification(input);
     if (result.ok) {
       this.opts.emit('clarification.updated', result.clarification);
@@ -490,7 +510,7 @@ export class GatewayAgentRunner {
         throw new Error('CLARIFICATION_VERSION_UNSUPPORTED: use single-question clarify in this environment');
       }
     }
-    const taskSession = request.kind !== 'approval'
+    const taskSession = request.kind !== 'approval' && !request.deviceInteraction
       ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId)
       : undefined;
     if (taskSession?.runId) {
@@ -534,7 +554,7 @@ export class GatewayAgentRunner {
           }
         : undefined;
     const persistedSession = getClarificationSnapshot(conversationId);
-    if (!persistedSession && this.externalStreamBySession.has(conversationId)) {
+    if (!persistedSession && !request.deviceInteraction && this.externalStreamBySession.has(conversationId)) {
       return this.ephemeralClarifications.start({
         beforeResponse: this.externalClarificationResponses.get(conversationId),
         runId,
@@ -557,6 +577,7 @@ export class GatewayAgentRunner {
 
 
       approvalKey: request.approvalKey,
+      deviceInteraction: request.deviceInteraction,
     });
     this.opts.emit('clarification.created', wait);
     const event: ClarificationStreamEvent = {

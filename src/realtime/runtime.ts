@@ -11,6 +11,7 @@ import {
   REALTIME_HEARTBEAT_INTERVAL_MS,
   REALTIME_HEARTBEAT_TIMEOUT_MS,
   REALTIME_HELLO_TIMEOUT_MS,
+  ENDPOINT_V3_CAPABILITY,
   REALTIME_MAX_CLIENT_FRAME_BYTES,
   REALTIME_PROTOCOL_VERSION,
   parseClientRealtimeMessage,
@@ -335,6 +336,10 @@ export class RealtimeRuntime {
         }
         let endpointReady: { endpointId: string; turnToken: string } | undefined;
         if (message.payload.endpoint) {
+          if (!message.payload.capabilities?.includes(ENDPOINT_V3_CAPABILITY)) {
+            sendError('CLIENT_UPDATE_REQUIRED', 'Device Endpoint protocol v3 is required');
+            socket.close(4400, 'CLIENT_UPDATE_REQUIRED'); return;
+          }
           const endpointKindMatches = message.payload.endpoint.kind === message.payload.clientKind
             || (message.payload.clientKind === 'browser_extension'
               && message.payload.endpoint.kind === 'browser');

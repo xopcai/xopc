@@ -13,14 +13,18 @@ import { gatewaySession } from './gatewaySession';
 import { XopcHttpError } from './transport';
 import { xopcAppVersion } from '../common/appInfo';
 import { endpointProof, XopcCursors, XOPC_REALTIME_PROTOCOL_VERSION } from '../common/realtimeProtocol';
+import { APP_PROVIDER_ID, APP_PROVIDER_JSON } from '../common/deviceToolCatalog';
 import {
   XopcEndpointHello, XopcEndpointRegistration, XopcTicketRequest, XopcTicket, XopcPayload,
   XopcHello, XopcFrame, XopcTurnClaim, XopcReady, XopcEvent, XopcGap, XopcRealtimeError,
   XopcSubscriptions, XopcTopics, XopcSubscribed, XopcErrorEnvelope
 } from '../model/realtime';
 
-interface XopcDeviceEndpointMessage { type: string; payload: Object; }
+interface XopcDeviceEndpointMessage { protocolVersion: number; type: string; payload: Object; }
 interface XopcDeviceCancellation { invocationId: string; }
+interface AppProviderAck { revision: number; accepted: boolean; }
+interface AppProviderState { localId: string; catalogRevision: number; sequence: number; validForMs: number; reason: string; }
+interface AppAvailability { availability: string; }
 interface XopcDeviceEndpointFrame { protocolVersion: number; messageId: string; type: string; sentAt: number; payload: Object; }
 class XopcEmptyPayload {}
 interface XopcClarificationHealth { clarificationVersions?: number[]; }
@@ -32,6 +36,8 @@ export class XopcRealtimeClient {
   private generation: number = 0;
   private stopped: boolean = true;
   private ready: boolean = false;
+  private providerAccepted: boolean = false;
+  private providerSequence: number = 0;
   private reconnectTimer: number = -1;
   private heartbeatTimer: number = -1;
   private attempt: number = 0;
@@ -94,6 +100,7 @@ export class XopcRealtimeClient {
     this.contextPublisher.stop();
     cancelAllDeviceLocations(); cancelAllDevicePersonalTools();
     this.ready = false; this.claim = undefined;
+    this.providerAccepted = false; this.providerSequence = 0;
     clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
     const old = this.socket; this.socket = undefined;
     if (old) {
@@ -150,6 +157,10 @@ export class XopcRealtimeClient {
         this.fail('gateway_update_required');
         return;
       }
+      if (!response.payload.realtime.capabilities.includes('endpoint.tools.v3')) {
+        this.fail('gateway_update_required');
+        return;
+      }
       const endpoint: XopcEndpointHello = {
         principalId: profile.deviceId, endpointId: clientId, connectionInstanceId: this.crypto.uuid(),
         displayName: registration.displayName, kind: 'mobile', platform: 'harmonyos', appVersion: xopcAppVersion(),
@@ -165,7 +176,7 @@ export class XopcRealtimeClient {
       const socket = webSocket.createWebSocket(); this.socket = socket;
       socket.on('open', (_error: BusinessError, _value: Object): void => {
         if (generation !== this.generation) return;
-        const hello: XopcHello = { ticket: response.payload.ticket, clientId, clientKind: 'mobile', subscriptions: this.cursors.snapshot(), endpoint };
+        const hello: XopcHello = { ticket: response.payload.ticket, clientId, clientKind: 'mobile', subscriptions: this.cursors.snapshot(), endpoint, capabilities: ['endpoint.tools.v3'] };
         this.send('realtime.hello', hello);
       });
       socket.on('message', (_error: BusinessError, value: string | ArrayBuffer): void => {
@@ -194,7 +205,10 @@ export class XopcRealtimeClient {
       this.lastReceived = Date.now();
       this.heartbeatTimer = setInterval((): void => {
         if (Date.now() - this.lastReceived > 45000 || (!this.ready && Date.now() - this.lastReceived > 10000)) this.retry(generation);
-        else if (this.ready) this.send('realtime.ping', new XopcEmptyPayload());
+        else if (this.ready) {
+          this.send('realtime.ping', new XopcEmptyPayload());
+          this.publishProviderState();
+        }
       }, 5000);
       phase = 'socket';
       const socketUrl = origin.replace(/^https:/, 'wss:') + '/api/realtime/v1/ws';
@@ -217,13 +231,23 @@ export class XopcRealtimeClient {
 
   private send(kind: string, payload: Object): void {
     if (!this.socket) return;
-    if (kind.startsWith('tool.')) {
-      const inner: XopcDeviceEndpointFrame = { protocolVersion: 2, messageId: this.crypto.uuid(), type: kind, sentAt: Date.now(), payload };
+    if (kind.startsWith('tool.') || kind.startsWith('provider.') || kind === 'endpoint.availability_changed') {
+      const inner: XopcDeviceEndpointFrame = { protocolVersion: 3, messageId: this.crypto.uuid(), type: kind, sentAt: Date.now(), payload };
       this.send('endpoint.message', inner); return;
     }
     const generation = this.generation;
     const frame: XopcFrame<Object> = { protocolVersion: XOPC_REALTIME_PROTOCOL_VERSION, messageId: this.crypto.uuid(), kind, sentAt: Date.now(), payload };
     this.socket.send(JSON.stringify(frame)).catch((_error: Error): void => { this.retry(generation); });
+  }
+
+  private publishProviderState(): void {
+    if (!this.providerAccepted) return;
+    const foreground = gatewaySession.isForeground();
+    const availability: AppAvailability = { availability: foreground ? 'foreground' : 'background' };
+    this.send('endpoint.availability_changed', availability);
+    const state: AppProviderState = { localId: APP_PROVIDER_ID, catalogRevision: 1, sequence: ++this.providerSequence,
+      validForMs: 30000, reason: foreground ? 'ready' : 'needs_foreground' };
+    this.send('provider.state.changed', state);
   }
 
   private receive(raw: string): void {
@@ -236,10 +260,16 @@ export class XopcRealtimeClient {
       this.claim = { type: 'endpoint', endpointId: payload.endpoint.endpointId, token: payload.endpoint.turnToken };
       if (this.supportsEnvironment) this.contextPublisher.start(this.claim);
       this.ready = true; this.attempt = 0;
+      this.send('provider.catalog.replace', JSON.parse(APP_PROVIDER_JSON) as Object);
       this.onState('connected');
     } else if (frame.kind === 'endpoint.message') {
       const inner = frame.payload as XopcDeviceEndpointMessage;
-      if (inner.type === 'tool.invoke') invokeDeviceTool(inner.payload, (kind: string, body: Object): void => { this.send(kind, body); });
+      if (inner.protocolVersion !== 3) throw new Error('INVALID_ENDPOINT_FRAME');
+      if (inner.type === 'provider.catalog.ack') {
+        const ack = inner.payload as AppProviderAck;
+        this.providerAccepted = ack.revision === 1 && ack.accepted;
+        this.publishProviderState();
+      } else if (inner.type === 'tool.invoke') invokeDeviceTool(inner.payload, (kind: string, body: Object): void => { this.send(kind, body); }, this.providerAccepted && gatewaySession.isForeground());
       else if (inner.type === 'tool.cancel') { cancelDeviceLocation((inner.payload as XopcDeviceCancellation).invocationId); cancelDevicePersonalTool((inner.payload as XopcDeviceCancellation).invocationId); }
     } else if (frame.kind === 'realtime.event') {
       const event = frame.payload as XopcEvent;

@@ -12,6 +12,14 @@ export type ClarificationStatus =
   | 'superseded';
 export type ClarificationResolution = 'answered' | 'agent_decide' | 'cancelled';
 
+export type DeviceInteractionCheckpoint = {
+  actorPrincipalId: string;
+  endpointId: string;
+  principalId: string;
+  toolName: string;
+  providerDigest: string;
+};
+
 export type ClarificationCheckpoint = {
   transcriptEntryId?: string;
   objectiveSummary: string;
@@ -35,6 +43,7 @@ export type ClarificationWait = ClarificationPresentation & {
   status: ClarificationStatus;
   question: string;
   checkpoint: ClarificationCheckpoint;
+  deviceInteraction?: DeviceInteractionCheckpoint;
   answer?: string;
   response?: ClarificationAnswer;
   decision?: ClarificationDecision;
@@ -70,7 +79,7 @@ export const clarificationPresentationSchema = z.object({
     id: z.string().min(1).max(160),
     label: z.string().trim().min(1).max(1_000),
     description: z.string().max(2_000).optional(),
-  }).strict()).min(2).max(10).optional(),
+  }).strict()).min(1).max(10).optional(),
   recommendedChoiceId: z.string().min(1).max(160).optional(),
   approval: z.object({
     operation: z.string().min(1).max(1_000),

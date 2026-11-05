@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { DEVICE_SIGNED_REQUEST_HEADERS, deviceRequestProofMessage } from '@xopcai/gateway-contract';
 
 import type { DeviceRecord } from '../../storage/sqlite/device-access-repository.js';
 import { getDevice } from '../../storage/sqlite/device-access-repository.js';
@@ -7,7 +8,7 @@ import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 
 export const REQUEST_PROOF_WINDOW_MS = 120_000;
 export const PROOF_HEADER = 'X-Xopc-Proof';
-export const SIGNED_REQUEST_HEADERS = ['content-type', 'idempotency-key', 'x-xopc-expected-session-key', 'x-endpoint-id', 'x-endpoint-upload-token'] as const;
+export const SIGNED_REQUEST_HEADERS = DEVICE_SIGNED_REQUEST_HEADERS;
 const MAX_PENDING_NONCES = 100_000;
 const nonceBudgets = new WeakMap<object, { cleanupAt: number; total: number }>();
 
@@ -51,9 +52,7 @@ export function requestProofMessage(input: {
   gatewayId: string; credential: string; method: string; target: string;
   headers: (name: string) => string | undefined; proof: Pick<RequestProof, 'timestamp' | 'nonce' | 'digest'>;
 }): string {
-  return ['xopc-request-v1', input.gatewayId, proofDigest(input.credential), input.method, input.target,
-    input.proof.digest, ...SIGNED_REQUEST_HEADERS.map(name => input.headers(name) ?? ''),
-    String(input.proof.timestamp), input.proof.nonce].join('\n');
+  return deviceRequestProofMessage({ ...input, credentialDigest: proofDigest(input.credential) });
 }
 
 export function verifyRequestProofSignature(device: DeviceRecord, proof: RequestProof, message: string): boolean {

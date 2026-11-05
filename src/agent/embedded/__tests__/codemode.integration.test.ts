@@ -39,7 +39,7 @@ import { materializeNativeExternalTools } from '../external-tool-discovery.js';
 import { createExternalToolGatewayTools } from '../../external-tools/gateway-tools.js';
 import { createDefaultExternalToolGatewayTools } from '../../external-tools/index.js';
 import { EndpointRegistry } from '../../../endpoint-tools/registry.js';
-import { EndpointBindingService } from '../../../endpoint-tools/binding-service.js';
+import { EndpointTaskTargetService } from '../../../endpoint-tools/task-targets.js';
 import { EndpointInvocationService } from '../../../endpoint-tools/invocation-service.js';
 import type { EndpointToolRuntime } from '../../../endpoint-tools/runtime.js';
 import { ENDPOINT_PROTOCOL_VERSION, ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointHelloPayload, type ServerEndpointMessage } from '@xopcai/endpoint-tools-protocol';
@@ -162,7 +162,7 @@ it.each(['android', 'ios', 'harmonyos'])('preserves a %s turn across device disc
   requireXopcDatabase();
   const { params, cwd } = await fixture();
   const registry = new EndpointRegistry();
-  const bindings = new EndpointBindingService(registry);
+  const bindings = new EndpointTaskTargetService(registry);
   const invocations = new EndpointInvocationService(registry);
   const endpointId = `${platform}:device`;
   const hello: EndpointHelloPayload = {
@@ -355,7 +355,7 @@ it('discovers and calls real device services through pi, keeps confirmation and 
   requireXopcDatabase();
   const { params, cwd } = await fixture();
   const registry = new EndpointRegistry();
-  const bindings = new EndpointBindingService(registry);
+  const bindings = new EndpointTaskTargetService(registry);
   const audit = { started: vi.fn(), finished: vi.fn() };
   const invocations = new EndpointInvocationService(registry, { audit });
   const sent: ServerEndpointMessage[] = [];

@@ -121,7 +121,7 @@ describe('endpoint tools over realtime', () => {
       messageId: crypto.randomUUID(), kind: 'realtime.hello', sentAt: Date.now(),
       payload: {
         ticket: issued.ticket, clientId: 'client-1', clientKind: 'web', subscriptions: [],
-        endpoint: { ...unsigned, signature },
+        endpoint: { ...unsigned, signature }, capabilities: ['endpoint.tools.v3'],
       },
     } satisfies ClientRealtimeMessage));
 

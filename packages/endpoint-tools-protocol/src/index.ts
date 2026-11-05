@@ -1,17 +1,22 @@
+import { providerOperationIntentSchema, providerOperationReceiptSchema, providerOperationQuerySchema, providerOperationStatusSchema } from './provider-execution.js';
+export * from './provider-execution.js';
 import { z } from 'zod';
 
 import { DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 import { desktopOperationIntentSchema, desktopOperationReceiptSchema } from './execution.js';
 import { desktopTerminalCommandSchema, desktopTerminalEventSchema } from './terminal.js';
+import { providerCatalogSchema, providerStateSchema } from './providers.js';
+export * from './providers.js';
 export * from './execution.js';
 export { ENDPOINT_FILE_OUTPUT_SCHEMA, ENDPOINT_CONTACT_RECORD_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 
-export const ENDPOINT_PROTOCOL_VERSION = 2 as const;
+export const ENDPOINT_PROTOCOL_VERSION = 3 as const;
 export const ENDPOINT_MAX_FILE_BYTES = 25 * 1024 * 1024;
+export const ENDPOINT_MAX_ARTIFACT_BYTES = 8 * 1024 * 1024;
 export const ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS = 3_000;
 export const ENDPOINT_MAX_CONCURRENT_INVOCATIONS = 4;
 
-export const endpointKindSchema = z.enum(['web', 'desktop', 'mobile', 'browser']);
+export const endpointKindSchema = z.enum(['web', 'desktop', 'mobile', 'browser', 'bridge']);
 export const endpointAvailabilitySchema = z.enum(['foreground', 'background']);
 export const endpointEffectSchema = z.enum(['read', 'write', 'destructive']);
 export const endpointConfirmationSchema = z.enum(['never', 'always']);
@@ -38,7 +43,7 @@ const timestampSchema = z.number().int().nonnegative();
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 export const endpointToolDescriptorSchema = z.strictObject({
-  name: z.string().regex(/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/).max(120),
+  name: z.string().regex(/^[A-Za-z0-9_.-]{1,202}$/),
   title: z.string().min(1).max(120),
   description: z.string().min(1).max(2_000),
   inputSchema: jsonObjectSchema,
@@ -64,7 +69,7 @@ export const endpointPrincipalRegistrationSchema = z.strictObject({
   publicKey: z.string().min(32).max(2_048),
 });
 
-export const endpointSessionBindingRequestSchema = z.strictObject({
+export const endpointTaskTargetRequestSchema = z.strictObject({
   endpointId: identifierSchema,
 });
 
@@ -135,6 +140,14 @@ export const toolInvokePayloadSchema = z.strictObject({
   deadlineAt: timestampSchema,
   execution: desktopOperationIntentSchema.optional(),
   operationQuery: desktopOperationIntentSchema.optional(),
+  providerExecution: providerOperationIntentSchema.optional(),
+  interactionAllowed: z.literal(true).optional(),
+  interactionRecoverable: z.literal(true).optional(),
+  artifact: z.strictObject({
+    token: z.uuid(),
+    size: z.number().int().min(0).max(ENDPOINT_MAX_ARTIFACT_BYTES),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  }).optional(),
   uploadGrant: z.strictObject({
     path: z.string().startsWith('/').max(500),
     token: identifierSchema,
@@ -199,6 +212,11 @@ const envelope = <TType extends string, TPayload extends z.ZodType>(
 });
 
 export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
+  envelope('provider.interaction.request', z.strictObject({ invocationId: z.uuid(), requestId: z.uuid(),
+    message: z.string().trim().min(1).max(1000), inputSchema: jsonObjectSchema })),
+  envelope('provider.catalog.replace', providerCatalogSchema),
+  envelope('provider.state.changed', providerStateSchema),
+  envelope('provider.operation.status', providerOperationStatusSchema),
   envelope('terminal.event', z.strictObject({ invocationId: z.uuid(), event: desktopTerminalEventSchema })),
   envelope('endpoint.availability_changed', z.strictObject({ availability: endpointAvailabilitySchema })),
   envelope('tool.received', invocationPayloadSchema),
@@ -212,18 +230,29 @@ export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
     content: z.array(endpointToolContentSchema).min(1).max(20),
     details: jsonObjectSchema.optional(),
     operationReceipt: desktopOperationReceiptSchema.optional(),
+    providerReceipt: providerOperationReceiptSchema.optional(),
   })),
   envelope('tool.error', z.strictObject({
     invocationId: z.uuid(),
     code: endpointToolErrorCodeSchema,
     message: z.string().min(1).max(2_000),
     operationReceipt: desktopOperationReceiptSchema.optional(),
+    providerReceipt: providerOperationReceiptSchema.optional(),
     operationResult: durableEndpointResultSchema.optional(),
   })),
-  envelope('tool.cancelled', invocationPayloadSchema.extend({ operationReceipt: desktopOperationReceiptSchema.optional() })),
+  envelope('tool.cancelled', invocationPayloadSchema.extend({ operationReceipt: desktopOperationReceiptSchema.optional(), providerReceipt: providerOperationReceiptSchema.optional() })),
 ]);
 
 export const serverEndpointMessageSchema = z.discriminatedUnion('type', [
+  envelope('provider.interaction.response', z.strictObject({ invocationId: z.uuid(), requestId: z.uuid(),
+    action: z.enum(['accept', 'decline', 'cancel']), content: jsonObjectSchema.optional() })),
+  envelope('provider.catalog.ack', z.discriminatedUnion('accepted', [
+    z.strictObject({ revision: z.number().int().nonnegative(), accepted: z.literal(true) }),
+    z.strictObject({ revision: z.number().int().nonnegative(), accepted: z.literal(false), code: z.enum([
+      'PROVIDER_CATALOG_RATE_LIMITED', 'PROVIDER_CATALOG_REVISION_CONFLICT', 'PROVIDER_CONNECTION_CONFLICT', 'PROVIDER_CATALOG_REJECTED',
+    ]) }),
+  ])),
+  envelope('provider.operation.query', providerOperationQuerySchema),
   envelope('terminal.command', z.strictObject({ invocationId: z.uuid(), command: desktopTerminalCommandSchema })),
   envelope('tool.invoke', toolInvokePayloadSchema),
   envelope('tool.cancel', toolCancelPayloadSchema),
@@ -236,7 +265,7 @@ export type EndpointResultKind = z.infer<typeof endpointResultKindSchema>;
 export type EndpointSensitivity = z.infer<typeof endpointSensitivitySchema>;
 export type EndpointToolDescriptor = z.infer<typeof endpointToolDescriptorSchema>;
 export type EndpointPrincipalRegistration = z.infer<typeof endpointPrincipalRegistrationSchema>;
-export type EndpointSessionBindingRequest = z.infer<typeof endpointSessionBindingRequestSchema>;
+export type EndpointTaskTargetRequest = z.infer<typeof endpointTaskTargetRequestSchema>;
 export type EndpointDeviceJobRequest = z.infer<typeof endpointDeviceJobRequestSchema>;
 export type EndpointDeviceJobStatus = z.infer<typeof endpointDeviceJobStatusSchema>;
 export type EndpointDeviceEvent = z.infer<typeof endpointDeviceEventSchema>;
@@ -330,7 +359,6 @@ export function deviceStateDescriptor(kind: EndpointKind, capability: 'state' | 
   };
 }
 
-export { bridgeDescriptor, BRIDGE_RESOURCE_SCHEMA, BRIDGE_READ_INPUT_SCHEMA, BRIDGE_LIST_OUTPUT_SCHEMA, BRIDGE_READ_OUTPUT_SCHEMA } from './bridge.js';
 export { locationDescriptor, locationRequestSchema, locationSampleSchema, LOCATION_INPUT_SCHEMA, LOCATION_OUTPUT_SCHEMA, type LocationRequest, type LocationSample } from './location.js';
 
 export { personalDescriptor, PERSONAL_TOOL_NAMES, CONTACT_PICK_INPUT_SCHEMA, CALENDAR_INPUT_SCHEMA, CALENDAR_OUTPUT_SCHEMA, type PersonalToolName } from './personal.js';

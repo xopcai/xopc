@@ -22,6 +22,9 @@ import { createHonoApp } from '../../gateway/hono/app.js';
 import type { GatewayService } from '../../gateway/service.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { EndpointToolProvider } from '../../agent/external-tools/endpoint-provider.js';
+import { recordDeviceExecutionActor } from '../execution-actor.js';
+import { insertSessionInput, claimNextSessionInput } from '../../storage/sqlite/session-input-repository.js';
+import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 
 const context = () => ({ invocationId: randomUUID(), signal: new AbortController().signal,
   reportProgress: () => {}, uploadFile: async () => { throw new Error('Unexpected upload'); } });
@@ -31,12 +34,12 @@ describe('Device Bridge', () => {
     const sensors = simulatedEnvironmentSensors(() => 100_000);
     sensors[1].read = async () => ({ value: null, capturedAt: 100_000 });
     const registry = createDeviceBridge(sensors, () => 100_000);
-    const policy = new EndpointToolPolicy();
-    for (const descriptor of registry.descriptors()) expect(() => policy.validateDescriptor('desktop', descriptor)).not.toThrow();
-    const list = await registry.get('desktop.bridge.list_resources')!.definition.execute({}, context());
+    expect(registry.descriptors()).toEqual([]);
+    expect(registry.providerCatalog().providers[0].localId).toBe('sensors');
+    const list = await registry.get('provider_sensors.list_resources')!.definition.execute({}, context());
     expect(list.content[0]).toMatchObject({ value: [expect.objectContaining({ resourceId: 'sim.room.temperature' }),
       expect.objectContaining({ resourceId: 'sim.room.humidity' })] });
-    const read = registry.get('desktop.bridge.read_sensor')!.definition;
+    const read = registry.get('provider_sensors.read_sensor')!.definition;
     expect((await read.execute({ resourceId: 'sim.room.humidity' }, context())).content[0]).toMatchObject({ value: { value: null, simulated: true } });
     await expect(read.execute({ resourceId: 'missing' }, context())).rejects.toThrow('Unknown');
     await expect(read.execute({ resourceId: 'sim.room.humidity', extra: true }, context())).rejects.toThrow();
@@ -45,8 +48,7 @@ describe('Device Bridge', () => {
     await expect(createDeviceBridge(sensors, () => 100_000).get(read.descriptor.name)!.definition.execute({ resourceId: 'sim.room.humidity' }, context())).rejects.toThrow('value');
     sensors[0].read = async () => ({ value: 0, capturedAt: 60_000 });
     await expect(createDeviceBridge(sensors, () => 100_000).get(read.descriptor.name)!.definition.execute({ resourceId: 'sim.room.temperature' }, context())).rejects.toThrow('stale');
-    expect(() => projectDeviceReading(read.descriptor.name, 'bridge', 'principal', [{ type: 'json', value: {
-      resourceId: 'different', capturedAt: 100_000 } }], 100_000, { resourceId: 'requested' })).toThrow('different resource');
+
   });
 
   it('runs an authenticated signed Bridge through the listening Gateway and an explicitly bound Agent tool', async () => {
@@ -72,17 +74,25 @@ describe('Device Bridge', () => {
         registry: createDeviceBridge([]) })).rejects.toThrow('401');
       bridge = await connectDeviceBridge({ gatewayUrl: base, token, identityPath: join(dir, 'identity.json'),
         registry: createDeviceBridge(simulatedEnvironmentSensors()), displayName: 'Simulated sensors' });
+      await vi.waitFor(() => expect(endpointTools.providers.list()).toHaveLength(1));
+      const claim = endpointTools.providers.list()[0];
+      endpointTools.providers.admit(bridge.principalId, 'sensors', claim.digest, true);
+      const conversationId = randomUUID();
+      createConversation({ agentId: 'main' }, '', conversationId);
       const provider = new EndpointToolProvider({ runtime: endpointTools,
-        getCurrentContext: () => ({ channel: 'cli', chatId: 'bridge-chat', conversationId: 'bridge-chat', origin: { type: 'system', source: 'cli' } }) });
+        getCurrentContext: () => ({ channel: 'cli', chatId: conversationId, conversationId, origin: { type: 'system', source: 'cli' } }) });
       expect(await provider.search('sensor')).toEqual([]);
-      const binding = await fetch(base + '/api/endpoint-tools/bindings/bridge-chat', { method: 'PUT',
+      const binding = await fetch(base + '/api/endpoint-tools/targets/' + conversationId, { method: 'PUT',
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ endpointId: bridge.endpointId }) });
       expect(binding.status, await binding.clone().text()).toBe(200);
+      recordDeviceExecutionActor(conversationId, 'read-sensor', { kind: 'owner', principalId: 'gateway-owner', scopes: ['gateway.admin'] });
+      insertSessionInput({ id: 'sensor-input', conversationId, clientMessageId: 'read-sensor', requestedDelivery: 'next',
+        effectiveDelivery: 'next', status: 'queued', content: 'Read temperature', origin: { type: 'system', source: 'cli' } });
+      claimNextSessionInput(conversationId, 'sensor-run');
       const tool = (await provider.search('sensor')).find(item => item.toolRef.includes('read_sensor'));
       expect(tool).toBeDefined();
       const result = await provider.execute(tool!.toolRef, { resourceId: 'sim.room.temperature' }, undefined, { toolCallId: 'sensor-test', signal: new AbortController().signal });
-      expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ source: { endpointId: bridge.endpointId,
-        resourceId: 'sim.room.temperature' }, cached: false, data: { value: 23.5, simulated: true, unit: 'celsius' } });
+      expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ resourceId: 'sim.room.temperature', value: 23.5, simulated: true, unit: 'celsius' });
       bridge.close();
       await new Promise(resolve => setTimeout(resolve, 20));
       expect(await provider.search('sensor')).toEqual([]);

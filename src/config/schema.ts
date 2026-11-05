@@ -492,6 +492,7 @@ export const GatewayWebchatConfigSchema = z.object({
 
 export const GatewayConfigSchema = z.object({
   outboundProxy: OutboundProxySchema.optional(),
+  deviceProvidersEnabled: z.boolean().optional(),
   /** Semantic bind mode. */
   bind: GatewayBindModeSchema.optional(),
   /** IPv4 listen address when `bind` is `custom`. */

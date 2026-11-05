@@ -1,5 +1,6 @@
 /** Private IPC drives test inputs; all desktop traffic uses the production Gateway listener. */
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { basename, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
@@ -8,6 +9,8 @@ import { AgentCatalogRepository } from '../src/agent-catalog/repository.js';
 import { AgentDefaultsSchema } from '../src/agent-config/index.js';
 import { openXopcDatabase, closeXopcDatabase } from '../src/storage/sqlite/connection.js';
 import { createConversation } from '../src/storage/sqlite/conversation-repository.js';
+import { recordDeviceExecutionActor } from '../src/endpoint-tools/execution-actor.js';
+import { insertSessionInput, claimNextSessionInput } from '../src/storage/sqlite/session-input-repository.js';
 import { computerDiagnostic } from '../src/computer/errors.js';
 import { ComputerRuntime } from '../src/computer/runtime.js';
 import { isComputerControlActive } from '../src/computer/control-guard.js';
@@ -46,6 +49,10 @@ if (!listener.listening) await once(listener, 'listening');
 const service = gateway.serviceInstance;
 const runtime = new ComputerRuntime(service.endpointTools, () => service.currentConfig);
 const owner = createConversation({ agentId: 'network-validation', sourceChannel: 'webchat' }, join(root, 'workspace')).key;
+recordDeviceExecutionActor(owner, 'network-validation', { kind: 'owner', principalId: 'gateway-owner', scopes: ['gateway.admin'] });
+insertSessionInput({ id: randomUUID(), conversationId: owner, clientMessageId: 'network-validation', requestedDelivery: 'next',
+  effectiveDelivery: 'next', status: 'queued', content: 'Run the isolated computer fixture', origin: { type: 'system', source: 'cli' } });
+claimNextSessionInput(owner, 'network-validation-run');
 process.on('message', async (message: any) => {
   try {
     let value: unknown;

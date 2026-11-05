@@ -20,6 +20,7 @@
 
 import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';
+import { verifiedChannelBus } from './verified-inbound.js';
 
 import type {
   ChannelPlugin,
@@ -314,7 +315,7 @@ export class ChannelLifecycleSupervisor {
   ): Promise<void> {
     try {
       const options: ChannelPluginInitOptions = {
-        bus: this.opts.bus,
+        bus: verifiedChannelBus(this.opts.bus, plugin.id),
         config: this.opts.getConfig(),
         channelConfig,
         sessionModel: this.opts.getSessionModelHooks?.(),

@@ -7,7 +7,10 @@ import type {
   ClarificationResponseAction,
   ClarificationWait,
   ClarificationWaitSnapshot,
+  DeviceInteractionCheckpoint,
 } from '@xopcai/gateway-contract';
+import type { GatewayPrincipal } from '../../gateway/security/gateway-principal.js';
+import { deviceExecutionPrincipalId, recordDeviceExecutionActor } from '../../endpoint-tools/execution-actor.js';
 
 import { appendTranscriptEntry } from './transcript-repository.js';
 import { estimateTextTokens } from '../../agent/memory/context-budget.js';
@@ -43,6 +46,7 @@ export type CreateClarificationInput = ClarificationPresentation & {
   question: string;
 
   approvalKey?: string;
+  deviceInteraction?: DeviceInteractionCheckpoint;
   now?: number;
 };
 
@@ -51,6 +55,7 @@ export type ResolveClarificationInput = ClarificationSubmission & {
   expectedVersion: number;
   idempotencyKey: string;
   action: ClarificationResponseAction;
+  responseActor?: GatewayPrincipal;
   now?: number;
 };
 
@@ -248,6 +253,7 @@ export function createClarificationWait(input: CreateClarificationInput): Clarif
       },
       expiresAt: input.kind === 'approval' ? now + APPROVAL_TTL_MS : undefined,
       approvalKey: input.approvalKey,
+      deviceInteraction: input.deviceInteraction,
       version: 1,
       createdAt: now,
       updatedAt: now,
@@ -303,11 +309,16 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
       return { ok: false, code: 'NOT_FOUND' };
     }
     const now = input.now ?? Date.now();
+    if (wait.deviceInteraction && (!input.responseActor || deviceExecutionPrincipalId(input.responseActor) !== wait.deviceInteraction.actorPrincipalId)) {
+      return { ok: false, code: 'NOT_FOUND' };
+    }
     let normalized: ReturnType<typeof normalizeClarificationSubmission> | undefined;
     try {
       if (input.action === 'answer') normalized = normalizeClarificationSubmission(wait, { schemaVersion: input.schemaVersion, answers: input.answers, response: input.response, decision: input.decision });
       else if (input.response !== undefined || input.decision !== undefined || input.answers !== undefined) return { ok: false, code: 'INVALID' };
     } catch { return { ok: false, code: 'INVALID' }; }
+    if (wait.deviceInteraction && input.action !== 'cancel'
+      && (input.action !== 'answer' || normalized?.response?.choiceId !== 'device_ready')) return { ok: false, code: 'INVALID' };
     if (wait.schemaVersion === 2 && normalized && estimateTextTokens(normalized.answer) > 2000) return { ok: false, code: 'INVALID' };
     if ((wait.schemaVersion === 2) !== (input.schemaVersion === 2)) return { ok: false, code: 'INVALID' };
     const responseIdentity = JSON.stringify({ schemaVersion: wait.schemaVersion ?? 1, action: input.action, answers: normalized?.answers, response: normalized?.response, decision: normalized?.decision });
@@ -377,8 +388,10 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
       `User response: ${answer}`,
       stale ? 'The request is over 24 hours old. Re-check mutable state before acting.' : '',
       'Do not repeat completed side effects. Continue from the stored transcript and current state.',
+      wait.deviceInteraction ? `The user confirmed readiness for ${wait.deviceInteraction.toolName} on the selected device. Discover this capability again before invoking it.` : '',
     ].filter(Boolean).join('\n');
     const origin = getSessionInputById(wait.conversationId, wait.originInputId);
+    if (wait.deviceInteraction && input.responseActor) recordDeviceExecutionActor(wait.conversationId, input.idempotencyKey, input.responseActor);
     insertSessionInput({
       id: resumeInputId,
       conversationId: wait.conversationId,
@@ -404,12 +417,32 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
   });
 }
 
+/** Only unconsumed device waits can reopen. Once execution starts, recovery requires effect evidence. */
+export function reopenDeviceInteraction(input: SessionInput): ClarificationWait | undefined {
+  if (input.kind !== 'clarification_resume' || !input.payload) return;
+  return runSqliteWriteTransaction(db => {
+    const wait = getClarification(input.payload!.waitId);
+    if (!wait?.deviceInteraction || wait.status !== 'queued' || wait.resumeInputId !== input.id
+      || readCurrentTranscriptId(db, input.conversationId) !== wait.transcriptId) return;
+    const reopened = writeWait({ ...wait, status: 'open', answer: undefined, response: undefined, answers: undefined,
+      resolution: undefined, responseIdempotencyKey: undefined, responseIdentity: undefined, resumeInputId: undefined,
+      updatedAt: Date.now() }, wait.version);
+    if (reopened) bumpSessionInputRevision(db, input.conversationId);
+    return reopened;
+  });
+}
+
 export function getClarificationResumeInput(conversationId: string, runId: string): SessionInput | undefined {
   if (!isXopcDatabaseOpen()) return undefined;
   const state = getSessionInputState(conversationId);
   if (state.activeRunId !== runId || !state.activeInputId) return undefined;
   const input = getSessionInputById(conversationId, state.activeInputId);
   return input?.kind === 'clarification_resume' ? input : undefined;
+}
+
+export function getDeviceInteractionForRun(conversationId: string, runId?: string): DeviceInteractionCheckpoint | undefined {
+  const input = runId ? getClarificationResumeInput(conversationId, runId) : undefined;
+  return input?.payload ? getClarification(input.payload.waitId)?.deviceInteraction : undefined;
 }
 
 export function consumeClarificationResume(input: SessionInput): boolean {

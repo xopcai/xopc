@@ -55,8 +55,8 @@ function buildProgram(ctx: CLIContext): Command {
       delete (parsedOpts as Record<string, unknown>)[k];
     }
     Object.assign(parsedOpts, next);
-    // Backup must inspect the database before any startup initialization or write.
-    if (actionCommand?.name() === 'backup' || actionCommand?.parent?.name() === 'backup') return;
+    // Backup inspects the database before writes; a device host has its own private state.
+    if (['backup', 'device-host'].includes(actionCommand?.name() ?? '') || actionCommand?.parent?.name() === 'backup') return;
     bootstrapApplicationStateSync();
   });
 

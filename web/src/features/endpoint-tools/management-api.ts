@@ -46,6 +46,7 @@ export interface ManagedEndpointInvocation {
   principalId: string;
   endpointId: string;
   toolName: string;
+  operationId?: string;
   effect: EndpointEffect;
   confirmationRequired: boolean;
   status: 'running' | 'succeeded' | 'failed';

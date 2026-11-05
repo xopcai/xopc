@@ -1,3 +1,4 @@
+import { ProviderOperationCheck } from './provider-operation-check';
 import { Activity, ChevronLeft, ChevronRight, Laptop, MonitorSmartphone, Search, ShieldOff, Smartphone } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -457,7 +458,10 @@ export function EndpointToolsManagementSettings() {
                 </p>
                 {invocation.errorMessage ? <p className="mt-1 text-xs text-danger">{invocation.errorMessage}</p> : null}
               </div>
-              <StatusBadge status={invocation.status} label={copy.status[invocation.status]} />
+              <div className="flex max-w-xs flex-col items-end gap-1">
+                <StatusBadge status={invocation.status} label={invocation.errorCode === 'OUTCOME_UNKNOWN' ? (language === 'zh' ? '结果未知' : 'Outcome unknown') : copy.status[invocation.status]} />
+                {invocation.operationId && invocation.toolName.startsWith('provider_') && invocation.errorCode === 'OUTCOME_UNKNOWN' ? <ProviderOperationCheck operationId={invocation.operationId} zh={language === 'zh'} /> : null}
+              </div>
             </div>
           ))}
         </div>

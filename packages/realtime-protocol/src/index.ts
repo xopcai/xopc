@@ -11,7 +11,8 @@ export const REALTIME_MAX_CLIENT_FRAME_BYTES = 256 * 1024;
 export const REALTIME_HELLO_TIMEOUT_MS = 5_000;
 export const REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
 export const REALTIME_HEARTBEAT_TIMEOUT_MS = 45_000;
-export const REALTIME_CAPABILITIES = ['realtime.capability-negotiation.v1', 'desktop.device-frames.v1', 'desktop.durable-execution.v1', 'desktop.operation-status.v1', 'desktop.terminal.v1', 'desktop.computer.v1', 'desktop.browser.v1'] as const;
+export const ENDPOINT_V3_CAPABILITY = 'endpoint.tools.v3' as const;
+export const REALTIME_CAPABILITIES = [ENDPOINT_V3_CAPABILITY, 'realtime.capability-negotiation.v1', 'desktop.device-frames.v1', 'desktop.durable-execution.v1', 'desktop.operation-status.v1', 'desktop.terminal.v1', 'desktop.computer.v1', 'desktop.browser.v1'] as const;
 export type RealtimeCapability = (typeof REALTIME_CAPABILITIES)[number];
 export const REALTIME_COMPATIBILITY_ERROR_CODES = [
   'CLIENT_UPDATE_REQUIRED',
@@ -31,6 +32,7 @@ export const realtimeClientKindSchema = z.enum([
   'desktop',
   'mobile',
   'browser_extension',
+  'bridge',
   'tui',
   'mcp',
 ]);
