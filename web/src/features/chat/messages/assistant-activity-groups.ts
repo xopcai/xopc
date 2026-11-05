@@ -1,5 +1,6 @@
 import type { AssistantWorkLogItem } from './assistant-turn-view-model';
 import type { TextContent, ToolUseContent } from './messages.types';
+import { isPreparationTool, isPublicToolFailure } from './tool-friendly-title';
 
 /** Keep public narration and known operation summaries; generic activity uses one indicator. */
 export function publicAssistantProgress(items: AssistantWorkLogItem[], toolTitle?: (tool: ToolUseContent) => string | null): TextContent[] {
@@ -41,8 +42,9 @@ export function summarizeToolActivity(tools: ToolUseContent[], title: (tool: Too
 }): string {
   const counts = new Map<string, number>();
   let failed = 0;
-  for (const tool of tools) {
-    if (tool.status === 'error' || tool.activity?.status === 'failed') { failed++; continue; }
+  const ordered = tools.toSorted((a, b) => Number(isPreparationTool(a.name)) - Number(isPreparationTool(b.name)));
+  for (const tool of ordered) {
+    if (isPublicToolFailure(tool)) { failed++; continue; }
     const action = title(tool);
     counts.set(action, (counts.get(action) ?? 0) + 1);
   }
