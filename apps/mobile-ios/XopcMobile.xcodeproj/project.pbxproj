@@ -156,6 +156,7 @@
 		EB75C083C8D1FA33EBB4A79B /* PhonePairingIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B97AE5CFBC755AB95D8A12 /* PhonePairingIntegrationTests.swift */; };
 		F07D4312BD631E0055643F1E /* ExecutionDetailModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59B9D0794B0D4CE399A11BC8 /* ExecutionDetailModels.swift */; };
 		F10B6CDD8CB6BB6A7395DFDC /* GatewayCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3272B6C344527204C77174 /* GatewayCommands.swift */; };
+		F1FEAB68D2E6A104BE59D44D /* DeviceEndpointTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2EC88A60E669DCF29DDA0C3 /* DeviceEndpointTypes.swift */; };
 		F326396C31D71504BB2D4B3E /* XopcMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1BAC3B4F53556FD5305510A /* XopcMobileApp.swift */; };
 		F3C23325BCC8986E485591D5 /* PersonalAgentAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01D9DD109BB37799192FCCE /* PersonalAgentAvatar.swift */; };
 		F8D09691A61C2D7A64935BBB /* PhoneWorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1611527C3882520B53DBDA16 /* PhoneWorkspaceModel.swift */; };
@@ -351,6 +352,7 @@
 		D13D27FE4A5FEC485141F446 /* ChatImageSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatImageSource.swift; sourceTree = "<group>"; };
 		D1EAEFED15390F1A3B6F2393 /* DevicePersonalTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicePersonalTools.swift; sourceTree = "<group>"; };
 		D28D3A761AB72069F8013A72 /* MarkdownNoteInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownNoteInput.swift; sourceTree = "<group>"; };
+		D2EC88A60E669DCF29DDA0C3 /* DeviceEndpointTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceEndpointTypes.swift; sourceTree = "<group>"; };
 		D68CBBC1C602DFC7544A836B /* ClarificationV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClarificationV2Tests.swift; sourceTree = "<group>"; };
 		D9B1323B1C44E84AFD108F23 /* ChatMessageLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageLinkRouter.swift; sourceTree = "<group>"; };
 		DA016590211F6147655749F4 /* AssistantTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantTimeline.swift; sourceTree = "<group>"; };
@@ -485,6 +487,7 @@
 			children = (
 				8FDDA0C2E058A5B28288921F /* ChatImageLoader.swift */,
 				7A268D1282EB841BE5D3ABED /* DeviceEndpointHost.swift */,
+				D2EC88A60E669DCF29DDA0C3 /* DeviceEndpointTypes.swift */,
 				FEC9ED44CEA56D122EC800D6 /* DeviceLocation.swift */,
 				D1EAEFED15390F1A3B6F2393 /* DevicePersonalTools.swift */,
 				2F84248ED419B36DD8608455 /* DeviceToolCatalog.swift */,
@@ -898,6 +901,7 @@
 				4EFBB47302B3D45026E5B952 /* ConversationsState.swift in Sources */,
 				0E04EDC4039351DFB9527F3F /* ConversationsView.swift in Sources */,
 				70E6F5D91CA3E55C8E0CF4C6 /* DeviceEndpointHost.swift in Sources */,
+				F1FEAB68D2E6A104BE59D44D /* DeviceEndpointTypes.swift in Sources */,
 				4E79CCA307BC1196D6FDA402 /* DeviceLocation.swift in Sources */,
 				61EEEEA68BAE3CB5173F6797 /* DevicePersonalTools.swift in Sources */,
 				2A855B7F7DB0CD1387C96F8C /* DeviceToolCatalog.swift in Sources */,
