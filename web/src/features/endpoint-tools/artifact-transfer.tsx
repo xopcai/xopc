@@ -33,8 +33,8 @@ export function ArtifactTransfer({ conversationId, deviceName, zh }: { conversat
   }}>
     <Dialog.Trigger asChild><Button variant="ghost" className="h-8 px-2 text-sm">{zh ? '传递文件' : 'Transfer file'}</Button></Dialog.Trigger>
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-      <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(23rem,90dvh)] w-[min(28rem,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface p-4 shadow-xl">
+      <Dialog.Overlay className="fixed inset-0 z-[120] bg-black/50" />
+      <Dialog.Content className="fixed left-1/2 top-1/2 z-[121] flex h-[min(23rem,90dvh)] w-[min(28rem,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover">
         <Dialog.Title className="text-base font-semibold">{zh ? '向执行设备传递文件' : 'Transfer file to execution device'}</Dialog.Title>
         <Dialog.Description className="mt-1 text-sm text-fg-muted">{deviceName}</Dialog.Description>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-3">
@@ -46,7 +46,7 @@ export function ArtifactTransfer({ conversationId, deviceName, zh }: { conversat
           </> : <p className="text-sm text-fg-muted">{zh ? '当前没有可传递的文件或接收能力。' : 'No eligible file or receiving capability is available.'}</p>}
           {request ? <>
             <p className="text-xs text-fg-muted">{zh ? '在两分钟内将这段请求发到当前对话。' : 'Send this request in this chat within two minutes.'}</p>
-            <textarea readOnly className="h-20 w-full resize-none rounded-md border border-edge bg-surface p-2 text-xs"
+            <textarea readOnly className="h-20 w-full resize-none rounded-md border border-edge bg-surface-inset p-2 text-xs"
               value={request} aria-label={zh ? '对话请求' : 'Chat request'} onFocus={event => event.currentTarget.select()} />
           </> : null}
           {error ? <p role="alert" className="text-xs text-danger">{zh ? '文件授权失败，请重新选择设备或文件。' : 'Unable to authorize transfer. Reselect the device or file.'}</p> : null}

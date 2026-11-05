@@ -18,15 +18,16 @@ function skillHubPublicSkillPageUrl(canonicalSlug: string): string | null {
   return `${SKILLHUB_PUBLIC_ORIGIN}/skills/${encodeURIComponent(id)}`;
 }
 
-/**
- * Public ClawHub web URL for a marketplace skill slug.
- * Site shape: `https://clawhub.ai/<owner>/<slug>` — but since we don't have owner in list items,
- * we use the direct slug route which ClawHub resolves.
- */
-function clawHubPublicSkillPageUrl(canonicalSlug: string): string | null {
-  const id = canonicalSlug.trim();
+function clawHubPublicSkillPageUrl(reference: string): string | null {
+  const id = reference.trim();
   if (!id) return null;
+  const [owner, slug] = id.replace(/^@/, '').split('/');
+  if (slug) return `${CLAWHUB_PUBLIC_ORIGIN}/${encodeURIComponent(owner)}/skills/${encodeURIComponent(slug)}`;
   return `${CLAWHUB_PUBLIC_ORIGIN}/${encodeURIComponent(id)}`;
+}
+
+export function marketplaceLocalSkillId(reference: string, provider?: string | null): string {
+  return provider === 'clawhub' ? reference.split('/').at(-1) ?? reference : reference;
 }
 
 /** Get the public web URL for a skill row based on the active marketplace provider. */

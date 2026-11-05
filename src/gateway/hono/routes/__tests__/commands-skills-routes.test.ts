@@ -27,9 +27,11 @@ function createApp() {
     decision: trusted,
     trusted,
   }));
+  const fetchSkillsPackageDetail = vi.fn(async (name: string) => ({ id: name }));
   const service = {
     getConfig: () => ({ agents: { default: 'main' } }),
     marketplace: {
+      fetchSkillsPackageDetail,
       getAgentSkillsApi,
       getSessionSkillsApi,
       getSessionWorkspaceTrustApi,
@@ -39,6 +41,7 @@ function createApp() {
   registerCommandsSkillsRoutes(app, { service } as Parameters<typeof registerCommandsSkillsRoutes>[1]);
   return {
     app,
+    fetchSkillsPackageDetail,
     getAgentSkillsApi,
     getSessionSkillsApi,
     getSessionWorkspaceTrustApi,
@@ -58,6 +61,17 @@ describe('commands and skills routes', () => {
   afterEach(() => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
+  });
+
+  it('passes the publisher-qualified ClawHub reference to the detail service', async () => {
+    const { app, fetchSkillsPackageDetail } = createApp();
+    const reference = 'publisher/self-improving-agent';
+    const response = await app.request(
+      `/api/skills/marketplace/packages/${encodeURIComponent(reference)}?provider=clawhub`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchSkillsPackageDetail).toHaveBeenCalledWith(reference, 'clawhub');
   });
 
   it('loads chat skills from the effective session workspace when conversationId is present', async () => {

@@ -30,6 +30,9 @@ type Props = Pick<
   | 'detailSource'
   | 'setDetailSource'
   | 'detailTitle'
+  | 'detailPackageReference'
+  | 'detailMarketplaceInstalled'
+  | 'detailMarketplaceQualified'
   | 'setDetailTitle'
   | 'detailCatalogPreview'
   | 'setDetailCatalogPreview'
@@ -48,7 +51,6 @@ type Props = Pick<
   | 'usingSkillInChatName'
   | 'installingMarketName'
   | 'togglingSkillName'
-  | 'isSkillInstalledByName'
   | 'onUseSkillInChat'
   | 'onMarketInstall'
   | 'onSkillToggle'
@@ -66,6 +68,9 @@ export function SkillsPageDetailDialog(p: Props) {
     detailSource,
     setDetailSource,
     detailTitle,
+    detailPackageReference,
+    detailMarketplaceInstalled,
+    detailMarketplaceQualified,
     setDetailTitle,
     detailCatalogPreview,
     setDetailCatalogPreview,
@@ -83,7 +88,6 @@ export function SkillsPageDetailDialog(p: Props) {
     usingSkillInChatName,
     installingMarketName,
     togglingSkillName,
-    isSkillInstalledByName,
     onUseSkillInChat,
     onMarketInstall,
     onSkillToggle,
@@ -238,27 +242,28 @@ export function SkillsPageDetailDialog(p: Props) {
                     type="button"
                     variant="secondary"
                     disabled={
-                      !detailTitle ||
+                      !detailPackageReference ||
                       detailLoading ||
-                      usingSkillInChatName === detailTitle ||
-                      installingMarketName === detailTitle
+                      (detailMarketplaceInstalled && detailMarketplaceQualified) ||
+                      usingSkillInChatName === detailPackageReference ||
+                      installingMarketName === detailPackageReference
                     }
                     onClick={() => void onUseSkillInChat()}
                   >
-                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : actionLabel}
+                    {usingSkillInChatName === detailPackageReference ? sk.previewUseInChatBusy : actionLabel}
                   </Button>
                   <Button
                     type="button"
-                    variant={isSkillInstalledByName(detailTitle) ? 'secondary' : 'primary'}
-                    disabled={!detailTitle || installingMarketName === detailTitle}
+                    variant={detailMarketplaceInstalled ? 'secondary' : 'primary'}
+                    disabled={!detailPackageReference || detailLoading || installingMarketName === detailPackageReference}
                     onClick={() => {
-                      if (!detailTitle) return;
-                      void onMarketInstall(detailTitle, { useDetailProvider: true });
+                      if (!detailPackageReference) return;
+                      void onMarketInstall(detailPackageReference, { useDetailProvider: true });
                     }}
                   >
-                    {installingMarketName === detailTitle
+                    {installingMarketName === detailPackageReference
                       ? sk.uploading
-                      : isSkillInstalledByName(detailTitle)
+                      : detailMarketplaceInstalled
                         ? sk.marketplaceReinstall
                         : sk.marketplaceInstall}
                   </Button>

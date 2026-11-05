@@ -48,6 +48,7 @@ import {
   type SourceFilter,
 } from '@/features/skills/skills-page.constants';
 import {
+  marketplaceLocalSkillId,
   marketplacePublicSkillUrl,
   normalizeCatalogEntry,
 } from '@/features/skills/skills-page.utils';
@@ -135,6 +136,7 @@ export function useSkillsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailSource, setDetailSource] = useState<'catalog' | 'store'>('catalog');
   const [detailTitle, setDetailTitle] = useState('');
+  const [detailPackageReference, setDetailPackageReference] = useState('');
   const [detailCatalogPreview, setDetailCatalogPreview] = useState<SkillMarkdownPreviewPayload | null>(null);
   const [detailMarketplacePreview, setDetailMarketplacePreview] = useState<SkillMarkdownPreviewPayload | null>(
     null,
@@ -153,6 +155,7 @@ export function useSkillsPage() {
   const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
   const [skillDiagnostics, setSkillDiagnostics] = useState<SkillDiagnostic[]>([]);
   const marketplaceDetailProviderRef = useRef<string | null>(null);
+  const marketplaceDetailRequestRef = useRef(0);
   const trackedUrlProviderRef = useRef<string | null>(urlMarketProvider);
   const trackedProvidersCurrentRef = useRef<string | null>(null);
   const trackedMarketFilterKeyRef = useRef('');
@@ -271,6 +274,7 @@ export function useSkillsPage() {
   if (!hasToken && trackedHasTokenRef.current) {
     setMarketBrowseProvider(null);
     marketplaceDetailProviderRef.current = null;
+    marketplaceDetailRequestRef.current += 1;
   }
   trackedHasTokenRef.current = hasToken;
 
@@ -695,7 +699,9 @@ export function useSkillsPage() {
     async (packageId: string, listTitle?: string, providerOverride?: string | null) => {
       const provider = providerOverride?.trim() || marketBrowseProvider;
       if (!provider) return;
+      const requestId = ++marketplaceDetailRequestRef.current;
       marketplaceDetailProviderRef.current = provider;
+      setDetailPackageReference(packageId);
       setDetailSource('store');
       setDetailOpen(true);
       setDetailTitle(listTitle?.trim() || packageId);
@@ -705,13 +711,16 @@ export function useSkillsPage() {
       setDetailLoading(true);
       try {
         const pkg = await getMarketplacePackageDetail(packageId, { provider });
+        if (requestId !== marketplaceDetailRequestRef.current) return;
         setDetailTitle(pkg.name);
+        setDetailPackageReference(provider === 'clawhub' ? pkg.id : pkg.name);
         setDetailMarketplacePreview(pkg.skillDocPreview);
       } catch (e) {
+        if (requestId !== marketplaceDetailRequestRef.current) return;
         setDetailMarketplacePreview(null);
         setDetailError(e instanceof Error ? e.message : sk.detailLoadFailed);
       } finally {
-        setDetailLoading(false);
+        if (requestId === marketplaceDetailRequestRef.current) setDetailLoading(false);
       }
     },
     [marketBrowseProvider, sk.detailLoadFailed],
@@ -817,8 +826,8 @@ export function useSkillsPage() {
   const detailExternalUrl = useMemo(() => {
     if (detailSource !== 'store' || !detailTitle) return null;
     const provider = marketplaceDetailProviderRef.current ?? marketBrowseProvider;
-    return marketplacePublicSkillUrl(provider, detailTitle);
-  }, [detailSource, detailTitle, marketBrowseProvider]);
+    return marketplacePublicSkillUrl(provider, detailPackageReference);
+  }, [detailSource, detailTitle, detailPackageReference, marketBrowseProvider]);
 
   const filteredCatalog = useMemo(() => {
     let rows = catalogMatchingSearch;
@@ -1000,7 +1009,7 @@ export function useSkillsPage() {
   };
 
   const isSkillInstalledByName = useCallback(
-    (name: string) => catalog.some((r) => r.name === name),
+    (name: string) => catalog.some((r) => r.name === name || r.directoryId === name),
     [catalog],
   );
 
@@ -1038,33 +1047,32 @@ export function useSkillsPage() {
       source?: 'catalog' | 'store';
       providerOverride?: string | null;
     }) => {
-      const name = (opts?.name ?? detailTitle).trim();
-      if (!name) return;
       const source = opts?.source ?? detailSource;
+      const name = (opts?.name ?? (source === 'store' ? detailPackageReference : detailTitle)).trim();
+      if (!name) return;
+      const provider = opts?.providerOverride?.trim() || marketplaceDetailProviderRef.current || marketBrowseProvider;
+      let chatSkillName = source === 'store' ? marketplaceLocalSkillId(name, provider) : name;
       if (source === 'catalog') {
         const row = catalog.find((r) => r.name === name);
         if (row?.plugin && pluginSkillUnavailable(row)) { setDetailOpen(false); navigate(pluginDetailPath(row.plugin.id, 'skills', row.plugin.authorizationStatus === 'required', skillLocation.pathname + skillLocation.search)); return; }
         if (row && !(enabledOverride[row.name] ?? row.enabled)) return;
       }
       setActionFeedback(null);
-      const needsMarketInstall = source === 'store' && !isSkillInstalledByName(name);
+      const needsMarketInstall = source === 'store' && !isSkillInstalledByName(chatSkillName);
       setUsingSkillInChatName(name);
       try {
         if (needsMarketInstall) {
-          const mp =
-            opts?.providerOverride?.trim() ||
-            marketplaceDetailProviderRef.current ||
-            marketBrowseProvider;
-          await installMarketplaceSkill({
+          const result = await installMarketplaceSkill({
             name,
             overwrite: false,
-            ...(mp ? { provider: mp } : {}),
+            ...(provider ? { provider } : {}),
           });
+          chatSkillName = result.availability?.skillName || result.skillId || chatSkillName;
           skipNextSkillsReloadRef.current = true;
           await load({ silent: true });
         }
         setDetailOpen(false);
-        navigate(`/chat/new?skill=${encodeURIComponent(name)}`);
+        navigate(`/chat/new?skill=${encodeURIComponent(chatSkillName)}`);
       } catch (e) {
         showFeedback('error', e instanceof Error ? e.message : sk.uploadFailed);
       } finally {
@@ -1074,6 +1082,7 @@ export function useSkillsPage() {
     [
       catalog,
       detailTitle,
+      detailPackageReference,
       skillLocation.pathname,
       skillLocation.search,
       detailSource,
@@ -1092,7 +1101,12 @@ export function useSkillsPage() {
       name: string,
       opts?: { useDetailProvider?: boolean; providerOverride?: string | null },
     ) => {
-      const installed = isSkillInstalledByName(name);
+      const p =
+        opts?.providerOverride?.trim() ||
+        (opts?.useDetailProvider
+          ? marketplaceDetailProviderRef.current ?? marketBrowseProvider
+          : marketBrowseProvider);
+      const installed = isSkillInstalledByName(marketplaceLocalSkillId(name, p));
       if (installed) {
         const ok = window.confirm(sk.marketplaceReinstallConfirm);
         if (!ok) return;
@@ -1100,11 +1114,6 @@ export function useSkillsPage() {
       setActionFeedback(null);
       setInstallingMarketName(name);
       try {
-        const p =
-          opts?.providerOverride?.trim() ||
-          (opts?.useDetailProvider
-            ? marketplaceDetailProviderRef.current ?? marketBrowseProvider
-            : marketBrowseProvider);
         const result = await installMarketplaceSkill({
           name,
           overwrite: installed,
@@ -1171,6 +1180,12 @@ export function useSkillsPage() {
     detailSource,
     setDetailSource,
     detailTitle,
+    detailPackageReference,
+    detailMarketplaceInstalled: isSkillInstalledByName(marketplaceLocalSkillId(
+      detailPackageReference, marketplaceDetailProviderRef.current ?? marketBrowseProvider,
+    )),
+    detailMarketplaceQualified: marketplaceDetailProviderRef.current === 'clawhub'
+      && detailPackageReference.includes('/'),
     setDetailTitle,
     detailCatalogPreview,
     setDetailCatalogPreview,

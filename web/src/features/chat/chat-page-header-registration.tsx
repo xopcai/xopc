@@ -233,6 +233,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             key={`context:${activeConversationId ?? context?.project?.id ?? 'new'}`}
             {...context}
             agentId={chatAgentId}
+            executionDeviceAction={activeConversationId ? <ExecutionDevicePicker conversationId={activeConversationId} disabled={chatAgentDisabled} /> : null}
             environmentAction={canChangeWorkspace && onWorkspaceChange ? <ChatWorkspaceControl
               directoryOnly conversationId={activeConversationId} workspacePath={activeConversationId ? workspacePath : context?.project?.workspaceRoot}
               available={workspaceAvailable} canChangeWorkspace disabled={workspaceDisabled}
@@ -242,7 +243,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             conversationId={activeConversationId ?? null}
           /> : null}
           {showContextControls && !workspaceOpen ? <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-edge-subtle" /> : null}
-          {activeConversationId && showContextControls ? <ExecutionDevicePicker key={`device:${activeConversationId}`} conversationId={activeConversationId} disabled={chatAgentDisabled} /> : null}
           {activeConversationId ? <ComputerChatButton key={activeConversationId} conversationId={activeConversationId} /> : null}
           {activeConversationId ? <PhoneChatButton conversationId={activeConversationId} /> : null}
           {showContextControls && !workspaceOpen ? (
