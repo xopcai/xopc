@@ -1,3 +1,4 @@
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Loader2 } from 'lucide-react';
@@ -11,8 +12,8 @@ import { SessionManager } from '../session/session-manager';
 import { pageContextDraftKey, pageContextDrafts } from './page-context-draft';
 
 /** Explicit resource capture only; never crawls page DOM, iframes, or related resources. */
-export function PageContextCaptureButton({ resource, selection, label, disabled = false }: {
-  resource: AppContextEnvelope['resourceRefs'][number]; selection?: AppContextEnvelope['selection']; label?: string; disabled?: boolean;
+export function PageContextCaptureButton({ resource, selection, label, disabled = false, presentation = 'button' }: {
+  resource: AppContextEnvelope['resourceRefs'][number]; selection?: AppContextEnvelope['selection']; label?: string; disabled?: boolean; presentation?: 'button' | 'menu';
 }) {
   const language = useLocaleStore(state => state.language);
   const labels = messages(language).chat.pageContext;
@@ -64,13 +65,14 @@ export function PageContextCaptureButton({ resource, selection, label, disabled 
       if (generation.current === current) { pending.current = false; setBusy(false); }
     }
   }
-  return <div className="flex min-w-0 flex-col items-start gap-1">
-    <button type="button" disabled={disabled || busy} onClick={() => void capture()} aria-busy={busy}
+  const button = <button type="button" disabled={disabled || busy} onClick={() => void capture()} aria-busy={busy}
       title={disabled ? labels.unavailable : label ?? labels.capture}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-edge px-2.5 py-1.5 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+      className={presentation === 'menu' ? 'flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover disabled:opacity-40' : 'inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-edge px-2.5 py-1.5 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50'}>
       {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <FileText className="size-3.5" aria-hidden />}
       {label ?? labels.capture}
-    </button>
+    </button>;
+  return <div className="flex min-w-0 flex-col items-start gap-1">
+    {presentation === 'menu' ? <DropdownMenu.Item asChild disabled={disabled || busy} onSelect={event => event.preventDefault()}>{button}</DropdownMenu.Item> : button}
     {failed ? <p role="alert" className="max-w-72 text-xs text-danger">{labels.unavailable}</p> : null}
   </div>;
 }

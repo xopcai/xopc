@@ -1,6 +1,7 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { RecordingOutcomeCard, recordingOutcomeInput } from './recording-outcome-card';
+import { LiveTranscriptView } from './live-transcript-view';
 import { Bookmark, FileText, Mic, Pause, Play, Square, Unlink, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -612,7 +613,7 @@ export function GlobalDiscussionCaptureHost() {
         {status.ai === 'textDelayed' ? <p className="text-xs leading-5 text-fg-muted">{copy.status.textDelayed}</p> : null}
         <details className="group rounded-xl bg-surface-inset px-3 py-2.5">
           <summary className="cursor-pointer text-xs font-medium text-fg-muted outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '查看实时文字' : 'Live transcript'}</summary>
-          <div className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg">{transcript?.text || (recorder.liveTranscriptionAvailable ? (zh ? '说话后，文字会陆续显示。' : 'Text will appear as you speak.') : copy.liveUnavailable)}</div>
+          <LiveTranscriptView text={transcript?.text ?? ''} placeholder={recorder.liveTranscriptionAvailable ? (zh ? '说话后，文字会陆续显示。' : 'Text will appear as you speak.') : copy.liveUnavailable} zh={zh} />
         </details>
         {inferredProject ? <div className="flex items-center justify-between gap-3 text-xs text-fg-muted"><span>{copy.projectLinked}</span><button type="button" className="inline-flex min-h-8 shrink-0 items-center gap-1 text-accent-fg" onClick={() => void unlinkProject()}><Unlink className="size-3" aria-hidden />{copy.undo}</button></div> : null}
         {finishing && uploadProgress > 0 ? <div role="progressbar" aria-label={zh ? '备份录音' : 'Recording backup'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(uploadProgress)} className="h-1.5 overflow-hidden rounded-full bg-surface-hover"><div className="h-full bg-accent motion-safe:transition-[width]" style={{ width: `${uploadProgress}%` }} /></div> : null}

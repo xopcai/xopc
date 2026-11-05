@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Check, ChevronDown, Eye, Code2, FileText, History, MessageCircle, MoreHorizontal, Search, Share2, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Eye, Code2, FileText, History, MessageCircle, MoreHorizontal, Search, Share2, Sparkles, Trash2, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -7,6 +7,7 @@ import { SessionManager } from '@/features/chat/session/session-manager';
 import { pageContextDrafts, pageContextDraftKey } from '@/features/chat/context/page-context-draft';
 import { useGatewayStore } from '@/stores/gateway-store';
 
+import type { EditorTextSelection } from '@/components/editor-text-selection';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
@@ -38,6 +39,7 @@ import { NoteHistoryPanel } from './note-history-panel';
 import { NoteMarkdownView } from './note-markdown-view';
 import { NoteBreakdownPanel } from './note-breakdown-panel';
 import { NoteShareDialog } from './note-share-dialog';
+import { NoteSelectionActions } from './note-selection-actions';
 import { NoteReadAloudControls } from './note-read-aloud-controls';
 import { buildNoteReadAloudText } from './note-read-aloud';
 
@@ -45,6 +47,8 @@ type EditorMode = 'wysiwyg' | 'source' | 'preview';
 
 const loadBlockEditor = () => import('@/components/block-editor');
 const loadMarkdownEditor = () => import('@/components/markdown/markdown-editor');
+
+const NoteAssistantChat = lazy(() => import('@/features/chat/chat-page').then(module => ({ default: module.ChatPage })));
 
 const BlockEditor = lazy(() => loadBlockEditor().then((m) => ({ default: m.BlockEditor })));
 const MarkdownEditor = lazy(() => loadMarkdownEditor().then((m) => ({ default: m.MarkdownEditor })));
@@ -184,10 +188,14 @@ function NoteDetailPanelInner({
   const automationSuggestions = messages(language).automations.suggestions;
   const { data: meeting } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId));
   const [showMeeting, setShowMeeting] = useState(true);
+  const [textSelection, setTextSelection] = useState<EditorTextSelection | null>(null);
+  const dismissSelection = useCallback(() => setTextSelection(null), []);
+  useEffect(() => { setTextSelection(null); }, [noteId]);
   const navigate = useNavigate();
   const isDark = useThemeStore((s) => s.resolved) === 'dark';
   const { openImage } = useNoteImageLightbox();
   const [mode, setMode] = useState<EditorMode>(initialMode);
+  useEffect(() => { setTextSelection(null); }, [mode, showMeeting]);
   const [activeSidePanel, setActiveSidePanel] = useState<'history' | 'breakdown' | null>(null);
   const [previewSnapshot, setPreviewSnapshot] = useState<NoteSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
@@ -196,6 +204,20 @@ function NoteDetailPanelInner({
   const [historyResizing, setHistoryResizing] = useState(false);
   const [catalyzing, setCatalyzing] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantBinding, setAssistantBinding] = useState<{ noteId: string; gatewayUrl: string; gatewayToken?: string; conversationId: string } | null>(null);
+  const assistantGeneration = useRef(0);
+  const [assistantDraft, setAssistantDraft] = useState<{ id: number; text: string } | null>(null);
+  const gatewayUrl = useGatewayStore(state => state.baseUrl);
+  const gatewayToken = useGatewayStore(state => state.conversationId);
+  const assistantConversationId = assistantBinding?.noteId === noteId && assistantBinding.gatewayUrl === gatewayUrl
+    && assistantBinding.gatewayToken === gatewayToken ? assistantBinding.conversationId : null;
+  useEffect(() => {
+    assistantGeneration.current++;
+    setAssistantOpen(false); setAssistantBinding(null); setOpeningChat(false); setAssistantDraft(null);
+    setShowMeeting(true);
+    return () => { assistantGeneration.current++; };
+  }, [noteId, gatewayUrl, gatewayToken]);
   const captureGeneration = useRef(0);
   useEffect(() => () => { captureGeneration.current += 1; }, [noteId]);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -203,12 +225,12 @@ function NoteDetailPanelInner({
   const [shareNote, setShareNote] = useState<Note | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const titleInitRef = useRef(false);
   const titleComposingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingMarkdownRef = useRef<string | null>(null);
   const pendingTitleRef = useRef<string | null>(null);
+  const pendingEditRevision = useRef<number | undefined>(undefined);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const sidePanelShellRef = useRef<HTMLDivElement>(null);
   const sidePanelInnerRef = useRef<HTMLDivElement>(null);
@@ -245,7 +267,6 @@ function NoteDetailPanelInner({
   }, [mutate, noteId, showRefreshError]);
 
   useEffect(() => {
-    titleInitRef.current = false;
     setTitle('');
     setPreviewSnapshot(null);
     setActiveSidePanel(null);
@@ -254,10 +275,9 @@ function NoteDetailPanelInner({
   }, [noteId]);
 
   useEffect(() => {
-    if (!note || titleInitRef.current) return;
+    if (!note || saving || pendingTitleRef.current !== null || titleComposingRef.current) return;
     setTitle(note.title ?? '');
-    titleInitRef.current = true;
-  }, [note]);
+  }, [note, saving]);
 
   useEffect(() => {
     if (!autoFocus || !note || isPreviewingSnapshot || didAutoFocusRef.current === noteId) return undefined;
@@ -307,6 +327,18 @@ function NoteDetailPanelInner({
     setMode(nextMode);
   }, [stopNoteReading]);
 
+  useEffect(() => {
+    if (!saving && pendingMarkdownRef.current === null && pendingTitleRef.current === null) {
+      pendingEditRevision.current = note?.remoteVersion ?? 1;
+    }
+  }, [noteId, note?.remoteVersion, saving]);
+  const persistEditorPatch = useCallback(async (patch: Partial<Note>) => {
+    const expected = pendingEditRevision.current ?? note?.remoteVersion ?? 1;
+    const saved = await updateNote(noteId, patch, expected);
+    if (pendingEditRevision.current === expected) pendingEditRevision.current = saved.remoteVersion ?? expected + 1;
+    return saved;
+  }, [noteId, note?.remoteVersion]);
+
   const handleTitleChange = useCallback(
     (value: string) => {
       stopNoteReading();
@@ -320,17 +352,18 @@ function NoteDetailPanelInner({
         if (nextTitle === null) return;
         setSaving(true);
         try {
-          await updateNote(noteId, { title: nextTitle });
+          await persistEditorPatch({ title: nextTitle });
           await mutate();
           onSaved?.();
-        } catch {
-          // title save failed silently — content save will surface errors
+        } catch (err) {
+          if (pendingTitleRef.current === null) pendingTitleRef.current = nextTitle;
+          setActionError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
         } finally {
           setSaving(false);
         }
       }, 600);
     },
-    [stopNoteReading, noteId, mutate, onSaved],
+    [stopNoteReading, noteId, mutate, onSaved, persistEditorPatch, n.saveFailed, n.saveFailedHint],
   );
 
   const headerMain = useMemo(
@@ -350,21 +383,6 @@ function NoteDetailPanelInner({
     [n.saving, saving, time, title],
   );
 
-  const handleOpenNoteChat = useCallback(async (forceNew = false) => {
-    setOpeningChat(true);
-    setActionError(null);
-    try {
-      const result = await openNoteChat(noteId, { forceNew });
-      await mutate();
-      await mutateNoteThreads();
-      navigate(`/chat/${encodeURIComponent(result.conversationId)}`);
-    } catch (err) {
-      setActionError(`${n.chatOpenFailedTitle}: ${err instanceof Error ? err.message : n.chatOpenFailedMessage}`);
-    } finally {
-      setOpeningChat(false);
-    }
-  }, [mutate, mutateNoteThreads, navigate, noteId, n.chatOpenFailedMessage, n.chatOpenFailedTitle]);
-
   const handleCatalyze = useCallback(async () => {
     setCatalyzing(true);
     setActionError(null);
@@ -379,6 +397,7 @@ function NoteDetailPanelInner({
   }, [mutate, noteId]);
 
   const handleBreakdownClick = useCallback(() => {
+    setAssistantOpen(false);
     setActiveSidePanel(activeSidePanel === 'breakdown' ? null : 'breakdown');
     if (!note?.aiDeep?.catalysis?.report && !catalyzing) {
       void handleCatalyze();
@@ -411,7 +430,7 @@ function NoteDetailPanelInner({
     if (Object.keys(patch).length === 0) return note ?? null;
     setSaving(true);
     try {
-      const saved = await updateNote(noteId, patch);
+      const saved = await persistEditorPatch(patch);
       await mutate(saved, { revalidate: false });
       onSaved?.();
       return saved;
@@ -423,9 +442,37 @@ function NoteDetailPanelInner({
     } finally {
       setSaving(false);
     }
-  }, [mutate, n.saveFailed, n.saveFailedHint, note, noteId, onSaved]);
+  }, [mutate, n.saveFailed, n.saveFailedHint, note, onSaved, persistEditorPatch]);
 
-  const handleCaptureContext = useCallback(async () => {
+  const beforeAssistantSend = useCallback(async () => {
+    if (saving) {
+      setActionError(language === 'zh' ? '笔记正在保存，请稍后发送。' : 'The note is saving. Please send again shortly.');
+      return false;
+    }
+    const saved = await flushPendingSave();
+    return !!saved && pendingMarkdownRef.current === null && pendingTitleRef.current === null;
+  }, [saving, language, flushPendingSave]);
+
+  const handleOpenNoteChat = useCallback(async (forceNew = false) => {
+    setActiveSidePanel(null);
+    setAssistantOpen(true);
+    if (openingChat || (!forceNew && assistantConversationId)) return;
+    const generation = ++assistantGeneration.current;
+    setOpeningChat(true); setActionError(null);
+    try {
+      if (!await beforeAssistantSend()) return;
+      const result = await openNoteChat(noteId, { forceNew });
+      if (generation !== assistantGeneration.current) return;
+      setAssistantBinding({ noteId, gatewayUrl, gatewayToken, conversationId: result.conversationId });
+      await mutate(); await mutateNoteThreads();
+    } catch (err) {
+      if (generation === assistantGeneration.current) setActionError(`${n.chatOpenFailedTitle}: ${err instanceof Error ? err.message : n.chatOpenFailedMessage}`);
+    } finally {
+      if (generation === assistantGeneration.current) setOpeningChat(false);
+    }
+  }, [openingChat, assistantConversationId, beforeAssistantSend, mutate, mutateNoteThreads, noteId, gatewayUrl, gatewayToken, n.chatOpenFailedMessage, n.chatOpenFailedTitle]);
+
+  const handleCaptureContext = useCallback(async (selectionOverride?: string) => {
     if (!note || openingChat || saving) return;
     setOpeningChat(true);
     setActionError(null);
@@ -436,9 +483,9 @@ function NoteDetailPanelInner({
       && useGatewayStore.getState().conversationId === gateway.conversationId;
     try {
       const selection = window.getSelection();
-      const selectedText = selection?.anchorNode && selection.focusNode
+      const selectedText = selectionOverride ?? (selection?.anchorNode && selection.focusNode
         && editorContainerRef.current?.contains(selection.anchorNode)
-        && editorContainerRef.current.contains(selection.focusNode) ? selection.toString() : '';
+        && editorContainerRef.current.contains(selection.focusNode) ? selection.toString() : '');
       // Leaving this page flushes edits too; capture the saved revision, not its predecessor.
       const saved = await flushPendingSave();
       if (!saved || !isCurrent()) return;
@@ -583,7 +630,7 @@ function NoteDetailPanelInner({
                 {language === 'zh' ? '分享' : 'Share'}
               </DropdownMenu.Item>
               <DropdownMenu.Item
-                onSelect={() => setActiveSidePanel(activeSidePanel === 'history' ? null : 'history')}
+                onSelect={() => { setAssistantOpen(false); setActiveSidePanel(activeSidePanel === 'history' ? null : 'history'); }}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
               >
                 <History className="size-4 text-fg-muted" aria-hidden />
@@ -641,8 +688,8 @@ function NoteDetailPanelInner({
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: headerStart,
-      main: note && !(meeting && showMeeting) ? headerMain : null,
-      end: note && !(meeting && showMeeting) ? headerEnd : null,
+      main: note && !meeting ? headerMain : null,
+      end: note && !meeting ? headerEnd : null,
     });
     return () => {
       if (clearHeaderOnCleanup) clearPageHeader();
@@ -664,17 +711,18 @@ function NoteDetailPanelInner({
         setSaving(true);
         setActionError(null);
         try {
-          await updateNote(noteId, { markdown });
+          await persistEditorPatch({ markdown });
           await mutate();
           onSaved?.();
         } catch (err) {
+          if (pendingMarkdownRef.current === null) pendingMarkdownRef.current = markdown;
           setActionError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
         } finally {
           setSaving(false);
         }
       }, 600);
     },
-    [stopNoteReading, noteId, mutate, n.saveFailed, n.saveFailedHint, onSaved],
+    [stopNoteReading, noteId, mutate, n.saveFailed, n.saveFailedHint, onSaved, persistEditorPatch],
   );
 
   const handleHistorySelect = useCallback(
@@ -716,7 +764,7 @@ function NoteDetailPanelInner({
       if (pendingTitle !== null) patch.title = pendingTitle;
       if (Object.keys(patch).length > 0) {
         // The component is already unmounting, so only consume the best-effort save failure here.
-        void updateNote(noteId, patch).catch(() => undefined);
+        void updateNote(noteId, patch, pendingEditRevision.current).catch(() => undefined);
       }
     };
   }, [noteId]);
@@ -766,33 +814,10 @@ function NoteDetailPanelInner({
     />
   ) : null;
 
-  return (
-    <>
-    <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
-      {/* Editor */}
-      <div className="mx-auto flex min-h-0 min-w-0 w-full max-w-[60rem] flex-1 flex-col">
-        {actionError ? <p className="mb-3 shrink-0 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
-        <ProductAutomationFeedback
-          eventType="note.created"
-          source="notes"
-          payloadKey="noteId"
-          payloadValue={noteId}
-          className="mb-3 shrink-0"
-        />
-        <ProductAutomationFeedback
-          eventType="note.updated"
-          source="notes"
-          payloadKey="noteId"
-          payloadValue={noteId}
-          className="mb-3 shrink-0"
-        />
-        {meeting && !showMeeting ? <button className="mb-2 inline-flex min-h-11 shrink-0 items-center self-start rounded-lg px-2 text-sm text-accent-fg focus-visible:ring-2 focus-visible:ring-accent" onClick={() => setShowMeeting(true)}>{language === 'zh' ? '← 返回录音笔记' : '← Back to recording'}</button> : null}
-        <div
-          ref={editorContainerRef}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel xl:flex-row"
-        >
-          {meeting && showMeeting ? <DiscussionNoteSections noteId={noteId} noteActions={{ onAnalyze: handleBreakdownClick,onChat: () => { void handleOpenNoteChat(false); },onShare: () => { void handleShare(); },onHistory: () => setActiveSidePanel(activeSidePanel === 'history' ? null : 'history'),onDelete: () => setDeleteConfirmOpen(true),busy: deleting || saving || catalyzing || openingChat }} onPersonalNotes={() => { setShowMeeting(false); window.setTimeout(() => titleInputRef.current?.focus(),0); }} /> : null}
-          <div className={meeting && showMeeting ? "hidden" : "min-h-0 min-w-0 flex-1"}>
+  const personalEditor = (
+    <div className="flex h-full min-h-0 flex-col">
+      {meeting ? <div className="flex shrink-0 items-center justify-end px-4 py-1"><NoteDetailModeSwitcher mode={mode} onModeChange={handleModeChange} labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }} /></div> : null}
+          <div className="h-full min-h-0 min-w-0 flex-1">
             {isPreviewingSnapshot ? (
               <div className="h-full overflow-y-auto px-4 py-4 sm:px-6">
                 {displayTitle && (
@@ -844,6 +869,7 @@ function NoteDetailPanelInner({
                           initialContent={note.markdown ?? ''}
                           onChange={handleSave}
                           noteId={noteId}
+                          onTextSelection={setTextSelection}
                         />
                       </Suspense>
                     </div>
@@ -869,6 +895,7 @@ function NoteDetailPanelInner({
                           initialContent={note.markdown ?? ''}
                           onChange={handleSave}
                           isDark={isDark}
+                          onTextSelection={setTextSelection}
                         />
                       </Suspense>
                     </div>
@@ -900,14 +927,61 @@ function NoteDetailPanelInner({
               </>
             )}
           </div>
+    </div>
+  );
+
+  return (
+    <>
+    {textSelection && !isPreviewingSnapshot && !(meeting && showMeeting) && mode !== 'preview' ? <NoteSelectionActions key={`${noteId}:${mode}`} noteId={noteId} selection={textSelection} zh={language === 'zh'} onDismiss={dismissSelection} onAsk={text => { setAssistantDraft({ id: Date.now(), text: language === 'zh' ? `请帮我分析或改写下面这段笔记：\n\n${text}` : `Help me analyze or rewrite this note selection:\n\n${text}` }); dismissSelection(); void handleOpenNoteChat(); }} /> : null}
+    <div className="@container/note flex h-full min-h-0 min-w-0 gap-3 p-3 sm:p-4">
+      {/* Editor */}
+      <div className={cn("mx-auto min-h-0 min-w-0 w-full flex-1 flex-col", (assistantOpen || activeSidePanel) ? "hidden @min-[56rem]/note:flex" : "flex", !meeting && "max-w-[60rem]")}>
+        {actionError ? <p className="mb-3 shrink-0 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
+        <ProductAutomationFeedback
+          eventType="note.created"
+          source="notes"
+          payloadKey="noteId"
+          payloadValue={noteId}
+          className="mb-3 shrink-0"
+        />
+        <ProductAutomationFeedback
+          eventType="note.updated"
+          source="notes"
+          payloadKey="noteId"
+          payloadValue={noteId}
+          className="mb-3 shrink-0"
+        />
+
+        <div
+          ref={editorContainerRef}
+          onKeyDown={event => {
+            if (textSelection && event.altKey && event.key === 'Enter') {
+              event.preventDefault();
+              document.querySelector<HTMLButtonElement>('[data-note-selection-actions] button:not(:disabled)')?.focus();
+            }
+          }}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel xl:flex-row"
+        >
+          {meeting ? <DiscussionNoteSections personalNotes={personalEditor} personalNotesActive={!showMeeting} onMeetingContent={() => setShowMeeting(true)} noteId={noteId} noteActions={{ onAnalyze: handleBreakdownClick,chatOpen: assistantOpen,onChat: () => { if (assistantOpen) setAssistantOpen(false); else void handleOpenNoteChat(false); },onShare: () => { void handleShare(); },onHistory: () => { setAssistantOpen(false); setActiveSidePanel(activeSidePanel === 'history' ? null : 'history'); },onDelete: () => setDeleteConfirmOpen(true),busy: deleting || saving || catalyzing || openingChat }} onPersonalNotes={() => { setShowMeeting(false); window.setTimeout(() => titleInputRef.current?.focus(),0); }} /> : null}
+          {!meeting ? personalEditor : null}
         </div>
       </div>
+
+      {assistantOpen || assistantConversationId ? <aside id={`note-assistant-${noteId}`} aria-label={language === 'zh' ? '笔记 AI 对话' : 'Note AI chat'} className={cn('min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel', assistantOpen ? 'flex w-full @min-[56rem]/note:w-[22rem] @min-[76rem]/note:w-[24rem]' : 'hidden')}>
+        <header className="flex shrink-0 items-center gap-2 border-b border-edge-subtle px-4 py-2"><MessageCircle className="size-4 text-accent-fg" aria-hidden /><h2 className="flex-1 text-sm font-medium">{language === 'zh' ? 'AI 对话' : 'AI chat'}</h2><button type="button" className="inline-flex size-11 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={language === 'zh' ? '收起 AI 对话' : 'Close AI chat'} onClick={() => { setAssistantOpen(false); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[aria-controls="note-assistant-${noteId}"]`)?.focus({ preventScroll: true })); }}><X className="size-4" /></button></header>
+        <p className="shrink-0 border-b border-edge-subtle px-4 py-3 text-xs leading-5 text-fg-muted">{language === 'zh' ? '已关联当前笔记。可提问、改写我的笔记，也可将回答保存回笔记。' : 'Linked to this note. Ask questions, edit My notes, or save an answer to the note.'}</p>
+        {actionError && assistantConversationId ? <p role="alert" className="shrink-0 px-4 py-2 text-xs text-danger">{actionError}</p> : null}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {assistantConversationId ? <Suspense fallback={<EditorFallback />}><NoteAssistantChat key={`${noteId}:${assistantConversationId}`} embedded sourceNoteInView conversationId={assistantConversationId} draftSeed={assistantDraft} beforeSend={beforeAssistantSend} /></Suspense> : openingChat ? <EditorFallback /> : <div className="space-y-3 p-4 text-sm"><p className="text-fg-muted">{actionError || (language === 'zh' ? '对话尚未打开，请重试。' : 'Chat could not be opened. Try again.')}</p><button type="button" className="min-h-11 rounded-lg px-3 text-accent-fg hover:bg-surface-hover" onClick={() => void handleOpenNoteChat()}>{language === 'zh' ? '重新打开' : 'Try again'}</button></div>}
+        </div>
+      </aside> : null}
 
       {/* Shared side panel — animated width */}
       <div
         ref={sidePanelShellRef}
         className={cn(
-          'relative flex min-h-0 shrink-0 flex-col overflow-hidden',
+          'relative min-h-0 max-w-full shrink-0 flex-col overflow-hidden',
+          activeSidePanel ? 'flex' : 'hidden',
           !historyResizing && 'transition-[width] duration-300 ease-in-out',
         )}
         style={{ width: activeSidePanel ? sidePanelWidth : 0 }}

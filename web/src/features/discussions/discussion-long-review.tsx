@@ -11,32 +11,51 @@ export function DiscussionLongReview({ id, query, zh, refreshKey, sourceKey, act
   onEvidence: (evidence: DiscussionEvidence) => void; onPlay: (start: number,end: number) => void;
 }) {
   const [review,setReview] = useState<DiscussionReview>();
+  const [pending,setPending] = useState<DiscussionReview>();
+  const published = useRef<{ key: string; value: DiscussionReview } | null>(null);
+  const explicitRefresh = useRef(false);
   const [loading,setLoading] = useState(true); const [error,setError] = useState('');
   const [busy,setBusy] = useState(false); const generation = useRef(0);
   const [loadedSource,setLoadedSource] = useState<string>();
   const [selected,setSelected] = useState<DiscussionReviewEntry>();
   const [freshQuery,setFreshQuery] = useState('');
   const [tick,setTick] = useState(0);
+  const documentKey = JSON.stringify([id,sourceKey,query]);
+  // Searches are snapshots; only an explicit refresh changes their result set.
+  const backgroundRefreshKey = query ? '' : refreshKey;
   useEffect(() => { if (!active || query) return; const timer = window.setInterval(() => setTick(value => value + 1),3000); return () => window.clearInterval(timer); },[active,query]);
   useEffect(() => { setSelected(undefined); },[id,query]);
   useEffect(() => {
     const current = ++generation.current; const controller = new AbortController();
     setLoading(true); setBusy(false); setError('');
+    const replace = explicitRefresh.current;
+    explicitRefresh.current = false;
     const timer = window.setTimeout(() => {
       void fetchJson<DiscussionReview>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/review?q=${encodeURIComponent(query)}`),{ signal: controller.signal }).then(value => {
-        if (generation.current === current) { setReview(value); setLoadedSource(sourceKey); setFreshQuery(query); }
+        if (generation.current !== current) return;
+        const previous = published.current;
+        if (!replace && previous?.key === documentKey) {
+          if (previous.value.version !== value.version) setPending(value);
+          return;
+        }
+        published.current = { key: documentKey,value };
+        setReview(value); setPending(undefined); setLoadedSource(documentKey); setFreshQuery(query);
       }).catch(caught => { if (generation.current === current && !controller.signal.aborted) setError(String(caught)); })
         .finally(() => { if (generation.current === current) setLoading(false); });
     },query ? 200 : 0);
     return () => { generation.current++; controller.abort(); window.clearTimeout(timer); };
-  },[id,query,refreshKey,sourceKey,tick]);
+  },[id,query,backgroundRefreshKey,sourceKey,documentKey,tick]);
+  function refresh() { explicitRefresh.current = true; setTick(value => value + 1); }
   async function more() {
     if (!review || busy) return; const current = generation.current; setBusy(true);
     try {
       const next = await fetchJson<DiscussionReview>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/review?q=${encodeURIComponent(query)}&offset=${review.hits.length}&version=${review.version}`));
-      if (current === generation.current) setReview({ ...next,hits: [...review.hits,...next.hits] });
+      if (current === generation.current) {
+        const value = { ...next,hits: [...review.hits,...next.hits] };
+        published.current = { key: documentKey,value }; setReview(value);
+      }
     } catch (caught) { if (current === generation.current) setError(zh ? `内容已变化，请重新搜索。${String(caught)}` : `Content changed; search again. ${String(caught)}`); }
-    finally { setBusy(false); }
+    finally { if (current === generation.current) setBusy(false); }
   }
   function open(entry: DiscussionReviewEntry) {
     setSelected(entry);
@@ -52,11 +71,15 @@ export function DiscussionLongReview({ id, query, zh, refreshKey, sourceKey, act
     {entry.segments.length ? <Button onClick={() => open(entry)}>{zh ? '查看对应原文' : 'View transcript'}</Button> : <p className="text-xs text-fg-muted">{zh ? '暂无可核实的原文定位' : 'No verified transcript reference'}</p>}
   </article>;
   return <section aria-label={zh ? '长录音回顾' : 'Recording review'} className="flex flex-col gap-3">
-    {error ? <div><p role="alert" className="text-sm text-danger">{error}</p><Button onClick={() => setTick(value => value + 1)}>{zh ? '刷新结果' : 'Refresh results'}</Button></div> : null}
-    {loading && (!review || loadedSource !== sourceKey || freshQuery !== query) ? <Skeleton className="h-20 w-full" /> : null}
-    {review && loadedSource === sourceKey && (!query || freshQuery === query) ? <>
+    {error ? <div><p role="alert" className="text-sm text-danger">{error}</p><Button onClick={refresh}>{zh ? '刷新结果' : 'Refresh results'}</Button></div> : null}
+    {loading && (!review || loadedSource !== documentKey || freshQuery !== query) ? <Skeleton className="h-20 w-full" /> : null}
+    {review && loadedSource === documentKey && (!query || freshQuery === query) ? <>
+      <div className="sticky top-0 z-10 h-0">{pending ? <div className="flex items-center justify-between gap-3 rounded-lg border border-edge-subtle bg-surface-overlay px-3 py-2 text-xs text-fg-muted shadow-popover">
+        <span role="status">{zh ? '内容已更新，当前阅读位置已保留' : 'Updates available. Your reading position is preserved.'}</span>
+        <Button variant="ghost" onClick={() => { published.current = { key: documentKey,value: pending }; setReview(pending); setPending(undefined); }}>{zh ? '查看最新' : 'View latest'}</Button>
+      </div> : null}</div>
 
-      {query ? <><h3 className="text-sm font-medium">{zh ? `搜索结果 · ${review.total}` : `Search results · ${review.total}`}</h3><Button onClick={() => setTick(value => value + 1)}>{zh ? '刷新结果' : 'Refresh results'}</Button>
+      {query ? <><h3 className="text-sm font-medium">{zh ? `搜索结果 · ${review.total}` : `Search results · ${review.total}`}</h3><Button onClick={refresh}>{zh ? '刷新结果' : 'Refresh results'}</Button>
         <div aria-label={zh ? '命中位置' : 'Match positions'} className="relative my-3 h-5 rounded bg-surface-inset">{review.hits.filter(hit => hit.startedAtMs !== undefined).map(hit => <button key={hit.id} className="absolute top-0 h-5 w-1.5 rounded bg-accent" style={{ left: `${Math.min(99,100 * hit.startedAtMs! / Math.max(1,review.coverage.durationMs))}%` }} aria-label={`${clock(hit.startedAtMs!)} ${hit.title || label(hit)}`} onClick={() => open(hit)} />)}</div>{!review.total ? <p className="text-sm text-fg-muted">{zh ? '未找到关键词；尚未转写的内容无法搜索。' : 'No matches. Untranscribed audio is not searchable yet.'}</p> : null}{review.hits.map(row)}</> : <>
         {tab === 'summary' && review.chapters.length ? <details className="rounded-xl bg-surface-inset px-4"><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent">{zh ? '章节目录' : 'Chapters'} · {review.chapters.length}</summary><div className="space-y-3 pb-4">{review.chapters.map(row)}</div></details> : null}
         {review.hits.length ? <><h3 className="text-sm font-medium">{zh ? '本轮已完成转写（阶段性）' : 'Available transcription from this run'}</h3>{review.hits.map(row)}</> : null}

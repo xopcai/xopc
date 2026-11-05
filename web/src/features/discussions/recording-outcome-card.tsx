@@ -13,17 +13,17 @@ export function recordingOutcomeInput(detail?: DiscussionDetail | null, localSav
     analysisStale: !!detail?.organization && detail.organization.transcriptRevision !== detail.transcript?.revision };
 }
 
-export function RecordingOutcomeCard({ input, zh, compact = false, busy = false, onRetry, children, context = 'capture' }: {
-  input: XopcRecordingOutcomeInput; zh: boolean; context?: 'capture' | 'note'; compact?: boolean; busy?: boolean;
+export function RecordingOutcomeCard({ input, zh, compact = false, busy = false, onRetry, children, nextAttemptAt, context = 'capture' }: {
+  nextAttemptAt?: number; input: XopcRecordingOutcomeInput; zh: boolean; context?: 'capture' | 'note'; compact?: boolean; busy?: boolean;
   onRetry?: (mode: string) => void; children?: React.ReactNode;
 }) {
   const state = projectRecordingOutcome(input);
   const stage = recordingOutcomeStages[state.stage as keyof typeof recordingOutcomeStages];
   const phrase = (key: keyof typeof recordingOutcomePhrases) => recordingOutcomePhrases[key][zh ? 0 : 1];
   const retryKey = (`retry_${['analysis_failed','transcription_failed','verify_failed'].includes(state.stage) ? state.stage : state.retry}`) as keyof typeof recordingOutcomePhrases;
-  return <section aria-live="polite" data-recording-outcome={state.stage} className={context === 'note' ? 'text-fg' : 'rounded-xl bg-surface-inset p-3 text-fg'}>
+  return <section aria-live="polite" data-recording-outcome={state.stage} className={context === 'note' ? 'mx-auto w-full max-w-[46rem] text-fg' : 'rounded-xl bg-surface-inset p-3 text-fg'}>
     {context === 'capture' ? <p className="mb-1 text-sm font-medium">{phrase(`leave_${state.leave}` as keyof typeof recordingOutcomePhrases)}</p> : null}
-    <details className="group" key={context}>
+    <details className="group" key={context} open={context === 'note' && (state.stage.endsWith('_failed') || state.stage.includes('retry') || state.stage === 'local_partial') ? true : undefined}>
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
         <span className={`size-1.5 shrink-0 rounded-full ${state.stage.endsWith('_failed') || state.stage === 'local_partial' ? 'bg-danger' : 'bg-accent'}`} aria-hidden />
         <span className="min-w-0 flex-1">{stage[zh ? 0 : 1]}</span>
@@ -33,6 +33,7 @@ export function RecordingOutcomeCard({ input, zh, compact = false, busy = false,
         {context === 'note' ? <p>{phrase(`leave_${state.leave}` as keyof typeof recordingOutcomePhrases)}</p> : null}
         {!compact ? <>
           <p>{stage[zh ? 2 : 3]}</p>
+          {nextAttemptAt && Number.isFinite(nextAttemptAt) ? <p>{zh ? '下次自动重试时间：' : 'Next automatic retry: '}{new Date(nextAttemptAt).toLocaleTimeString(zh ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</p> : null}
           {state.leave === 'local' ? <p>{phrase('local_hint')}</p> : null}
           <ul className="flex flex-wrap gap-x-4 gap-y-1" aria-label={zh ? '已可用内容' : 'Available content'}>
             {(['audio','text','note'] as const).map(key => <li key={key}>{phrase(key)} · {key === 'note' && state.note && state.stale ? phrase('old_note') : phrase(state[key] ? 'available' : 'pending')}</li>)}
