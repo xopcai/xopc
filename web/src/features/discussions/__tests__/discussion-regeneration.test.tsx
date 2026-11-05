@@ -38,9 +38,9 @@ describe('original-audio regeneration controls', () => {
   it('distinguishes a full original-audio rerun from summary-only regeneration', async () => {
     await render();
     expect(find('重新整理纪要')).toBeUndefined();
-    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="更多笔记操作"]')!.click());
+    await act(async () => find('整理方式')!.click());
     expect(find('重新整理纪要')).toBeDefined();
-    await act(async () => find('从原音重新生成')!.click());
+    await act(async () => { document.querySelector('dialog details, [role="dialog"] details')?.setAttribute('open',''); find('从原音重新生成')!.click(); });
     expect(mocks.retry).toHaveBeenCalledWith('capture', 'from_audio');
     expect(container.textContent).toContain('Previous published summary');
   });

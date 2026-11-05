@@ -15,6 +15,7 @@ import {
 } from '@xopcai/note-editor-core';
 
 import { cn } from '@/lib/cn';
+import type { EditorTextSelection } from '@/components/editor-text-selection';
 import { messages } from '@/i18n/messages';
 import { useAppLinkOpener } from '@/lib/use-app-link-opener';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -46,6 +47,7 @@ export interface BlockEditorProps {
   className?: string;
   /** Note ID for image upload endpoint. */
   noteId?: string;
+  onTextSelection?: (selection: EditorTextSelection | null) => void;
 }
 
 function isEmptyParagraphAtDocEdge(
@@ -69,6 +71,7 @@ export function BlockEditor({
   placeholder = 'Start writing, or type "/" for commands…',
   className,
   noteId,
+  onTextSelection,
 }: BlockEditorProps) {
   const language = useLocaleStore((s) => s.language);
   const notesLabels = messages(language).notes;
@@ -77,6 +80,8 @@ export function BlockEditor({
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const selectionCallback = useRef(onTextSelection);
+  selectionCallback.current = onTextSelection;
   const imageInputRef = useRef<HTMLInputElement>(null);
   const slashRuntimeRef = useRef<SlashCommandRuntime>({});
   const uploadImageFileRef = useRef<(file: File) => void>(() => undefined);
@@ -127,10 +132,28 @@ export function BlockEditor({
     ],
     content: '',
     onUpdate: ({ editor: editorInstance }) => {
+      selectionCallback.current?.(null);
       const markdownContent = serializeNoteMarkdown(editorInstance);
       latestMarkdownRef.current = markdownContent;
       lastSentMarkdownRef.current = markdownContent;
       onChangeRef.current(markdownContent);
+    },
+    onSelectionUpdate: ({ editor: current }) => {
+      const { from, to, empty } = current.state.selection;
+      const text = current.state.doc.textBetween(from, to, '\n');
+      if (empty || !text.trim() || !current.view.hasFocus()) { selectionCallback.current?.(null); return; }
+      const document = current.state.doc;
+      const start = current.view.coordsAtPos(from); const end = current.view.coordsAtPos(to);
+      const resolved = document.resolve(to);
+      const insertAt = resolved.depth ? resolved.after(1) : to;
+      selectionCallback.current?.({ text,
+        rect: { left: Math.min(start.left,end.left), right: Math.max(start.right,end.right), top: start.top, bottom: end.bottom },
+        insertAfter: markdown => {
+          if (current.isDestroyed || !current.state.doc.eq(document)) return false;
+          return current.chain().focus().insertContentAt(insertAt, markdown).run();
+        },
+        restore: () => { if (!current.isDestroyed && current.state.doc.eq(document)) current.chain().focus().setTextSelection({ from, to }).run(); },
+      });
     },
     editorProps: {
       attributes: {

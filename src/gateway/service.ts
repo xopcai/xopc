@@ -661,6 +661,7 @@ export class GatewayService {
         const context = await buildNoteAgentContext({
           note,
           notesService: this.notesService,
+          meeting: await this.discussions.getByNoteId(note.id),
           config: this.config,
         });
         const { images: _images, ...snapshot } = context;
@@ -806,6 +807,7 @@ export class GatewayService {
           return buildNoteAgentContext({
             note,
             notesService: this.notesService,
+            meeting: await this.discussions.getByNoteId(note.id),
             config: this.config,
           });
         }

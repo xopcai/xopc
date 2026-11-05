@@ -213,10 +213,10 @@ export async function getNote(id: string): Promise<Note | null> {
   return data.note ?? null;
 }
 
-export async function updateNote(id: string, patch: Partial<Note>): Promise<Note> {
+export async function updateNote(id: string, patch: Partial<Note>, expectedRevision?: number): Promise<Note> {
   const result = await fetchJson<{ note: Note }>(apiUrl(`/api/notes/${encodeURIComponent(id)}`), {
     method: 'PATCH',
-    body: JSON.stringify(patch),
+    body: JSON.stringify({ ...patch, ...(expectedRevision === undefined ? {} : { expectedRevision }) }),
   });
   return result.note;
 }

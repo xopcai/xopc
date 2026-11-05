@@ -96,8 +96,11 @@ type SourceNoteSaveDraft = {
   content: string;
 };
 
-export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome, automationWorkspace = false, automationTimelineEntries, readOnly = false, onHistoryReady, automationExecution = false, initialTurnId, onInitialTurnLocated }: {
+export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome, automationWorkspace = false, automationTimelineEntries, readOnly = false, onHistoryReady, automationExecution = false, initialTurnId, onInitialTurnLocated }: {
   embedded?: boolean;
+  beforeSend?: () => Promise<boolean>;
+  draftSeed?: { id: number; text: string } | null;
+  sourceNoteInView?: boolean;
   automationWorkspace?: boolean;
   automationExecution?: boolean;
   initialTurnId?: string;
@@ -124,6 +127,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const welcomeDraftSeq = useRef(0);
   const pendingSourceNoteSaveRef = useRef<PendingSourceNoteSave | null>(null);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
+  const [injectedDraftSeed, setInjectedDraftSeed] = useState<{ id: number; text: string } | null>(null);
+  useEffect(() => { setInjectedDraftSeed(draftSeed ?? null); }, [draftSeed]);
   const [personalCalibrationDismissed, setPersonalCalibrationDismissed] = useState(() =>
     Boolean(conversationId && window.localStorage.getItem(`personal-calibration:${conversationId}`)));
   const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
@@ -641,41 +646,51 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     [welcomeSpotlight],
   );
 
+  const sendScope = useRef(0);
+  useEffect(() => {
+    sendScope.current++;
+    return () => { sendScope.current++; };
+  }, [conversationId, token]);
   const handleComposerSend = useCallback(
     (...args: Parameters<ComposerSendHandler>) => {
-      const [text, attachments, thinkingLevel, contextRefs, sendOptions] = args;
-      if (pageContextDraft && (editingUserTurn || text.trim().startsWith('/'))) {
-        useChatSessionStore.getState().setShellError(m.chat.pageContext.pending);
-        return false;
-      }
-      if (editingUserTurn) {
-        return stream.replaceLatestUserTurn(
-          editingUserTurn.turnId,
+      const dispatch = () => {
+        const [text, attachments, thinkingLevel, contextRefs, sendOptions] = args;
+        if (pageContextDraft && (editingUserTurn || text.trim().startsWith('/'))) {
+          useChatSessionStore.getState().setShellError(m.chat.pageContext.pending);
+          return false;
+        }
+        if (editingUserTurn) {
+          return stream.replaceLatestUserTurn(
+            editingUserTurn.turnId,
+            text,
+            attachments,
+            thinkingLevel,
+            contextRefs,
+          );
+        }
+        let dispatched = false;
+        const acceptance = stream.sendMessage(
           text,
           attachments,
           thinkingLevel,
           contextRefs,
+          undefined,
+          pageContextDraft?.envelope,
+          (clientSubmissionId, messageRenderKey) => {
+            dispatched = true;
+            reserveReplySpace(messageRenderKey ?? clientSubmissionId);
+            sendOptions?.onDispatched?.({ clientSubmissionId, messageRenderKey });
+          },
         );
-      }
-      let dispatched = false;
-      const acceptance = stream.sendMessage(
-        text,
-        attachments,
-        thinkingLevel,
-        contextRefs,
-        undefined,
-        pageContextDraft?.envelope,
-        (clientSubmissionId, messageRenderKey) => {
-          dispatched = true;
-          reserveReplySpace(messageRenderKey ?? clientSubmissionId);
-          sendOptions?.onDispatched?.({ clientSubmissionId, messageRenderKey });
-        },
-      );
-      if (!dispatched) return acceptance;
-      if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
-      return true;
+        if (!dispatched) return acceptance;
+        if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
+        return true;
+      };
+      if (!beforeSend) return dispatch();
+      const scope = sendScope.current;
+      return beforeSend().then(ready => ready && scope === sendScope.current ? dispatch() : false);
     },
-    [editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending, reserveReplySpace],
+    [beforeSend, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending, reserveReplySpace],
   );
 
   const projectComposer = useProjectSessionComposer({
@@ -896,8 +911,10 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     ],
   );
 
-  const handleDraftSourceNoteDigest = useCallback(() => {
+  const handleDraftSourceNoteDigest = useCallback(async () => {
     if (!sourceNoteId) return;
+    const scope = sendScope.current;
+    if (beforeSend && (!await beforeSend() || scope !== sendScope.current)) return;
     const prompt = m.chat.sourceNoteDigestPrompt.replace('{{title}}', sourceNoteTitle);
     if (stream.streaming || stream.sending) {
       void followUp.addPendingFollowUp(prompt);
@@ -912,6 +929,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     }
     void stream.sendMessage(prompt);
   }, [
+    beforeSend,
     followUp,
     language,
     m.chat.sourceNoteDigestPrompt,
@@ -1059,7 +1077,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             </Link>
           </div>
         ) : null}
-        {embedded && sourceNoteId ? (
+        {embedded && sourceNoteId && !sourceNoteInView ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
               <span className="min-w-0 truncate">
@@ -1367,7 +1385,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 streaming={stream.streaming}
                 conversationId={session.conversationId}
                 prepareContextSession={session.projectPreparation ? projectComposer.prepareSession : undefined}
-                welcomeDraftSeed={welcomeDraftSeed}
+                welcomeDraftSeed={injectedDraftSeed ?? welcomeDraftSeed}
                 welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? welcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
                 thinkingLevel={session.thinkingLevel}
@@ -1383,10 +1401,18 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
                 onAbort={() => void stream.abort().catch(() => {})}
                 onAddPendingFollowUp={async (text, atts, contextRefs, interrupt, delivery) => {
+                  const scope = sendScope.current;
+                  if (beforeSend && (!await beforeSend() || scope !== sendScope.current)) {
+                    throw new Error(language === 'zh' ? '请先保存笔记，再发送消息。' : 'Save the note before sending.');
+                  }
                   await followUp.addPendingFollowUp(text, atts, contextRefs, pageContextDraft?.envelope, interrupt, delivery);
                   if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
                 }}
-                onSteeringInterrupt={pageContextDraft ? undefined : (text, atts, contextRefs) => stream.interruptAndSend(text, atts, undefined, contextRefs)}
+                onSteeringInterrupt={pageContextDraft ? undefined : async (text, atts, contextRefs) => {
+                  const scope = sendScope.current;
+                  if (beforeSend && (!await beforeSend() || scope !== sendScope.current)) return false;
+                  return stream.interruptAndSend(text, atts, undefined, contextRefs);
+                }}
                 pendingFollowUps={followUp.pendingFollowUps}
                 editingFollowUpId={followUp.editingFollowUpId}
                 onBeginEditFollowUp={followUp.beginEditFollowUp}

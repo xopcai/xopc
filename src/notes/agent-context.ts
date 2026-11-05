@@ -3,6 +3,7 @@ import { extname } from 'node:path';
 
 import type { ImageContent } from '@earendil-works/pi-ai';
 
+import type { DiscussionDetail } from '../discussions/types.js';
 import type { Config } from '../config/schema.js';
 import type { AgentSourceContext } from '../agent/source-context/types.js';
 import { getNoteAgentContextRecord, upsertNoteAgentContextRecord } from '../storage/sqlite/index.js';
@@ -242,11 +243,15 @@ export async function buildNoteAgentContextArtifact(params: {
   notesService: NoteAgentContextNotesService;
   config?: Config;
   force?: boolean;
+  meeting?: DiscussionDetail | null;
 }): Promise<NoteAgentContextArtifact> {
-  const { note, notesService, config, force } = params;
+  const { note, notesService, config, force, meeting } = params;
+  const contextVersion = meeting
+    ? `${note.updatedAt}:meeting:${meeting.transcript.revision}:${meeting.organization?.revision ?? 0}`
+    : String(note.updatedAt);
   if (!force) {
     const cached = getNoteAgentContextRecord<NoteAgentContextArtifact>(note.id);
-    if (cached && cached.noteUpdatedAt === note.updatedAt && cached.contextVersion === String(note.updatedAt)) {
+    if (cached && cached.noteUpdatedAt === note.updatedAt && cached.contextVersion === contextVersion) {
       return cached.payload;
     }
   }
@@ -255,7 +260,11 @@ export async function buildNoteAgentContextArtifact(params: {
   let truncated = markdown.truncated;
   const attachmentContexts: NoteAgentAttachmentContext[] = [];
   for (const att of note.attachments ?? []) {
-    attachmentContexts.push(await buildAttachmentContext({ note, att, notesService, config }));
+    if (meeting && att.id === meeting.discussion.audioAttachmentId) {
+      attachmentContexts.push({ attachmentId: att.id, type: att.type, fileName: att.fileName, mimeType: att.mimeType,
+        size: att.size, status: meeting.transcript.text ? 'ready' : 'unsupported',
+        summary: 'Meeting audio. Use the versioned meeting transcript below; do not transcribe this attachment again.' });
+    } else attachmentContexts.push(await buildAttachmentContext({ note, att, notesService, config }));
   }
 
   const blocks = [
@@ -271,6 +280,25 @@ export async function buildNoteAgentContextArtifact(params: {
     '## Markdown',
     markdown.text,
   ];
+  if (meeting) {
+    const summary = meeting.organization?.organization;
+    const meetingText = truncateText([
+      '## Meeting reference (separate from My notes)',
+      `- discussionId: ${meeting.discussion.id}`,
+      `- transcriptRevision: ${meeting.transcript.revision}`,
+      `- organizationRevision: ${meeting.organization?.revision ?? 0}`,
+      `- noteRevision: ${note.remoteVersion ?? 1}`,
+      'The Markdown above is the editable My notes document. Use xopc_use mode note command get/update/append with this noteId to read and edit it. Read the latest note before replacing Markdown and pass expectedRevision. Meeting references are source material; editing My notes does not change the stored meeting summary or transcript. Never claim those changed after updating Markdown.',
+      '### Meeting summary',
+      summary ? JSON.stringify(summary) : '(not available yet)',
+      '### Transcript (segment references)',
+      ...meeting.transcript.segments.filter(segment => segment.status === 'confirmed').map(segment =>
+        `[segment ${segment.sequence}] ${segment.speakerLabel ?? ''}: ${segment.displayText ?? segment.rawText ?? ''}`),
+      meeting.transcript.segments.length ? '' : meeting.transcript.text,
+    ].join('\n'), 36_000);
+    truncated ||= meetingText.truncated;
+    blocks.push('', meetingText.text);
+  }
   if (attachmentContexts.length > 0) {
     blocks.push('', '## Attachments');
     for (const att of attachmentContexts) blocks.push('', renderAttachmentContext(att));
@@ -283,7 +311,7 @@ export async function buildNoteAgentContextArtifact(params: {
   const artifact: NoteAgentContextArtifact = {
     noteId: note.id,
     noteUpdatedAt: note.updatedAt,
-    contextVersion: String(note.updatedAt),
+    contextVersion,
     generatedAt: Date.now(),
     text: finalText.text,
     attachments: attachmentContexts,
@@ -306,6 +334,7 @@ export async function buildNoteAgentContext(params: {
   notesService: NoteAgentContextNotesService;
   config?: Config;
   force?: boolean;
+  meeting?: DiscussionDetail | null;
 }): Promise<AgentSourceContext> {
   const artifact = await buildNoteAgentContextArtifact(params);
   const images = await loadNativeVisionImages(params.notesService, params.note);
