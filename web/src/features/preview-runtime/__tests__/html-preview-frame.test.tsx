@@ -8,26 +8,29 @@ import { prepareHtmlPreviewDocument } from '../html-preview-document';
 import { HtmlPreviewFrame } from '../html-preview-frame';
 
 describe('prepareHtmlPreviewDocument', () => {
-  it('gives srcdoc documents their own base URL so fragment links stay in the preview', () => {
+  it('adds fragment navigation to the head without setting a base URL', () => {
     const html = '<!doctype html><html lang="zh"><head><title>Profile</title></head><body><a href="#about">About</a><section id="about">...</section></body></html>';
 
-    expect(prepareHtmlPreviewDocument(html)).toContain(
-      '<head><base href="about:srcdoc"><title>Profile</title>',
-    );
+    const prepared = prepareHtmlPreviewDocument(html);
+    expect(prepared).toContain('<head><script>');
+    expect(prepared).toContain('</script><title>Profile</title>');
+    expect(prepared).not.toContain('<base');
   });
 
   it('creates a head without moving or removing the doctype', () => {
     const html = '<!doctype html><nav><a href="#about">About</a></nav><section id="about">...</section>';
 
-    expect(prepareHtmlPreviewDocument(html)).toBe(
-      '<!doctype html><head><base href="about:srcdoc"></head><nav><a href="#about">About</a></nav><section id="about">...</section>',
+    const prepared = prepareHtmlPreviewDocument(html);
+    expect(prepared).toMatch(/^<!doctype html><head><script>/);
+    expect(prepared).toContain(
+      '</script></head><nav><a href="#about">About</a></nav><section id="about">...</section>',
     );
   });
 
   it('preserves an explicit document base', () => {
     const html = '<head><base href="https://example.com/"></head><body></body>';
 
-    expect(prepareHtmlPreviewDocument(html)).toBe(html);
+    expect(prepareHtmlPreviewDocument(html)).toContain('</script>' + html.slice('<head>'.length));
   });
 });
 
