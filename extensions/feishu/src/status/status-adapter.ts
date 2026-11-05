@@ -1,5 +1,4 @@
 import type { ChannelStatusAdapter } from '@xopcai/xopc/channels/plugin-types.js';
-import type { Config } from '@xopcai/xopc/config/schema.js';
 
 import type { ResolvedFeishuAccount } from '../state/accounts.js';
 

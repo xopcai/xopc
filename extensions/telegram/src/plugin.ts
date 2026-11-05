@@ -538,10 +538,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     }
   }
 
-  private attachRunnerExitHandler(_accountId: string, _runner: unknown): void {
-    // Polling exit is handled by startTelegramPollingSession.onExit.
-  }
-
   private setupMessageHandler(accountId: string, bot: Bot): void {
     const account = this.config.resolveAccount(this.cfg, accountId);
 

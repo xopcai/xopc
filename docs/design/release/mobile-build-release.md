@@ -39,7 +39,7 @@ pnpm run mobile:ios:build
 ```
 
 
-共享移动协议客户端：
+共享实时协议和 Gateway 契约测试：
 
 ```bash
 pnpm run mobile:test:stream

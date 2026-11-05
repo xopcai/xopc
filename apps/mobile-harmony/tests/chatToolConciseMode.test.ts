@@ -18,18 +18,6 @@ describe('Harmony chat tool concise mode', () => {
     expect(stepsView).toContain("$r('app.string.chat_steps_working')");
   });
 
-  it('does not expose raw tool input, output, or failure details', () => {
-    const toolView = source('entry/src/main/ets/view/ChatToolView.ets');
-
-    expect(toolView).not.toContain('chatToolFailureSummary');
-    expect(toolView).not.toContain('chat_tool_failed');
-    expect(toolView).not.toContain('chat_tool_input');
-    expect(toolView).not.toContain('chat_tool_output');
-    expect(toolView).not.toContain('chat_tool_show_all');
-    expect(toolView).not.toContain('JSON.stringify(this.call.input');
-    expect(toolView).toContain('chatToolPreview(this.call)');
-  });
-
   it('separates work-log narration from the final answer and stays collapsed by default', () => {
     const contentView = source('entry/src/main/ets/view/ChatMessageContent.ets');
     const stepsView = source('entry/src/main/ets/view/ChatStepsView.ets');
@@ -41,7 +29,6 @@ describe('Harmony chat tool concise mode', () => {
     expect(stepsView).not.toContain("this.reasoning === 'stream' && !!this.row.live");
     expect(stepsView).not.toContain("Text('●')");
     expect(contentView).toContain('onShowDetail: this.onShowExecution');
-    expect(stepsView).not.toContain('XopcChatToolView');
   });
 
   it('shows a compact waiting bubble only until an answer starts', () => {

@@ -4486,16 +4486,3 @@ private fun PairingScreen(
     }
   }
 }
-
-@Composable
-private fun UnpairedScreen(title: String, description: String, insets: PaddingValues) {
-  Column(
-    modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 16.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
-  ) {
-    Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-      Text(description, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-  }
-}

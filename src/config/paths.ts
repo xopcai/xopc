@@ -407,7 +407,7 @@ export function resolveBundledSkillsDir(): string | null {
 }
 
 /**
- * Path to extension-sdk entry (for jiti / extension loader aliases).
+ * Resolve the extension SDK source entry path.
  */
 export function resolveExtensionSdkPath(): string {
   try {

@@ -4,7 +4,6 @@ import path from 'node:path';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
 
-import { clearContextTokensForAccount } from '../messaging/inbound.js';
 import { resolveWeixinRootDir } from '../storage/state-dir.js';
 import { logger } from '../util/logger.js';
 

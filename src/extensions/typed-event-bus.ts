@@ -81,7 +81,6 @@ export class TypedEventBus<
   private requestHandlers = new Map<keyof TRequests, RequestHandlerMeta[]>();
   private pendingRequests = new Map<string, InternalRequest>();
   private options: Required<TypedEventBusOptions>;
-  private requestIdCounter = 0;
 
   constructor(options: TypedEventBusOptions = {}) {
     this.options = {

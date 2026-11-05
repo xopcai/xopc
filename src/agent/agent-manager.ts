@@ -370,10 +370,6 @@ export class AgentManager implements AgentInstanceGateway {
     });
   }
 
-  private isUserContextEnabledForSession(conversationId: string): boolean {
-    return resolveUserContextSessionAccess(this.config.config, conversationId).userModel;
-  }
-
   private computeBaseWorkspacePath(): string {
     const cfg = this.config.config;
     if (!cfg) {
