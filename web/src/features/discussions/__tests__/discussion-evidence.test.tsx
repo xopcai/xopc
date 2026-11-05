@@ -47,7 +47,7 @@ it('locates evidence beyond the first transcript page and keeps the same audio e
   await act(async () => button('原话').click());
   await act(async () => [...container.querySelectorAll('button')].filter(button => button.textContent === '定位原文')[1].click());
   expect(container.querySelector('#discussion-segment-70')).not.toBeNull(); expect(container.querySelector('audio')).toBe(player);
-  await act(async () => button('概览').click()); expect(container.querySelector('audio')).toBe(player);
+  await act(async () => button('纪要').click()); expect(container.querySelector('audio')).toBe(player);
 });
 it('keeps corrected historical evidence readable without binding old segment IDs to new transcript rows', async () => {
   mocks.fetch.mockResolvedValue({ ...evidence,stale: true,transcriptRevision: 3 }); await render();
@@ -65,4 +65,41 @@ it('restores playback position without autoplay and removes playback when source
   expect(container.querySelector('audio')).toBeNull();
   expect([...container.querySelectorAll('button')].filter(button => button.textContent?.startsWith('播放原话'))).toHaveLength(0);
   expect(container.textContent).toContain('First source');
+});
+it('returns from a distant source to the conclusion, its scroll position and keyboard trigger', async () => {
+  await render(); const viewport = container.querySelector('main')!; viewport.scrollTop = 480;
+  const trigger = button('原话'); trigger.focus();
+  await act(async () => trigger.click());
+  expect(document.activeElement).toBe(container.querySelector('[aria-label="原话证据"]'));
+  await act(async () => [...container.querySelectorAll('button')].filter(button => button.textContent === '定位原文')[1].click());
+  viewport.scrollTop = 900;
+  useDiscussionReviewState.getState().update('note',{ positionMs: 14000 });
+  await act(async () => button('返回结论').click());
+  expect(button('纪要').getAttribute('aria-pressed')).toBe('true');
+  expect(viewport.scrollTop).toBe(480); expect(document.activeElement).toBe(button('原话'));
+  expect(useDiscussionReviewState.getState().notes.note.positionMs).toBe(14000);
+});
+it('does not reopen a closed evidence panel when its request completes late', async () => {
+  let resolve!: (value: typeof evidence) => void; mocks.fetch.mockReturnValue(new Promise(done => { resolve = done; }));
+  await render(); await act(async () => button('原话').click());
+  expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="原话证据"] button')!.click());
+  await act(async () => resolve(evidence));
+  expect(container.querySelector('[aria-label="原话证据"]')).toBeNull();
+});
+it('keeps the current transcript readable until the user accepts a live update', async () => {
+  await render(); await act(async () => button('原文').click());
+  mocks.detail = { ...mocks.detail!, transcript: { ...mocks.detail!.transcript, revision: 8, segments: mocks.detail!.transcript.segments.map((segment,index) => index ? segment : { ...segment,displayText: 'New corrected source',revision: 2 }) } };
+  await render();
+  expect(container.querySelector('#discussion-segment-0')?.textContent).toContain('Current segment 0');
+  await act(async () => button('内容已更新 · 查看最新').click());
+  expect(container.querySelector('#discussion-segment-0')?.textContent).toContain('New corrected source');
+});
+it('does not restore playback from a late evidence response after the original audio is deleted', async () => {
+  let resolve!: (value: typeof evidence) => void; mocks.fetch.mockReturnValue(new Promise(done => { resolve = done; }));
+  await render(); await act(async () => button('原话').click());
+  mocks.detail = { ...mocks.detail!, discussion: { ...mocks.detail!.discussion, audioDeletedAt: 1 } }; await render();
+  await act(async () => resolve(evidence));
+  expect(container.textContent).toContain('First source');
+  expect([...container.querySelectorAll('button')].some(button => button.textContent?.startsWith('播放原话'))).toBe(false);
 });

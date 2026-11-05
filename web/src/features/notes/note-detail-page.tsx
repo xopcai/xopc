@@ -24,7 +24,7 @@ export function NoteDetailPage() {
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col">
+    <div className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col">
       <NoteDetailPanel key={noteId} noteId={noteId} onBack={handleBack}
         initialMode={searchParams.get('edit') === '1' ? 'wysiwyg' : 'preview'}
         autoFocus={searchParams.get('edit') === '1'} />
