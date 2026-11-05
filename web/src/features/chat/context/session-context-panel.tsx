@@ -20,6 +20,7 @@ import { useSessionContext } from './use-session-context';
 export interface SessionContextPanelProps {
   conversationId: string | null;
   environmentAction?: ReactNode;
+  executionDeviceAction?: ReactNode;
   draftRefs?: ComposerContextRef[];
   draftAttachments?: ComposerAttachmentSummary[];
   draftPage?: ComposerAttachmentSummary | null;
@@ -86,88 +87,91 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
           onCloseAutoFocus={event => {
             if (document.activeElement?.closest('[data-primary-chat-composer]')) event.preventDefault();
           }}
-          className="xopc-session-context-popover z-50 max-h-[min(30rem,var(--radix-popover-content-available-height))] w-[min(23rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-edge bg-surface-overlay p-3 shadow-popover">
-          <h2 className="mb-2 px-2 text-sm font-medium text-fg">{copy.title}</h2>
-          {isLoading ? <div className="space-y-2 px-2" aria-busy="true">{[0, 1, 2].map((n) => <Skeleton key={n} className="h-8 w-full" />)}</div> : error ? (
-            <div className="flex items-center justify-between px-2 py-2 text-sm text-fg-muted"><span>{copy.unavailable}</span>{retry()}</div>
-          ) : <div className="space-y-3">
-            <section aria-label={copy.work}>
-              {currentProject ? <Link className={rowClass} to={chatProductHref(returnTo, `/projects/${encodeURIComponent(currentProject.id)}`)} onClick={close}>
-                <FolderKanban className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={currentProject.title}>{currentProject.title}</span>
-              </Link> : null}
-              {task ? <Link className={rowClass} to={taskDetailModalHref(returnTo, task.id)} onClick={close}>
-                <Target className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={task.title}>{task.title}</span><span className="shrink-0 text-xs text-fg-muted">{task.phase}</span>
-              </Link> : null}
-              {delegatedTasks.length ? <>
-                {delegatedTasks.length > 2 ? <button type="button" className={`${rowClass} w-full text-left`} onClick={() => setShowAllTasks(!showAllTasks)} aria-expanded={showAllTasks}>
-                  <Target className="size-4 shrink-0" aria-hidden /><span className="flex-1">{copy.delegatedTasks} · {data?.work.delegatedTaskCount ?? delegatedTasks.length}</span><span className="text-xs text-fg-muted">{showAllTasks ? copy.collapse : copy.expand}</span>
-                </button> : <p className="px-2 pt-2 text-xs text-fg-subtle">{copy.delegatedTasks} · {data?.work.delegatedTaskCount ?? delegatedTasks.length}</p>}
-                {(showAllTasks ? delegatedTasks : delegatedTasks.slice(0, 2)).map((delegated) => <Link key={delegated.id} className={`${rowClass} pl-9`}
-                  to={taskDetailModalHref(returnTo, delegated.id)} onClick={close}>
-                  <span className="min-w-0 flex-1 truncate" title={delegated.title}>{delegated.title}</span>
-                  <span className="shrink-0 text-xs text-fg-muted">{delegated.runStatus ?? delegated.phase}</span>
-                </Link>)}
-              </> : null}
-              {!hasWork ? <p className="px-2 py-2 text-sm text-fg-muted">{workUnavailable ? copy.unavailable : copy.independent}</p> : null}
-              {workUnavailable ? <div className="flex items-center justify-between px-2 text-xs text-fg-muted">{hasWork ? copy.partialUnavailable : null}{retry()}</div> : null}
-              {currentProject && props.onLeaveProject ? <button type="button" className={actionClass} onClick={() => { close(); props.onLeaveProject?.(); }}>{props.leaveProjectLabel}</button> : null}
-            </section>
+          className="xopc-session-context-popover z-50 w-[min(23rem,calc(100vw-1.5rem))] rounded-xl border border-edge bg-surface-overlay shadow-popover">
+          <div className="max-h-[min(30rem,var(--radix-popover-content-available-height))] overflow-y-auto rounded-xl p-3">
+            <h2 className="mb-2 px-2 text-sm font-medium text-fg">{copy.title}</h2>
+            {isLoading ? <div className="space-y-2 px-2" aria-busy="true">{[0, 1, 2].map((n) => <Skeleton key={n} className="h-8 w-full" />)}</div> : error ? (
+              <div className="flex items-center justify-between px-2 py-2 text-sm text-fg-muted"><span>{copy.unavailable}</span>{retry()}</div>
+            ) : <div className="space-y-3">
+              <section aria-label={copy.work}>
+                {currentProject ? <Link className={rowClass} to={chatProductHref(returnTo, `/projects/${encodeURIComponent(currentProject.id)}`)} onClick={close}>
+                  <FolderKanban className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={currentProject.title}>{currentProject.title}</span>
+                </Link> : null}
+                {task ? <Link className={rowClass} to={taskDetailModalHref(returnTo, task.id)} onClick={close}>
+                  <Target className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={task.title}>{task.title}</span><span className="shrink-0 text-xs text-fg-muted">{task.phase}</span>
+                </Link> : null}
+                {delegatedTasks.length ? <>
+                  {delegatedTasks.length > 2 ? <button type="button" className={`${rowClass} w-full text-left`} onClick={() => setShowAllTasks(!showAllTasks)} aria-expanded={showAllTasks}>
+                    <Target className="size-4 shrink-0" aria-hidden /><span className="flex-1">{copy.delegatedTasks} · {data?.work.delegatedTaskCount ?? delegatedTasks.length}</span><span className="text-xs text-fg-muted">{showAllTasks ? copy.collapse : copy.expand}</span>
+                  </button> : <p className="px-2 pt-2 text-xs text-fg-subtle">{copy.delegatedTasks} · {data?.work.delegatedTaskCount ?? delegatedTasks.length}</p>}
+                  {(showAllTasks ? delegatedTasks : delegatedTasks.slice(0, 2)).map((delegated) => <Link key={delegated.id} className={`${rowClass} pl-9`}
+                    to={taskDetailModalHref(returnTo, delegated.id)} onClick={close}>
+                    <span className="min-w-0 flex-1 truncate" title={delegated.title}>{delegated.title}</span>
+                    <span className="shrink-0 text-xs text-fg-muted">{delegated.runStatus ?? delegated.phase}</span>
+                  </Link>)}
+                </> : null}
+                {!hasWork ? <p className="px-2 py-2 text-sm text-fg-muted">{workUnavailable ? copy.unavailable : copy.independent}</p> : null}
+                {workUnavailable ? <div className="flex items-center justify-between px-2 text-xs text-fg-muted">{hasWork ? copy.partialUnavailable : null}{retry()}</div> : null}
+                {currentProject && props.onLeaveProject ? <button type="button" className={actionClass} onClick={() => { close(); props.onLeaveProject?.(); }}>{props.leaveProjectLabel}</button> : null}
+              </section>
 
-            {sources.length || sourcesUnavailable ? <section className="border-t border-edge-subtle pt-3">
-              <div className="mb-1 flex items-center justify-between px-2">
-                <h3 className="text-sm text-fg-subtle">{copy.sources} {sources.length ? `${sources.length}${data?.sourcesHasMore ? '+' : ''}` : ''}</h3>
-                {sourcesUnavailable ? retry() : null}
-              </div>
-              {(showAllSources ? sources : sources.slice(0, 3)).map((source) => {
-                const relation = source.origins.some((origin) => origin.kind === 'session') ? copy.session
-                  : source.origins.some((origin) => origin.kind === 'task') ? copy.task
-                    : source.origins.some((origin) => origin.kind === 'recent') ? copy.recent : copy.draft;
-                const label = source.pending && source.origins.length ? `${relation} · ${copy.draft}` : source.pending ? copy.draft : relation;
-                const SourceIcon = source.kind === 'file' && source.fileKind === 'directory' ? Folder
-                  : source.kind === 'file' ? FileText
-                    : source.kind === 'session' ? MessagesSquare
-                      : source.kind === 'browser_tab' || source.kind === 'browser_page' || source.kind === 'app_context' ? AppWindow
-                        : source.kind === 'mcp_resource' ? Database
-                          : source.kind === 'attachment' ? Paperclip : FileText;
-                const title = source.unavailable ? copy.unavailable : source.title || (source.kind === 'note' ? copy.untitled : copy.untitledSource);
-                const body = <><SourceIcon className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={source.unavailable ? undefined : source.title}>{title}</span><span className="shrink-0 text-xs text-fg-muted">{label}</span></>;
-                const target = source.kind === 'note' ? noteDetailHref(returnTo, source.id)
-                  : source.kind === 'session' ? `/chat/${encodeURIComponent(source.id)}` : null;
-                const key = `${source.kind}:${source.id}`;
-                return !source.unavailable && target ? <Link key={key} className={rowClass} to={target} onClick={close}>{body}</Link>
-                  : <div key={key} className="flex min-w-0 items-center gap-3 px-2 py-2 text-sm text-fg-muted">{body}</div>;
-              })}
-              {!sources.length ? <p className="px-2 py-2 text-xs text-fg-muted">{copy.unavailable}</p> : null}
-              {sources.length > 0 && sourcesUnavailable ? <p className="px-2 py-1 text-xs text-fg-muted">{copy.partialUnavailable}</p> : null}
-              {sources.length > 3 ? <button type="button" className={actionClass} onClick={() => setShowAllSources(!showAllSources)} aria-expanded={showAllSources}>{showAllSources ? copy.collapse : copy.expand}</button> : null}
-              {data?.sourcesHasMore ? <p className="px-2 py-1 text-xs text-fg-muted">{copy.more}</p> : null}
-              {sourceNoteAvailable && props.onDraftSourceNote ? <button type="button" className={actionClass} onClick={() => { close(); props.onDraftSourceNote?.(); }}>{props.draftSourceNoteLabel}</button> : null}
-            </section> : null}
+              {sources.length || sourcesUnavailable ? <section className="border-t border-edge-subtle pt-3">
+                <div className="mb-1 flex items-center justify-between px-2">
+                  <h3 className="text-sm text-fg-subtle">{copy.sources} {sources.length ? `${sources.length}${data?.sourcesHasMore ? '+' : ''}` : ''}</h3>
+                  {sourcesUnavailable ? retry() : null}
+                </div>
+                {(showAllSources ? sources : sources.slice(0, 3)).map((source) => {
+                  const relation = source.origins.some((origin) => origin.kind === 'session') ? copy.session
+                    : source.origins.some((origin) => origin.kind === 'task') ? copy.task
+                      : source.origins.some((origin) => origin.kind === 'recent') ? copy.recent : copy.draft;
+                  const label = source.pending && source.origins.length ? `${relation} · ${copy.draft}` : source.pending ? copy.draft : relation;
+                  const SourceIcon = source.kind === 'file' && source.fileKind === 'directory' ? Folder
+                    : source.kind === 'file' ? FileText
+                      : source.kind === 'session' ? MessagesSquare
+                        : source.kind === 'browser_tab' || source.kind === 'browser_page' || source.kind === 'app_context' ? AppWindow
+                          : source.kind === 'mcp_resource' ? Database
+                            : source.kind === 'attachment' ? Paperclip : FileText;
+                  const title = source.unavailable ? copy.unavailable : source.title || (source.kind === 'note' ? copy.untitled : copy.untitledSource);
+                  const body = <><SourceIcon className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={source.unavailable ? undefined : source.title}>{title}</span><span className="shrink-0 text-xs text-fg-muted">{label}</span></>;
+                  const target = source.kind === 'note' ? noteDetailHref(returnTo, source.id)
+                    : source.kind === 'session' ? `/chat/${encodeURIComponent(source.id)}` : null;
+                  const key = `${source.kind}:${source.id}`;
+                  return !source.unavailable && target ? <Link key={key} className={rowClass} to={target} onClick={close}>{body}</Link>
+                    : <div key={key} className="flex min-w-0 items-center gap-3 px-2 py-2 text-sm text-fg-muted">{body}</div>;
+                })}
+                {!sources.length ? <p className="px-2 py-2 text-xs text-fg-muted">{copy.unavailable}</p> : null}
+                {sources.length > 0 && sourcesUnavailable ? <p className="px-2 py-1 text-xs text-fg-muted">{copy.partialUnavailable}</p> : null}
+                {sources.length > 3 ? <button type="button" className={actionClass} onClick={() => setShowAllSources(!showAllSources)} aria-expanded={showAllSources}>{showAllSources ? copy.collapse : copy.expand}</button> : null}
+                {data?.sourcesHasMore ? <p className="px-2 py-1 text-xs text-fg-muted">{copy.more}</p> : null}
+                {sourceNoteAvailable && props.onDraftSourceNote ? <button type="button" className={actionClass} onClick={() => { close(); props.onDraftSourceNote?.(); }}>{props.draftSourceNoteLabel}</button> : null}
+              </section> : null}
 
-            {((conversationId && (environment || environmentUnavailable)) || props.environmentAction) ? <section className="border-t border-edge-subtle pt-3">
-              <div className="mb-1 flex items-center justify-between px-2">
-                <h3 className="text-sm text-fg-subtle">{copy.environment}</h3>
-                {environmentUnavailable ? retry() : null}
-              </div>
-              {!environment ? props.environmentAction : null}
-              {environment ? <>
-                <div className="flex min-w-0 items-center gap-3 px-2 py-2 text-sm text-fg">
-                  <Monitor className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-                  <span className="min-w-0 flex-1 truncate">{environment.kind === 'managed_worktree' ? copy.worktree : copy.local}</span>
-                  {environment.branch || environment.headSha ? <span className="inline-flex min-w-0 max-w-40 items-center gap-1 text-xs text-fg-muted"><GitBranch className="size-3.5 shrink-0" aria-hidden /><span className="truncate">{environment.branch || (environment.detached ? `${copy.detached} · ${environment.headSha?.slice(0, 8)}` : environment.headSha?.slice(0, 8))}</span></span> : null}
+              {((conversationId && (environment || environmentUnavailable)) || props.environmentAction) ? <section className="border-t border-edge-subtle pt-3">
+                <div className="mb-1 flex items-center justify-between px-2">
+                  <h3 className="text-sm text-fg-subtle">{copy.environment}</h3>
+                  {environmentUnavailable ? retry() : null}
                 </div>
-                <div className="flex min-w-0 items-center gap-2 pl-9 pr-1">
-                  <span className="min-w-0 flex-1 truncate text-xs text-fg-muted" title={environment.rootPath}>{environment.rootPath}</span>
-                  <button type="button" className={actionClass} aria-label={environmentPathCopied ? copy.copied : copy.copyEnvironmentPath} title={environmentPathCopied ? copy.copied : copy.copyEnvironmentPath} onClick={copyEnvironmentPath}>
-                    {environmentPathCopied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
-                  </button>
-                </div>
-                {props.environmentAction}
-                {!environment.available ? <p className="px-2 py-1 text-xs text-fg-muted">{copy.unavailableEnvironment}</p> : null}
-                {currentProject && project?.workspaceRoot ? <NewChatLink className={actionClass} to={newChatHrefForProject(currentProject.id)} state={{ forceNewChat: true, agentId: props.agentId, temporary: props.temporary }} onClick={close}>{copy.newEnvironment}</NewChatLink> : null}
-              </> : <p className="px-2 py-2 text-xs text-fg-muted">{copy.unavailable}</p>}
-            </section> : null}
-          </div>}
+                {!environment ? props.environmentAction : null}
+                {environment ? <>
+                  <div className="flex min-w-0 items-center gap-3 px-2 py-2 text-sm text-fg">
+                    <Monitor className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                    <span className="min-w-0 flex-1 truncate">{environment.kind === 'managed_worktree' ? copy.worktree : copy.local}</span>
+                    {environment.branch || environment.headSha ? <span className="inline-flex min-w-0 max-w-40 items-center gap-1 text-xs text-fg-muted"><GitBranch className="size-3.5 shrink-0" aria-hidden /><span className="truncate">{environment.branch || (environment.detached ? `${copy.detached} · ${environment.headSha?.slice(0, 8)}` : environment.headSha?.slice(0, 8))}</span></span> : null}
+                  </div>
+                  <div className="flex min-w-0 items-center gap-2 pl-9 pr-1">
+                    <span className="min-w-0 flex-1 truncate text-xs text-fg-muted" title={environment.rootPath}>{environment.rootPath}</span>
+                    <button type="button" className={actionClass} aria-label={environmentPathCopied ? copy.copied : copy.copyEnvironmentPath} title={environmentPathCopied ? copy.copied : copy.copyEnvironmentPath} onClick={copyEnvironmentPath}>
+                      {environmentPathCopied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+                    </button>
+                  </div>
+                  {props.environmentAction}
+                  {!environment.available ? <p className="px-2 py-1 text-xs text-fg-muted">{copy.unavailableEnvironment}</p> : null}
+                  {currentProject && project?.workspaceRoot ? <NewChatLink className={actionClass} to={newChatHrefForProject(currentProject.id)} state={{ forceNewChat: true, agentId: props.agentId, temporary: props.temporary }} onClick={close}>{copy.newEnvironment}</NewChatLink> : null}
+                </> : <p className="px-2 py-2 text-xs text-fg-muted">{copy.unavailable}</p>}
+              </section> : null}
+            </div>}
+            {props.executionDeviceAction}
+          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

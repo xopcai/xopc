@@ -17,9 +17,9 @@ export function ComputerChatButton({ conversationId }: { conversationId: string 
   if (!state || state.conversationId !== conversationId || state.status === 'ended') return null;
   return <Popover.Root open={open} onOpenChange={setOpen}>
     <Popover.Trigger asChild>
-      <Button variant="ghost" className="min-h-10 gap-1.5 px-2"
+      <Button variant="ghost" className="size-8 shrink-0 gap-1.5 rounded-lg p-0 xl:w-auto xl:px-2"
         title={zh ? '查看电脑预览' : 'View computer preview'} aria-label={zh ? '查看电脑预览' : 'View computer preview'}>
-        <Monitor className="size-4" aria-hidden /><span className="text-xs">{zh ? '电脑' : 'Computer'}</span>
+        <Monitor className="size-4 shrink-0" aria-hidden /><span className="hidden whitespace-nowrap text-xs xl:inline">{zh ? '电脑' : 'Computer'}</span>
       </Button>
     </Popover.Trigger>
     <Popover.Portal>

@@ -11,7 +11,7 @@ import { getChatSkillsCached, type ChatSkillsPayload } from '@/features/chat/pal
 import { getMarketplaceSkills } from '@/features/skills/skill-api';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import type { SkillsMarketplacePayload } from '@/features/skills/skill.types';
-import { marketplacePackageRequestName } from '@/features/skills/skills-page.utils';
+import { marketplaceLocalSkillId, marketplacePackageRequestName } from '@/features/skills/skills-page.utils';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { fetchProjectSessions, type ProjectSession } from './api';
@@ -374,7 +374,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
                       const provider = row.providerId ?? marketplacePayload.provider;
                       const packageName = marketplacePackageRequestName(row, provider);
                       const installed = items.some((item) => item.origin === 'xopc-workspace' && (
-                        item.directoryId === row.id || item.directoryId === packageName || item.name === row.name
+                        item.directoryId === row.id || item.directoryId === marketplaceLocalSkillId(packageName, provider) || item.name === row.name
                       ));
                       const installing = installingMarketplaceSkill === packageName;
                       return (
@@ -384,7 +384,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
                             <h4 className="truncate text-sm font-semibold text-fg">{presentation.displayName}</h4>
                             <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{presentation.description || '—'}</p>
                             <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-                              <span className="inline-flex items-center gap-1 text-xs text-fg-subtle"><Download className="size-3.5" aria-hidden />{copy.marketplaceDownloads} {row.downloads}</span>
+                              <span className="inline-flex items-center gap-1 text-xs text-fg-subtle"><Download className="size-3.5" aria-hidden />{provider === 'clawhub' ? `${row.author.username} · ` : ''}{copy.marketplaceDownloads} {row.downloads}</span>
                               <Button
                                 type="button"
                                 className="h-8 px-2.5 text-xs"

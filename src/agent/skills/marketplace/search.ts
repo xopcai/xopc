@@ -2,6 +2,7 @@ import type { Config } from '../../../config/schema.js';
 
 import { listMarketplacePackages } from '../skills-marketplace.js';
 import {
+  clawHubSearchReference,
   searchClawHubFederatedSkills,
   type ClawHubSearchResultItem,
 } from './adapters/clawhub/adapter.js';
@@ -141,8 +142,9 @@ function fromClawHub(item: ClawHubSearchResultItem): SkillsMarketplaceSearchResu
     ?? item.owner?.handle
     ?? item.ownerHandle
     ?? source;
-  const reference = item.install?.reference
-    ?? (source === 'clawhub' && owner !== 'clawhub' ? `${owner}/${item.slug}` : item.slug);
+  const reference = source === 'clawhub'
+    ? clawHubSearchReference(item)
+    : item.install?.reference ?? item.slug;
   const result: SkillsMarketplaceSearchResult = {
     id: item.id ?? `${source}:${reference}`,
     provider: 'clawhub',
