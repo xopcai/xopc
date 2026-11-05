@@ -39,6 +39,7 @@ function resolveClawHubBaseUrl(): string {
 // ─── ClawHub API types ───────────────────────────────────────────────────────
 
 interface ClawHubSkillListItem {
+  ownerHandle?: string;
   slug: string;
   displayName: string;
   summary: string;
@@ -230,30 +231,50 @@ export async function searchClawHubFederatedSkills(
   return cachedSearchClawHubSkills(query, limit);
 }
 
-async function getClawHubSkillDetail(slug: string): Promise<ClawHubSkillDetail> {
-  const enc = encodeURIComponent(slug.trim());
-  const res = await clawHubFetch(`/api/v1/skills/${enc}`);
-  assertOk(res, `skill detail [${slug}]`);
+function parseClawHubReference(reference: string): { slug: string; ownerHandle?: string } {
+  const parts = reference.trim().replace(/^@/, '').split('/');
+  const slug = parts.at(-1) ?? '';
+  const ownerHandle = parts.length === 2 ? parts[0] : undefined;
+  if (parts.length > 2 || !isValidSkillId(slug) || (ownerHandle !== undefined && !isValidSkillId(ownerHandle))) {
+    throw new Error(`Invalid ClawHub skill reference: ${reference}`);
+  }
+  return { slug, ownerHandle };
+}
+
+function clawHubReference(slug: string, ownerHandle?: string | null): string {
+  return ownerHandle ? `${ownerHandle}/${slug}` : slug;
+}
+
+function clawHubSkillPath(reference: string, suffix = '', params = new URLSearchParams()): string {
+  const { slug, ownerHandle } = parseClawHubReference(reference);
+  if (ownerHandle) params.set('ownerHandle', ownerHandle);
+  return `/api/v1/skills/${encodeURIComponent(slug)}${suffix}${params.size ? `?${params}` : ''}`;
+}
+
+async function getClawHubSkillDetail(reference: string): Promise<ClawHubSkillDetail> {
+  const res = await clawHubFetch(clawHubSkillPath(reference));
+  if (res.status === 409) {
+    throw new Error(`Ambiguous ClawHub skill "${reference}". Select a publisher or use owner/slug.`);
+  }
+  assertOk(res, `skill detail [${reference}]`);
   return (await res.json()) as ClawHubSkillDetail;
 }
 
-async function getClawHubVersionDetail(slug: string, version: string): Promise<ClawHubVersionDetail> {
-  const enc = encodeURIComponent(slug.trim());
+async function getClawHubVersionDetail(reference: string, version: string): Promise<ClawHubVersionDetail> {
   const ver = encodeURIComponent(version.trim());
-  const res = await clawHubFetch(`/api/v1/skills/${enc}/versions/${ver}`);
-  assertOk(res, `version detail [${slug}@${version}]`);
+  const res = await clawHubFetch(clawHubSkillPath(reference, `/versions/${ver}`));
+  assertOk(res, `version detail [${reference}@${version}]`);
   return (await res.json()) as ClawHubVersionDetail;
 }
 
-async function getClawHubSkillFileText(slug: string, filePath: string, version?: string): Promise<string> {
-  const enc = encodeURIComponent(slug.trim());
+async function getClawHubSkillFileText(reference: string, filePath: string, version?: string): Promise<string> {
   const sp = new URLSearchParams({ path: filePath });
   if (version?.trim()) sp.set('version', version.trim());
   const base = resolveClawHubBaseUrl();
-  const url = `${base}/api/v1/skills/${enc}/file?${sp.toString()}`;
+  const url = `${base}${clawHubSkillPath(reference, '/file', sp)}`;
   const res = await fetch(url, { headers: { Accept: 'text/markdown,text/plain,*/*' } });
   if (!res.ok) {
-    throw new Error(`ClawHub file fetch [${slug}/${filePath}] failed (${res.status})`);
+    throw new Error(`ClawHub file fetch [${reference}/${filePath}] failed (${res.status})`);
   }
   const text = await res.text();
   return text.length > MAX_CLAWHUB_FILE_BYTES ? text.slice(0, MAX_CLAWHUB_FILE_BYTES) : text;
@@ -271,13 +292,7 @@ async function downloadClawHubSkillZip(
   reference: string,
   version?: string,
 ): Promise<{ buffer: Buffer; version: string; slug: string }> {
-  const normalized = reference.trim().replace(/^@/, '');
-  const parts = normalized.split('/').filter(Boolean);
-  const ownerHandle = parts.length === 2 ? parts[0] : undefined;
-  const slug = parts.length === 2 ? parts[1]! : parts.length === 1 ? parts[0]! : '';
-  if (!isValidSkillId(slug) || (ownerHandle && !isValidSkillId(ownerHandle))) {
-    throw new Error(`Invalid ClawHub install reference: ${reference}`);
-  }
+  const { slug, ownerHandle } = parseClawHubReference(reference);
   const sp = new URLSearchParams({ slug });
   if (ownerHandle) sp.set('ownerHandle', ownerHandle);
   if (version?.trim()) sp.set('version', version.trim());
@@ -286,16 +301,16 @@ async function downloadClawHubSkillZip(
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`ClawHub download [${slug}] failed (${res.status}): ${body.slice(0, 200)}`);
+    throw new Error(`ClawHub download [${reference}] failed (${res.status}): ${body.slice(0, 200)}`);
   }
   const contentType = res.headers.get('content-type') ?? '';
   if (!contentType.includes('zip') && !contentType.includes('octet-stream')) {
-    throw new Error(`ClawHub download [${slug}] unexpected content-type: ${contentType}`);
+    throw new Error(`ClawHub download [${reference}] unexpected content-type: ${contentType}`);
   }
   const arrayBuf = await res.arrayBuffer();
   if (arrayBuf.byteLength > MAX_SKILL_ZIP_BYTES) {
     throw new Error(
-      `ClawHub download [${slug}] exceeds size limit (${arrayBuf.byteLength} > ${MAX_SKILL_ZIP_BYTES})`,
+      `ClawHub download [${reference}] exceeds size limit (${arrayBuf.byteLength} > ${MAX_SKILL_ZIP_BYTES})`,
     );
   }
   const resolvedVersion = version?.trim()
@@ -408,12 +423,12 @@ interface PackageListItem {
 
 function convertListItemToPackageItem(item: ClawHubSkillListItem): PackageListItem {
   return {
-    id: item.slug,
+    id: clawHubReference(item.slug, item.ownerHandle),
     name: item.displayName || item.slug,
     type: 'skill',
     description: item.summary || '',
     downloads: item.stats.downloads,
-    author: { username: 'clawhub', avatarUrl: null },
+    author: { username: item.ownerHandle || 'clawhub', avatarUrl: null },
     latestVersion: item.latestVersion?.version ?? item.tags.latest ?? '1.0.0',
     updatedAt: String(item.updatedAt),
     categories: item.metadata?.os ?? [],
@@ -422,26 +437,30 @@ function convertListItemToPackageItem(item: ClawHubSkillListItem): PackageListIt
   };
 }
 
+function clawHubSearchOwner(item: ClawHubSearchResultItem): string | undefined {
+  return item.ownerHandle || item.publisher?.handle || item.owner?.handle || undefined;
+}
+
+export function clawHubSearchReference(item: ClawHubSearchResultItem): string {
+  const reference = item.install?.reference?.trim().replace(/^@/, '');
+  const [owner, slug, ...rest] = reference?.split('/') ?? [];
+  if (slug === item.slug && rest.length === 0 && owner && isValidSkillId(owner)) return clawHubReference(slug, owner);
+  return clawHubReference(item.slug, clawHubSearchOwner(item));
+}
+
 function convertSearchResultToPackageItem(
   item: ClawHubSearchResultItem,
   enrichment?: ClawHubSkillListItem,
 ): PackageListItem {
+  const reference = clawHubSearchReference(item);
   return {
-    // ClawHub detail and browse APIs use the globally unique slug. Federated
-    // result ids are opaque, while owner/slug install references are rejected
-    // by the detail endpoint and cannot be matched to an installed skill id.
-    id: item.slug,
+    id: reference,
     name: item.displayName || item.slug,
     type: 'skill',
     description: item.summary || '',
     downloads: item.downloads ?? item.native?.skill?.stats?.downloads ?? enrichment?.stats.downloads ?? 0,
     author: {
-      username:
-        item.publisher?.handle
-        ?? item.sourceIdentity?.owner
-        ?? item.owner?.handle
-        ?? item.ownerHandle
-        ?? 'clawhub',
+      username: reference === item.slug ? 'clawhub' : reference.slice(0, reference.indexOf('/')),
       avatarUrl: item.publisher?.avatarUrl ?? item.owner?.image ?? null,
     },
     latestVersion: item.version ?? enrichment?.latestVersion?.version ?? '1.0.0',
@@ -500,25 +519,24 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
     const page = params.page ?? 1;
 
     if (params.q?.trim()) {
-      // Search results from /search omit downloads/stars/metadata. We pull the cached list
-      // snapshot in parallel and merge by slug — costs nothing when the list cache is hot
-      // (which it is after any preceding browse), and adds at most one round-trip on a cold
-      // cache. We still tolerate a list-fetch failure: enrichment becomes a no-op.
+      // Enrich search results with catalog metadata for the same publisher and slug.
       const [searchResponse, listSettled] = await Promise.allSettled([
         cachedSearchClawHubSkills(params.q.trim(), LIST_BATCH_SIZE),
         cachedListClawHubSkills({ limit: LIST_BATCH_SIZE }),
       ]);
       if (searchResponse.status === 'rejected') throw searchResponse.reason;
-      const enrichmentBySlug = new Map<string, ClawHubSkillListItem>();
+      const enrichmentByReference = new Map<string, ClawHubSkillListItem>();
       if (listSettled.status === 'fulfilled') {
-        for (const it of listSettled.value.items) enrichmentBySlug.set(it.slug, it);
+        for (const item of listSettled.value.items) {
+          enrichmentByReference.set(clawHubReference(item.slug, item.ownerHandle), item);
+        }
       }
       // The general ClawHub catalog remains installable through the ClawHub adapter, so
       // federated skills.sh rows are surfaced only by skills_marketplace_search, where their
       // canonical source and install reference can be preserved.
       let rows = searchResponse.value.results
         .filter((r) => !r.source || r.source === 'clawhub')
-        .map((r) => convertSearchResultToPackageItem(r, enrichmentBySlug.get(r.slug)));
+        .map((r) => convertSearchResultToPackageItem(r, enrichmentByReference.get(clawHubSearchReference(r))));
       rows = sortClawHubSearchRows(rows, params.sort);
       const total = rows.length;
       const start = (page - 1) * pageSize;
@@ -540,15 +558,17 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
   async getPackageDetail(_config, packageName) {
     const detail = await cachedGetClawHubSkillDetail(packageName);
     const slug = detail.skill.slug;
+    const ownerHandle = parseClawHubReference(packageName).ownerHandle || detail.owner?.handle;
+    const reference = clawHubReference(slug, ownerHandle);
     const version = detail.latestVersion.version;
 
     let readme: string | null = null;
 
     try {
-      const versionDetail = await getClawHubVersionDetail(slug, version);
+      const versionDetail = await getClawHubVersionDetail(reference, version);
       const docPath = pickClawHubDocFilePath(versionDetail.version.files);
       if (docPath) {
-        const rawText = await getClawHubSkillFileText(slug, docPath, version);
+        const rawText = await getClawHubSkillFileText(reference, docPath, version);
         const trimmed = rawText.trim();
         if (trimmed) readme = trimmed;
       }
@@ -572,7 +592,7 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
     });
 
     return {
-      id: slug,
+      id: reference,
       name: slug,
       type: 'skill',
       description,
@@ -580,8 +600,8 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       skillDocPreview,
       downloads: detail.skill.stats.downloads,
       author: {
-        username: detail.owner.handle,
-        avatarUrl: detail.owner.image,
+        username: ownerHandle ?? 'clawhub',
+        avatarUrl: detail.owner?.image ?? null,
       },
       latestVersion: {
         version: detail.latestVersion.version,
