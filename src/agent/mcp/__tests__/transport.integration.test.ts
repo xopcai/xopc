@@ -25,8 +25,15 @@ it('uses the native client on a real legacy SSE connection with a custom API-Key
   server.listen(0, '127.0.0.1'); await once(server, 'listening'); const address = server.address() as { port: number };
   const client = new McpClient({ name: 'xopc-test', version: '1', requestTimeoutMs: 5000 });
   try {
-    const transport = createXopcMcpTransport()({ name: 'legacy', config: { type: 'http', url: `http://127.0.0.1:${address.port}/legacy`, headers: { 'X-API-Key': 'fixture-api-key' }, xopcLegacySse: true } as any, source: 'test', scope: 'extension' }, process.cwd(), undefined);
+    const origin = { id: 'fixture', revision: 'test-revision', serverName: 'legacy' };
+    const checkAccess = vi.fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error('Plugin authorization revoked')).mockResolvedValue(undefined);
+    const transport = createXopcMcpTransport({}, checkAccess)({ name: 'legacy', config: { type: 'http', url: `http://127.0.0.1:${address.port}/legacy`, headers: { 'X-API-Key': 'fixture-api-key' }, xopcLegacySse: true, xopcPlugin: origin } as any, source: 'test', scope: 'extension' }, process.cwd(), undefined);
     await client.connect(transport); expect((await client.listTools())[0].name).toBe('read_profile');
+    expect(checkAccess).not.toHaveBeenCalled();
+    await expect(client.callTool('read_profile', {})).rejects.toThrow('Plugin authorization revoked');
+    expect(seen).not.toContain('tools/call');
+    expect(checkAccess).toHaveBeenCalledWith(origin);
     expect(await client.callTool('read_profile', {})).toMatchObject({ content: [{ text: 'LEGACY-READ-VERIFIED' }] });
     expect(seen).toContain('initialize');
   } finally { await client.close(); stream?.end(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }

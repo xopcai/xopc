@@ -1,4 +1,4 @@
-import { refreshPluginRuntimeAccess } from '../../extensions/agent-plugins/refresh-runtime-access.js';
+import { assertPluginMcpCallAccess, schedulePluginRuntimeAccessRefresh } from '../../extensions/agent-plugins/refresh-runtime-access.js';
 import { assertProviderUsage, getModelUsageOrigin, isProviderUsageScopeError } from '../../providers/model-usage.js';
 import crypto from 'node:crypto';
 import { connectionObjectiveContext } from '../context/connection-objective-context.js';
@@ -143,10 +143,10 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     await agentManager.ensureMemoryReadyForSession?.(conversationId);
     if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
 
-    if (config && await refreshPluginRuntimeAccess(config, agentManager.getResolvedWorkspaceForSession(conversationId), resolveEffectiveAgentProfileForSession(conversationId).agentId)) {
-      agentManager.removeAgent(conversationId);
+    if (config) {
+      schedulePluginRuntimeAccessRefresh(config, agentManager.getResolvedWorkspaceForSession(conversationId),
+        resolveEffectiveAgentProfileForSession(conversationId).agentId);
     }
-    if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
 
     const agent = (agentManager as any).getOrCreateAgent(conversationId) as {
       state: {
@@ -251,6 +251,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     const preparedMcp = config && executionToolPolicy.nativeMcp ? await prepareNativeMcpConfig(config, workspaceDir, resolveEffectiveAgentProfileForSession(conversationId).agentId) : undefined;
     if (source && !preparedMcp) throw new Error('The bound MCP source cannot be loaded.');
     const mcp = preparedMcp ? restrictAutomationMcpConfig(runId, conversationId, preparedMcp) : undefined;
+    if (mcp && config) mcp.assertPluginCallAccess = origin => assertPluginMcpCallAccess(config, workspaceDir, origin);
     const promptCachePolicy = resolvePromptCachePolicy(
       config
         ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.promptCache

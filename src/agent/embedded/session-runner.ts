@@ -374,7 +374,7 @@ export class EmbeddedSessionRunnerPool {
         ...(discovery ? [createXopcToolSearchExtension(tools, { nativeDiscovery, externalDiscovery, registry,
           ...(registry ? { refreshNative: () => materializeNativeExternalTools({ conversationId: runtimeId,
             tools: tools.filter(tool => !getXopcToolMetadata(tool)?.external) }) } : {}) })] : []),
-        ...(mcp ? [createMcpExtension({ createTransport: createXopcMcpTransport(), loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
+        ...(mcp ? [createMcpExtension({ createTransport: createXopcMcpTransport({}, mcp.assertPluginCallAccess), loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
         createAgentProfileContextExtension(runtimeId),
       ],
     });
