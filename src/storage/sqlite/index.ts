@@ -20,13 +20,6 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
-  deleteEndpointSessionBinding,
-  deleteEndpointSessionBindingsByPrincipal,
-  getEndpointSessionBinding,
-  setEndpointSessionBinding,
-  type StoredEndpointSessionBinding,
-} from './endpoint-session-binding-repository.js';
-export {
   deleteBrowserTabBinding,
   deleteBrowserTabBindingsByEndpoint,
   deleteBrowserTabBindingsByPrincipal,

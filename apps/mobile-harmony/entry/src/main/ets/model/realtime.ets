@@ -16,7 +16,7 @@ export interface XopcErrorEnvelope { error: XopcErrorBody; }
 export interface XopcSubscription { topic: string; afterSeq?: number; view?: string; }
 export interface XopcSubscriptions { subscriptions: XopcSubscription[]; }
 export interface XopcTopics { topics: string[]; }
-export interface XopcHello extends XopcRealtimeClientIdentity, XopcSubscriptions { ticket: string; endpoint: XopcEndpointHello; }
+export interface XopcHello extends XopcRealtimeClientIdentity, XopcSubscriptions { ticket: string; endpoint: XopcEndpointHello; capabilities: string[]; }
 export interface XopcFrame<T> { protocolVersion: number; messageId: string; kind: string; sentAt: number; payload: T; }
 export interface XopcTurnClaim { type: string; endpointId: string; token: string; }
 export interface XopcEndpointReady { endpointId: string; turnToken: string; }

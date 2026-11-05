@@ -6,12 +6,36 @@ import { COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS } from '@xopcai/com
 
 import {
   ENDPOINT_MAX_FILE_BYTES,
+  ENDPOINT_MAX_ARTIFACT_BYTES,
   type EndpointToolContent,
 } from '@xopcai/endpoint-tools-protocol';
 
 const GRANT_TTL_MS = 5 * 60_000;
 export const ENDPOINT_UPLOAD_MAX_BYTES = ENDPOINT_MAX_FILE_BYTES;
 const DEFAULT_MAX_FILES = 8;
+const TRANSFER_TTL_MS = 2 * 60_000;
+
+export interface EndpointInvocationScope {
+  conversationId: string;
+  transcriptId: string;
+  actorPrincipalId: string;
+}
+
+interface ArtifactDestination {
+  scope: EndpointInvocationScope;
+  endpointId: string;
+  connectionId: string;
+  toolName: string;
+  providerDigest: string;
+}
+
+interface ArtifactTransfer {
+  transferId: string;
+  file: EndpointUploadedFile;
+  destination: ArtifactDestination;
+  expiresAt: number;
+  stillAuthorized(): boolean;
+}
 
 interface UploadGrantRecord {
   profile: 'durable' | 'computer-frame' | 'personal';
@@ -23,6 +47,7 @@ interface UploadGrantRecord {
   maxBytes: number;
   maxFiles: number;
   uploadedFileIds: string[];
+  scope?: EndpointInvocationScope;
 }
 
 export interface EndpointUploadedFile {
@@ -57,6 +82,9 @@ export class EndpointUploadService {
   private readonly frames = new Map<string, { bytes: Buffer; expiresAt: number; endpointId: string }>();
   private readonly pruneTimer: ReturnType<typeof setInterval>;
   private readonly validatingFrames = new Set<string>();
+  private readonly invocationScopes = new Map<string, EndpointInvocationScope>();
+  private readonly transfers = new Map<string, ArtifactTransfer>();
+  private readonly downloads = new Map<string, ArtifactTransfer & { token: string }>();
 
   constructor(private readonly rootDir: string) {
     mkdirSync(rootDir, { recursive: true, mode: 0o700 });
@@ -64,7 +92,7 @@ export class EndpointUploadService {
     this.pruneTimer.unref();
   }
 
-  createGrant(invocationId: string, endpointId: string, now = Date.now(), profile: 'durable' | 'computer-frame' | 'personal' = 'durable', principalId?: string): EndpointUploadGrant {
+  createGrant(invocationId: string, endpointId: string, now = Date.now(), profile: 'durable' | 'computer-frame' | 'personal' = 'durable', principalId?: string, scope?: EndpointInvocationScope): EndpointUploadGrant {
     const token = crypto.randomUUID();
     const grant: UploadGrantRecord = {
       profile,
@@ -76,6 +104,7 @@ export class EndpointUploadService {
       maxBytes: profile === 'computer-frame' ? COMPUTER_FRAME_MAX_BYTES : profile === 'personal' ? 10 * 1024 * 1024 : ENDPOINT_UPLOAD_MAX_BYTES,
       maxFiles: profile === 'durable' ? DEFAULT_MAX_FILES : 1,
       uploadedFileIds: [],
+      scope,
     };
     this.grants.set(invocationId, grant);
     return {
@@ -161,11 +190,79 @@ export class EndpointUploadService {
     if (grant) {
       for (const fileId of grant.uploadedFileIds) {
         if (!referenced.some((item) => item.fileId === fileId)) this.deleteFile(fileId);
+        else if (grant.scope && grant.profile !== 'computer-frame') {
+          if (this.invocationScopes.size >= 2048) {
+            const oldest = this.invocationScopes.keys().next().value;
+            if (oldest) this.invocationScopes.delete(oldest);
+          }
+          this.invocationScopes.set(fileId, grant.scope);
+        }
       }
       this.grants.delete(invocationId);
     } else if (referenced.length > 0) {
       throw new EndpointUploadError('Invocation did not have an upload grant');
     }
+  }
+
+  issueTransfer(fileId: string, destination: ArtifactDestination, stillAuthorized: () => boolean) {
+    const now = Date.now();
+    for (const [id, transfer] of this.transfers) if (transfer.expiresAt <= now) this.transfers.delete(id);
+    const file = this.getFile(fileId), source = this.invocationScopes.get(fileId);
+    if (!file || !source || source.conversationId !== destination.scope.conversationId
+      || source.transcriptId !== destination.scope.transcriptId || file.endpointId === destination.endpointId
+      || file.size > ENDPOINT_MAX_ARTIFACT_BYTES || this.transfers.size >= 256 || !stillAuthorized()) return;
+    const transferId = crypto.randomUUID(), expiresAt = now + TRANSFER_TTL_MS;
+    this.transfers.set(transferId, { transferId, file, destination, expiresAt, stillAuthorized });
+    return { transferId, expiresAt, sourceEndpointId: file.endpointId, name: file.name, size: file.size };
+  }
+
+  listTransferFiles(conversationId: string, transcriptId: string, destinationId: string) {
+    const result: Array<Pick<EndpointUploadedFile, 'fileId' | 'endpointId' | 'name' | 'size'>> = [];
+    for (const [fileId, scope] of this.invocationScopes) {
+      if (scope.conversationId !== conversationId || scope.transcriptId !== transcriptId) continue;
+      const file = this.getFile(fileId);
+      if (!file || file.endpointId === destinationId || file.size > ENDPOINT_MAX_ARTIFACT_BYTES) continue;
+      result.push({ fileId, endpointId: file.endpointId, name: file.name, size: file.size });
+      if (result.length > 32) result.shift();
+    }
+    return result.reverse();
+  }
+
+  bindTransfer(transferId: unknown, destination: ArtifactDestination, invocationId: string, deadlineAt: number) {
+    if (typeof transferId !== 'string') return;
+    const transfer = this.transfers.get(transferId), expected = transfer?.destination;
+    if (!transfer || !expected || transfer.expiresAt <= Date.now() || !transfer.stillAuthorized()
+      || !this.sameScope(expected.scope, destination.scope) || expected.endpointId !== destination.endpointId
+      || expected.connectionId !== destination.connectionId || expected.toolName !== destination.toolName
+      || expected.providerDigest !== destination.providerDigest) return;
+    this.transfers.delete(transferId);
+    const token = crypto.randomUUID();
+    this.downloads.set(invocationId, { ...transfer, token, expiresAt: Math.min(transfer.expiresAt, deadlineAt) });
+    return { token, size: transfer.file.size, sha256: transfer.file.sha256 };
+  }
+
+  takeTransfer(invocationId: string, endpointId: string, connectionId: string, token: string,
+    isActorActive: (scope: EndpointInvocationScope) => boolean): Uint8Array | undefined {
+    const transfer = this.downloads.get(invocationId);
+    if (!transfer || transfer.destination.endpointId !== endpointId || transfer.destination.connectionId !== connectionId
+      || Buffer.byteLength(token) !== transfer.token.length || !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(transfer.token))
+      || transfer.expiresAt <= Date.now() || !transfer.stillAuthorized() || !isActorActive(transfer.destination.scope)) return;
+    this.downloads.delete(invocationId);
+    const bytes = this.readFile(transfer.file.fileId);
+    if (bytes?.byteLength === transfer.file.size) return bytes;
+  }
+
+  revokeTransfer(transferId: string): void {
+    this.transfers.delete(transferId);
+    for (const [invocationId, transfer] of this.downloads) {
+      if (transfer.transferId === transferId) this.downloads.delete(invocationId);
+    }
+  }
+
+  closeTransfer(invocationId: string): void { this.downloads.delete(invocationId); }
+
+  private sameScope(a: EndpointInvocationScope, b: EndpointInvocationScope): boolean {
+    return a.conversationId === b.conversationId && a.transcriptId === b.transcriptId && a.actorPrincipalId === b.actorPrincipalId;
   }
 
   abort(invocationId: string): void {
@@ -252,6 +349,8 @@ export class EndpointUploadService {
     clearInterval(this.pruneTimer);
     for (const id of this.frames.keys()) this.deleteFile(id);
     this.grants.clear();
+    this.transfers.clear();
+    this.downloads.clear();
   }
 
   private deleteFile(fileId: string): void {
@@ -261,5 +360,6 @@ export class EndpointUploadService {
     this.frames.get(fileId)?.bytes.fill(0);
     this.frames.delete(fileId);
     this.files.delete(fileId);
+    this.invocationScopes.delete(fileId);
   }
 }

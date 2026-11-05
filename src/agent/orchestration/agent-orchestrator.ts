@@ -22,6 +22,8 @@ import { abortEmbeddedRun } from '../embedded/runs.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import { persistInboundAttachments } from '../../channels/attachments/inbound-persist.js';
+import type { verifiedChannelInbound } from '../../channels/verified-inbound.js';
+import { withDeviceDelegation } from '../../endpoint-tools/delegation.js';
 import {
   buildTranscriptUserMessage,
   clearPendingTranscriptUserMessage,
@@ -83,11 +85,11 @@ export class AgentOrchestrator {
   /**
    * Process a message through the agent orchestration pipeline
    */
-  async process(msg: InboundMessage, context: SessionContext): Promise<void> {
-    return withModelUsageOrigin(modelUsageOriginFromTurn(context.origin), () => this.processScoped(msg, context));
+  async process(msg: InboundMessage, context: SessionContext, verified?: ReturnType<typeof verifiedChannelInbound>): Promise<void> {
+    return withModelUsageOrigin(modelUsageOriginFromTurn(context.origin), () => this.processScoped(msg, context, verified));
   }
 
-  private async processScoped(msg: InboundMessage, context: SessionContext): Promise<void> {
+  private async processScoped(msg: InboundMessage, context: SessionContext, verified?: ReturnType<typeof verifiedChannelInbound>): Promise<void> {
     const { conversationId } = context;
 
     log.debug({ conversationId }, 'Processing message through agent orchestrator');
@@ -143,7 +145,7 @@ export class AgentOrchestrator {
 
       const turnResult = await (async () => {
         try {
-          return await runEmbeddedTurnForSession({
+          return await withDeviceDelegation(verified, conversationId, turnId, () => runEmbeddedTurnForSession({
             conversationId,
             runId: turnId,
             userMessage: userMessageForModel,
@@ -156,7 +158,7 @@ export class AgentOrchestrator {
             getConfig: this.getConfig,
             beforeTurn: () => this.agentManager.beginBackgroundReviewUserTurn(conversationId),
             onEvent: (event) => this.onEmbeddedStreamEvent?.(conversationId, event),
-          });
+          }));
         } finally {
           clearPendingTranscriptUserMessage(conversationId, userMessage);
         }

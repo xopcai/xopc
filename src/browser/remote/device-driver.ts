@@ -39,11 +39,15 @@ export class RemoteDeviceBrowserDriver implements BrowserDriver {
   private bound?: { connectionId: string; deviceId: string; gatewayId: string; grantId: string; revision: number; instanceId: string; toolRevision: string };
   constructor(private readonly endpoints: EndpointToolRuntime, private readonly endpointId: string, private readonly owner: string) {}
   async connect(): Promise<void> { this.current(); }
-  private current() {
+  private current(releasing = false) {
     const endpoint = this.endpoints.registry.get(this.endpointId), authority = endpoint?.executionAuthority;
     const tool = this.endpoints.registry.getTool(this.endpointId, REMOTE_BROWSER_CONTROL_TOOL);
     if (!endpoint || endpoint.kind !== 'desktop' || !authority || !tool || endpoint.availability !== 'foreground'
       || endpoint.principalId !== authority.deviceId || authority.expiresAt <= Date.now()) throw new Error('BROWSER_REMOTE_AUTHORITY_INVALID');
+    if (!releasing) {
+      const target = this.endpoints.targets.resolve(this.owner);
+      if (!target || target.endpointId !== this.endpointId || target.connectionId !== endpoint.connectionId) throw new Error('BROWSER_TARGET_SCOPE_CHANGED');
+    }
     const next = { connectionId: endpoint.connectionId, deviceId: authority.deviceId, gatewayId: authority.gatewayId, grantId: authority.grantId,
       revision: authority.authorizationRevision, instanceId: authority.connectionInstanceId, toolRevision: tool.revision };
     if (this.bound && JSON.stringify(this.bound) !== JSON.stringify(next)) throw new Error('BROWSER_REMOTE_CONNECTION_CHANGED');
@@ -94,7 +98,7 @@ export class RemoteDeviceBrowserDriver implements BrowserDriver {
     if (target && (target.kind !== 'endpoint' || target.endpointId !== this.endpointId)) throw new Error('BROWSER_REMOTE_TARGET_MISMATCH');
   }
   private async send(sessionId: string, input: RemoteBrowserInput, target?: BrowserTarget, signal?: AbortSignal): Promise<BrowserControlResult> {
-    this.current(); this.target(target);
+    this.current(input.action === 'close'); this.target(target);
     if (this.session !== sessionId) throw new Error('BROWSER_REMOTE_SESSION_MISMATCH');
     const command: RemoteBrowserCommand = { version: 1, owner: this.owner, sessionId, actionId: randomUUID(), input };
     this.used = true;
@@ -106,7 +110,7 @@ export class RemoteDeviceBrowserDriver implements BrowserDriver {
       if (json.length !== 1 || files.length > 1) throw new Error('BROWSER_REMOTE_RESULT_INVALID');
       const result: BrowserControlResult = replySchema.parse(json[0].value).result;
       const state = 'error' in result ? result.error.observation : result.receipt.observation;
-      this.current(); signal?.throwIfAborted();
+      this.current(input.action === 'close'); signal?.throwIfAborted();
       if (state && state.sessionId !== sessionId || !('error' in result) && result.receipt.action !== input.action) throw new Error('BROWSER_REMOTE_RESULT_MISMATCH');
       if (files.length && (!bytes || !state || !['image/png', 'image/jpeg'].includes(files[0].mimeType))) throw new Error('BROWSER_REMOTE_FRAME_MISSING');
       if (input.action === 'observe' && input.visual === 'always' && !('error' in result) && !bytes) throw new Error('BROWSER_REMOTE_FRAME_MISSING');

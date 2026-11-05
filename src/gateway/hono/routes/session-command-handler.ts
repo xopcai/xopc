@@ -14,6 +14,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { parseSlashCommand, commandRegistry } from '../../../chat-commands/index.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
 import { createLogger } from '../../../utils/logger.js';
+import { recordDeviceExecutionActor } from '../../../endpoint-tools/execution-actor.js';
 
 const log = createLogger('Gateway:SessionCommand');
 
@@ -71,6 +72,7 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
       if (command.input.appContext) contexts.push(await deps.service.prepareSessionAppContext(command.input.appContext, principal, id.data, command.clientMessageId));
       return contexts;
     });
+    if ('input' in command) recordDeviceExecutionActor(id.data, command.clientMessageId, principal);
     deps.service.emit('session.input-state', payload.inputState);
     if ('kind' in command && command.kind === 'start') deps.service.emit('session.updated', { key: id.data });
     if (payload.receipt.lifecycle === 'preparing') deps.service.sessionPreparations.wake(id.data);

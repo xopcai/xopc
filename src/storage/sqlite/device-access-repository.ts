@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-import { initialDeviceRefreshTokenSchema, isMobileDevicePlatform } from '@xopcai/gateway-contract';
+import { initialDeviceRefreshTokenSchema, isMobileDevicePlatform, buildRefreshProofMessage } from '@xopcai/gateway-contract';
 
 import { buckets } from '../../gateway/rate-limit/index.js';
 
@@ -221,16 +221,7 @@ export function authenticateDeviceAccessToken(
   };
 }
 
-export function buildRefreshProofMessage(input: {
-  credentialId: string;
-  timestamp: number;
-  nonce: string;
-  requestId: string;
-  nextRefreshToken: string;
-  requestProofVersion: 1;
-}): string {
-  return `xopc-device-refresh-v2\n${input.credentialId}\n${input.timestamp}\n${input.nonce}\n${input.requestId}\n${input.nextRefreshToken}\nrequest-proof:${input.requestProofVersion}`;
-}
+export { buildRefreshProofMessage };
 
 function verifyRefreshProof(
   publicKeyJwk: DevicePublicKeyJwk,

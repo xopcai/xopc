@@ -23,6 +23,7 @@ export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
       phoneMediaProtocolVersion: 1,
       deviceStateToolsV1: true,
       hardwareBridgeV1: true,
+      deviceProvidersV1: true,
       deviceLocationTasksV1: true,
       mobilePersonalToolsV1: true,
       ...(principal.kind === 'device' ? { deviceId: principal.deviceId } : {}),

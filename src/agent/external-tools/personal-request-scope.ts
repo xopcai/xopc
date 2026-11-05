@@ -53,6 +53,12 @@ export function scopePersonalRequestProvider(
   };
   return {
     source: provider.source,
+    ...(provider.catalog ? { catalog: async () => {
+      if (getRequest()) return [];
+      const descriptors = await provider.catalog!();
+      if (getRequest()) throw new Error('Personal request execution identity changed');
+      return descriptors;
+    } } : {}),
     async search(query) {
       const request = getRequest();
       if (!request) return provider.search(query);

@@ -54,9 +54,9 @@ describe('endpoint tool protocol', () => {
     expect(() => endpointHelloPayloadSchema.parse({ ...hello, unexpectedField: true })).toThrow();
   });
 
-  it('rejects protocol v1 messages instead of entering a compatibility path', () => {
+  it.each([1, 2])('rejects protocol v%i messages instead of entering a compatibility path', version => {
     expect(() => clientEndpointMessageSchema.parse({
-      protocolVersion: 1,
+      protocolVersion: version,
       messageId: 'bf1a9f36-caf1-41a7-8d22-e1d6e6b4bb55',
       type: 'tool.received',
       sentAt: 1,

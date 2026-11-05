@@ -24,6 +24,7 @@ import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-w
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
 import { createLogger } from '../../../utils/logger.js';
+import { recordDeviceExecutionActor } from '../../../endpoint-tools/execution-actor.js';
 
 const MAX_TURN_CONTEXTS = 5;
 const log = createLogger('Gateway:SessionInput');
@@ -142,6 +143,7 @@ export async function submitSessionInput(
         } }, forbidden ? 403 : invalid ? 400 : 409);
       }
     }
+    recordDeviceExecutionActor(conversationId, typeof body.clientMessageId === 'string' ? body.clientMessageId : '', getGatewayPrincipal(c));
     const result = await deps.service.submitSessionInput({
       expectedTranscriptId: body.expectedTranscriptId as string | undefined,
       conversationId,

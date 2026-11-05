@@ -171,7 +171,7 @@ describe('EndpointInvocationService', () => {
     });
 
     await expect(promise).rejects.toMatchObject<Partial<EndpointToolExecutionError>>({
-      code: 'PROTOCOL_ERROR',
+      code: 'OUTCOME_UNKNOWN',
     });
   });
 
@@ -202,8 +202,20 @@ describe('EndpointInvocationService', () => {
     expect(sent).toHaveLength(1);
     service.failEndpoint('endpoint-1');
     await expect(promise).rejects.toMatchObject<Partial<EndpointToolExecutionError>>({
-      code: 'ENDPOINT_DISCONNECTED',
+      code: 'OUTCOME_UNKNOWN',
     });
+  });
+
+  it('treats receipt followed by disconnect as uncertain without sending another invocation', async () => {
+    const { sent, descriptor, service } = fixture();
+    const result = service.invoke({ endpointId: 'endpoint-1', toolCallId: 'accepted', toolName: descriptor.name,
+      arguments: {}, descriptorRevision: endpointToolRevision(descriptor) });
+    const { invocationId } = JSON.parse(sent[0]!).payload;
+    service.handleMessage('endpoint-1', { protocolVersion: ENDPOINT_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
+      type: 'tool.received', sentAt: Date.now(), payload: { invocationId } });
+    service.failEndpoint('endpoint-1');
+    await expect(result).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN', confirmedNoEffect: false });
+    expect(sent.map(frame => JSON.parse(frame).type)).toEqual(['tool.invoke']);
   });
 });
 
@@ -237,8 +249,7 @@ describe('endpoint completion failures', () => {
         if (trigger === 'disconnect') service.failEndpoint('endpoint-1');
         if (trigger === 'shutdown') service.close();
       }).not.toThrow();
-      const code = trigger.includes('timeout') ? 'TOOL_TIMEOUT'
-        : trigger === 'abort' ? 'TOOL_CANCELLED' : 'ENDPOINT_DISCONNECTED';
+      const code = 'OUTCOME_UNKNOWN';
       expect(await result).toMatchObject({ code });
       expect(finished).toHaveBeenCalledTimes(1);
       expect(vi.getTimerCount()).toBe(0);
@@ -248,7 +259,7 @@ describe('endpoint completion failures', () => {
         const next = invoke().catch((error: unknown) => error);
         expect(sent.filter((value) => JSON.parse(value).type === 'tool.invoke')).toHaveLength(2);
         service.close();
-        expect(await next).toMatchObject({ code: 'ENDPOINT_DISCONNECTED' });
+        expect(await next).toMatchObject({ code: 'OUTCOME_UNKNOWN' });
       }
     },
   );
@@ -272,7 +283,7 @@ describe('endpoint completion failures', () => {
         expect(await result).toBe(auditError);
         expect(finished).not.toHaveBeenCalled();
       } else {
-        expect(await result).toMatchObject({ code: 'ENDPOINT_DISCONNECTED' });
+        expect(await result).toMatchObject({ code: 'OUTCOME_UNKNOWN' });
         expect(finished).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
       }
       expect(uploads.abort).toHaveBeenCalledTimes(1);

@@ -1,3 +1,4 @@
+import { EndpointTaskTargetService } from '../src/endpoint-tools/task-targets.js';
 /** Real QuickJS -> shared runtime -> broker -> pinned native driver, fixture only. */
 import assert from 'node:assert/strict';
 import { dirname, join } from 'node:path';
@@ -30,7 +31,7 @@ async function main() {
   const frames = new Map<string, Uint8Array>();
   let invocation = 0;
   const endpoint = { kind: 'desktop', endpointId: 'fixture-native', principalId: 'fixture-owner' };
-  const endpoints = { bindings: { get: () => undefined }, registry: { get: () => endpoint, getTool: () => ({ revision: 'fixture-current' }) },
+  const endpoints = { targets: undefined as EndpointTaskTargetService | undefined, registry: { get: () => endpoint, getTool: () => ({ revision: 'fixture-current' }) },
     uploads: { takeComputerFrame(id: string) { const value = frames.get(id); frames.delete(id); return value; } },
     invocations: { async invoke({ arguments: command }: any) {
       const result = await broker.command(command);
@@ -40,6 +41,7 @@ async function main() {
       if (frame) { frames.set(id, frame.bytes); content.push({ type: 'file', fileId: id, mimeType: frame.mimeType }); }
       return { invocationId: id, content };
     } } };
+  endpoints.targets = new EndpointTaskTargetService(endpoints.registry as never);
   const runtime = new ComputerRuntime(endpoints as any, () => ConfigSchema.parse({ computer: { enabled: true } }), () => endpoint.endpointId);
   const tool = createComputerUseTool({ runtime, context: () => ({ conversationId: owner, runId: 'native-program' }) });
   const execute = (input: unknown, id = 'native-program-call') => tool.execute(id, input as any, new AbortController().signal);

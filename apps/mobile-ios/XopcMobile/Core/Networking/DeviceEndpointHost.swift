@@ -74,6 +74,8 @@ actor DeviceEndpointHost {
     private var reader: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
     private var environmentTask: Task<Void, Never>?
+    private var appProviderAccepted = false
+    private var appProviderSequence = 0
     private let instance = UUID().uuidString.lowercased()
 
     init(client: GatewayClient) {
@@ -95,6 +97,8 @@ actor DeviceEndpointHost {
 
     func stop() {
         claim = nil
+        appProviderAccepted = false
+        appProviderSequence = 0
         for task in invocations.values {
             task.cancel()
         }; invocations.removeAll()
@@ -118,7 +122,8 @@ actor DeviceEndpointHost {
         guard registered.isSuccessful else { throw GatewayClientError.server("无法注册设备能力") }
         let ticket: GatewayEnvelope<RealtimeTicket> = try await client.request(path: "/api/realtime/tickets", method: "POST",
                                                                                body: client.encoder.encode(RealtimeTicketCommand(clientId: endpointId, clientKind: "mobile", protocolVersion: 2)))
-        guard let ticket = ticket.payload, ticket.realtime.minVersion <= 2, ticket.realtime.maxVersion >= 2 else {
+        guard let ticket = ticket.payload, ticket.realtime.minVersion <= 2, ticket.realtime.maxVersion >= 2,
+              ticket.realtime.capabilities.contains("endpoint.tools.v3") else {
             throw GatewayClientError.invalidResponse
         }
         let catalogJson = compatibility.payload?.catalogJson ?? "[]"
@@ -131,7 +136,7 @@ actor DeviceEndpointHost {
         let socket = client.session.webSocketTask(with: url)
         self.socket = socket; socket.resume()
         do {
-            try await send("realtime.hello", ["ticket": ticket.ticket, "clientId": endpointId, "clientKind": "mobile", "subscriptions": [], "endpoint": endpoint])
+            try await send("realtime.hello", ["ticket": ticket.ticket, "clientId": endpointId, "clientKind": "mobile", "subscriptions": [], "endpoint": endpoint, "capabilities": ["endpoint.tools.v3"]])
             let timeout = Task {
                 try? await Task.sleep(for: .seconds(10))
                 if !Task.isCancelled {
@@ -148,6 +153,9 @@ actor DeviceEndpointHost {
             if compatibility.payload?.endpointEnvironmentV1 == true {
                 environmentTask = Task { await publishEnvironment(claim) }
             }
+            if let catalog = try JSONSerialization.jsonObject(with: Data(DeviceToolCatalog.appProviderJson.utf8)) as? [String: Any] {
+                try await send("provider.catalog.replace", catalog)
+            }
             startLoops(socket)
             return claim
         } catch { stop(); throw error }
@@ -157,10 +165,28 @@ actor DeviceEndpointHost {
         reader = Task { await readLoop(socket) }
         heartbeat = Task {
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(15)); try Task.checkCancellation(); try await send("realtime.ping", [:]) }
+                do {
+                    try await Task.sleep(for: .seconds(5))
+                    try Task.checkCancellation()
+                    guard self.socket === socket else { break }
+                    try await send("realtime.ping", [:])
+                    try await publishAppProviderState(socket)
+                }
                 catch { break }
             }
         }
+    }
+
+    private func publishAppProviderState(_ socket: URLSessionWebSocketTask) async throws {
+        guard appProviderAccepted else { return }
+        let foreground = await MainActor.run { UIApplication.shared.applicationState == .active }
+        guard self.socket === socket, appProviderAccepted else { return }
+        try await send("endpoint.availability_changed", ["availability": foreground ? "foreground" : "background"])
+        guard self.socket === socket, appProviderAccepted else { return }
+        appProviderSequence += 1
+        try await send("provider.state.changed", ["localId": DeviceToolCatalog.appProviderId, "catalogRevision": 1,
+                                                  "sequence": appProviderSequence, "validForMs": 30_000,
+                                                  "reason": foreground ? "ready" : "needs_foreground"])
     }
 
     private struct EnvironmentAck: Decodable {
@@ -233,8 +259,16 @@ actor DeviceEndpointHost {
             while !Task.isCancelled {
                 let frame = try await receive(socket)
                 if frame["kind"] as? String == "endpoint.message", let inner = frame["payload"] as? [String: Any],
-                   let request = inner["payload"] as? [String: Any], let id = request["invocationId"] as? String
+                   let request = inner["payload"] as? [String: Any]
                 {
+                    guard inner["protocolVersion"] as? Int == 3 else { break }
+                    if inner["type"] as? String == "provider.catalog.ack" {
+                        guard self.socket === socket else { break }
+                        appProviderAccepted = request["revision"] as? Int == 1 && request["accepted"] as? Bool == true
+                        try await publishAppProviderState(socket)
+                        continue
+                    }
+                    guard let id = request["invocationId"] as? String else { continue }
                     if inner["type"] as? String == "tool.invoke" {
                         guard invocations[id] == nil else { continue }
                         let requestData = try Self.json(request)
@@ -280,9 +314,11 @@ actor DeviceEndpointHost {
         switch request["toolName"] as? String {
         case "mobile.device.get_state": index = 0
         case "mobile.device.get_power": index = 1
+        case DeviceToolCatalog.appToolName: index = 2
         default: try await fail("TOOL_NOT_FOUND"); return
         }
-        guard request["descriptorRevision"] as? String == DeviceToolCatalog.revisions[index] else {
+        let revision = index == 2 ? DeviceToolCatalog.appToolRevision : DeviceToolCatalog.revisions[index]
+        guard request["descriptorRevision"] as? String == revision else {
             try await fail("TOOL_REVISION_MISMATCH"); return
         }
         guard request["confirmationRequired"] as? Bool == false,
@@ -292,6 +328,15 @@ actor DeviceEndpointHost {
         }
         guard let deadline = request["deadlineAt"] as? Double, deadline > Double(Self.now()) else {
             try await fail("TOOL_TIMEOUT"); return
+        }
+        if index == 2 {
+            let foreground = await MainActor.run { UIApplication.shared.applicationState == .active }
+            try Task.checkCancellation()
+            guard appProviderAccepted, foreground else { try await fail("ENDPOINT_NOT_FOREGROUND"); return }
+            try await send("tool.received", ["invocationId": id])
+            try Task.checkCancellation()
+            try await send("tool.result", ["invocationId": id, "content": [["type": "json", "value": ["active": true]]]])
+            return
         }
         try await send("tool.received", ["invocationId": id])
         let reading = try await deviceReading(index)
@@ -317,8 +362,8 @@ actor DeviceEndpointHost {
     }
 
     private func send(_ kind: String, _ payload: [String: Any]) async throws {
-        if kind.hasPrefix("tool.") {
-            try await send("endpoint.message", ["protocolVersion": 2, "messageId": UUID().uuidString, "type": kind, "sentAt": Self.now(), "payload": payload]); return
+        if kind.hasPrefix("tool.") || kind.hasPrefix("provider.") || kind == "endpoint.availability_changed" {
+            try await send("endpoint.message", ["protocolVersion": 3, "messageId": UUID().uuidString, "type": kind, "sentAt": Self.now(), "payload": payload]); return
         }
 
         guard let socket else { throw GatewayClientError.transport }

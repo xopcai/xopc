@@ -2,7 +2,6 @@ import { getDesktopExecutionGrant } from '../../../storage/sqlite/desktop-execut
 import { z } from 'zod';
 import {
   endpointPrincipalRegistrationSchema,
-  endpointSessionBindingRequestSchema,
 } from '@xopcai/endpoint-tools-protocol';
 import type { Hono } from 'hono';
 
@@ -145,7 +144,9 @@ export function registerEndpointToolRoutes(
     if (gatewayPrincipal.kind === 'device') {
       const device = gatewayPrincipal.deviceId ? getDevice(gatewayPrincipal.deviceId) : undefined;
       const ownsPrincipal = parsed.data.principalId === gatewayPrincipal.deviceId;
-      const compatibleKind = device?.platform === 'chrome'
+      const compatibleKind = device?.platform === 'bridge'
+        ? parsed.data.kind === 'bridge' && parsed.data.publicKey === desktopDeviceEndpointKey(device)
+        : device?.platform === 'chrome'
         ? parsed.data.kind === 'browser' && parsed.data.platform === 'chrome'
         : device?.platform === 'desktop' ? parsed.data.kind === 'desktop' && parsed.data.platform === 'desktop'
           && (device.scopes.includes('desktop.observe.state') || device.scopes.includes('desktop.observe.screen') || device.scopes.includes('desktop.execute') && getDesktopExecutionGrant(device.id)?.active) && parsed.data.publicKey === desktopDeviceEndpointKey(device)
@@ -214,50 +215,6 @@ export function registerEndpointToolRoutes(
         effect: effect as 'read' | 'write' | 'destructive' | undefined,
       }),
     });
-  });
-
-  authenticated.get('/api/endpoint-tools/bindings/:conversationId', (c) => {
-    try {
-      const binding = deps.service.endpointTools.bindings.get(c.req.param('conversationId'));
-      return binding
-        ? c.json({ ok: true, payload: binding })
-        : c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Endpoint binding not found' } }, 404);
-    } catch {
-      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session key' } }, 400);
-    }
-  });
-
-  authenticated.put('/api/endpoint-tools/bindings/:conversationId', async (c) => {
-    const parsed = endpointSessionBindingRequestSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
-      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint binding' } }, 400);
-    }
-    const gatewayPrincipal = getGatewayPrincipal(c);
-    const endpoint = deps.service.endpointTools.registry.get(parsed.data.endpointId);
-    if (gatewayPrincipal.kind === 'device'
-      && (!endpoint || !gatewayPrincipal.deviceId || endpoint.principalId !== gatewayPrincipal.deviceId)) {
-      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint does not belong to this device' } }, 403);
-    }
-    try {
-      const binding = deps.service.endpointTools.bindings.bind(
-        c.req.param('conversationId'),
-        parsed.data.endpointId,
-      );
-      return c.json({ ok: true, payload: binding });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const status = message === 'Endpoint is offline' ? 409 : 400;
-      return c.json({ ok: false, error: { code: 'BINDING_FAILED', message } }, status);
-    }
-  });
-
-  authenticated.delete('/api/endpoint-tools/bindings/:conversationId', (c) => {
-    try {
-      const removed = deps.service.endpointTools.bindings.unbind(c.req.param('conversationId'));
-      return c.json({ ok: true, payload: { removed } });
-    } catch {
-      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session key' } }, 400);
-    }
   });
 
   authenticated.post('/api/endpoint-tools/invocations/:invocationId/files', async (c) => {

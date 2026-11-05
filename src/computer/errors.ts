@@ -89,6 +89,10 @@ export function computerRecoveryDirective(code: string, dispatch: 'notStarted' |
 
 /** Recovery instructions are deterministic; never replay an input with unknown delivery. */
 export function computerRecovery(code: string): string {
+  if (code === 'COMPUTER_TARGET_REQUIRED') return 'Use device_use discover to find an accessible desktop, then device_use select with its exact targetRef. Continue in this conversation; opening it in another client is not required.';
+  if (code === 'COMPUTER_TARGET_UNSUPPORTED') return 'The selected device does not provide desktop control. Explicitly select a device with Computer Use capability.';
+  if (code === 'COMPUTER_TARGET_SCOPE_CHANGED') return 'This input is outside the active device execution context. Close the current control session before explicitly selecting the authorized target.';
+  if (code === 'COMPUTER_TARGET_OFFLINE') return 'The selected desktop execution context is unavailable or its connection changed. Do not switch devices or replay actions. Check device_use discover and reconcile any uncertain operation before explicitly selecting a new context.';
   if (code === 'COMPUTER_AGENT_MODEL_REQUIRED') return 'Direct UI programs require an active visual main-model turn. Select a visual model and open with planner:agent; do not change models inside an active desktop session.';
   if (code === 'COMPUTER_AGENT_MODEL_CHANGED' || code === 'COMPUTER_PLANNER_MISMATCH') return 'The requested UI planner does not match the active session. Close and confirm release before opening the requested mode with the current main model.';
   if (code === 'COMPUTER_PROGRAM_UNAWAITED_CALL') return 'The program ended with an unawaited UI call. Earlier inputs may already have completed. Control was released. Reopen and observe current state before performing only the remaining authorized actions; never replay the script. Await every ui.* call, including emitScreenshot. observe({visual:true}) already attaches the screenshot.';

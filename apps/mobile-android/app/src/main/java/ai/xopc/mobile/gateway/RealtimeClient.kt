@@ -123,6 +123,8 @@ internal class RealtimeClient(
     val ticketPayload = ticketResponse.getJSONObject("payload")
     require(ticketResponse.optBoolean("ok") && ticketPayload.getJSONObject("realtime").getInt("minVersion") <= 2 &&
       ticketPayload.getJSONObject("realtime").getInt("maxVersion") >= 2) { "INVALID_REALTIME_TICKET" }
+    val ticketCapabilities = ticketPayload.getJSONObject("realtime").optJSONArray("capabilities") ?: JSONArray()
+    require((0 until ticketCapabilities.length()).any { ticketCapabilities.optString(it) == "endpoint.tools.v3" }) { "GATEWAY_UPDATE_REQUIRED" }
     val endpoint = runInterruptible(Dispatchers.IO) { endpointHello(profile.deviceId, clientId, displayName, supportsDeviceTools, supportsLocationTools, supportsPersonalTools) }
     val origin = runInterruptible(Dispatchers.IO) { gateway.activeVerifiedOrigin() }
     val events = Channel<String>(Channel.BUFFERED)
@@ -130,6 +132,7 @@ internal class RealtimeClient(
       override fun onOpen(webSocket: WebSocket, response: Response) {
         val hello = JSONObject().put("ticket", ticketPayload.getString("ticket"))
           .put("clientId", clientId).put("clientKind", "mobile")
+          .put("capabilities", JSONArray().put("endpoint.tools.v3"))
           .put("subscriptions", JSONArray().put(JSONObject().put("topic", "gateway"))
             .put(JSONObject().put("topic", "sessions"))).put("endpoint", endpoint)
         webSocket.send(frame("realtime.hello", hello))
@@ -166,8 +169,26 @@ internal class RealtimeClient(
         watchedRunTopic?.let { subscribe(socket, it, watchedRunSeq) }
       }
       onState("connected")
+      var providerAccepted = false
+      var providerSequence = 0L
+      var providerLastReport = 0L
+      var lastForeground: Boolean? = null
+      if (deviceTools != null) socket.send(endpointFrame("provider.catalog.replace", JSONObject(DeviceToolCatalog.appProviderJson)))
+      suspend fun publishProviderState() {
+        if (!providerAccepted) return
+        val now = System.currentTimeMillis()
+        val foreground = withContext(Dispatchers.Main.immediate) { DeviceLocation.isForeground() }
+        if (foreground == lastForeground && now - providerLastReport < 15_000) return
+        providerLastReport = now
+        lastForeground = foreground
+        socket.send(endpointFrame("endpoint.availability_changed", JSONObject().put("availability", if (foreground) "foreground" else "background")))
+        socket.send(endpointFrame("provider.state.changed", JSONObject().put("localId", DeviceToolCatalog.appProviderId)
+          .put("catalogRevision", 1).put("sequence", ++providerSequence).put("validForMs", 30_000)
+          .put("reason", if (foreground) "ready" else "needs_foreground")))
+      }
       var lastReceived = System.currentTimeMillis()
       while (currentCoroutineContext().isActive) {
+        publishProviderState()
         val received = withTimeoutOrNull(5_000) { events.receiveCatching() }
         if (received == null) {
           if (System.currentTimeMillis() - lastReceived > 45_000) break
@@ -181,8 +202,18 @@ internal class RealtimeClient(
         when (message.getString("kind")) {
           "endpoint.message" -> {
             val inner = message.getJSONObject("payload")
+            require(inner.optInt("protocolVersion") == 3) { "INVALID_ENDPOINT_FRAME" }
             when (inner.getString("type")) {
-              "tool.invoke" -> deviceTools?.invoke(inner.getJSONObject("payload")) { kind, payload -> socket.send(endpointFrame(kind, payload)) }
+              "provider.catalog.ack" -> {
+                val ack = inner.getJSONObject("payload")
+                providerAccepted = ack.optInt("revision") == 1 && ack.optBoolean("accepted")
+              }
+              "tool.invoke" -> {
+                val request = inner.getJSONObject("payload")
+                val appReady = request.optString("toolName") == DeviceToolCatalog.appToolName && providerAccepted &&
+                  withContext(Dispatchers.Main.immediate) { DeviceLocation.isForeground() }
+                deviceTools?.invoke(request, appReady) { kind, payload -> socket.send(endpointFrame(kind, payload)) }
+              }
               "tool.cancel" -> { val id = inner.getJSONObject("payload").getString("invocationId"); DeviceLocation.cancel(id); DevicePersonalTools.cancel(id) }
             }
           }
@@ -275,7 +306,7 @@ internal class RealtimeClient(
   }
 
   private fun endpointFrame(kind: String, payload: JSONObject): String = frame("endpoint.message", JSONObject()
-    .put("protocolVersion", 2).put("messageId", UUID.randomUUID().toString()).put("type", kind)
+    .put("protocolVersion", 3).put("messageId", UUID.randomUUID().toString()).put("type", kind)
     .put("sentAt", System.currentTimeMillis()).put("payload", payload))
 
   private fun frame(kind: String, payload: JSONObject): String = JSONObject().put("protocolVersion", 2)

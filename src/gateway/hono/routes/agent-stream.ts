@@ -8,6 +8,8 @@ import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
 import { replaceLatestSessionTurn } from './session-input-handler.js';
 import { handleSessionCommand, handleSessionInputReceipt, handleSessionPreparationRetry } from './session-command-handler.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { deviceExecutionPrincipalId } from '../../../endpoint-tools/execution-actor.js';
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, chatRateLimitMiddleware } = deps;
@@ -106,6 +108,10 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     if (!conversationId) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing conversationId' } }, 400);
     const snapshot = service.getClarificationState(conversationId);
     if (!snapshot) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404);
+    const checkpoint = snapshot.clarification?.deviceInteraction;
+    if (checkpoint && deviceExecutionPrincipalId(getGatewayPrincipal(c)) !== checkpoint.actorPrincipalId) {
+      return c.json({ ok: true, payload: { ...snapshot, clarification: null } });
+    }
     return c.json({ ok: true, payload: snapshot });
   });
 
@@ -116,7 +122,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     if (!id || !command.success) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid clarification response' } }, 400);
     }
-    const result = service.resolveClarificationResponse({ id, ...command.data });
+    const result = service.resolveClarificationResponse({ id, ...command.data, responseActor: getGatewayPrincipal(c) });
     if (result.ok === true) return c.json({ ok: true, payload: result }, result.queued ? 202 : 200);
     const status = result.code === 'NOT_FOUND' ? 404 : result.code === 'EXPIRED' ? 410 : result.code === 'INVALID' ? 400 : 409;
     const message = result.code === 'NOT_FOUND'

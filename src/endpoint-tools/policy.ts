@@ -12,9 +12,6 @@ import {
   desktopCommandDescriptor,
   desktopTerminalDescriptors,
   PERSONAL_TOOL_NAMES,
-  BRIDGE_LIST_OUTPUT_SCHEMA,
-  BRIDGE_READ_OUTPUT_SCHEMA,
-  BRIDGE_READ_INPUT_SCHEMA,
   LOCATION_INPUT_SCHEMA,
   LOCATION_OUTPUT_SCHEMA,
   DEVICE_EMPTY_INPUT_SCHEMA,
@@ -78,8 +75,6 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   ])),
   ...Object.fromEntries(['mobile', 'desktop', 'web'].map(kind =>
     [`${kind}.device.get_location`, contract('personal.foreground-read', LOCATION_OUTPUT_SCHEMA, ['json'], ['location-read-once'], LOCATION_INPUT_SCHEMA)])),
-  'desktop.bridge.list_resources': contract('public.background-read', BRIDGE_LIST_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA),
-  'desktop.bridge.read_sensor': contract('public.background-read', BRIDGE_READ_OUTPUT_SCHEMA, ['json'], [], BRIDGE_READ_INPUT_SCHEMA),
   'desktop.computer.control': contract('computer.session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
   [REMOTE_COMPUTER_CONTROL_TOOL]: contract('computer.remote-session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
   'web.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),

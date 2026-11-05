@@ -17,7 +17,10 @@ import {
   startEndpointToolInvocationAudit,
 } from '../../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
-import { registerEndpointToolRoutes } from '../endpoint-tools.js';
+import { registerEndpointToolRoutes as registerPrincipalRoutes } from '../endpoint-tools.js';
+import { registerDeviceTargetRoutes } from '../device-targets.js';
+const registerEndpointToolRoutes = (app: Hono, deps: AuthenticatedRouteDeps) => { registerPrincipalRoutes(app, deps); registerDeviceTargetRoutes(app, deps); };
+import { createConversation } from '../../../../storage/sqlite/conversation-repository.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 
 describe('endpoint tool principal routes', () => {
@@ -204,16 +207,17 @@ describe('endpoint tool principal routes', () => {
     expect((await app.request('/api/endpoint-tools/invocations?page=0')).status).toBe(400);
   });
 
-  it('creates and removes an explicit session endpoint binding', async () => {
+  it('creates and removes a task target for an existing conversation', async () => {
+    const conversationId = createConversation({ agentId: 'main' }).key;
     const binding = {
-      conversationId: 'telegram:chat-1',
+      conversationId,
       endpointId: 'mobile-1',
-      boundAt: 42,
+      selectedAt: 42,
     };
     const bindings = {
       get: () => binding,
-      bind: () => binding,
-      unbind: () => true,
+      select: () => binding,
+      clear: () => true,
     };
     const app = new Hono();
     app.use('*', async (c, next) => {
@@ -225,10 +229,10 @@ describe('endpoint tool principal routes', () => {
       await next();
     });
     registerEndpointToolRoutes(app, {
-      service: { endpointTools: { bindings, registry: { get: () => undefined } } },
+      service: { endpointTools: { targets: bindings, registry: { get: () => undefined } } },
     } as unknown as AuthenticatedRouteDeps);
 
-    const path = '/api/endpoint-tools/bindings/telegram%3Achat-1';
+    const path = '/api/endpoint-tools/targets/' + conversationId;
     const put = await app.request(path, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -246,7 +250,8 @@ describe('endpoint tool principal routes', () => {
     await expect(remove.json()).resolves.toMatchObject({ payload: { removed: true } });
   });
 
-  it('prevents a device from binding a session to another device endpoint', async () => {
+  it('prevents a device from selecting another device endpoint', async () => {
+    const conversationId = createConversation({ agentId: 'main' }).key;
     const app = new Hono();
     app.use('*', async (c, next) => {
       setGatewayPrincipal(c, {
@@ -261,12 +266,12 @@ describe('endpoint tool principal routes', () => {
       service: {
         endpointTools: {
           registry: { get: () => ({ endpointId: 'browser:device-b', principalId: 'device-b' }) },
-          bindings: { bind: () => { throw new Error('must not bind'); } },
+          targets: { bind: () => { throw new Error('must not bind'); } },
         },
       },
     } as unknown as AuthenticatedRouteDeps);
 
-    const response = await app.request('/api/endpoint-tools/bindings/webchat%3Asession-1', {
+    const response = await app.request('/api/endpoint-tools/targets/' + conversationId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ endpointId: 'browser:device-b' }),

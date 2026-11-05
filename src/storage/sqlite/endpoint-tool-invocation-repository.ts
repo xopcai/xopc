@@ -65,17 +65,19 @@ export function finishEndpointToolInvocationAudit(params: {
   errorCode?: EndpointToolErrorCode;
   errorMessage?: string;
   completedAt?: number;
+  recovered?: true;
 }): void {
   getSqliteDatabase().prepare(`
     UPDATE endpoint_tool_invocations
     SET status = ?, error_code = ?, error_message = ?, completed_at = ?
-    WHERE id = ? AND status = 'running'
+    WHERE id = ? AND (status = 'running' OR (? = 1 AND status = 'failed' AND error_code IN ('OUTCOME_UNKNOWN', 'ENDPOINT_DISCONNECTED')))
   `).run(
     params.status,
     params.errorCode ?? null,
     params.errorMessage?.slice(0, 2_000) ?? null,
     params.completedAt ?? Date.now(),
     params.id,
+    params.recovered ? 1 : 0,
   );
 }
 

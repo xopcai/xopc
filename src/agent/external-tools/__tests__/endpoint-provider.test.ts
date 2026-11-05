@@ -55,8 +55,8 @@ function runtime(bound = false) {
         candidate === endpointId && toolName === descriptor.name ? tool : undefined
       )),
     },
-    bindings: {
-      get: vi.fn(() => bound ? { conversationId: 'session-1', endpointId, boundAt: 1 } : undefined),
+    targets: {
+      get: vi.fn(() => bound ? { conversationId: 'session-1', endpointId, selectedAt: 1 } : undefined),
       resolve: vi.fn(() => bound ? endpoint : undefined),
     },
     grants: { find: vi.fn(() => undefined), candidates: vi.fn(() => []) },
@@ -112,7 +112,7 @@ describe('EndpointToolProvider', () => {
     await expect(provider.search('clipboard')).resolves.toEqual([]);
   });
 
-  it('exposes a cross-device endpoint only after the session is explicitly bound', async () => {
+  it('does not turn a selected endpoint into cross-device permission for an unauthenticated channel', async () => {
     const provider = new EndpointToolProvider({
       runtime: runtime(true),
       getCurrentContext: () => ({
@@ -123,9 +123,7 @@ describe('EndpointToolProvider', () => {
       }),
     });
 
-    await expect(provider.search('clipboard')).resolves.toEqual([
-      expect.objectContaining({ namespace: endpointId, title: 'Write clipboard' }),
-    ]);
+    await expect(provider.search('clipboard')).resolves.toEqual([]);
   });
 
   it('executes through the endpoint invocation state machine', async () => {

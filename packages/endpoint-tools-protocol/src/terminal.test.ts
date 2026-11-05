@@ -6,7 +6,7 @@ import { clientEndpointMessageSchema, serverEndpointMessageSchema } from './inde
 import { desktopTerminalCommandSchema, desktopTerminalEventSchema } from './terminal.js';
 
 const binding = () => ({ sessionId: randomUUID(), generation: randomUUID(), connectionInstanceId: randomUUID() });
-const envelope = (type: string, payload: unknown) => ({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), type, payload });
+const envelope = (type: string, payload: unknown) => ({ protocolVersion: 3, messageId: randomUUID(), sentAt: Date.now(), type, payload });
 
 it('keeps typed terminal traffic separate from tool progress and never claims opening or EOF proves executor stop', () => {
   const scope = binding(), invocationId = randomUUID();

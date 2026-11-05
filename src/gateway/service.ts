@@ -432,6 +432,7 @@ export class GatewayService {
     markStaleAiUsageEventsUnknown(now - 6 * 60 * 60 * 1000, now);
     pruneAiUsageEvents(now - AI_USAGE_RETENTION_MS);
     this.config = loadConfig(this.configPath);
+    this.endpointTools.setProvidersEnabled(this.config.gateway?.deviceProvidersEnabled !== false);
     configureGatewayHttpProxy(this.config.gateway.outboundProxy);
     let bootstrapConfigChanged = initializeVoiceDefaults(
       this.config,
@@ -596,6 +597,7 @@ export class GatewayService {
     this.chatPreviews = new ChatPreviewService({ localApps: this.localApps });
 
     this.agentRunner = new GatewayAgentRunner({
+      canResumeDeviceInteraction: (conversationId, checkpoint) => this.endpointTools.canResumeDeviceInteraction(conversationId, checkpoint),
       afterConnectionResume: (input, status) => this.mcpSetup.completeContinuation(input, status === 'ok'
         ? this.agentService.getLastAssistantPlainText(input.conversationId)
         : '连接已保存，但后续读取未完成。请在原微信私聊查看状态或重试；尚未验证业务结果。'),
@@ -728,7 +730,11 @@ export class GatewayService {
       bus: this.bus,
       enableHotReload: this.serviceConfig.enableHotReload !== false,
       getConfig: () => this.config,
-      setConfig: (next) => { this.config = next; this._mcpSetup?.reconcileWeixinScopes(); },
+      setConfig: (next) => {
+        this.config = next;
+        this.endpointTools.setProvidersEnabled(next.gateway?.deviceProvidersEnabled !== false);
+        this._mcpSetup?.reconcileWeixinScopes();
+      },
       getAgentService: () => this.ensureAgentService(),
       getChannelManager: () => this.channelManager,
       getExtensionLoader: () => this.extensionLoader,

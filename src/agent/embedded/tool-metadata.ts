@@ -2,7 +2,7 @@ import type { AgentTool, BeforeToolCallContext } from '@earendil-works/pi-agent-
 import { createHash } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 
-export type ToolInvalidationReason = 'connection' | 'authorization';
+export type ToolInvalidationReason = 'connection' | 'authorization' | 'catalog';
 
 export type XopcToolMetadata = Pick<ToolDefinition, 'exposure' | 'namespace' | 'annotations' | 'outputSchema'> & {
   external?: { toolRef: string; revision: string; readOnly: boolean };

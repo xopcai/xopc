@@ -11,6 +11,7 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { useLocaleStore } from '@/stores/locale-store';
+import { DeviceProviders } from './device-providers';
 import type { ManagedDevice } from './management-api';
 import { managedDeviceStatus, managedDeviceToolCount, shortDeviceId } from './management-model';
 
@@ -92,6 +93,7 @@ export function DeviceDetailDrawer({
                 </div>
               </section>
 
+              {device.principal && status !== 'revoked' ? <DeviceProviders key={device.id} principalId={device.id} zh={language === 'zh'} /> : null}
               {device.access && !device.access.revokedAt && ['ios', 'android', 'harmonyos'].includes(device.platform ?? '') ? <DevicePhoneAccess key={device.id} device={device} zh={language === 'zh'} /> : null}
               <section>
                 <h3 className="text-sm font-semibold text-fg">{copy.endpointsTitle}</h3>

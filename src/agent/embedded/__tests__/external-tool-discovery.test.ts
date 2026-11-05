@@ -1,5 +1,5 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
+import { ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointToolDescriptor, type TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 import type { EndpointToolRuntime } from '../../../endpoint-tools/runtime.js';
@@ -25,7 +25,7 @@ function fixture() {
     requiresForeground: false, requiredPermissions: [], timeoutMs: 1000, maxConcurrency: 1,
     supportsCancellation: true, idempotent: true, resultKinds: ['text'],
   };
-  const state = { endpointId: 'phone-1', connectionId: 'connection-1', available: true,
+  const state = { origin: { type: 'endpoint', endpointId: 'phone-1' } as TurnOrigin, endpointId: 'phone-1', connectionId: 'connection-1', available: true,
     policy: undefined as { mode: string; readOnly?: boolean } | undefined };
   const invoke = vi.fn(async () => {
     expect(getEmbeddedExecutionSession()).toBe(conversationId);
@@ -37,10 +37,10 @@ function fixture() {
   const runtime = { registry: {
     get: (id: string) => state.available && id === state.endpointId ? snapshot() : undefined,
     getTool: (id: string, name: string) => state.available && id === state.endpointId && name === descriptor.name ? tool : undefined,
-  }, bindings: { get: () => undefined, resolve: () => undefined },
+  }, targets: { get: () => undefined, resolve: () => undefined, select: () => ({}), hold: () => () => {} },
   grants: { find: () => undefined, candidates: () => [] }, invocations: { invoke } } as unknown as EndpointToolRuntime;
   const context = () => ({ conversationId, channel: 'webchat', chatId: 'chat',
-    origin: { type: 'endpoint' as const, endpointId: state.endpointId } });
+    origin: state.origin });
   const provider = new EndpointToolProvider({ runtime, getCurrentContext: context });
   const foreignSearch = vi.fn(async () => []);
   const tools = wrapToolsWithProtection(createExternalToolGatewayTools([
@@ -126,7 +126,7 @@ it('cannot promote interactive or sensitive device reads into Codemode using loc
 
 it('does not expose a device without an authorized origin and never registers connection orchestration as callable', async () => {
   const f = fixture();
-  vi.spyOn(f.provider, 'search').mockResolvedValue([]);
+  f.state.origin = { type: 'channel', channel: 'telegram' };
   expect(await f.materialize()).toEqual([]);
   for (const name of ['xopc_require_connection', 'xopc_update_connection_objective']) {
     expect(getXopcToolMetadata(f.tools.find(tool => tool.name === name) as AgentTool)?.exposure).toBe('model-only');

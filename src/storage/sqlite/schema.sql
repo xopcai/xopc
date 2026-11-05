@@ -1379,7 +1379,7 @@ CREATE TABLE browser_tab_bindings (
 
 CREATE TABLE endpoint_principals (
   id           TEXT PRIMARY KEY,
-  kind         TEXT NOT NULL CHECK(kind IN ('web', 'desktop', 'mobile', 'browser')),
+  kind         TEXT NOT NULL CHECK(kind IN ('web', 'desktop', 'mobile', 'browser', 'bridge')),
   display_name TEXT NOT NULL,
   platform     TEXT NOT NULL,
   public_key   TEXT NOT NULL,
@@ -1391,12 +1391,6 @@ CREATE TABLE endpoint_principals (
 CREATE TABLE endpoint_instance_bindings (
   endpoint_id TEXT PRIMARY KEY,
   principal_id TEXT NOT NULL REFERENCES endpoint_principals(id),
-  bound_at INTEGER NOT NULL
-);
-
-CREATE TABLE endpoint_session_bindings (
-  "conversation_id" TEXT PRIMARY KEY,
-  endpoint_id TEXT NOT NULL REFERENCES endpoint_instance_bindings(endpoint_id),
   bound_at INTEGER NOT NULL
 );
 
@@ -1516,7 +1510,7 @@ CREATE VIRTUAL TABLE "transcript_fts" USING fts5(
 CREATE TABLE "devices" (
   device_id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL,
-  platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'harmonyos', 'chrome', 'desktop')),
+  platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'harmonyos', 'chrome', 'desktop', 'bridge')),
   extension_id TEXT CHECK (extension_id IS NULL OR length(extension_id) = 32),
   public_key_jwk TEXT NOT NULL,
   scopes_json TEXT NOT NULL,
@@ -3220,8 +3214,6 @@ CREATE INDEX idx_endpoint_principals_active
 CREATE INDEX idx_endpoint_instance_bindings_principal
   ON endpoint_instance_bindings(principal_id);
 
-CREATE INDEX idx_endpoint_session_bindings_endpoint
-  ON endpoint_session_bindings(endpoint_id);
 
 CREATE INDEX idx_browser_sessions_expiry ON browser_sessions(expires_at);
 

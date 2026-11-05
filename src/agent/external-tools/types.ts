@@ -68,6 +68,7 @@ export interface ExternalToolDiscoveryContext {
 
 export interface ExternalToolProvider {
   readonly source: ExternalToolSource;
+  catalog?(): Promise<ExternalToolDescriptor[]>;
   search(query: string, context?: ExternalToolDiscoveryContext): Promise<ExternalToolSearchHit[]>;
   connectionCandidates?(query: string): Promise<ExternalConnectionCandidate[]>;
   describe(toolRef: string, context?: ExternalToolDiscoveryContext): Promise<ExternalToolDescriptor | undefined>;

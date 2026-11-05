@@ -1,5 +1,7 @@
 export const computerUseManual = `# Computer Use
 
+Use device_use discover and select to choose an accessible execution desktop from any chat entry point. Selection does not grant permissions. The selected task target wins over the message source, and active sessions remain pinned to their connection. An offline target never falls back to another device. Close active control before choosing another desktop.
+
 Use computer_use for a task that requires a desktop app's UI. Prefer existing structured browser or application tools when appropriate. Do not use shell or another tool to bypass a desktop refusal.
 
 Programmable UI: a visual main model may open with planner:"agent" and use exec {code:"..."}, bypassing independent GUI-model prediction. Default planner:"gui" retains step/run. Close before changing planner/model. In agent mode use exec for visual observations; observe(question), step and run require the GUI planner.

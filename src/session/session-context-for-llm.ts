@@ -567,6 +567,11 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
     }
     if (isTranscriptCustomMessageEntry(r)) {
       if (r.customType === 'clarification_answers') continue;
+      if (r.customType === 'device_interaction_result') {
+        out.push({ role: 'user', content: '[Gateway device recovery evidence] The original device invocation completed after reconnect. Do not repeat its actions.',
+          timestamp: parseTimestampValue(r.timestamp) } as AgentMessage);
+        continue;
+      }
       if (r.customType === 'task_allocation_status' && isRoutineTaskAllocationStatus(r.details)) continue;
       if (r.customType === 'personal_request_status' || r.customType === 'connection_control_status') continue;
       if (r.customType === PERSONAL_PROACTIVE_MESSAGE_TYPE) {
@@ -610,7 +615,7 @@ export function buildSessionDisplayMessages(rows: TranscriptStoredRow[]): AgentM
   for (const r of rows) {
     if (isTranscriptCustomMessageEntry(r)) {
       if (r.customType === 'task_allocation_status' && isRoutineTaskAllocationStatus(r.details)) continue;
-      if (r.customType === 'personal_request_status' || r.customType === 'connection_control_status') {
+      if (r.customType === 'personal_request_status' || r.customType === 'connection_control_status' || r.customType === 'device_interaction_result') {
         out.push({ role: 'assistant', content: [{ type: 'text', text: typeof r.content === 'string' ? r.content : '' }],
           timestamp: typeof r.timestamp === 'number' ? r.timestamp : 0 } as AgentMessage);
         continue;

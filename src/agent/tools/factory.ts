@@ -106,6 +106,7 @@ import { getBrowserTabBinding } from '../../storage/sqlite/browser-tab-binding-r
 import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
 import { ComputerRuntime } from '../../computer/runtime.js';
 import { createComputerUseTool } from './computer-use-tool.js';
+import { createDeviceUseTool } from './device-use-tool.js';
 import { createReviewWorkspaceTool } from './review-workspace.js';
 import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
 import { createDelegateTool } from './delegate-tool.js';
@@ -238,7 +239,7 @@ export class AgentToolsFactory {
   }
 
   private browserRuntime: BrowserRuntime | null = null;
-  private readonly deviceBrowserRuntimes = new Map<string, { owner: string; runtime: RemoteDeviceBrowserRuntime; driver?: RemoteDeviceBrowserDriver }>();
+  private readonly deviceBrowserRuntimes = new Map<string, { owner: string; runtime: RemoteDeviceBrowserRuntime; driver?: RemoteDeviceBrowserDriver; releaseTarget?: () => void }>();
   /** Cached readiness probe keyed by the active driver configuration. */
   private browserReadinessCache: {
     key: string;
@@ -330,7 +331,7 @@ export class AgentToolsFactory {
         resolveTarget: (conversationId) => {
           const binding = getBrowserTabBinding(conversationId);
           if (binding) return { kind: 'attached_tab', bindingId: binding.id };
-          const endpointBinding = this.deps.endpointTools?.bindings.get(conversationId);
+          const endpointBinding = this.deps.endpointTools?.targets.get(conversationId);
           return endpointBinding
             ? { kind: 'endpoint', endpointId: endpointBinding.endpointId }
             : undefined;
@@ -358,27 +359,30 @@ export class AgentToolsFactory {
     const key = JSON.stringify([owner, endpointId]), existing = this.deviceBrowserRuntimes.get(key);
     if (existing) return existing.runtime;
     if (this.deviceBrowserRuntimes.size >= 20) throw new Error('BROWSER_REMOTE_SESSION_LIMIT');
-    const entry: { owner: string; runtime: RemoteDeviceBrowserRuntime; driver?: RemoteDeviceBrowserDriver } = { owner, runtime: undefined! };
+    const targets = this.deps.endpointTools!.targets;
+    if (!targets.get(owner)) targets.select(owner, endpointId);
+    const releaseTarget = targets.hold(owner, `browser:${key}`);
+    const entry: { owner: string; runtime: RemoteDeviceBrowserRuntime; driver?: RemoteDeviceBrowserDriver; releaseTarget?: () => void } = { owner, runtime: undefined! };
     const runtime = new RemoteDeviceBrowserRuntime({
       getConfig: () => { const config = this.deps.getConfig?.(); if (!config) throw new Error('Browser configuration is unavailable'); return config.browser; },
       createDriver: async () => { entry.driver = new RemoteDeviceBrowserDriver(this.deps.endpointTools!, endpointId, owner); return entry.driver; },
       resolveTarget: () => ({ kind: 'endpoint', endpointId }),
       allowedUploadRoots: [], emit: this.deps.emitBrowserEvent,
-    }, () => { if (this.deviceBrowserRuntimes.get(key)?.runtime === runtime) this.deviceBrowserRuntimes.delete(key); });
-    entry.runtime = runtime; this.deviceBrowserRuntimes.set(key, entry);
+    }, () => { if (this.deviceBrowserRuntimes.get(key)?.runtime === runtime) { this.deviceBrowserRuntimes.delete(key); releaseTarget(); } });
+    entry.runtime = runtime; entry.releaseTarget = releaseTarget; this.deviceBrowserRuntimes.set(key, entry);
     return runtime;
   }
   private async reconcileStoppedDeviceBrowsers(owner: string | undefined): Promise<void> {
     if (!owner) return;
     for (const [key, entry] of this.deviceBrowserRuntimes) {
       if (entry.owner !== owner || entry.runtime.hasPendingCalls() || !entry.driver?.verifiedStopped()) continue;
-      await entry.runtime.shutdown(); this.deviceBrowserRuntimes.delete(key);
+      await entry.runtime.shutdown(); this.deviceBrowserRuntimes.delete(key); entry.releaseTarget?.();
     }
   }
   private async closeDeviceBrowserRuntimes(owner?: string): Promise<void> {
     const entries = [...this.deviceBrowserRuntimes].filter(([, entry]) => owner === undefined || entry.owner === owner);
     const results = await Promise.allSettled(entries.map(([, entry]) => entry.runtime.shutdown()));
-    results.forEach((result, index) => { if (result.status === 'fulfilled') this.deviceBrowserRuntimes.delete(entries[index]![0]); });
+    results.forEach((result, index) => { if (result.status === 'fulfilled') { this.deviceBrowserRuntimes.delete(entries[index]![0]); entries[index]![1].releaseTarget?.(); } });
     if (results.some(result => result.status === 'rejected')) throw new Error('BROWSER_REMOTE_RELEASE_UNCONFIRMED');
   }
 
@@ -801,6 +805,12 @@ export class AgentToolsFactory {
             ...(typeof phoneDeviceId === 'string' ? { preferredDeviceId: phoneDeviceId } : {}) };
         },
       })] : []),
+      ...(this.deps.endpointTools ? [createDeviceUseTool({ runtime: this.deps.endpointTools, requestClarification: this.deps.gatewayClarify?.requestClarification,
+        conversationId: () => {
+          const id = getEmbeddedExecutionSession() ?? currentConversationId();
+          if (!id) throw new Error('Device Use requires an active conversation');
+          return id;
+        } })] : []),
       ...(cfg?.computer.enabled && this.deps.endpointTools
         ? [createComputerUseTool({
             runtime: this.ensureComputerRuntime(),

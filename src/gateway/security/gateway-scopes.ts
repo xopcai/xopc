@@ -49,6 +49,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/frame$/.test(path) && method === 'GET') return 'phone.view';
   if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/video-ticket$/.test(path) && method === 'POST') return 'phone.view';
   if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/control$/.test(path) && method === 'POST') return 'phone.control';
+  if (path === '/api/endpoint-tools/hosts/enrollment' || path === '/api/endpoint-tools/providers/admission' || path.startsWith('/api/endpoint-tools/provider-operations/')) return 'gateway.admin';
   if (path.startsWith('/api/endpoint-tools')) return 'device.self';
   if (path === '/api/user-context/environment' || path.startsWith('/api/user-context/environment/')) return 'device.self';
   if (path === '/api/personal-agent/activity') return 'tasks.read';

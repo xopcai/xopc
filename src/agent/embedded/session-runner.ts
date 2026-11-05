@@ -27,6 +27,7 @@ import { isCodemodeCoreRead } from '../tools/codemode-permissions.js';
 import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
 import { getExternalToolRegistry } from '../external-tools/tool-registry.js';
 import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-search-extension.js';
+import { materializeNativeExternalTools } from './external-tool-discovery.js';
 import { type NativeMcpConfig, getNativePiAgentDir } from '../mcp/native-mcp.js';
 import { createXopcMcpTransport } from '../mcp/transport.js';
 import { createMcpSetupContinuationGuard } from '../mcp/continuation-guard.js';
@@ -370,7 +371,9 @@ export class EmbeddedSessionRunnerPool {
         createMcpSetupContinuationGuard(runtimeId, tools.some(tool => tool.name === 'mcp_setup')),
         ...(mcp?.automationSourceRunId ? [createAutomationMcpSourceGuard(mcp.automationSourceRunId)] : []),
         ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
-        ...(discovery ? [createXopcToolSearchExtension(tools, { nativeDiscovery, externalDiscovery, registry })] : []),
+        ...(discovery ? [createXopcToolSearchExtension(tools, { nativeDiscovery, externalDiscovery, registry,
+          ...(registry ? { refreshNative: () => materializeNativeExternalTools({ conversationId: runtimeId,
+            tools: tools.filter(tool => !getXopcToolMetadata(tool)?.external) }) } : {}) })] : []),
         ...(mcp ? [createMcpExtension({ createTransport: createXopcMcpTransport(), loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
         createAgentProfileContextExtension(runtimeId),
       ],
@@ -430,7 +433,7 @@ export class EmbeddedSessionRunnerPool {
           if (current?.session !== session) return;
           // Calls still validate live device authorization and contract revisions.
           // A transport change must not cancel an unrelated assistant response.
-          if (reason === 'connection' && current.activeLeases > 0) {
+          if (reason === 'catalog' || reason === 'connection' && current.activeLeases > 0) {
             current.invalidated = true;
             log.info({ runtimeId }, 'Device connection changed; runner will refresh after the active turn');
             return;

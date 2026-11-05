@@ -58,7 +58,7 @@ function fixture() {
     requestDigest: createHash('sha256').update(canonicalJson(args)).digest('hex'), descriptorDigest: revision, surface: 'fixture', recovery: 'manual' },
   operationId => service!.invoke({ endpointId: hello.endpointId, toolCallId: 'fixture', toolName: descriptor.name, arguments: args, descriptorRevision: revision, operationId, signal }));
   const message = (type: string, payload: Record<string, unknown>) => service!.handleMessage(hello.endpointId, {
-    protocolVersion: 2, messageId: randomUUID(), type, sentAt: Date.now(), payload: { invocationId: sent[0].payload.invocationId, ...payload },
+    protocolVersion: 3, messageId: randomUUID(), type, sentAt: Date.now(), payload: { invocationId: sent[0].payload.invocationId, ...payload },
   } as any);
   const receipt = (state: string, extra = {}) => ({ operationId: sent[0].payload.execution.operationId, invocationId: sent[0].payload.invocationId,
     connectionInstanceId: hello.connectionInstanceId, state, executionStopped: ['succeeded', 'failed', 'stopped'].includes(state), updatedAt: Date.now(), ...extra });

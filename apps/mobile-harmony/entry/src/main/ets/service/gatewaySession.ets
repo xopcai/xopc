@@ -38,6 +38,7 @@ export class XopcGatewaySession {
   }
 
   setForeground(value: boolean): void { this.foreground = value; }
+  isForeground(): boolean { return this.foreground; }
 
   async restore(progress: (code: string) => void = (_code: string): void => {}): Promise<XopcProfile | undefined> {
     const generation = this.generation;
