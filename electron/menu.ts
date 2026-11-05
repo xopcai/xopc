@@ -72,7 +72,7 @@ export function buildAppMenuModel(
         item('file.quickCapture', t.file.quickCapture),
         separator(),
         item('file.search', t.file.search, { accelerator: 'CmdOrCtrl+K' }),
-        item('file.gatewayConnections', t.file.gatewayConnections),
+        item('file.gatewaySettings', t.file.gatewaySettings),
         separator(),
         ...(isMac
           ? []
@@ -177,14 +177,14 @@ export function buildAppMenuModel(
 export function invokeAppMenuAction(
   mainWindow: BrowserWindow,
   id: string,
-  actions: { gatewayConnections?(): void } = {},
+  actions: { gatewaySettings?(): void } = {},
 ): { ok: true } | { ok: false; error: 'UNKNOWN_MENU_ACTION' } {
   const wc = mainWindow.webContents;
 
   switch (id) {
-    case 'file.gatewayConnections':
-      if (!actions.gatewayConnections) return { ok: false, error: 'UNKNOWN_MENU_ACTION' };
-      actions.gatewayConnections();
+    case 'file.gatewaySettings':
+      if (!actions.gatewaySettings) return { ok: false, error: 'UNKNOWN_MENU_ACTION' };
+      actions.gatewaySettings();
       break;
     case 'app.settings':
       wc.send('menu:navigate', '/settings/appearance');
@@ -307,7 +307,7 @@ export function invokeAppMenuAction(
   return { ok: true };
 }
 
-export function buildAppMenu(mainWindow: BrowserWindow, t: ElectronMenuMessages, actions: { gatewayConnections?(): void } = {}): Menu {
+export function buildAppMenu(mainWindow: BrowserWindow, t: ElectronMenuMessages, actions: { gatewaySettings?(): void } = {}): Menu {
   const template: MenuItemConstructorOptions[] = buildAppMenuModel(t).map((group) => ({
     label: group.label,
     submenu: group.items.map((menuItem): MenuItemConstructorOptions => {

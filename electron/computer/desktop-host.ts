@@ -1,7 +1,7 @@
 import { release } from 'node:os';
-import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { readFile, writeFile, stat } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto';
+import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
+import { basename, dirname, extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, clipboard, dialog, safeStorage, shell, systemPreferences, type BrowserWindow } from 'electron';
 import WebSocket from 'ws';
@@ -28,6 +28,7 @@ import { ComputerAccessPolicy } from './access-policy.js';
 import { ComputerPreviewManager } from './preview-manager.js';
 import { startPreviewCapture } from './preview-capture.js';
 import { localGatewayOrigin } from '../gateway/local-connection.js';
+import type { DesktopGatewayTarget } from '../gateway/desktop-transport.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
 const log = createLogger('DesktopEndpointHost');
@@ -71,7 +72,7 @@ export class DesktopEndpointHost {
       log.warn({ phase: 'cleanup' }, 'Computer driver stop could not be confirmed');
     });
   }
-  constructor(private readonly options: { connection(): { port: number; token: string } | undefined; window(): BrowserWindow | null }) {
+  constructor(private readonly options: { connection(): (DesktopGatewayTarget | { port: number; token: string }) | undefined; window(): BrowserWindow | null }) {
     // Dev launches out/main/index.js directly, so app.getAppPath() is not the repository root.
     const binary = resolveComputerDriverPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, mainDir: import.meta.dirname });
     const sdkUrl = resolveComputerDriverSdkUrl({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
@@ -167,7 +168,7 @@ export class DesktopEndpointHost {
     catch (error) {
       if (!this.reenrollmentRequired) this.error = error instanceof Error && error.message === GATEWAY_PROTOCOL_INCOMPATIBLE
         ? getComputerMessages(getElectronShellLanguage()).protocolIncompatible
-        : 'Desktop endpoint is not ready. Check the local Gateway and keychain.';
+        : 'Desktop endpoint is not ready. Check the selected Gateway and keychain.';
       if (!this.stopped && !this.reenrollmentRequired && !(error instanceof RealtimeConnectionError && !error.retryable)) {
         this.retry = setTimeout(() => { void this.start(); }, 2000);
       }
@@ -193,7 +194,7 @@ export class DesktopEndpointHost {
       });
       if (answer.response !== 1 || this.stopped || !this.visible()) return;
       const identity = this.createIdentity();
-      await writeTextAtomic(join(app.getPath('userData'), 'desktop-endpoint-identity.json'), JSON.stringify(identity.data), { mode: 0o600 });
+      await writeTextAtomic(this.identityPath(), JSON.stringify(identity.data), { mode: 0o600 });
       if (this.stopped) return;
       this.reenrollmentRequired = false;
       await this.start();
@@ -208,9 +209,15 @@ export class DesktopEndpointHost {
     this.stopBrokerInBackground();
     this.error = 'Desktop identity was revoked. Re-register this device in Computer Use settings.';
   }
+  private identityPath(): string {
+    const connection = this.options.connection();
+    if (!connection || !('scope' in connection) || connection.scope === 'local') return join(app.getPath('userData'), 'desktop-endpoint-identity.json');
+    return join(app.getPath('userData'), 'desktop-endpoint-identities', createHash('sha256').update(connection.origin).digest('hex') + '.json');
+  }
   private async identity(): Promise<{ data: Identity; privateKey: string }> {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('Desktop identity requires the OS keychain');
-    const path = join(app.getPath('userData'), 'desktop-endpoint-identity.json');
+    const path = this.identityPath();
+    await mkdir(dirname(path), { recursive: true });
     try {
       const data = JSON.parse(await readFile(path, 'utf8')) as Identity;
       return { data, privateKey: safeStorage.decryptString(Buffer.from(data.encryptedPrivateKey, 'base64')) };
@@ -223,7 +230,7 @@ export class DesktopEndpointHost {
   }
   private async connect(): Promise<void> {
     const connection = this.options.connection(); if (!connection) throw new Error('Gateway unavailable');
-    const base = localGatewayOrigin(connection);
+    const base = 'origin' in connection ? connection.origin : localGatewayOrigin(connection);
     const headers = { Authorization: `Bearer ${connection.token}`, 'Content-Type': 'application/json' };
     const request = async (path: string, body: unknown, signal?: AbortSignal) => {
       const result = await fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body), redirect: 'error',
@@ -299,7 +306,7 @@ export class DesktopEndpointHost {
         clientKind: 'desktop',
         protocolVersion: REALTIME_PROTOCOL_VERSION,
       }, signal)).payload,
-      getWebSocketUrl: () => base.replace('http:', 'ws:') + '/api/realtime/v1/ws',
+      getWebSocketUrl: () => base.replace(/^http/, 'ws') + '/api/realtime/v1/ws',
       createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     });
     realtime.setEndpoint({ createHello: async () => {

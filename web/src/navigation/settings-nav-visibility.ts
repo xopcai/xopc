@@ -13,7 +13,6 @@ const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
   '/settings/tracing',
   '/settings/runtimes',
   '/settings/extensions/debug',
-  '/settings/ext/',
 ] as const;
 
 export function isSettingsTabVisibleInMode(tab: Tab, mode: SettingsMode): boolean {

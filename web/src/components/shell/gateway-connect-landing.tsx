@@ -1,3 +1,4 @@
+import { DesktopGatewayConnection } from '@/features/settings/desktop-gateway-connection';
 import { ChevronDown, ExternalLink } from 'lucide-react';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -19,6 +20,8 @@ export function GatewayConnectLanding() {
   const m = messages(language);
   const l = m.gatewayLanding;
   const appearanceLabel = m.appearanceSettings.pageTitle;
+
+  if (window.electronAPI?.gateway?.connection) return <div className="flex min-h-full flex-col justify-center p-6"><div className="mx-auto w-full max-w-2xl"><DesktopGatewayConnection /></div></div>;
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col bg-surface-base">

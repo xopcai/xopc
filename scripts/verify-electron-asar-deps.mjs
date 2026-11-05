@@ -64,10 +64,6 @@ function verifyUnpackedRuntimeDeps(asarPath) {
 function verifyUnpackedAppLayout(asarPath) {
   const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
   const required = [
-    'out/preload/connections.cjs',
-    'out/preload/gateway-connections.html',
-    'out/preload/gateway-connections.js',
-    'out/preload/screen-capture.html',
     'out/server/index.js',
     'out/server/codemode-worker.js',
     'node_modules/quickjs-wasi/quickjs.wasm',
@@ -119,15 +115,10 @@ function main() {
     const read = path => readFileSync(join(tmp, path));
     const manifest = verifyDesktopPackageLayout(read, supportedUpgradeFiles(root));
     verifyCanonicalSqlBytes(read, root);
-    console.log(`[verify-electron-asar-deps] OK — ${Object.keys(manifest.files).length} desktop UI, connection UI, Gateway and SQL resources`);
+    console.log(`[verify-electron-asar-deps] OK — ${Object.keys(manifest.files).length} desktop UI, Gateway and SQL resources`);
     const artifacts = verifyDesktopArtifactBytes(read, root);
     console.log(`[verify-electron-asar-deps] OK — ${Object.keys(artifacts.files).length} packaged files match built runtime bytes`);
-    if (process.platform === 'darwin' && asarPath.includes('Contents/Resources/')) {
-      const native = join(dirname(asarPath), 'bin/desktop-workspace.node'), worker = join(dirname(asarPath), 'bin/workspace-worker.cjs');
-      if (!existsSync(native) || statSync(native).size < 4096) throw new Error('Native workspace adapter is missing or empty');
-      if (!readFileSync(worker).equals(readFileSync(join(root, 'electron/desktop/workspace-worker.cjs')))) throw new Error('Workspace worker does not match its trusted source');
-      console.log('[verify-electron-asar-deps] OK — native workspace adapter present and worker bytes verified');
-    }
+
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

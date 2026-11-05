@@ -1,375 +1,161 @@
-// Isolated production-main acceptance and repeatable local connection baseline.
+// Exercise one desktop window across two real Gateways without touching the user's data.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, readFile, readdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { tmpdir, platform, arch, release } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
-import { performance } from 'node:perf_hooks';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { _electron } from 'playwright-core';
 
-import { createAcceptanceOutput, localConnectionArtifactManifest, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
-import { assertComparableSampling, LEGACY_SAMPLE_PLAN, latencyPopulations, latencySummary as summary } from './electron-local-connection-metrics.mjs';
+import { createAcceptanceOutput, localConnectionEnvironment, prepareLocalConnectionLayout, withTimeout } from './electron-local-connection-support.mjs';
 
-assert.notEqual(platform(), 'win32', 'This acceptance runner requires POSIX process inspection; Windows acceptance is separate');
-
-const flag = (name, fallback) => {
-  const index = process.argv.indexOf(name);
-  return index < 0 ? fallback : process.argv[index + 1];
-};
-const runs = Number(flag('--runs', '30'));
-const operations = Number(flag('--operations', '100'));
-const functional = process.argv.includes('--functional');
-const diagnostics = process.argv.includes('--diagnostics');
-const serverDiagnostics = process.argv.includes('--server-diagnostics');
-const modeFlag = flag('--mode', 'all');
-assert(['all', 'spawn', 'reuse'].includes(modeFlag), 'Invalid acceptance mode');
-const modes = modeFlag === 'all' ? ['spawn', 'reuse'] : [modeFlag];
-assert(!serverDiagnostics || (diagnostics && modeFlag === 'reuse'), 'Server probe requires --diagnostics --mode reuse (Node runtime)');
-const comparePath = flag('--compare', undefined);
-assert(!comparePath || (!diagnostics && !serverDiagnostics), 'Diagnostic runs cannot be compared for acceptance');
-assert(Number.isInteger(runs) && runs > 0);
-assert(Number.isInteger(operations) && operations > 0);
-const output = resolve(flag('--output', 'reports/electron-local-connection.json'));
-assert(!comparePath || resolve(comparePath) !== output, 'Do not overwrite the comparison baseline');
-await createAcceptanceOutput(output);
 const root = resolve(import.meta.dirname, '..');
-const artifactRoot = resolve(flag('--artifact-root', root));
-const entry = join(artifactRoot, 'out/main/index.js');
-const artifactSha256 = createHash('sha256').update(await readFile(entry)).digest('hex');
-let cleanupLayout;
-const result = {
-  schemaVersion: 2, samplingPlan: LEGACY_SAMPLE_PLAN, startedAt: new Date().toISOString(),
-  commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-  worktreeDirty: Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()),
-  artifactSha256, developmentLayoutLink: true, node: process.version, platform: platform(), arch: arch(), osRelease: release(),
-  artifactSourceRef: flag('--artifact-source-ref', 'working-tree'),
-  scope: 'Built production Electron main/preload and Gateway; development Electron runtime, not signed installer or real remote server',
-  runs, operations, functional, diagnostics, serverDiagnostics, modes, samples: [], passed: false,
-};
-await mkdir(dirname(output), { recursive: true });
-const save = () => writeFile(output, `${JSON.stringify(result, null, 2)}\n`);
-
-async function electronBuildHash() {
-  const hash = createHash('sha256');
-  for (const directory of ['out/main', 'out/preload']) {
-    const base = join(artifactRoot, directory);
-    for (const entry of (await readdir(base, { recursive: true, withFileTypes: true }))
-      .filter(entry => entry.isFile()).sort((a, b) => join(a.parentPath, a.name).localeCompare(join(b.parentPath, b.name)))) {
-      const path = join(entry.parentPath, entry.name);
-      hash.update(relative(artifactRoot, path)).update('\0').update(await readFile(path)).update('\0');
-    }
-  }
-  return hash.digest('hex');
+const state = await mkdtemp(join(tmpdir(), 'xopc-unified-gateway-'));
+const output = await createAcceptanceOutput(join(tmpdir(), 'xopc-unified-gateway-' + randomUUID() + '.json'));
+const report = { passed: false, checks: {} };
+let application, remote, cleanupLayout;
+let remoteLogs = '';
+async function port() { const server = createServer().listen(0, '127.0.0.1'); await once(server, 'listening'); const value = server.address().port; await new Promise(resolve => server.close(resolve)); return value; }
+async function until(test, timeout = 30000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) { if (await test().catch(() => false)) return; await delay(100); }
+  throw new Error('Gateway acceptance timed out');
 }
-
-async function freePort() {
-  const server = createServer();
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const port = server.address().port;
-  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  return port;
-}
-
-async function until(check, timeoutMs = 60_000) {
-  const deadline = performance.now() + timeoutMs;
-  while (performance.now() < deadline) {
-    const value = await withTimeout(Promise.resolve().then(check), Math.max(1, deadline - performance.now()), 'Acceptance deadline expired');
-    if (value) return value;
-    await delay(100);
-  }
-  throw new Error('Acceptance deadline expired');
-}
-
-function processTree(pid) {
-  const rows = execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,%cpu='], { encoding: 'utf8' })
-    .trim().split('\n').map(line => line.trim().split(/\s+/).map(Number));
-  const ids = new Set([pid]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const [id, parent] of rows) if (ids.has(parent) && !ids.has(id)) { ids.add(id); changed = true; }
-  }
-  const owned = rows.filter(([id]) => ids.has(id));
-  return { pids: owned.map(row => row[0]), processes: owned.length, rssMiB: owned.reduce((sum, row) => sum + row[2], 0) / 1024,
-    cpuPercentSnapshot: owned.reduce((sum, row) => sum + row[3], 0) };
-}
-
-async function run(mode, index) {
-  const state = await mkdtemp(join(tmpdir(), 'xopc-local-connection-'));
-  const port = await freePort();
-  const token = randomUUID();
-  const base = `http://127.0.0.1:${port}`;
-  const configPath = join(state, 'xopc.json');
-  const workspace = join(state, 'workspace/main');
-  await mkdir(workspace, { recursive: true });
-  await writeFile(configPath, JSON.stringify({ gateway: { mode: 'local', bind: 'loopback', port,
-    auth: { mode: 'token', token } }, browser: { enabled: false } }));
-  const fixtureModule = functional ? await import('./electron-local-connection-fixture.mjs') : undefined;
-  const fixture = await fixtureModule?.createLocalConnectionFixture(state);
-  const remoteProfilePath = join(state, 'electron/gateway-connections-v1/profiles.json');
-  if (functional) {
-    await mkdir(dirname(remoteProfilePath), { recursive: true });
-    await writeFile(remoteProfilePath, '{deliberately-corrupt-remote-profile');
-  }
-  const env = localConnectionEnvironment(process.env, artifactRoot, state, configPath, workspace);
-  if (serverDiagnostics) {
-    env.NODE_OPTIONS = `--require=${JSON.stringify(join(root, 'scripts/electron-connection-http-probe.cjs'))}`;
-    env.XOPC_ACCEPTANCE_HTTP_TRACE = join(state, 'http-trace.jsonl');
-  }
-  const sample = { mode, index, passed: false, readyMs: null, configMs: [], sessionsMs: [] };
-  result.samples.push(sample);
-  let external;
-  let application;
-  let logs = '';
-  let stopStartupProbe = false;
-  let startupProbe;
-  const authenticated = () => fetch(`${base}/api/config`, {
-    headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(1500),
-  }).then(response => response.ok).catch(() => false);
-  try {
-    if (mode === 'reuse') {
-      external = spawn(process.execPath, [join(artifactRoot, 'dist/src/cli/bin.js'), 'gateway', '--foreground',
-        '--bind', 'loopback', '--port', String(port), '--no-hot-reload'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
-      external.stdout.on('data', chunk => { logs = (logs + chunk).slice(-8000); });
-      external.stderr.on('data', chunk => { logs = (logs + chunk).slice(-8000); });
-      await until(async () => {
-        assert(external.exitCode === null, 'External Gateway exited during startup');
-        return authenticated();
-      });
-    }
-    const start = performance.now();
-    if (diagnostics) startupProbe = (async () => {
-      while (!stopStartupProbe) {
-        if (await authenticated()) return { firstObservedAuthenticatedAt: performance.timeOrigin + performance.now() };
-        await delay(50);
-      }
-      return undefined;
-    })();
-    application = await _electron.launch({ args: [entry], cwd: root, env, timeout: 60_000 });
-    if (diagnostics) await application.evaluate(() => {
-      globalThis.__acceptanceStartupTrace = [];
-      const original = globalThis.fetch;
-      globalThis.fetch = async (...args) => {
-        const start = performance.now();
-        let path = '[unparseable]';
-        try { path = new URL(args[0] instanceof Request ? args[0].url : String(args[0])).pathname; } catch { /* Diagnostics must not change fetch behavior. */ }
-        try {
-          const response = await original(...args);
-          globalThis.__acceptanceStartupTrace.push({ path, start: performance.timeOrigin + start,
-            elapsedMs: performance.now() - start, status: response.status });
-          return response;
-        } catch (error) {
-          globalThis.__acceptanceStartupTrace.push({ path, start: performance.timeOrigin + start,
-            elapsedMs: performance.now() - start, failed: true });
-          throw error;
-        }
-      };
-    });
-    application.process().stdout?.on('data', chunk => { logs = (logs + chunk).slice(-8000); });
-    application.process().stderr?.on('data', chunk => { logs = (logs + chunk).slice(-8000); });
-    const page = await until(async () => {
-      for (const window of application.windows()) {
-        if (!window.url().startsWith(base + '/')) continue;
-        try {
-          const ready = await window.evaluate(async () => Boolean(window.electronAPI)
-            && (await fetch('/api/config', { signal: AbortSignal.timeout(2000) })).ok);
-          if (ready) return window;
-        } catch { /* Navigation can replace the initial recovery/loading document. */ }
-      }
-    });
-    sample.readyMs = performance.now() - start;
-    assert.equal((await fetch(`${base}/api/config`, { signal: AbortSignal.timeout(2000) })).status, 401, 'Gateway still requires authentication');
-    const count = index === 0 ? operations : 1;
-    const metrics = await page.evaluate(async ({ count, diagnostics }) => {
-      const configMs = [], sessionsMs = [];
-      const timing = [];
-      for (let index = 0; index < count; index++) {
-        for (const [path, values] of [['/api/config', configMs], ['/api/sessions', sessionsMs]]) {
-          const start = performance.now();
-          const response = await fetch(path, { signal: AbortSignal.timeout(2000) });
-          const headersAt = diagnostics ? performance.now() : undefined;
-          if (!response.ok) throw new Error(`${path}: ${response.status}`);
-          await response.json();
-          const completedAt = performance.now();
-          values.push(completedAt - start);
-          if (diagnostics) {
-            timing.push({ path, index, start, headersAt, completedAt, requestId: response.headers.get('x-request-id') });
-          }
-        }
-      }
-      const session = await fetch('/api/browser-session', { signal: AbortSignal.timeout(2000) });
-      if (!session.ok) throw new Error('Browser Cookie bootstrap failed');
-      return { configMs, sessionsMs, browserSession: true, ...(diagnostics ? { timing, timeOrigin: performance.timeOrigin } : {}) };
-    }, { count, diagnostics });
-    Object.assign(sample, metrics);
-    if (diagnostics) {
-      sample.startupDiagnostics = {
-        independentProbe: await startupProbe,
-        mainRequests: await application.evaluate(() => globalThis.__acceptanceStartupTrace),
-        lifecycleLog: (await readFile(join(state, 'electron/electron-startup.log'), 'utf8')).slice(-20_000).replaceAll(token, '[redacted]'),
-      };
-      sample.browserDiagnostics = await page.evaluate(async () => {
-        const longTasks = [];
-        const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => ({ startTime: e.startTime, duration: e.duration }))));
-        observer.observe({ type: 'longtask', buffered: true });
-        await new Promise(resolve => setTimeout(resolve, 0));
-        observer.disconnect();
-        return { longTasks, navigation: performance.getEntriesByType('navigation').map(e => e.toJSON()), resources: performance.getEntriesByType('resource').filter(e => ['/api/config', '/api/sessions'].includes(new URL(e.name).pathname)).map(e => e.toJSON()) };
-      });
-    }
-    if (serverDiagnostics) sample.httpTrace = (await readFile(env.XOPC_ACCEPTANCE_HTTP_TRACE, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
-    await until(() => page.evaluate(async () => (await window.electronAPI.computer.status())?.connected));
-    sample.endpointConnected = true;
-    sample.runtime = await application.evaluate(() => ({ node: process.versions.node, electron: process.versions.electron }));
-    if (fixture) {
-      assert.equal((await fetch(`${base}/api/automation-runs/product-events`, { signal: AbortSignal.timeout(2000) })).status, 401);
-      const automationRoute = await page.evaluate(async () => {
-        const response = await fetch('/api/automation-runs/product-events?eventType=acceptance.unused', { signal: AbortSignal.timeout(2000) });
-        const body = await response.json();
-        const invalid = await fetch('/api/automation-runs/product-events?limit=-1', { signal: AbortSignal.timeout(2000) });
-        return { status: response.status, empty: Array.isArray(body.items) && body.items.length === 0, invalidStatus: invalid.status };
-      });
-      assert.deepEqual(automationRoute, { status: 200, empty: true, invalidStatus: 400 });
-      assert.equal((await fetch(`${base}/api/providers/meta`, { signal: AbortSignal.timeout(2000) })).status, 401);
-      const providerRoute = await page.evaluate(async () => {
-        const response = await fetch('/api/providers/meta', { signal: AbortSignal.timeout(2000) });
-        const body = await response.json();
-        return { status: response.status, valid: Array.isArray(body.payload?.providers)
-          && body.payload.providers.every(p => Number.isInteger(p.modelCount) && p.modelCount >= 0 && typeof p.configured === 'boolean') };
-      });
-      assert.deepEqual(providerRoute, { status: 200, valid: true });
-      sample.functional = await withTimeout(fixtureModule.verifyLocalConnectionFunctions(page, fixture, until), 90_000, 'Functional acceptance exceeded 90 seconds');
-      sample.functional.authenticatedAutomationLazyRoute = true;
-      sample.functional.authenticatedProviderMetaRoute = true;
-      assert.equal(await readFile(remoteProfilePath, 'utf8'), '{deliberately-corrupt-remote-profile', 'Local mode must not read or migrate remote profiles');
-      sample.functional.corruptRemoteProfileIgnored = true;
-      await until(() => page.evaluate(async () => {
-        const response = await fetch('/api/runtime/quit-impact', { signal: AbortSignal.timeout(2000) });
-        if (!response.ok) return false;
-        return !(await response.json()).payload.shouldConfirm;
-      }), 30_000);
-      const restart = await withTimeout(page.evaluate(() => window.electronAPI.gateway.restart()),
-        35_000, 'Gateway restart acceptance timed out');
-      if (mode === 'spawn') {
-        assert(restart.ok, `Owned Gateway restart failed: ${restart.message}`);
-        await until(authenticated);
-        await until(() => page.evaluate(async () => (await window.electronAPI.computer.status())?.connected));
-        await page.reload();
-        await page.getByRole('main').getByText('XOPC_LOCAL_CHAT_OK', { exact: true }).first().waitFor({ timeout: 30_000 });
-        sample.functional.ownedRestartPreservesChat = true;
-      } else {
-        assert.equal(restart.ok, false, 'A reused service must not grant embedded restart authority');
-        assert.match(restart.message, /not registered/);
-        assert(await authenticated(), 'A refused restart must leave the external service available');
-        sample.functional.externalRestartDenied = true;
-      }
-    }
-    sample.resources = processTree(application.process().pid);
-    await save();
-    const shutdownStart = performance.now();
-    let shutdownTimer;
-    try {
-      await Promise.race([application.close(), new Promise((_, reject) => {
-        shutdownTimer = setTimeout(() => reject(new Error('Electron shutdown exceeded 15 seconds')), 15_000);
-      })]);
-    } finally { clearTimeout(shutdownTimer); }
-    application = undefined;
-    sample.shutdownMs = performance.now() - shutdownStart;
-    if (mode === 'reuse') {
-      assert(await authenticated(), 'Closing Electron must not stop an externally owned Gateway');
-      sample.externalSurvived = true;
-    } else {
-      await until(async () => !(await authenticated()), 12_000);
-      sample.ownedGatewayStopped = true;
-    }
-    sample.passed = true;
-  } catch (error) {
-    sample.error = String(error).replaceAll(token, '[redacted]');
-    sample.windows = await Promise.all((application?.windows() ?? []).map(async page => ({
-      url: page.url().slice(0, 160),
-      text: (await page.locator('body').innerText({ timeout: 1000 }).catch(() => '')).slice(-3000).replaceAll(token, '[redacted]'),
-      realtime: await withTimeout(page.evaluate(() => window.__connectionEvents?.slice(-10).map(event => ({
-        kind: event.kind, event: event.payload?.event, code: event.payload?.code,
-      }))), 1500, 'Realtime diagnostic timed out').catch(() => undefined),
-    })));
-    if (logs) sample.gatewayLogTail = logs.replaceAll(token, '[redacted]');
-    throw error;
-  } finally {
-    stopStartupProbe = true;
-    await startupProbe;
-    if (application && application.process().exitCode === null && application.process().signalCode === null) {
-      // A failing fixture can leave a native quit-confirmation dialog open.
-      // Only reap this test instance's descendants, never an external/reused Gateway.
-      for (const pid of processTree(application.process().pid).pids.reverse()) {
-        try { process.kill(pid, 'SIGKILL'); } catch { /* Already exited. */ }
-      }
-      await application.close().catch(() => {});
-    }
-    if (external && external.exitCode === null && external.signalCode === null) {
-      const exited = once(external, 'exit');
-      external.kill('SIGTERM');
-      const timer = setTimeout(() => external.kill('SIGKILL'), 7000);
-      await exited;
-      clearTimeout(timer);
-    }
-    try { await save(); } finally {
-      try { await fixture?.close(); } finally { await rm(state, { recursive: true, force: true }); }
-    }
-  }
-}
-
+const localToken = randomUUID(), remoteToken = randomUUID();
+const redact = text => String(text).replaceAll(localToken, '[redacted]').replaceAll(remoteToken, '[redacted]').replace(/Token: [^\n]+/g, 'Token: [redacted]');
 try {
-  cleanupLayout = await prepareLocalConnectionLayout(artifactRoot, root);
-  result.electronBuildSha256 = await electronBuildHash();
-  result.artifactManifest = await localConnectionArtifactManifest(artifactRoot);
-  for (const mode of modes) for (let index = 0; index < runs; index++) {
-    await run(mode, index);
-    console.log(`${mode} ${index + 1}/${runs} passed`);
+  const client = join(state, 'client'), server = join(state, 'server'); await mkdir(client); await mkdir(server);
+  const localPort = await port(), remotePort = await port();
+  const clientConfig = join(client, 'xopc.json'), serverConfig = join(server, 'xopc.json');
+  await writeFile(clientConfig, JSON.stringify({ gateway: { port: localPort, bind: 'loopback', auth: { mode: 'token', token: localToken } }, browser: { enabled: false } }));
+  await writeFile(serverConfig, JSON.stringify({ gateway: { port: remotePort, bind: 'loopback', auth: { mode: 'token', token: remoteToken } }, browser: { enabled: false } }));
+  await mkdir(join(client, 'electron'), { recursive: true });
+  const policyPath = join(client, 'electron/computer-access-policy.json');
+  const policy = JSON.stringify({ version: 1, authorizedAppIds: ['com.example.PreviouslyAuthorized'] }); await writeFile(policyPath, policy);
+  remote = spawn(process.execPath, [join(root, 'dist/src/cli/bin.js'), 'gateway', '--foreground', '--bind', 'loopback', '--port', String(remotePort), '--no-hot-reload'], {
+    cwd: root, env: localConnectionEnvironment(process.env, root, server, serverConfig, join(server, 'workspace')), stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  for (const stream of [remote.stdout, remote.stderr]) stream.on('data', value => { remoteLogs = (remoteLogs + value).slice(-12000); });
+  const remoteOrigin = `http://127.0.0.1:${remotePort}`;
+  await until(async () => (await fetch(remoteOrigin + '/api/browser-session', { headers: { Authorization: `Bearer ${remoteToken}` } })).ok);
+  cleanupLayout = await prepareLocalConnectionLayout(root);
+  application = await _electron.launch({ args: [join(root, 'out/main/index.js')], cwd: root,
+    env: localConnectionEnvironment(process.env, root, client, clientConfig, join(client, 'workspace')), timeout: 30000 });
+  let page = await application.firstWindow(); page.setDefaultTimeout(30000);
+  await until(async () => page.evaluate(() => !!window.electronAPI?.gateway?.connection));
+  await until(async () => page.evaluate(async () => (await fetch('/api/browser-session')).ok));
+  const before = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().startsWith('http:')).id);
+  const rendererOrigin = new URL(page.url()).origin;
+  const localSession = await page.evaluate(() => fetch('/api/browser-session').then(response => response.json()));
+  await until(() => page.evaluate(async () => (await window.electronAPI.computer.status()).connected));
+  const localClaim = await page.evaluate(async () => (await window.electronAPI.computer.status()).claim.endpointId);
+  const local = await page.evaluate(() => window.electronAPI.gateway.connection()); assert.equal(local.mode, 'local');
+  assert.equal(new URL(local.origin).port, String(localPort));
+  report.checks.localRendererAndEndpointReady = true;
+  const result = await page.evaluate(async ({ origin, credential }) => window.electronAPI.gateway.switchConnection({ mode: 'remote', origin, credential }), { origin: remoteOrigin, credential: remoteToken });
+  assert(result.ok, result.error);
+  await until(() => page.evaluate(async () => (await window.electronAPI.gateway.connection()).mode === 'remote'));
+  await until(() => page.evaluate(async () => (await fetch('/api/browser-session')).ok));
+  const remoteSession = await page.evaluate(() => fetch('/api/browser-session').then(response => response.json()));
+  assert.notEqual(remoteSession.conversationId, localSession.conversationId);
+  assert.equal(new URL(page.url()).origin, rendererOrigin);
+  assert.equal(await application.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.webContents.getURL().startsWith('http:'), before), true);
+  assert.equal(await page.evaluate(() => typeof window.gatewayConnections), 'undefined');
+  assert.equal(await page.locator('#root').count(), 1);
+  assert.equal(await application.evaluate(({ BrowserWindow }, origin) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().startsWith(origin)).length, rendererOrigin), 1);
+  await page.screenshot({ path: '/tmp/xopc-unified-remote-main.png' });
+  if (process.argv.includes('--settings-design')) {
+    await page.evaluate(() => {
+      localStorage.setItem('xopc.language', 'zh');
+      localStorage.setItem('xopc-web-settings-mode', JSON.stringify({ state: { mode: 'advanced' }, version: 0 }));
+      location.hash = '/settings/gateway';
+    });
+    await page.reload();
+    await page.getByRole('heading', { name: 'Gateway', exact: true }).waitFor();
+    const dismiss = page.getByRole('button', { name: '跳过 — 稍后再设置' });
+    if (await dismiss.isVisible().catch(() => false)) await dismiss.click();
+    await page.getByRole('heading', { name: '服务配置', exact: true }).waitFor();
+    await page.getByText('更改连接', { exact: true }).waitFor();
+    assert.equal(await page.getByText('本机服务', { exact: true }).count(), 0);
+    assert(!(await page.locator('body').innerText()).includes(rendererOrigin));
+    await page.screenshot({ path: '/tmp/xopc-settings-gateway-overview.png' });
+    await page.getByRole('button', { name: '更改连接', exact: true }).click();
+    await page.getByRole('heading', { name: '更改 Gateway 连接' }).waitFor();
+    await page.screenshot({ path: '/tmp/xopc-settings-gateway-edit.png' });
+    await page.getByRole('button', { name: '取消', exact: true }).click();
+    await page.setViewportSize({ width: 520, height: 1000 });
+    // Crossing the settings shell portal breakpoint remounts the route content.
+    await page.getByRole('button', { name: '更改连接', exact: true }).click();
+    await page.getByRole('heading', { name: '更改 Gateway 连接' }).waitFor();
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await page.screenshot({ path: '/tmp/xopc-settings-gateway-narrow.png' });
+    await page.getByRole('button', { name: '取消', exact: true }).click();
+    await page.setViewportSize({ width: 1200, height: 850 });
+    report.checks.settingsNavigationAndGatewayDesign = true;
   }
-  result.summary = Object.fromEntries(modes.map(mode => {
-    const samples = result.samples.filter(sample => sample.mode === mode);
-    return [mode, { readyMs: summary(samples.map(sample => sample.readyMs)),
-      configMs: summary(samples.flatMap(sample => sample.configMs)),
-      sessionsMs: summary(samples.flatMap(sample => sample.sessionsMs)),
-      shutdownMs: summary(samples.map(sample => sample.shutdownMs)),
-      rssMiB: summary(samples.map(sample => sample.resources.rssMiB)) }];
-  }));
-  result.latencyPopulations = Object.fromEntries(modes.map(mode => [mode, Object.fromEntries(['configMs', 'sessionsMs']
-    .map(metric => [metric, latencyPopulations(result.samples.filter(sample => sample.mode === mode), metric)]))]));
-  assert.equal(await electronBuildHash(), result.electronBuildSha256, 'Electron build changed during acceptance');
-  assert.deepEqual(await localConnectionArtifactManifest(artifactRoot), result.artifactManifest, 'Gateway/UI/SQL build changed during acceptance');
-  result.passed = true;
-  if (comparePath) {
-    const baseline = JSON.parse(await readFile(resolve(comparePath), 'utf8'));
-    assertComparableSampling(baseline, result);
-    assert.equal(baseline.platform, result.platform);
-    assert.equal(baseline.arch, result.arch);
-    assert.equal(baseline.node, result.node);
-    const limits = { readyMs: 100, configMs: 5, sessionsMs: 5, rssMiB: 32 };
-    result.comparison = [];
-    for (const mode of ['spawn', 'reuse']) for (const [metric, absoluteTolerance] of Object.entries(limits)) {
-      const before = baseline.summary[mode][metric].p95;
-      const after = result.summary[mode][metric].p95;
-      const maximum = before + Math.max(before * 0.05, absoluteTolerance);
-      result.comparison.push({ mode, metric, before, after, maximum, passed: after <= maximum });
-    }
-    result.passed = result.comparison.every(metric => metric.passed);
-    assert(result.passed, 'Local baseline regression budget exceeded; inspect comparison evidence');
-  }
+  report.checks.sameWindowAndBundledUiAcrossGateways = true;
+  await until(() => page.evaluate(async () => (await window.electronAPI.computer.status()).connected));
+  const remoteClaim = await page.evaluate(async () => (await window.electronAPI.computer.status()).claim.endpointId); assert.notEqual(remoteClaim, localClaim);
+  const devices = await (await fetch(remoteOrigin + '/api/endpoint-tools/devices', { headers: { Authorization: `Bearer ${remoteToken}` } })).json();
+  assert(JSON.stringify(devices).includes(remoteClaim));
+  assert.equal(await readFile(policyPath, 'utf8'), policy);
+  report.checks.authorizedLocalEndpointRegisteredOnRemote = true;
+  const persisted = await readFile(join(client, 'electron/desktop-gateway.json'), 'utf8'); assert(!persisted.includes(remoteToken));
+  report.checks.credentialEncrypted = true;
+  // A failed destination must leave the current Gateway and native claim intact.
+  const invalid = await page.evaluate(async () => window.electronAPI.gateway.switchConnection({ mode: 'remote', origin: 'http://public.invalid', credential: 'invalid' }));
+  assert.equal(invalid.ok, false); assert.equal((await page.evaluate(() => window.electronAPI.gateway.connection())).mode, 'remote');
+  report.checks.failedSwitchPreservesActiveGateway = true;
+  const back = await page.evaluate(() => window.electronAPI.gateway.switchConnection({ mode: 'local' })); assert(back.ok, back.error);
+  await until(() => page.evaluate(async () => (await fetch('/api/browser-session')).ok));
+  const again = await page.evaluate(() => fetch('/api/browser-session').then(response => response.json()));
+  assert.equal(again.conversationId, localSession.conversationId); assert.equal(new URL(page.url()).origin, rendererOrigin);
+  await until(() => page.evaluate(async () => (await window.electronAPI.computer.status()).connected));
+  assert.equal(await readFile(policyPath, 'utf8'), policy);
+  report.checks.switchBackPreservesLocalDataAndPermissions = true;
+  const reconnect = await page.evaluate(({ origin, credential }) => window.electronAPI.gateway.switchConnection({ mode: 'remote', origin, credential }), { origin: remoteOrigin, credential: remoteToken });
+  assert(reconnect.ok, reconnect.error);
+  await until(() => page.evaluate(async () => (await window.electronAPI.gateway.connection()).mode === 'remote'));
+  const localDatabase = await stat(join(client, 'xopc.db'));
+  await withTimeout(application.close(), 10000, 'Restart cleanup'); application = undefined;
+  application = await _electron.launch({ args: [join(root, 'out/main/index.js')], cwd: root,
+    env: localConnectionEnvironment(process.env, root, client, clientConfig, join(client, 'workspace')), timeout: 30000 });
+  page = await application.firstWindow();
+  await until(() => page.evaluate(async () => (await window.electronAPI.gateway.connection()).mode === 'remote'));
+  await until(() => page.evaluate(async () => (await fetch('/api/browser-session')).ok));
+  assert.equal((await stat(join(client, 'xopc.db'))).mtimeMs, localDatabase.mtimeMs);
+  assert.equal(new URL(page.url()).origin, rendererOrigin);
+  report.checks.stableClientStorageAcrossRestart = true;
+  report.checks.restartRestoresRemoteConnection = true;
+  report.checks.remoteStartupDoesNotOpenLocalDatabase = true;
+  await withTimeout(application.close(), 10000, 'Offline restart cleanup'); application = undefined;
+  const remoteExit = once(remote, 'exit'); remote.kill('SIGTERM'); await remoteExit; remote = undefined;
+  application = await _electron.launch({ args: [join(root, 'out/main/index.js')], cwd: root,
+    env: localConnectionEnvironment(process.env, root, client, clientConfig, join(client, 'workspace')), timeout: 30000 });
+  page = await application.firstWindow();
+  const connectionPanel = page.locator('section[aria-label="桌面 Gateway 连接"], section[aria-label="Desktop Gateway connection"]');
+  await connectionPanel.waitFor();
+  await connectionPanel.getByRole('button', { name: /^(连接到|Connect to)$/ }).click();
+  await page.getByRole('button', { name: /^(本地 Gateway|Local Gateway)$/ }).click();
+  await connectionPanel.getByRole('button', { name: /^(连接并切换|Connect and switch)$/ }).click();
+  await until(() => page.evaluate(async () => (await window.electronAPI.gateway.connection()).mode === 'local'));
+  await until(() => page.evaluate(async () => (await fetch('/api/browser-session')).ok));
+  report.checks.offlineRemoteRecoveryThroughSameWindow = true;
+  report.passed = true;
 } catch (error) {
-  result.passed = false;
-  console.error(String(error));
-  process.exitCode = 1;
+  report.error = redact(error?.stack ?? error); report.gatewayLogs = redact(remoteLogs); process.exitCode = 1;
+  if (application) report.windows = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({ id: window.id, url: window.webContents.getURL() }))).catch(() => []);
 } finally {
-  result.finishedAt = new Date().toISOString();
-  if (cleanupLayout) {
-    try { await save(); } finally { await cleanupLayout(); }
-    console.log(`Report: ${output}`);
-  }
+  if (application) await withTimeout(application.close(), 10000, 'Desktop cleanup').catch(() => application.process()?.kill('SIGKILL'));
+  if (remote) { remote.kill('SIGTERM'); await withTimeout(once(remote, 'exit'), 10000, 'Remote Gateway cleanup').catch(() => remote.kill('SIGKILL')); }
+  await cleanupLayout?.();
+  await writeFile(output, JSON.stringify(report, null, 2));
+  await writeFile('/tmp/xopc-unified-gateway-acceptance.json', JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report));
+  if (report.passed) await rm(state, { recursive: true, force: true });
+  else console.log('Failure fixture retained at ' + state);
 }

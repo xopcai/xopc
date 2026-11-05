@@ -1,5 +1,6 @@
 import { isAbsolute } from 'node:path';
 
+import { getSelectedDesktopGateway } from '../gateway/selected-gateway.js';
 import { getGatewayConnection } from '../gateway-process.js';
 import { localGatewayOrigin } from '../gateway/local-connection.js';
 
@@ -11,6 +12,7 @@ export async function resolveFileResourceHostPath(fileResourceId: unknown): Prom
   if (typeof fileResourceId !== 'string' || !fileResourceId.trim() || fileResourceId.length > 8_192) {
     return { ok: false, code: 'INVALID_FILE', error: 'Invalid file resource.' };
   }
+  if (getSelectedDesktopGateway()?.scope !== undefined && getSelectedDesktopGateway()?.scope !== 'local') return { ok: false, code: 'NOT_FOUND', error: 'This file belongs to the remote Gateway. Download it before opening it locally.' };
   const connection = getGatewayConnection();
   if (!connection) {
     return { ok: false, code: 'NOT_FOUND', error: 'Local file service is unavailable.' };

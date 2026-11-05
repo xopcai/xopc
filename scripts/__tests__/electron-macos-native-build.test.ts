@@ -11,7 +11,6 @@ const repo = fileURLToPath(new URL('../..', import.meta.url));
 
 describe.skipIf(process.platform !== 'darwin')('macOS release native architectures', () => {
   it.each([
-    ['build-desktop-workspace.mjs', 'desktop-workspace-macos.cc', 'desktop-workspace.node'],
     ['build-voice-hotkey-helper.mjs', 'voice-hotkey-macos.swift', 'voice-hotkey-helper'],
   ])('builds %s with both Intel and Apple Silicon slices', (script, source, binary) => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-native-release-'));

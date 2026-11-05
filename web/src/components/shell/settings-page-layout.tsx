@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowLeft, Menu, X } from 'lucide-react';
+import { ArrowLeft, Bug, Menu, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
 import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
+import { SettingsScope } from '@/components/shell/settings-scope';
 import { SettingsModeToggle } from '@/components/shell/settings-mode-toggle';
 import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { TabIcon } from '@/components/shell/tab-icons';
@@ -15,7 +16,6 @@ import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
 import {
   ELECTRON_ONLY_SETTINGS_TABS,
-  ELECTRON_SYSTEM_NAV_GROUP,
   isSettingsTabActiveAtPath,
   pathForTab,
   SETTINGS_SHELL_NAV_GROUPS,
@@ -85,7 +85,7 @@ function SettingsNavGroupBlock({
 }) {
   const m = messages(language);
   const tabs = visibleSettingsNavTabs(group, settingsMode);
-  if (tabs.length === 0) {
+  if (tabs.length === 0 && !(group.id === 'diagnostics' && settingsMode === 'advanced')) {
     return null;
   }
   return (
@@ -118,6 +118,12 @@ function SettingsNavGroupBlock({
             {tab === 'settingsPhoneUse' ? <BetaBadge /> : null}
           </NavLink>
         ))}
+        {group.id === 'diagnostics' && settingsMode === 'advanced' ? (
+          <NavLink to="/settings/extensions/debug" state={location.state} className={settingsNavLinkClass}>
+            <Bug className="size-5 shrink-0 opacity-90" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">{m.extensionDebug.nav}</span>
+          </NavLink>
+        ) : null}
       </div>
     </div>
   );
@@ -206,14 +212,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
     </Link>
   );
 
-  const railNavGroups: SettingsShellNavGroup[] = useMemo(
-    () => SETTINGS_SHELL_NAV_GROUPS.map((group) => (
-      isElectron() && group.id === 'system'
-        ? { ...group, tabs: [...group.tabs, ...ELECTRON_SYSTEM_NAV_GROUP.tabs] }
-        : group
-    )),
-    [],
-  );
+  const railNavGroups = SETTINGS_SHELL_NAV_GROUPS;
 
   const activeSettingsTab = useMemo(
     () =>
@@ -237,7 +236,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2"
         aria-label={m.nav.settings}
       >
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-4">
           {railNavGroups.map((group, groupIndex) => (
             <SettingsNavGroupBlock
               key={group.id}
@@ -363,6 +362,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
           </div>
         ) : null}
         <div key={location.pathname} hidden={settingsPathBlocked} className="settings-content-enter min-h-full">
+          <SettingsScope tab={activeSettingsTab} />
           <Outlet />
         </div>
       </div>

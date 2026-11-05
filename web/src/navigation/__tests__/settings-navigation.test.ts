@@ -8,35 +8,28 @@ import {
 } from '@/navigation';
 
 describe('settings navigation information architecture', () => {
-  it('groups settings by user intent', () => {
-    const capabilities = SETTINGS_SHELL_NAV_GROUPS.find((group) => group.id === 'capabilities');
-    const connection = SETTINGS_SHELL_NAV_GROUPS.find((group) => group.id === 'connection');
-    const system = SETTINGS_SHELL_NAV_GROUPS.find((group) => group.id === 'system');
-
-    expect(capabilities?.tabs).toEqual([
-      'settingsModels',
-      'settingsSearch',
-      'settingsAgentDefaults',
+  it('groups destinations by user intent without duplicates or a catch-all system group', () => {
+    expect(SETTINGS_SHELL_NAV_GROUPS.map(group => [group.id, group.tabs])).toEqual([
+      ['general', ['settingsOverview', 'settingsAppearance', 'settingsKeyboardShortcuts', 'settingsSystem', 'settingsDesktopPet']],
+      ['capabilities', ['settingsPersonal', 'settingsModels', 'settingsSearch', 'settingsAgentDefaults']],
+      ['connection', ['settingsGateway', 'settingsDevices', 'settingsAgentBrowser', 'settingsComputerUse', 'settingsPhoneUse', 'settingsTunnel']],
+      ['data', ['settingsImports', 'sessions', 'usage', 'settingsShares', 'settingsDesktopApp']],
+      ['diagnostics', ['settingsRuntimes', 'tracing', 'logs']],
     ]);
-    expect(SETTINGS_SHELL_NAV_GROUPS.find(group => group.id === 'integrations')?.tabs).toEqual([
-      'settingsAgentBrowser',
-      'settingsComputerUse',
-      'settingsPhoneUse',
-    ]);
-    expect(connection?.tabs).toEqual(['settingsDevices', 'settingsTunnel', 'settingsShares']);
-    expect(system?.tabs).toEqual(['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'usage', 'tracing', 'logs']);
+    const tabs = SETTINGS_SHELL_NAV_GROUPS.flatMap(group => group.tabs);
+    expect(new Set(tabs).size).toBe(tabs.length);
   });
 
-  it('uses concise group labels', () => {
+  it('uses the same unambiguous names in navigation and page headings', () => {
     const zh = messages('zh');
-    const en = messages('en');
-
-    expect(zh.settingsNavGroups.capabilities).toBe('智能');
-    expect(zh.settingsNavGroups.connection).toBe('设备与连接');
-    expect(en.settingsNavGroups.capabilities).toBe('Intelligence');
-    expect(en.settingsNavGroups.connection).toBe('Devices & connections');
-    expect(zh.settingsNavGroups.integrations).toBe('集成');
-    expect(en.settingsNavGroups.integrations).toBe('Integrations');
+    expect(zh.settingsNavGroups.connection).toBe('连接与设备');
+    expect(zh.settingsNavGroups.data).toBe('数据与用量');
+    expect(zh.settingsNavGroups.diagnostics).toBe('高级与诊断');
+    expect(zh.settingsNavGroups.extensions).toBe('插件设置');
+    expect(zh.nav.settingsGateway).toBe(zh.settingsSections.gateway);
+    expect(zh.nav.settingsSystem).toBe(zh.settingsSections.system);
+    expect(zh.nav.settingsDesktopPet).toBe(zh.settingsSections['desktop-pet']);
+    expect(messages('en').settingsNavGroups.connection).toBe('Connections & devices');
   });
 
   it('maps each intelligence destination directly and keeps image models under Models', () => {
