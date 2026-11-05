@@ -17,7 +17,7 @@ export type ElectronMenuMessages = {
     newChat: string;
     quickCapture: string;
     search: string;
-    gatewayConnections: string;
+    gatewaySettings: string;
     settings: string;
   };
   edit: {
@@ -109,7 +109,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       newChat: 'New Chat',
       quickCapture: 'Quick Capture',
       search: 'Search',
-      gatewayConnections: 'Gateway Connections…',
+      gatewaySettings: 'Gateway…',
       settings: 'Settings…',
     },
     edit: {
@@ -199,7 +199,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       newChat: '新建聊天',
       quickCapture: '快速记录',
       search: '搜索',
-      gatewayConnections: 'Gateway 连接管理…',
+      gatewaySettings: 'Gateway 设置…',
       settings: '设置…',
     },
     edit: {

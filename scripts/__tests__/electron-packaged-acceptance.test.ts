@@ -22,7 +22,7 @@ it('detects orphaned helpers and bundled servers without matching neighboring or
 
 it('tracks only the exact installed executable outside tmp and excludes external Gateway owners', () => {
   const executable = '/Users/test/Acceptance Apps/xopc.app/Contents/MacOS/xopc';
-  const rows = `12 ${executable} --gateway-connections
+  const rows = `12 ${executable}
 13 ${executable} /Users/test/out/server/index.js gateway
 14 /Applications/xopc.app/Contents/MacOS/xopc
 15 /bin/zsh -c ${executable}

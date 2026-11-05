@@ -1,3 +1,4 @@
+import { getSelectedDesktopGateway } from './gateway/selected-gateway.js';
 import { getGatewayConnection } from './gateway-process.js';
 import { localGatewayOrigin } from './gateway/local-connection.js';
 
@@ -10,6 +11,7 @@ export type AppQuitImpact = {
 const QUIT_IMPACT_TIMEOUT_MS = 800;
 
 export async function getAppQuitImpact(): Promise<AppQuitImpact> {
+  if (getSelectedDesktopGateway()?.scope !== undefined && getSelectedDesktopGateway()?.scope !== 'local') return { shouldConfirm: false, blockingCount: 0 };
   const connection = getGatewayConnection();
   if (!connection) return { shouldConfirm: false, blockingCount: 0 };
 

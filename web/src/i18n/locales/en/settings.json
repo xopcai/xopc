@@ -10,19 +10,19 @@
     "connectors": "Connections",
     "channels": "Channels",
     "devices": "Devices",
-    "gateway": "Local service",
+    "gateway": "Gateway",
     "runtimes": "Runtime",
     "tunnel": "Remote access",
     "remote-access": "Remote access",
     "shares": "Sharing",
     "personal": "Ada",
-    "system": "System permissions",
-    "desktop-pet": "Pet",
+    "system": "Local permissions",
+    "desktop-pet": "Desktop pet",
     "desktop-app": "Application data",
     "cron": "Scheduled tasks",
     "skills": "Skills",
     "keyboard-shortcuts": "Keyboard shortcuts",
-    "imports": "Import capabilities"
+    "imports": "Import"
   },
   "settingsPage": {
     "comingSoon": "Settings · {{title}} (coming soon)."
@@ -822,7 +822,7 @@
     "resetPosition": "Reset position"
   },
   "systemSettings": {
-    "title": "System permissions",
+    "title": "Local permissions",
     "behaviorGroup": "App behavior",
     "desktopOnlyTitle": "Desktop app only",
     "desktopOnlyBody": "System integration is available in the xopc Electron app.",
@@ -1042,10 +1042,11 @@
     "capabilities": "Intelligence",
     "integrations": "Integrations",
     "agent": "Agent capabilities",
-    "connection": "Devices & connections",
+    "connection": "Connections & devices",
     "automation": "Automation",
-    "diagnostics": "Diagnostics",
-    "extensions": "Plugins"
+    "diagnostics": "Advanced & diagnostics",
+    "extensions": "Plugin settings",
+    "data": "Data & usage"
   },
   "cronSettingsPage": {
     "title": "Scheduled tasks",

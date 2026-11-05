@@ -12,7 +12,7 @@
   "nav": {
     "chat": "对话",
     "settings": "设置",
-    "sessions": "会话管理",
+    "sessions": "会话记录",
     "usage": "用量与费用",
     "localApps": "应用工坊",
     "profile": "你",
@@ -26,7 +26,7 @@
     "settingsOverview": "概览",
     "settingsModels": "模型",
     "settingsSearch": "网络搜索",
-    "settingsGateway": "本机服务",
+    "settingsGateway": "Gateway",
     "settingsRuntimes": "运行环境",
     "settingsDevices": "设备",
     "settingsTunnel": "远程访问",
@@ -38,10 +38,10 @@
     "settingsAgentDefaults": "智能体设置",
     "settingsKeyboardShortcuts": "快捷键",
     "settingsPersonal": "Ada",
-    "settingsSystem": "通知与权限",
-    "settingsDesktopPet": "宠物",
+    "settingsSystem": "本机权限",
+    "settingsDesktopPet": "桌面宠物",
     "settingsDesktopApp": "应用数据",
-    "settingsImports": "导入能力",
+    "settingsImports": "导入",
     "tracing": "运行追踪"
   },
   "productNavigation": {

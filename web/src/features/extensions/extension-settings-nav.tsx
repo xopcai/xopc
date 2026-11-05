@@ -2,7 +2,7 @@
  * ExtensionSettingsNav — settings left-rail links for `settingsPanels` contributions.
  */
 
-import { Bug, Puzzle } from 'lucide-react';
+import { Puzzle } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
@@ -24,9 +24,8 @@ export function ExtensionSettingsNav({ navLinkClassName, showAdvanced = true }: 
 
   const settingsPanels = collectSettingsPanels(uiExtensions);
 
-  if (!showAdvanced) {
-    return null;
-  }
+  const configExtensions = showAdvanced ? configOnlyExtensions(uiExtensions) : [];
+  if (settingsPanels.length === 0 && configExtensions.length === 0) return null;
 
   return (
     <div>
@@ -34,10 +33,6 @@ export function ExtensionSettingsNav({ navLinkClassName, showAdvanced = true }: 
         {m.settingsNavGroups.extensions}
       </p>
       <div className="flex flex-col gap-0.5">
-        <NavLink to="/settings/extensions/debug" className={navLinkClassName}>
-          <Bug className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-          <span className="min-w-0 flex-1 truncate">{m.extensionDebug.nav}</span>
-        </NavLink>
         {settingsPanels.map(({ extension, panel }) => {
           const path = `/settings/ext/${extension.id}/${panel.id}`;
           return (
@@ -47,7 +42,7 @@ export function ExtensionSettingsNav({ navLinkClassName, showAdvanced = true }: 
             </NavLink>
           );
         })}
-        {configOnlyExtensions(uiExtensions).map((extension) => (
+        {configExtensions.map((extension) => (
           <NavLink
             key={`${extension.id}:config`}
             to={`/settings/ext/${extension.id}`}

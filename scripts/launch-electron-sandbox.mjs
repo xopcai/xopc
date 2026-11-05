@@ -34,8 +34,8 @@ if (args.includes('--reuse')) {
 }
 const root = resolve(import.meta.dirname, '..');
 const env = packagedAcceptanceEnvironment(localConnectionEnvironment(process.env, root, state, config, join(state, 'workspace')));
-console.log(`Isolated state: ${state}\nMode: ${args.includes('--remote') ? 'Gateway connections' : 'local'}\nNo inherited model credentials; configure a test model in the app. Reuse this directory with --state and --reuse.`);
-const child = spawn(target.executablePath, args.includes('--remote') ? ['--gateway-connections'] : [], { cwd: state, env, stdio: 'inherit' });
+console.log(`Isolated state: ${state}\nMode: desktop\nNo inherited model credentials; configure a test model in the app. Reuse this directory with --state and --reuse.`);
+const child = spawn(target.executablePath, [], { cwd: state, env, stdio: 'inherit' });
 const stop = () => child.kill('SIGTERM'); process.on('SIGINT', stop); process.on('SIGTERM', stop);
 child.once('error', error => { console.error(error.message); process.exitCode = 1; });
 const [code, signal] = await once(child, 'exit'); process.off('SIGINT', stop); process.off('SIGTERM', stop);

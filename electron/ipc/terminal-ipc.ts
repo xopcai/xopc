@@ -8,6 +8,7 @@ import type { IpcMain, WebContents } from 'electron';
 import type { IPty } from 'node-pty';
 import * as nodePty from 'node-pty';
 
+import { getSelectedDesktopGateway } from '../gateway/selected-gateway.js';
 import { getGatewayConnection } from '../gateway-process.js';
 import { localGatewayOrigin } from '../gateway/local-connection.js';
 import { assertTrustedRenderer } from './trusted-renderer.js';
@@ -119,6 +120,7 @@ async function fetchGatewayJson(url: string, token: string): Promise<Record<stri
 }
 
 export async function resolveTerminalWorkspace(conversationId: string, transcriptId: string): Promise<string> {
+  if (getSelectedDesktopGateway()?.scope !== undefined && getSelectedDesktopGateway()?.scope !== 'local') throw new Error('Server workspaces cannot be opened as local terminals');
   const connection = getGatewayConnection();
   if (!connection) {
     throw new Error('Integrated terminal requires a local desktop gateway connection');

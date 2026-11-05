@@ -13,6 +13,7 @@ import {
   nativeTheme,
   powerMonitor,
   session,
+  safeStorage,
   shell,
   type BrowserWindowConstructorOptions,
   type IpcMainInvokeEvent,
@@ -65,7 +66,8 @@ import {
   maybeShowDesktopPetOnStartup,
   toggleDesktopPet,
 } from './desktop-pet/window.js';
-import { assertTrustedRenderer } from './ipc/trusted-renderer.js';
+import { assertTrustedRenderer, setTrustedDesktopOrigin } from './ipc/trusted-renderer.js';
+import { setSelectedDesktopGateway } from './gateway/selected-gateway.js';
 import { DesktopEndpointHost } from './computer/desktop-host.js';
 import { registerComputerPreviewIpc } from './computer/preview-ipc.js';
 import { getGatewayConnection } from './gateway-process.js';
@@ -86,7 +88,10 @@ import {
 } from './auto-updater.js';
 import { getElectronMenuMessages, type ElectronUiLanguage } from './i18n.js';
 import { buildAppMenu, buildAppMenuModel, invokeAppMenuAction } from './menu.js';
-import { GatewayModeRelaunch } from './gateway/mode-relaunch.js';
+import { DesktopGatewayTransport, type DesktopGatewayTarget } from './gateway/desktop-transport.js';
+import { DesktopGatewaySettings, type DesktopGatewaySettingsData } from './gateway/desktop-settings.js';
+import { RemoteGatewayUpstream } from './gateway/remote-upstream.js';
+import { assertGatewayCompatibility } from './gateway-compatibility.js';
 import {
   appQuitConfirmationGate,
   bypassNextAppQuitConfirmation,
@@ -150,7 +155,7 @@ function currentMenuMessages() {
 function refreshElectronMenus(language?: ElectronUiLanguage): void {
   const messages = getElectronMenuMessages(language ?? getElectronShellLanguage());
   if (mainWindow && !mainWindow.isDestroyed()) {
-    Menu.setApplicationMenu(buildAppMenu(mainWindow, messages, { gatewayConnections: () => gatewayModeRelaunch.request() }));
+    Menu.setApplicationMenu(buildAppMenu(mainWindow, messages, { gatewaySettings: () => navigateMainWindow('/settings/gateway') }));
     if (process.platform === 'win32') {
       mainWindow.setMenuBarVisibility(false);
     }
@@ -403,10 +408,8 @@ if (gotTheLock) {
 let appIsQuitting = false;
 let quitCleanupStarted = false;
 let quitCleanupComplete = false;
-let quitCleanupConfirmed = false;
 let quitCleanupPromise: Promise<void> | null = null;
-const gatewayModeRelaunch = new GatewayModeRelaunch({ quit: () => app.quit(), relaunch: args => app.relaunch({ args }),
-  ...(process.defaultApp ? { entry: process.argv[1] } : {}) });
+
 
 function approveAppQuit(): void {
   if (appQuitConfirmationGate.resolve(true)) app.quit();
@@ -446,9 +449,8 @@ async function evaluateAppQuit(): Promise<void> {
       ? await dialog.showMessageBox(owner, options)
       : await dialog.showMessageBox(options);
     if (result.response === 1) approveAppQuit();
-    else { gatewayModeRelaunch.cancel(); appQuitConfirmationGate.resolve(false); }
+    else { appQuitConfirmationGate.resolve(false); }
   } catch (error) {
-    gatewayModeRelaunch.cancel();
     appQuitConfirmationGate.resolve(false);
     const message = error instanceof Error ? error.message : String(error);
     appendElectronStartupLog(`quit confirmation failed: ${message}`);
@@ -691,7 +693,87 @@ async function resolveVoiceModelProxyUrl(): Promise<string | undefined> {
   }
 }
 
-async function resolveWindowLoad(reportProgress: StartupProgressReporter = () => {}): Promise<
+let desktopTransport: DesktopGatewayTransport | undefined;
+let desktopSettings: DesktopGatewaySettings;
+let desktopGatewayData: DesktopGatewaySettingsData | undefined;
+let activeGateway: DesktopGatewayTarget | undefined;
+let gatewayConnectionError: string | undefined;
+let gatewaySwitching = false;
+let gatewayRevision = 0;
+const desktopFileRoots: string[] = [];
+
+async function initializeDesktopGateway(): Promise<void> {
+  if (desktopTransport) return;
+  desktopSettings = new DesktopGatewaySettings(join(app.getPath('userData'), 'desktop-gateway.json'), {
+    encrypt: async value => {
+      if (!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('Gateway credentials require the OS keychain');
+      return safeStorage.encryptStringAsync(value);
+    },
+    decrypt: async value => (await safeStorage.decryptStringAsync(value)).result,
+  });
+  desktopGatewayData = await desktopSettings.read();
+  desktopFileRoots.push(app.getPath('userData'), getElectronUserPaths().workspacePath);
+  const assets = app.isPackaged ? join(process.resourcesPath, 'app.asar.unpacked/dist/gateway/static/root')
+    : join(import.meta.dirname, '../../dist/gateway/static/root');
+  desktopTransport = new DesktopGatewayTransport(assets);
+  await desktopTransport.start(desktopGatewayData.uiPort);
+  desktopGatewayData = { ...desktopGatewayData, uiPort: Number(new URL(desktopTransport.origin).port) };
+  await desktopSettings.write(desktopGatewayData);
+  setTrustedDesktopOrigin(desktopTransport.origin);
+}
+
+async function selectDesktopGateway(data: DesktopGatewaySettingsData, reportProgress: StartupProgressReporter = () => {}): Promise<void> {
+  let target: DesktopGatewayTarget;
+  let localRoots: string[] | undefined;
+  if (data.mode === 'remote') {
+    const remote = await desktopSettings.remote(data);
+    const upstream = new RemoteGatewayUpstream({ ...remote, transport: remote.origin.startsWith('https:') ? 'direct' : 'ssh', identity: data.remote?.identity });
+    try {
+      const identity = await upstream.authenticate();
+      await assertGatewayCompatibility(remote);
+      data = { ...data, remote: { ...data.remote!, identity } };
+    } finally { upstream.close(); }
+    target = { ...remote, scope: remote.origin };
+  } else {
+    await resolveLocalWindowLoad(reportProgress);
+    if (!getGatewayConnection()) {
+      const config = await ensureGatewayConfigForElectron(getElectronUserPaths());
+      registerGatewayConnection({ port: config.port, token: config.token });
+    }
+    const local = getGatewayConnection();
+    if (!local) throw new Error('Local Gateway is unavailable');
+    localRoots = (await ensureGatewayConfigForElectron(getElectronUserPaths())).fileIpcRoots;
+    target = { origin: localGatewayOrigin(local), token: local.token, scope: 'local' };
+  }
+  // Stop every native invocation and old realtime connection before changing authority.
+  await desktopEndpointHost?.close();
+  stopAllTerminals();
+  if (data.mode === 'remote') { stopTunnelStatusPolling(); await stopGatewayProcessAndWait(); }
+  if (localRoots) desktopFileRoots.splice(0, desktopFileRoots.length, ...localRoots);
+  desktopTransport!.select(target);
+  activeGateway = target;
+  setSelectedDesktopGateway(target);
+  desktopGatewayData = data;
+  gatewayRevision += 1;
+  await desktopSettings.write(data);
+  desktopEndpointHost = new DesktopEndpointHost({ connection: () => activeGateway, window: () => mainWindow });
+  void desktopEndpointHost.start();
+  gatewayConnectionError = undefined;
+}
+
+async function resolveWindowLoad(reportProgress: StartupProgressReporter = () => {}): Promise<{ kind: 'url'; href: string; openDevTools: boolean }> {
+  await initializeDesktopGateway();
+  if (!activeGateway) {
+    try { await selectDesktopGateway(desktopGatewayData!, reportProgress); }
+    catch (error) {
+      if (desktopGatewayData?.mode !== 'remote') throw error;
+      gatewayConnectionError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  return { kind: 'url', href: desktopTransport!.origin + '/?gateway=' + gatewayRevision + '#/chat', openDevTools: false };
+}
+
+async function resolveLocalWindowLoad(reportProgress: StartupProgressReporter = () => {}): Promise<
   { kind: 'url'; href: string; openDevTools: boolean } | { kind: 'file'; path: string }
 > {
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -703,6 +785,7 @@ async function resolveWindowLoad(reportProgress: StartupProgressReporter = () =>
     reportProgress({ phase: 'preparing-workspace' });
     const paths = getElectronUserPaths();
     const { port, token, bind, bindHost } = await ensureGatewayConfigForElectron(paths);
+    if (!getGatewayConnection() || getGatewayConnection()!.port !== port || getGatewayConnection()!.token !== token) registerGatewayConnection({ port, token });
     // Browser-extension artifacts and the Native Messaging enrollment host are
     // installed/repaired inside the gateway subprocess (see
     // gateway/service.ts → ensureBrowserExtensionOnStartup). Main does not import src/.
@@ -898,7 +981,7 @@ function createWindow(): void {
   });
 
   const menuMessages = currentMenuMessages();
-  Menu.setApplicationMenu(buildAppMenu(win, menuMessages, { gatewayConnections: () => gatewayModeRelaunch.request() }));
+  Menu.setApplicationMenu(buildAppMenu(win, menuMessages, { gatewaySettings: () => navigateMainWindow('/settings/gateway') }));
   if (process.platform === 'win32') {
     win.setMenuBarVisibility(false);
   }
@@ -1155,12 +1238,6 @@ function createWindow(): void {
         if (load.openDevTools || shouldAutoOpenDevTools()) {
           openMainWindowDevTools(win);
         }
-      } else {
-        lastGatewayConsoleHref = null;
-        await win.loadFile(load.path);
-        if (shouldAutoOpenDevTools()) {
-          openMainWindowDevTools(win);
-        }
       }
       // Install link guards only after the first document is loaded. Startup uses main-process
       // loadURL (data: loading page → loopback gateway SPA); deferring avoids any chance that
@@ -1223,11 +1300,8 @@ app.whenReady().then(async () => {
   await initElectronShellPreferences();
   nativeTheme.themeSource = getElectronShellThemePreference();
   nativeTheme.on('updated', syncMainWindowNativeTheme);
-  const electronUserPaths = getElectronUserPaths();
-  const gatewayConfig = await ensureGatewayConfigForElectron(electronUserPaths);
-  registerGatewayConnection({ port: gatewayConfig.port, token: gatewayConfig.token });
-  desktopEndpointHost = new DesktopEndpointHost({ connection: getGatewayConnection, window: () => mainWindow });
-  void desktopEndpointHost.start();
+  await initializeDesktopGateway();
+  desktopEndpointHost = new DesktopEndpointHost({ connection: () => activeGateway, window: () => mainWindow });
   if (!globalShortcut.register('Control+Alt+Escape', () => { void desktopEndpointHost?.stopControl(); })) {
     console.warn('[Computer] Emergency shortcut unavailable; use the tray or settings Stop control.');
   }
@@ -1254,7 +1328,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('computer:stop', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.stopControl(); return { ok: true }; });
   ipcMain.handle('computer:reenroll', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
-  const { fileIpcRoots } = gatewayConfig;
+  const fileIpcRoots = desktopFileRoots;
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
   const intakeGuard = (event: IpcMainInvokeEvent) => {
     assertTrustedRenderer(event);
@@ -1355,7 +1429,7 @@ app.whenReady().then(async () => {
     if (!win || win.isDestroyed()) {
       return { ok: false as const, error: 'UNKNOWN_MENU_ACTION' as const };
     }
-    return invokeAppMenuAction(win, actionId, { gatewayConnections: () => gatewayModeRelaunch.request() });
+    return invokeAppMenuAction(win, actionId, { gatewaySettings: () => navigateMainWindow('/settings/gateway') });
   });
 
   ipcMain.handle('window:fullscreen-enter', () => {
@@ -1380,8 +1454,8 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('gateway:restart', async (event) => {
     assertTrustedRenderer(event);
-    if (!shouldEmbedGateway()) {
-      return { ok: false, message: 'Embedded gateway is not active in this session.' };
+    if (!shouldEmbedGateway() || desktopGatewayData?.mode === 'remote') {
+      return { ok: false, message: 'The selected Gateway is managed on its server.' };
     }
     try {
       const paths = getElectronUserPaths();
@@ -1391,16 +1465,45 @@ app.whenReady().then(async () => {
         resolveCredentials: () => ensureGatewayConfigForElectron(paths),
       });
       setEmbeddedGatewayCredentials(port, token);
-      return { ok: true, token, port };
+      await desktopEndpointHost?.close();
+      activeGateway = { origin: localGatewayOrigin({ port }), token, scope: 'local' };
+      setSelectedDesktopGateway(activeGateway);
+      desktopTransport?.select(activeGateway);
+      desktopEndpointHost = new DesktopEndpointHost({ connection: () => activeGateway, window: () => mainWindow });
+      void desktopEndpointHost.start();
+      return { ok: true, token: desktopTransport?.credential ?? token, port };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };
     }
   });
 
+  ipcMain.handle('gateway:connection', (event) => {
+    assertMainComputerRenderer(event);
+    return { mode: desktopGatewayData?.mode ?? 'local', origin: activeGateway?.origin,
+      remoteOrigin: desktopGatewayData?.remote?.origin ?? '', hasCredential: !!desktopGatewayData?.remote,
+      endpointConnected: desktopEndpointHost?.snapshot().connected ?? false, error: gatewayConnectionError };
+  });
+  ipcMain.handle('gateway:switch', async (event, input: unknown) => {
+    assertMainComputerRenderer(event);
+    if (gatewaySwitching) return { ok: false, error: 'Gateway switch already in progress' };
+    gatewaySwitching = true;
+    try {
+      const value = input as { mode?: unknown; origin?: unknown; credential?: unknown };
+      if (!value || !['local', 'remote'].includes(String(value.mode)) || Object.keys(value).some(key => !['mode', 'origin', 'credential'].includes(key))) throw new Error('Invalid Gateway configuration');
+      if (value.mode === 'remote' && (typeof value.origin !== 'string' || value.credential !== undefined && typeof value.credential !== 'string')) throw new Error('Invalid Gateway configuration');
+      const next = value.mode === 'local' ? { ...await desktopSettings.read(), mode: 'local' as const }
+        : await desktopSettings.configure(value.origin as string, value.credential as string | undefined);
+      await selectDesktopGateway(next);
+      // Reload this same window to discard old Gateway caches and transient UI state.
+      setTimeout(() => { if (mainWindow && !mainWindow.isDestroyed()) void loadMainWindowUrl(mainWindow, desktopTransport!.origin + '/?gateway=' + gatewayRevision + '#/chat'); }, 100);
+      return { ok: true };
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) }; }
+    finally { gatewaySwitching = false; }
+  });
   ipcMain.handle('gateway:get-credential', (event) => {
     assertTrustedRenderer(event);
-    return getGatewayCredential();
+    return desktopTransport?.credential ?? getGatewayCredential();
   });
 
   registerTunnelPowerMonitor();
@@ -1487,14 +1590,12 @@ app.on('before-quit', (event) => {
   }
 
   if (quitCleanupComplete) {
-    if (quitCleanupConfirmed) gatewayModeRelaunch.finishCleanup();
-    else gatewayModeRelaunch.cancel();
     return;
   }
 
   event.preventDefault();
   if (!quitCleanupPromise) {
-    quitCleanupPromise = Promise.all([stopGatewayProcessAndWait(), desktopEndpointHost?.close()]).then(() => { quitCleanupConfirmed = true; }).finally(() => {
+    quitCleanupPromise = Promise.all([stopGatewayProcessAndWait(), desktopEndpointHost?.close(), desktopTransport?.close()]).then(() => undefined).finally(() => {
       quitCleanupComplete = true;
       app.quit();
     });

@@ -28,7 +28,7 @@ describe('settings-nav-visibility', () => {
     expect(isSettingsPathVisibleInMode('/settings/overview', 'simple')).toBe(true);
     expect(isSettingsPathVisibleInMode('/settings/remote-access', 'simple')).toBe(true);
     expect(isSettingsPathVisibleInMode('/settings/shares', 'simple')).toBe(true);
-    expect(isSettingsPathVisibleInMode('/settings/ext/foo', 'simple')).toBe(false);
+    expect(isSettingsPathVisibleInMode('/settings/ext/foo', 'simple')).toBe(true);
     expect(isSettingsPathVisibleInMode('/settings/logs', 'advanced')).toBe(true);
     expect(isSettingsPathVisibleInMode('/settings/runtimes', 'simple')).toBe(false);
     expect(isSettingsPathVisibleInMode('/settings/tracing', 'simple')).toBe(false);

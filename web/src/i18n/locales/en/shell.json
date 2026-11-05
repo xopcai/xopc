@@ -12,7 +12,7 @@
   "nav": {
     "chat": "Chat",
     "settings": "Settings",
-    "sessions": "Session management",
+    "sessions": "Conversation history",
     "usage": "Usage & cost",
     "localApps": "App Studio",
     "profile": "You",
@@ -26,7 +26,7 @@
     "settingsOverview": "Overview",
     "settingsModels": "Models",
     "settingsSearch": "Web search",
-    "settingsGateway": "Local service",
+    "settingsGateway": "Gateway",
     "settingsRuntimes": "Runtime",
     "settingsDevices": "Devices",
     "settingsTunnel": "Remote access",
@@ -38,10 +38,10 @@
     "settingsAgentDefaults": "Agent settings",
     "settingsKeyboardShortcuts": "Keyboard shortcuts",
     "settingsPersonal": "Ada",
-    "settingsSystem": "Notifications and permissions",
-    "settingsDesktopPet": "Pet",
+    "settingsSystem": "Local permissions",
+    "settingsDesktopPet": "Desktop pet",
     "settingsDesktopApp": "Application data",
-    "settingsImports": "Import capabilities",
+    "settingsImports": "Import",
     "tracing": "Runtime tracing"
   },
   "productNavigation": {

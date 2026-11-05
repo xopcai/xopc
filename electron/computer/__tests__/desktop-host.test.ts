@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
 }));
 vi.mock('node:fs/promises', () => ({
   readFile: async () => { if (state.saved) return state.saved; throw Object.assign(new Error('missing'), { code: 'ENOENT' }); },
-  writeFile: state.write, stat: vi.fn(),
+  writeFile: state.write, stat: vi.fn(), mkdir: vi.fn(),
 }));
 vi.mock('../../../src/infra/write-file-atomic.js', () => ({ writeTextAtomic: state.atomicWrite }));
 vi.mock('../../ipc/system-settings-ipc.js', () => ({ showEndpointNotification: vi.fn(), getElectronShellLanguage: () => state.language }));
