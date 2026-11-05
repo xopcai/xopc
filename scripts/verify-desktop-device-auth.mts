@@ -49,7 +49,9 @@ try {
   while (Date.now() < deadline) { if ((await owner('/api/desktop-host/compatibility').catch(() => ({ status: 0 }))).status === 200) break; await delay(200); }
   const compatibility = await owner('/api/desktop-host/compatibility'); assert.equal(compatibility.status, 200); assert.deepEqual(compatibility.body.payload.manifest, DESKTOP_HOST_MANIFEST);
   assert.equal((await request('/api/desktop-host/compatibility')).status, 401);
-  const originalChat = await owner('/api/desktop-chat/bootstrap?chat=1'); assert.equal(originalChat.status, 200);
+  const originalCompatibility = compatibility;
+  assert.equal((await owner('/api/desktop-chat/bootstrap')).status, 404);
+  report.checks.retiredChatApiRemoved = true;
   const setup = await owner('/api/desktop-host/pairing-setups', 'POST', {}); assert.equal(setup.status, 201);
   const invitation = desktopPairingInvitationSchema.parse(setup.body.payload.invitation);
   const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }), requestId = randomUUID();
@@ -90,7 +92,7 @@ try {
   const replay = deviceHeaders('/api/devices/me'); assert.equal((await request('/api/devices/me', 'GET', undefined, replay)).status, 200); assert.equal((await request('/api/devices/me', 'GET', undefined, replay)).status, 401);
   report.checks.requestProofAndReplayRejection = true;
   report.denied = [];
-  for (const [path, method, body] of [['/api/sessions', 'GET'], ['/api/endpoint-tools/devices', 'GET'], ['/api/endpoint-tools/principals', 'POST', {}], ['/api/realtime/tickets', 'POST', {}], ['/api/desktop-host/pairing-setups', 'POST', {}], ['/api/device-pairing/requests/other/decision', 'POST', {}], ['/api/desktop-chat/bootstrap', 'GET']] as const) {
+  for (const [path, method, body] of [['/api/sessions', 'GET'], ['/api/endpoint-tools/devices', 'GET'], ['/api/endpoint-tools/principals', 'POST', {}], ['/api/realtime/tickets', 'POST', {}], ['/api/desktop-host/pairing-setups', 'POST', {}], ['/api/device-pairing/requests/other/decision', 'POST', {}]] as const) {
     const result = await device(path, method, body); assert.equal(result.status, 403, path); report.denied.push({ path, method, status: result.status });
   }
   report.checks.noOwnerMobileBrowserEndpointOrRealtimeAuthority = true;
@@ -116,7 +118,7 @@ try {
   assert.equal((await device('/api/devices/me')).status, 401);
   assert.equal((await request('/api/device-auth/refresh', 'POST', refreshBody)).status, 401);
   assert.equal((await complete()).body.error.code, 'DEVICE_REVOKED');
-  assert.deepEqual((await owner('/api/desktop-chat/bootstrap?chat=1')).body, originalChat.body);
+  assert.deepEqual((await owner('/api/desktop-host/compatibility')).body, originalCompatibility.body);
   report.checks.revocationAndChatIndependence = true;
   // The client store uses authenticated encryption here; OS safeStorage and native consent remain D2 installation checks.
   const encryptionKey = randomBytes(32), encryption = { available: async () => true,

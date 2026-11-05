@@ -33,9 +33,7 @@ asarUnpack:
   # The file:// connection page must stay on disk with file protocol privileges disabled.
   # Keep the original local preload layout; only the remote entry assets are added here.
   - 'out/preload/connections.cjs'
-  - 'out/preload/shell.cjs'
   - 'out/preload/gateway-connections.*'
-  - 'out/preload/remote-shell.*'
   - 'out/preload/screen-capture.html'
   - 'out/server/**'
   - 'node_modules/**'

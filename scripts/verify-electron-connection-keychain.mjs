@@ -76,7 +76,7 @@ try {
   page = await launch();
   const result = await page.evaluate(id => window.gatewayConnections.select(0, id), profileId);
   assert(result.ok, `Native credential decrypt failed: ${result.error}`);
-  assert.equal(result.snapshot.status, 'remote-chat-unavailable');
+  assert.equal(result.snapshot.status, 'configured');
   report.checks.crossProcessDecrypt = true;
   const removed = await page.evaluate(async () => {
     const state = await window.gatewayConnections.snapshot();

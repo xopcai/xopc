@@ -1,4 +1,4 @@
-import { ShellUpstream } from '../shell/upstream.js';
+import { RemoteGatewayUpstream } from '../gateway/remote-upstream.js';
 import type { DesktopAuthTransport } from './device-auth.js';
 import type { DesktopBinding } from './device-identity.js';
 import { SCREEN_CAPTURE_MAX_BYTES } from '@xopcai/endpoint-tools-protocol';
@@ -6,7 +6,7 @@ import { COMPUTER_FRAME_MAX_BYTES } from '@xopcai/computer-control-contract';
 
 /** Identity proof precedes every enrollment or device credential; redirects are never followed. */
 export function desktopAuthTransport(binding: DesktopBinding, transport: 'direct' | 'ssh', lifetime?: AbortSignal) {
-  const upstream = new ShellUpstream({ origin: binding.origin, transport, token: 'unused-device-channel',
+  const upstream = new RemoteGatewayUpstream({ origin: binding.origin, transport, token: 'unused-device-channel',
     identity: { gatewayId: binding.gatewayId, publicKey: binding.publicKey } });
   const request: DesktopAuthTransport = async (path, method, body, headers = {}, operationSignal) => {
     const uploadName = method === 'POST' ? path.match(/^\/api\/endpoint-tools\/invocations\/[0-9a-f-]{36}\/files\?name=(screenshot\.png|observation\.png|observation\.jpg)$/)?.[1] : undefined;

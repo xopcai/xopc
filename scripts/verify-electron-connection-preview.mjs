@@ -106,7 +106,7 @@ try {
   await page.getByRole('button', { name: '选择配置', exact: true }).click();
   await page.getByText('当前选择：Server A', { exact: true }).waitFor();
   snapshot = await page.evaluate(() => window.gatewayConnections.snapshot());
-  assert.equal(snapshot.status, 'remote-chat-unavailable');
+  assert.equal(snapshot.status, 'configured');
   const stale = await page.evaluate(({ id, epoch }) => window.gatewayConnections.select(epoch - 1, id), { id: snapshot.profiles[0].id, epoch: snapshot.epoch });
   assert.deepEqual(stale, { ok: false, error: 'STALE_CONNECTION_EPOCH', snapshot });
   report.checks.epochAndNoReadyClaim = true;

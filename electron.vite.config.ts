@@ -6,9 +6,8 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'electron-vite';
-import { build as buildBrowserScript } from 'esbuild';
 
-import { dependencyInventoryPlugin, writeDependencyRecords } from './scripts/electron-dependency-inventory.mjs';
+import { dependencyInventoryPlugin } from './scripts/electron-dependency-inventory.mjs';
 
 import webPkg from './web/package.json' with { type: 'json' };
 
@@ -64,7 +63,6 @@ export default defineConfig({
           // Keep main's import.meta.dirname at out/main for preload and native helper paths.
           main: resolve(__dirname, 'electron/main.ts'),
           compatibility: resolve(__dirname, 'electron/gateway-compatibility.ts'),
-          'remote-shell-worker': resolve(__dirname, 'electron/shell/worker.ts'),
         },
         // electron-vite 6 beta locates the last ESM import with a regex that can overrun into
         // bundled source. Providing the shim explicitly bypasses that unsafe insertion path.
@@ -80,10 +78,7 @@ export default defineConfig({
   preload: {
     plugins: [dependencyInventoryPlugin(__dirname), { name: 'computer-preview-document', async generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'computer-preview.html', source: readFileSync(resolve(__dirname, 'electron/computer/preview-worker.html'), 'utf8') });
-      const chat = await buildBrowserScript({ entryPoints: [resolve(__dirname, 'electron/chat/view.ts')], bundle: true, write: false, platform: 'browser', format: 'iife', target: 'chrome140', minify: true, metafile: true });
-      writeDependencyRecords(resolve(__dirname, 'out/preload/chat-dependency-records.json'), Object.keys(chat.metafile!.inputs), __dirname);
-      this.emitFile({ type: 'asset', fileName: 'remote-shell.js', source: chat.outputFiles[0]!.text });
-      for (const fileName of ['gateway-connections.html', 'gateway-connections.js', 'remote-shell.html', 'remote-shell.css', 'screen-capture.html']) {
+      for (const fileName of ['gateway-connections.html', 'gateway-connections.js', 'screen-capture.html']) {
         this.emitFile({ type: 'asset', fileName, source: readFileSync(resolve(__dirname, 'electron/gateway', fileName), 'utf8') });
       }
     } }],
@@ -96,7 +91,6 @@ export default defineConfig({
           index: resolve(__dirname, 'electron/preload.ts'),
           'computer-preview': resolve(__dirname, 'electron/computer/preview-worker.ts'),
           connections: resolve(__dirname, 'electron/gateway/connections-preload.ts'),
-          shell: resolve(__dirname, 'electron/gateway/shell-preload.ts'),
         },
         // Root package.json is `"type": "module"`, so electron-vite would default preload to ESM
         // (`index.mjs`). Electron does not execute that preload as an ES module. Force CJS (`index.cjs`).

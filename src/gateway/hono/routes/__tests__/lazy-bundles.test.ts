@@ -14,11 +14,8 @@ describe('lazy route bundles', () => {
     for (const path of ['/api/desktop-host/status/extra', '/api/desktop-host/devices/device-id/screen/extra', '/api/desktop-host/screen-other']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');
   });
 
-  it('maps only the authenticated desktop chat discovery endpoint', () => {
-    expect(findAuthenticatedLazyRouteBundle('/api/desktop-chat/bootstrap')?.id).toBe('desktop-chat');
-    for (const path of ['/api/desktop-chat', '/api/desktop-chat/bootstrap/extra', '/api/desktop-chat-other/bootstrap', '/api/gateway-identity/challenge']) {
-      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-chat');
-    }
+  it('does not register the retired desktop chat API', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/desktop-chat/bootstrap')).toBeUndefined();
   });
   it('maps session input control without capturing input and transcript routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/input-control')?.id).toBe('session-input-control');

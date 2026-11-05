@@ -1,9 +1,9 @@
-import { ShellUpstream } from '../shell/upstream.js';
-import type { RemoteTarget } from '../shell/upstream.js';
+import { RemoteGatewayUpstream } from '../gateway/remote-upstream.js';
+import type { RemoteTarget } from '../gateway/remote-upstream.js';
 
 /** Main-only, bounded owner calls always re-prove the pinned Gateway before sending credentials. */
 export function desktopOwnerClient(target: RemoteTarget, lifetime: AbortSignal) {
-  const upstream = new ShellUpstream(target);
+  const upstream = new RemoteGatewayUpstream(target);
   return { close: () => upstream.close(), request: async (path: string, method = 'GET', body?: unknown): Promise<any> => {
     if (!(path === '/api/desktop-host/compatibility' && method === 'GET'
       || /^\/api\/desktop-host\/devices\/[0-9a-f-]{36}\/(?:observation|screen)$/.test(path) && ['GET', 'POST'].includes(method))) throw new Error('DESKTOP_OWNER_ROUTE_DENIED');

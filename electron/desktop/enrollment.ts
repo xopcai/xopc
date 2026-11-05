@@ -4,7 +4,7 @@ import type { DesktopBinding } from './device-identity.js';
 import { DesktopIdentityStore } from './device-identity.js';
 import { DesktopDeviceAuth } from './device-auth.js';
 import { desktopAuthTransport } from './device-transport.js';
-import { ShellUpstream } from '../shell/upstream.js';
+import { RemoteGatewayUpstream } from '../gateway/remote-upstream.js';
 import type { GatewayConnectionPreview } from '../gateway/connection-manager.js';
 import { isConnectionId } from '../gateway/profiles.js';
 
@@ -50,7 +50,7 @@ export class DesktopEnrollmentManager {
     };
     const channel = desktopAuthTransport(binding, profile.transport, controller.signal);
     const client = new DesktopDeviceAuth(binding, this.options.store, channel.request);
-    let owner: ShellUpstream | undefined;
+    let owner: RemoteGatewayUpstream | undefined;
     try {
       if (action !== 'disable' && this.options.manager.snapshot().selectedId !== id) throw new Error('DESKTOP_SELECT_GATEWAY_REQUIRED');
       if (action === 'disable') {
@@ -71,7 +71,7 @@ export class DesktopEnrollmentManager {
       }
       if (!this.options.visible()) throw new Error('DESKTOP_LOCAL_UI_REQUIRED');
       const target = await this.options.manager.privateConnection(epoch, id); current();
-      owner = new ShellUpstream(target);
+      owner = new RemoteGatewayUpstream(target);
       const ownerJson = async (path: string, method = 'GET', body?: unknown) => {
         current(); const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]);
         await owner!.verifyPinnedIdentity(signal); current();
