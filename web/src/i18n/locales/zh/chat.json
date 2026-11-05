@@ -219,7 +219,7 @@
     "thoughtsStreaming": "正在思考…",
     "rawThinking": "原始思考数据（开发者）",
     "activityRepeated": "{{action}}（{{count}} 次）",
-    "activityMore": "另 {{count}} 项操作",
+    "activityMore": "还有 {{count}} 条记录",
     "activityFailed": "{{count}} 项操作未完成",
     "activityEarlier": "查看之前的过程",
     "activityParallel": "正在处理 {{count}} 项工作…",
@@ -290,6 +290,65 @@
     "stepFetchUrl": "已查阅网页",
     "stepUnknownTool": "其他操作",
     "toolActivity": {
+      "operations": {
+        "automation": {
+          "create": {"running": "正在创建自动化…", "completed": "已创建自动化"},
+          "update": {"running": "正在更新自动化…", "completed": "已更新自动化"},
+          "delete": {"running": "正在删除自动化…", "completed": "已删除自动化"},
+          "pause": {"running": "正在暂停自动化…", "completed": "已暂停自动化"},
+          "resume": {"running": "正在恢复自动化…", "completed": "已恢复自动化"},
+          "run": {"running": "正在触发自动化运行…", "completed": "已触发自动化运行"},
+          "rerun": {"running": "正在重新触发自动化运行…", "completed": "已重新触发自动化运行"},
+          "cancel": {"running": "正在取消自动化运行…", "completed": "已取消自动化运行"},
+          "history": {"running": "正在查看自动化运行记录…", "completed": "已查看自动化运行记录"},
+          "list": {"running": "正在查看自动化列表…", "completed": "已查看自动化列表"}
+        },
+        "job": {
+          "start": {"running": "正在启动后台任务…", "completed": "已启动后台任务"},
+          "status": {"running": "正在查看后台任务状态…", "completed": "已查看后台任务状态"},
+          "wait": {"running": "正在等待后台任务更新…", "completed": "已检查后台任务更新"},
+          "stdin": {"running": "正在向后台任务发送输入…", "completed": "已向后台任务发送输入"},
+          "cancel": {"running": "正在取消后台任务…", "completed": "已请求取消后台任务"},
+          "list": {"running": "正在查看后台任务列表…", "completed": "已查看后台任务列表"}
+        },
+        "todo": {
+          "read": {"running": "正在查看待办清单…", "completed": "已查看待办清单"},
+          "write": {"running": "正在更新待办清单…", "completed": "已更新待办清单"}
+        },
+        "computer": {
+          "discover": {"running": "正在查找可用的桌面应用…", "completed": "已检查可用的桌面应用"},
+          "open": {"running": "正在连接应用窗口…", "completed": "已连接应用窗口"},
+          "observe": {"running": "正在查看应用窗口…", "completed": "已查看应用窗口"},
+          "step": {"running": "正在执行下一步界面操作…", "completed": "已尝试下一步界面操作"},
+          "run": {"running": "正在执行一组界面操作…", "completed": "已执行界面操作"},
+          "exec": {"running": "正在运行桌面界面脚本…", "completed": "已运行桌面界面脚本"},
+          "close": {"running": "正在结束桌面控制…", "completed": "已结束桌面控制"},
+          "report": {"running": "正在读取桌面操作报告…", "completed": "已检查桌面操作报告"},
+          "flows": {"running": "正在查找已保存的桌面流程…", "completed": "已检查保存的桌面流程"},
+          "forget_flow": {"running": "正在移除保存的桌面流程…", "completed": "已处理桌面流程移除请求"}
+        },
+        "browser": {
+          "observe": {"running": "正在查看网页内容…", "completed": "已查看网页内容"},
+          "navigate": {"running": "正在打开网页…", "completed": "已打开网页"},
+          "click": {"running": "正在点击网页控件…", "completed": "已点击网页控件"},
+          "fill": {"running": "正在填写网页表单…", "completed": "已填写网页表单字段"},
+          "select": {"running": "正在选择网页选项…", "completed": "已选择网页选项"},
+          "press": {"running": "正在向网页发送按键…", "completed": "已向网页发送按键"},
+          "scroll": {"running": "正在滚动网页…", "completed": "已滚动网页"},
+          "wait": {"running": "正在等待网页更新…", "completed": "已检查网页状态"},
+          "upload": {"running": "正在为网页表单选取文件…", "completed": "已在网页表单中选取文件"},
+          "tabs": {"running": "正在处理浏览器标签页…", "completed": "已处理浏览器标签页"},
+          "sequence": {"running": "正在执行一组网页操作…", "completed": "已执行一组网页操作"},
+          "close": {"running": "正在结束浏览器控制…", "completed": "已结束浏览器控制"}
+        }
+      },
+      "resultsFound": "找到 {{count}} 条结果",
+      "noResults": "未找到匹配结果",
+      "noActionsExecuted": "未触发界面操作",
+      "actionsExecuted": "执行了 {{count}} 次界面操作",
+      "manualSubjects": {"computer_use": "电脑操作", "browser_use": "浏览器操作", "phone_use": "手机操作", "xopc_use": "工作区操作", "web_search": "网页搜索"},
+      "manualFor": "{{title}} · {{tool}}",
+      "stepFailed": "未完成 · {{operation}}",
       "builtins": {
         "codeExecution": { "running": "正在运行代码…", "completed": "运行代码" },
         "toolSearch": { "running": "正在查找可用工具…", "completed": "查找可用工具" },
@@ -304,7 +363,7 @@
         "imageGeneration": { "running": "正在生成图片…", "completed": "生成了图片" },
         "imageInspection": { "running": "正在查看图片…", "completed": "查看了图片" },
         "job": { "running": "正在管理后台任务…", "completed": "管理了后台任务" },
-        "manual": { "running": "正在查阅参考资料…", "completed": "已查阅参考资料" },
+        "manual": { "running": "正在查看工具使用说明…", "completed": "已查看工具使用说明" },
         "mediaRead": { "running": "正在读取媒体…", "completed": "读取了媒体" },
         "mediaSend": { "running": "正在发送媒体…", "completed": "发送了媒体" },
         "memoryMaintenance": { "running": "正在整理记忆…", "completed": "整理了记忆" },

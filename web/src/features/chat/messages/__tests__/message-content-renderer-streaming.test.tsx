@@ -122,6 +122,7 @@ describe('streaming assistant Markdown rendering', () => {
     workspaceConversationId?: string,
     pendingStatus?: 'sending' | 'waiting',
     taskRunId?: string,
+    simplified = true,
   ) {
     act(() => {
       root.render(
@@ -130,6 +131,7 @@ describe('streaming assistant Markdown rendering', () => {
             {workLog ? (
               <AssistantStepsBlock
                 workLog={workLog}
+                simplified={simplified}
                 pendingStatus={pendingStatus}
                 toolLabels={emptyLabels}
                 stepLabels={stepLabels}
@@ -201,6 +203,18 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.querySelector('button[aria-expanded]')).toBeNull();
     act(() => useDevViewStore.setState({ showRawToolData: true }));
     expect(container.querySelector('details')?.textContent).toContain('Private reasoning');
+  });
+
+  it('shows a single visible status for the active operation in an expanded work log', () => {
+    const workLog: AssistantTurnWorkLogPresentation = {
+      items: [{ type: 'tool_use', id: 'desktop', name: 'computer_use', status: 'running', input: { op: 'observe' } }],
+      active: true, status: 'running', expandedByDefault: true, compact: false,
+    };
+    render([], true, false, workLog, undefined, undefined, undefined, false);
+    expect(container.querySelector('button[aria-expanded="true"]')?.textContent).toContain('Work log');
+    expect(container.querySelector('[role="status"]')?.classList.contains('sr-only')).toBe(true);
+    expect(container.querySelectorAll('[data-activity-status="running"]')).toHaveLength(1);
+    expect(container.querySelector('[data-activity-status="running"]')?.textContent).toContain('Inspecting the app window');
   });
 
   it.each([false, true])('resets live expansion on completion: %s', (manual) => {
