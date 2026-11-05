@@ -216,16 +216,13 @@ export class BrowserChatClient {
   private sessionsRequest = 0;
   private defaultModelId?: string;
   private inputsRequest = 0;
-  private endpointBinding?: string;
-  private endpointBindingTask?: Promise<void>;
   private endpointPoll?: ReturnType<typeof setInterval>;
   private lastContextPulse = 0;
   private readonly onRuntimeMessage = (message: { type?: string; claim?: TurnClaim }) => {
     if (message.type !== 'browser/endpoint-ready' || !message.claim) return;
     this.turnClaim = message.claim;
     this.update({ endpointReady: true, error: undefined });
-    void this.bindSessionEndpoint()
-      .then(() => this.recoverOutbox())
+    void this.recoverOutbox()
       .catch((cause) => this.update({ error: cause instanceof Error ? cause.message : String(cause) }));
   };
   private snapshot: BrowserChatSnapshot = {
@@ -320,8 +317,6 @@ export class BrowserChatClient {
     this.realtime?.disconnect();
     this.realtime = undefined;
     this.turnClaim = undefined;
-    this.endpointBinding = undefined;
-    this.endpointBindingTask = undefined;
     this.update({ endpointReady: false });
   }
 
@@ -343,7 +338,6 @@ export class BrowserChatClient {
       void chrome.runtime.sendMessage({ type: 'browser/context-activity',
         foreground: typeof document !== 'undefined' && document.visibilityState === 'visible' }).catch(() => undefined);
     }
-    const previousEndpointId = this.turnClaim?.endpointId;
     const response = await chrome.runtime.sendMessage({ type: 'browser/get-endpoint-claim' }).catch(() => undefined) as {
       claim?: TurnClaim;
       error?: string;
@@ -353,45 +347,7 @@ export class BrowserChatClient {
       endpointReady: Boolean(this.turnClaim),
       ...(response?.error ? { error: response.error } : this.turnClaim ? { error: undefined } : {}),
     });
-    if (this.turnClaim?.endpointId !== previousEndpointId) {
-      this.endpointBinding = undefined;
-      if (this.turnClaim) {
-        void this.bindSessionEndpoint()
-          .catch((cause) => this.update({ error: cause instanceof Error ? cause.message : String(cause) }));
-      }
-    }
     if (this.turnClaim && this.snapshot.pendingDelivery) void this.recoverOutbox();
-  }
-
-  private async bindSessionEndpoint(): Promise<void> {
-    const conversationId = this.snapshot.conversationId;
-    const endpointId = this.turnClaim?.endpointId;
-    if (!conversationId || !endpointId) return;
-    if (await readDraft(conversationId)) return;
-    const desired = `${conversationId}\n${endpointId}`;
-    if (this.endpointBinding === desired) return;
-    if (this.endpointBindingTask) {
-      await this.endpointBindingTask;
-      if (this.endpointBinding === desired) return;
-    }
-    const task = json(await gatewayFetch(
-      `/api/endpoint-tools/bindings/${encodeURIComponent(conversationId)}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpointId }),
-      },
-    )).then(() => {
-      if (this.snapshot.conversationId === conversationId && this.turnClaim?.endpointId === endpointId) {
-        this.endpointBinding = desired;
-      }
-    });
-    this.endpointBindingTask = task;
-    try {
-      await task;
-    } finally {
-      if (this.endpointBindingTask === task) this.endpointBindingTask = undefined;
-    }
   }
 
   async loadSessions(search?: string): Promise<void> {
@@ -462,7 +418,6 @@ export class BrowserChatClient {
         this.reloadTabBinding(),
       ]);
       if (this.snapshot.conversationId !== conversationId) return;
-      await this.bindSessionEndpoint();
       if (this.snapshot.conversationId !== conversationId) return;
       const run = await json<{ payload?: { active?: boolean; runId?: string } }>(await gatewayFetch(
         `/api/sessions/${encodeURIComponent(conversationId)}/run`,
@@ -520,7 +475,6 @@ export class BrowserChatClient {
     const conversationId = this.snapshot.conversationId;
     const scope = await deliveryScope(conversationId, this.profileIdentity);
     const draft = await readBrowserOutbox<SessionCreation>(scope.draftKey);
-    if (!draft) await this.bindSessionEndpoint();
     await scope.assertCurrent();
     if (this.snapshot.conversationId !== conversationId) throw new Error(t('errorChatChanged'));
     const clientMessageId = crypto.randomUUID();
@@ -573,7 +527,6 @@ export class BrowserChatClient {
       outboxStored = false;
       await scope.assertCurrent();
       if (this.snapshot.conversationId !== conversationId) return 'sent';
-      if (draft) await this.bindSessionEndpoint();
       const runId = response.payload.inputState.inputs?.find((input) => input.clientMessageId === clientMessageId)?.runId
         ?? response.payload.inputState.activeRunId
         ?? await this.waitForRun(conversationId, clientMessageId);
@@ -635,7 +588,6 @@ export class BrowserChatClient {
       await deleteBrowserOutbox(scope.inputKey);
       await scope.assertCurrent();
       if (this.snapshot.conversationId !== conversationId) return;
-      if (request.kind === 'start') await this.bindSessionEndpoint();
       this.update({ pendingDelivery: false, error: undefined });
       const runId = response.payload.inputState.inputs?.find((input) => input.clientMessageId === request.clientMessageId)?.runId
         ?? response.payload.inputState.activeRunId

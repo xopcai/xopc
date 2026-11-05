@@ -1,3 +1,4 @@
+import { EndpointTaskTargetService } from '../src/endpoint-tools/task-targets.js';
 /** Electron-only live phases. Use run-computer-flow-validation.mts to isolate state and restart. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -94,7 +95,7 @@ async function main() {
   };
   const frames = new Map<string, Uint8Array>();
   const endpoint: any = {
-    bindings: { get: () => undefined, resolve: () => undefined },
+    targets: undefined,
     registry: { get: (id: string) => id === 'live-textedit' ? { endpointId: id, kind: 'desktop' } : undefined,
       getTool: () => ({ revision: 'live-validation' }) },
     uploads: { takeComputerFrame: (id: string) => { const image = frames.get(id); frames.delete(id); return image; } },
@@ -117,6 +118,7 @@ async function main() {
       return { invocationId, content };
     } },
   };
+  endpoint.targets = new EndpointTaskTargetService(endpoint.registry as never);
   const runtime = new ComputerRuntime(endpoint, () => config, () => 'live-textedit');
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {

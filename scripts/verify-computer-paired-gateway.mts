@@ -90,7 +90,7 @@ process.on('message', async (message: any) => {
     if (message.op !== 'run' || running) throw new Error('PAIR_BUSY');
     running = true; calls = []; usageReads = [];
     const owner = createConversation({ agentId: 'paired-ui', sourceChannel: 'webchat' }, join(root, 'workspace')).key;
-    service.endpointTools.bindings.bind(owner, message.endpointId);
+    service.endpointTools.targets.select(owner, message.endpointId);
     const runId = randomUUID();
     const base = createComputerUseTool({ runtime, context: () => ({ conversationId: owner, runId }) });
     const toolCalls: Array<{ op: string; durationMs: number; ok: boolean; status?: string; errorCode?: string; scriptError?: string; codeHash?: string }> = [];

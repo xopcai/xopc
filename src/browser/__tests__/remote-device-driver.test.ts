@@ -14,7 +14,7 @@ function fixture() {
     executionAuthority: { gatewayId: randomUUID(), deviceId, grantId: randomUUID(), authorizationRevision: 1, connectionInstanceId: randomUUID(), expiresAt: Date.now() + 60000 } };
   const tool = { descriptor: REMOTE_BROWSER_DESCRIPTOR, revision: 'a'.repeat(64) };
   const take = vi.fn(() => bytes);
-  const runtime = { registry: { get: vi.fn(() => endpoint), getTool: vi.fn(() => tool) }, uploads: { takeComputerFrame: take } };
+  const runtime = { targets: { resolve: () => endpoint }, registry: { get: vi.fn(() => endpoint), getTool: vi.fn(() => tool) }, uploads: { takeComputerFrame: take } };
   const driver = new RemoteDeviceBrowserDriver(runtime as never, endpointId, 'owner');
   const state = { sessionId: 'session', tabId: 'tab-1', documentId: 'document-1', revision: 1, url: 'https://fixture.invalid/', title: 'Fixture',
     nodes: [], changes: { added: [], changed: [], removed: [] } };

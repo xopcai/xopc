@@ -44,9 +44,10 @@ const Reply = z.object({
 type ObservationReply = { value: z.infer<typeof Reply>; frame?: Uint8Array; mimeType?: 'image/png' | 'image/jpeg' };
 type GoalContext = { observation?: ObservationReply; observationsReused: number; stabilityObservations: number; actionsRemaining: number; nativeMs: ComputerNativeTiming };
 type Session = {
-  id: string; owner: string; endpointId: string; appRef: string; mode: 'observe' | 'control'; prepare: boolean; windowRef?: string; binding: ComputerModelBinding;
+  id: string; owner: string; endpointId: string; connectionId: string; appRef: string; mode: 'observe' | 'control'; prepare: boolean; windowRef?: string; binding: ComputerModelBinding;
   adapter?: ComputerStepAdapter; programStore?: Record<string, unknown>; createdAt: number; modelRequests: number; actions: number;
   rescues: number; rescueLimit: number;
+  releaseTarget?: () => void;
   pending?: ActionEnvelope; controller: AbortController;
   task: ComputerTaskState;
   flowCapture: ComputerFlowCapture; flowScope: string; flowPrincipalId?: string; lastFlowId?: string;
@@ -106,6 +107,8 @@ export class ComputerRuntime {
     if (!owner) throw new Error('COMPUTER_CONVERSATION_REQUIRED');
     const stale = this.sessions.get(owner);
     if (stale && !this.operations.has(owner) && this.verifiedRemoteStop(stale)) this.forget(stale);
+    const active = this.sessions.get(owner);
+    if (active && !['close', 'report', 'flows', 'forget_flow'].includes(input.op)) this.assertTarget(owner, active);
     if (input.op === 'flows' || input.op === 'forget_flow') {
       signal?.throwIfAborted();
       const scope = this.flowScope(owner);
@@ -348,7 +351,7 @@ export class ComputerRuntime {
     if (input.op === 'discover') {
       const endpoint = this.resolveEndpoint(owner);
       const id = randomUUID();
-      const reply = await this.send({ endpointId: endpoint.endpointId, id }, { op: 'discover', sessionId: id, owner, query: input.query }, signal);
+      const reply = await this.send({ endpointId: endpoint.endpointId, connectionId: endpoint.connectionId, id }, { op: 'discover', sessionId: id, owner, query: input.query }, signal);
       reply.frame?.fill(0);
       return this.present(reply.value);
     }
@@ -389,7 +392,7 @@ export class ComputerRuntime {
         ...(deployment?.origin ? { upstreamOrigin: deployment.origin } : {}) };
       }
       signal.throwIfAborted();
-      s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, adapter,
+      s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, connectionId: endpoint.connectionId, adapter,
         binding,
         ...(endpoint.executionAuthority ? { executionScope: { gatewayId: endpoint.executionAuthority.gatewayId, deviceId: endpoint.executionAuthority.deviceId,
           authorizationRevision: endpoint.executionAuthority.authorizationRevision, tool: REMOTE_COMPUTER_CONTROL_TOOL,
@@ -399,6 +402,7 @@ export class ComputerRuntime {
         flowCapture: new ComputerFlowCapture(), flowPrincipalId: endpoint.principalId, flowScope: JSON.stringify([effective.id, effective.workspace]),
         diagnostics: diagnostics!, serviceLimits };
       s.diagnostics.bind(s.id);
+      s.releaseTarget = this.endpoints.targets.hold(owner, `computer:${s.id}`);
       this.sessions.set(owner, s);
       enterComputerControl(owner, async () => { await this.close(owner); });
     }
@@ -653,16 +657,27 @@ export class ComputerRuntime {
       ...(reply.observation ? { summary: reply.observation.summary, observation: { id: reply.observation.id, width: reply.observation.imageWidth, height: reply.observation.imageHeight } } : {}), ...(reply.receipt ? { receipt: reply.receipt } : {}) };
   }
   private resolveEndpoint(owner: string) {
-    const explicitBinding = this.endpoints.bindings.get(owner);
+    const explicitBinding = this.endpoints.targets.get(owner);
     const turnEndpoint = this.getTurnEndpoint?.(owner);
-    const endpoint = explicitBinding ? this.endpoints.bindings.resolve(owner)
-      : turnEndpoint ? this.endpoints.registry.get(turnEndpoint) : this.endpoints.bindings.resolve(owner);
-    if (!endpoint || endpoint.kind !== 'desktop') throw new Error('COMPUTER_DESKTOP_BINDING_REQUIRED');
+    const endpoint = explicitBinding ? this.endpoints.targets.resolve(owner)
+      : turnEndpoint ? this.endpoints.registry.get(turnEndpoint) : this.endpoints.targets.resolve(owner);
+    if (!endpoint) throw new Error(explicitBinding ? 'COMPUTER_TARGET_OFFLINE' : 'COMPUTER_TARGET_REQUIRED');
+    if (endpoint.kind !== 'desktop') throw new Error('COMPUTER_TARGET_UNSUPPORTED');
     if (!this.endpoints.registry.getTool(endpoint.endpointId, endpoint.executionAuthority ? REMOTE_COMPUTER_CONTROL_TOOL : COMPUTER_CONTROL_TOOL)) throw new Error('COMPUTER_DESKTOP_UPGRADE_REQUIRED');
+    if (!explicitBinding) this.endpoints.targets.select(owner, endpoint.endpointId);
     return endpoint;
   }
-  private async send(s: Pick<Session, 'endpointId' | 'id'> & Partial<Pick<Session, 'diagnostics'>>, command: ComputerCommand, signal?: AbortSignal) {
+  private assertTarget(owner: string, session: Pick<Session, 'endpointId' | 'connectionId'>): void {
+    const current = this.endpoints.registry.get(session.endpointId);
+    if (!current || current.connectionId !== session.connectionId) throw new Error('COMPUTER_TARGET_OFFLINE');
+    const selected = this.endpoints.targets.resolve(owner);
+    if (!selected || selected.endpointId !== session.endpointId || selected.connectionId !== session.connectionId) throw new Error('COMPUTER_TARGET_SCOPE_CHANGED');
+  }
+  private async send(s: Pick<Session, 'endpointId' | 'connectionId' | 'id'> & Partial<Pick<Session, 'diagnostics'>>, command: ComputerCommand, signal?: AbortSignal) {
     signal?.throwIfAborted();
+    const current = this.endpoints.registry.get(s.endpointId);
+    if (!current || current.connectionId !== s.connectionId) throw new Error('COMPUTER_TARGET_OFFLINE');
+    if (command.op !== 'release') this.assertTarget(command.owner, s);
     const invoke = () => invokeComputerCommand(this.endpoints, s.endpointId, command, signal);
     const phase = command.op === 'open' ? 'open' : command.op === 'act' ? 'dispatch' : command.op === 'observe' ? 'observe' : command.op === 'release' ? 'release' : undefined;
     if (command.op === 'observe') s.diagnostics?.count('observations');
@@ -688,7 +703,7 @@ export class ComputerRuntime {
   }
   private forget(s: Session): void {
     if (this.sessions.get(s.owner) !== s) return;
-    this.sessions.delete(s.owner); leaveComputerControl(s.owner);
+    this.sessions.delete(s.owner); leaveComputerControl(s.owner); s.releaseTarget?.();
     s.diagnostics.finish(true); this.retainReport(s.owner, s.diagnostics);
     clearComputerFrames(s.owner); s.programStore = undefined;
     s.task.clear(); s.pendingContext = undefined; s.controller.abort();

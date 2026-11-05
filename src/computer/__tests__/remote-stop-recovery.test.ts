@@ -1,3 +1,4 @@
+import { EndpointTaskTargetService } from '../../endpoint-tools/task-targets.js';
 import { randomUUID } from 'node:crypto';
 import { REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
@@ -22,10 +23,10 @@ it('retains offline Computer admission until independent stop proof, then clears
   const driver = { discover: async () => [{ appId: 'fixture', name: 'Fixture', running: true }], resolveTarget: vi.fn(async () => target), observe: vi.fn(), perform: vi.fn(), stop: vi.fn(async () => {}) };
   const makeBroker = () => new ComputerBroker(driver, { deferApproval: false, isVisible: () => true, requestApproval: async () => true }, { enabled: true });
   let broker = makeBroker(), online = true;
-  const endpoint = { endpointId: randomUUID(), principalId: randomUUID(), kind: 'desktop', availability: 'foreground', tools: [{ descriptor: { name: REMOTE_COMPUTER_CONTROL_TOOL }, revision: 'r1' }],
+  const endpoint = { endpointId: randomUUID(), connectionId: randomUUID(), principalId: randomUUID(), kind: 'desktop', availability: 'foreground', tools: [{ descriptor: { name: REMOTE_COMPUTER_CONTROL_TOOL }, revision: 'r1' }],
     executionAuthority: { gatewayId: randomUUID(), deviceId: '', grantId: randomUUID(), authorizationRevision: 1, expiresAt: Date.now() + 120000 } };
   endpoint.executionAuthority.deviceId = endpoint.principalId;
-  const endpoints = { bindings: { get: () => undefined, resolve: () => undefined },
+  const endpoints = { targets: undefined as EndpointTaskTargetService | undefined,
     registry: { get: (id: string) => online && id === endpoint.endpointId ? endpoint : undefined, getTool: () => ({ revision: 'r1' }) } };
   vi.mocked(invokeComputerCommand).mockImplementation(async (_runtime, _id, command) => {
     if (!online) throw new Error('COMPUTER_REMOTE_AUTHORITY_INVALID');
@@ -38,6 +39,7 @@ it('retains offline Computer admission until independent stop proof, then clears
     return { content: [{ type: 'json', value }] } as never;
   });
   const config = { computer: ComputerConfigSchema.parse({ enabled: true }) };
+  endpoints.targets = new EndpointTaskTargetService(endpoints.registry as never);
   const runtime = new ComputerRuntime(endpoints as never, () => config as never, () => endpoint.endpointId);
   bindComputerAgentTurn(owner, runId, { id: 'fixture-vision', provider: 'fixture', baseUrl: 'https://model.invalid/v1', input: ['image'] } as never);
   try {
@@ -54,6 +56,8 @@ it('retains offline Computer admission until independent stop proof, then clears
     expect(invokeComputerCommand).toHaveBeenCalledTimes(before); expect(isComputerControlActive(owner)).toBe(false);
     endpoint.endpointId = randomUUID(); endpoint.executionAuthority.authorizationRevision = 2; endpoint.executionAuthority.grantId = randomUUID();
     broker = makeBroker(); online = true;
+    await expect(runtime.execute(owner, { op: 'discover', query: 'Fixture' })).rejects.toThrow('COMPUTER_TARGET_OFFLINE');
+    endpoints.targets!.select(owner, endpoint.endpointId);
     const next = await runtime.execute(owner, { op: 'discover', query: 'Fixture' });
     expect(await runtime.execute(owner, { op: 'open', appRef: next.apps![0]!.appRef, mode: 'control', prepare: false, planner: 'agent' })).toMatchObject({ status: 'ready' });
     expect(isComputerControlActive(owner)).toBe(true); expect(await runtime.close(owner)).toBe(true);

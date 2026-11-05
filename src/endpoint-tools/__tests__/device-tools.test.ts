@@ -4,7 +4,7 @@ import { deviceStateDescriptor } from '@xopcai/endpoint-tools-protocol';
 
 import { requireXopcDatabase } from '../../storage/sqlite/connection.js';
 import { EndpointRegistry } from '../registry.js';
-import { EndpointBindingService } from '../binding-service.js';
+import { EndpointTaskTargetService } from '../task-targets.js';
 import { DeviceTargetResolver } from '../target-resolver.js';
 import { EndpointToolPolicy } from '../policy.js';
 import { endpointClaimBelongsToPrincipal, deviceTurnSourceContext } from '../turn-context.js';
@@ -18,9 +18,9 @@ function fixture() {
     kind, platform: kind, appVersion: '1', availability: 'foreground', nonce: randomUUID(), signedAt: Date.now(),
     signature: 'fixture-signature', tools: [deviceStateDescriptor(kind, 'state')],
   }, kind, { readyState: 1, send: () => {}, close: () => {} });
-  const bindings = new EndpointBindingService(registry);
-  bindings.bind('chat', 'desktop');
-  return { registry, bindings, resolver: new DeviceTargetResolver(registry, bindings) };
+  const bindings = new EndpointTaskTargetService(registry);
+  bindings.select('chat', 'desktop');
+  return { registry, bindings, resolver: new DeviceTargetResolver(registry, bindings, undefined, { kind: 'owner', principalId: 'owner', scopes: ['gateway.admin'] }) };
 }
 
 describe('Device Tools', () => {

@@ -6,6 +6,29 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps device host enrollment independently', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/hosts/enrollment')?.id).toBe('device-hosts');
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/hosts/enrollment/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/hosts-other/enrollment')).toBeUndefined();
+  });
+  it('maps task target routes without capturing adjacent routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/targets/id')?.id).toBe('device-targets');
+    for (const path of ['/api/endpoint-tools/targets', '/api/endpoint-tools/targets/id/extra', '/api/endpoint-tools/targets-other/id']) expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+  });
+  it('routes provider catalogs and admission without capturing adjacent endpoint routes', () => {
+    for (const path of ['/api/endpoint-tools/providers', '/api/endpoint-tools/providers/admission', '/api/endpoint-tools/provider-operations/id',
+      '/api/endpoint-tools/artifact-transfers', '/api/endpoint-tools/artifact-transfers/id', '/api/endpoint-tools/invocations/id/artifact',
+      '/api/endpoint-tools/delegations', '/api/endpoint-tools/delegations/id', '/api/endpoint-tools/interactions/id']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('device-providers');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/provider-operations/id/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/invocations/id/artifact/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/delegations/id/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/interactions/id/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/providers-other')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/providers/admission/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/compatibility')?.id).toBe('endpoint-compatibility');
+  });
   it('maps independent desktop discovery and pairing without capturing chat or nearby routes', () => {
     for (const path of ['/api/desktop-host/execution', '/api/desktop-host/operations', '/api/desktop-host/operations/operation-id', '/api/desktop-host/operations/operation-id/review', '/api/desktop-host/devices/device-id/execution']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('desktop-host');
     for (const path of ['/api/desktop-host/operations/operation-id/extra', '/api/desktop-host/operations/operation-id/review/extra', '/api/desktop-host/execution/extra', '/api/desktop-host/devices/device-id/execution/extra', '/api/desktop-host/execution-other']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('desktop-host');

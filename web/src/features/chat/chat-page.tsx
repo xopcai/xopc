@@ -4,6 +4,7 @@ import { AutomationConfigurationContext } from '@/features/automations/automatio
 import { AutomationConfigurationPanel } from '@/features/automations/automation-task-card';
 import { chatVirtualScroll, pauseChatTailFollowing } from '@/features/chat/scroll/chat-virtual-scroll';
 import * as Dialog from '@radix-ui/react-dialog';
+import { DeviceInteractionPanel } from '@/features/endpoint-tools/device-interaction-panel';
 import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FileText } from 'lucide-react';
@@ -1350,6 +1351,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 </div>
               ) : null}
               <ReadAloudDock />
+              <DeviceInteractionPanel conversationId={session.conversationId} active={stream.streaming || stream.sending} />
               <ChatComposer
                 personal={personal}
                 nextTurnSuggestionsEnabled={!stream.streaming}

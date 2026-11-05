@@ -112,7 +112,7 @@ for (const phase of ['capture', 'reuse', 'unknown']) {
     const upload = await fetch(base + `/api/endpoint-tools/invocations/${randomUUID()}/files?name=observation.png`, {
       method: 'POST', headers: { ...headers, 'Content-Type': 'image/png', 'x-endpoint-id': endpoint.endpointId, 'x-endpoint-upload-token': 'invalid' }, body: new Uint8Array([1]) });
     assert.equal(upload.status, 400); assert.equal((await upload.json() as any).error.code, 'INVALID_UPLOAD_GRANT');
-    await request(`/api/endpoint-tools/bindings/${status.owner}`, { endpointId: endpoint.endpointId }, 'PUT');
+    await request(`/api/endpoint-tools/targets/${status.owner}`, { endpointId: endpoint.endpointId }, 'PUT');
     const execute = (input: unknown) => gateway.rpc('execute', { input });
     const settle = async (input: unknown) => {
       let value = await execute(input); const until = Date.now() + (TEXTEDIT && (input as any).op === 'open' ? 270_000 : 30_000);
@@ -143,6 +143,7 @@ for (const phase of ['capture', 'reuse', 'unknown']) {
     const flows = await execute({ op: 'flows' }); assert.equal(flows.flows.length, flowId ? 1 : 0); if (flowId) assert.equal(flows.flows[0].id, flowId);
     await desktop.rpc('access', { allowed: false }); assert.equal((await open()).errorCode, 'COMPUTER_APP_NOT_AUTHORIZED');
     const denied = await desktop.rpc('status'); assert.equal(denied.observations, 0); assert.equal(denied.inputs, 0); assert.equal((await gateway.rpc('status')).modelRequests, 0);
+    await desktop.rpc('drained');
     await desktop.rpc('access', { allowed: true });
     await baseline(TEXTEDIT || phase === 'capture', TEXTEDIT); await desktop.rpc('mode', { mode: 'scenario' });
     if (!TEXTEDIT) assert.equal((await open()).status, 'ready');

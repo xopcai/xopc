@@ -1,5 +1,5 @@
-import { EndpointToolRegistry, type EndpointToolDefinition } from '@xopcai/endpoint-tools-client';
-import { bridgeDescriptor } from '@xopcai/endpoint-tools-protocol';
+import { EndpointToolRegistry, type CapabilityProviderDefinition } from '@xopcai/endpoint-tools-client';
+import type { ProviderTool } from '@xopcai/endpoint-tools-protocol';
 import { z } from 'zod';
 
 const resourceSchema = z.object({
@@ -21,12 +21,17 @@ export function createDeviceBridge(adapters: readonly BridgeSensorAdapter[], now
     if (resources.has(resource.resourceId)) throw new Error('Duplicate Bridge resource ID');
     resources.set(resource.resourceId, { resource, read: adapter.read.bind(adapter) });
   }
-  const definitions: EndpointToolDefinition[] = [
-    { descriptor: bridgeDescriptor('list_resources'), execute: async args => {
+  const descriptor = (name: string, description: string, inputSchema: Record<string, unknown>): ProviderTool => ({
+    name, title: name === 'list_resources' ? 'Discover sensors' : 'Read sensor', description, inputSchema,
+    effect: 'read', sensitivity: 'public', confirmation: 'never', requiresForeground: false, requiredPermissions: [],
+    timeoutMs: 10_000, maxConcurrency: 1, supportsCancellation: true, idempotent: true, resultKinds: ['json'],
+  });
+  const definitions: CapabilityProviderDefinition['tools'] = [
+    { descriptor: descriptor('list_resources', 'List temperature and humidity sensors with stable resource IDs and simulation labels.', { type: 'object', additionalProperties: false }), execute: async args => {
       z.object({}).strict().parse(args);
       return { content: [{ type: 'json', value: [...resources.values()].map(item => ({ ...item.resource })) }] };
     } },
-    { descriptor: bridgeDescriptor('read_sensor'), execute: async (args, context) => {
+    { descriptor: descriptor('read_sensor', 'Read a fresh temperature or humidity sample by resourceId. Simulated samples are marked; unavailable values are null.', { type: 'object', properties: { resourceId: { type: 'string', maxLength: 128 } }, required: ['resourceId'], additionalProperties: false }), execute: async (args, context) => {
       const { resourceId } = z.object({ resourceId: z.string() }).strict().parse(args);
       const adapter = resources.get(resourceId);
       if (!adapter) throw new TypeError('Unknown Bridge resource');
@@ -43,7 +48,9 @@ export function createDeviceBridge(adapters: readonly BridgeSensorAdapter[], now
       return { content: [{ type: 'json', value: { ...adapter.resource, value, capturedAt: sample.capturedAt } }] };
     } },
   ];
-  return new EndpointToolRegistry(definitions);
+  const registry = new EndpointToolRegistry([]);
+  registry.registerProvider({ localId: 'sensors', title: 'Environment sensors', summary: 'Read connected temperature and humidity sensors', tools: definitions });
+  return registry;
 }
 
 export function simulatedEnvironmentSensors(now = Date.now): BridgeSensorAdapter[] {

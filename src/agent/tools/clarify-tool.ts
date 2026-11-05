@@ -27,6 +27,7 @@ export type ClarifyRequestPayload = ClarificationPresentation & {
 
   /** Stable hash of the exact operation guarded by an approval. */
   approvalKey?: string;
+  deviceInteraction?: import('@xopcai/gateway-contract').DeviceInteractionCheckpoint;
 };
 
 export type ClarifyRequestResult =

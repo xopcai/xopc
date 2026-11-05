@@ -149,6 +149,7 @@ async function checkNativeMcpCli() {
  assert(report.servers.some(server=>server.name==='docs' && server.state==='connected' && server.tools.includes('lookup')));
  console.log('Native MCP CLI verified');
 }
+let endpointClaim;
 async function boot() {
  child=spawn(process.execPath,[entry,'gateway','--port',String(port),'--bind','loopback','--no-hot-reload'],{cwd:root,env:{...process.env,XOPC_CONFIG_PATH:configPath,XOPC_CONFIG:configPath,XOPC_STATE_DIR:state,PI_CODING_AGENT_DIR:join(state,'pi'),XOPC_HOME:state,XOPC_WORKSPACE:workspace,XOPC_SKIP_CHANNELS:'1',XOPC_NO_RESPAWN:'1',XOPC_LOG_FILE:'false',XOPC_LOG_CONSOLE:'false'},stdio:['ignore','pipe','pipe']});
  child.stdout.on('data', b=>logs+=b.toString()); child.stderr.on('data', b=>logs+=b.toString());
@@ -166,7 +167,7 @@ async function boot() {
         requiredPermissions: [], timeoutMs: 1000, maxConcurrency: 1, supportsCancellation: true, idempotent: true, resultKinds: ['text'] }] };
     hello.signature = sign('sha256', Buffer.from(endpointHelloSigningPayload(hello)), { key: deviceKey.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
     return hello;
-  }, onReady: () => { endpointReady = true; }, onDisconnected: () => { endpointReady = false; }, onMessage: message => {
+  }, onReady: claim => { endpointReady = true; endpointClaim = claim; }, onDisconnected: () => { endpointReady = false; endpointClaim = undefined; }, onMessage: message => {
     if (message.type !== 'tool.invoke') return;
     deviceCalls++;
     const envelope = () => ({ protocolVersion: ENDPOINT_PROTOCOL_VERSION, messageId: randomUUID(), sentAt: Date.now() });
@@ -210,14 +211,14 @@ try {
  let transcriptId=session.transcriptId ?? session.session?.transcriptId;
  console.log('Tool run verified', {toolResultSeen});
  let config=await request(`/api/sessions/${conversationId}/agent-config`,undefined,'GET');
- const append=async content=>request(`/api/sessions/${conversationId}/inputs`,{kind:'append',clientMessageId:randomUUID(),expectedTranscriptId:transcriptId,configVersion:config.configVersion ?? config.version ?? 0,delivery:'next',interrupt:false,input:{content},origin});
- const nativeTurn = async content => {
+ const append=async (content, inputOrigin = origin)=>request(`/api/sessions/${conversationId}/inputs`,{kind:'append',clientMessageId:randomUUID(),expectedTranscriptId:transcriptId,configVersion:config.configVersion ?? config.version ?? 0,delivery:'next',interrupt:false,input:{content},origin:inputOrigin});
+ const nativeTurn = async (content, withSource = true) => {
   const count = events.filter(e => e.event === 'run.completed').length;
-  await append(content); await until(() => events.filter(e => e.event === 'run.completed').length > count, content);
+  const source = withSource ? { type: 'endpoint', endpointId: endpointClaim.endpointId, token: endpointClaim.turnToken } : origin;
+  await append(content, source); await until(() => events.filter(e => e.event === 'run.completed').length > count, content);
   assert.equal(events.findLast(e => e.event === 'run.completed').data.status, 'success');
  };
  if (nativePilot) {
-  await request(`/api/endpoint-tools/bindings/${conversationId}`, { endpointId: 'smoke-phone' }, 'PUT');
   await nativeTurn('PI_NATIVE_DISCOVER'); assert.equal(deviceCalls, 0, 'search invoked device');
   await nativeTurn('PI_NATIVE_DIRECT'); assert.equal(deviceCalls, 1);
   await nativeTurn('PI_NATIVE_SCRIPT'); assert.equal(deviceCalls, 2);
@@ -269,8 +270,7 @@ try {
  if (nativePilot) {
   await nativeTurn('PI_NATIVE_DISCOVER after reconnect');
   await nativeTurn('PI_NATIVE_DIRECT after reconnect'); assert.equal(deviceCalls, 3);
-  await request(`/api/endpoint-tools/bindings/${conversationId}`, undefined, 'DELETE');
-  await nativeTurn('PI_NATIVE_OFFLINE'); assert.equal(deviceCalls, 3);
+  await nativeTurn('PI_NATIVE_OFFLINE', false); assert.equal(deviceCalls, 3);
  }
  if(discoveryPilot){
   let count=events.filter(e=>e.event==='run.completed').length;
@@ -306,6 +306,6 @@ try {
  await append('PI_DISABLED');
  await until(()=>events.filter(e=>e.event==='run.completed').length>completed,'disabled turn completed');
  if(modelFailure) throw modelFailure;
- console.log(JSON.stringify({passed:true,entry,checks:['authentication','REST input','realtime tool end','model tool result','cancel terminal','restart','SQLite recovery','codemode-store','nested calls','reset store isolation','disable cancels worker','disabled declaration',...(discoveryPilot?['native CLI diagnostics','deferred search','MCP structured output','authenticated full output','native shutdown','catalog revocation','disconnect','reconnect']:[]),...(nativePilot?['signed device','native discovery without MCP opt-in','native direct call','native Codemode read','device audit','reconnect contract reload','unbind declaration removal']:[])],modelRequests}));
+ console.log(JSON.stringify({passed:true,entry,checks:['authentication','REST input','realtime tool end','model tool result','cancel terminal','restart','SQLite recovery','codemode-store','nested calls','reset store isolation','disable cancels worker','disabled declaration',...(discoveryPilot?['native CLI diagnostics','deferred search','MCP structured output','authenticated full output','native shutdown','catalog revocation','disconnect','reconnect']:[]),...(nativePilot?['signed device','native discovery without MCP opt-in','native direct call','native Codemode read','device audit','reconnect contract reload','source declaration removal']:[])],modelRequests}));
 } catch (error) { console.error(error); console.error(logs.slice(-9000)); process.exitCode=1; }
 finally { await stop(); model.closeAllConnections(); await new Promise(resolve=>model.close(resolve)); rmSync(state,{recursive:true,force:true}); }

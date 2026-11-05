@@ -1,3 +1,4 @@
+import { EndpointTaskTargetService } from '../src/endpoint-tools/task-targets.js';
 import '../src/infra/http-proxy-env.js';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
@@ -116,7 +117,7 @@ async function main() {
       modelInputs++; await perform(target, action, signal); completedInputs++; modelActions.push(action.kind);
     };
     const endpoints: any = {
-      bindings: { get: () => undefined, resolve: () => undefined },
+      targets: undefined,
       registry: { get: () => ({ endpointId: 'windows-input-live', kind: 'desktop' }), getTool: () => ({ revision: 'windows-validation' }) },
       uploads: { takeComputerFrame: (id: string) => { const frame = frames.get(id); frames.delete(id); return frame; } },
       invocations: { invoke: async ({ arguments: raw }: any) => {
@@ -128,6 +129,7 @@ async function main() {
       } },
     };
     const config = ConfigSchema.parse({ computer: { enabled: true, maxModelRequests: 12, maxActionsPerSession: 12 } });
+    endpoints.targets = new EndpointTaskTargetService(endpoints.registry as never);
     const runtime = new ComputerRuntime(endpoints, () => config, () => 'windows-input-live');
     const originalFetch = globalThis.fetch;
     const responses: Array<{ status: number; content: unknown }> = [];

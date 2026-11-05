@@ -22,6 +22,7 @@ export interface EndpointTransport {
 export interface RegisteredEndpointTool {
   descriptor: EndpointToolDescriptor;
   revision: string;
+  provider?: { principalId: string; localId: string; name: string; summary: string; instructions?: string; digest: string; durableOperations?: 1; artifactInput?: string; gatewayFormInput?: 1; resourceId?: string };
 }
 
 export interface EndpointConnectionSnapshot {
@@ -73,9 +74,9 @@ function snapshot(connection: EndpointConnection): EndpointConnectionSnapshot {
 
 export class EndpointRegistry {
   private readonly connectionByEndpointId = new Map<string, EndpointConnection>();
-  private readonly changeListeners = new Set<(endpointId: string, reason?: 'connection' | 'authorization') => void>();
+  private readonly changeListeners = new Set<(endpointId: string, reason?: 'connection' | 'authorization' | 'catalog') => void>();
 
-  onChange(listener: (endpointId: string, reason?: 'connection' | 'authorization') => void): () => void {
+  onChange(listener: (endpointId: string, reason?: 'connection' | 'authorization' | 'catalog') => void): () => void {
     this.changeListeners.add(listener);
     return () => { this.changeListeners.delete(listener); };
   }
@@ -184,6 +185,23 @@ export class EndpointRegistry {
 
   getTool(endpointId: string, toolName: string): RegisteredEndpointTool | undefined {
     return this.connectionByEndpointId.get(endpointId)?.toolByName.get(toolName);
+  }
+
+  replaceProviderTools(endpointId: string, connectionId: string, tools: readonly RegisteredEndpointTool[]): void {
+    const connection = this.requireConnection(endpointId, connectionId);
+    const next = new Map([...connection.toolByName].filter(([, tool]) => !tool.provider));
+    for (const tool of tools) {
+      if (!tool.provider || tool.provider.principalId !== connection.principalId || next.has(tool.descriptor.name)) {
+        throw new Error('Provider tool identity conflicts with this endpoint');
+      }
+      next.set(tool.descriptor.name, tool);
+    }
+    const invalidated = [...connection.toolByName].some(([name, tool]) => {
+      const replacement = next.get(name);
+      return replacement?.revision !== tool.revision || replacement?.provider?.digest !== tool.provider?.digest;
+    });
+    connection.toolByName = next;
+    for (const listener of this.changeListeners) listener(endpointId, invalidated ? 'authorization' : 'catalog');
   }
 
   verifyTurnClaim(endpointId: string, turnToken: string): boolean {

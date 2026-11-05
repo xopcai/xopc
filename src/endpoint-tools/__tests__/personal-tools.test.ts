@@ -23,8 +23,8 @@ function fixture(name: typeof PERSONAL_TOOL_NAMES[number]) {
     toolName: name, toolCallId: randomUUID(), descriptorRevision: registry.getTool('phone', name)!.revision, arguments: args, signal });
   const result = (value: unknown) => {
     const invocationId = JSON.parse(sent[0]).payload.invocationId;
-    service.handleMessage('phone', { protocolVersion: 2, messageId: randomUUID(), type: 'tool.received', sentAt: Date.now(), payload: { invocationId } });
-    service.handleMessage('phone', { protocolVersion: 2, messageId: randomUUID(), type: 'tool.result', sentAt: Date.now(), payload: { invocationId, content: [{ type: 'json', value }] } });
+    service.handleMessage('phone', { protocolVersion: 3, messageId: randomUUID(), type: 'tool.received', sentAt: Date.now(), payload: { invocationId } });
+    service.handleMessage('phone', { protocolVersion: 3, messageId: randomUUID(), type: 'tool.result', sentAt: Date.now(), payload: { invocationId, content: [{ type: 'json', value }] } });
   };
   return { registry, service, sent, invoke, result };
 }

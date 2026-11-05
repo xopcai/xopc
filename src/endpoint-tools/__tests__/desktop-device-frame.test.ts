@@ -10,12 +10,12 @@ const pair = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
 const privateKey = pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
 const publicKey = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
 const binding = { gatewayId: randomUUID(), deviceId: randomUUID(), clientId: randomUUID(), connectionInstanceId: randomUUID(), authorizationRevision: 7 };
-const frame = (): ClientEndpointMessage => ({ protocolVersion: 2, messageId: randomUUID(), type: 'tool.result', sentAt: Date.now(),
+const frame = (): ClientEndpointMessage => ({ protocolVersion: 3, messageId: randomUUID(), type: 'tool.result', sentAt: Date.now(),
   payload: { invocationId: randomUUID(), content: [{ type: 'text', text: 'Synthetic result' }] } });
 
 it('reuses signed device frames for bounded terminal output without relaxing the existing realtime frame budget', () => {
   const signer = new DesktopDeviceFrameSigner(binding, privateKey), verifier = new DesktopDeviceFrameVerifier(binding, publicKey);
-  const message: ClientEndpointMessage = { protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), type: 'terminal.event',
+  const message: ClientEndpointMessage = { protocolVersion: 3, messageId: randomUUID(), sentAt: Date.now(), type: 'terminal.event',
     payload: { invocationId: randomUUID(), event: { event: 'output', sessionId: randomUUID(), generation: randomUUID(), connectionInstanceId: binding.connectionInstanceId,
       sequence: 1, bytes: Buffer.alloc(16384, 7).toString('base64') } } };
   const wire = signer.sign(message);

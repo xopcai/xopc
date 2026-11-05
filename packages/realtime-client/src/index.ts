@@ -4,6 +4,7 @@ import type {
   ServerEndpointMessage,
 } from '@xopcai/endpoint-tools-protocol';
 import {
+  ENDPOINT_V3_CAPABILITY,
   REALTIME_CAPABILITIES,
   REALTIME_MAX_CLIENT_FRAME_BYTES,
   REALTIME_PROTOCOL_VERSION,
@@ -229,6 +230,7 @@ export class RealtimeClient {
       }
       const capabilities = REALTIME_CAPABILITIES.filter(capability =>
         issuedTicket.realtime.capabilities.includes(capability));
+      if (endpoint && !capabilities.includes(ENDPOINT_V3_CAPABILITY)) throw new RealtimeConnectionError('GATEWAY_UPDATE_REQUIRED', false);
       if (closed || !this.shouldReconnect || generation !== this.generation) return;
       this.offeredCapabilities = new Set(capabilities ?? []);
       socket = this.options.createWebSocket(this.options.getWebSocketUrl());

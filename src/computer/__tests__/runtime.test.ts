@@ -1,3 +1,4 @@
+import { EndpointTaskTargetService } from '../../endpoint-tools/task-targets.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ComputerBroker } from '../broker.js';
 import { ComputerRuntime, ComputerUseInputSchema } from '../runtime.js';
@@ -52,18 +53,29 @@ function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
     if (frame) { frames.set('frame', frame.bytes); content.push({ type: 'file', fileId: 'frame', mimeType: frame.mimeType }); }
     return { content, invocationId: 'invoke' };
   });
-  let toolAvailable = true;
-  const endpointIdentity = { kind: 'desktop', endpointId: 'endpoint', principalId: undefined as string | undefined };
-  const endpoint = { bindings: { get: () => undefined, resolve: () => undefined }, registry: {
+  let toolAvailable = true, executionActor = 'owner';
+  const endpointIdentity = { kind: 'desktop', endpointId: 'endpoint', connectionId: 'epoch-1', principalId: undefined as string | undefined };
+  const endpoint = { targets: undefined as EndpointTaskTargetService | undefined, registry: {
     get: (id: string) => id === endpointIdentity.endpointId ? endpointIdentity : undefined, getTool: () => toolAvailable ? ({ revision: 'r1' }) : undefined },
     invocations: { invoke }, uploads: { takeComputerFrame: (id: string) => { const value = frames.get(id); frames.delete(id); return value; } } };
+  endpoint.targets = new EndpointTaskTargetService(endpoint.registry as never, () => undefined, () => executionActor);
   const runtime = new ComputerRuntime(endpoint as any, () => config as any, () => endpointIdentity.endpointId, flowStore);
   cleanups.push(async () => { await runtime.shutdown(); await broker.dispose(); });
-  return { runtime, broker, driver, frames, images, config, fetch, invoke, endpointIdentity, setToolAvailable: (value: boolean) => { toolAvailable = value; }, approve: (value = true) => approve(value),
+  return { runtime, broker, driver, frames, images, config, fetch, invoke, endpointIdentity, targets: endpoint.targets, setExecutionActor: (actor: string) => { executionActor = actor; }, setToolAvailable: (value: boolean) => { toolAvailable = value; }, approve: (value = true) => approve(value),
     discover: async () => (await runtime.execute('owner', { op: 'discover', query: '飞书' })).apps![0].appRef,
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
 describe('agent to broker desktop lifecycle', () => {
+  it('rejects a different actor before an existing GUI session can observe or dispatch', async () => {
+    const f = fixture();
+    await f.open(await f.discover());
+    const sent = f.invoke.mock.calls.length;
+    f.setExecutionActor('another-device');
+    await expect(f.runtime.execute('owner', { op: 'observe' })).rejects.toThrow('COMPUTER_TARGET_SCOPE_CHANGED');
+    expect(f.invoke).toHaveBeenCalledTimes(sent);
+    expect(await f.runtime.close('owner')).toBe(true);
+  });
+
   it('reuses the last in-exec observation for verify and supports a forced independent read', async () => {
     const f = fixture();
     const observe = f.driver.observe.getMockImplementation()!;
@@ -721,6 +733,9 @@ describe('verified flow lifecycle through the desktop broker', () => {
     state.reset();
     f.endpointIdentity.endpointId = identity === 'other-same-endpoint' ? 'endpoint' : 'new-connection';
     f.endpointIdentity.principalId = identity === 'same' ? 'authenticated-device' : identity.startsWith('other') ? 'another-device' : undefined;
+    f.endpointIdentity.connectionId = 'epoch-2';
+    await expect(f.discover()).rejects.toThrow('COMPUTER_TARGET_OFFLINE');
+    f.targets.select('owner', f.endpointIdentity.endpointId);
     await f.open(await f.discover());
     const calls = f.fetch.mock.calls.length, inputs = f.driver.perform.mock.calls.length;
     if (identity === 'same') {
@@ -736,6 +751,7 @@ describe('verified flow lifecycle through the desktop broker', () => {
     await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
     const saved = await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Legacy navigation' });
     state.reset(); f.endpointIdentity.endpointId = 'reconnected'; f.endpointIdentity.principalId = 'authenticated-device';
+    f.endpointIdentity.connectionId = 'epoch-2'; f.targets.select('owner', f.endpointIdentity.endpointId);
     await f.open(await f.discover()); const calls = f.fetch.mock.calls.length;
     await expect(f.runtime.execute('owner', { ...navigationStep, flowId: saved.savedFlow!.id })).rejects.toThrow('COMPUTER_FLOW_TARGET_MISMATCH');
     expect(f.fetch).toHaveBeenCalledTimes(calls);

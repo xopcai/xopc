@@ -1,9 +1,8 @@
 export { EndpointToolRuntime } from './runtime.js';
 export {
-  EndpointBindingService,
-  type EndpointSessionBinding,
-  type EndpointSessionBindingStore,
-} from './binding-service.js';
+  EndpointTaskTargetService,
+  type EndpointExecutionTarget,
+} from './task-targets.js';
 export {
   EndpointInvocationService,
   EndpointToolExecutionError,

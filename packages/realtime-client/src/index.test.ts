@@ -140,6 +140,19 @@ describe('RealtimeClient', () => {
     client.disconnect();
   });
 
+  it('rejects an older Gateway before opening a device Endpoint socket', async () => {
+    const createWebSocket = vi.fn(() => new FakeSocket()), onStateChange = vi.fn();
+    const client = new RealtimeClient({ clientId: 'device', clientKind: 'web', getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => issuedTicket({ capabilities: [] }), createWebSocket, onStateChange });
+    client.setEndpoint({ createHello: async () => ({ principalId: 'p', endpointId: 'e', connectionInstanceId: crypto.randomUUID(),
+      displayName: 'Device', kind: 'web', platform: 'web', appVersion: '1', availability: 'foreground', nonce: 'fixture-nonce',
+      signedAt: Date.now(), signature: 'fixture-signature', tools: [] }), onReady: vi.fn(), onMessage: vi.fn() });
+    client.connect();
+    await vi.waitFor(() => expect(onStateChange).toHaveBeenCalledWith('error', 'GATEWAY_UPDATE_REQUIRED'));
+    expect(createWebSocket).not.toHaveBeenCalled();
+    client.disconnect();
+  });
+
   it('only sends capabilities advertised by the ticket issuer', async () => {
     const oldSocket = new FakeSocket();
     const oldClient = new RealtimeClient({
