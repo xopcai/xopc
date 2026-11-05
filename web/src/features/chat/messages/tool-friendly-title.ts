@@ -1,5 +1,7 @@
 import { resolveToolActivity, type ToolActivity } from '@xopcai/gateway-contract';
 
+import { parseToolResult } from '@/features/chat/tool-results/parse-tool-result';
+
 export type FriendlyToolTitleLabels = {
   searchedWeb: string;
   searchedMemory?: string;
@@ -21,6 +23,14 @@ export type ToolExecutionState = 'running' | 'completed';
 type ToolExecutionLabel = Record<ToolExecutionState, string>;
 
 export type ToolExecutionLabels = {
+  operations: Record<'computer' | 'browser' | 'automation' | 'job' | 'todo', Record<string, ToolExecutionLabel>>;
+  manualSubjects: Record<string, string>;
+  manualFor: string;
+  resultsFound: string;
+  noResults: string;
+  noActionsExecuted: string;
+  actionsExecuted: string;
+  stepFailed: string;
   phone?: Record<'discover' | 'set_mode' | 'open' | 'observe' | 'step' | 'run' | 'status' | 'pause' | 'request_user' | 'resume' | 'cancel' | 'close' | 'default', ToolExecutionLabel>;
   builtins: Record<
     'automation' | 'browser' | 'clarification' | 'codeExecution' | 'toolSearch' | 'computer' | 'connection' | 'desktopPet' | 'delegation' | 'diagnostics' | 'imageGeneration' | 'imageInspection' | 'job' | 'manual' | 'mediaRead' | 'mediaSend' | 'memoryMaintenance' | 'memoryRead' | 'memoryUpdate' | 'message' | 'publish' | 'planning' | 'review' | 'sessionRecall' | 'sessionSearch' | 'sessionStatus' | 'share' | 'skillInstall' | 'skillManage' | 'skillSearch' | 'skillView' | 'speech' | 'structuredOutput' | 'todo' | 'webExtract',
@@ -78,6 +88,26 @@ function normalizedToolId(name: string): string {
   return name.trim().toLowerCase().replace(/-/g, '_').split('__').at(-1)?.split('.').at(-1) ?? '';
 }
 
+type PublicTool = { name: string; input?: unknown; result?: unknown; details?: unknown; activity?: ToolActivity };
+
+export function isPreparationTool(name: string): boolean {
+  return ['tool_search', 'tool_manual', 'skill_view'].includes(normalizedToolId(name));
+}
+
+function operationDetails(block: PublicTool): Record<string, unknown> | null {
+  const result = parseToolResult(block.result);
+  return result.details ?? asRecord(result.text) ?? asRecord(block.result) ?? asRecord(block.details);
+}
+
+export function isPublicToolFailure(block: PublicTool & { status: string }): boolean {
+  if (block.status === 'error' || block.activity?.status === 'failed') return true;
+  const id = normalizedToolId(block.name);
+  if (block.status !== 'done' || (id !== 'browser_use' && id !== 'computer_use')) return false;
+  const details = operationDetails(block);
+  return id === 'browser_use' ? details?.ok === false
+    : typeof details?.errorCode === 'string' || typeof details?.scriptError === 'string';
+}
+
 const BUILTIN_SEMANTICS: Readonly<Record<string, keyof ToolExecutionLabels['builtins']>> = {
   automation: 'automation',
   browser_use: 'browser',
@@ -124,21 +154,57 @@ export function hasSpecificToolExecutionTitle(name: string): boolean {
   return id === 'xopc_use' || id === 'phone_use' || id in BUILTIN_SEMANTICS;
 }
 
-/** Public activity titles never interpolate arbitrary tool names or input previews. */
+/** Public titles use known operation names and bounded result metadata. */
 export function getPublicToolExecutionTitle(
-  block: { name: string; input?: unknown; activity?: ToolActivity },
+  block: PublicTool,
   state: ToolExecutionState,
   labels: ToolExecutionLabels,
   friendlyLabels: FriendlyToolTitleLabels,
   runningLabels: Record<ToolDisplayKind, string>,
 ): string {
+  const id = normalizedToolId(block.name);
+  if (id === 'automation' || id === 'managed_job' || id === 'todo') {
+    const input = asRecord(block.input);
+    const group = id === 'managed_job' ? 'job' : id;
+    const operation = id === 'todo' && input ? (Array.isArray(input.todos) ? 'write' : 'read') : input?.action;
+    const operations = labels.operations[group];
+    if (typeof operation === 'string' && Object.hasOwn(operations, operation)) return operations[operation][state];
+  }
+  if (id === 'computer_use' || id === 'browser_use') {
+    const input = asRecord(block.input);
+    const isComputer = id === 'computer_use';
+    const operations = labels.operations[isComputer ? 'computer' : 'browser'];
+    const operation = isComputer ? input?.op : input?.action;
+    if (typeof operation === 'string' && Object.hasOwn(operations, operation)) {
+      if (state === 'completed' && isComputer && (operation === 'run' || operation === 'exec')) {
+        const count = asRecord(operationDetails(block)?.run)?.actionsExecuted;
+        if (count === 0) return labels.noActionsExecuted;
+        if (typeof count === 'number' && Number.isSafeInteger(count) && count > 0) {
+          return fill(labels.actionsExecuted, { count: String(count) });
+        }
+      }
+      return operations[operation][state];
+    }
+  }
+  if (id === 'tool_manual') {
+    const subject = asRecord(block.input)?.tool;
+    if (typeof subject === 'string' && Object.hasOwn(labels.manualSubjects, subject)) {
+      return fill(labels.manualFor, { title: labels.builtins.manual[state], tool: labels.manualSubjects[subject] });
+    }
+  }
   if (hasSpecificToolExecutionTitle(block.name)) {
-    const id = normalizedToolId(block.name);
     return getToolExecutionTitle(block.name, id === 'xopc_use' || id === 'phone_use' ? block.input : undefined,
       state, labels, friendlyLabels, block.activity);
   }
   const kind = classifyToolDisplay(block.name, block.activity);
   if (state === 'running') return runningLabels[kind];
+  if (kind === 'webSearch') {
+    const count = block.activity?.count;
+    if (block.activity?.status === 'empty') return labels.noResults;
+    if (block.activity?.status === 'completed' && count !== undefined && count > 0) {
+      return fill(labels.resultsFound, { count: String(count) });
+    }
+  }
   if (kind === 'other') return labels.fallback.completed.replace(/\{\{name\}\}/g, '').trim();
   return getFriendlyToolTitle(block.name, friendlyLabels, block.activity);
 }

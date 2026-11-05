@@ -25,6 +25,8 @@ import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/too
 import {
   getPublicToolExecutionTitle,
   hasSpecificToolExecutionTitle,
+  isPreparationTool,
+  isPublicToolFailure,
   type ToolExecutionLabels,
 } from '@/features/chat/messages/tool-friendly-title';
 import {
@@ -235,17 +237,18 @@ export function AssistantStepsBlock({
     friendlyTitleLabels, clusterLabels.ing),
   [friendlyTitleLabels, stepLabels.toolActivity, clusterLabels.ing]);
 
+  const runningTools = activityBlocks.filter(block => block.type === 'tool_use'
+    && (block.status === 'running' || block.activity?.status === 'running'));
+  const runningCount = runningTools.length;
   const streamingHeaderText = useMemo(() => {
     if (!anyActive) return null;
-    const runningCount = activityBlocks.filter(block => block.type === 'tool_use'
-      && (block.status === 'running' || block.activity?.status === 'running')).length;
     if (runningCount > 1) return chatLabels.activityParallel.replace('{{count}}', String(runningCount));
     return buildStepsRoundStreamingSummary(
       activityBlocks,
       clusterLabels.ing,
       (block) => semanticTitle(block, 'running'),
     );
-  }, [anyActive, activityBlocks, clusterLabels, semanticTitle, chatLabels.activityParallel]);
+  }, [anyActive, runningCount, activityBlocks, clusterLabels, semanticTitle, chatLabels.activityParallel]);
   const pendingLabel = pendingStatus === 'sending' ? chatLabels.sendingLabel
     : pendingStatus === 'waiting' ? (waitingLong ? chatLabels.waitingLongLabel : chatLabels.waitingLabel) : null;
   const fallbackLabel = activityBlocks.some((block) => block.type === 'thinking' && block.streaming)
@@ -297,10 +300,13 @@ export function AssistantStepsBlock({
     </>;
   }
 
+  const showTimelineHeading = expanded && (!simplified || showRawToolData)
+    && runningCount === 1 && timelineItems.includes(runningTools[0]);
   const headerMain = anyActive ? (
     <>
+      {showTimelineHeading ? <span className="min-w-0 flex-1 truncate">{stepLabels.workLogTitle}</span> : null}
       <span
-        className="block min-w-0 flex-1 truncate whitespace-nowrap"
+        className={showTimelineHeading ? 'sr-only' : 'block min-w-0 flex-1 truncate whitespace-nowrap'}
         data-status-phase={statusPhase}
         role="status"
         aria-live="polite"
@@ -342,14 +348,15 @@ export function AssistantStepsBlock({
 
   if (simplified && !showRawToolData) {
     const failedWithoutAnswer = !anyActive && !answerStarted && workLog.items.some(item => item.type === 'tool_use'
-      && (item.status === 'error' || item.activity?.status === 'failed'));
+      && isPublicToolFailure(item));
     const needsAttention = workLog.status === 'failed' || workLog.status === 'partial' || failedWithoutAnswer;
     const progress = (anyActive && !answerStarted) || needsAttention
       ? publicAssistantProgress(workLog.items, block => {
-        if (block.status === 'error' || block.activity?.status === 'failed') return null;
+        if (isPublicToolFailure(block) || isPreparationTool(block.name)) return null;
         if (!hasSpecificToolExecutionTitle(block.name) && classifyTool(block.name, block.activity) === 'other') return null;
-        return semanticTitle(block, anyActive && (block.status === 'running' || block.activity?.status === 'running')
+        const title = semanticTitle(block, anyActive && (block.status === 'running' || block.activity?.status === 'running')
           ? 'running' : 'completed');
+        return anyActive && title === activeHeaderLabel ? null : title;
       }) : [];
     return (
       <div data-assistant-work-log data-work-log-status={workLog.status} className="my-1 min-w-0 w-full text-left">
@@ -532,13 +539,14 @@ function ToolActivityGroup({ tools, runActive, labels, language, renderTool }: {
 }) {
   const running = runActive && tools.some(tool => tool.status === 'running' || tool.activity?.status === 'running');
   const chat = messages(language).chat;
-  const summary = summarizeToolActivity(tools, tool => getPublicToolExecutionTitle(tool,
+  const activeTool = running ? [...tools].reverse().find(tool => tool.status === 'running' || tool.activity?.status === 'running') : undefined;
+  const remainingTools = tools.filter(tool => tool !== activeTool);
+  const summary = summarizeToolActivity(remainingTools, tool => getPublicToolExecutionTitle(tool,
     runActive && (tool.status === 'running' || tool.activity?.status === 'running') ? 'running' : 'completed',
     labels.toolActivity, labels, labels.runningActions), {
     repeated: chat.activityRepeated, more: chat.activityMore, failed: chat.activityFailed,
     separator: language === 'zh' ? '、' : ', ',
   });
-  const activeTool = running ? [...tools].reverse().find(tool => tool.status === 'running' || tool.activity?.status === 'running') : undefined;
   if (tools.length === 1) return renderTool(tools[0]);
   return (
     <div data-activity-group className="min-w-0 space-y-1.5">
@@ -548,7 +556,7 @@ function ToolActivityGroup({ tools, runActive, labels, language, renderTool }: {
           <span>{summary}</span>
         </summary>
         <div className="mt-2 min-w-0 space-y-2.5 border-l border-edge-subtle pl-3">
-          {tools.filter(tool => tool !== activeTool).map(renderTool)}
+          {remainingTools.map(renderTool)}
         </div>
       </details>
     </div>
@@ -728,7 +736,7 @@ function StepRow({
 
 
   const isStreaming = runActive && (block.status === 'running' || block.activity?.status === 'running');
-  const isError = block.status === 'error' || block.activity?.status === 'failed';
+  const isError = surfaceOnly ? block.status === 'error' || block.activity?.status === 'failed' : isPublicToolFailure(block);
   const failureSummary = isError
     ? toolFailureSummary(block, stepLabels.toolError, cardLabels)
     : '';
@@ -769,9 +777,12 @@ function StepRow({
     unknownTool: stepLabels.unknownTool,
   };
 
-  const title = isError ? stepLabels.toolError : memoryActivity?.title
-    ?? getPublicToolExecutionTitle(block, isStreaming ? 'running' : 'completed',
-      stepLabels.toolActivity, friendlyLabels, stepLabels.runningActions);
+  const operationTitle = getPublicToolExecutionTitle(block, isStreaming || isError ? 'running' : 'completed',
+    stepLabels.toolActivity, friendlyLabels, stepLabels.runningActions);
+  const title = isError
+    ? (kind === 'other' && !hasSpecificToolExecutionTitle(block.name) ? stepLabels.toolError
+      : stepLabels.toolActivity.stepFailed.replace('{{operation}}', operationTitle.replace(/^正在|[.…]+$/g, '')))
+    : memoryActivity?.title ?? operationTitle;
   const Icon = isError ? TriangleAlert : kind.includes('Search') || kind === 'search' ? Search
     : kind === 'readFile' ? BookOpen : kind === 'editFile' || kind === 'writeFile' ? FilePenLine
       : kind === 'fetchUrl' || kind === 'openUrl' ? Globe : Circle;

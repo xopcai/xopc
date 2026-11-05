@@ -219,7 +219,7 @@
     "thoughtsStreaming": "Analyzing…",
     "rawThinking": "Raw thinking data (developer)",
     "activityRepeated": "{{action}} ({{count}} times)",
-    "activityMore": "{{count}} more",
+    "activityMore": "{{count}} more steps",
     "activityFailed": "Unfinished: {{count}}",
     "activityEarlier": "View earlier steps",
     "activityParallel": "Working on {{count}} items…",
@@ -290,6 +290,65 @@
     "stepFetchUrl": "Reviewed webpage",
     "stepUnknownTool": "Other actions",
     "toolActivity": {
+      "operations": {
+        "automation": {
+          "create": {"running": "Creating an automation…", "completed": "Created an automation"},
+          "update": {"running": "Updating an automation…", "completed": "Updated an automation"},
+          "delete": {"running": "Deleting an automation…", "completed": "Deleted an automation"},
+          "pause": {"running": "Pausing an automation…", "completed": "Paused an automation"},
+          "resume": {"running": "Resuming an automation…", "completed": "Resumed an automation"},
+          "run": {"running": "Triggering an automation run…", "completed": "Triggered an automation run"},
+          "rerun": {"running": "Retrying an automation run…", "completed": "Triggered an automation retry"},
+          "cancel": {"running": "Canceling an automation run…", "completed": "Canceled an automation run"},
+          "history": {"running": "Checking automation run history…", "completed": "Checked automation run history"},
+          "list": {"running": "Checking available automations…", "completed": "Checked available automations"}
+        },
+        "job": {
+          "start": {"running": "Starting a background job…", "completed": "Started a background job"},
+          "status": {"running": "Checking background job status…", "completed": "Checked background job status"},
+          "wait": {"running": "Waiting for a background job update…", "completed": "Checked for a background job update"},
+          "stdin": {"running": "Sending input to a background job…", "completed": "Sent input to a background job"},
+          "cancel": {"running": "Canceling a background job…", "completed": "Requested background job cancellation"},
+          "list": {"running": "Checking background jobs…", "completed": "Checked background jobs"}
+        },
+        "todo": {
+          "read": {"running": "Checking the to-do list…", "completed": "Checked the to-do list"},
+          "write": {"running": "Updating the to-do list…", "completed": "Updated the to-do list"}
+        },
+        "computer": {
+          "discover": {"running": "Finding available desktop apps…", "completed": "Checked available desktop apps"},
+          "open": {"running": "Connecting to an app window…", "completed": "Connected to an app window"},
+          "observe": {"running": "Inspecting the app window…", "completed": "Inspected the app window"},
+          "step": {"running": "Attempting the next UI action…", "completed": "Attempted the next UI action"},
+          "run": {"running": "Running a series of UI actions…", "completed": "Ran UI actions"},
+          "exec": {"running": "Running a desktop UI script…", "completed": "Ran a desktop UI script"},
+          "close": {"running": "Ending desktop control…", "completed": "Ended desktop control"},
+          "report": {"running": "Checking the desktop activity report…", "completed": "Checked the desktop activity report"},
+          "flows": {"running": "Looking up saved desktop workflows…", "completed": "Checked saved desktop workflows"},
+          "forget_flow": {"running": "Removing a saved desktop workflow…", "completed": "Processed a desktop workflow removal request"}
+        },
+        "browser": {
+          "observe": {"running": "Inspecting the web page…", "completed": "Inspected the web page"},
+          "navigate": {"running": "Opening a web page…", "completed": "Opened a web page"},
+          "click": {"running": "Clicking a page control…", "completed": "Clicked a page control"},
+          "fill": {"running": "Filling a web form field…", "completed": "Filled a web form field"},
+          "select": {"running": "Selecting a page option…", "completed": "Selected a page option"},
+          "press": {"running": "Sending a keystroke to the page…", "completed": "Sent a keystroke to the page"},
+          "scroll": {"running": "Scrolling the page…", "completed": "Scrolled the page"},
+          "wait": {"running": "Waiting for the page to update…", "completed": "Checked the page state"},
+          "upload": {"running": "Selecting files for a web form…", "completed": "Selected files for a web form"},
+          "tabs": {"running": "Working with browser tabs…", "completed": "Handled browser tabs"},
+          "sequence": {"running": "Running a series of browser actions…", "completed": "Ran a series of browser actions"},
+          "close": {"running": "Ending browser control…", "completed": "Ended browser control"}
+        }
+      },
+      "resultsFound": "Results found: {{count}}",
+      "noResults": "No matching results",
+      "noActionsExecuted": "No UI actions performed",
+      "actionsExecuted": "UI actions performed: {{count}}",
+      "manualSubjects": {"computer_use": "Computer control", "browser_use": "Browser control", "phone_use": "Phone control", "xopc_use": "Workspace actions", "web_search": "Web search"},
+      "manualFor": "{{title}} · {{tool}}",
+      "stepFailed": "Step failed · {{operation}}",
       "builtins": {
         "codeExecution": { "running": "Running code…", "completed": "Ran code" },
         "toolSearch": { "running": "Finding available tools…", "completed": "Found available tools" },
@@ -1101,7 +1160,7 @@
       "recentFiles": "Recent",
       "recentBadge": "Recent"
     },
-    "contextReferencesMore": "{{count}} more",
+    "contextReferencesMore": "{{count}} more steps",
     "contextReferencesLess": "Show fewer",
     "callFailed": "Call unavailable",
     "callDisconnected": "Call disconnected",
