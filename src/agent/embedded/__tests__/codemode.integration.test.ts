@@ -178,7 +178,7 @@ it.each(['android', 'ios', 'harmonyos'])('preserves a %s turn across device disc
   };
   const transport = { readyState: 1, close: vi.fn(), send: vi.fn() };
   registry.register(hello, 'first', transport);
-  const endpointTools = { registry, bindings, grants: { find: () => undefined, candidates: () => [] }, invocations } as unknown as EndpointToolRuntime;
+  const endpointTools = { registry, bindings, targets: bindings, grants: { find: () => undefined, candidates: () => [] }, invocations } as unknown as EndpointToolRuntime;
   const gateway = createDefaultExternalToolGatewayTools({ workspace: cwd, getConfig: () => undefined,
     getCurrentContext: () => ({ conversationId: params.conversationId, channel: 'webchat', chatId: 'chat',
       origin: { type: 'endpoint', endpointId } }), endpointTools, canAccessMemory: () => false });
@@ -390,7 +390,7 @@ it('discovers and calls real device services through pi, keeps confirmation and 
     });
   } };
   registry.register(hello, 'connection-1', socket);
-  const endpointTools = { registry, bindings, grants: { find: () => undefined, candidates: () => [] }, invocations } as unknown as EndpointToolRuntime;
+  const endpointTools = { registry, bindings, targets: bindings, grants: { find: () => undefined, candidates: () => [] }, invocations } as unknown as EndpointToolRuntime;
   const gateway = createDefaultExternalToolGatewayTools({ workspace: cwd, getConfig: () => undefined,
     getCurrentContext: () => ({ conversationId: params.conversationId, channel: 'webchat', chatId: 'chat',
       origin: { type: 'endpoint', endpointId: 'phone' } }), endpointTools, canAccessMemory: () => false });
@@ -430,8 +430,8 @@ it('discovers and calls real device services through pi, keeps confirmation and 
   expect(JSON.stringify(reloaded.calls[0])).not.toContain(read.name);
   expect(JSON.stringify(reloaded.calls[1])).toContain(read.name);
   const reboundEvictions = getEmbeddedSessionRunnerStats().evictions;
-  bindings.bind(params.conversationId, 'phone');
-  expect(getEmbeddedSessionRunnerStats().evictions).toBe(reboundEvictions + 1);
+  bindings.select(params.conversationId, 'phone');
+  expect(getEmbeddedSessionRunnerStats().evictions).toBe(reboundEvictions);
   const invalidations = vi.fn();
   const release = getXopcToolMetadata(replacement[0])!.subscribeInvalidation!(invalidations);
   registry.disconnect('phone', 4003, 'Device revoked');
