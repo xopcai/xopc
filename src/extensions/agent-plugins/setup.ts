@@ -244,7 +244,8 @@ export class PluginSetupService {
       try { const current = this.get(id, owner); if (!current || current.id !== job.id || current.revision !== job.revision || current.state === 'cancelled' || !this.store.receipt(id)) controller.abort(); } catch { controller.abort(); }
     }, 500);
     cancellationPoll.unref();
-    job.state = 'running'; job.resources = 'running'; delete job.error; this.write(job);
+    job.state = 'running'; job.resources = 'running'; delete job.error;
+    if (!refreshOnly) this.write(job);
     try {
       if (!refreshOnly) await preparePluginResources(this.store, plugin, controller.signal);
       job.resources = 'ready';
@@ -275,7 +276,8 @@ export class PluginSetupService {
           server.state = result.state; server.toolCount = result.toolCount;
           const persisted = this.get(id, owner);
           if (!persisted || persisted.id !== job.id || persisted.revision !== job.revision || persisted.state === 'cancelled' || !this.store.receipt(id)) throw new Error('Setup changed');
-          this.config(id, job.packageRevision, config); this.write(job);
+          this.config(id, job.packageRevision, config);
+          if (!refreshOnly) this.write(job);
         }
         for (const target of job.authorizations) {
           const declaration = declarations.find(value => value.id === target.id)!;

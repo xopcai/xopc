@@ -1,3 +1,4 @@
+import type { PluginMcpOrigin } from '../../extensions/agent-plugins/refresh-runtime-access.js';
 import { lookup } from 'node:dns';
 import { resolve } from 'node:path';
 
@@ -18,16 +19,31 @@ export function retryAfter(value: string | null, now = Date.now()): number | und
 }
 
 /** Adapts native transports; credentials are already resolved by prepareNativeMcpConfig. */
-export function createXopcMcpTransport(diagnostics: McpTransportDiagnostics = {}): McpTransportFactory {
+export function createXopcMcpTransport(diagnostics: McpTransportDiagnostics = {}, assertPluginCallAccess?: (origin: PluginMcpOrigin) => Promise<void>): McpTransportFactory {
   return (entry, cwd, authProvider) => {
     const config = entry.config as unknown as Record<string, unknown>;
+    const plugin = config.xopcPlugin as PluginMcpOrigin | undefined;
+    const guard = (transport: McpTransport) => {
+      if (plugin && assertPluginCallAccess) {
+        const send = transport.send.bind(transport);
+        transport.send = async (message, options) => {
+          if ('method' in message && message.method === 'tools/call') {
+            options?.signal?.throwIfAborted();
+            await assertPluginCallAccess(plugin);
+            options?.signal?.throwIfAborted();
+          }
+          return send(message, options);
+        };
+      }
+      return transport;
+    };
     if (!('url' in config)) {
       const env = Object.fromEntries(Object.entries(config.env as Record<string, string> ?? {}));
       const command = String(config.command), args = config.args as string[] | undefined, directory = resolve(cwd, String(config.cwd ?? '.'));
-      if (!config.xopcManagedStdio) return new StdioTransport({ command, args, cwd: directory, env, stderr: 'pipe' });
+      if (!config.xopcManagedStdio) return guard(new StdioTransport({ command, args, cwd: directory, env, stderr: 'pipe' }));
       const inherited = Object.fromEntries(['PATH', 'LANG', 'LC_ALL', 'SystemRoot', 'TEMP', 'TMP'].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
-      return new StdioTransport({ command: process.execPath, args: ['--input-type=module', '-e', mcpStdioSupervisor, JSON.stringify({ command, args: args ?? [], cwd: directory })],
-        cwd: directory, env: { ...inherited, NPM_CONFIG_USERCONFIG: process.platform === 'win32' ? 'NUL' : '/dev/null', ...env }, inheritEnv: false, stderr: 'pipe', closeTimeoutMs: 2000 });
+      return guard(new StdioTransport({ command: process.execPath, args: ['--input-type=module', '-e', mcpStdioSupervisor, JSON.stringify({ command, args: args ?? [], cwd: directory })],
+        cwd: directory, env: { ...inherited, NPM_CONFIG_USERCONFIG: process.platform === 'win32' ? 'NUL' : '/dev/null', ...env }, inheritEnv: false, stderr: 'pipe', closeTimeoutMs: 2000 }));
     }
     const url = new URL(String(config.url));
     const headers = config.headers as Record<string, string> | undefined;
@@ -56,7 +72,7 @@ export function createXopcMcpTransport(diagnostics: McpTransportDiagnostics = {}
     else transport = new StreamableHttpTransport({ url, headers, authProvider, fetch: fetcher, openGetStream: !diagnostics.probe, reconnect: diagnostics.probe ? { maxRetries: 0 } : undefined });
     const close = transport.close.bind(transport);
     transport.close = async () => { try { await close(); } finally { await dispatcher.close(); } };
-    return transport;
+    return guard(transport);
   };
 }
 

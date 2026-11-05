@@ -1,3 +1,4 @@
+import type { PluginMcpOrigin } from '../../extensions/agent-plugins/refresh-runtime-access.js';
 import type { PluginServer } from '../../extensions/agent-plugins/validation.js';
 import { validPluginOAuthReference, type PluginOAuthReference } from '../../extensions/agent-plugins/connection-reuse.js';
 import { mkdirSync } from 'node:fs';
@@ -19,7 +20,7 @@ export function getNativePiAgentDir(): string {
   return directory;
 }
 
-export type NativeMcpConfig = LoadedMcpConfig & { credentials?: NativeMcpCredentials; credentialAliases?: Record<string, string>; automationSourceRunId?: string };
+export type NativeMcpConfig = LoadedMcpConfig & { credentials?: NativeMcpCredentials; credentialAliases?: Record<string, string>; automationSourceRunId?: string; assertPluginCallAccess?: (origin: PluginMcpOrigin) => Promise<void> };
 
 /** Only projects host configuration and secret references; all MCP execution belongs to pi. */
 export async function prepareNativeMcpConfig(config: Config, workspaceDir: string, agentId?: string): Promise<NativeMcpConfig> {
@@ -47,7 +48,10 @@ export async function prepareNativeMcpConfig(config: Config, workspaceDir: strin
     if (typeof value.displayName === 'string' && value.displayName.trim()) projected.description = `Service: ${value.displayName.trim()}. ${typeof value.description === 'string' ? value.description : ''}`.trim();
     if (projected.type === 'streamable-http') projected.type = 'http';
     if (projected.type === 'sse') { projected.type = 'http'; projected.xopcLegacySse = true; }
-    const plugin = raw.xopcPlugin as { id: string; revision: string } | undefined;
+    const plugin = raw.xopcPlugin as PluginMcpOrigin | undefined;
+    if (plugin?.id && plugin.revision && plugin.serverName) {
+      projected.xopcPlugin = { id: plugin.id, revision: plugin.revision, serverName: plugin.serverName };
+    }
     result.servers.push({ name, config: projected as unknown as McpServerConfig, source: plugin?.revision ? `plugin:${plugin.id}@${plugin.revision}` : 'xopc.json', scope: 'extension' });
   }
   if (aliases.size) {
