@@ -21,7 +21,7 @@ export function GatewayConnectLanding() {
   const l = m.gatewayLanding;
   const appearanceLabel = m.appearanceSettings.pageTitle;
 
-  if (window.electronAPI?.gateway?.connection) return <div className="flex min-h-full flex-col justify-center p-6"><div className="mx-auto w-full max-w-2xl"><DesktopGatewayConnection /></div></div>;
+  if (typeof window !== 'undefined' && window.electronAPI?.gateway?.connection) return <div className="flex min-h-full flex-col justify-center p-6"><div className="mx-auto w-full max-w-2xl"><DesktopGatewayConnection /></div></div>;
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col bg-surface-base">

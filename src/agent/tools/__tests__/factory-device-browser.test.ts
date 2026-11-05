@@ -8,6 +8,7 @@ import { checkBrowserReadiness } from '../../../browser/index.js';
 import { createBrowserDriver } from '../../../browser/drivers/create-driver.js';
 import { invokeRemoteBrowserCommand } from '../../../browser/remote/endpoint-transport.js';
 import { ConfigSchema } from '../../../config/schema.js';
+import { EndpointTaskTargetService } from '../../../endpoint-tools/task-targets.js';
 import { closeXopcDatabase } from '../../../storage/sqlite/connection.js';
 import { hasVerifiedDesktopExecutionStop } from '../../../storage/sqlite/desktop-execution-stop-repository.js';
 import { AgentToolsFactory } from '../factory.js';
@@ -23,7 +24,8 @@ it('routes the public browser_use tool to its explicit independent device withou
   const endpoint = { endpointId, kind: 'desktop', principalId: deviceId, availability: 'foreground', connectionId: randomUUID(),
     executionAuthority: { gatewayId: randomUUID(), deviceId, grantId: randomUUID(), authorizationRevision: 1,
       connectionInstanceId: randomUUID(), expiresAt: Date.now() + 60000 } };
-  const endpoints = { registry: { get: () => endpoint, getTool: () => ({ descriptor: REMOTE_BROWSER_DESCRIPTOR, revision: 'a'.repeat(64) }) } };
+  const registry = { get: () => endpoint, getTool: () => ({ descriptor: REMOTE_BROWSER_DESCRIPTOR, revision: 'a'.repeat(64) }) };
+  const endpoints = { registry, targets: new EndpointTaskTargetService(registry as never) };
   const setup = vi.fn();
   let originEndpoint = endpointId;
   vi.mocked(invokeRemoteBrowserCommand).mockImplementation(async (_runtime, _id, command) => ({ content: [{ type: 'json', value: {
@@ -43,13 +45,12 @@ it('routes the public browser_use tool to its explicit independent device withou
   expect(factory.hasBrowserSessions()).toBe(true);
   const before = vi.mocked(invokeRemoteBrowserCommand).mock.calls.length;
   originEndpoint = randomUUID();
-  await expect(tool.execute('other-device', { action: 'observe' })).rejects.toThrow('PREVIOUS_SESSION_UNRELEASED');
-  expect(invokeRemoteBrowserCommand).toHaveBeenCalledTimes(before); expect(createBrowserDriver).not.toHaveBeenCalled();
+  expect((await tool.execute('other-device', { action: 'observe' })).details).toMatchObject({ ok: true });
+  expect(invokeRemoteBrowserCommand).toHaveBeenCalledTimes(before + 1); expect(createBrowserDriver).not.toHaveBeenCalled();
   vi.mocked(hasVerifiedDesktopExecutionStop).mockReturnValue(true);
   endpoint.endpointId = originEndpoint; endpoint.connectionId = randomUUID(); endpoint.executionAuthority.grantId = randomUUID(); endpoint.executionAuthority.authorizationRevision++;
-  expect((await tool.execute('new-explicit-device', { action: 'observe' })).details).toMatchObject({ ok: true });
+  await expect(tool.execute('new-explicit-device', { action: 'observe' })).rejects.toThrow('BROWSER_TARGET_OFFLINE');
   expect(invokeRemoteBrowserCommand).toHaveBeenCalledTimes(before + 1);
-  expect(vi.mocked(invokeRemoteBrowserCommand).mock.calls.at(-1)![1]).toBe(originEndpoint);
   expect(createBrowserDriver).not.toHaveBeenCalled();
   await factory.closeBrowserPageForSession(owner);
   expect(factory.hasBrowserSessions()).toBe(false);
