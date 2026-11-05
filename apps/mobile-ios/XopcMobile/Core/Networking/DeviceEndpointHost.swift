@@ -123,7 +123,8 @@ actor DeviceEndpointHost {
         let ticket: GatewayEnvelope<RealtimeTicket> = try await client.request(path: "/api/realtime/tickets", method: "POST",
                                                                                body: client.encoder.encode(RealtimeTicketCommand(clientId: endpointId, clientKind: "mobile", protocolVersion: 2)))
         guard let ticket = ticket.payload, ticket.realtime.minVersion <= 2, ticket.realtime.maxVersion >= 2,
-              ticket.realtime.capabilities.contains("endpoint.tools.v3") else {
+              ticket.realtime.capabilities.contains("endpoint.tools.v3")
+        else {
             throw GatewayClientError.invalidResponse
         }
         let catalogJson = compatibility.payload?.catalogJson ?? "[]"
@@ -171,8 +172,7 @@ actor DeviceEndpointHost {
                     guard self.socket === socket else { break }
                     try await send("realtime.ping", [:])
                     try await publishAppProviderState(socket)
-                }
-                catch { break }
+                } catch { break }
             }
         }
     }
@@ -185,7 +185,7 @@ actor DeviceEndpointHost {
         guard self.socket === socket, appProviderAccepted else { return }
         appProviderSequence += 1
         try await send("provider.state.changed", ["localId": DeviceToolCatalog.appProviderId, "catalogRevision": 1,
-                                                  "sequence": appProviderSequence, "validForMs": 30_000,
+                                                  "sequence": appProviderSequence, "validForMs": 30000,
                                                   "reason": foreground ? "ready" : "needs_foreground"])
     }
 
