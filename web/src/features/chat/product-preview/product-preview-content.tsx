@@ -13,6 +13,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { AutomationRunPreview } from './automation-run-preview';
+import { ProjectPreview } from './project-preview';
 import { ProductPreviewSkeleton } from './product-preview-modal';
 import type { ProductPreviewTarget } from './product-preview-route';
 
@@ -60,16 +61,7 @@ function ProductDetailsPreview({ target }: { target: ProductPreviewTarget }) {
   const metaClass = 'text-sm text-fg-muted';
   const sectionClass = 'space-y-3';
 
-  if (data.kind === 'project') {
-    const project = data.value;
-    return <div className="space-y-6">
-      <div className={sectionClass}><h2 className={headingClass}>{project.name}</h2><p className={metaClass}>{stateLabel(project.status)} · {stateLabel(project.health)}</p>{markdown(project.description)}{markdown(project.brief)}{markdown(project.outcome)}</div>
-      {project.successCriteria?.length > 0 && <section className={sectionClass}><h3 className="font-medium text-fg">{zh ? '完成标准' : 'Success criteria'}</h3><ul className="list-disc space-y-2 pl-5 text-sm text-fg">{project.successCriteria.map((item, index) => <li key={index}>{item}</li>)}</ul></section>}
-      {project.milestones?.length > 0 && <section className={sectionClass}><h3 className="font-medium text-fg">{zh ? '里程碑' : 'Milestones'}</h3>{project.milestones.slice(0, 8).map((item) => <p key={item.id} className={metaClass}>{item.title} · {stateLabel(item.status)}</p>)}</section>}
-      {project.recentUpdates?.[0] && <section className={sectionClass}><h3 className="font-medium text-fg">{zh ? '最近进展' : 'Latest update'}</h3>{markdown(project.recentUpdates[0].summary)}</section>}
-    </div>;
-  }
-
+  if (data.kind === 'project') return <ProjectPreview project={data.value} target={target} />;
 
   if (data.kind === 'automation') {
     const automation = data.value;
