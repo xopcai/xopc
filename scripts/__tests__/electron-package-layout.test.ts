@@ -19,10 +19,10 @@ function fixture() {
 describe('desktop package resource gate', () => {
   it('hashes the local and remote resources and every supported SQL upgrade', () => {
     const value = fixture(); const before = value.verify();
-    value.files.set('out/preload/remote-shell.js', Buffer.from('different bytes'));
-    expect(value.verify().files['out/preload/remote-shell.js']).not.toBe(before.files['out/preload/remote-shell.js']);
+    value.files.set('out/preload/gateway-connections.js', Buffer.from('different bytes'));
+    expect(value.verify().files['out/preload/gateway-connections.js']).not.toBe(before.files['out/preload/gateway-connections.js']);
   });
-  it.each(['out/main/remote-shell-worker.js', 'out/preload/shell.cjs', 'out/preload/remote-shell.js', 'out/server/schema.sql', 'out/server/upgrades/261_schema.sql', 'dist/gateway/static/root/assets/app-123.js'])('rejects incomplete package: %s', path => {
+  it.each(['out/preload/gateway-connections.js', 'out/server/schema.sql', 'out/server/upgrades/261_schema.sql', 'dist/gateway/static/root/assets/app-123.js'])('rejects incomplete package: %s', path => {
     const value = fixture(); value.files.delete(path);
     expect(value.verify).toThrow(/Missing or empty/);
   });
@@ -53,7 +53,7 @@ describe('desktop package resource gate', () => {
   });
   it('rejects missing lazy chunks and stale SQL bytes even when entry resources exist', () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-s4-layout-'));
-    const paths = ['out/main/chunks/lazy.js', 'out/preload/shell.cjs', 'out/server/schema.sql', 'dist/gateway/static/root/index.html',
+    const paths = ['out/main/chunks/lazy.js', 'out/preload/connections.cjs', 'out/server/schema.sql', 'dist/gateway/static/root/index.html',
       'src/storage/sqlite/schema.sql', 'src/storage/sqlite/upgrades/261_schema.sql'];
     try {
       for (const path of paths) { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), 'current'); }

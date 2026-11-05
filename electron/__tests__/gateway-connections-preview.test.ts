@@ -63,7 +63,7 @@ describe('remote connection preview', () => {
     const profile = (await store.load())[0];
     const encrypted = await readFile(join(root, 'credentials', `${profile.credentialRef}.bin`));
     expect(encrypted.includes(Buffer.from('test-secret'))).toBe(false);
-    expect(await manager.select(1, saved.profiles[0].id)).toMatchObject({ epoch: 2, status: 'remote-chat-unavailable' });
+    expect(await manager.select(1, saved.profiles[0].id)).toMatchObject({ epoch: 2, status: 'configured' });
     const restarted = new GatewayConnectionPreview(store, credentials);
     await restarted.initialize();
     expect(restarted.snapshot()).toMatchObject({ status: 'unselected', epoch: 0, profiles: [{ hasCredential: true }] });

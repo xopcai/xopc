@@ -65,12 +65,8 @@ function verifyUnpackedAppLayout(asarPath) {
   const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
   const required = [
     'out/preload/connections.cjs',
-    'out/preload/shell.cjs',
     'out/preload/gateway-connections.html',
     'out/preload/gateway-connections.js',
-    'out/preload/remote-shell.html',
-    'out/preload/remote-shell.js',
-    'out/preload/remote-shell.css',
     'out/preload/screen-capture.html',
     'out/server/index.js',
     'out/server/codemode-worker.js',
@@ -123,7 +119,7 @@ function main() {
     const read = path => readFileSync(join(tmp, path));
     const manifest = verifyDesktopPackageLayout(read, supportedUpgradeFiles(root));
     verifyCanonicalSqlBytes(read, root);
-    console.log(`[verify-electron-asar-deps] OK — ${Object.keys(manifest.files).length} desktop UI, Shell, Gateway and SQL resources`);
+    console.log(`[verify-electron-asar-deps] OK — ${Object.keys(manifest.files).length} desktop UI, connection UI, Gateway and SQL resources`);
     const artifacts = verifyDesktopArtifactBytes(read, root);
     console.log(`[verify-electron-asar-deps] OK — ${Object.keys(artifacts.files).length} packaged files match built runtime bytes`);
     if (process.platform === 'darwin' && asarPath.includes('Contents/Resources/')) {
