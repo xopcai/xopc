@@ -13,10 +13,10 @@ function contractFields(descriptor: Record<string, unknown> | null | undefined):
 
 /** Compare executable contracts, not release labels (dev builds may share a version). */
 export async function assertGatewayCompatibility(
-  connection: { port: number; token: string },
+  connection: { port?: number; origin?: string; token: string },
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`${localGatewayOrigin(connection)}/api/endpoint-tools/compatibility`, {
+  const response = await fetch(`${connection.origin ?? localGatewayOrigin({ port: connection.port! })}/api/endpoint-tools/compatibility`, {
     headers: { Authorization: `Bearer ${connection.token}` },
     redirect: 'error',
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),

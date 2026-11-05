@@ -10,19 +10,19 @@
     "connectors": "连接",
     "channels": "消息通道",
     "devices": "设备",
-    "gateway": "本机服务",
+    "gateway": "Gateway",
     "runtimes": "运行环境",
     "tunnel": "远程访问",
     "remote-access": "远程访问",
     "shares": "分享",
     "personal": "Ada",
-    "system": "系统授权",
-    "desktop-pet": "宠物",
+    "system": "本机权限",
+    "desktop-pet": "桌面宠物",
     "desktop-app": "应用数据",
     "cron": "定时任务",
     "skills": "技能",
     "keyboard-shortcuts": "快捷键",
-    "imports": "导入能力"
+    "imports": "导入"
   },
   "settingsPage": {
     "comingSoon": "设置 · {{title}}（即将推出）。"
@@ -822,7 +822,7 @@
     "resetPosition": "重置位置"
   },
   "systemSettings": {
-    "title": "系统授权",
+    "title": "本机权限",
     "behaviorGroup": "应用行为",
     "desktopOnlyTitle": "仅桌面端",
     "desktopOnlyBody": "系统集成功能仅在 xopc Electron 桌面版中可用。",
@@ -1042,10 +1042,11 @@
     "capabilities": "智能",
     "integrations": "集成",
     "agent": "智能体能力",
-    "connection": "设备与连接",
+    "connection": "连接与设备",
     "automation": "自动化",
-    "diagnostics": "诊断",
-    "extensions": "插件"
+    "diagnostics": "高级与诊断",
+    "extensions": "插件设置",
+    "data": "数据与用量"
   },
   "cronSettingsPage": {
     "title": "定时任务",

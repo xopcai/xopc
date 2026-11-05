@@ -379,6 +379,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   gateway: {
+    connection: () => ipcRenderer.invoke('gateway:connection'),
+    switchConnection: (input: { mode: 'local' | 'remote'; origin?: string; credential?: string }) => ipcRenderer.invoke('gateway:switch', input),
     getCredential: () => ipcRenderer.invoke('gateway:get-credential') as Promise<string | undefined>,
     onExited: (
       callback: (detail: {

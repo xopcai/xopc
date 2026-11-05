@@ -1,6 +1,6 @@
 {
   "sessions": {
-    "title": "Sessions",
+    "title": "Conversation history",
     "tabsAriaLabel": "Session sections",
     "tabsSessions": "Sessions",
     "tabsSessionsHint": "Browse, filter, continue, archive, export, and delete conversation sessions.",

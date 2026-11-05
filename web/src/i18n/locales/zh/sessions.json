@@ -1,6 +1,6 @@
 {
   "sessions": {
-    "title": "会话",
+    "title": "会话记录",
     "tabsAriaLabel": "会话分区",
     "tabsSessions": "会话",
     "tabsSessionsHint": "浏览、筛选、继续、归档、导出和删除对话会话。",

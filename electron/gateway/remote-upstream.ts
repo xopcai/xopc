@@ -6,7 +6,7 @@ import https from 'node:https';
 
 import { z } from 'zod';
 
-import { parseRemoteProfile } from './profiles.js';
+import { normalizeGatewayOrigin } from './desktop-settings.js';
 
 const remoteGatewayIdentitySchema = z.object({ gatewayId: z.uuid(), publicKey: z.string().min(80).max(512) });
 export type RemoteGatewayIdentity = z.infer<typeof remoteGatewayIdentitySchema>;
@@ -31,7 +31,7 @@ export class RemoteGatewayUpstream {
   constructor(readonly target: RemoteTarget) {
     this.identity = target.identity;
     if (!target.token?.trim() || Buffer.byteLength(target.token) > 8192) throw new Error('INVALID_CREDENTIAL');
-    this.origin = parseRemoteProfile({ id: '00000000-0000-0000-0000-000000000000', mode: 'remote', name: 'Gateway', origin: target.origin, transport: target.transport }).origin;
+    this.origin = normalizeGatewayOrigin(target.origin);
     if (target.transport === 'ssh') this.lookup = (hostname, options, done) => {
       lookup(hostname, { all: true }, (error, resolved) => {
         const addresses = (resolved ?? []).filter(value => ['127.0.0.1', '::1'].includes(value.address)

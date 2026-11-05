@@ -90,6 +90,8 @@ export interface ElectronStartupAPI {
 }
 
 export interface ElectronGatewayShellAPI {
+  connection(): Promise<{ mode: 'local' | 'remote'; origin?: string; remoteOrigin: string; hasCredential: boolean; endpointConnected: boolean; error?: string }>;
+  switchConnection(input: { mode: 'local' | 'remote'; origin?: string; credential?: string }): Promise<{ ok: boolean; error?: string }>;
   getCredential(): Promise<string | undefined>;
   onExited(
     callback: (detail: { code: number | null; signal: string | null }) => void,

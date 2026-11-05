@@ -13,6 +13,8 @@ import {
 import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
 import useSWR from 'swr';
 
+import { useDesktopGatewayConnection } from '@/features/gateway/use-desktop-gateway-connection';
+import { DesktopGatewayConnection } from './desktop-gateway-connection';
 import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -165,7 +167,19 @@ const initialGatewayUi: GatewayUi = {
 };
 
 export function GatewaySettingsPanel() {
+  const language = useLocaleStore(state => state.language);
+  const m = messages(language);
+  return <SettingsPageFrame gap="gap-7">
+    <SettingsPageHeader title="Gateway" subtitle={language === 'zh' ? '选择聊天与工作数据所在的服务，管理连接和服务配置。' : 'Choose where your chats and work live, and manage the connection and server settings.'} docsLink={docsGuidePageUrl(language, 'gateway')} docsLabel={m.gatewaySettings.docsLink} />
+    <DesktopGatewayConnection />
+    <GatewayServerSettingsPanel />
+  </SettingsPageFrame>;
+}
+
+function GatewayServerSettingsPanel() {
   const baseUrl = useGatewayStore((state) => state.baseUrl);
+  const { data: desktopConnection } = useDesktopGatewayConnection();
+  const remote = desktopConnection?.mode === 'remote';
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const g = m.gatewaySettings;
@@ -410,49 +424,38 @@ export function GatewaySettingsPanel() {
 
   if (!hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
+      <section className="space-y-5" aria-label={language === 'zh' ? '服务配置' : 'Server configuration'}>
         <SettingsPageHeader title={m.settingsSections.gateway} />
         <p className="text-sm text-fg-muted">{g.needToken}</p>
-      </SettingsPageFrame>
+      </section>
     );
   }
 
   if (loading) {
     return (
-      <SettingsPageFrame gap="gap-6" padding="px-3 py-8 sm:px-5 xl:px-6">
+      <section className="space-y-5" aria-label={language === 'zh' ? '服务配置' : 'Server configuration'}>
         <SettingsPageSkeleton sections={3} />
-      </SettingsPageFrame>
+      </section>
     );
   }
 
   if (!form) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
+      <section className="space-y-5" aria-label={language === 'zh' ? '服务配置' : 'Server configuration'}>
         <p className="text-sm text-fg-muted">{error ?? fetchError ?? g.loadError}</p>
         <Button type="button" variant="secondary" onClick={() => void mutate()}>
           {g.retry}
         </Button>
-      </SettingsPageFrame>
+      </section>
     );
   }
 
   return (
-    <SettingsPageFrame gap="gap-6">
-      <SettingsPageHeader
-        title={m.settingsSections.gateway}
-        docsLink={docsGuidePageUrl(language, 'gateway')}
-        docsLabel={g.docsLink}
-        actions={
-          <>
-          <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
-            {g.discard}
-          </Button>
-          <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
-            {saving ? g.saving : g.save}
-          </Button>
-          </>
-        }
-      />
+    <section className="space-y-5" aria-label={language === 'zh' ? '服务配置' : 'Server configuration'}>
+      <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-t border-edge bg-surface-panel pb-3 pt-5">
+        <div className="min-w-0 flex-1"><h2 className="text-base font-semibold text-fg">{language === 'zh' ? '服务配置' : 'Server configuration'}</h2><p className="mt-1 text-xs leading-relaxed text-fg-muted">{language === 'zh' ? (remote ? '以下设置保存在远端 Gateway，适用于连接该服务的所有客户端。' : '以下设置保存在当前 Gateway，适用于连接该服务的所有客户端。') : 'These settings are saved on the current Gateway and apply to every client connected to it.'}</p></div>
+        {dirty ? <div className="flex items-center gap-2"><Button type="button" variant="secondary" disabled={saving} onClick={discard}>{g.discard}</Button><Button type="button" variant="primary" disabled={saving} onClick={() => void save()}>{saving ? g.saving : (language === 'zh' ? '保存服务配置' : 'Save server settings')}</Button></div> : null}
+      </div>
 
       {tokenExpired ? (
         <div
@@ -473,7 +476,7 @@ export function GatewaySettingsPanel() {
 
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
-      {showRestartPrompt ? (
+      {showRestartPrompt && !remote ? (
         <div className="flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/40">
           <p className="text-xs text-amber-950 dark:text-amber-100">{g.restartHint}</p>
           <Button
@@ -504,19 +507,14 @@ export function GatewaySettingsPanel() {
         onCancel={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: false } })}
       />
 
-      <GatewaySecurityAuditCard enabled={hasToken} refreshToken={auditRefreshToken} />
       <GatewaySettingsTabNav g={g} activeTab={activeTab} visibleTabs={visibleTabs} onChange={setActiveTab} />
 
       <GatewayTabPanel g={g} id="network" activeTab={activeTab}>
-        <section className="space-y-3 rounded-xl bg-surface-hover/20 p-4">
-          <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '当前服务连接' : 'Current service connection'}</h2>
+        {!window.electronAPI?.gateway?.connection ? <section className="space-y-3 rounded-xl border border-edge p-4">
+          <h3 className="text-sm font-medium text-fg">{language === 'zh' ? '服务地址' : 'Server address'}</h3>
           <p className="break-all text-sm text-fg-muted">{baseUrl}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" onClick={() => void mutate()}>{g.retry}</Button>
-            <Button type="button" variant="secondary" onClick={() => openTokenDialog()}>{g.updateToken}</Button>
-            <Button type="button" variant="secondary" onClick={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: true } })}>{g.restartGatewayButton}</Button>
-          </div>
-        </section>
+          <div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => void mutate()}>{g.retry}</Button><Button type="button" variant="secondary" onClick={() => openTokenDialog()}>{g.updateToken}</Button></div>
+        </section> : null}
         <SettingsAdvancedSection title={language === "zh" ? "服务监听配置" : "Service listener configuration"} summary={`${form.bind} · ${form.port}`}>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -796,6 +794,7 @@ export function GatewaySettingsPanel() {
       </GatewayTabPanel>
 
       <GatewayTabPanel g={g} id="security" activeTab={activeTab}>
+        <GatewaySecurityAuditCard enabled={hasToken} refreshToken={auditRefreshToken} />
 
         <GatewaySecurityFields
           g={g}
@@ -821,7 +820,7 @@ export function GatewaySettingsPanel() {
           onSkipIdsChange={updateChannelConnectDeferSkipIds}
         />
       </GatewayTabPanel>
-    </SettingsPageFrame>
+    </section>
   );
 }
 

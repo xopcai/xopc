@@ -42,61 +42,25 @@ function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 }
 
 /** Group keys for `messages(lang).settingsNavGroups` — left rail sections + sort order. */
-export type SettingsNavGroupId =
-  | 'general'
-  | 'system'
-  | 'capabilities'
-  | 'integrations'
-  | 'connection'
-  | 'automation';
+export type SettingsNavGroupId = 'general' | 'capabilities' | 'connection' | 'data' | 'diagnostics';
 
 export type SettingsShellNavGroup = {
   id: SettingsNavGroupId;
   tabs: readonly Tab[];
 };
 
-/** Settings tabs shown only in the Electron desktop shell. */
 export const ELECTRON_ONLY_SETTINGS_TABS = new Set<Tab>([
   'settingsDesktopPet',
   'settingsDesktopApp',
 ]);
 
-/** Electron-only group — rendered above Extensions in the settings rail. */
-export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
-  id: 'system',
-  tabs: ['settingsDesktopPet', 'settingsDesktopApp'],
-};
-
-/**
- * Settings rail. Product capabilities stay visible in the default mode while
- * implementation details are progressively disclosed inside each page:
- *
- *   - `capabilities`: models plus the behavior available to every agent.
- *   - `connection`: user-facing ways to reach and share this xopc instance.
- *   - `system`: local service, runtimes, sessions, and diagnostics.
- *
- * Runtime management and diagnostics are advanced destinations; ordinary setup
- * retains dependency repair. Electron-only rows are merged by the layout.
- */
+/** Group by user intent; platform and advanced-mode visibility are applied by the rail. */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsPersonal', 'settingsSystem', 'settingsKeyboardShortcuts'] },
-  {
-    id: 'capabilities',
-    tabs: [
-      'settingsModels',
-      'settingsSearch',
-      'settingsAgentDefaults',
-    ],
-  },
-  { id: 'integrations', tabs: ['settingsAgentBrowser', 'settingsComputerUse', 'settingsPhoneUse'] },
-  {
-    id: 'connection',
-    tabs: ['settingsDevices', 'settingsTunnel', 'settingsShares'],
-  },
-  {
-    id: 'system',
-    tabs: ['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'usage', 'tracing', 'logs'],
-  },
+  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsKeyboardShortcuts', 'settingsSystem', 'settingsDesktopPet'] },
+  { id: 'capabilities', tabs: ['settingsPersonal', 'settingsModels', 'settingsSearch', 'settingsAgentDefaults'] },
+  { id: 'connection', tabs: ['settingsGateway', 'settingsDevices', 'settingsAgentBrowser', 'settingsComputerUse', 'settingsPhoneUse', 'settingsTunnel'] },
+  { id: 'data', tabs: ['settingsImports', 'sessions', 'usage', 'settingsShares', 'settingsDesktopApp'] },
+  { id: 'diagnostics', tabs: ['settingsRuntimes', 'tracing', 'logs'] },
 ] as const;
 
 /** Official docs site (VitePress `base: /xopc/`). */
