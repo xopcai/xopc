@@ -18,6 +18,20 @@ const editModeIdentity = (mode?: ComposerMode) => mode?.kind === 'editTurn' ? `t
   : mode?.kind === 'editFollowUp' ? `input:${mode.inputId}:${mode.version}` : 'compose';
 const sameItems = <T,>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 
+// A newly mounted composer must wait for the previous instance's queued writes.
+const pendingWrites = new Map<string, Promise<void>>();
+
+function enqueueWrite(scope: string, write: () => Promise<void>): Promise<void> {
+  const previous = pendingWrites.get(scope) ?? Promise.resolve();
+  const pending = previous.catch(() => {}).then(write);
+  pendingWrites.set(scope, pending);
+  const clear = () => {
+    if (pendingWrites.get(scope) === pending) pendingWrites.delete(scope);
+  };
+  void pending.then(clear, clear);
+  return pending;
+}
+
 export function usePersistedComposer(id: string | null | undefined, editor: UseComposerEditorReturn,
   attachments: UseComposerAttachmentsReturn, refs: ComposerContextRef[], setRefs: (refs: ComposerContextRef[]) => void,
   editSession?: { snapshot: () => SavedEditSession; restore: (saved: SavedEditSession) => void }): void {
@@ -29,7 +43,6 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
   const active = useRef<ActiveDraft | undefined>(undefined);
   const previousScope = useRef('');
   const [hydration, setHydration] = useState(0);
-  const writes = useRef(Promise.resolve());
 
   useLayoutEffect(() => {
     if (!scope || !id) { active.current = undefined; return; }
@@ -45,7 +58,9 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
     }
     previousScope.current = scope;
     let loaded = false;
-    void entry.storage.read().then(saved => {
+    const pendingWrite = pendingWrites.get(scope);
+    const read = pendingWrite ? pendingWrite.catch(() => {}).then(() => entry.storage.read()) : entry.storage.read();
+    void read.then(saved => {
       loaded = true;
       if (active.current !== entry) return;
       entry.receipts = saved?.intakeReceipts ?? [];
@@ -82,7 +97,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
     if (!entry || entry.scope !== scope || (!entry.ready && !entry.dirty)) return;
     const snapshot: SavedComposer = { text: editor.value, attachments: attachments.attachments, refs, editSession: current.current.editSession?.snapshot() };
     const payload = snapshot.text || snapshot.attachments.length || refs.length || snapshot.editSession?.mode.kind !== undefined && snapshot.editSession.mode.kind !== 'compose' ? snapshot : undefined;
-    writes.current = writes.current.catch(() => {}).then(() => entry.storage.write(payload ? { ...payload, intakeReceipts: entry.receipts } : entry.receipts.length ? { text: '', attachments: [], refs: [], intakeReceipts: entry.receipts } : undefined))
+    void enqueueWrite(scope, () => entry.storage.write(payload ? { ...payload, intakeReceipts: entry.receipts } : entry.receipts.length ? { text: '', attachments: [], refs: [], intakeReceipts: entry.receipts } : undefined))
       .catch(error => { console.warn('Composer draft persistence failed', error); });
   }, [scope, hydration, editor.value, attachments.attachments, refs, editorIdentity]);
 
@@ -90,7 +105,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
     const entry = active.current;
     if (!entry?.ready || !scope) return;
     return registerExternalIntakeReceiver(scope, async (intakeId, incoming) => {
-      await writes.current;
+      await pendingWrites.get(scope)?.catch(() => {});
       if (active.current !== entry) throw new Error('Conversation changed. Please retry.');
       if (entry.receipts.includes(intakeId)) return;
       const live = current.current;
@@ -101,9 +116,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
       entry.receipts.push(intakeId);
       try {
         const snapshot: SavedComposer = { text: live.editor.valueRef.current, attachments: live.attachments.attachmentsRef.current, refs: live.refs, intakeReceipts: entry.receipts.slice(), editSession: live.editSession?.snapshot() };
-        const pending = writes.current.catch(() => {}).then(() => entry.storage.write(snapshot));
-        writes.current = pending;
-        await pending;
+        await enqueueWrite(scope, () => entry.storage.write(snapshot));
       } catch (error) {
         entry.receipts = entry.receipts.filter(id => id !== intakeId);
         throw error;

@@ -34,32 +34,49 @@ export async function submitQueuedInput(id: string, proposed: AppendCommand, isC
     if (!payload?.inputState) throw new Error('Gateway returned an invalid input state');
     return payload.inputState;
   };
-  if (pending) {
-    const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(id)}/input-receipts/${encodeURIComponent(command.clientMessageId)}`));
+  const lookupReceipt = async (signal?: AbortSignal) => {
+    const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(id)}/input-receipts/${encodeURIComponent(command.clientMessageId)}`), { signal });
     const json = await response.json() as { payload?: ReceiptPayload; error?: { code?: string; message?: string } };
     assertScope();
-    if (response.ok) {
-      const state = validate(json.payload);
-      await clearPendingSessionCommand(id, command.clientMessageId);
-      assertScope();
-      return state;
-    }
+    if (response.ok) return validate(json.payload);
     if (response.status !== 404 || json.error?.code !== 'NOT_RECEIVED') throw new Error(json.error?.message ?? 'Input receipt lookup failed');
+    return undefined;
+  };
+  const confirm = async (state: unknown) => {
+    assertScope();
+    await clearPendingSessionCommand(id, command.clientMessageId);
+    assertScope();
+    return state;
+  };
+  if (pending) {
+    const state = await lookupReceipt();
+    if (state !== undefined) return confirm(state);
   }
   const { origin: _origin, ...durable } = command;
   await savePendingSessionCommand(id, durable);
   assertScope();
-  const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(id)}/inputs`), {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command),
-  });
-  const json = await response.json() as { payload?: ReceiptPayload; error?: string | { message?: string } };
-  assertScope();
-  if (!response.ok) {
-    if (response.status >= 400 && response.status < 500) await clearPendingSessionCommand(id, command.clientMessageId);
-    throw new Error(typeof json.error === 'string' ? json.error : json.error?.message ?? 'Message was not accepted');
+  let response: Response | undefined;
+  let state: unknown;
+  try {
+    response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(id)}/inputs`), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command),
+    });
+    const json = await response.json() as { payload?: ReceiptPayload; error?: string | { message?: string } };
+    assertScope();
+    if (!response.ok) {
+      throw new Error(typeof json.error === 'string' ? json.error : json.error?.message ?? 'Message was not accepted');
+    }
+    state = validate(json.payload);
+  } catch (error) {
+    assertScope();
+    if (response && response.status >= 400 && response.status < 500 && response.status !== 408) {
+      await clearPendingSessionCommand(id, command.clientMessageId);
+      throw error;
+    }
+    // The gateway may have committed the input before the POST response was lost.
+    state = await lookupReceipt(AbortSignal.timeout(3000)).catch(() => undefined);
+    assertScope();
+    if (state === undefined) throw error;
   }
-  const state = validate(json.payload);
-  await clearPendingSessionCommand(id, command.clientMessageId);
-  assertScope();
-  return state;
+  return confirm(state);
 }
