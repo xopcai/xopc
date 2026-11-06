@@ -25,14 +25,15 @@ beforeEach(() => { vi.resetAllMocks(); });
 describe('durable follow-up submission', () => {
   it.each(['accepted', 'not-received'])('recovers a steer submission after a lost reply (%s)', async state => {
     const steer = { ...command, delivery: 'steer' as const, interrupt: false };
-    vi.mocked(apiFetch).mockRejectedValueOnce(new Error('Connection lost'));
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error('Connection lost'))
+      .mockRejectedValueOnce(new Error('Connection still unavailable'));
     await expect(submitQueuedInput('conversation', steer, () => true)).rejects.toThrow('Connection lost');
     const frozen = vi.mocked(savePendingSessionCommand).mock.calls[0][1];
     vi.mocked(readPendingSessionCommand).mockResolvedValue(frozen);
     if (state === 'not-received') vi.mocked(apiFetch).mockResolvedValueOnce(Response.json({ error: { code: 'NOT_RECEIVED' } }, { status: 404 }));
     vi.mocked(apiFetch).mockResolvedValueOnce(Response.json(accepted()));
     expect(await submitQueuedInput('conversation', { ...steer, clientMessageId: 'new' }, () => true)).toEqual({ revision: 10 });
-    if (state === 'not-received') expect(JSON.parse(vi.mocked(apiFetch).mock.calls[2][1]!.body as string)).toEqual(steer);
+    if (state === 'not-received') expect(JSON.parse(vi.mocked(apiFetch).mock.calls[3][1]!.body as string)).toEqual(steer);
     expect(clearPendingSessionCommand).toHaveBeenCalledWith('conversation', 'original');
   });
 
@@ -48,6 +49,21 @@ describe('durable follow-up submission', () => {
     await expect(submitQueuedInput('conversation', command, () => true)).rejects.toThrow('Connection lost');
     expect(savePendingSessionCommand).toHaveBeenCalledWith('conversation', durable());
     expect(clearPendingSessionCommand).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['lost connection', () => Promise.reject(new Error('Connection lost'))],
+    ['truncated response', () => Promise.resolve(new Response('{"payload":', { status: 202 }))],
+    ['proxy timeout', () => Promise.resolve(Response.json({ error: 'Gateway timeout' }, { status: 504 }))],
+  ] as const)('confirms an accepted input in the same submission after a %s', async (_name, submit) => {
+    vi.mocked(apiFetch).mockImplementationOnce(submit).mockResolvedValueOnce(Response.json(accepted()));
+
+    await expect(submitQueuedInput('conversation', command, () => true)).resolves.toEqual({ revision: 10 });
+
+    expect(vi.mocked(apiFetch).mock.calls.map(([url, init]) => [new URL(String(url)).pathname, init?.method ?? 'GET'])).toEqual([
+      ['/api/sessions/conversation/inputs', 'POST'],
+      ['/api/sessions/conversation/input-receipts/original', 'GET'],
+    ]);
+    expect(clearPendingSessionCommand).toHaveBeenCalledExactlyOnceWith('conversation', 'original');
   });
   it('recovers an accepted receipt after refresh without reposting or changing its identity', async () => {
     vi.mocked(readPendingSessionCommand).mockResolvedValue(durable());

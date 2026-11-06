@@ -51,6 +51,27 @@ it('restores persisted content and removes the record when the composer is clear
   await act(async () => edit(''));
   expect(storage.write).toHaveBeenLastCalledWith('one', undefined);
 });
+it('waits for a sent draft to be deleted before restoring a remounted composer', async () => {
+  await render('one');
+  await restore('one', 'older draft');
+  let finishSave!: () => void;
+  storage.write.mockImplementationOnce(() => new Promise<void>(resolve => { finishSave = resolve; }));
+  await act(async () => edit('/skill:review https://example.test/pull/123'));
+  await act(async () => edit(''));
+  await act(async () => root.render(null));
+
+  storage.reads.delete('one');
+  await render('one');
+  const readBeforeDeletion = storage.reads.get('one');
+  if (readBeforeDeletion) {
+    await restore('one', '/skill:review https://example.test/pull/123');
+  }
+  await act(async () => finishSave());
+  if (!readBeforeDeletion) await act(async () => storage.reads.get('one')!(undefined));
+
+  expect(storage.write).toHaveBeenLastCalledWith('one', undefined);
+  expect(text).toBe('');
+});
 it('does not overwrite typing while storage is opening', async () => {
   await render('one'); await act(async () => edit('new typing'));
   await restore('one', 'older draft');
