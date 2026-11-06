@@ -315,6 +315,19 @@ describe('TaskApplicationService', () => {
     expect(new TaskCollaborationRepository().recent(run.taskId)[0].body.length).toBeLessThanOrEqual(8000);
   });
 
+  it('keeps a cleared criterion pending after a successful automatic verification', () => {
+    const { service, task, run } = createRunningTask('cleared-criterion');
+    const current = new TaskRepository().require(task.id);
+    const reviews = new TaskCriterionReviewRepository();
+    reviews.set({ task: current, expectedVersion: current.version, criterionIndex: 0,
+      status: 'unverified', actor: { kind: 'user', id: 'owner' } });
+
+    const result = service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt });
+
+    expect(result).toMatchObject({ ok: true, model: { task: { phase: 'review' } } });
+    expect(reviews.allPassed(current)).toBe(false);
+  });
+
   it.each(['manual', 'verified_then_review', 'verified_auto'] as const)('honors current human criterion reviews under %s before completing a task', (acceptancePolicy) => {
     const service = new TaskApplicationService();
     const created = service.create({

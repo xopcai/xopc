@@ -19,6 +19,13 @@ function decisionScore(item: HomeDecision): number {
   return 50;
 }
 
+export function compareHomeDecisions(left: HomeDecision, right: HomeDecision, now: number): number {
+  const deadline = (item: HomeDecision) => item.dueAt !== undefined && item.dueAt <= now + 24 * 60 * 60_000
+    ? item.dueAt : Infinity;
+  return (deadline(left) - deadline(right)) || Number(right.urgency === 'now') - Number(left.urgency === 'now')
+    || decisionScore(right) - decisionScore(left) || right.updatedAt - left.updatedAt;
+}
+
 function decisionKey(item: HomeDecision): string {
   const title = item.title.trim().toLocaleLowerCase();
   return item.response
@@ -33,12 +40,14 @@ export class AttentionGovernor {
     includeAll?: boolean;
     maxDecisions?: number;
     maxAttention?: number;
+    nowMs?: number;
   }): AttentionProjection {
     const maxDecisions = Math.max(1, Math.min(20, input.maxDecisions ?? 7));
     const maxAttention = Math.max(1, Math.min(10, input.maxAttention ?? 5));
     const seen = new Set<string>();
+    const now = input.nowMs ?? Date.now();
     const eligible = [...input.decisions]
-      .sort((left, right) => decisionScore(right) - decisionScore(left) || right.updatedAt - left.updatedAt)
+      .sort((left, right) => compareHomeDecisions(left, right, now))
       .filter((item) => {
         const key = decisionKey(item);
         if (seen.has(key)) return false;
@@ -54,7 +63,7 @@ export class AttentionGovernor {
       attention,
       policy: {
         visibleDecisionCount: decisions.length,
-        suppressedDecisionCount: Math.max(0, input.decisions.length - decisions.length),
+        suppressedDecisionCount: eligible.length - decisions.length,
         visibleAttentionCount: attention.length,
         suppressedAttentionCount: Math.max(0, input.attention.length - attention.length),
       },

@@ -116,7 +116,7 @@ export function DatePicker({
           collisionBoundary={portalContainer ?? undefined}
           className={cn(
             popoverZ,
-            'max-h-[var(--radix-popover-content-available-height)] w-[19rem] overflow-y-auto rounded-2xl border border-edge bg-surface-overlay p-3 shadow-float outline-none',
+            'max-h-[var(--radix-popover-content-available-height)] w-[19rem] max-w-[var(--radix-popover-content-available-width)] overflow-y-auto rounded-2xl border border-edge bg-surface-overlay p-3 shadow-float outline-none',
           )}
         >
           <div className="flex h-10 items-center justify-between gap-2 px-1">
@@ -162,7 +162,7 @@ export function DatePicker({
                   disabled={isDisabled}
                   aria-label={new Intl.DateTimeFormat(locale, { dateStyle: 'full' }).format(date)}
                   className={cn(
-                    'mx-auto flex size-9 items-center justify-center rounded-xl text-sm tabular-nums text-fg transition-colors',
+                    'mx-auto flex h-9 w-full max-w-9 items-center justify-center rounded-xl text-sm tabular-nums text-fg transition-colors',
                     'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     outsideMonth && 'text-fg-disabled',
                     isDisabled && 'cursor-not-allowed opacity-35 hover:bg-transparent',

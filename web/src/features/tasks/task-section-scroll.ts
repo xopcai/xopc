@@ -3,6 +3,12 @@ export interface TaskSectionScroll {
   isComplete: () => boolean;
 }
 
+export function findTaskScroller(pane: HTMLElement): HTMLElement | null {
+  let scroller: HTMLElement | null = pane;
+  while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+  return scroller;
+}
+
 /** Scroll only the task pane, leaving the dialog, page and adjacent chat in place. */
 export function scrollTaskSection(nav: HTMLElement | null, id: string): TaskSectionScroll | undefined {
   const pane = nav?.closest<HTMLElement>('.task-detail-scroll');
@@ -10,8 +16,7 @@ export function scrollTaskSection(nav: HTMLElement | null, id: string): TaskSect
     .find(item => item.dataset.taskSection === id);
   if (!target || !pane) return;
   if (target instanceof HTMLDetailsElement) target.open = true;
-  let scroller: HTMLElement | null = pane;
-  while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+  const scroller = findTaskScroller(pane);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!scroller) {
     target.scrollIntoView({ block: 'start', behavior: reducedMotion ? 'instant' : 'smooth' });

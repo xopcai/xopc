@@ -4,12 +4,16 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TaskDetailPage } from '../task-detail-page';
+import { TaskDetailModal, TaskDetailPage } from '../task-detail-page';
 import { commandTask, reviewTaskCriterion, type TaskDetail } from '@/features/tasks/home-api';
 import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { taskCopy } from '@/features/tasks/task-copy';
 
 const state = vi.hoisted(() => ({ detail: {} as TaskDetail, mutate: vi.fn(), automations: [] as Automation[], schedulesLoading: false }));
+vi.mock('@/components/ui/date-time-picker', () => ({
+  DateTimePicker: ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) =>
+    <input aria-label={label} data-test-date-time-picker value={value} onChange={event => onChange(event.target.value)} />,
+}));
 vi.mock('@/features/tasks/use-task-detail', () => ({ useTaskDetail: () => ({ data: state.detail, mutate: state.mutate }) }));
 vi.mock('swr', async () => {
   const { useState } = await import('react');
@@ -45,6 +49,7 @@ describe('task detail action-first layout', () => {
   let root: ReturnType<typeof createRoot>;
   const copy = taskCopy('zh');
   const button = (label: string) => [...container.querySelectorAll('button')].find((item) => item.textContent === label)!;
+  const checkbox = () => container.querySelector<HTMLInputElement>('input[type=checkbox]')!;
   const render = async () => { await act(async () => root.render(<MemoryRouter initialEntries={['/tasks/task-1']}><Routes><Route path="/tasks/:taskId" element={<TaskDetailPage />} /></Routes></MemoryRouter>)); };
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -72,6 +77,37 @@ describe('task detail action-first layout', () => {
     expect(container.textContent).toContain(copy.taskProperties);
     expect(container.textContent).toContain(copy.taskRelations);
     expect(container.querySelector('textarea[aria-label="任务留言"]')).not.toBeNull();
+  });
+
+  it('moves the task name into the dialog header after the large title scrolls away', async () => {
+    let update: ((isIntersecting: boolean, bottom: number) => void) | undefined;
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe(target: Element) {
+        if (target.matches('.task-detail-scroll > header')) {
+          update = (isIntersecting, bottom) => this.callback([
+            { isIntersecting, boundingClientRect: { bottom } } as IntersectionObserverEntry,
+          ], this as unknown as IntersectionObserver);
+        }
+      }
+      unobserve() {}
+      disconnect() {}
+    });
+    try {
+      await act(async () => root.render(<MemoryRouter><TaskDetailModal taskId="task-1" backgroundPath="/tasks" onClose={vi.fn()} /></MemoryRouter>));
+      const header = document.querySelector('[data-task-header-compact]')!;
+      expect(header.getAttribute('data-task-header-compact')).toBe('false');
+      act(() => update!(false, 80));
+      expect(header.getAttribute('data-task-header-compact')).toBe('false');
+      act(() => update!(false, -1));
+      expect(header.getAttribute('data-task-header-compact')).toBe('true');
+      expect(header.querySelector('[aria-hidden="false"]')?.textContent).toBe('Prepare report');
+      act(() => update!(true, 80));
+      expect(header.getAttribute('data-task-header-compact')).toBe('false');
+      expect(header.querySelector('[aria-hidden="false"]')?.textContent).toBe('任务详情');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('opens a collapsed section from navigation and supports repeated clicks', async () => {
@@ -178,7 +214,7 @@ describe('task detail action-first layout', () => {
     state.detail.task.phase = 'review'; state.detail.allowedCommands = ['start', 'close'];
     await render();
     expect(button(copy.runTask)).toBeUndefined();
-    expect(button('验收通过，完成任务').disabled).toBe(true);
+    expect(button('完成任务')).toBeUndefined();
     const acceptance = container.querySelector<HTMLElement>(`[aria-label="${copy.successDefinition}"]`)!;
     acceptance.scrollIntoView = vi.fn();
     act(() => button('去验收').click());
@@ -191,43 +227,34 @@ describe('task detail action-first layout', () => {
     expect(document.body.textContent).toContain(copy.deleteTask);
   });
 
-  it('lets a user accept an unverified automatic criterion and then complete the task', async () => {
+  it('closes the task on the last checkbox without a second command', async () => {
     state.detail.task.phase = 'review';
     state.detail.task.contract!.acceptancePolicy = 'verified_auto';
     state.detail.allowedCommands = ['close'];
-    vi.mocked(reviewTaskCriterion).mockImplementation(async () => {
-      state.detail = { ...state.detail, task: { ...state.detail.task, version: 4 },
+    vi.mocked(reviewTaskCriterion).mockImplementation(async (_taskId, _index, status) => {
+      state.detail = { ...state.detail, task: { ...state.detail.task, version: 5, phase: 'closed', resolution: 'done' },
         criterionReviews: [{ criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1,
-          status: 'passed', reviewedBy: { kind: 'user', id: 'owner' }, reviewedAt: 1 }] };
+          status, reviewedBy: { kind: 'user', id: 'owner' }, reviewedAt: 1 }] };
       return state.detail;
     });
     await render();
-    expect(button('验收通过，完成任务').disabled).toBe(true);
-    expect(button('标记未通过')).toBeDefined();
-    await act(async () => button('确认通过').click());
+    expect(button('完成任务')).toBeUndefined();
+    expect(checkbox().checked).toBe(false);
+    await act(async () => checkbox().click());
     expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'passed', 3, 1);
     await render();
-    expect(container.textContent).toContain('人工判定');
-    expect(button('更改判定')).toBeDefined();
-    expect(button('确认通过')).toBeUndefined();
-    await act(async () => button('验收通过，完成任务').click());
-    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'close', resolution: 'done' }, 4);
+    expect(checkbox().checked).toBe(true);
+    expect(checkbox().disabled).toBe(true);
+    expect(button('完成任务')).toBeUndefined();
+    expect(commandTask).not.toHaveBeenCalled();
   });
 
-  it('hides criterion review controls for closed tasks', async () => {
+  it('keeps criterion checkboxes read-only for closed tasks', async () => {
     state.detail.task.phase = 'closed';
     await render();
-    expect(button('确认通过')).toBeUndefined();
-    expect(button('标记未通过')).toBeUndefined();
-  });
-
-  it('allows completion only after all criteria passed', async () => {
-    state.detail.task.phase = 'review'; state.detail.allowedCommands = ['close'];
-    state.detail.criterionReviews = [{ criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1, status: 'passed', reviewedAt: 1 }] as TaskDetail['criterionReviews'];
-    await render();
-    expect(button('去验收')).toBeDefined();
-    await act(async () => button('验收通过，完成任务').click());
-    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'close', resolution: 'done' }, 3);
+    expect(checkbox().disabled).toBe(true);
+    await act(async () => checkbox().click());
+    expect(reviewTaskCriterion).not.toHaveBeenCalled();
   });
 
   it('keeps main sections readable while collapsing detailed evidence', async () => {
@@ -253,15 +280,17 @@ describe('task detail action-first layout', () => {
     expect(followUp.textContent).toContain('Choose internal or public release');
     expect(followUp.querySelector('a')?.getAttribute('href')).toBe('/chat/task/task-1');
     const acceptance = container.querySelector(`[aria-label="${copy.successDefinition}"]`)!;
-    expect(acceptance.querySelectorAll('summary')[0].textContent).toBe('验收 · 0/2');
+    expect(acceptance.querySelector('[aria-live=polite]')?.textContent).toBe('0/2');
     expect(acceptance.textContent.split(note)).toHaveLength(2);
-    const evidencePanels = [...acceptance.querySelectorAll('summary')].filter((item) => item.textContent.startsWith('查看依据'));
+    const evidencePanels = [...acceptance.querySelectorAll('li > details > summary')];
     expect(evidencePanels).toHaveLength(2);
+    expect(evidencePanels.map(item => item.textContent)).toEqual(['Report saved', 'Evidence checked']);
     for (const summary of evidencePanels) expect((summary.parentElement as HTMLDetailsElement).open).toBe(false);
     const toolbar = container.querySelector('[aria-label="任务操作"]')!;
     expect(toolbar.textContent).not.toContain(copy.pauseTask);
     expect(toolbar.textContent).not.toContain('设置执行时间');
-    await act(async () => evidencePanels[0].click());
+    await act(async () => evidencePanels[0].querySelector('span[id]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(reviewTaskCriterion).not.toHaveBeenCalled();
     expect((evidencePanels[0].parentElement as HTMLDetailsElement).open).toBe(true);
     expect((evidencePanels[1].parentElement as HTMLDetailsElement).open).toBe(false);
   });
@@ -273,11 +302,10 @@ describe('task detail action-first layout', () => {
       status: 'passed', reviewedAt: 1 }] as TaskDetail['criterionReviews'];
     vi.mocked(reviewTaskCriterion).mockRejectedValueOnce(new Error('Conflict'));
     await render();
-    act(() => button('更改判定').click());
-    await act(async () => button('标记未通过').click());
-    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'failed', 3, 1);
+    await act(async () => checkbox().click());
+    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'unverified', 3, 1);
     expect(container.querySelector(`[aria-label="${copy.successDefinition}"] [role="alert"]`)?.textContent).toBe(copy.actionFailed);
-    expect(button('确认通过')).toBeDefined();
+    expect(checkbox().checked).toBe(true);
     expect(commandTask).not.toHaveBeenCalled();
   });
 
@@ -323,7 +351,7 @@ describe('task detail action-first layout', () => {
     expect(schedule.tagName).toBe('BUTTON');
     act(() => schedule.click());
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    expect(document.querySelector('input[type="datetime-local"]')).not.toBeNull();
+    expect(document.querySelector('input[data-test-date-time-picker]')).not.toBeNull();
     expect(container.textContent).toContain('Prepare report');
   });
 
@@ -341,7 +369,7 @@ describe('task detail action-first layout', () => {
     vi.mocked(automationApi.create).mockResolvedValue({ automation: saved });
     vi.mocked(automationApi.update).mockResolvedValue({ automation: saved });
     await render(); act(() => button('设置执行时间').click());
-    const time = document.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+    const time = document.querySelector<HTMLInputElement>('input[data-test-date-time-picker]')!;
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(time, '2099-10-28T14:30');
       time.dispatchEvent(new Event('input', { bubbles: true }));

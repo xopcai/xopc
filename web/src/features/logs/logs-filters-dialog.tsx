@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { LOG_LEVELS, type LogLevel } from '@/features/logs/log.types';
 import type { LogsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -58,30 +59,8 @@ export function LogsFiltersDialog({
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <p className="text-xs font-medium text-fg-muted">{L.timeRange}</p>
             <div className="mt-2 flex flex-col gap-3">
-              <div>
-                <label htmlFor="log-from-d" className="mb-1 block text-xs text-fg-muted">
-                  {L.from}
-                </label>
-                <input
-                  id="log-from-d"
-                  type="datetime-local"
-                  value={dateFrom}
-                  onChange={(e) => onDateFromChange(e.target.value)}
-                  className="w-full rounded-xl border border-edge bg-surface-base p-2 text-sm text-fg dark:border-edge"
-                />
-              </div>
-              <div>
-                <label htmlFor="log-to-d" className="mb-1 block text-xs text-fg-muted">
-                  {L.to}
-                </label>
-                <input
-                  id="log-to-d"
-                  type="datetime-local"
-                  value={dateTo}
-                  onChange={(e) => onDateToChange(e.target.value)}
-                  className="w-full rounded-xl border border-edge bg-surface-base p-2 text-sm text-fg dark:border-edge"
-                />
-              </div>
+              <DateTimePicker label={L.from} value={dateFrom} defaultTime="00:00" onChange={onDateFromChange} className="text-xs text-fg-muted" />
+              <DateTimePicker label={L.to} value={dateTo} defaultTime="23:59" onChange={onDateToChange} className="text-xs text-fg-muted" />
             </div>
             <p className="mt-6 text-xs font-medium text-fg-muted">{L.levelCustom}</p>
             <p className="mt-1 text-xs leading-5 text-fg-subtle">{L.levelCustomHint}</p>

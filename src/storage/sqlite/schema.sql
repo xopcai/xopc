@@ -574,7 +574,7 @@ CREATE TABLE task_criterion_reviews (
   contract_version INTEGER NOT NULL,
   criterion_index INTEGER NOT NULL,
   criterion_text TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('passed', 'failed')),
+  status TEXT NOT NULL CHECK (status IN ('passed', 'failed', 'unverified')),
   note TEXT,
   reviewed_by_json TEXT NOT NULL,
   reviewed_at INTEGER NOT NULL,

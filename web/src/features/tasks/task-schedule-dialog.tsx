@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { TimePicker } from '@/components/ui/time-picker';
 import { automationApi, type Automation } from '@/features/automations/automation-api';
@@ -98,7 +99,7 @@ export function TaskScheduleDialog({ taskId, taskTitle, projectId, executorAgent
                 {editing?.trigger.kind === 'schedule' && editing.trigger.schedule.kind === 'cron' ? <SelectOption value="cron">{zh ? '自定义规则' : 'Custom schedule'}</SelectOption> : null}
                 <SelectOption value="once">{labels.trigger.once}</SelectOption><SelectOption value="daily">{labels.trigger.daily}</SelectOption><SelectOption value="weekly">{labels.trigger.weekly}</SelectOption>
               </Select></label>
-              {form.triggerMode === 'once' ? <label className="grid gap-2 text-sm text-fg">{labels.form.onceAt}<input required type="datetime-local" className={inputClass} value={form.onceAt} onChange={(event) => update({ onceAt: event.target.value })} /></label>
+              {form.triggerMode === 'once' ? <DateTimePicker label={labels.form.onceAt} disabled={busy} value={form.onceAt} defaultTime={form.time} onChange={onceAt => update({ onceAt })} />
                 : ['daily', 'weekly'].includes(form.triggerMode) ? <div className="grid gap-2 text-sm text-fg"><span>{labels.form.time}</span><TimePicker disabled={busy} value={form.time} onChange={(time) => update({ time })} ariaLabel={labels.form.time} /></div> : null}
               {form.triggerMode === 'weekly' ? <label className="grid gap-2 text-sm text-fg">{labels.form.day}<Select value={form.weekday} onChange={(event) => update({ weekday: event.target.value })}>
                 {(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const).map((day, index) => <SelectOption key={day} value={String(index)}>{labels.weekdays[day]}</SelectOption>)}

@@ -14,6 +14,7 @@ const snapshot = (needsAttention: boolean): HomeResponse => ({
     updatedAt: 1, secondaryActions: [],
   }] : [],
   background: [], backgroundCount: 0, runningConversations: [], decisions: [],
+  recentDeliveries: [], resumable: [],
   advisor: { state: 'quiet', reason: 'no_change' },
   attentionPolicy: {
     visibleDecisionCount: needsAttention ? 1 : 0, suppressedDecisionCount: 0,

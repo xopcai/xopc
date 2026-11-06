@@ -77,9 +77,11 @@ export const HomeWorkbenchItemSchema = z.object({
   kind: z.enum(['decision', 'failure', 'running', 'scheduled']),
   title: z.string(),
   summary: z.string(),
+  projectName: z.string().optional(),
   recommendation: z.string().optional(),
   dueAt: z.number().int().nonnegative().optional(),
   statusLabel: z.string().optional(),
+  backgroundState: z.enum(['waiting', 'paused']).optional(),
   updatedAt: z.number(),
   openAction: HomeActionSchema.optional(),
   primaryAction: HomeActionSchema.optional(),
@@ -295,6 +297,25 @@ export const HomeOpportunityActionResponseSchema = z.discriminatedUnion('outcome
 
 export const HomeResponseSchema = z.object({
   runningConversations: z.array(HomeRunningConversationSchema).default([]),
+  recentDeliveries: z.array(z.object({
+    id: z.string(),
+    kind: z.enum(['task', 'automation']),
+    subjectId: z.string(),
+    title: z.string(),
+    summary: z.string(),
+    completedAt: z.number(),
+    read: z.boolean(),
+    href: z.string(),
+  })).default([]),
+  resumable: z.array(z.object({
+    id: z.string(),
+    kind: z.enum(['task', 'conversation']),
+    title: z.string(),
+    summary: z.string().optional(),
+    projectName: z.string().optional(),
+    updatedAt: z.number(),
+    href: z.string(),
+  })).default([]),
   needsUser: z.array(HomeWorkbenchItemSchema),
   background: z.array(HomeWorkbenchItemSchema),
   backgroundCount: z.number().int().nonnegative(),
@@ -392,6 +413,8 @@ export type HomeOpportunityHistoryResponse = z.infer<typeof HomeOpportunityHisto
 export type HomeOpportunityActionRequest = z.infer<typeof HomeOpportunityActionRequestSchema>;
 export type HomeOpportunityActionResponse = z.infer<typeof HomeOpportunityActionResponseSchema>;
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;
+export type HomeDelivery = HomeResponse['recentDeliveries'][number];
+export type HomeResumeItem = HomeResponse['resumable'][number];
 export type HomeAdviceMetrics = z.infer<typeof HomeAdviceMetricsSchema>;
 export type TaskValueMetrics = z.infer<typeof TaskValueMetricsSchema>;
 

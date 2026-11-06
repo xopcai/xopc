@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { TimePicker } from '@/components/ui/time-picker';
 import type { Project } from '@/features/projects/api';
@@ -43,9 +44,8 @@ export function AutomationQuickCreate({ form, setForm, labels, projects, project
             <SelectOption value="weekly">{labels.trigger.weekly}</SelectOption>
           </Select>
         </label>
-        {form.triggerMode === 'once' ? <label className="grid gap-2 text-sm text-fg">{labels.form.onceAt}
-          <input type="datetime-local" className={inputClass} value={form.onceAt} onChange={(event) => update({ onceAt: event.target.value })} />
-        </label> : <div className="grid gap-2 text-sm text-fg"><span>{labels.form.time}</span>
+        {form.triggerMode === 'once' ? <DateTimePicker label={labels.form.onceAt} value={form.onceAt} defaultTime={form.time} onChange={onceAt => update({ onceAt })} />
+        : <div className="grid gap-2 text-sm text-fg"><span>{labels.form.time}</span>
           <TimePicker value={form.time} onChange={(time) => update({ time })} ariaLabel={labels.form.time} />
         </div>}
         {form.triggerMode === 'weekly' && <label className="grid gap-2 text-sm text-fg">{labels.form.day}

@@ -3,7 +3,9 @@ import type {
   HomeAttention,
   HomeAdvisor,
   HomeDecision,
+  HomeDelivery,
   HomeResponse,
+  HomeResumeItem,
   HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
 
@@ -19,12 +21,25 @@ import type { ProjectService } from '../projects/project-service.js';
 import {
   isHomeAttentionAcknowledged,
   listConnectorApprovals,
+  listSessionMetadata,
   type HomeAttentionSubjectKind,
 } from '../storage/sqlite/index.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
-import { AttentionGovernor } from './attention-governor.js';
+import { AttentionGovernor, compareHomeDecisions } from './attention-governor.js';
+import { stripMarkdown } from '../voice/tts/preprocess.js';
+
+const RECENT_WORK_MS = 7 * 24 * 60 * 60_000;
+const DELIVERY_HISTORY_LIMIT = 30;
+
+function deliverySummary(summary: string): string {
+  return stripMarkdown(summary).replace(/\s+/g, ' ').trim().slice(0, 240);
+}
+
+function automationRunHref(run: AutomationRun): string {
+  return `/automations?automation=${encodeURIComponent(run.automationId)}&view=run&run=${encodeURIComponent(run.id)}`;
+}
 
 type HomeAutomation = {
   id: string;
@@ -157,6 +172,7 @@ export function decisionFromTask(
     detail: isChinese ? ({
       'Agent run returned no result or evidence': '本次执行没有返回结果或依据，请重试。',
       'The latest run failed': '最近一次执行失败，请查看详情后重试。',
+      'Assistant response was truncated before completion': '回复未完整生成，可查看已有结果或重试。',
       'Task is overdue': '任务已逾期。',
     } as Record<string, string>)[item.summary] ?? item.summary : item.summary,
     reason,
@@ -178,11 +194,14 @@ function homeActionCopy(locale?: string) {
         review: '查看并处理',
         reviewResult: '查看结果并验收',
         retry: '重试',
-        acknowledge: '暂时忽略',
+        acknowledge: '移除本次提醒',
         viewProgress: '查看进度',
         viewSchedule: '查看计划',
         runningTask: '任务正在推进',
         waitingTask: '等待条件',
+        pausedTask: '已暂停',
+        pausedByUser: '已由你暂停',
+        viewPausedTask: '查看并恢复',
         dependencyRecommendation: '先查看并处理依赖任务，再继续推进。',
         scheduled: '下一项定时工作',
         inputRecommendation: '建议补充所需信息，让工作继续推进。',
@@ -196,11 +215,14 @@ function homeActionCopy(locale?: string) {
         review: 'Review',
         reviewResult: 'Review result',
         retry: 'Retry',
-        acknowledge: 'Dismiss',
+        acknowledge: 'Remove this alert',
         viewProgress: 'View progress',
         viewSchedule: 'View schedule',
         runningTask: 'Task in progress',
         waitingTask: 'Waiting',
+        pausedTask: 'Paused',
+        pausedByUser: 'Paused by you',
+        viewPausedTask: 'Review and resume',
         dependencyRecommendation: 'Resolve the dependency before continuing.',
         scheduled: 'Next scheduled work',
         inputRecommendation: 'Provide the missing information so the work can continue.',
@@ -234,11 +256,12 @@ export function buildHomeWorkbench(input: {
   attention: HomeAttention[];
   runningTasks: TaskAggregate[];
   waitingTaskReasons?: Record<string, string>;
+  pausedTaskIds?: ReadonlySet<string>;
   scheduled: HomeAutomation[];
   nowMs: number;
 }): Pick<HomeResponse, 'needsUser' | 'background' | 'backgroundCount'> {
   const copy = homeActionCopy(input.locale);
-  const decisions = input.decisions.map((decision): HomeWorkbenchItem => {
+  const decisions = [...input.decisions].sort((a, b) => compareHomeDecisions(a, b, input.nowMs)).map((decision): HomeWorkbenchItem => {
     const openAction: HomeAction = { type: 'open', label: copy.review, href: decision.href };
     const connectorActions = decision.response?.kind === 'connector_approval'
       ? {
@@ -261,6 +284,7 @@ export function buildHomeWorkbench(input: {
       kind: 'decision',
       title: decision.title,
       summary: decision.detail || copy.review,
+      projectName: decision.projectName,
       recommendation: decisionRecommendation(decision, copy),
       dueAt: decision.dueAt,
       updatedAt: decision.updatedAt,
@@ -300,17 +324,19 @@ export function buildHomeWorkbench(input: {
     }],
   }));
   const tasks = input.runningTasks.map((task): HomeWorkbenchItem => {
+    const reason = input.waitingTaskReasons?.[task.id];
+    const paused = input.pausedTaskIds?.has(task.id);
     const openAction: HomeAction = {
       type: 'open',
-      label: copy.viewProgress,
+      label: paused ? copy.viewPausedTask : copy.viewProgress,
       href: `/tasks/${encodeURIComponent(task.id)}`,
     };
     return {
       id: `task:${task.id}`,
       kind: 'running',
       title: task.title,
-      summary: input.waitingTaskReasons?.[task.id] ?? copy.runningTask,
-      ...(input.waitingTaskReasons?.[task.id] ? { statusLabel: copy.waitingTask } : {}),
+      summary: paused && reason === 'Paused by user' ? copy.pausedByUser : reason ?? (paused ? copy.pausedTask : copy.runningTask),
+      ...(paused ? { backgroundState: 'paused', statusLabel: copy.pausedTask } : reason ? { backgroundState: 'waiting', statusLabel: copy.waitingTask } : {}),
       updatedAt: task.updatedAt,
       openAction,
       secondaryActions: [],
@@ -326,12 +352,6 @@ export function buildHomeWorkbench(input: {
     openAction: { type: 'open', label: copy.viewSchedule, href: `/automations?automation=${encodeURIComponent(automation.id)}` },
     secondaryActions: [],
   }));
-  const urgencyById = new Map(input.decisions.map((decision) => [decision.id, decision.urgency]));
-  decisions.sort((left, right) => {
-    const leftUrgency = urgencyById.get(left.id) === 'now' ? 1 : 0;
-    const rightUrgency = urgencyById.get(right.id) === 'now' ? 1 : 0;
-    return rightUrgency - leftUrgency || right.updatedAt - left.updatedAt;
-  });
   failures.sort((left, right) => right.updatedAt - left.updatedAt);
   const needsUser = [...decisions, ...failures];
   const allBackground = [...tasks, ...scheduled];
@@ -344,6 +364,7 @@ export function buildHomeWorkbench(input: {
 
 export class HomeQueryService {
   readonly #tasks = new TaskRepository();
+  readonly #runs = new TaskRunRepository();
   readonly #projector = new TaskReadModelProjector();
   readonly #attentionGovernor = new AttentionGovernor();
 
@@ -354,11 +375,16 @@ export class HomeQueryService {
 
   async getSnapshot(locale?: string, includeAll = false): Promise<HomeResponse> {
     const nowMs = Date.now();
-    const tasks = this.#tasks.list({ limit: 60 });
+    const activeTasks: TaskAggregate[] = [];
+    for (let offset = 0; ; offset += 200) {
+      const page = this.#tasks.list({ excludeClosed: true, limit: 200, offset });
+      activeTasks.push(...page);
+      if (page.length < 200) break;
+    }
     const activeRuns = this.service.sessions.listActiveRuns();
     const [automations, automationRuns, projects, connectorApprovals, activeRunSessions] = await Promise.all([
       this.service.automationServiceInstance.list(),
-      this.service.automationServiceInstance.listRuns({ limit: 10 }),
+      this.service.automationServiceInstance.listRuns({ limit: 200 }),
       this.service.projects.list({ limit: 500 }),
       Promise.resolve(listConnectorApprovals({ principalId: 'local-owner', status: 'pending', limit: 100 })),
       Promise.all(activeRuns.map(async (run) => ({
@@ -366,8 +392,15 @@ export class HomeQueryService {
         session: await this.service.sessions.getSession(run.conversationId),
       }))),
     ]);
+    const linkedConversations = new Set(automationRuns.flatMap((run) => run.conversationId ? [run.conversationId] : []));
+    if (activeRuns.length) {
+      for (const task of activeTasks) {
+        const run = this.#runs.getActiveRoot(task.id);
+        if (run?.conversationId) linkedConversations.add(run.conversationId);
+      }
+    }
     const runningConversations = activeRunSessions
-      .filter((item) => Boolean(item.session))
+      .filter((item) => item.session && !linkedConversations.has(item.conversationId))
       .map((item) => {
         const session = item.session!;
         const updatedAt = Date.parse(session.lastInteractionAt ?? session.updatedAt);
@@ -380,22 +413,26 @@ export class HomeQueryService {
         };
       })
       .sort((left, right) => right.updatedAt - left.updatedAt);
-    const activeTasks = tasks.filter((task) => task.phase !== 'closed');
+    const models = activeTasks.map((task) => this.#projector.project(task, nowMs));
     const projectsById = new Map(projects.items.map((project) => [project.id, project]));
     const upcomingAutomations = automations
       .filter((automation) => automation.delivery.notificationPolicy !== 'none')
       .map(toHomeAutomation)
       .filter((automation): automation is HomeAutomation => Boolean(automation))
       .sort((a, b) => Date.parse(a.nextRunAt) - Date.parse(b.nextRunAt));
-    const latestAutomationRuns = [...automationRuns]
-      .sort((left, right) => right.createdAtMs - left.createdAtMs)
-      .filter((run, index, all) => all.findIndex((candidate) => candidate.automationId === run.automationId) === index);
     const automationsById = new Map(automations.map((automation) => [automation.id, automation]));
+    const visibleRuns = automationRuns.filter((run) =>
+      automationsById.has(run.automationId) && automationsById.get(run.automationId)?.delivery.notificationPolicy !== 'none');
+    const latestAutomationRuns = new Map<string, AutomationRun>();
+    for (const run of visibleRuns) {
+      const current = latestAutomationRuns.get(run.automationId);
+      if (!current || current.createdAtMs < run.createdAtMs) latestAutomationRuns.set(run.automationId, run);
+    }
     const decisionCandidates: HomeDecision[] = [
-      ...activeTasks
-        .map((task) => decisionFromTask(
-          this.#projector.project(task),
-          task.projectId ? projectsById.get(task.projectId)?.name : undefined,
+      ...models
+        .map((model) => decisionFromTask(
+          model,
+          model.task.projectId ? projectsById.get(model.task.projectId)?.name : undefined,
           locale,
         ))
         .filter((item): item is HomeDecision => Boolean(item)),
@@ -408,6 +445,7 @@ export class HomeQueryService {
           detail: `${approval.connectorId} · ${approval.scope}\n${JSON.stringify(approval.argumentsPreview).slice(0, 1600)}`,
           reason: 'approval_required',
           urgency: 'now',
+          dueAt: Date.parse(approval.expiresAt),
           href: approval.conversationId ? `/chat/${encodeURIComponent(approval.conversationId)}` : '/connectors',
           updatedAt: Date.parse(approval.createdAt),
           response: { kind: 'connector_approval', approvalId: approval.id },
@@ -415,9 +453,8 @@ export class HomeQueryService {
     ];
 
     const attentionCandidates: HomeAttention[] = [
-      ...latestAutomationRuns
+      ...[...latestAutomationRuns.values()]
         .filter((run) => run.status === 'failed' || run.status === 'timeout')
-        .filter((run) => automationsById.get(run.automationId)?.delivery.notificationPolicy !== 'none')
         .filter((run) => !isHomeAttentionAcknowledged('automation_run', run.id))
         .map((run): HomeAttention => ({
           id: `automation_run:${run.id}`,
@@ -440,36 +477,112 @@ export class HomeQueryService {
       includeAll,
       decisions: decisionCandidates,
       attention: attentionCandidates,
+      nowMs,
     });
     const decisions = governed.decisions;
     const attention = governed.attention;
 
     const waitingTaskReasons: Record<string, string> = {};
-    const runningTasks = tasks.filter((task) => {
-      if (task.phase === 'closed') return false;
-      const model = this.#projector.project(task);
+    const pausedTaskIds = new Set<string>();
+    const runningTasks = models.filter((model) => {
+      const task = model.task;
       if (model.operationalState === 'waiting' && model.attention.length === 0) {
-        waitingTaskReasons[task.id] = new TaskRunRepository().listActiveWaits(task.id)[0]?.reason
+        const waits = this.#runs.listActiveWaits(task.id);
+        const pause = waits.find((wait) => wait.kind === 'paused');
+        if (pause) pausedTaskIds.add(task.id);
+        waitingTaskReasons[task.id] = (pause ?? waits[0])?.reason
           ?? homeActionCopy(locale).waitingTask;
         return true;
       }
-      return ['queued', 'running', 'verifying'].includes(model.operationalState);
-    });
+      return ['allocating', 'queued', 'running', 'verifying'].includes(model.operationalState);
+    }).map((model) => model.task);
     const workbench = buildHomeWorkbench({
       locale,
       decisions,
       attention,
       runningTasks,
       waitingTaskReasons,
+      pausedTaskIds,
       scheduled: upcomingAutomations,
       nowMs,
     });
+    const copy = homeActionCopy(locale);
+    const runningAutomations: HomeWorkbenchItem[] = visibleRuns
+      .filter((run) => ['queued', 'running', 'cancelling'].includes(run.status))
+      .map((run) => ({
+        id: `automation_run:${run.id}`, kind: 'running', title: run.automationName || run.automationId,
+        summary: copy.runningTask, updatedAt: run.startedAtMs ?? run.createdAtMs,
+        openAction: { type: 'open', label: copy.viewProgress, href: automationRunHref(run) }, secondaryActions: [],
+      }));
     return {
       ...workbench,
+      background: [...runningAutomations, ...workbench.background],
+      backgroundCount: runningAutomations.length + workbench.backgroundCount,
       runningConversations,
+      recentDeliveries: this.recentDeliveries(visibleRuns),
+      resumable: this.resumableWork(models, decisionCandidates, projectsById, activeRuns, nowMs),
       decisions,
       advisor: this.getAdvisor(locale),
       attentionPolicy: governed.policy,
     };
+  }
+
+  private recentDeliveries(automationRuns: AutomationRun[]): HomeDelivery[] {
+    const deliveries: HomeDelivery[] = [];
+    for (const task of this.#tasks.list({ phase: 'closed', limit: 100 })) {
+      if (task.resolution !== 'done') continue;
+      const run = this.#runs.getLatestRoot(task.id);
+      if (!run || run.contractVersion !== task.latestContractVersion) continue;
+      const receipt = this.#runs.getReceipt(run.id);
+      if (!receipt || receipt.status !== 'succeeded' || (!receipt.summary.trim() && !receipt.evidence.length)) continue;
+      deliveries.push({
+        id: `task:${run.id}`, kind: 'task', subjectId: task.id, title: task.title,
+        summary: deliverySummary(receipt.summary), completedAt: receipt.finalizedAt, read: task.contract?.acceptancePolicy === 'manual',
+        href: `/tasks/${encodeURIComponent(task.id)}`,
+      });
+    }
+    for (const run of automationRuns) {
+      if (run.status !== 'succeeded' || !run.endedAtMs || (!run.summary?.trim() && !run.conversationId)) continue;
+      deliveries.push({
+        id: `automation:${run.id}`, kind: 'automation', subjectId: run.id, title: run.automationName || run.automationId,
+        summary: deliverySummary(run.summary ?? ''), completedAt: run.endedAtMs, read: run.readAtMs !== undefined,
+        href: automationRunHref(run),
+      });
+    }
+    return deliveries.sort((a, b) => b.completedAt - a.completedAt).slice(0, DELIVERY_HISTORY_LIMIT);
+  }
+
+  private resumableWork(
+    models: TaskReadModel[],
+    decisions: HomeDecision[],
+    projects: Map<string, { name: string }>,
+    activeRuns: Array<{ conversationId: string }>,
+    now: number,
+  ): HomeResumeItem[] {
+    const cutoff = now - RECENT_WORK_MS;
+    const decisionIds = new Set(decisions.flatMap((item) => item.response?.kind === 'task' ? [item.response.taskId] : []));
+    const runningIds = new Set(activeRuns.map((item) => item.conversationId));
+    const resumable: HomeResumeItem[] = [];
+    for (const { task, operationalState, allowedCommands } of models) {
+      if (task.updatedAt < cutoff || decisionIds.has(task.id) || operationalState !== 'idle' || !allowedCommands.includes('start')) continue;
+      resumable.push({
+        id: task.id, kind: 'task', title: task.title, summary: task.contract?.objective,
+        projectName: task.projectId ? projects.get(task.projectId)?.name : undefined,
+        updatedAt: task.updatedAt, href: `/tasks/${encodeURIComponent(task.id)}`,
+      });
+    }
+    for (const session of listSessionMetadata({
+      limit: 20, excludeArchived: true, excludeAutomationRuns: true, rootConversationsOnly: true,
+      activity: 'manual', updatedAfter: cutoff,
+    }).items) {
+      const updatedAt = Date.parse(session.lastInteractionAt ?? session.updatedAt);
+      if (!session.messageCount || !session.name?.trim() || updatedAt < cutoff || runningIds.has(session.key)) continue;
+      resumable.push({
+        id: session.key, kind: 'conversation', title: session.name,
+        projectName: session.projectId ? projects.get(session.projectId)?.name : undefined,
+        updatedAt, href: `/chat/${encodeURIComponent(session.key)}`,
+      });
+    }
+    return resumable.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
   }
 }
