@@ -36,7 +36,6 @@
     "incomplete": "部分位置未能完成扫描，仅可导入清单中列出的内容。",
     "projectContents": "{skills} 个技能 · {context} 份规则",
     "chosenCount": "已选 {count} 项",
-    "directoryOnly": "仅项目目录",
     "noContent": "没有发现可导入的内容。",
     "scanNotices": "其他内容与扫描提示",
     "runningHint": "可以关闭此窗口，稍后查看导入结果。",

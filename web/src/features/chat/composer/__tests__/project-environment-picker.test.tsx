@@ -104,14 +104,16 @@ describe('composer project environment selection and first send', () => {
     create.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     await render();
     await act(async () => { submit().click(); submit().click(); });
-    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout');
+    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout', undefined, expect.any(Function));
     expect(submit().disabled).toBe(true);
     expect(select().disabled).toBe(true);
     expect(commit).not.toHaveBeenCalled();
-    await act(async () => finish('created'));
+    act(() => create.mock.calls[0][2]!('created'));
+    expect(selection.getDraftHandoffTarget()).toBe('created');
     const currentSender = vi.fn();
     await render({ prepared: null, conversationId: 'created', sender: currentSender });
     expect(currentSender).not.toHaveBeenCalled();
+    await act(async () => finish('created'));
     await render({ prepared: null, conversationId: 'created', ready: true, sender: currentSender });
     expect(currentSender).toHaveBeenCalledExactlyOnceWith('Keep draft', attachments, undefined, refs);
     expect(onSend).not.toHaveBeenCalled();
@@ -149,7 +151,7 @@ describe('composer project environment selection and first send', () => {
     create.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     await render();
     await act(async () => openTerminal().click());
-    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout');
+    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout', undefined, expect.any(Function));
     expect(openTerminal().disabled).toBe(true);
     expect(onSend).not.toHaveBeenCalled();
 
@@ -170,7 +172,7 @@ describe('composer project environment selection and first send', () => {
     expect(submit().disabled).toBe(false);
     await act(async () => submit().click());
     await render({ prepared: null, conversationId: 'created', ready: true });
-    expect(create.mock.calls).toEqual([['managed_worktree'], ['managed_worktree']]);
+    expect(create.mock.calls.map(([mode]) => mode)).toEqual(['managed_worktree', 'managed_worktree']);
     expect(onSend).toHaveBeenCalledOnce();
     expect(commit).toHaveBeenCalledOnce();
   });
@@ -183,7 +185,7 @@ describe('composer project environment selection and first send', () => {
     expect(selection.mode).toBe('local_checkout');
     expect(selection.allowed).toBe(true);
     await act(async () => submit().click());
-    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout');
+    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout', undefined, expect.any(Function));
   });
 
   it('keeps dirty Worktree unavailable without showing an inline warning', async () => {

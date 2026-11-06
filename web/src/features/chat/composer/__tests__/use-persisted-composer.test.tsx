@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useRef, useState } from 'react';
+import { act, useCallback, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -19,19 +19,32 @@ let savedEdit: SavedEditSession | undefined;
 const restoreEditor = vi.fn();
 let edit: (value: string) => void;
 let text: string;
+let fillDraft: () => void;
+let clearDraft: () => void;
+let visibleAttachments: Attachment[];
+let visibleRefs: ComposerContextRef[];
+const fixtureAttachment: Attachment = { id: 'file', type: 'document', name: 'draft.txt', mimeType: 'text/plain', size: 1, content: 'YQ==' };
+const fixtureRef: ComposerContextRef = { kind: 'note', sourceId: 'note', expectedVersion: '1', title: 'Draft note' };
 let root: ReturnType<typeof createRoot>;
 let container: HTMLDivElement;
-function Harness({ id }: { id: string }) {
+function Harness({ id, handoffTarget }: { id: string | null; handoffTarget?: string }) {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [refs, setRefs] = useState<ComposerContextRef[]>([]);
+  const targetRef = useRef(handoffTarget); targetRef.current = handoffTarget;
+  const getHandoffTarget = useCallback(() => targetRef.current, []);
   const valueRef = useRef(value); valueRef.current = value;
   const attachmentsRef = useRef(attachments); attachmentsRef.current = attachments;
+  fillDraft = () => { setValue('private draft'); setAttachments([fixtureAttachment]); setRefs([fixtureRef]); };
+  clearDraft = () => { setValue(''); setAttachments([]); setRefs([]); };
   edit = setValue; text = value;
+  visibleAttachments = attachments; visibleRefs = refs;
   usePersistedComposer(id, { value, valueRef, resetEditor: options => {
     valueRef.current = options?.nextText ?? ''; setValue(valueRef.current);
   } } as UseComposerEditorReturn, { attachments, attachmentsRef, setAttachments: (next: Attachment[]) => { attachmentsRef.current = next; setAttachments(next); },
-    clearAttachments: () => setAttachments([]) } as unknown as UseComposerAttachmentsReturn, refs, setRefs, savedEdit ? { snapshot: () => savedEdit!, restore: restoreEditor } : undefined);
+    clearAttachments: () => { attachmentsRef.current = []; setAttachments([]); } } as unknown as UseComposerAttachmentsReturn,
+    refs, setRefs, savedEdit ? { snapshot: () => savedEdit!, restore: restoreEditor } : undefined,
+    undefined, getHandoffTarget);
   return null;
 }
 beforeEach(() => {
@@ -42,8 +55,49 @@ beforeEach(() => {
   container = document.createElement('div'); root = createRoot(container);
 });
 afterEach(() => { act(() => root.unmount()); });
-const render = async (id: string) => { await act(async () => root.render(<Harness id={id} />)); };
+const render = async (id: string | null, handoffTarget?: string) => {
+  await act(async () => root.render(<Harness id={id} handoffTarget={handoffTarget} />));
+};
 const restore = async (id: string, value: string) => { await act(async () => storage.reads.get(id)!({ text: value, attachments: [], refs: [] })); };
+
+it('isolates the existing session draft when opening a new project composer', async () => {
+  await render('existing');
+  await restore('existing', '');
+  await act(async () => fillDraft());
+
+  await render(null);
+
+  expect({ text, attachments: visibleAttachments, refs: visibleRefs }).toEqual({ text: '', attachments: [], refs: [] });
+  expect(storage.write).toHaveBeenLastCalledWith('existing', expect.objectContaining({
+    text: 'private draft', attachments: [fixtureAttachment], refs: [fixtureRef],
+  }));
+});
+
+it.each([undefined, 'prepared'])('isolates an unrelated conversation while the preparation target is %s', async target => {
+  await render(null);
+  await act(async () => fillDraft());
+
+  await render('existing', target);
+  expect({ text, attachments: visibleAttachments, refs: visibleRefs }).toEqual({ text: '', attachments: [], refs: [] });
+  await restore('existing', 'existing draft');
+  expect(text).toBe('existing draft');
+  expect(storage.write).not.toHaveBeenCalledWith('existing', expect.objectContaining({ text: 'private draft' }));
+});
+
+it('carries the full draft into its prepared session and deletes it after send', async () => {
+  await render('previous');
+  await restore('previous', 'previous draft');
+  await render(null);
+  await act(async () => fillDraft());
+
+  await render('prepared', 'prepared');
+  await act(async () => storage.reads.get('prepared')!(undefined));
+  expect(storage.write).toHaveBeenLastCalledWith('prepared', expect.objectContaining({
+    text: 'private draft', attachments: [fixtureAttachment], refs: [fixtureRef],
+  }));
+  await act(async () => clearDraft());
+  expect(storage.write).toHaveBeenLastCalledWith('prepared', undefined);
+});
 
 it('restores persisted content and removes the record when the composer is cleared', async () => {
   await render('one'); await restore('one', 'unsent');

@@ -33,7 +33,7 @@ export interface ProjectSessionPreparation {
   project: Project;
   agentId: string;
   temporary: boolean;
-  create: (mode: NonNullable<LocalSessionOptions['executionMode']>, config?: SessionInitialAgentConfig) => Promise<string>;
+  create: (mode: NonNullable<LocalSessionOptions['executionMode']>, config?: SessionInitialAgentConfig, onOpened?: (id: string) => void) => Promise<string>;
 }
 
 export function useChatSessionInit(opts: {
@@ -172,7 +172,7 @@ export function useChatSessionInit(opts: {
       if (!isLive()) return;
       if (!request.requestedAgentId && project?.defaultAgentId) spec.agentId = project.defaultAgentId;
       const modelPreference = modelPreferenceForAgent(preferences, spec.agentId);
-      const open = (executionMode?: LocalSessionOptions['executionMode'], config?: SessionInitialAgentConfig) => openNewChatHandoff({
+      const open = (executionMode?: LocalSessionOptions['executionMode'], config?: SessionInitialAgentConfig, onOpened?: (id: string) => void) => openNewChatHandoff({
         sessionMgr: runtime.sessionMgrRef.current,
         agentId: spec.agentId,
         currentConversationId: lastNonNewConversationIdRef.current,
@@ -194,6 +194,7 @@ export function useChatSessionInit(opts: {
         search: searchParamsForComposerHandoff(request.newRouteLocationSearch),
         onOpened: (key) => {
           if (!isLive()) return;
+          onOpened?.(key);
           runtime.adoptEmptySession(key, null);
           applyResolvedSessionConfig(key);
         },
@@ -201,9 +202,9 @@ export function useChatSessionInit(opts: {
       if (project?.workspaceRoot?.trim()) {
         setPreparation({
           requestKey, token, baseUrl, project, agentId: spec.agentId, temporary: spec.temporary,
-          create: (mode, config) => {
+          create: (mode, config, onOpened) => {
             if (!isLive()) return Promise.reject(new Error('New chat request changed'));
-            return open(mode, config);
+            return open(mode, config, onOpened);
           },
         });
         return;

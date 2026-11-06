@@ -48,15 +48,15 @@ export function usePreparedSessionModel(preparation: ProjectSessionPreparation |
   latest.current = { preparation, selection, ready, explicitlySelected };
 
   // Keep preparation identity stable when editing the model, so the environment choice survives.
-  const prepared = useMemo(() => preparation && ({
+  const prepared = useMemo<ProjectSessionPreparation | null>(() => preparation && ({
     ...preparation,
-    create: async (mode) => {
+    create: async (mode, _config, onOpened) => {
       const current = latest.current;
       if (current.preparation !== preparation || !current.ready || !current.selection) {
         throw new Error('Model configuration is not ready');
       }
       const config = current.selection;
-      const key = await preparation.create(mode, config);
+      const key = await preparation.create(mode, config, onOpened);
       if (current.explicitlySelected) {
         rememberAgentModel(preparation.agentId, { modelRef: config.model, thinkingLevel: config.thinkingLevel });
       }

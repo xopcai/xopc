@@ -23,6 +23,7 @@ type PendingCreation = {
   baseUrl: string;
   token: string | undefined;
   conversationId: string | null;
+  openedConversationId?: string;
   completion: Promise<string | null>;
   resolve: (conversationId: string | null) => void;
 };
@@ -65,6 +66,13 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
     setPending(null);
     current?.resolve(accepted ? current.conversationId : null);
   }, []);
+  const getDraftHandoffTarget = useCallback(() => {
+    const current = pendingRef.current;
+    const gateway = useGatewayStore.getState();
+    return current?.token === gateway.conversationId && current?.baseUrl === gateway.baseUrl
+      ? current?.openedConversationId
+      : undefined;
+  }, []);
 
   useEffect(() => {
     if (!pending) return;
@@ -72,7 +80,10 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
       finish(false);
       return;
     }
-    if (!pending.conversationId) return;
+    if (!pending.conversationId) {
+      if (preparation !== pending.preparation && pending.openedConversationId !== conversationId) finish(false);
+      return;
+    }
     if (conversationId === pending.conversationId) {
       if (ready) finish(true);
     } else if (preparation !== pending.preparation) {
@@ -107,7 +118,10 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
     };
     pendingRef.current = current;
     setPending(current);
-    void Promise.resolve().then(() => preparation.create(mode)).then((key) => {
+    void Promise.resolve().then(() => preparation.create(mode, undefined, (key) => {
+      // The route can commit before the creation promise resumes.
+      if (pendingRef.current === current) current.openedConversationId = key;
+    })).then((key) => {
       if (pendingRef.current !== current) return;
       rememberProjectExecutionMode(preparation.project.id, mode);
       const created = { ...current, conversationId: key };
@@ -153,6 +167,7 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
       setFailure(null);
     },
     retry: () => void mutate(),
+    getDraftHandoffTarget,
     prepareSession,
     send,
   };

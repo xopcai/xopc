@@ -111,7 +111,6 @@ export function ImportSelectionDialog({ open, sourceName, inventory, selected, o
             open={projectsOpen}
             disabled={locked}
             onOpenChange={setProjectsOpen}
-            onCheckedChange={checked => toggleGroup(projects, checked)}
           >
             <ProjectList inventoryId={inventory.id} projects={projects} projectChildren={projectChildren} selected={selected} disabled={locked} onToggle={toggle} />
           </ImportGroupCard>}
@@ -195,9 +194,9 @@ function ConnectionRow({ inventoryId, item }: { inventoryId: string; item: Inven
 
 function ImportGroupCard({ icon: Icon, title, description, items, selected, open, disabled, onOpenChange, onCheckedChange, children }: {
   icon: LucideIcon; title: string; description: string; items: InventoryItem[]; selected: Set<string>; open: boolean; disabled: boolean;
-  onOpenChange: (open: boolean) => void; onCheckedChange: (checked: boolean) => void; children: ReactNode;
+  onOpenChange: (open: boolean) => void; onCheckedChange?: (checked: boolean) => void; children: ReactNode;
 }) {
-  const state = selectionState(items, selected);
+  const state = onCheckedChange ? selectionState(items, selected) : undefined;
   return <section className="overflow-hidden rounded-xl border border-edge bg-surface-inset">
     <div className="flex min-h-16 items-center gap-3 px-3 py-2 sm:px-4">
       <Button variant="ghost" className="min-w-0 flex-1 justify-start gap-3 px-1 text-left" aria-expanded={open} onClick={() => onOpenChange(!open)}>
@@ -208,7 +207,7 @@ function ImportGroupCard({ icon: Icon, title, description, items, selected, open
         </span>
         <ChevronDown aria-hidden="true" className={cn('h-4 w-4 shrink-0 text-fg-muted transition-transform duration-200 motion-reduce:transition-none', open && 'rotate-180')} />
       </Button>
-      <TriStateCheckbox label={title} checked={state.checked} indeterminate={state.indeterminate} disabled={disabled || !state.availableCount} onChange={onCheckedChange} />
+      {state && onCheckedChange && <TriStateCheckbox label={title} checked={state.checked} indeterminate={state.indeterminate} disabled={disabled || !state.availableCount} onChange={onCheckedChange} />}
     </div>
     {open && <div className="space-y-2 border-t border-edge bg-surface-overlay p-3 sm:p-4">{children}</div>}
   </section>;
@@ -268,21 +267,21 @@ function ProjectRow({ inventoryId, project, children, selected, disabled, onTogg
   const t = messages(useLocaleStore(state => state.language)).imports;
   const [open, setOpen] = useState(false);
   const selectedChildren = children.filter(item => selected.has(item.id)).length;
+  const identity = <span className="min-w-0 flex-1">
+    <span className="block truncate text-sm font-medium text-fg">{project.name}</span>
+    <span className="mt-0.5 block truncate text-xs font-normal text-fg-muted" title={project.displayPath}>{project.displayPath}</span>
+  </span>;
   return <div className="rounded-xl border border-edge">
     <div className="flex items-center gap-2 p-2">
-      <Button variant="ghost" className="min-w-0 flex-1 justify-start px-2 text-left" aria-expanded={open} onClick={() => setOpen(value => !value)}>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-fg">{project.name}</span>
-          <span className="mt-0.5 block truncate text-xs font-normal text-fg-muted">{project.displayPath}</span>
-        </span>
-        {children.length > 0 && <span className="text-xs font-normal text-fg-muted">{t.projectContents.replace('{skills}', String(children.filter(item => item.kind === 'skill').length)).replace('{context}', String(children.filter(item => item.kind === 'context').length))} · {t.chosenCount.replace('{count}', String(selectedChildren))}</span>}
+      {children.length > 0 ? <Button variant="ghost" className="min-w-0 flex-1 justify-start px-2 text-left" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+        {identity}
+        <span className="text-xs font-normal text-fg-muted">{t.projectContents.replace('{skills}', String(children.filter(item => item.kind === 'skill').length)).replace('{context}', String(children.filter(item => item.kind === 'context').length))} · {t.chosenCount.replace('{count}', String(selectedChildren))}</span>
         <ChevronDown aria-hidden="true" className={cn('h-4 w-4 shrink-0 text-fg-muted transition-transform duration-200 motion-reduce:transition-none', open && 'rotate-180')} />
-      </Button>
+      </Button> : <div className="min-w-0 flex-1 px-2">{identity}</div>}
       <input type="checkbox" aria-label={project.name} checked={selected.has(project.id)} disabled={disabled || !selectable(project)} onChange={event => onToggle(project, event.target.checked)} />
     </div>
     {open && <div className="border-t border-edge p-2">
-      {children.length ? <div className="space-y-1">{children.map(item => <ImportItemRow key={item.id} inventoryId={inventoryId} item={item} checked={selected.has(item.id)} disabled={disabled} onChange={checked => onToggle(item, checked)} />)}</div>
-        : <p className="p-2 text-xs text-fg-muted">{t.directoryOnly}</p>}
+      <div className="space-y-1">{children.map(item => <ImportItemRow key={item.id} inventoryId={inventoryId} item={item} checked={selected.has(item.id)} disabled={disabled} onChange={checked => onToggle(item, checked)} />)}</div>
     </div>}
   </div>;
 }

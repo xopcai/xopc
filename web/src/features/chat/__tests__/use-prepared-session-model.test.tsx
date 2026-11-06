@@ -57,7 +57,7 @@ describe('prepared session model', () => {
     expect(value.ready).toBe(true);
     expect(preparation.create).not.toHaveBeenCalled();
     await act(async () => { await value.preparation!.create('local_checkout'); });
-    expect(preparation.create).toHaveBeenCalledWith('local_checkout', { model: 'cloud/default', thinkingLevel: 'low' });
+    expect(preparation.create).toHaveBeenCalledWith('local_checkout', { model: 'cloud/default', thinkingLevel: 'low' }, undefined);
     expect(modelPreferenceForAgent(readNewSessionPreferences(), 'main')).toBeUndefined();
   });
 
@@ -75,7 +75,7 @@ describe('prepared session model', () => {
     expect(value.thinkingLevel).toBe('off');
     expect(preparation.create).not.toHaveBeenCalled();
     await act(async () => { await identity!.create('managed_worktree'); });
-    expect(preparation.create).toHaveBeenCalledWith('managed_worktree', { model: 'cloud/other', thinkingLevel: 'off' });
+    expect(preparation.create).toHaveBeenCalledWith('managed_worktree', { model: 'cloud/other', thinkingLevel: 'off' }, undefined);
     expect(modelPreferenceForAgent(readNewSessionPreferences(), 'main')?.modelRef).toBe('cloud/other');
   });
 
