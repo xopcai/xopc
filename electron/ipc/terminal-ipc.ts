@@ -325,18 +325,22 @@ export class TerminalManager {
 
 let activeTerminalManager: TerminalManager | undefined;
 
+function requireTerminalManager(): TerminalManager {
+  if (!activeTerminalManager) throw new Error('Terminal manager is stopped');
+  return activeTerminalManager;
+}
+
 export function registerTerminalIpc(ipcMain: IpcMain): void {
-  const manager = new TerminalManager();
-  activeTerminalManager = manager;
+  activeTerminalManager = new TerminalManager();
 
   ipcMain.handle('terminal:create', async (event, input: TerminalCreateInput) => {
     assertTrustedRenderer(event);
-    return manager.create(event.sender, input);
+    return requireTerminalManager().create(event.sender, input);
   });
   ipcMain.on('terminal:write', (event, terminalId: unknown, data: unknown) => {
     try {
       assertTrustedRenderer(event);
-      manager.write(terminalId, data);
+      requireTerminalManager().write(terminalId, data);
     } catch (error) {
       sendToRenderer(event.sender, 'terminal:error', {
         terminalId: typeof terminalId === 'string' ? terminalId : undefined,
@@ -346,17 +350,24 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   });
   ipcMain.handle('terminal:resize', (event, terminalId: unknown, cols: unknown, rows: unknown) => {
     assertTrustedRenderer(event);
-    manager.resize(terminalId, cols, rows);
+    requireTerminalManager().resize(terminalId, cols, rows);
     return { ok: true };
   });
   ipcMain.handle('terminal:dispose', (event, transcriptId: unknown, terminalKey: unknown) => {
     assertTrustedRenderer(event);
-    manager.dispose(transcriptId, terminalKey);
+    requireTerminalManager().dispose(transcriptId, terminalKey);
     return { ok: true };
   });
 }
 
+export function resetAllTerminals(): void {
+  if (!activeTerminalManager) return;
+  activeTerminalManager.closeAll();
+  activeTerminalManager = new TerminalManager();
+}
+
 export function stopAllTerminals(): void {
-  activeTerminalManager?.closeAll();
+  const manager = activeTerminalManager;
   activeTerminalManager = undefined;
+  manager?.closeAll();
 }

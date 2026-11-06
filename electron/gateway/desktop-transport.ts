@@ -8,6 +8,8 @@ import { pipeline } from 'node:stream/promises';
 
 import { WebSocket, WebSocketServer } from 'ws';
 
+import { HTML_PREVIEW_HEADERS, HTML_PREVIEW_PATH, HTML_PREVIEW_SHELL } from '../../src/gateway/html-preview-shell.js';
+
 export type DesktopGatewayTarget = { origin: string; token: string; scope: string };
 const MIME: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
 const equal = (a: string, b: string) => Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -68,6 +70,11 @@ export class DesktopGatewayTransport {
     try {
       if (!this.allowed(req)) { fail(403, 'Desktop origin required'); return; }
       const path = new URL(req.url ?? '/', this.origin).pathname;
+      // The preview shell is renderer code and must come from the desktop bundle.
+      if (path === HTML_PREVIEW_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+        res.writeHead(200, HTML_PREVIEW_HEADERS).end(req.method === 'HEAD' ? undefined : HTML_PREVIEW_SHELL);
+        return;
+      }
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('X-Frame-Options', 'DENY');
       if (req.method === 'GET' && (path === '/' || path === '/index.html' || path.startsWith('/assets/') || /^\/(?:favicon\.[a-z]+|manifest\.webmanifest|icons\/[^.][^?]*)$/.test(path))) {

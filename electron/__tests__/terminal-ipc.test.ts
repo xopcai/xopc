@@ -1,9 +1,20 @@
 import { EventEmitter } from 'node:events';
 
+import type { IpcMain, IpcMainInvokeEvent } from 'electron';
+import { spawn } from 'node-pty';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { registerGatewayConnection } from '../gateway-process.js';
-import { resolveTerminalWorkspace, TerminalManager } from '../ipc/terminal-ipc.js';
+import {
+  registerTerminalIpc,
+  resetAllTerminals,
+  resolveTerminalWorkspace,
+  stopAllTerminals,
+  TerminalManager,
+  type TerminalCreateInput,
+} from '../ipc/terminal-ipc.js';
+
+vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -261,6 +272,57 @@ describe('TerminalManager', () => {
 
     await expect(creation).rejects.toThrow('creation was cancelled');
     expect(spawnPty).not.toHaveBeenCalled();
+  });
+});
+
+describe('terminal IPC lifecycle', () => {
+  afterEach(() => {
+    stopAllTerminals();
+    vi.mocked(spawn).mockReset();
+  });
+
+  it('creates terminals after Gateway selection and invalidates old PTYs and pending requests on switch', async () => {
+    type CreateHandler = (event: IpcMainInvokeEvent, input: TerminalCreateInput) => Promise<{ terminalId: string }>;
+    const handlers = new Map<string, CreateHandler>();
+    const ipcMain = { handle: handlers.set.bind(handlers), on: vi.fn() } as unknown as IpcMain;
+    const sender = { ...fakeOwner(), getURL: () => 'http://127.0.0.1:18790/' };
+    const event = { sender } as unknown as IpcMainInvokeEvent;
+    const input = {
+      conversationId: 'conversation',
+      transcriptId: 'transcript',
+      terminalKey: 'terminal-1',
+      cols: 80,
+      rows: 24,
+    };
+    const child = new FakePty();
+    const replacement = new FakePty();
+    vi.mocked(spawn).mockReturnValueOnce(child as never).mockReturnValueOnce(replacement as never);
+    registerGatewayConnection({ port: 18790, token: 'dev-token' });
+    const transcript = () => Response.json({ payload: { transcriptId: input.transcriptId } });
+    const workspace = () => Response.json({ payload: { effectiveWorkspacePath: process.cwd() } });
+    const fetchMock = vi.fn(async (url: string) => url.includes('/resolve?') ? transcript() : workspace());
+    vi.stubGlobal('fetch', fetchMock);
+
+    registerTerminalIpc(ipcMain);
+    const create = handlers.get('terminal:create')!;
+    resetAllTerminals();
+    await create(event, input);
+
+    const pendingInput = { ...input, terminalKey: 'terminal-2' };
+    let releaseTranscript!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { releaseTranscript = resolve; }));
+    const pending = create(event, pendingInput);
+    resetAllTerminals();
+    expect(child.kill).toHaveBeenCalledOnce();
+    await create(event, pendingInput);
+    releaseTranscript(transcript());
+    await expect(pending).rejects.toThrow('Terminal manager is stopped');
+    expect(spawn).toHaveBeenCalledTimes(2);
+
+    stopAllTerminals();
+    expect(replacement.kill).toHaveBeenCalledOnce();
+    resetAllTerminals();
+    await expect(create(event, input)).rejects.toThrow('Terminal manager is stopped');
   });
 });
 
