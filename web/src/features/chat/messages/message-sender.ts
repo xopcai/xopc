@@ -570,10 +570,12 @@ export class MessageSender {
         callbacks?.onResult({ runId: '', conversationId: resolvedChatId, status: 'success' });
         return;
       }
-      this._abort = undefined;
     } finally {
       discardPendingResponseLatency(chatId, latencyStartedAt);
-      if (this._abort === controller) this._abort = undefined;
+      if (this._abort === controller) {
+        this._abort = undefined;
+        dispatchPendingAgentRunChanged(chatId);
+      }
     }
   }
 

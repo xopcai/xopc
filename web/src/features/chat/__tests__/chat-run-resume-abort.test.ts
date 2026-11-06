@@ -538,6 +538,13 @@ describe('MessageSender terminal state', () => {
     const sender = new MessageSender();
     const onReplayGap = vi.fn(async () => {});
     const onResult = vi.fn();
+    const streamingStatesAtNotification: boolean[] = [];
+    vi.mocked(window.dispatchEvent).mockImplementation(event => {
+      if (event.type === 'xopc-pending-agent-run-changed') {
+        streamingStatesAtNotification.push(sender.isStreamingFor(conversationId));
+      }
+      return true;
+    });
     vi.mocked(apiFetch).mockImplementation(async (url, init) => {
       if (String(url).endsWith('/input-state')) {
         return new Response(JSON.stringify({ payload: { inputs: [] } }), { status: 200 });
@@ -559,6 +566,7 @@ describe('MessageSender terminal state', () => {
     );
     expect(onReplayGap).toHaveBeenCalledOnce();
     expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: 'success' }));
+    expect(streamingStatesAtNotification.at(-1)).toBe(false);
   });
 
   it.each(['send', 'resume'] as const)(
