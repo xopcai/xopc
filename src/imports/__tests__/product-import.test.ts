@@ -87,11 +87,26 @@ it('rejects new target conflicts instead of silently choosing another name', asy
   await expect(run(inventory, [inventory.candidates[0].id])).rejects.toMatchObject({ code: 'inventory_stale' });
   expect(existsSync(join(home, 'xopc/skills/claude-code-reports'))).toBe(false);
 });
-it('blocks untrusted project skills but allows an explicitly selected project entry', async () => {
-  const path = join(home, 'project'); skill(join(path, '.claude/skills/reports'));
-  write(join(home, '.claude.json'), JSON.stringify({ projects: { [path]: {} } }));
-  const inventory = await scan(); expect(inventory.candidates.find(i => i.kind === 'skill')!.status).toBe('blocked');
-  const result = await run(inventory, [inventory.candidates.find(i => i.kind === 'project')!.id]);
+it('lists skill-only projects when their skills are available for import', async () => {
+  const trusted = join(home, 'trusted');
+  const untrusted = join(home, 'untrusted');
+  skill(join(trusted, '.claude/skills/reports'));
+  skill(join(untrusted, '.claude/skills/reports'));
+  write(join(home, '.claude.json'), JSON.stringify({ projects: { [trusted]: {}, [untrusted]: {} } }));
+  const importer = createRuntimeImportService('gateway-owner', undefined, root => root === trusted);
+  const inventory = await scanProduct(importer, 'claude-code');
+  expect(inventory.candidates).toMatchObject([
+    { kind: 'project', displayPath: trusted },
+    { kind: 'skill', status: 'ready' },
+  ]);
+  write(join(untrusted, 'CLAUDE.md'), 'Project working rules');
+  const rescanned = await scanProduct(importer, 'claude-code');
+  const project = rescanned.candidates.find(i => i.kind === 'project' && i.displayPath === untrusted)!;
+  expect(rescanned.candidates.filter(i => i.parentId === project.id)).toMatchObject([
+    { kind: 'skill', status: 'blocked' },
+    { kind: 'context', status: 'ready' },
+  ]);
+  const result = await run(rescanned, [project.id]);
   expect(result).toMatchObject({ projects: 1, skills: 0 });
 });
 it('deduplicates simultaneous requests and rejects a request ID used with another selection', async () => {

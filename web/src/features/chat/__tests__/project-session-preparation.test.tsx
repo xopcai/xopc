@@ -50,7 +50,10 @@ describe('project session preparation', () => {
     expect(preparation?.project).toEqual(project);
     expect(openNewChatHandoff).not.toHaveBeenCalled();
     expect(runtime.navigateToSession).not.toHaveBeenCalled();
-    await act(async () => preparation!.create('local_checkout'));
+    const onOpened = vi.fn();
+    await act(async () => preparation!.create('local_checkout', undefined, onOpened));
+    expect(onOpened).toHaveBeenCalledExactlyOnceWith('created');
+    expect(onOpened.mock.invocationCallOrder[0]).toBeLessThan(runtime.navigateToSession.mock.invocationCallOrder[0]);
     expect(openNewChatHandoff).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-a', executionMode: 'local_checkout', search: '?draft=hello&autoSend=1' }));
     expect(runtime.adoptEmptySession).toHaveBeenCalledWith('created', null);
     expect(runtime.navigateToSession).toHaveBeenCalledWith('created', true, '?draft=hello&autoSend=1');

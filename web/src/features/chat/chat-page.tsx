@@ -570,14 +570,9 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   const contextSwitchSourceRef = useRef<string | null | undefined>(undefined);
   const [updatingContext, setUpdatingContext] = useState(false);
   useLayoutEffect(() => {
-    if (contextSwitchSourceRef.current !== undefined) {
-      if (chatConversationId && chatConversationId !== contextSwitchSourceRef.current) {
-        contextSwitchSourceRef.current = undefined;
-      }
-      return;
+    if (chatConversationId && chatConversationId !== contextSwitchSourceRef.current) {
+      contextSwitchSourceRef.current = undefined;
     }
-    setComposerContextRefs([]);
-    setComposerAttachmentSummaries([]);
   }, [chatConversationId]);
   useEffect(() => {
     let cancelled = false;
@@ -943,7 +938,6 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   const handleProjectChange = useCallback(async (projectId: string | null) => {
     if (updatingContext || projectComposer.busy) return;
     if (session.projectPreparation) {
-      contextSwitchSourceRef.current = null;
       navigate(newChatHrefForProject(projectId), { state: { forceNewChat: true, agentId: agents.displayAgentId, temporary: session.userContextMode === 'temporary' } });
       return;
     }
@@ -1386,6 +1380,8 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 sending={stream.sending}
                 streaming={stream.streaming}
                 conversationId={session.conversationId}
+                unboundDraftKey={session.conversationId ? undefined : JSON.stringify([pathname, searchParams.get('projectId')])}
+                getDraftHandoffTarget={projectComposer.getDraftHandoffTarget}
                 prepareContextSession={session.projectPreparation ? projectComposer.prepareSession : undefined}
                 welcomeDraftSeed={injectedDraftSeed ?? welcomeDraftSeed}
                 welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? welcomeSelection : null}
@@ -1441,7 +1437,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 voiceAgentName={personal && personalWelcome ? personalWelcome.name : welcomeAgent.name}
                 voiceTaskId={taskId ?? undefined}
                 voiceMode={personal ? 'assistant' : undefined}
-                prepareVoiceSession={session.projectPreparation ? () => session.projectPreparation!.create(projectComposer.mode) : undefined}
+                prepareVoiceSession={session.projectPreparation ? projectComposer.prepareSession : undefined}
               />
               </div>
             </div>

@@ -85,18 +85,22 @@ it('shows request errors without treating them as a successful import', async ()
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('Owner access required');
   expect(container.querySelector('[role="status"]')).toBeNull();
 });
-it('searches large project inventories without rendering every project at once', async () => {
+it('searches large project inventories without selecting the entire project group', async () => {
   const projects = Array.from({ length: 65 }, (_, index) => ({
     id: `project-${index}`, kind: 'project' as const, name: `project-${index}`, description: '', displayPath: `/work/project-${index}`,
     scope: 'project' as const, status: 'ready' as const, suggested: false,
   }));
+  const rules = projects.map(project => ({
+    ...inventory.candidates[4], id: `${project.id}-rule`, parentId: project.id, displayPath: `${project.displayPath}/CLAUDE.md`,
+  }));
   vi.mocked(importRequest).mockImplementation(async path => {
     if (path === '/sources') return { sources: [{ id: 'claude-code', name: 'Claude Code', detected: true }] };
-    if (path.endsWith('/scan')) return { ...inventory, candidates: [inventory.candidates[0], ...projects] };
+    if (path.endsWith('/scan')) return { ...inventory, candidates: [inventory.candidates[0], ...projects, ...rules] };
     return result;
   });
   await open();
   await act(async () => buttonStarting('Projects').click());
+  expect(checkbox('Projects')).toBeUndefined();
   expect(document.body.textContent).toContain('project-59');
   expect(document.body.textContent).not.toContain('project-64');
   const search = document.querySelector<HTMLInputElement>('input[aria-label="Search Projects"]')!;
@@ -104,5 +108,8 @@ it('searches large project inventories without rendering every project at once',
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, 'project-64');
     search.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  expect(document.body.textContent).toContain('project-64');
+  expect(checkbox('project-64').checked).toBe(false);
+  await act(async () => checkbox('project-64').click());
+  await act(async () => buttonStarting('Import 2 items').click());
+  expect(importRequest).toHaveBeenCalledWith('/runs', { inventoryId: 'inventory', candidateIds: ['s', 'project-64'], requestId: expect.any(String), retryOf: undefined });
 });

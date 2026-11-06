@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useComposerActions, type UseComposerActionsOptions } from '../use-composer-actions';
+import type { ComposerSendAccepted } from '../composer.types';
 
 vi.mock('../composer-notifications', () => ({ showComposerNotification: vi.fn() }));
 
@@ -114,12 +115,12 @@ describe('composer acceptance preserves drafts', () => {
   it.each(['rejected', 'failed', 'changed', 'switched'])('retains the draft when interrupt is %s', async mode => {
     let resolve!: (accepted: boolean) => void;
     let reject!: (error: Error) => void;
-    options = { ...options, runBusy: true, draftScope: 'first',
+    options = { ...options, runBusy: true, draftScope: { gatewayIdentity: 'gateway', conversationId: 'first' },
       onSteeringInterrupt: () => new Promise<boolean>((done, fail) => { resolve = done; reject = fail; }) };
     await render();
     await act(async () => actions.interruptDraft());
     if (mode === 'changed') options = { ...options, getTextValue: () => 'New draft' };
-    if (mode === 'switched') options = { ...options, draftScope: 'second' };
+    if (mode === 'switched') options = { ...options, draftScope: { gatewayIdentity: 'gateway', conversationId: 'second' } };
     await render();
     await act(async () => {
       if (mode === 'failed') reject(new Error('Connection lost'));
@@ -173,6 +174,36 @@ describe('composer acceptance preserves drafts', () => {
     await act(async () => accept(false));
     expect(options.resetEditor).not.toHaveBeenCalled();
   });
+
+  it.each(['created session', 'different session', 'different gateway', 'newer draft', 'existing source'] as const)(
+    'settles a project first send with the %s in view', async (scenario) => {
+      let resolve!: (result: ComposerSendAccepted) => void;
+      options = {
+        ...options,
+        draftScope: { gatewayIdentity: 'gateway', conversationId: scenario === 'existing source' ? 'previous' : null },
+        wireAttachmentsPayload: () => [{ type: 'file', name: 'draft.txt' }],
+        getContextRefs: () => [{ kind: 'note', sourceId: 'note', title: 'Note', expectedVersion: '1' }],
+        onSend: () => new Promise<ComposerSendAccepted>(done => { resolve = done; }),
+      };
+      await render();
+      actions.send();
+      options = {
+        ...options,
+        draftScope: {
+          gatewayIdentity: scenario === 'different gateway' ? 'other-gateway' : 'gateway',
+          conversationId: scenario === 'different session' ? 'other-session' : 'created',
+        },
+        getTextValue: scenario === 'newer draft' ? () => 'New draft' : options.getTextValue,
+      };
+      await render();
+      await act(async () => resolve({ conversationId: 'created' }));
+
+      const expectedClears = scenario === 'created session' ? 1 : 0;
+      expect(options.resetEditor).toHaveBeenCalledTimes(expectedClears);
+      expect(options.clearAttachments).toHaveBeenCalledTimes(expectedClears);
+      expect(options.clearContextRefs).toHaveBeenCalledTimes(expectedClears);
+    },
+  );
 
   it('sends a reference-only draft', async () => {
     const onSend = vi.fn(() => true);

@@ -106,9 +106,19 @@ export async function scanProduct(service: ImportService, source: ImportSource, 
       inventory.notices.push(`${path}: some contents could not be scanned; only listed items can be imported.`);
     }
   }
-  const score = (item: StoredInventoryItem) => inventory.candidates.some(c => c.parentId === item.id && ['ready', 'conflict'].includes(c.status)) ? 0 : item.projectId ? 1 : 2;
-  const roots = inventory.candidates.filter(c => c.kind === 'project').sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name) || a.location.localeCompare(b.location));
-  inventory.candidates = [...inventory.candidates.filter(c => c.scope === 'user'), ...roots.flatMap(p => [p, ...inventory.candidates.filter(c => c.parentId === p.id)])];
+  const importableProjects = new Set(inventory.candidates.flatMap(item =>
+    item.parentId && (item.kind === 'skill' || item.kind === 'context') && (item.status === 'ready' || item.status === 'conflict')
+      ? [item.parentId] : []));
+  const roots = inventory.candidates.filter(c => c.kind === 'project' && importableProjects.has(c.id))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.location.localeCompare(b.location));
+  const standaloneConnections = inventory.candidates
+    .filter(c => c.kind === 'connection' && c.parentId && !importableProjects.has(c.parentId))
+    .map(c => ({ ...c, parentId: undefined }));
+  inventory.candidates = [
+    ...inventory.candidates.filter(c => c.scope === 'user'),
+    ...roots.flatMap(p => [p, ...inventory.candidates.filter(c => c.parentId === p.id)]),
+    ...standaloneConnections,
+  ];
   new ImportSelectionRepository(owner).save('inventory', inventory);
   return publicInventory(inventory);
 }
