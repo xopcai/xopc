@@ -41,7 +41,7 @@ import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerUnderstandingSourcesIpc } from './ipc/understanding-sources-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
-import { registerTerminalIpc, stopAllTerminals } from './ipc/terminal-ipc.js';
+import { registerTerminalIpc, resetAllTerminals, stopAllTerminals } from './ipc/terminal-ipc.js';
 import {
   getElectronShellLanguage,
   getElectronShellThemePreference,
@@ -747,9 +747,9 @@ async function selectDesktopGateway(data: DesktopGatewaySettingsData, reportProg
   }
   // Stop every native invocation and old realtime connection before changing authority.
   await desktopEndpointHost?.close();
-  stopAllTerminals();
   if (data.mode === 'remote') { stopTunnelStatusPolling(); await stopGatewayProcessAndWait(); }
   if (localRoots) desktopFileRoots.splice(0, desktopFileRoots.length, ...localRoots);
+  resetAllTerminals();
   desktopTransport!.select(target);
   activeGateway = target;
   setSelectedDesktopGateway(target);
