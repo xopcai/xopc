@@ -75,9 +75,11 @@ export function HomeTaskReview({ taskId, language, onComplete, onUpdated }: {
     setBusy(true);
     setError(undefined);
     try {
-      updated(await operation());
-      setNotice(message);
-      if (complete) onComplete();
+      const next = await operation();
+      updated(next);
+      const completed = complete || (detail?.task.phase !== 'closed' && next.task.phase === 'closed' && next.task.resolution === 'done');
+      setNotice(completed ? (zh ? '任务已验收完成。' : 'Task accepted.') : message);
+      if (completed) onComplete();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {

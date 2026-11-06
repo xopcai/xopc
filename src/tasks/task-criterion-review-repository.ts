@@ -1,26 +1,16 @@
 import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
 
-import type { ActorRef, Task } from '@xopcai/gateway-contract';
+import type { ActorRef, Task, TaskCriterionReview } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 import { TaskRunRepository } from './task-run-repository.js';
 
-export interface TaskCriterionReview {
-  contractVersion: number;
-  criterionIndex: number;
-  criterionText: string;
-  status: 'passed' | 'failed';
-  note?: string;
-  reviewedBy: ActorRef;
-  reviewedAt: number;
-}
-
 type ReviewRow = {
   contract_version: number;
   criterion_index: number;
   criterion_text: string;
-  status: 'passed' | 'failed';
+  status: TaskCriterionReview['status'];
   note: string | null;
   reviewed_by_json: string;
   reviewed_at: number;
@@ -51,7 +41,7 @@ export class TaskCriterionReviewRepository {
     task: Task;
     expectedVersion: number;
     criterionIndex: number;
-    status: 'passed' | 'failed';
+    status: TaskCriterionReview['status'];
     note?: string;
     actor: ActorRef;
   }): TaskCriterionReview | undefined {
@@ -90,11 +80,12 @@ export class TaskCriterionReviewRepository {
     });
   }
 
-  allPassed(task: Task): boolean {
+  allPassed(task: Task, passingCriterionIndex?: number): boolean {
     const criteria = task.contract?.acceptanceCriteria ?? [];
     if (criteria.length === 0) return false;
     const reviews = new Map(this.list(task.id, task.latestContractVersion)
       .map((review) => [review.criterionIndex, review.status]));
+    if (passingCriterionIndex !== undefined) reviews.set(passingCriterionIndex, 'passed');
     const runs = new TaskRunRepository();
     const versions = new Map(runs.listByTask(task.id).map((run) => [run.id, run.contractVersion]));
     const receipts = runs.listReceipts(task.id)
@@ -106,7 +97,7 @@ export class TaskCriterionReviewRepository {
       if (task.contract?.acceptancePolicy === 'manual') return false;
       for (const receipt of receipts) {
         const check = receipt.verification.checks.find((item) => item.criterion === criterion);
-        if (!check || check.status === 'unverified') continue;
+        if (!check) continue;
         return check.status === 'passed' && verifiedTaskCriteria(receipt).has(criterion);
       }
       return false;

@@ -43,6 +43,7 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TimePicker } from '@/components/ui/time-picker';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { ModelSelector } from '@/features/chat/model/model-selector';
@@ -2410,14 +2411,7 @@ function AutomationForm({
           <SelectOption value="event">{labels.trigger.customEvent}</SelectOption>
         </Select>
         {form.triggerMode === 'once' ? (
-          <Field label={labels.form.onceAt}>
-            <input
-              className={inputClass}
-              type="datetime-local"
-              value={form.onceAt}
-              onChange={(event) => update({ onceAt: event.target.value })}
-            />
-          </Field>
+          <DateTimePicker label={labels.form.onceAt} value={form.onceAt} defaultTime={form.time} onChange={onceAt => update({ onceAt })} />
         ) : null}
         {form.triggerMode === 'daily' || form.triggerMode === 'weekly' ? (
           <div className="grid gap-3 sm:grid-cols-2">

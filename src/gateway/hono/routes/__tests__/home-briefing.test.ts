@@ -3,6 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { buildHomeWorkbench, decisionFromTask } from '../home.js';
 
 describe('home workbench', () => {
+  it('ranks a near deadline above newer routine decisions and preserves the project label', () => {
+    const workbench = buildHomeWorkbench({
+      decisions: [
+        { id: 'newer', kind: 'task', title: 'Check format', reason: 'decision_needed', urgency: 'now', href: '/tasks/newer', updatedAt: 900 },
+        { id: 'due', kind: 'task', title: 'Review report', reason: 'decision_needed', urgency: 'now', href: '/tasks/due', updatedAt: 400, dueAt: 2_000, projectName: 'Customer renewal' },
+      ],
+      attention: [], runningTasks: [], scheduled: [], nowMs: 1_000,
+    });
+    expect(workbench.needsUser.map((item) => item.id)).toEqual(['due', 'newer']);
+    expect(workbench.needsUser[0]?.projectName).toBe('Customer renewal');
+  });
+
   it('keeps decisions and failures in the user-attention layer', () => {
     const workbench = buildHomeWorkbench({
       locale: 'zh-CN',
@@ -138,8 +150,8 @@ describe('home workbench', () => {
 
   it('retains paused tasks as reachable background items with their wait reason', () => {
     const task = { id: 'paused-task', title: 'Paused', updatedAt: 1 } as Parameters<typeof buildHomeWorkbench>[0]['runningTasks'][number];
-    const home = buildHomeWorkbench({ locale: 'en', decisions: [], attention: [], runningTasks: [task], waitingTaskReasons: { 'paused-task': 'Paused by user' }, scheduled: [], nowMs: 1 });
-    expect(home.background[0]).toMatchObject({ summary: 'Paused by user', statusLabel: 'Waiting', openAction: { type: 'open', href: '/tasks/paused-task' } });
+    const home = buildHomeWorkbench({ locale: 'zh', decisions: [], attention: [], runningTasks: [task], waitingTaskReasons: { 'paused-task': 'Paused by user' }, pausedTaskIds: new Set(['paused-task']), scheduled: [], nowMs: 1 });
+    expect(home.background[0]).toMatchObject({ summary: '已由你暂停', statusLabel: '已暂停', backgroundState: 'paused', openAction: { type: 'open', label: '查看并恢复', href: '/tasks/paused-task' } });
   });
 
 });

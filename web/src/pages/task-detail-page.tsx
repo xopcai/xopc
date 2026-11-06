@@ -8,7 +8,9 @@ import { TaskPhaseHistory } from '@/features/tasks/task-phase-history';
 import { TaskSchedulePanel } from '@/features/tasks/task-schedule-panel';
 import { TaskScheduleDialog } from '@/features/tasks/task-schedule-dialog';
 import { TaskCurrentAction } from '@/features/tasks/task-current-action';
-import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
+import { TaskHeaderTitle } from '@/features/tasks/task-header-title';
+import { findTaskScroller } from '@/features/tasks/task-section-scroll';
+import type { TaskChangedEvent, TaskCommand, TaskCriterionReview, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, CalendarClock, Circle, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
@@ -216,11 +218,14 @@ function TextList({ items, empty, contentKey }: {
   })}</ul></TaskExpandableContent>;
 }
 
-function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
+type TaskHeaderState = { taskId: string; title?: string; compact: boolean };
+
+function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHeaderChange }: {
   taskId: string;
   presentation: 'page' | 'modal';
   backgroundPath?: string;
   onDeleted?: () => void;
+  onHeaderChange?: (state: TaskHeaderState) => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -255,6 +260,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const acceptanceRef = useRef<HTMLDetailsElement>(null);
   const resultsRef = useRef<HTMLElement>(null);
   const splitPaneRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  const [compactHeader, setCompactHeader] = useState(false);
   const skipTitleSaveRef = useRef(false);
   const skipDescriptionSaveRef = useRef(false);
   const initialDescriptionDraftRef = useRef('');
@@ -582,7 +589,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     }
   }, [copy.actionFailed, navigate, onDeleted, returnPath, setOperationPending, taskId]);
 
-  const reviewCriterion = useCallback(async (criterionIndex: number, status: 'passed' | 'failed') => {
+  const reviewCriterion = useCallback(async (criterionIndex: number, status: TaskCriterionReview['status']) => {
     const currentDetail = detailRef.current;
     if (!currentDetail) return false;
     setOperationPending('acceptance', true);
@@ -602,15 +609,36 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     }
   }, [copy.actionFailed, mutateDetail, setOperationPending, taskId]);
 
+  const taskTitle = detail?.task.title;
+  const hasTaskTitle = taskTitle !== undefined;
+  useLayoutEffect(() => {
+    const hero = heroRef.current;
+    const pane = hero?.parentElement;
+    if (!hasTaskTitle || !hero || !pane || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => {
+      const scroller = findTaskScroller(pane);
+      const top = scroller ? scroller.getBoundingClientRect().top + scroller.clientTop : 0;
+      setCompactHeader(!entry.isIntersecting && entry.boundingClientRect.bottom <= top);
+    });
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, [hasTaskTitle, taskId]);
+
+  useLayoutEffect(() => {
+    onHeaderChange?.({ taskId, title: taskTitle, compact: compactHeader });
+  }, [compactHeader, onHeaderChange, taskId, taskTitle]);
+
   useLayoutEffect(() => {
     if (presentation === 'modal') return;
     setPageHeader({
       startExtra: <Link to={returnPath} className="flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={copy.backToWork}><ArrowLeft className="size-4" /></Link>,
-      main: detail ? <p className="truncate text-sm font-semibold text-fg">{projectName ? `${projectName} / ${copy.taskLabel}` : copy.taskLabel}</p> : null,
+      main: hasTaskTitle ? <div className="min-w-0 text-sm font-semibold text-fg">
+        <TaskHeaderTitle label={projectName ? `${projectName} / ${copy.taskLabel}` : copy.taskLabel} title={taskTitle} compact={compactHeader} />
+      </div> : null,
       end: null,
     });
     return clearPageHeader;
-  }, [clearPageHeader, copy.backToWork, copy.taskLabel, detail, presentation, projectName, returnPath, setPageHeader]);
+  }, [clearPageHeader, compactHeader, copy.backToWork, copy.taskLabel, hasTaskTitle, presentation, projectName, returnPath, setPageHeader, taskTitle]);
 
   if (loadError && !detail) return <div className={presentation === 'modal' ? 'p-5 text-sm text-danger' : 'mx-auto max-w-3xl p-6 text-sm text-danger'}>{copy.taskNotFound}</div>;
   if (!detail) return <div className={presentation === 'modal' ? 'p-5' : 'mx-auto max-w-4xl p-4 sm:p-6'}><DetailSkeleton /></div>;
@@ -743,8 +771,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
       style={{ '--task-chat-panel-width': `${chatPanelPercent}%` } as CSSProperties}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-      <div className="task-detail-scroll flex min-w-0 shrink-0 flex-col lg:min-h-0 lg:flex-1 lg:shrink lg:overflow-y-auto lg:overscroll-contain">
-      <header className={cn('shrink-0 border-b border-edge-subtle bg-surface-panel px-5 py-4 sm:px-6', recentlyChanged('title') && 'task-detail-live-update')}>
+      <div className="task-detail-scroll flex min-w-0 shrink-0 flex-col bg-surface-panel lg:min-h-0 lg:flex-1 lg:shrink lg:overflow-y-auto lg:overscroll-contain">
+      <header ref={heroRef} className={cn('shrink-0 px-4 py-5 sm:px-6 sm:py-6', recentlyChanged('title') && 'task-detail-live-update')}>
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
@@ -784,11 +812,11 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
                     event.currentTarget.blur();
                   }
                 }}
-                className="mt-2 block max-h-56 min-h-14 w-full max-w-3xl resize-none overflow-y-auto bg-transparent p-0 text-xl font-semibold leading-7 text-fg outline-none [field-sizing:content]"
+                className="mt-2 block max-h-56 min-h-14 w-full max-w-3xl resize-none overflow-y-auto bg-transparent p-0 text-xl font-semibold leading-7 tracking-tight text-fg sm:text-2xl outline-none [field-sizing:content]"
               />
             ) : (
               <TaskExpandableContent content={detail.task.title} contentKey={`${taskId}:title`} language={language} previewHeight={56} className="mt-2 max-w-3xl">
-                <h1 className="break-words text-xl font-semibold leading-7 text-fg">
+                <h1 className="break-words text-xl font-semibold leading-7 tracking-tight text-fg sm:text-2xl">
                   <button type="button" className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-sm text-left outline-none hover:bg-surface-hover/60 focus-visible:ring-2 focus-visible:ring-accent/40" title={detail.task.title} onClick={beginTitleEdit}>{detail.task.title}</button>
                 </h1>
               </TaskExpandableContent>
@@ -813,7 +841,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
 
       </header>
       <div className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-edge-subtle bg-surface-panel px-4 py-2 sm:px-5" aria-label={language === 'zh' ? '任务操作' : 'Task actions'}>
-        <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{detail.task.title} · {statusLabel}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{statusLabel}</span>
         {taskActions}
         {error ? <p role="alert" className="basis-full text-sm text-danger">{error}</p> : null}
         <TaskDetailNavigation key={taskId} language={language} hasSchedule={taskSchedules.length > 0} />
@@ -824,28 +852,27 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         <section data-task-section="results" data-task-section-label={language === 'zh' ? '交付结果' : 'Results'} ref={resultsRef} tabIndex={-1} aria-labelledby="task-results-heading" className="scroll-mt-24 space-y-4">
           <TaskDeliverySummary detail={detail} language={language} />
           {detail.task.phase === 'review' && (detail.waits.length > 0 || detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) ? <TaskCurrentAction detail={detail} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} /> : null}
-          <TaskDetailDisclosure panelId="acceptance" data-task-section="acceptance" data-task-section-label={language === 'zh' ? '验收' : 'Acceptance'} defaultOpen ref={acceptanceRef} tabIndex={-1} aria-label={copy.successDefinition} className="scroll-mt-24 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel" summaryClassName="cursor-pointer p-4 text-sm font-medium text-fg" title={<>{language === 'zh' ? '验收' : 'Acceptance'} · {criterionSummaries.filter((criterion) => criterion.status === 'passed').length}/{criterionSummaries.length}</>}>
-            <div className="px-4 pb-4">
-              <TaskAcceptancePanel key={`${taskId}:${detail.task.latestContractVersion}`} criteria={criterionSummaries} language={language} closed={detail.task.phase === 'closed'} pending={pendingOperations.has('acceptance')} completionPending={commandPending} canComplete={canApprove} error={acceptanceError}
+          <TaskDetailDisclosure panelId="acceptance" chevron data-task-section="acceptance" data-task-section-label={language === 'zh' ? '验收' : 'Acceptance'} defaultOpen ref={acceptanceRef} tabIndex={-1} aria-label={copy.successDefinition} className="scroll-mt-24 overflow-hidden rounded-2xl border border-edge-subtle bg-surface-panel" summaryClassName="min-h-12 cursor-pointer px-4 py-2 text-sm font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" title={<span className="flex items-center justify-between gap-2">
+            {language === 'zh' ? '验收' : 'Acceptance'}
+            <span aria-live="polite" className="rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium tabular-nums text-fg-muted">{criterionSummaries.filter((criterion) => criterion.status === 'passed').length}/{criterionSummaries.length}</span>
+          </span>}>
+            <TaskAcceptancePanel key={`${taskId}:${detail.task.latestContractVersion}`} criteria={criterionSummaries} language={language} closed={detail.task.phase === 'closed'} pending={pendingOperations.has('acceptance')} error={acceptanceError}
                 blockedReason={activeWait ? (language === 'zh' ? '请先处理待办事项' : 'Resolve the pending request first')
-                  : activeRun ? (language === 'zh' ? '请等待当前执行结束' : 'Wait for the current run to finish')
-                  : !allCriteriaPassed ? (criterionSummaries.length === 0 ? (language === 'zh' ? '请先定义验收标准' : 'Define acceptance criteria first') : (language === 'zh' ? `还有 ${criterionSummaries.filter((item) => item.status !== 'passed').length} 项待验收` : `${criterionSummaries.filter((item) => item.status !== 'passed').length} criteria need review`))
-                  : (language === 'zh' ? '任务尚未进入可完成状态' : 'The task is not ready for completion')}
-                onReview={reviewCriterion} onComplete={() => void execute({ type: 'close', resolution: 'done' })} projectId={detail.task.projectId} conversationId={conversationConversationId ?? undefined} />
-            </div>
+                  : activeRun ? (language === 'zh' ? '请等待当前执行结束' : 'Wait for the current run to finish') : undefined}
+                onReview={reviewCriterion} projectId={detail.task.projectId} conversationId={conversationConversationId ?? undefined} />
           </TaskDetailDisclosure>
         </section>
 
-        <TaskDetailDisclosure panelId="report" defaultOpen data-task-section="report" data-task-section-label={language === 'zh' ? '执行报告' : 'Report'} className="rounded-xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer text-sm font-medium text-fg" title={language === 'zh' ? '完整执行报告' : 'Full execution report'}>
+        <TaskDetailDisclosure panelId="report" chevron defaultOpen data-task-section="report" data-task-section-label={language === 'zh' ? '执行报告' : 'Report'} className="rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '完整执行报告' : 'Full execution report'}>
           <TaskExecutionReport key={latestReceipt?.runId ?? taskId} detail={detail} language={language} />
         </TaskDetailDisclosure>
         {!automationList && !automationListError ? <Skeleton className="h-9 rounded-lg" /> : null}
         {automationListError ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger"><span>{language === 'zh' ? '无法读取执行计划，请重试后再设置时间。' : 'Could not load schedules. Retry before setting a time.'}</span><Button variant="ghost" onClick={() => void mutateAutomations()}>{language === 'zh' ? '重试' : 'Retry'}</Button></div> : null}
-        {taskSchedules.length > 0 ? <TaskDetailDisclosure panelId="schedule" defaultOpen data-task-section="schedule" data-task-section-label={language === 'zh' ? '执行时间' : 'Schedule'} ref={schedulePanelRef} tabIndex={-1} className="scroll-mt-24 rounded-xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer text-sm text-fg-muted" title={<>{language === 'zh' ? '执行时间' : 'Execution schedule'} · {taskSchedules.length}{nextScheduledRun !== undefined ? ` · ${language === 'zh' ? '下次执行：' : 'Next run: '}${formatMediumDateTime(nextScheduledRun, language)}` : ''}</>}>
+        {taskSchedules.length > 0 ? <TaskDetailDisclosure panelId="schedule" chevron defaultOpen data-task-section="schedule" data-task-section-label={language === 'zh' ? '执行时间' : 'Schedule'} ref={schedulePanelRef} tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm text-fg-muted" title={<>{language === 'zh' ? '执行时间' : 'Execution schedule'} · {taskSchedules.length}{nextScheduledRun !== undefined ? ` · ${language === 'zh' ? '下次执行：' : 'Next run: '}${formatMediumDateTime(nextScheduledRun, language)}` : ''}</>}>
           <div className="mt-3"><TaskSchedulePanel schedules={taskSchedules} language={language} onEdit={editSchedule} onUpdated={saveScheduledAutomation} /></div>
         </TaskDetailDisclosure> : null}
 
-        <TaskDetailDisclosure panelId="goal" defaultOpen data-task-section="goal" data-task-section-label={language === 'zh' ? '目标说明' : 'Goal'} className="rounded-xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer text-sm font-medium text-fg" title={language === 'zh' ? '任务目标与说明' : 'Task goal and description'}>
+        <TaskDetailDisclosure panelId="goal" chevron defaultOpen data-task-section="goal" data-task-section-label={language === 'zh' ? '目标说明' : 'Goal'} className="rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '任务目标与说明' : 'Task goal and description'}>
           <div className="mt-3">
         <section className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel divide-y divide-edge-subtle">
         <div className="border-b border-edge-subtle p-5">
@@ -907,7 +934,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           </div>
         </TaskDetailDisclosure>
 
-        <TaskDetailDisclosure panelId="management" defaultOpen data-task-section="management" data-task-section-label={language === 'zh' ? '任务管理' : 'Management'} aria-label={language === 'zh' ? '任务管理' : 'Task management'} className="rounded-xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer text-sm font-medium text-fg" title={language === 'zh' ? '任务管理' : 'Task management'}>
+        <TaskDetailDisclosure panelId="management" chevron defaultOpen data-task-section="management" data-task-section-label={language === 'zh' ? '任务管理' : 'Management'} aria-label={language === 'zh' ? '任务管理' : 'Task management'} className="rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '任务管理' : 'Task management'}>
         <aside className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
           <section className={cn('p-5', recentlyChanged('phase', 'resolution', 'priority', 'dueAt', 'delegateAgentId') && 'task-detail-live-update')}>
             <h2 className="text-sm font-semibold text-fg">{copy.taskProperties}</h2>
@@ -943,7 +970,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           {referenceContext.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{referenceContext.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
         </TaskDetailDisclosure>
 
-        <TaskDetailDisclosure panelId="activity" defaultOpen data-task-section="activity" data-task-section-label={language === 'zh' ? '活动留言' : 'Activity'} className="rounded-xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer text-sm font-semibold text-fg" title={language === 'zh' ? '活动记录与留言' : 'Activity and updates'}>
+        <TaskDetailDisclosure panelId="activity" chevron defaultOpen data-task-section="activity" data-task-section-label={language === 'zh' ? '活动留言' : 'Activity'} className="rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-semibold text-fg" title={language === 'zh' ? '活动记录与留言' : 'Activity and updates'}>
           <div className="mt-3 space-y-4"><TaskCollaborationPanel key={taskId} taskId={taskId} /><TaskPhaseHistory changes={detail.phaseChanges} language={language} /></div>
         </TaskDetailDisclosure>
       </section>
@@ -960,12 +987,10 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         onPointerDown={beginPanelResize}
         onKeyDown={resizePanelsWithKeyboard}
         onDoubleClick={() => commitChatPanelPercent(DEFAULT_TASK_CHAT_PANEL_PERCENT)}
-        className={`group hidden w-2 shrink-0 cursor-col-resize touch-none items-stretch justify-center bg-surface-panel outline-none transition-colors hover:bg-surface-hover focus-visible:bg-surface-hover lg:flex ${resizingPanels ? 'bg-surface-hover' : ''}`}
-      >
-        <div className="w-px bg-edge-strong/70 transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
-      </div>
+        className="hidden w-2 shrink-0 cursor-col-resize touch-none bg-surface-panel outline-none focus-visible:bg-accent-soft lg:block"
+      />
 
-      <aside className="flex min-h-[34rem] min-w-0 shrink-0 flex-col border-t border-edge-subtle bg-surface-panel lg:min-h-0 lg:w-[var(--task-chat-panel-width)] lg:border-t-0">
+      <aside className="flex min-h-[34rem] min-w-0 shrink-0 flex-col bg-surface-panel lg:min-h-0 lg:w-[var(--task-chat-panel-width)]">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge-subtle px-4 py-3">
           <h2 className="text-sm font-medium text-fg-muted">{language === 'zh' ? '执行对话' : 'Execution chat'}</h2>
           <div className="flex items-center gap-1">
@@ -1030,6 +1055,8 @@ export function TaskDetailModal({ taskId, backgroundPath, workspacePanelWidth = 
   const language = useLocaleStore((state) => state.language);
   const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
   const workspacePanelOpen = workspacePanelWidth > 0;
+  const [header, setHeader] = useState<TaskHeaderState>();
+  const currentHeader = header?.taskId === taskId ? header : undefined;
 
   return (
     <Dialog.Root
@@ -1073,14 +1100,16 @@ export function TaskDetailModal({ taskId, backgroundPath, workspacePanelWidth = 
           }}
         >
           <header className="flex shrink-0 items-center justify-between gap-3 bg-surface-panel px-5 py-3.5">
-            <Dialog.Title className="font-medium text-fg">{language === 'zh' ? '任务详情' : 'Task details'}</Dialog.Title>
+            <Dialog.Title className="min-w-0 flex-1 font-medium text-fg">
+              <TaskHeaderTitle label={language === 'zh' ? '任务详情' : 'Task details'} title={currentHeader?.title} compact={currentHeader?.compact ?? false} />
+            </Dialog.Title>
             <Dialog.Description className="sr-only">{language === 'zh' ? '查看并操作任务详情' : 'View and manage task details'}</Dialog.Description>
             <div className="flex shrink-0 items-center gap-1">
               <Dialog.Close className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}><X className="size-4" aria-hidden /></Dialog.Close>
             </div>
           </header>
           <div className="min-h-0 flex-1 overflow-hidden">
-            <TaskDetailView taskId={taskId} presentation="modal" backgroundPath={backgroundPath} onDeleted={() => {
+            <TaskDetailView key={taskId} taskId={taskId} presentation="modal" backgroundPath={backgroundPath} onHeaderChange={setHeader} onDeleted={() => {
               setPreviewPath(null);
               onClose();
             }} />

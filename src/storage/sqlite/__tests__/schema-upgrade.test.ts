@@ -73,6 +73,23 @@ function expectPreserved(db: DatabaseSync): void {
 }
 
 describe('supported installed database upgrades', () => {
+  it('preserves v270 criterion decisions and supports clearing acceptance after upgrade', () => {
+    const db = historicalDatabase(270);
+    try {
+      db.exec(`INSERT INTO task_contracts(task_id, version, objective, created_by_json, created_at)
+        VALUES ('task-1', 1, 'Keep my task', '{"kind":"user"}', 1);
+        INSERT INTO task_criterion_reviews VALUES
+          ('task-1', 1, 0, 'First criterion', 'passed', 'Retain note', '{"kind":"user"}', 2),
+          ('task-1', 1, 1, 'Second criterion', 'failed', NULL, '{"kind":"user"}', 3);`);
+      const before = db.prepare('SELECT * FROM task_criterion_reviews ORDER BY criterion_index').all();
+      ensureXopcDatabaseSchema(db);
+      expect(db.prepare('SELECT * FROM task_criterion_reviews ORDER BY criterion_index').all()).toEqual(before);
+      db.exec("UPDATE task_criterion_reviews SET status = 'unverified' WHERE criterion_index = 0");
+      expect(db.prepare('SELECT status FROM task_criterion_reviews WHERE criterion_index = 0').get()?.status).toBe('unverified');
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('preserves device identity and foreign-key dependents while adding bridge identities at v270', () => {
     const db = historicalDatabase(269);
     try {

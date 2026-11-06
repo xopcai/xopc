@@ -7,11 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   load: vi.fn(), retry: vi.fn(), acknowledge: vi.fn(), decision: vi.fn(), fetchTask: vi.fn(),
+  getRun: vi.fn(), markRunRead: vi.fn(),
   home: {} as HomeResponse,
 }));
 vi.mock('@/features/tasks/use-home-snapshot', () => ({ useHomeSnapshot: () => ({ home: mocks.home, loading: false, loadError: null, setLoadError: vi.fn(), load: mocks.load }) }));
 vi.mock('@/features/tasks/home-api', () => ({ retryWorkAttention: mocks.retry, acknowledgeWorkAttention: mocks.acknowledge, respondToWorkDecision: mocks.decision, fetchTask: mocks.fetchTask }));
-vi.mock('@/features/tasks/home-quick-composer', () => ({ HomeQuickComposer: () => null }));
+vi.mock('@/features/automations/automation-api', () => ({ automationApi: { getRun: mocks.getRun, markRunRead: mocks.markRunRead } }));
+vi.mock('@/features/tasks/home-quick-composer', () => ({ HomeQuickComposer: ({ variant }: { variant: string }) => <div data-composer={variant} /> }));
 vi.mock('@/features/tasks/home-advisor-card', () => ({ HomeAdvisorCard: () => null }));
 vi.mock('@/features/tasks/home-advisor-status-control', () => ({ HomeAdvisorStatusControl: () => null }));
 vi.mock('@/features/tasks/home-advisor-history-dialog', () => ({ HomeAdvisorHistoryDialog: () => null }));
@@ -31,6 +33,7 @@ describe('home card actions', () => {
   let root: ReturnType<typeof createRoot>;
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     useLocaleStore.setState({ language: 'en' });
     mocks.home = { needsUser: [], background: [], backgroundCount: 0, runningConversations: [], decisions: [], advisor: { state: 'disabled' } } as unknown as HomeResponse;
@@ -41,6 +44,41 @@ describe('home card actions', () => {
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
   const button = (text: string) => [...container.querySelectorAll('button')].find((item) => item.textContent === text)!;
   const render = () => act(async () => root.render(<MemoryRouter><HomePage /><LocationProbe /></MemoryRouter>));
+
+  it('promotes the unread delivery after resolving the last item and opens the idle composer after reading it', async () => {
+    mocks.home.needsUser = [{
+      id: 'approval-1', kind: 'decision', title: 'Send the quote', summary: 'Mail · send\nTo: purchasing',
+      updatedAt: 1, secondaryActions: [],
+      primaryAction: { type: 'connector_decision', label: 'Allow and continue', approvalId: 'approval-1', decision: 'approve' },
+    }];
+    mocks.home.recentDeliveries = [{
+      id: 'automation:weekly-report', kind: 'automation', subjectId: 'weekly-report',
+      title: 'Department weekly report', summary: 'Three projects', completedAt: Date.now(), read: false,
+      href: '/automations?view=run&run=weekly-report',
+    }];
+    mocks.decision.mockResolvedValue({ ok: true });
+    mocks.load.mockImplementation(async () => { mocks.home = { ...mocks.home, needsUser: [] }; });
+    mocks.getRun.mockResolvedValue({ run: { summary: 'Three projects' } });
+    mocks.markRunRead.mockResolvedValue({ marked: true });
+    const headings = () => [...container.querySelectorAll('h2')].map((heading) => heading.textContent);
+    await render();
+    expect(headings()[0]).toBe('Needs attention');
+    expect(button('Allow and continue')).toBeUndefined();
+    await act(async () => button('Review authorization').click());
+    expect(container.textContent).toContain('To: purchasing');
+    await act(async () => button('Allow and continue').click());
+    expect(headings()[0]).toBe('Recent results');
+    await act(async () => button('Open result').click());
+    const markRead = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+      .find((item) => item.textContent === 'Done reading, back to workbench')!;
+    expect(markRead.disabled).toBe(false);
+    await act(async () => markRead.click());
+    expect(mocks.markRunRead).toHaveBeenCalledWith('weekly-report');
+    expect(headings()[0]).toBe('What do you want to get done?');
+    expect(container.querySelector('[data-composer="inline"]')).toBeTruthy();
+    await act(async () => button('Result history').click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Department weekly report');
+  });
 
   it('makes every background item reachable beyond the initial three', async () => {
     mocks.home.background = Array.from({ length: 4 }, (_, index) => ({ id: `schedule-${index}`, kind: 'scheduled', title: `Schedule ${index}`, summary: 'Scheduled', updatedAt: 1, secondaryActions: [], openAction: { type: 'open', label: 'View schedule', href: `/automations?automation=${index}` } }));
