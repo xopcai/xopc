@@ -1,9 +1,28 @@
 import type { Root as MdRoot, RootContent as MdContent } from 'mdast';
 import type { Root, Element, Text } from 'hast';
+import LinkifyIt from 'linkify-it';
 import { SKIP, visitParents } from 'unist-util-visit-parents';
 
 import { collectFileMentionMatches, parseWorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
 import { resolveAppLink } from '@/lib/app-link';
+
+const webLinkifier = new LinkifyIt().tlds(['app', 'cloud', 'dev', 'online', 'site', 'tech', 'xyz'], true);
+
+function bareWebLinks(text: string) {
+  // Treat CJK sentence punctuation as a boundary while preserving the match offsets.
+  const matches = webLinkifier.match(text.replace(/[，。；！？、：（）【】《》「」『』]/g, ' '));
+  return (matches ?? []).flatMap(match => {
+    if (match.schema !== '') return [];
+    try {
+      const url = new URL(`https://${match.raw}`);
+      // Some top-level domains overlap with file extensions (for example, .md).
+      if (parseWorkspaceFileLinkTarget(url.hostname)) return [];
+      return [{ start: match.index, end: match.lastIndex, label: match.raw, url: url.href }];
+    } catch {
+      return [];
+    }
+  });
+}
 
 function fileHref(path: string, line?: number): string {
   const params = new URLSearchParams({ path });
@@ -16,6 +35,8 @@ function normalizeHref(href: string, appLinks: boolean): string {
     const intent = resolveAppLink(href);
     if (intent.kind === 'internal-route') return `#${intent.route}`;
     if (href.startsWith('#')) return href;
+    const [webLink] = bareWebLinks(href);
+    if (webLink?.start === 0 && webLink.end === href.length) return webLink.url;
   }
   const target = parseWorkspaceFileLinkTarget(href);
   return target ? fileHref(target.path, target.line) : href;
@@ -34,7 +55,7 @@ export function rehypeChatLinks() {
   };
 }
 
-/** Keep app links and literal HTML in the syntax tree, including escaped xopc links. */
+/** Resolve bare web and app links before workspace file detection. */
 export function remarkChatContent({ breaks = false }: { breaks?: boolean } = {}) {
   return (tree: MdRoot) => {
     visitParents(tree, (node, ancestors) => {
@@ -46,8 +67,12 @@ export function remarkChatContent({ breaks = false }: { breaks?: boolean } = {})
         }
         return SKIP;
       }
-      if (node.type !== 'text' || ancestors.some(n => n.type === 'link')) return;
-      const matches = Array.from(node.value.matchAll(/\[([^\]\n]+)\]\((xopc:\/\/[^\s<>]+?)\)|xopc:\/\/[^\s<>\[\]()"'，。；！？、]+/gi));
+      if (node.type !== 'text' || ancestors.some(n => n.type === 'link' || n.type === 'linkReference')) return;
+      const appLinks = Array.from(node.value.matchAll(/\[([^\]\n]+)\]\((xopc:\/\/[^\s<>]+?)\)|xopc:\/\/[^\s<>\[\]()"'，。；！？、]+/gi), match => {
+        const raw = match[0].replace(/[.,;!?]+$/, '');
+        return { start: match.index, end: match.index + raw.length, url: match[2] ?? raw, label: match[1] ?? raw };
+      });
+      const matches = [...appLinks, ...bareWebLinks(node.value)].sort((a, b) => a.start - b.start);
       if (!matches.length && !(breaks && node.value.includes('\n'))) return;
       const output: MdContent[] = [];
       const appendText = (value: string) => {
@@ -59,10 +84,10 @@ export function remarkChatContent({ breaks = false }: { breaks?: boolean } = {})
       };
       let cursor = 0;
       for (const match of matches) {
-        const raw = match[0].replace(/[.,;!?]+$/, '');
-        appendText(node.value.slice(cursor, match.index));
-        output.push({ type: 'link', url: match[2] ?? raw, children: [{ type: 'text', value: match[1] ?? raw }] });
-        cursor = match.index + raw.length;
+        if (match.start < cursor) continue;
+        appendText(node.value.slice(cursor, match.start));
+        output.push({ type: 'link', url: match.url, children: [{ type: 'text', value: match.label }] });
+        cursor = match.end;
       }
       appendText(node.value.slice(cursor));
       const parent = ancestors.at(-1);

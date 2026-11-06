@@ -976,6 +976,9 @@ importers:
       katex:
         specifier: 0.19.0
         version: 0.19.0
+      linkify-it:
+        specifier: 5.0.2
+        version: 5.0.2
       lucide-react:
         specifier: ^1.11.0
         version: 1.17.0(react@19.2.6)
@@ -1046,6 +1049,9 @@ importers:
       '@types/hast':
         specifier: 3.0.4
         version: 3.0.4
+      '@types/linkify-it':
+        specifier: 5.0.0
+        version: 5.0.0
       '@types/marked':
         specifier: ^6.0.0
         version: 6.0.0
