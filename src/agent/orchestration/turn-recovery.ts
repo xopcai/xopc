@@ -1,24 +1,31 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export const ACCEPTANCE_REPAIR_READ_TOOLS = new Set(['read_file', 'find', 'grep', 'list_dir', 'tool_manual', 'tool_search',
-  'review_workspace', 'language_diagnostics', 'session_status', 'web_fetch', 'web_extract', 'web_search', 'read_media', 'publish_task_result']);
+  'review_workspace', 'language_diagnostics', 'session_status', 'web_fetch', 'web_extract', 'web_search', 'read_media',
+  'data_batch', 'task_collaboration', 'publish_task_result']);
 
 /** A model request can be resumed only after every issued tool has a confirmed result. */
 export function canResumeAfterModelFailure(rows: readonly unknown[], options?: { allowFailedReadTools?: ReadonlySet<string> }): boolean {
   const messages = rows.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object');
-  const pending = new Set<string>();
+  const pending = new Map<string, { name?: string; arguments?: Record<string, unknown> }>();
   for (const message of messages.slice(Math.max(0, messages.findLastIndex(item => item.role === 'user')))) {
     if (message.role === 'assistant') {
       if (message.stopReason === 'aborted') return false;
       if (message.stopReason === 'error') continue;
       for (const block of Array.isArray(message.content) ? message.content : []) {
-        if (block?.type === 'toolCall' && typeof block.id === 'string') pending.add(block.id);
+        if (block?.type === 'toolCall' && typeof block.id === 'string') pending.set(block.id, block);
       }
     } else if (message.role === 'toolResult') {
       // A synthesized or failed result cannot prove that an external effect did not occur.
       const recordedReplay = Array.isArray(message.content) && message.content.some(block => block?.type === 'text'
         && typeof block.text === 'string' && block.text.startsWith('This operation already completed before recovery.'));
-      if (message.isError && !recordedReplay && !options?.allowFailedReadTools?.has(String(message.toolName))) return false;
+      const call = typeof message.toolCallId === 'string' ? pending.get(message.toolCallId) : undefined;
+      // Collaboration also posts messages and can materialize files. Only exempt the original read call.
+      const readOnly = options?.allowFailedReadTools?.has(String(message.toolName))
+        && (message.toolName !== 'task_collaboration' || (call?.name === message.toolName
+          && call.arguments?.command === 'get'
+          && (call.arguments.materialize === undefined || call.arguments.materialize === false)));
+      if (message.isError && !recordedReplay && !readOnly) return false;
       if (typeof message.toolCallId === 'string') pending.delete(message.toolCallId);
     }
   }

@@ -223,7 +223,8 @@ export class PersonalReplyComposer {
         }
         const prefix = packet.delivery.outcome.status === 'succeeded' ? '' : packet.delivery.outcome.status === 'partial'
           ? '部分完成 / Partial result.\n\n' : '未完成 / Incomplete result.\n\n';
-        const text = prefix + sanitizePersonalResultFileLinks(packet.preservedText ?? packet.report);
+        const text = packet.delivery.text && packet.delivery.text === packet.delivery.outcome.research?.finalText
+          ? packet.delivery.text : prefix + sanitizePersonalResultFileLinks(packet.preservedText ?? packet.report);
         const delivery = TaskResultDeliverySchema.parse({ ...packet.delivery, deliveryId: `reply:${packet.delivery.deliveryId}`, text,
           outcome: { ...packet.delivery.outcome, deliverables: [], summary: text.slice(0, 2000) } });
         const entry = appendTranscriptEntry(delivery.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
@@ -283,7 +284,11 @@ export class PersonalReplyComposer {
           }
           const transcriptId = readCurrentTranscriptId(db, packet.delivery.conversationId);
           let text = row.draft_transcript_id === transcriptId && row.context_revision === conversation.revision ? row.text : null;
-          if (!text) {
+          if (packet.delivery.text && packet.delivery.text === packet.delivery.outcome.research?.finalText) {
+            text = packet.delivery.text;
+            db.prepare("UPDATE task_result_deliveries SET reply_text = ?, reply_draft_transcript_id = ?, reply_context_revision = ?, reply_status = 'ready' WHERE delivery_id = ? AND reply_lease_token = ?")
+              .run(text, transcriptId, conversation.revision, row.delivery_id, row.lease_token);
+          } else if (!text) {
             const controller = new AbortController();
             composingReplies.set(row.delivery_id, controller);
             const compositionStartedAt = performance.now();

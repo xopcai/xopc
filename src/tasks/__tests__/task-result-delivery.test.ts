@@ -13,7 +13,7 @@ import { isMediaUriReferencedByLiveSession } from '../../media/session-reference
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
-import { loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
+import { appendTranscriptEntry, loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
 import { buildSessionContextForLlm } from '../../session/session-context-for-llm.js';
 import { materializeTaskHandoffFile, resolveTaskHandoffReferences } from '../task-handoff.js';
 import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
@@ -24,6 +24,8 @@ import { resolveMediaReference } from '../../media/media-reference.js';
 import { TaskApplicationService } from '../task-application-service.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
+import { TaskRunRepository } from '../task-run-repository.js';
+import { submitTaskResearchResult, type ResearchReviewer } from '../task-research-result.js';
 import { TaskResultDeliveryService } from '../task-result-delivery-service.js';
 import { TaskMainUpdateDelivery } from '../task-main-update-delivery.js';
 import { TaskResultDeliveryRepository } from '../task-result-delivery-repository.js';
@@ -61,13 +63,13 @@ describe('background task result delivery', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  function task(criteria: string[] = []) {
+  function task(criteria: string[] = [], acceptancePolicy: 'manual' | 'verified_auto' = 'manual', expectedOutputs = ['Image']) {
     const main = createConversation({ agentId: 'main' });
     const worker = createConversation({ agentId: 'worker' });
     const created = new TaskApplicationService().create({ idempotencyKey: `draw:${main.key}`,
       title: 'Draw sunset', locale: 'zh', priority: 'normal', originConversationId: main.key,
-      contract: { objective: 'Draw sunset', expectedOutputs: ['Image'], acceptanceCriteria: criteria,
-        constraints: [], approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] },
+      contract: { objective: 'Draw sunset', expectedOutputs, acceptanceCriteria: criteria,
+        constraints: [], approvalRequired: [], assumptions: [], risks: [], acceptancePolicy, outputDestinations: [] },
       dependencies: [], context: [], authorityGrants: [],
       activation: { mode: 'start', executor: { kind: 'agent', agentId: 'worker' } } });
     if (!created.ok || !created.runId) throw new Error('Expected task run');
@@ -212,6 +214,58 @@ describe('background task result delivery', () => {
     expect(delivery.outcome.deliverables[0].sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(delivery.text).toBe('Final only.');
     expect(delivery.outcome.status).toBe('succeeded');
+  });
+
+  it.each(['personal', 'busy personal', 'standard'])('repairs and delivers the exact checked chat text (%s)', async mode => {
+    const criterion = '对话回复为中文，全文不超过 12 字';
+    const { main, worker, coordinator, runId, taskId } = task([criterion], 'verified_auto', ['对话中的中文要点汇总']);
+    if (mode !== 'standard') markPersonal(main.key);
+    appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId: 'read', toolName: 'web_fetch',
+      content: [{ type: 'text', text: 'Official price is one yuan.' }], timestamp: Date.now(), isError: false });
+    const submission = { finalArtifactIds: [],
+      sources: [{ id: 'official', toolCallId: 'read', excerpt: 'Official price is one yuan.' }],
+      claims: [{ id: 'price', statement: 'Price is one yuan.', kind: 'fact', sourceIds: ['official'] }] };
+    const review = vi.fn<ResearchReviewer>(async () => ({
+      claims: [{ id: 'price', support: 'supported', note: 'Supported by the source.' }],
+      checks: [{ criterionIndex: 0, status: 'passed', claimIds: ['price'], note: 'Reviewed.' }],
+    }));
+    const missing = await submitTaskResearchResult(worker.key, 'missing', submission, undefined, review);
+    expect(missing.checks[0]).toMatchObject({ status: 'unverified' });
+    const runs = new TaskRunRepository();
+    const resume = () => {
+      const waiting = runs.require(runId);
+      expect(waiting.status).toBe('waiting');
+      expect(waiting.policySnapshot.continuation.message).toContain('finalText');
+      expect(new TaskResultDeliveryRepository().hasForRun(runId)).toBe(false);
+      runs.setStatus({ runId, expectedVersion: waiting.version, from: ['waiting'], to: 'running' });
+      return TaskRunCoordinator.start({ runId, fallbackObjective: 'Return price',
+        context: { runId, taskId, conversationId: worker.key, agentId: 'worker', channel: 'webchat',
+          origin: 'task', triggerKind: 'user' } })!;
+    };
+    appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId: 'batch', toolName: 'data_batch',
+      content: [{ type: 'text', text: 'Read validation failed' }], timestamp: Date.now(), isError: true });
+    coordinator.finalize({ status: 'succeeded', summary: 'Draft ready', assistantText: 'Draft ready.' });
+    const firstRepair = resume();
+    const oversized = await submitTaskResearchResult(worker.key, 'long', { ...submission, finalText: '价'.repeat(13) }, undefined, review);
+    expect(oversized.checks[0]).toMatchObject({ status: 'failed', note: expect.stringContaining('13') });
+    firstRepair.finalize({ status: 'succeeded', summary: 'Draft ready', assistantText: 'Draft ready.' });
+    const resumed = resume();
+    const finalText = '官方售价为一元。';
+    await submitTaskResearchResult(worker.key, 'fixed', { ...submission, finalText }, undefined, review);
+    expect(review.mock.lastCall?.[0].result.finalText).toBe(finalText);
+    resumed.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'NO_REPLY' });
+    expect(runs.getReceipt(runId)).toMatchObject({ completionVerdict: 'achieved', remainingWork: [], summary: finalText });
+    expect(new TaskRepository().require(taskId)).toMatchObject({ phase: 'closed', resolution: 'done' });
+    const deliver = new TaskResultDeliveryService();
+    const compose = vi.fn(async () => 'This would change the answer.');
+    const composer = new PersonalReplyComposer(compose);
+    await deliver.drain(vi.fn());
+    if (mode === 'busy personal') getSqliteDatabase().prepare('UPDATE task_result_deliveries SET created_at = ?').run(Date.now() - 6000);
+    await composer.drain(vi.fn(), () => mode !== 'busy personal');
+    await deliver.drain(vi.fn());
+    await composer.drain(vi.fn(), () => mode !== 'busy personal');
+    expect(compose).not.toHaveBeenCalled();
+    expect(loadTranscriptRowsForSession(main.key)).toMatchObject([{ content: finalText }]);
   });
 
   it('retries exhausted delivery without another TaskRun, artifact generation or duplicate message', async () => {

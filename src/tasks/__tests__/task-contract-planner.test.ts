@@ -49,6 +49,15 @@ describe('parseTaskContractResponse', () => {
     expect(planned.acceptanceCriteria).toEqual(['已运行 node reproduce.mjs']);
     expect(planned.constraints).toHaveLength(2);
   });
+  it('keeps the actual chat deliverable and its length and content requirements in acceptance', () => {
+    const criteria = ['最终回复为中文，全文不超过 700 字', '最终回复区分正式发布和传闻'];
+    expect(parseTaskContractResponse(JSON.stringify({ objective: '汇总发布情况', expectedOutputs: ['聊天回复'],
+      acceptanceCriteria: criteria }))).toMatchObject({ acceptanceCriteria: criteria, constraints: [] });
+    expect(parseTaskContractResponse(JSON.stringify({ objective: 'Return findings', expectedOutputs: ['Findings'],
+      acceptanceCriteria: ['Final reply has at most 700 characters'] }))).toMatchObject({
+      acceptanceCriteria: ['Final reply has at most 700 characters'],
+    });
+  });
   it('rejects contracts without checkable criteria', () => {
     expect(parseTaskContractResponse('{"objective":"Ship","expectedOutputs":["Release"]}')).toBeUndefined();
   });

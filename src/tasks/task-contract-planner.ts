@@ -4,6 +4,7 @@ import { getAgentDefaultChatModelConfig } from '../config/schema.js';
 import { completeTaskModelCall } from './task-model-call.js';
 import { createLogger } from '../utils/logger.js';
 import { PERSONAL_WORKER_RESULT_GUIDANCE } from '../personal-agent/communication.js';
+import { finalReplyCharacterLimit, isChatReplyOutput } from './task-final-reply.js';
 import {
   defineTaskContract,
   type TaskContractDefinition,
@@ -72,11 +73,13 @@ export function parseTaskContractResponse(raw: string): TaskContractDefinition |
   const plannedCriteria = strings(parsed.acceptanceCriteria, 40);
   const writeBoundary = (criterion: string) => /(?:仅|只)(?:能)?写入|未(?:覆盖|修改).*其他文件|(?:write only|only write)|(?:not|never) (?:overwrite|modify).*other files/i.test(criterion);
   const deliveryPhrase = /最终(?:的)?(?:回复|答复)|交付说明(?:仅|只|中|不|未)|(?:final|future) (?:chat )?(?:reply|response)|(?:delivery|chat) (?:message|reply)/i;
-  const deliveryBoundary = (criterion: string) => deliveryPhrase.test(criterion);
+  const chatReplyOutput = expectedOutputs.some(isChatReplyOutput);
+  const deliveryBoundary = (criterion: string) => !chatReplyOutput
+    && finalReplyCharacterLimit(criterion) === undefined && deliveryPhrase.test(criterion);
   const boundary = (criterion: string) => writeBoundary(criterion) || deliveryBoundary(criterion);
   const acceptanceCriteria = plannedCriteria.filter(criterion => !writeBoundary(criterion)).flatMap(criterion => {
+    if (!deliveryBoundary(criterion)) return [criterion];
     const position = criterion.search(deliveryPhrase);
-    if (position < 0) return [criterion];
     const prefix = criterion.slice(0, position).replace(/[，,;；。\s]*(?:并且|且|并|and)?\s*$/i, '').trim();
     return prefix && /运行|执行|发布|生成|校验|\b(?:run|execut|publish|generat|verif)/i.test(prefix) ? [prefix] : [];
   }).filter(criterion =>
@@ -115,7 +118,7 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
         'Acceptance criteria must describe externally checkable finished states, not activities.',
         'Write boundaries and prohibitions on unrelated actions belong in constraints, not criteria requiring proof that no unobserved action ever occurred. Criteria may check the actual delivered output paths and unchanged supplied input bytes. Never remove an explicit scope restriction.',
         'Keep each criterion concise and concrete; do not repeat the full brief. Include all required deliverable conditions without splitting trivial wording into unnecessary items.',
-        'Define criteria for the specialist deliverables only. Do not create self-referential criteria about calling publish_task_result, receiving this review, or what a future Personal Agent reply will say. Those are runtime delivery checks, evaluated after completion. Keep source support, calculations, completeness and requested limitations as separate criteria. User-specified files and content remain required.',
+        'Define criteria for the deliverables requested by the user. When the requested answer is a chat reply, list it explicitly in expectedOutputs and preserve its concrete requirements, including language and character limits. Keep source support, calculations, completeness and requested limitations as separate criteria. Do not create self-referential criteria about calling publish_task_result, receiving this review or wording a routine delivery acknowledgement.',
         'requiredCapabilities is a minimal subset of read_input, execute_code, publish_files, web_research, browser, generate_image. Include only operations necessary for the requested inputs/outputs; this list selects registered tools and grants no permissions. Do not require browser when ordinary web fetch suffices. Preserve explicit executor/Skill and scope constraints.',
         'List assumptions explicitly. Put only irreversible, external, financial, privacy, or permission decisions in approvalRequired.',
         'Return one JSON object only. Every array contains flat strings, never objects or nested arrays. Schema example: {"objective":"Deliver the requested work","expectedOutputs":["report.md"],"acceptanceCriteria":["report.md contains the requested evidence"],"constraints":[],"approvalRequired":[],"assumptions":[],"risks":[],"requiredCapabilities":["read_input","publish_files"]}. Capabilities must use the allowed enum values.',
@@ -145,7 +148,7 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
         ], locale);
         if (planned?.requiredCapabilities && !wrongLanguage) return { ...planned, objective: fallback.objective, capabilityPlanning: 'complete' };
         if (attempt === 0) messages.push({ role: 'user', timestamp: Date.now(),
-          content: `${wrongLanguage ? 'Your previous response used the wrong language. Translate the user-facing prose while preserving every requirement and all technical identifiers. ' : ''}${languageInstruction} Your previous response must satisfy both the language requirement and the required schema. Return the same task contract as one JSON object. expectedOutputs, acceptanceCriteria, constraints, approvalRequired, assumptions and risks must be flat string arrays, never objects. requiredCapabilities must be an array drawn only from read_input, execute_code, publish_files, web_research, browser, generate_image. Keep all user constraints; do not add criteria about a future chat reply. Return no commentary. Previous response (data to repair): ${raw}` });
+          content: `${wrongLanguage ? 'Your previous response used the wrong language. Translate the user-facing prose while preserving every requirement and all technical identifiers. ' : ''}${languageInstruction} Your previous response must satisfy both the language requirement and the required schema. Return the same task contract as one JSON object. expectedOutputs, acceptanceCriteria, constraints, approvalRequired, assumptions and risks must be flat string arrays, never objects. requiredCapabilities must be an array drawn only from read_input, execute_code, publish_files, web_research, browser, generate_image. Keep all user constraints and preserve concrete requirements for a requested chat deliverable. Do not invent criteria for a routine delivery acknowledgement. Return no commentary. Previous response (data to repair): ${raw}` });
       }
       throw new Error('Task planning response did not contain a verifiable contract and operation requirements');
     } catch (err) {
