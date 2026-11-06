@@ -19,7 +19,7 @@ import { applyResearchReview, bindResearchSources, mergeResearchSubmission, subm
 import { parseTaskContractResponse } from '../task-contract-planner.js';
 import { buildResearchRepair } from '../task-research-repair.js';
 import { TaskJudgeService } from '../../agent/tasks/task-judge-service.js';
-import { canResumeAfterModelFailure } from '../../agent/orchestration/turn-recovery.js';
+import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure } from '../../agent/orchestration/turn-recovery.js';
 import { parsePersonalReplyDraft, type PersonalReplyPacket } from '../../personal-agent/reply-composer.js';
 
 const submission = { sources: [{ id: 'source', excerpt: 'Actual price 1/hour.' }],
@@ -189,6 +189,22 @@ describe('personal repair benchmark v1', () => {
     expect(canResumeAfterModelFailure([call, failed], options)).toBe(true);
     expect(canResumeAfterModelFailure([call], options)).toBe(false);
     expect(canResumeAfterModelFailure([call, { ...failed, toolName: 'exec_command' }], options)).toBe(false);
+  });
+  it('resumes failed batch and collaboration reads while holding uncertain collaboration writes', () => {
+    const options = { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS };
+    const call = (name: string, args: object) => ({ role: 'assistant',
+      content: [{ type: 'toolCall', id: name, name, arguments: args }] });
+    const failure = (name: string) => ({ role: 'toolResult', toolCallId: name, toolName: name, isError: true });
+    const batch = [call('data_batch', { operations: [] }), failure('data_batch')];
+    const read = call('task_collaboration', { command: 'get', section: 'evidence' });
+    const write = call('task_collaboration', { command: 'post', kind: 'question' });
+    const materialize = call('task_collaboration', { command: 'get', section: 'source', materialize: true });
+    const error = failure('task_collaboration');
+    expect(canResumeAfterModelFailure([...batch, read, error], options)).toBe(true);
+    expect(canResumeAfterModelFailure([...batch, read], options)).toBe(false);
+    expect(canResumeAfterModelFailure([...batch, write, error], options)).toBe(false);
+    expect(canResumeAfterModelFailure([...batch, materialize, error], options)).toBe(false);
+    expect(canResumeAfterModelFailure([...batch, error], options)).toBe(false);
   });
   it('A14-counts: rejects the observed mistaken nine/eight acceptance summary for a ten/nine result', async () => {
     const x = execution(); const result = await submitTaskResearchResult(x.worker.key, 'review', submission, undefined, review);

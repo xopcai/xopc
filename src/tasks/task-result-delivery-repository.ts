@@ -11,6 +11,7 @@ import { personalRequestForTask } from '../personal-agent/request-repository.js'
 import { hasPersonalResultFileLinks, sanitizePersonalResultFileLinks } from '../personal-agent/result-file-links.js';
 import { TaskRepository } from './task-repository.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
+import { finalReplyCharacterLimit } from './task-final-reply.js';
 
 const log = createLogger('TaskResultDelivery');
 
@@ -84,20 +85,25 @@ export class TaskResultDeliveryRepository {
       : selectionRequired ? [] : [...artifacts.values()].slice(-50);
     const selectedManifest = validResearch?.finalArtifactIds !== undefined;
     const selectedMissing = selectedManifest && deliverables.length !== validResearch!.finalArtifactIds!.length;
+    const finalText = validResearch?.finalText;
     const rawText = resultText?.trim() && resultText.trim() !== 'NO_REPLY' ? resultText.trim() : undefined;
     const unpublishedFile = Boolean(rawText && hasPersonalResultFileLinks(rawText)
-      && !deliverables.some(item => item.availability === 'available'));
-    const text = rawText ? sanitizePersonalResultFileLinks(rawText)
-      || (unpublishedFile ? 'The file has not been published for download.' : undefined) : undefined;
-    if (!deliverables.length && (!text || status !== 'succeeded')) return false;
+      && !finalText && !deliverables.some(item => item.availability === 'available'));
+    const candidate = finalText ?? (rawText ? sanitizePersonalResultFileLinks(rawText) : undefined);
+    const replyLength = candidate ? Array.from(candidate).length : 0;
+    const replyTooLong = task.contract?.acceptanceCriteria.some(criterion =>
+      replyLength > (finalReplyCharacterLimit(criterion) ?? Infinity));
+    const text = replyTooLong ? undefined : candidate
+      || (unpublishedFile ? 'The file has not been published for download.' : undefined);
+    if (!deliverables.length && (!text || (status !== 'succeeded' && !finalText))) return false;
     // Connected-app requests have their own structured text delivery.
     if (!deliverables.length && personalRequestForTask(run.taskId)) return false;
     const outcome: TurnOutcome = { ...latest, research: validResearch, deliverables, evidence: [], changeSet: undefined,
-      summary,
+      summary: replyTooLong ? undefined : summary,
       status: selectedManifest
-        ? status === 'failed' || researchGap || selectedMissing || unpublishedFile || deliverables.some(item => item.availability !== 'available') ? 'partial' : 'succeeded'
+        ? status === 'failed' || researchGap || selectedMissing || unpublishedFile || replyTooLong || deliverables.some(item => item.availability !== 'available') ? 'partial' : 'succeeded'
         : latest.status === 'failed' ? 'failed'
-        : status === 'failed' || latest.status === 'partial' || unpublishedFile || researchGap || deliverables.some(item => item.availability !== 'available')
+        : status === 'failed' || latest.status === 'partial' || unpublishedFile || replyTooLong || researchGap || deliverables.some(item => item.availability !== 'available')
           ? 'partial' : 'succeeded' };
     const now = Date.now();
     const previous = db.prepare(`SELECT delivery_id, payload_json FROM task_result_deliveries WHERE task_run_id IN

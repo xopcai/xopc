@@ -191,6 +191,40 @@ describe('chat Markdown links', () => {
     await vi.waitFor(() => expect(openExternalUrl).toHaveBeenCalledWith('https://example.com/'));
   });
 
+  it.each([
+    '来源：ithome.com/1/017/078.htm。更多内容见原文。',
+    '[查看来源](ithome.com/1/017/078.htm)',
+    '[查看来源][source]\n\n[source]: ithome.com/1/017/078.htm',
+  ])('opens a scheme-less source URL from Personal AI as a web link: %s', async (markdown) => {
+    const openExternalUrl = vi.fn(async () => ({ ok: true as const }));
+    const openFile = vi.fn();
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: { shell: { openExternalUrl } },
+    });
+    const container = renderMarkdown(markdown, openFile, '/personal');
+    const anchor = container.querySelector('a');
+
+    expect(anchor?.getAttribute('href')).toBe('https://ithome.com/1/017/078.htm');
+    expect(anchor?.target).toBe('_blank');
+    await act(async () => anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(openExternalUrl).toHaveBeenCalledWith('https://ithome.com/1/017/078.htm');
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
+  it('preserves workspace paths with dotted names alongside bare web links', () => {
+    const container = renderMarkdown(
+      './example.com/report.html docs/v1.0/intro.md report.md help.aliyun.com/zh/model-studio/update-log',
+      vi.fn(),
+    );
+    expect([...container.querySelectorAll('a')].map(anchor => anchor.getAttribute('href'))).toEqual([
+      '/xopc/workspace/file?path=example.com%2Freport.html',
+      '/xopc/workspace/file?path=docs%2Fv1.0%2Fintro.md',
+      '/xopc/workspace/file?path=report.md',
+      'https://help.aliyun.com/zh/model-studio/update-log',
+    ]);
+  });
+
   it('opens a bare non-ASCII output filename as a workspace file', () => {
     const onOpen = vi.fn();
     const container = renderMarkdown(

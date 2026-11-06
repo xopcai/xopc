@@ -15,6 +15,7 @@ import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 import { currentTaskResearchResult, taskInstructionSequence } from './task-research-result.js';
 import { buildResearchRepair, inspectTaskPublications } from './task-research-repair.js';
+import { isChatReplyOutput } from './task-final-reply.js';
 import { resolveTaskLocale } from './task-language.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
 import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
@@ -148,28 +149,30 @@ export class TaskRunCoordinator {
     const hasAssistantResult = Boolean(input.assistantText?.trim() && input.assistantText.trim() !== 'NO_REPLY');
     const hasBoardResult = new TaskCollaborationRepository().recent(run.taskId, undefined, 20)
       .some((entry) => entry.taskRunId === run.id && entry.kind === 'result');
-    const emptySuccess = input.status === 'succeeded' && !hasAssistantResult && !hasBoardResult
-      && !this.#hasDeliverables && this.#evidence.length === 0;
     const task = new TaskRepository().require(run.taskId);
+    const research = currentTaskResearchResult(run.id);
+    const personalSnapshot = personalRequestReviewSnapshot(task.id, run.id);
+    const currentResearch = research && (!personalSnapshot || (personalSnapshot.hash && personalSnapshot.hash === research.personalResultHash))
+      && research.contractVersion === task.latestContractVersion
+      && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
+    const emptySuccess = input.status === 'succeeded' && !hasAssistantResult && !hasBoardResult
+      && !currentResearch?.finalText && !this.#hasDeliverables && this.#evidence.length === 0;
     const zh = resolveTaskLocale(task) === 'zh';
     const status = emptySuccess ? 'failed' : input.status;
     const recoveryOptions = { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS };
     const unconfirmedEffects = status === 'failed' && Boolean(run.conversationId
       && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId), recoveryOptions));
     const systemSummaries: Record<string, string> = { 'Message processed': '消息已处理', Interrupted: '执行已中断', 'Agent run ended unexpectedly': '助手执行意外结束' };
-    const resultSummary = status === 'succeeded' && hasAssistantResult && /^Message processed(?: successfully)?$/.test(input.summary)
+    const resultSummary = status === 'succeeded' && currentResearch?.finalText ? currentResearch.finalText
+      : status === 'succeeded' && hasAssistantResult && /^Message processed(?: successfully)?$/.test(input.summary)
       ? input.assistantText!.trim() : input.summary;
     const summary = emptySuccess ? (zh ? '助手执行未返回结果或证据' : 'Agent run returned no result or evidence')
       : zh ? systemSummaries[resultSummary] ?? resultSummary : resultSummary;
-    const research = currentTaskResearchResult(run.id);
-    const personalSnapshot = personalRequestReviewSnapshot(task.id, run.id);
-    const currentResearch = research && (!personalSnapshot || (personalSnapshot.hash && personalSnapshot.hash === research.personalResultHash))
-      && research.contractVersion === task.latestContractVersion
-      && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
     const publications = inspectTaskPublications(run.id, currentResearch);
     const repair = buildResearchRepair({ research: currentResearch, stale: Boolean(research && !currentResearch),
       instructionSequence: taskInstructionSequence(task.id), publications, criteria: task.contract?.acceptanceCriteria ?? [],
       resultFingerprint: personalSnapshot?.hash,
+      requiresFinalText: !personalSnapshot && task.contract?.expectedOutputs.some(isChatReplyOutput),
       requiresReview: task.contract?.acceptancePolicy === 'verified_auto' || (!personalSnapshot && Boolean(task.body?.includes('publish_task_result'))) });
     const repairBlocked = Boolean(repair && run.conversationId && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId),
       { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS }));

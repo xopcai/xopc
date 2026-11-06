@@ -89,10 +89,11 @@ export class TaskResultDeliveryService {
                 : deliverables.length ? 'Results ready' : 'Result returned'}.`;
             const personal = getPersonalAgentByConversation(delivery.conversationId);
             if (personal) warmPersonalResult(delivery.conversationId, delivery.deliveryId);
-            if (personal && !personalRequestForTask(delivery.taskId)) enqueuePersonalReply({ delivery: { ...delivery, outcome },
+            if (personal && (delivery.text || !outcome.research?.finalText) && !personalRequestForTask(delivery.taskId)) enqueuePersonalReply({ delivery: { ...delivery, outcome },
               report: delivery.text?.trim() || delivery.outcome.summary?.trim() || statusText,
               objective: new TaskRepository().get(delivery.taskId)?.contract?.objective ?? delivery.taskTitle });
-            const content = personal ? statusText : delivery.text ? `${statusText}\n\n${delivery.text}` : statusText;
+            const content = personal || !delivery.text ? statusText
+              : delivery.text === outcome.research?.finalText ? delivery.text : `${statusText}\n\n${delivery.text}`;
             const details = { ...delivery, outcome };
             if (personal) delete details.text;
             const entry = !personal || deliverables.length ? appendTranscriptEntry(delivery.conversationId, {
