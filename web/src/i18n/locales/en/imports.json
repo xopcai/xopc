@@ -36,7 +36,6 @@
     "incomplete": "Some locations could not be scanned. Only the listed items can be imported.",
     "projectContents": "{skills} skills · {context} rules",
     "chosenCount": "{count} selected",
-    "directoryOnly": "Project directory only",
     "noContent": "No importable content found.",
     "scanNotices": "Other content and scan notices",
     "runningHint": "You can close this window and view the result later.",

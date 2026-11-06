@@ -2,7 +2,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import type { SessionInputControlView } from '@xopcai/gateway-contract';
 import type { ComposerMode } from './composer.types';
 import { parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useSideChatStore } from '@/stores/side-chat-store';
@@ -147,6 +147,8 @@ export const ChatComposer = memo(function ChatComposer({
   voiceMode,
   prepareVoiceSession,
   prepareContextSession,
+  unboundDraftKey,
+  getDraftHandoffTarget,
   editingUserTurnId,
   composerMode, inputControl, onResumeQueue, onRestoreEditor, onReacquireEdit,
   onCancelUserMessageEdit,
@@ -203,8 +205,10 @@ export const ChatComposer = memo(function ChatComposer({
   voiceAgentName?: string;
   voiceTaskId?: string;
   voiceMode?: 'assistant';
-  prepareVoiceSession?: () => Promise<string>;
+  prepareVoiceSession?: () => Promise<string | null>;
   prepareContextSession?: () => Promise<string | null>;
+  unboundDraftKey?: string;
+  getDraftHandoffTarget?: () => string | undefined;
   editingUserTurnId?: string | null;
   composerMode?: ComposerMode;
   onRestoreEditor?: (mode: ComposerMode) => void;
@@ -579,7 +583,7 @@ export const ChatComposer = memo(function ChatComposer({
   }, [suggestionEligible, nextTurn.suggestion, nextTurn.shown, pickers.palette.open]);
 
   const draftGateway = useGatewayStore(state => state.conversationId);
-  const draftScope = JSON.stringify([draftGateway, conversationId]);
+  const draftScope = useMemo(() => ({ gatewayIdentity: draftGateway, conversationId, unboundDraftKey }), [draftGateway, conversationId, unboundDraftKey]);
   const editDrafts = useRef(new Map<string, ComposerDraft>());
   const previousEditorKey = useRef('compose');
   const currentMode = composerMode ?? (editingFollowUpId
@@ -595,7 +599,7 @@ export const ChatComposer = memo(function ChatComposer({
         : saved.mode.kind === 'editFollowUp' ? `input:${saved.mode.inputId}` : 'compose';
       onRestoreEditor?.(saved.mode);
     },
-  });
+  }, unboundDraftKey, getDraftHandoffTarget);
 
   const editNeedsPause = currentMode.kind !== 'compose' && Boolean(inputControl && !inputControl.paused);
   const actions = useComposerActions({
@@ -1005,7 +1009,9 @@ export const ChatComposer = memo(function ChatComposer({
             if (conversationId) { call.open({ conversationId, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId, mode: voiceMode }); return; }
             if (!prepareVoiceSession) return;
             preparingCallRef.current = true;
-            void prepareVoiceSession().then((key) => call.open({ conversationId: key, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId, mode: voiceMode }))
+            void prepareVoiceSession().then((key) => {
+              if (key) return call.open({ conversationId: key, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId, mode: voiceMode });
+            })
               .catch((error: unknown) => showComposerNotification('error', error instanceof Error ? error.message : m.chat.callFailed))
               .finally(() => { preparingCallRef.current = false; });
           }}

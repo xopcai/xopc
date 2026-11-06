@@ -34,29 +34,39 @@ function enqueueWrite(scope: string, write: () => Promise<void>): Promise<void> 
 
 export function usePersistedComposer(id: string | null | undefined, editor: UseComposerEditorReturn,
   attachments: UseComposerAttachmentsReturn, refs: ComposerContextRef[], setRefs: (refs: ComposerContextRef[]) => void,
-  editSession?: { snapshot: () => SavedEditSession; restore: (saved: SavedEditSession) => void }): void {
+  editSession?: { snapshot: () => SavedEditSession; restore: (saved: SavedEditSession) => void },
+  unboundDraftKey?: string, getDraftHandoffTarget?: () => string | undefined): void {
   const editorIdentity = editModeIdentity(editSession?.snapshot().mode);
   const identity = useGatewayStore(state => state.conversationId);
   const scope = identity && id ? JSON.stringify([identity, id]) : '';
   const current = useRef({ editor, attachments, refs, setRefs, editSession });
   current.current = { editor, attachments, refs, setRefs, editSession };
   const active = useRef<ActiveDraft | undefined>(undefined);
-  const previousScope = useRef('');
+  const previousDraft = useRef<{ identity: string | undefined; id: typeof id; unboundDraftKey?: string } | undefined>(undefined);
   const [hydration, setHydration] = useState(0);
 
   useLayoutEffect(() => {
-    if (!scope || !id) { active.current = undefined; return; }
-    const entry: ActiveDraft = { receipts: [], scope, ready: false, dirty: false, observe: false,
-      snapshot: { text: current.current.editor.valueRef.current, attachments: current.current.attachments.attachmentsRef.current, refs: current.current.refs, editSession: current.current.editSession?.snapshot() },
-      storage: composerDraftStorage<SavedComposer>(id) };
-    active.current = entry;
-    if (previousScope.current && previousScope.current !== scope) {
+    const previous = previousDraft.current;
+    previousDraft.current = { identity, id, unboundDraftKey };
+    const isProjectHandoff = previous?.identity === identity && previous?.id === null
+      && Boolean(id) && id === getDraftHandoffTarget?.();
+    const draftChanged = previous && (previous.identity !== identity || previous.id !== id || previous.unboundDraftKey !== unboundDraftKey);
+    const resetDraft = draftChanged && !isProjectHandoff;
+    if (resetDraft) {
       current.current.editor.resetEditor();
       current.current.attachments.clearAttachments();
       current.current.setRefs([]);
-      entry.snapshot = { text: '', attachments: [], refs: [], editSession: current.current.editSession?.snapshot() };
     }
-    previousScope.current = scope;
+    if (!scope || !id) { active.current = undefined; return; }
+    const entry: ActiveDraft = { receipts: [], scope, ready: false, dirty: false, observe: false,
+      snapshot: {
+        text: current.current.editor.valueRef.current,
+        attachments: current.current.attachments.attachmentsRef.current,
+        refs: resetDraft ? [] : current.current.refs,
+        editSession: current.current.editSession?.snapshot(),
+      },
+      storage: composerDraftStorage<SavedComposer>(id) };
+    active.current = entry;
     let loaded = false;
     const pendingWrite = pendingWrites.get(scope);
     const read = pendingWrite ? pendingWrite.catch(() => {}).then(() => entry.storage.read()) : entry.storage.read();
@@ -79,7 +89,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
         setHydration(value => value + 1);
       });
     return () => { if (active.current === entry) active.current = undefined; };
-  }, [scope, id]);
+  }, [scope, id, identity, unboundDraftKey, getDraftHandoffTarget]);
 
   useLayoutEffect(() => {
     const entry = active.current;

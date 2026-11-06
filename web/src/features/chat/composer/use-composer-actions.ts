@@ -53,7 +53,7 @@ export interface UseComposerActionsOptions {
   editingUserTurnId?: string | null;
   blocked?: boolean;
   queuePaused?: boolean;
-  draftScope?: string;
+  draftScope?: { gatewayIdentity: string | undefined; conversationId: string | null };
   onFinishUserEdit?: () => void;
   onFinishFollowUpEdit?: () => void;
 
@@ -173,7 +173,13 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     commitAcceptedSend(result, (conversationId) => {
       onUserTextCommitted?.(draft.text, conversationId);
       const latest = latestOptions.current;
-      if (latest.draftScope !== options.draftScope || latest.getTextValue() !== draft.text
+      const sourceScope = options.draftScope;
+      const currentScope = latest.draftScope;
+      // Preparing a project's first conversation binds the same editor to the accepted target.
+      const boundToAcceptedTarget = intent === 'send' && sourceScope?.conversationId === null
+        && conversationId !== undefined && currentScope?.conversationId === conversationId
+        && currentScope.gatewayIdentity === sourceScope.gatewayIdentity;
+      if ((!boundToAcceptedTarget && currentScope !== sourceScope) || latest.getTextValue() !== draft.text
         || JSON.stringify(latest.wireAttachmentsPayload()) !== JSON.stringify(draft.attachments)
         || JSON.stringify(latest.getContextRefs()) !== JSON.stringify(draft.contextRefs)) return;
       if (intent === 'replaceTurn') {
