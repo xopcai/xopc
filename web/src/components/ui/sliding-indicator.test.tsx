@@ -64,6 +64,12 @@ it('uses the same inset surface for segmented controls', () => {
     expect(surface.style.transform).toBe('translate3d(5px, 5px, 0)');
     expect(surface.style.width).toBe('98px');
     expect(surface.style.height).toBe('26px');
+
+    act(() => root.render(<SlidingSegmented flush value="one" onChange={() => {}} options={[{ value: 'one', label: 'One' }]} aria-label="Views" />));
+    expect(container.querySelector('[data-sliding-indicator]')).toBe(surface);
+    expect(surface.style.transform).toBe('translate3d(4px, 4px, 0)');
+    expect(surface.style.width).toBe('100px');
+    expect(surface.style.height).toBe('28px');
   } finally {
     act(() => root.unmount());
     spies.forEach(spy => spy.mockRestore());

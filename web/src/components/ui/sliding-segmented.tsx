@@ -29,6 +29,7 @@ export function SlidingSegmented<T extends string>({
   onChange,
   options,
   'aria-label': ariaLabel,
+  flush = false,
   className,
   buttonClassName,
 }: {
@@ -36,18 +37,20 @@ export function SlidingSegmented<T extends string>({
   onChange: (next: T) => void;
   options: SlidingSegmentOption<T>[];
   'aria-label': string;
+  /** Align the selected surface to the track edges without an outline or inset. */
+  flush?: boolean;
   className?: string;
   /** Extra classes for each segment button (e.g. height, padding). */
   buttonClassName?: string;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const thumb = useSlidingIndicator(trackRef, 'button', 'button[aria-pressed="true"]', 1);
+  const thumb = useSlidingIndicator(trackRef, 'button', 'button[aria-pressed="true"]', flush ? 0 : 1);
 
   return (
     <div
       ref={trackRef}
       className={cn(
-        segmentedTrackClassName,
+        flush ? 'rounded-pill bg-surface-hover' : segmentedTrackClassName,
         'relative isolate flex w-full max-w-full flex-row items-center',
         className,
       )}
@@ -56,7 +59,10 @@ export function SlidingSegmented<T extends string>({
     >
       <SlidingIndicator
         bounds={thumb}
-        className="rounded-pill bg-surface-panel shadow-sm dark:ring-1 dark:ring-edge-strong/40"
+        className={cn(
+          'rounded-pill',
+          flush ? 'bg-surface-active' : 'bg-surface-panel shadow-sm dark:ring-1 dark:ring-edge-strong/40',
+        )}
       />
       {options.map((opt) => {
         const Icon = opt.icon;

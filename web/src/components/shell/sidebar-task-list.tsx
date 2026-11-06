@@ -5,6 +5,7 @@ import {
   Archive,
   ChevronDown,
   ClipboardCopy,
+  Clock3,
   ExternalLink,
   Folder,
   FolderOpen,
@@ -16,15 +17,14 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type UIEvent } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
 import { AutomationRunList } from '@/features/automations/automation-run-list';
 
-import { SessionFilterToolbar } from '@/features/sessions/session-filter-toolbar';
-import { useSessionDiscovery } from '@/features/sessions/use-session-discovery';
+import { allProjectOptions } from '@/features/sessions/session-filter-projects';
 import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
 
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
@@ -32,6 +32,7 @@ import { ProjectUnderstandingAction, ProjectUnderstandingCheckbox } from '@/feat
 import { shouldRefreshSidebarForTranscriptUpdate } from '@/components/shell/sidebar-session-refresh';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { navigateToNewChat } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
@@ -68,7 +69,6 @@ import { showComposerNotification } from '@/features/chat/composer/composer-noti
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-const SessionDescriptionContext = createContext(false);
 const TaskGroupsContext = createContext<Record<string, SidebarTaskGroup>>({});
 
 const SidebarTaskChildRow = memo(function SidebarTaskChildRow({
@@ -108,6 +108,9 @@ const PROJECT_LIMIT = 12;
 const PROJECT_PREVIEW_LIMIT = 5;
 const SIDEBAR_STALE_DAYS = 60;
 const SIDEBAR_DRAG_MIME = 'application/x-xopc-sidebar-item';
+
+type SessionView = 'recent' | 'projects';
+type RecentPeriod = 'today' | 'yesterday' | 'older';
 
 type SidebarSortSpec = {
   containerId: string;
@@ -235,13 +238,27 @@ function sessionUpdatedAtMs(session: SessionMetadata): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function groupRecentSessions(sessions: SessionMetadata[]): Record<RecentPeriod, SessionMetadata[]> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const groups: Record<RecentPeriod, SessionMetadata[]> = { today: [], yesterday: [], older: [] };
+  for (const session of sessions) {
+    const updatedAt = sessionUpdatedAtMs(session);
+    const period = updatedAt >= today.getTime() ? 'today' : updatedAt >= yesterday.getTime() ? 'yesterday' : 'older';
+    groups[period].push(session);
+  }
+  return groups;
+}
+
 function rowShellClass(isActive: boolean): string {
   return cn(
     'group relative flex min-h-8 w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
     'pl-6',
     'focus-within:outline-none',
     isActive
-      ? 'bg-surface-active font-medium text-fg'
+      ? 'bg-accent-soft font-medium text-fg before:pointer-events-none before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-accent'
       : 'font-normal text-fg-muted hover:bg-surface-hover hover:text-fg',
   );
 }
@@ -302,7 +319,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   defaultUnnamedTitle,
   contextLabel,
   sort,
-  showTaskChildren = true,
 }: {
   session: SessionMetadata;
   isActive: boolean;
@@ -316,7 +332,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
   sort?: SidebarSortSpec;
-  showTaskChildren?: boolean;
 }) {
   const taskGroup = useContext(TaskGroupsContext)[session.key];
   const location = useLocation();
@@ -333,11 +348,10 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
     || child.activeConversationId === chatConversationIdFromPath(location.pathname)) ?? false);
   const [tasksExpanded, setTasksExpanded] = useState(activeChild);
   useEffect(() => { if (activeChild) setTasksExpanded(true); }, [activeChild]);
-  const showDescription = useContext(SessionDescriptionContext);
   const identity = resolveSessionIdentity(session);
   const showIdentityIcon = isAutomationConfigurationSession(session) || identity.source !== 'workbench' || identity.purpose !== 'chat';
   const identityLabel = sessionIdentityLabel(session, sb.sessionFilters);
-  const description = [identityLabel, contextLabel].filter(Boolean).join(' · ');
+  const description = [contextLabel, showIdentityIcon ? identityLabel : undefined].filter(Boolean).join(' · ');
   const [menuOpen, setMenuOpen] = useState(false);
   const [pinBusy, setPinBusy] = useState(false);
   const agentRunActive = useSidebarSessionAgentRun(session.key);
@@ -378,7 +392,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
     <SidebarSortableItem spec={sort}>
     <div>
     <div className={rowShellClass(isActive)}>
-      {showTaskChildren && (taskGroup?.total || automationId) ? (
+      {taskGroup?.total || automationId ? (
         <button type="button" className="absolute left-0 flex size-6 items-center justify-center text-fg-subtle hover:text-fg"
           aria-label={automationId
             ? tasksExpanded ? sb.automationRunsCollapse : sb.automationRunsExpand
@@ -395,8 +409,9 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           'flex min-w-0 items-center gap-2',
           hasRunPresence ? 'pr-[4.75rem]' : 'pr-12',
         )}
-        title={`${title} — ${description}`}
-        aria-label={`${title} — ${description}`}
+        title={[title, identityLabel, contextLabel].filter(Boolean).join(' — ')}
+        aria-label={[title, identityLabel, contextLabel].filter(Boolean).join(' — ')}
+        aria-current={isActive ? 'page' : undefined}
         onClick={() => onNavigate?.()}
         onDoubleClick={(event) => {
           event.preventDefault();
@@ -409,7 +424,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         </span> : null}
         <span className="min-w-0 flex-1">
           <span className="block truncate">{title}</span>
-          {showDescription ? <span className="block truncate text-xs font-normal text-fg-muted">{description}</span> : null}
+          {description ? <span className="block truncate text-xs font-normal text-fg-muted">{description}</span> : null}
         </span>
       </Link>
       {agentRunActive ? (
@@ -443,8 +458,9 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         className={cn(
           'pointer-events-none absolute inset-y-0 z-10 flex items-center opacity-0 transition-opacity',
           'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
+          '[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
           hasRunPresence ? 'right-7' : 'right-1',
-          menuOpen && 'pointer-events-auto opacity-100',
+          (menuOpen || isPinned || isActive) && 'pointer-events-auto opacity-100',
         )}
       >
         <button
@@ -529,10 +545,10 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         </Popover.Root>
       </div>
     </div>
-    {showTaskChildren && tasksExpanded && taskGroup?.items.map((child) => (
+    {tasksExpanded && taskGroup?.items.map((child) => (
       <SidebarTaskChildRow key={child.taskId} child={child} activeTaskId={activeTaskId} onNavigate={onNavigate} sb={sb} />
     ))}
-    {showTaskChildren && tasksExpanded && automationId ? (
+    {tasksExpanded && automationId ? (
       <AutomationRunList
         automationId={automationId}
         projectId={session.projectId}
@@ -988,6 +1004,7 @@ function SidebarPinnedSection({
   clipboard,
   defaultUnnamedTitle,
   onReorder,
+  projectNames,
 }: {
   sessions: SessionMetadata[];
   activeConversationId?: string;
@@ -1000,6 +1017,7 @@ function SidebarPinnedSection({
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
   onReorder: (containerId: string, itemIds: string[]) => void;
+  projectNames?: ReadonlyMap<string, string>;
 }) {
   if (sessions.length === 0) return null;
 
@@ -1013,6 +1031,7 @@ function SidebarPinnedSection({
           <SidebarTaskRow
             key={session.key}
             session={session}
+            contextLabel={session.projectId ? projectNames?.get(session.projectId) : undefined}
             isActive={activeConversationId === session.key}
             onNavigate={onNavigate}
             mutate={mutate}
@@ -1062,13 +1081,6 @@ function SidebarTaskListContent({
   const projectsText = m.projectsPage;
   const wd = m.chat.workingDirectory;
   const token = useGatewayStore((s) => s.conversationId);
-  const discovery = useSessionDiscovery(gateway, token);
-  const filterLabels = sb.sessionFilters;
-  const listScrollRef = useRef<HTMLDivElement>(null);
-  const browseScrollTop = useRef(0);
-  useLayoutEffect(() => {
-    if (listScrollRef.current) listScrollRef.current.scrollTop = discovery.active ? 0 : browseScrollTop.current;
-  }, [discovery.active]);
   const openTokenDialog = useGatewayStore((s) => s.openTokenDialog);
 
   const { data: chatAgents, mutate: mutateChatAgents } = useSWR(
@@ -1104,7 +1116,8 @@ function SidebarTaskListContent({
   const [creatingProject, setCreatingProject] = useState(false);
   const [autoUnderstand, setAutoUnderstand] = useState(false);
   const [includedConversationId, setIncludedConversationId] = useState<string | undefined>(() => activeConversationId);
-  const [projectsCollapsed, setProjectsCollapsed] = useState(false);
+  const [view, setView] = useState<SessionView>('recent');
+  const [showOlder, setShowOlder] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
@@ -1125,10 +1138,11 @@ function SidebarTaskListContent({
     (pageIndex, previousPageData) => {
       if (!token) return null;
       if (previousPageData && !previousPageData.projects.hasMore) return null;
-      return ['sidebar-chat-list', token, includedConversationId ?? '', pageIndex] as const;
+      return ['sidebar-chat-list', gateway, token, includedConversationId ?? '', pageIndex] as const;
     },
-    async ([, , includeConversationId, pageIndex]: readonly [
+    async ([, , , includeConversationId, pageIndex]: readonly [
       'sidebar-chat-list',
+      string,
       string,
       string,
       number,
@@ -1150,6 +1164,39 @@ function SidebarTaskListContent({
       revalidateOnFocus: false,
     },
   );
+
+  const {
+    data: recentPages,
+    error: recentError,
+    size: recentSize,
+    setSize: setRecentSize,
+    isValidating: validatingRecent,
+    mutate: mutateRecent,
+  } = useSWRInfinite<Awaited<ReturnType<typeof listSessions>>>(
+    (page, previous) => !token || (previous && !previous.hasMore)
+      ? null
+      : ['sidebar-recent-sessions', gateway, token, page] as const,
+    ([, , , page]: readonly ['sidebar-recent-sessions', string, string, number]) => listSessions({
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+      excludeArchived: true,
+      rootConversationsOnly: true,
+      excludeAutomationRuns: true,
+    }),
+    { revalidateOnFocus: false },
+  );
+  const recentItems = useMemo(() => {
+    const sessions = new Map<string, SessionMetadata>();
+    for (const page of recentPages ?? []) {
+      for (const session of page.items) {
+        if (!sessions.has(session.key) && session.status !== 'archived' &&
+            isSidebarConversation(session) && resolveSessionIdentity(session).source !== 'system') {
+          sessions.set(session.key, session);
+        }
+      }
+    }
+    return [...sessions.values()].sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
+  }, [recentPages]);
 
   const projectGroups = useMemo(() => {
     const pages = data ?? [];
@@ -1182,9 +1229,10 @@ function SidebarTaskListContent({
   }, [data, loadingProjectIds, pendingOrders, projectSessionOverrides]);
   const taskGroups = useMemo((): Record<string, SidebarTaskGroup> => {
     const groups: Record<string, SidebarTaskGroup> = {};
+    for (const page of recentPages ?? []) Object.assign(groups, page.childrenByConversationId);
     for (const page of data ?? []) Object.assign(groups, page.childrenByConversationId);
     return { ...groups, ...extraTaskGroups };
-  }, [data, extraTaskGroups]);
+  }, [data, extraTaskGroups, recentPages]);
 
   const firstInbox = data?.[0]?.inbox;
   const inboxItems = useMemo(() => {
@@ -1222,8 +1270,8 @@ function SidebarTaskListContent({
     return out;
   }, [inboxItems, projectGroups]);
   const visibleConversationIds = useMemo(
-    () => new Set(items.map((session) => session.key)),
-    [items],
+    () => new Set([...items, ...recentItems].map((session) => session.key)),
+    [items, recentItems],
   );
 
   const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0 || inboxHasMore;
@@ -1237,6 +1285,30 @@ function SidebarTaskListContent({
     [pinnedSessions],
   );
 
+  const loadedProjectNames = useMemo(
+    () => new Map(projectGroups.map(({ project }) => [project.id, project.name])),
+    [projectGroups],
+  );
+  const needsProjectNames = [...recentItems, ...pinnedSessions].some(
+    ({ projectId }) => projectId && !loadedProjectNames.has(projectId),
+  );
+  const { data: projectOptions, mutate: mutateProjectOptions } = useSWR(
+    token && (data || !isValidating) && needsProjectNames ? ['sidebar-project-names', gateway, token] : null,
+    allProjectOptions,
+    { revalidateOnFocus: false },
+  );
+  const projectNames = useMemo(
+    () => new Map([...projectOptions?.map((project) => [project.id, project.name] as const) ?? [], ...loadedProjectNames]),
+    [loadedProjectNames, projectOptions],
+  );
+  const recentGroups = groupRecentSessions(recentItems.filter(
+    (session) => session.status !== 'pinned' && !pinnedConversationIds.has(session.key),
+  ));
+  const activeOlder = recentGroups.older.some((session) => session.key === activeConversationId);
+  useEffect(() => {
+    if (activeOlder) setShowOlder(true);
+  }, [activeConversationId, activeOlder]);
+
   const loadingMore = Boolean(data && size > data.length);
   const lastPage = data?.[data.length - 1];
   const hasMorePages = lastPage?.projects.hasMore ?? false;
@@ -1248,7 +1320,8 @@ function SidebarTaskListContent({
     setInboxHasMoreOverride(null);
     setExtraTaskGroups({});
     void mutate();
-  }, [mutate]);
+    void mutateRecent();
+  }, [mutate, mutateRecent]);
 
   const reorderSidebar = useCallback((containerId: string, itemIds: string[]) => {
     if (reorderBusyRef.current.has(containerId)) return;
@@ -1280,14 +1353,12 @@ function SidebarTaskListContent({
   const onScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
       const el = e.currentTarget;
-      if (discovery.active) return;
-      browseScrollTop.current = el.scrollTop;
-      if (!hasMorePages || loadingMore) return;
+      if (view !== 'projects' || !hasMorePages || loadingMore) return;
       const { scrollTop, scrollHeight, clientHeight } = el;
       if (scrollHeight - scrollTop - clientHeight > 100) return;
-      void setSize((s) => s + 1);
+      void setSize(size + 1);
     },
-    [discovery.active, hasMorePages, loadingMore, setSize],
+    [hasMorePages, loadingMore, setSize, size, view],
   );
 
   useEffect(() => {
@@ -1295,14 +1366,11 @@ function SidebarTaskListContent({
     const onSessionListRefresh = () => {
       refreshSidebar();
     };
-    const onSessionUpdated = (e: Event) => {
-      const d = (e as CustomEvent<{ key?: string; name?: string }>).detail;
-      if (!d?.key) {
-        refreshSidebar();
-        return;
-      }
+    const onProjectUpdated = () => {
       refreshSidebar();
+      void mutateProjectOptions();
     };
+    const onRunCompleted = () => void mutateRecent();
     const onSessionTranscriptUpdated = (e: Event) => {
       if (shouldRefreshSidebarForTranscriptUpdate(
         (e as CustomEvent<unknown>).detail,
@@ -1311,25 +1379,29 @@ function SidebarTaskListContent({
         refreshSidebar();
       }
     };
-    window.addEventListener('session-updated', onSessionUpdated);
+    window.addEventListener('session-updated', onSessionListRefresh);
     window.addEventListener('session-created', onSessionListRefresh);
-    window.addEventListener('project-updated', onSessionListRefresh);
+    window.addEventListener('project-updated', onProjectUpdated);
     window.addEventListener('task-updated', onSessionListRefresh);
     window.addEventListener('session-transcript-updated', onSessionTranscriptUpdated);
+    window.addEventListener('run-completed', onRunCompleted);
+    window.addEventListener('agent-run-ended', onRunCompleted);
     return () => {
-      window.removeEventListener('session-updated', onSessionUpdated);
+      window.removeEventListener('session-updated', onSessionListRefresh);
       window.removeEventListener('session-created', onSessionListRefresh);
-      window.removeEventListener('project-updated', onSessionListRefresh);
+      window.removeEventListener('project-updated', onProjectUpdated);
       window.removeEventListener('task-updated', onSessionListRefresh);
       window.removeEventListener('session-transcript-updated', onSessionTranscriptUpdated);
+      window.removeEventListener('run-completed', onRunCompleted);
+      window.removeEventListener('agent-run-ended', onRunCompleted);
     };
-  }, [token, refreshSidebar, visibleConversationIds]);
+  }, [token, refreshSidebar, mutateProjectOptions, mutateRecent, visibleConversationIds]);
 
   useEffect(() => {
-    if (!token || !activeConversationId || !data) return;
+    if (view !== 'projects' || !token || !activeConversationId || !data) return;
     if (items.some((session) => session.key === activeConversationId)) return;
     setIncludedConversationId((prev) => (prev === activeConversationId ? prev : activeConversationId));
-  }, [activeConversationId, data, items, token]);
+  }, [activeConversationId, data, items, token, view]);
 
   const openRename = useCallback((session: SessionMetadata) => {
     setRenameKey(session.key);
@@ -1343,7 +1415,6 @@ function SidebarTaskListContent({
     try {
       await renameSession(renameKey, name);
       setRenameKey(null);
-      discovery.refresh();
       refreshSidebar();
     } catch {
       // Preserve the current sidebar state when the action fails.
@@ -1353,7 +1424,6 @@ function SidebarTaskListContent({
   const runDelete = async (key: string) => {
     try {
       await deleteSession(key);
-      discovery.refresh();
       if (activeConversationId === key) {
         navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
       }
@@ -1574,6 +1644,58 @@ function SidebarTaskListContent({
     ? projectGroups.find((group) => group.project.id === removeProjectId)?.project
     : undefined;
 
+  const recentHasMore = recentPages?.at(-1)?.hasMore ?? false;
+  const loadingRecentMore = Boolean(recentPages && recentSize > recentPages.length && validatingRecent);
+  const sessionRowProps = {
+    onNavigate,
+    mutate: refreshSidebar,
+    onRequestRename: openRename,
+    onRequestDelete: setDeleteKey,
+    sb,
+    sess,
+    clipboard: m.clipboard,
+    defaultUnnamedTitle: m.chat.newSession,
+  };
+
+  const changeView = (next: SessionView) => {
+    setView(next);
+    if (next !== 'projects' || !activeConversationId) return;
+    const active = recentItems.find((session) => session.key === activeConversationId)
+      ?? items.find((session) => session.key === activeConversationId);
+    const projectId = active?.projectId;
+    if (projectId) {
+      setCollapsedProjectIds((current) => {
+        if (!current.has(projectId)) return current;
+        const expanded = new Set(current);
+        expanded.delete(projectId);
+        return expanded;
+      });
+    } else if (active) {
+      setInboxCollapsed(false);
+    }
+  };
+
+  const renderRecentRows = (sessions: SessionMetadata[]) => (
+    <div className="flex flex-col gap-0.5">
+      {sessions.map((session) => (
+        <SidebarTaskRow
+          key={session.key}
+          session={session}
+          contextLabel={session.projectId ? projectNames.get(session.projectId) : undefined}
+          isActive={activeConversationId === session.key}
+          {...sessionRowProps}
+        />
+      ))}
+    </div>
+  );
+
+  const renderRecentPeriod = (label: string, sessions: SessionMetadata[]) => sessions.length > 0 ? (
+    <section aria-label={label}>
+      <h2 className={cn('px-2 pb-1', sidebarSectionLabelClass)}>{label}</h2>
+      {renderRecentRows(sessions)}
+    </section>
+  ) : null;
+
   if (!token) {
     return (
       <div className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-2">
@@ -1599,101 +1721,95 @@ function SidebarTaskListContent({
   }
 
   return (
-    <SessionDescriptionContext value={discovery.filters.details}>
     <TaskGroupsContext value={taskGroups}>
     <div className="flex min-h-0 flex-1 flex-col">
       <div
-        ref={listScrollRef}
         className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-2"
         onScroll={onScroll}
       >
         {scrollHeader}
-        <div hidden={discovery.active || loadingFirst} className="px-2">
-          <SidebarPinnedSection
-            sessions={pinnedSessions}
-            activeConversationId={activeConversationId}
-            onNavigate={onNavigate}
-            mutate={refreshSidebar}
-            onRequestRename={openRename}
-            onRequestDelete={setDeleteKey}
-            sb={sb}
-            sess={sess}
-            clipboard={m.clipboard}
-            defaultUnnamedTitle={m.chat.newSession}
-            onReorder={reorderSidebar}
+        <div className="px-4 pb-2">
+          <SlidingSegmented<SessionView>
+            aria-label={sb.sessionViewLabel}
+            value={view}
+            onChange={changeView}
+            flush
+            buttonClassName="h-8"
+            options={[
+              { value: 'recent', label: sb.sessionViewRecent, icon: Clock3 },
+              { value: 'projects', label: sb.sessionViewProjects, icon: Folder },
+            ]}
           />
         </div>
         <div className="px-2">
-          <div className="group flex min-w-0 items-center gap-1.5 px-2 pb-1">
-            <button
+          <SidebarPinnedSection
+            sessions={pinnedSessions}
+            projectNames={view === 'recent' ? projectNames : undefined}
+            activeConversationId={activeConversationId}
+            {...sessionRowProps}
+            onReorder={reorderSidebar}
+          />
+        </div>
+        {view === 'recent' ? (
+          <div className="flex flex-col gap-2 px-2">
+            {!recentPages && !recentError ? <SidebarTaskListSkeleton /> : null}
+            {recentError ? (
+              <div role="alert" className="space-y-2 p-2 text-xs text-fg-muted">
+                <p>{sb.sessionFilters.error}</p>
+                <Button variant="secondary" onClick={() => void mutateRecent()}>{sb.sessionFilters.retry}</Button>
+              </div>
+            ) : null}
+            {recentPages && !recentError && !recentItems.length && !pinnedSessions.length && !recentHasMore
+              ? <p className="px-2 py-3 text-xs text-fg-muted">{sb.taskListEmpty}</p>
+              : null}
+            {renderRecentPeriod(sb.timelineToday, recentGroups.today)}
+            {renderRecentPeriod(sb.timelineYesterday, recentGroups.yesterday)}
+            {recentGroups.older.length > 0 ? (
+              <div>
+                <button
+                  type="button"
+                  className={cn('flex w-full items-center gap-1 rounded-lg px-2 py-1 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', sidebarSectionButtonClass)}
+                  aria-expanded={showOlder}
+                  onClick={() => setShowOlder((value) => !value)}
+                >
+                  <ChevronDown className={cn('size-3.5 transition-transform', !showOlder && '-rotate-90')} aria-hidden />
+                  {sb.timelineOlder}
+                </button>
+                {showOlder ? renderRecentRows(recentGroups.older) : null}
+              </div>
+            ) : null}
+            {loadingRecentMore ? <SidebarSessionSkeletonRow /> : recentHasMore && !recentError ? (
+              <button
+                type="button"
+                className="mx-2 rounded-lg px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onClick={() => void setRecentSize(recentSize + 1)}
+              >
+                {sb.sessionFilters.more}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div>
+          <div className="flex items-center justify-between px-4 pb-0.5">
+            <h2 className={sidebarSectionLabelClass}>{sb.sessionViewProjects}</h2>
+            <Button
               type="button"
-              className={cn(
-                'flex shrink-0 items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-                sidebarSectionButtonClass,
-              )}
-              onClick={() => setProjectsCollapsed((value) => !value)}
-              aria-expanded={!projectsCollapsed}
-            >
-              {sb.projectsHeading}
-              <ChevronDown
-                className={cn(
-                  'size-3.5 transition-transform duration-150 ease-out',
-                  projectsCollapsed && '-rotate-90',
-                )}
-                strokeWidth={1.75}
-                aria-hidden
-              />
-            </button>
-            <SessionFilterToolbar
-              filters={discovery.filters} onChange={discovery.updateFilters}
-              search={discovery.search} onSearch={discovery.setSearch}
-              labels={filterLabels} gateway={gateway} agents={chatAgents?.items ?? []}
-            />
-            <button
-              type="button"
-              className={cn(
-                'flex size-6 shrink-0 items-center justify-center rounded-md text-fg-subtle opacity-0 transition-[color,background-color,opacity] hover:bg-surface-hover hover:text-fg focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                'group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100',
-                createProjectOpen && 'opacity-100',
-              )}
+              variant="ghost"
+              className="size-7 shrink-0 rounded-md p-0 text-fg-muted"
               onClick={() => setCreateProjectOpen(true)}
               aria-label={projectsText.createTitle}
               title={projectsText.createTitle}
             >
               <Plus className="size-3.5" strokeWidth={2} aria-hidden />
-            </button>
+            </Button>
           </div>
-        </div>
-        {discovery.active ? (
-          <div className="px-2 py-2">
-            {discovery.pendingUpdate ? <button type="button" className="mb-2 w-full rounded-md px-2 py-1 text-xs text-accent-fg hover:bg-surface-hover" onClick={discovery.refresh}>{filterLabels.refresh}</button> : null}
-            {discovery.error ? <div role="alert" className="space-y-2 p-2 text-xs text-fg-muted"><p>{filterLabels.error}</p><Button variant="secondary" onClick={discovery.refresh}>{filterLabels.retry}</Button></div>
-              : discovery.loading ? <SidebarTaskListSkeleton />
-              : <>
-                <p className="px-2 pb-2 text-xs text-fg-muted" aria-live="polite">{filterLabels.results.replace('{{count}}', String(discovery.total))}</p>
-                {!discovery.items.length ? <p className="px-2 py-4 text-xs text-fg-muted">{filterLabels.empty}</p> : null}
-                <SessionDescriptionContext value={true}>
-                  {discovery.items.map((session) => <SidebarTaskRow
-                    key={session.key} session={session} isActive={session.key === activeConversationId} showTaskChildren={false}
-                    contextLabel={session.projectId ? discovery.projects?.find((project) => project.id === session.projectId)?.name ?? projectGroups.find((group) => group.project.id === session.projectId)?.project.name ?? session.projectId : filterLabels.unassigned}
-                    onNavigate={onNavigate} mutate={() => { discovery.refresh(); refreshSidebar(); }}
-                    onRequestRename={openRename} onRequestDelete={setDeleteKey}
-                    sb={sb} sess={sess} clipboard={m.clipboard} defaultUnnamedTitle={m.chat.newSession}
-                  />)}
-                </SessionDescriptionContext>
-                {discovery.loadingMore ? <SidebarSessionSkeletonRow /> : discovery.hasMore ? <button type="button" className="w-full rounded-md py-2 text-xs text-fg-muted hover:bg-surface-hover" onClick={discovery.loadMore}>{filterLabels.more}</button> : null}
-              </>}
-          </div>
-        ) : null}
-        <div hidden={discovery.active}>
           {loadingFirst ? (
             <SidebarTaskListSkeleton />
           ) : hasGroupedItems ? (
             <div className="flex flex-col px-2">
               {projectGroups.length > 0 ? (
                 <div className="pb-1">
-                  {!projectsCollapsed
-                    ? projectGroups.map((group) => (
+                  {projectGroups.map((group) => (
                         <SidebarProjectSection
                           key={group.project.id}
                           group={group}
@@ -1724,8 +1840,7 @@ function SidebarTaskListContent({
                           }}
                           onReorder={reorderSidebar}
                         />
-                      ))
-                    : null}
+                  ))}
                 </div>
               ) : null}
 
@@ -1786,12 +1901,17 @@ function SidebarTaskListContent({
             </div>
           )}
 
-          {loadingMore ? (
-            <div className="flex justify-center py-2" aria-busy>
-              <Loader2 className="size-4 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
-            </div>
+          {loadingMore ? <SidebarSessionSkeletonRow /> : hasMorePages ? (
+            <button
+              type="button"
+              className="mx-4 rounded-lg px-2 py-1.5 text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => void setSize(size + 1)}
+            >
+              {sb.sessionFilters.more}
+            </button>
           ) : null}
-        </div>
+          </div>
+        )}
       </div>
 
       <Dialog.Root
@@ -2029,6 +2149,5 @@ function SidebarTaskListContent({
       </Dialog.Root>
     </div>
     </TaskGroupsContext>
-    </SessionDescriptionContext>
   );
 }
