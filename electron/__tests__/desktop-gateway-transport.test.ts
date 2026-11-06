@@ -63,7 +63,33 @@ it('rejects untrusted browser requests and sandboxes upstream documents', async 
   const cookie = await login();
   expect((await fetch(transport.origin + '/api/config', { headers: { Cookie: cookie, Origin: 'https://other.example' } })).status).toBe(403);
   const html = await fetch(transport.origin + '/api/html', { headers: { Cookie: cookie } });
+  expect(html.headers.get('x-frame-options')).toBe('DENY');
   expect(html.headers.get('content-security-policy')).toContain('sandbox'); expect(html.headers.get('content-security-policy')).not.toContain('allow-same-origin');
+});
+
+it('serves the bundled HTML preview shell with its same-origin framing policy', async () => {
+  transport.select(await backend('a'));
+  const url = transport.origin + '/api/preview/html';
+  const response = await fetch(url);
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-type')).toContain('text/html');
+  expect(response.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  const csp = response.headers.get('content-security-policy');
+  expect(csp).toContain("frame-ancestors 'self'");
+  expect(csp).toContain("script-src 'unsafe-inline' https: blob:");
+  expect(csp).toContain('sandbox allow-scripts');
+  expect(csp).not.toContain('allow-same-origin');
+  expect(await response.text()).toContain('xopc-html-preview');
+
+  const head = await fetch(url, { method: 'HEAD' });
+  expect(head.status).toBe(200);
+  expect(head.headers.get('content-security-policy')).toBe(csp);
+  expect(await head.text()).toBe('');
+  expect((await fetch(url, { method: 'POST' })).status).toBe(401);
+  expect((await fetch(url + '/other')).status).toBe(401);
+  expect((await fetch(url, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status).toBe(403);
+  expect(calls).toHaveLength(0);
 });
 
 it('relays realtime and closes the old connection on Gateway switch', async () => {

@@ -12,6 +12,7 @@ import type { GatewayService } from '../service.js';
 import { resolveAllowedBrowserOrigins, resolveGatewayServiceListenPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { maxSessionInputRequestBodyBytes } from '../chat-limits.js';
+import { HTML_PREVIEW_PATH } from '../html-preview-shell.js';
 import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
 import { isChromeExtensionOrigin } from '../security/origin-check.js';
@@ -36,7 +37,7 @@ import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-exten
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
 import { registerPublicLocalAppPreviewRoutes } from './routes/local-apps.js';
-import { HTML_PREVIEW_PATH, registerPublicHtmlPreviewRoute } from './routes/html-preview.js';
+import { registerPublicHtmlPreviewRoute } from './routes/html-preview.js';
 import { registerDeviceAuthPublicRoutes } from './routes/devices.js';
 import { resetLazyRouteBundlesForTests } from './routes/lazy-fallback.js';
 import { prewarmStaticUiCache } from './lib/static-ui.js';
