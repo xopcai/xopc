@@ -63,7 +63,7 @@ export class AttentionGovernor {
       attention,
       policy: {
         visibleDecisionCount: decisions.length,
-        suppressedDecisionCount: eligible.length - decisions.length,
+        suppressedDecisionCount: input.decisions.length - decisions.length,
         visibleAttentionCount: attention.length,
         suppressedAttentionCount: Math.max(0, input.attention.length - attention.length),
       },
