@@ -14,6 +14,7 @@ import {
   type TaskCommand,
   type TaskCreateRequest,
   type TaskCreateResponse,
+  type TaskCriterionReview,
   type TaskDetailResponse,
   type TaskPatchRequest,
 } from '@xopcai/gateway-contract';
@@ -80,7 +81,7 @@ export async function commandTask(
 export async function reviewTaskCriterion(
   taskId: string,
   criterionIndex: number,
-  status: 'passed' | 'failed',
+  status: TaskCriterionReview['status'],
   expectedVersion: number,
   contractVersion: number,
 ): Promise<TaskDetail> {

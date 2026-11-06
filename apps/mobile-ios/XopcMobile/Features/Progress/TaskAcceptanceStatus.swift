@@ -7,12 +7,14 @@ enum TaskAcceptanceStatus: String {
 
     static func resolve(_ criterion: String, index: Int, detail: TaskDetailEnvelope) -> TaskAcceptanceStatus {
         let version = detail.task.latestContractVersion
-        if detail.task.contract?.acceptancePolicy != "verified_auto",
-           let review = detail.criterionReviews?.first(where: {
+        if let review = detail.criterionReviews?.first(where: {
                $0.contractVersion == version && $0.criterionIndex == index
            })
         {
-            return review.status == "passed" ? .passed : .failed
+            if review.status == "unverified" { return .pending }
+            if detail.task.contract?.acceptancePolicy != "verified_auto" {
+                return review.status == "passed" ? .passed : .failed
+            }
         }
         if detail.task.contract?.acceptancePolicy == "manual" {
             return .pending

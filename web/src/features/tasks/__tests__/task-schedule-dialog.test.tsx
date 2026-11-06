@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { TaskScheduleDialog } from '../task-schedule-dialog';
 
+vi.mock('@/components/ui/date-time-picker', () => ({
+  DateTimePicker: ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) =>
+    <input aria-label={label} data-test-date-time-picker value={value} onChange={event => onChange(event.target.value)} />,
+}));
 vi.mock('@/features/automations/automation-api', () => ({ automationApi: { create: vi.fn(), update: vi.fn() } }));
 vi.mock('@/components/ui/popover-select', () => ({
   Select: (props: SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} />,
@@ -22,7 +26,7 @@ describe('task schedule dialog', () => {
   const onCreated = vi.fn();
   const onClose = vi.fn();
   const button = (label: string) => [...document.querySelectorAll('button')].find((item) => item.textContent === label)!;
-  const input = () => document.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+  const input = () => document.querySelector<HTMLInputElement>('input[data-test-date-time-picker]')!;
   const setDate = (value: string) => act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input(), value);
     input().dispatchEvent(new Event('input', { bubbles: true }));

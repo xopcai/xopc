@@ -34,18 +34,18 @@ describe('HomeTaskReview', () => {
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
   const button = (label: string) => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label)!;
 
-  it('requires criterion review before accepting and refreshes after completion', async () => {
+  it('refreshes the Home card when saving the last criterion completes the task', async () => {
     vi.mocked(fetchTask).mockResolvedValue(detail());
-    vi.mocked(reviewTaskCriterion).mockResolvedValue(detail(true));
-    vi.mocked(commandTask).mockResolvedValue(detail(true));
+    const closed = detail(true);
+    closed.task = { ...closed.task, phase: 'closed', resolution: 'done' };
+    vi.mocked(reviewTaskCriterion).mockResolvedValue(closed);
     const complete = vi.fn();
     await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="zh" onComplete={complete} /></MemoryRouter>));
     expect(button('验收完成').disabled).toBe(true);
     await act(async () => button('确认通过').click());
     expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'passed', 3, 1);
-    expect(button('验收完成').disabled).toBe(false);
-    await act(async () => button('验收完成').click());
-    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'close', resolution: 'done' }, 4);
+    expect(button('验收完成')).toBeUndefined();
+    expect(commandTask).not.toHaveBeenCalled();
     expect(complete).toHaveBeenCalledOnce();
   });
 

@@ -5,6 +5,7 @@ import type { XopcWorkspaceItem, XopcMobileTaskDetail, XopcMobileTaskReview,
 export function taskCriterionState(info: XopcMobileTaskDetail, criterion: string, index: number): string {
   const review = info.criterionReviews.find((entry: XopcMobileTaskReview): boolean =>
     entry.contractVersion === info.latestContractVersion && entry.criterionIndex === index);
+  if (review?.status === 'unverified') return 'pending';
   if (review && info.contract?.acceptancePolicy !== 'verified_auto') return review.status;
   if (info.contract?.acceptancePolicy === 'manual') return 'pending';
   const runIds = info.runs.filter((run: XopcMobileTaskRun): boolean => run.contractVersion === info.latestContractVersion)

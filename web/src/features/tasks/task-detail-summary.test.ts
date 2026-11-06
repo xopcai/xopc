@@ -34,6 +34,16 @@ describe('summarizeTaskCriteria', () => {
     expect(summarizeTaskCriteria(task)[0]).toMatchObject({ status: 'unverified', runId: 'current' });
   });
 
+  it('keeps a cleared criterion unchecked while preserving its automatic pass as evidence', () => {
+    const task = detail();
+    task.task.contract!.acceptancePolicy = 'verified_auto';
+    task.criterionReviews = [{ contractVersion: 2, criterionIndex: 0, criterionText: 'Tests pass',
+      status: 'unverified', reviewedBy: { kind: 'user' }, reviewedAt: 300 }];
+    expect(summarizeTaskCriteria(task)[0]).toMatchObject({
+      status: 'unverified', verificationStatus: 'passed', evidence: [{ title: 'Current test' }],
+    });
+  });
+
   it('keeps the latest unverified reason instead of borrowing an older pass', () => {
     const task = detail();
     task.receipts.push({ runId: 'latest', finalizedAt: 300, verification: { status: 'unverified', checks: [{

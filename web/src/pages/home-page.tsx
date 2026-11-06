@@ -2,12 +2,13 @@ import * as Dialog from '@radix-ui/react-dialog';
 import type {
   HomeAction,
   HomeCapabilityPreflight,
+  HomeDelivery,
   HomeOpportunity,
   HomeOpportunityActionRequest,
   HomeOpportunityFeedbackRequest,
   HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
-import { CalendarClock, ChevronRight, CircleAlert, Plus, X } from 'lucide-react';
+import { CalendarClock, Check, ChevronDown, ChevronRight, CirclePause, CircleAlert, Plus, Search, Sparkles, X } from 'lucide-react';
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -47,6 +48,8 @@ import { HomeAdvisorCard, type HomeAdvisorReceipt } from '@/features/tasks/home-
 import { HomeAdvisorHistoryDialog } from '@/features/tasks/home-advisor-history-dialog';
 import { HomeAdvisorStatusControl, type HomeAdvisorStatusCopy } from '@/features/tasks/home-advisor-status-control';
 import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
+import { HomeDeliveriesDialog, HomeDeliveryRow } from '@/features/tasks/home-deliveries';
+import { currentTaskReceipt } from '@/features/tasks/task-detail-summary';
 import { HomeTaskReview } from '@/features/tasks/home-task-review';
 import { retryHomeTask } from '@/features/tasks/home-task-actions';
 import { taskCopy } from '@/features/tasks/task-copy';
@@ -62,6 +65,17 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 function interpolate(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(values[key] ?? ''));
+}
+
+const READ_DELIVERIES_KEY = 'xopc-home-read-deliveries';
+
+function loadReadDeliveries(): string[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(READ_DELIVERIES_KEY) ?? '[]');
+    return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string').slice(0, 300) : [];
+  } catch {
+    return [];
+  }
 }
 
 function HomeSkeleton() {
@@ -82,7 +96,7 @@ type HomeActionRunner = (action: HomeAction, itemId: string) => void;
 function DecisionCard({
   item,
   busy,
-  recommendationLabel,
+  primary,
   dueLabel,
   failureLabel,
   locale,
@@ -92,7 +106,7 @@ function DecisionCard({
 }: {
   item: HomeWorkbenchItem;
   busy: boolean;
-  recommendationLabel: string;
+  primary: boolean;
   dueLabel: string;
   failureLabel: string;
   locale: 'en' | 'zh';
@@ -111,60 +125,62 @@ function DecisionCard({
     else next.delete('reviewTask');
     setSearchParams(next);
   };
-  const due = item.dueAt ? `${dueLabel} ${formatMediumDateTime(new Date(item.dueAt), locale)}` : null;
-  const kicker = item.kind === 'failure' ? failureLabel : due;
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const work = messages(locale).projectsPage.home.workbench;
+  const authorization = item.primaryAction?.type === 'connector_decision';
+  const due = item.dueAt !== undefined ? `${dueLabel} ${formatMediumDateTime(item.dueAt, locale)}` : null;
+  const subtitle = [item.projectName, authorization ? item.summary.split('\n')[0] : item.summary].filter(Boolean).join(' · ');
+  const expandReview = Boolean(reviewTaskId && (item.primaryAction?.type === 'task_review' || item.primaryAction?.type === 'open'));
   return (
-    <article className="px-5 py-5 sm:px-6 sm:py-6" aria-busy={busy}>
-      {kicker ? (
-        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-warning">
-          <span className="size-1.5 rounded-full bg-warning" aria-hidden />
-          <span>{kicker}</span>
+    <article className="px-3 py-3 sm:px-4" aria-busy={busy}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 flex-1 basis-52">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            {item.openAction ? (
+              <button type="button" className="break-words text-left text-sm font-semibold text-fg hover:underline" onClick={() => onAction(item.openAction!, item.id)}>{item.title}</button>
+            ) : <span className="break-words text-sm font-semibold text-fg">{item.title}</span>}
+            {due || item.kind === 'failure' ? <span className="rounded bg-warning/10 px-1.5 py-0.5 text-xs text-warning">{due ?? failureLabel}</span> : null}
+          </div>
+          <p className="mt-0.5 line-clamp-2 break-words text-xs text-fg-muted">{subtitle}</p>
         </div>
-      ) : null}
-      <button
-        type="button"
-        className="block w-full text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-accent"
-        disabled={!item.openAction}
-        onClick={() => item.openAction && onAction(item.openAction, item.id)}
-      >
-        <span className="block text-lg font-semibold leading-7 tracking-tight text-fg">{item.title}</span>
-        <span className="mt-1.5 block text-sm leading-6 text-fg-muted">{item.summary}</span>
-      </button>
-      {item.recommendation ? (
-        <p className="mt-3 text-sm leading-6 text-fg-muted">
-          <span className="font-semibold text-fg">{recommendationLabel}：</span>
-          {item.recommendation}
-        </p>
-      ) : null}
-      {item.primaryAction || item.secondaryActions.length > 0 ? (
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-1">
+          {reviewTaskId && item.primaryAction?.type === 'retry_task' ? (
+            <Button variant="ghost" className="min-h-9 px-2 text-xs" aria-expanded={reviewOpen} onClick={() => setReviewOpen(!reviewOpen)}>{locale === 'zh' ? '查看结果与依据' : 'View result and evidence'}</Button>
+          ) : null}
           {item.primaryAction ? (
             <Button
               type="button"
-              variant="primary"
-              className="h-9 rounded-lg px-3.5 text-xs"
+              variant={primary ? 'primary' : 'secondary'}
+              className="min-h-9 shrink-0 px-2.5 text-xs shadow-none"
               disabled={busy}
-              aria-expanded={reviewTaskId && ['task_review', 'open'].includes(item.primaryAction.type) ? reviewOpen : undefined}
-              onClick={() => reviewTaskId && ['task_review', 'open'].includes(item.primaryAction!.type) ? setReviewOpen(!reviewOpen) : onAction(item.primaryAction!, item.id)}
+              aria-expanded={authorization ? scopeOpen : expandReview ? reviewOpen : undefined}
+              onClick={() => {
+                if (authorization) setScopeOpen((open) => !open);
+                else if (expandReview) setReviewOpen(!reviewOpen);
+                else onAction(item.primaryAction!, item.id);
+              }}
             >
-              {item.primaryAction.label}
+              {authorization ? work.viewScope : item.primaryAction.label}
             </Button>
           ) : null}
-          {item.secondaryActions.map((action) => (
-            <Button
-              key={`${action.type}:${action.label}`}
-              type="button"
-              variant="secondary"
-              className="h-9 rounded-lg px-3.5 text-xs shadow-none"
-              disabled={busy}
-              onClick={() => onAction(action, item.id)}
-            >
-              {action.label}
-            </Button>
+        </div>
+      </div>
+      {authorization && scopeOpen ? (
+        <div className="mt-3 space-y-2 rounded-lg bg-surface-inset px-3 py-2">
+          <p className="whitespace-pre-wrap break-words text-xs text-fg-muted">{item.summary}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" disabled={busy} onClick={() => onAction(item.primaryAction!, item.id)}>{item.primaryAction?.label}</Button>
+            {item.secondaryActions.map((action) => <Button key={action.label} disabled={busy} onClick={() => onAction(action, item.id)}>{action.label}</Button>)}
+          </div>
+        </div>
+      ) : null}
+      {!authorization && !expandReview && item.secondaryActions.length ? (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {item.secondaryActions.filter((action) => action.type !== 'open').map((action) => (
+            <Button key={action.label} variant="ghost" disabled={busy} onClick={() => onAction(action, item.id)}>{action.label}</Button>
           ))}
         </div>
       ) : null}
-      {reviewTaskId && item.primaryAction?.type === 'retry_task' ? <Button variant="ghost" className="mt-2" aria-expanded={reviewOpen} onClick={() => setReviewOpen(!reviewOpen)}>{locale === 'zh' ? '查看结果与依据' : 'View result and evidence'}</Button> : null}
       {reviewOpen && reviewTaskId ? <HomeTaskReview key={reviewTaskId} taskId={reviewTaskId} language={locale} onUpdated={onUpdated} onComplete={() => { setReviewOpen(false); onComplete(); }} /> : null}
     </article>
   );
@@ -176,25 +192,26 @@ function BackgroundRow({ item, onAction, language, onUpdated }: { item: HomeWork
   const taskId = taskMatch ? decodeURIComponent(taskMatch[1]) : undefined;
   const icon = item.kind === 'scheduled'
     ? <CalendarClock className="size-4" aria-hidden />
-    : <span className="size-1.5 rounded-full bg-fg-subtle" aria-hidden />;
+    : item.backgroundState === 'paused' ? <CirclePause className="size-4" aria-hidden />
+      : <span className="size-1.5 rounded-full bg-fg-subtle" aria-hidden />;
   return (
     <div>
-    <button
-      type="button"
-      className="flex min-h-16 w-full items-center gap-3 py-3 text-left outline-none hover:text-fg focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-accent"
-      disabled={!item.openAction}
-      aria-expanded={taskId ? expanded : undefined}
-      onClick={() => taskId ? setExpanded((value) => !value) : item.openAction && onAction(item.openAction, item.id)}
-    >
-      <span className="flex size-7 shrink-0 items-center justify-center text-fg-subtle">{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-fg">{item.title}</span>
-        <span className="mt-0.5 block truncate text-xs text-fg-muted">{item.summary}</span>
-      </span>
-      {item.statusLabel ? <span className="shrink-0 text-xs text-fg-subtle">{item.statusLabel}</span> : null}
-      {item.openAction ? <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden /> : null}
-    </button>
-    {taskId && expanded ? <HomeTaskReview taskId={taskId} language={language} onUpdated={onUpdated} onComplete={() => setExpanded(false)} /> : null}
+      <button
+        type="button"
+        className="flex min-h-11 w-full items-center gap-2 rounded-md px-1 py-2 text-left hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
+        disabled={!item.openAction}
+        aria-expanded={taskId ? expanded : undefined}
+        onClick={() => taskId ? setExpanded((value) => !value) : item.openAction && onAction(item.openAction, item.id)}
+      >
+        <span className="flex size-5 shrink-0 items-center justify-center text-fg-muted">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block line-clamp-2 break-words text-sm font-medium text-fg">{item.title}</span>
+          {item.kind === 'scheduled' ? <time className="block text-xs text-fg-muted" dateTime={new Date(item.updatedAt).toISOString()}>{formatMediumDateTime(item.updatedAt, language)}</time>
+            : <span className="block truncate text-xs text-fg-muted">{item.summary}</span>}
+        </span>
+        {item.openAction ? <span className="flex shrink-0 items-center gap-0.5 text-xs text-accent-fg"><span>{item.openAction.label}</span><ChevronRight className="size-3.5" aria-hidden /></span> : null}
+      </button>
+      {taskId && expanded ? <HomeTaskReview taskId={taskId} language={language} onUpdated={onUpdated} onComplete={() => setExpanded(false)} /> : null}
     </div>
   );
 }
@@ -209,11 +226,17 @@ export function HomePage() {
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [showAllAttention, setShowAllAttention] = useState(false);
-  const { home, loading, loadError, setLoadError, load } = useHomeSnapshot(language, location.key, showAllAttention);
+  const { home, loading, loadError, setLoadError, load } = useHomeSnapshot(language, location.key, true);
+  const work = t.home.workbench;
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [deliveryView, setDeliveryView] = useState<HomeDelivery | 'history' | null>(null);
+  const [readDeliveries, setReadDeliveries] = useState(loadReadDeliveries);
+  const resultTrigger = useRef<HTMLElement | null>(null);
+  const [suggestionExpanded, setSuggestionExpanded] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [intent, setIntent] = useState('');
   const actionPendingRef = useRef(false);
-  const [actionReceipt, setActionReceipt] = useState<{ message: string; href?: string }>();
+  const [actionReceipt, setActionReceipt] = useState<{ message: string; href?: string; item?: HomeWorkbenchItem; slot?: number }>();
   const [showAllBackground, setShowAllBackground] = useState(false);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [advisorBusy, setAdvisorBusy] = useState(false);
@@ -337,9 +360,62 @@ export function HomePage() {
     findAnother: t.home.advisorRefresh,
   }), [t.home]);
 
-  const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0);
-  const showInlineComposer = Boolean(home && home.needsUser.length === 0);
+  const deliveries = (home?.recentDeliveries ?? []).map((item) => readDeliveries.includes(item.id) ? { ...item, read: true } : item);
+  const now = Date.now();
+  const unreadDeliveries = deliveries.filter((item) => !item.read && item.completedAt >= now - 7 * 24 * 60 * 60_000);
+  const resumable = home?.resumable ?? [];
+  const needsUserCount = (home?.needsUser.length ?? 0)
+    + (home?.attentionPolicy?.suppressedAttentionCount ?? 0) + (home?.attentionPolicy?.suppressedDecisionCount ?? 0);
+  const nextMidnight = new Date(now);
+  nextMidnight.setHours(24, 0, 0, 0);
+  const dueToday = home?.needsUser.filter((item) => item.dueAt !== undefined && item.dueAt >= now && item.dueAt < nextMidnight.getTime()).length ?? 0;
+  const background = home?.background ?? [];
+  const moving = background.filter((item) => item.kind !== 'scheduled');
+  const scheduled = background.filter((item) => item.kind === 'scheduled');
+  const advisorVisible = home?.advisor.state === 'ready' || home?.advisor.state === 'clarification' || Boolean(advisorReceipt);
+  useEffect(() => {
+    if (!advisorReceipt) return;
+    const timer = window.setTimeout(() => setAdvisorReceipt(undefined), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [advisorReceipt]);
+  const mode = !home ? undefined : needsUserCount > 0 ? 'attention' : unreadDeliveries.length > 0 ? 'delivery'
+    : resumable.length > 0 || moving.length > 0 || home.runningConversations?.length || advisorVisible ? 'resume' : 'idle';
+  const isIdle = mode === 'idle';
+  const showInlineComposer = isIdle && !conversationOpen;
   const composerVisible = showInlineComposer || conversationOpen;
+  const previousMode = useRef(mode);
+  const focusAfterWork = useRef(false);
+
+  useLayoutEffect(() => {
+    const previous = previousMode.current;
+    previousMode.current = mode;
+    if (!previous || !mode || mode === previous) return;
+    if (focusAfterWork.current) {
+      focusAfterWork.current = false;
+      if (document.activeElement === document.body) stageRef.current?.focus({ preventScroll: true });
+    }
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const animation = stageRef.current?.animate?.(
+      [{ opacity: 0.7, transform: 'translateY(4px)' }, { opacity: 1, transform: 'translateY(0)' }],
+      { duration: 180, easing: 'ease-out' },
+    );
+    return () => animation?.cancel();
+  }, [mode]);
+
+  useEffect(() => {
+    const syncReadDeliveries = (event: StorageEvent) => {
+      if (event.key === READ_DELIVERIES_KEY || event.key === null) setReadDeliveries(loadReadDeliveries());
+    };
+    window.addEventListener('storage', syncReadDeliveries);
+    return () => window.removeEventListener('storage', syncReadDeliveries);
+  }, []);
+
+  const rememberDelivery = useCallback((id: string) => {
+    setReadDeliveries((current) => [...new Set([id, ...current])].slice(0, 300));
+    try {
+      localStorage.setItem(READ_DELIVERIES_KEY, JSON.stringify([...new Set([id, ...loadReadDeliveries()])].slice(0, 300)));
+    } catch { /* A blocked storage provider still allows this tab to acknowledge results. */ }
+  }, []);
 
   useEffect(() => {
     if (!composerVisible && voiceActive) cancelVoiceCapture();
@@ -397,23 +473,26 @@ export function HomePage() {
     if (action.type === 'task_review' || actionPendingRef.current) return;
     actionPendingRef.current = true;
     setBusyItemId(itemId);
+    const slot = home?.needsUser.findIndex((item) => item.id === itemId) ?? -1;
+    const resolved = slot < 0 ? undefined : { item: home?.needsUser[slot], slot };
     setActionReceipt(undefined);
     setLoadError(null);
     void (async () => {
       try {
         if (action.type === 'retry_task') {
           await retryHomeTask(action.taskId, language);
-          setActionReceipt({ message: language === 'zh' ? '任务已重新开始，可查看执行进度。' : 'Task restarted. View progress.', href: modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(action.taskId)}`) });
+          setActionReceipt({ ...resolved, message: language === 'zh' ? '任务已重新开始，可查看执行进度。' : 'Task restarted. View progress.', href: modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(action.taskId)}`) });
         } else if (action.type === 'connector_decision') {
           await respondToWorkDecision({ kind: 'connector_approval', approvalId: action.approvalId }, action.decision);
-          setActionReceipt({ message: language === 'zh' ? (action.decision === 'approve' ? '已批准授权，任务状态将自动更新。' : '已拒绝授权。') : (action.decision === 'approve' ? 'Permission approved. Task status will update.' : 'Permission denied.') });
+          setActionReceipt({ ...resolved, message: language === 'zh' ? (action.decision === 'approve' ? '已批准授权，任务状态将自动更新。' : '已拒绝授权。') : (action.decision === 'approve' ? 'Permission approved. Task status will update.' : 'Permission denied.') });
         } else if (action.type === 'retry_run') {
           const result = await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
-          setActionReceipt({ message: language === 'zh' ? '已发起重试，可查看新的执行结果。' : 'Retry started. Follow the new execution.', href: result.conversationId ? `/chat/${encodeURIComponent(result.conversationId)}` : `/automations?run=${encodeURIComponent(result.runId)}` });
+          setActionReceipt({ ...resolved, message: language === 'zh' ? '已发起重试，可查看新的执行结果。' : 'Retry started. Follow the new execution.', href: result.conversationId ? `/chat/${encodeURIComponent(result.conversationId)}` : `/automations?run=${encodeURIComponent(result.runId)}` });
         } else if (action.type === 'acknowledge_run') {
           await acknowledgeWorkAttention({ kind: action.subjectKind, runId: action.runId });
-          setActionReceipt({ message: language === 'zh' ? '已确认此异常，已从待处理事项移除。' : 'Issue acknowledged and removed from pending items.' });
+          setActionReceipt({ ...resolved, message: language === 'zh' ? '已确认此异常，已从待处理事项移除。' : 'Issue acknowledged and removed from pending items.' });
         }
+        focusAfterWork.current = true;
         await load();
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : String(error));
@@ -422,17 +501,22 @@ export function HomePage() {
         setBusyItemId(null);
       }
     })();
-  }, [language, load, navigate]);
+  }, [home, language, load, navigate]);
 
-  const onTaskUpdated = useCallback((detail: TaskDetail) => {
+  const onTaskUpdated = useCallback((detail: TaskDetail, item?: HomeWorkbenchItem) => {
+    const result = detail.task.phase === 'closed' && detail.task.resolution === 'done' ? currentTaskReceipt(detail) : undefined;
+    if (result) rememberDelivery(`task:${result.runId}`);
+    focusAfterWork.current = true;
+    const slot = item ? home?.needsUser.findIndex((entry) => entry.id === item.id) : undefined;
     setActionReceipt({
+      item, slot,
       message: language === 'zh'
         ? (detail.task.phase === 'closed' ? '任务已验收完成。' : '操作已保存，任务状态已更新。')
         : (detail.task.phase === 'closed' ? 'Task accepted.' : 'Action saved. Task status updated.'),
       href: modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(detail.task.id)}`),
     });
     void load();
-  }, [language, load]);
+  }, [home, language, load, rememberDelivery]);
 
   const refreshAdvisor = useCallback(() => {
     setAdvisorBusy(true);
@@ -514,7 +598,7 @@ export function HomePage() {
 
   const headerEnd = useMemo(() => (
     <div className="flex items-center gap-1">
-      {home ? (
+      {home && !isIdle ? (
         <HomeAdvisorStatusControl
           advisor={home.advisor}
           busy={advisorBusy}
@@ -523,14 +607,14 @@ export function HomePage() {
           onRefresh={refreshAdvisor}
         />
       ) : null}
-      {!showInlineComposer ? (
-        <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setConversationOpen(true)}>
+      {!isIdle ? (
+        <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={() => setConversationOpen(true)}>
           <Plus className="size-4" aria-hidden />
           {copy.newWork}
         </Button>
       ) : null}
     </div>
-  ), [advisorBusy, advisorStatusCopy, copy.newWork, home, refreshAdvisor, showInlineComposer]);
+  ), [advisorBusy, advisorStatusCopy, copy.newWork, home, isIdle, refreshAdvisor]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -541,17 +625,78 @@ export function HomePage() {
     return () => clearPageHeader();
   }, [clearPageHeader, headerEnd, setPageHeader, t.title]);
 
+  const openDelivery = (view: HomeDelivery | 'history') => {
+    resultTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setDeliveryView(view);
+  };
+  const finishDelivery = (item: HomeDelivery) => {
+    rememberDelivery(item.id);
+    setDeliveryView(null);
+    setActionReceipt({ message: work.deliverySaved });
+    void load();
+  };
+  const visibleAttention = showAllAttention ? (home?.needsUser ?? []) : (home?.needsUser.slice(0, 2) ?? []);
+  const remainingAttention = needsUserCount - visibleAttention.length;
+  const handled = actionReceipt?.item && !home?.needsUser.some((item) => item.id === actionReceipt.item?.id)
+    && (actionReceipt.slot ?? Infinity) < 2 ? actionReceipt.item : undefined;
+  const attentionRows = [...visibleAttention];
+  if (handled) attentionRows.splice(actionReceipt?.slot ?? 0, 0, handled);
+  const runningChats = (home?.runningConversations ?? []).map<HomeWorkbenchItem>((run) => ({
+    id: run.runId, kind: 'running', title: run.title ?? (language === 'zh' ? '对话正在执行' : 'Conversation in progress'),
+    summary: work.inProgress, updatedAt: run.updatedAt, secondaryActions: [],
+    openAction: { type: 'open', label: work.inProgress, href: `/chat/${encodeURIComponent(run.conversationId)}` },
+  }));
+  const liveBackground = [...moving, ...runningChats].sort((a, b) => b.updatedAt - a.updatedAt);
+  const advisorCompact = mode === 'attention' && !advisorReceipt && !suggestionExpanded;
+  const advisorTitle = home?.advisor.state === 'ready' ? home.advisor.primary.title
+    : home?.advisor.state === 'clarification' ? home.advisor.question.question : undefined;
 
-  const needsUserCount = home?.needsUser.length ?? 0;
-  const backgroundCount = home?.backgroundCount ?? 0;
-  const headline = needsUserCount > 0 ? interpolate(t.home.attentionTitle, { count: needsUserCount })
-    : backgroundCount > 0 ? t.home.clearTitle : t.home.idleTitle;
-  const intro = needsUserCount > 0
-    ? backgroundCount > 0 ? interpolate(t.home.attentionIntroWithBackground, { count: backgroundCount }) : t.home.attentionIntro
-    : backgroundCount > 0 ? interpolate(t.home.clearIntro, { count: backgroundCount }) : t.home.idleIntro;
+  const deliverySection = unreadDeliveries.length > 0 ? (
+    <section className="space-y-2" aria-labelledby="home-delivery-title">
+      <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-3">
+        <h2 id="home-delivery-title" className="text-base font-semibold text-fg">{work.progress}</h2>
+        <Button variant="ghost" className="px-2 text-xs" onClick={() => openDelivery('history')}>{work.deliveryHistory}</Button>
+      </div>
+      <div className="divide-y divide-edge-subtle rounded-xl border border-edge-subtle bg-surface-panel">
+        {unreadDeliveries.slice(0, mode === 'attention' ? 1 : 3).map((item, index) => (
+          <HomeDeliveryRow key={item.id} item={item} language={language} showNew primary={mode === 'delivery' && index === 0} onOpen={() => openDelivery(item)} />
+        ))}
+      </div>
+    </section>
+  ) : null;
+  const backgroundGroups = [
+    { title: work.inProgress, items: liveBackground.filter((item) => !item.backgroundState && !item.statusLabel) },
+    { title: work.waiting, items: liveBackground.filter((item) => item.backgroundState === 'waiting' || (!item.backgroundState && item.statusLabel)) },
+    { title: work.paused, items: liveBackground.filter((item) => item.backgroundState === 'paused') },
+    { title: work.scheduled, items: scheduled },
+  ].filter((group) => group.items.length > 0);
+  const backgroundLimit = mode === 'attention' ? 1 : 3;
+  const backgroundSection = backgroundGroups.length ? (
+    <section className="min-w-0 space-y-2" aria-labelledby="home-background-title">
+      <div className="flex min-h-9 items-center">
+        <h2 id="home-background-title" className="text-base font-semibold text-fg">{work.background}</h2>
+      </div>
+      <div className="divide-y divide-edge-subtle rounded-xl border border-edge-subtle bg-surface-panel">
+        {backgroundGroups.map(({ title, items }) => (
+          <div key={title} className="px-3 py-2">
+            <h3 className="px-1 pt-1 text-xs font-medium text-fg-muted">{title}</h3>
+            <div className="divide-y divide-edge-subtle">
+              {(showAllBackground ? items : items.slice(0, backgroundLimit)).map((item) => <BackgroundRow key={item.id} item={item} language={language} onAction={runAction} onUpdated={onTaskUpdated} />)}
+            </div>
+          </div>
+        ))}
+        {backgroundGroups.some(({ items }) => items.length > backgroundLimit) ? (
+          <Button variant="ghost" className="w-full justify-start rounded-t-none px-4 text-xs" aria-expanded={showAllBackground} onClick={() => setShowAllBackground((value) => !value)}>
+            {language === 'zh' ? (showAllBackground ? '收起' : `查看全部 ${liveBackground.length + scheduled.length} 项`) : (showAllBackground ? 'Show less' : `View all ${liveBackground.length + scheduled.length} items`)}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  ) : null;
+  const hasPrimary = needsUserCount > 0 || unreadDeliveries.length > 0 || resumable.length > 0 || advisorVisible;
 
   return (
-    <main className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-4 pb-8 pt-3 sm:px-6 lg:px-8 lg:pb-12 lg:pt-4">
+    <div className="@container/workbench flex w-full min-w-0 flex-1 flex-col px-3 pb-6 pt-3 sm:px-4">
       <input
         ref={attachments.fileInputRef}
         type="file"
@@ -625,122 +770,176 @@ export function HomePage() {
         </div>
       ) : null}
 
-      {actionReceipt ? <div role="status" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-success/25 bg-success-soft px-4 py-3 text-sm text-fg">
-        <span>{actionReceipt.message}</span>
-        {actionReceipt.href ? <Button variant="ghost" onClick={() => navigate(actionReceipt.href!)}>{language === 'zh' ? '查看进展与结果' : 'View progress and result'}</Button> : null}
-      </div> : null}
+      <HomeDeliveriesDialog
+        view={deliveryView}
+        items={deliveries}
+        language={language}
+        onSelect={setDeliveryView}
+        onClose={() => setDeliveryView(null)}
+        onRead={finishDelivery}
+        onOpenFull={(item) => { setDeliveryView(null); navigate(modalizeTaskDetailHref('/', item.href)); }}
+        onRestoreFocus={() => {
+          const target = resultTrigger.current?.isConnected ? resultTrigger.current : stageRef.current;
+          target?.focus({ preventScroll: true });
+        }}
+      />
+
+      <div role="status">
+        {actionReceipt ? (
+          <div className="mb-3 flex w-full flex-wrap items-center justify-between gap-2 rounded-lg bg-success-soft px-3 py-1.5 text-xs text-fg">
+            <span>{actionReceipt.message}</span>
+            {actionReceipt.href ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => navigate(actionReceipt.href!)}>{language === 'zh' ? '查看进展与结果' : 'View progress and result'}</Button> : null}
+          </div>
+        ) : null}
+      </div>
 
       {loading ? <HomeSkeleton /> : home ? (
-        <div className={isIdle ? 'mx-auto my-auto w-full max-w-[640px]' : 'w-full'}>
-          <section className={isIdle ? 'w-full text-center' : 'max-w-3xl'}>
-            <h2 className="text-3xl font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{headline}</h2>
-            <p className={isIdle
-              ? 'mx-auto mt-3 max-w-xl text-sm leading-6 text-fg-muted sm:text-base sm:leading-7'
-              : 'mt-3 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base sm:leading-7'}>
-              {intro}
-            </p>
-          </section>
-
+        <div ref={stageRef} tabIndex={-1} className="flex min-h-0 w-full flex-1 flex-col gap-4 outline-none">
+          {needsUserCount === 0 ? <p className="text-xs font-medium text-fg-muted" aria-live="polite">{work.noAttention}</p> : null}
           {showInlineComposer ? (
-            <HomeQuickComposer
-              variant="inline"
-              inputId="home-conversation-intent"
-              inputRef={intentInputRef}
-              intent={intent}
-              labels={quickComposerLabels}
-              attachments={attachments.attachments}
-              isDragging={attachments.isDragging}
-              attachmentBusy={attachmentBusy}
-              attachmentsFull={attachmentsFull}
-              voice={voice}
-              chat={msg.chat}
-              onIntentChange={setIntent}
-              onPickFiles={() => attachments.fileInputRef.current?.click()}
-              onRemoveAttachment={attachments.removeAttachment}
-              onPaste={(event) => void handleAttachmentPaste(event)}
-              onDragOver={handleAttachmentDragOver}
-              onDragLeave={handleAttachmentDragLeave}
-              onDrop={(event) => void handleAttachmentDrop(event)}
-              onSubmit={startConversation}
-            />
-          ) : null}
-
-          <HomeAdvisorCard
-            advisor={home.advisor}
-            busy={advisorBusy}
-            copy={{
-              aiLabel: t.home.advisorAiLabel,
-              why: t.home.advisorWhy,
-              evidence: t.home.advisorEvidence,
-              needsSetup: t.home.advisorNeedsSetup,
-              start: t.home.advisorStart,
-              discuss: t.home.advisorDiscuss,
-              refresh: t.home.advisorRefresh,
-              refreshing: t.home.advisorRefreshing,
-              history: t.home.advisorHistory,
-              viewProgress: t.home.advisorViewProgress,
-              alternatives: t.home.advisorAlternatives,
-              feedback: t.home.advisorFeedback,
-              alreadyDone: t.home.advisorAlreadyDone,
-              irrelevant: t.home.advisorIrrelevant,
-              later: t.home.advisorLater,
-              lessLikeThis: t.home.advisorLessLikeThis,
-              sourceIncorrect: t.home.advisorSourceIncorrect,
-              minutes: t.home.advisorMinutes,
-              setupTitle: t.home.advisorSetupTitle,
-              setupHint: t.home.advisorSetupHint,
-              configure: t.home.advisorConfigure,
-              degradedStart: t.home.advisorDegradedStart,
-              automationHint: t.home.advisorAutomationHint,
-              automationAction: t.home.advisorAutomationAction,
-            }}
-            onRefresh={refreshAdvisor}
-            onAction={actOnAdvisor}
-            onFeedback={sendAdvisorFeedback}
-            onClarification={discussClarification}
-            onOpenHistory={() => setAdvisorHistoryOpen(true)}
-            preflight={advisorPreflight}
-            receipt={advisorReceipt}
-          />
-
-          {home.needsUser.length > 0 ? (
-            <section className="mt-10" aria-labelledby="home-needs-user-title">
-              <div className="mb-3 flex items-center gap-2 px-1">
-                <CircleAlert className="size-4 text-warning" aria-hidden />
-                <h2 id="home-needs-user-title" className="text-sm font-semibold text-fg">{t.home.needsUserTitle}</h2>
+            <section className="mx-auto flex w-full max-w-[640px] flex-1 flex-col justify-center pb-12 pt-10 text-center sm:pb-20 sm:pt-16">
+              <h2 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">{work.startTitle}</h2>
+              <p className="mt-2 text-sm leading-6 text-fg-muted">{work.startHint}</p>
+              <HomeQuickComposer
+                variant="inline"
+                inputId="home-conversation-intent"
+                inputRef={intentInputRef}
+                intent={intent}
+                labels={{ ...quickComposerLabels, intentPlaceholder: work.startExample }}
+                attachments={attachments.attachments}
+                isDragging={attachments.isDragging}
+                attachmentBusy={attachmentBusy}
+                attachmentsFull={attachmentsFull}
+                voice={voice}
+                chat={msg.chat}
+                onIntentChange={setIntent}
+                onPickFiles={() => attachments.fileInputRef.current?.click()}
+                onRemoveAttachment={attachments.removeAttachment}
+                onPaste={(event) => void handleAttachmentPaste(event)}
+                onDragOver={handleAttachmentDragOver}
+                onDragLeave={handleAttachmentDragLeave}
+                onDrop={(event) => void handleAttachmentDrop(event)}
+                onSubmit={startConversation}
+              />
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <Button variant="ghost" onClick={() => window.dispatchEvent(new Event('open-command-palette'))}><Search className="size-4" aria-hidden />{work.findWork}</Button>
+                <Button variant="ghost" onClick={() => openDelivery('history')}>{work.deliveryHistory}</Button>
               </div>
-              <div className="divide-y divide-edge-subtle overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base">
-                {home.needsUser.map((item) => (
-                  <DecisionCard
-                    key={item.id}
-                    item={item}
-                    busy={busyItemId !== null}
-                    recommendationLabel={t.home.recommendationLabel}
-                    dueLabel={t.home.dueLabel}
-                    failureLabel={copy.runAttention}
-                    locale={language}
-                    onAction={runAction}
-                    onComplete={() => void load()}
-                    onUpdated={onTaskUpdated}
-                  />
-                ))}
-              </div>
-              {showAllAttention || (home.attentionPolicy?.suppressedDecisionCount ?? 0) + (home.attentionPolicy?.suppressedAttentionCount ?? 0) > 0 ? <Button variant="ghost" className="mt-2" aria-expanded={showAllAttention} onClick={() => setShowAllAttention((value) => !value)}>{language === 'zh' ? (showAllAttention ? '收起待处理事项' : `查看其余 ${(home.attentionPolicy?.suppressedDecisionCount ?? 0) + (home.attentionPolicy?.suppressedAttentionCount ?? 0)} 项待处理事项`) : (showAllAttention ? 'Show fewer pending items' : `View ${(home.attentionPolicy?.suppressedDecisionCount ?? 0) + (home.attentionPolicy?.suppressedAttentionCount ?? 0)} more pending items`)}</Button> : null}
             </section>
           ) : null}
 
+          <div className={hasPrimary && backgroundSection ? 'grid min-w-0 items-start gap-5 @min-[56rem]/workbench:grid-cols-[minmax(0,1fr)_minmax(17rem,0.57fr)]' : 'grid min-w-0 gap-4'}>
+            {hasPrimary ? <div className="min-w-0 space-y-4">
+              {needsUserCount > 0 ? (
+                <section className="space-y-2" aria-labelledby="home-needs-user-title">
+                  <div className="flex min-h-9 flex-wrap items-center gap-2">
+                    <CircleAlert className="size-4 text-warning" aria-hidden />
+                    <h2 id="home-needs-user-title" className="text-base font-semibold text-fg">{work.attention}</h2>
+                    <span className="rounded-md bg-surface-inset px-1.5 py-0.5 text-xs font-medium tabular-nums text-fg-muted" aria-live="polite" aria-label={interpolate(t.home.attentionTitle, { count: needsUserCount })}>{needsUserCount}</span>
+                    {dueToday > 0 ? <span className="text-xs text-warning">{interpolate(work.dueToday, { count: dueToday })}</span> : null}
+                  </div>
+                  <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel">
+                    {attentionRows.map((item, index) => item === handled ? (
+                      <div key={item.id} className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 text-sm text-fg-muted">
+                        <span>{item.title}</span><Check className="size-4 shrink-0 text-success" aria-label={language === 'zh' ? '已处理' : 'Handled'} />
+                      </div>
+                    ) : (
+                      <DecisionCard
+                        key={item.id}
+                        item={item}
+                        primary={index === 0 || (index === 1 && attentionRows[0] === handled)}
+                        busy={busyItemId !== null}
+                        dueLabel={t.home.dueLabel}
+                        failureLabel={copy.runAttention}
+                        locale={language}
+                        onAction={runAction}
+                        onComplete={() => void load()}
+                        onUpdated={(detail) => onTaskUpdated(detail, item)}
+                      />
+                    ))}
+                    {showAllAttention || remainingAttention > 0 ? (
+                      <Button variant="ghost" className="w-full justify-start rounded-t-none px-4 text-xs" aria-expanded={showAllAttention} onClick={() => setShowAllAttention((value) => !value)}>
+                        <ChevronDown className={showAllAttention ? 'size-4 rotate-180' : 'size-4'} aria-hidden />
+                        {showAllAttention ? work.collapse : interpolate(work.remaining, { count: remainingAttention })}
+                      </Button>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
 
-          {home.background.length > 0 ? (
-            <section className="mt-10" aria-labelledby="home-background-title">
-              <div className="flex items-center justify-between gap-3 px-1">
-                <h2 id="home-background-title" className="text-sm font-semibold text-fg">{t.home.backgroundTitle}</h2>
-                <span className="text-xs text-fg-subtle">{interpolate(t.home.backgroundCount, { count: home.backgroundCount })}</span>
-              </div>
-              <div className="mt-2 divide-y divide-edge-subtle border-y border-edge-subtle">
-                {(showAllBackground ? home.background : home.background.slice(0, 3)).map((item) => <BackgroundRow key={item.id} item={item} language={language} onAction={runAction} onUpdated={onTaskUpdated} />)}
-              </div>
-              {home.background.length > 3 ? <Button variant="ghost" className="mt-2" aria-expanded={showAllBackground} onClick={() => setShowAllBackground((value) => !value)}>{language === 'zh' ? (showAllBackground ? '收起' : `查看全部 ${home.backgroundCount} 项`) : (showAllBackground ? 'Show less' : `View all ${home.backgroundCount} items`)}</Button> : null}
-            </section>
+              {deliverySection}
+
+
+              {resumable.length > 0 || advisorVisible ? (
+                <section className="space-y-2" aria-labelledby="home-resume-title">
+                  <h2 id="home-resume-title" className="flex min-h-9 items-center text-base font-semibold text-fg">{work.resume}</h2>
+                  {resumable.length > 0 ? (
+                    <div className="divide-y divide-edge-subtle rounded-xl border border-edge-subtle bg-surface-panel">
+                      {resumable.slice(0, mode === 'attention' ? 1 : 3).map((item) => (
+                        <div key={`${item.kind}:${item.id}`} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                          <div className="min-w-0 flex-1 basis-48">
+                            <p className="break-words text-sm font-semibold text-fg">{item.title}</p>
+                            <p className="mt-0.5 truncate text-xs text-fg-muted">{[item.projectName, item.summary || interpolate(work.lastActive, { time: formatMediumDateTime(item.updatedAt, language) })].filter(Boolean).join(' · ')}</p>
+                          </div>
+                          <Button variant="secondary" onClick={() => navigate(modalizeTaskDetailHref('/', item.href))}>{item.kind === 'task' ? work.continueTask : work.continueChat}</Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {advisorTitle && mode === 'attention' && !advisorReceipt ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-inset px-3 py-1">
+                      <p className="flex min-w-0 flex-1 items-center gap-2 text-xs text-fg-muted"><Sparkles className="size-4 shrink-0 text-accent" aria-hidden /><span className="truncate">{t.home.advisorStatusLabel} · {advisorTitle}</span></p>
+                      <Button variant="ghost" aria-expanded={suggestionExpanded} onClick={() => setSuggestionExpanded((value) => !value)}>{suggestionExpanded ? work.hideSuggestion : work.viewSuggestion}</Button>
+                    </div>
+                  ) : null}
+                  {advisorVisible && !advisorCompact ? (
+                    <HomeAdvisorCard
+                      advisor={home.advisor}
+                      busy={advisorBusy}
+                      copy={{
+                        aiLabel: t.home.advisorAiLabel,
+                        why: t.home.advisorWhy,
+                        evidence: t.home.advisorEvidence,
+                        needsSetup: t.home.advisorNeedsSetup,
+                        start: t.home.advisorStart,
+                        discuss: t.home.advisorDiscuss,
+                        refresh: t.home.advisorRefresh,
+                        refreshing: t.home.advisorRefreshing,
+                        history: t.home.advisorHistory,
+                        viewProgress: t.home.advisorViewProgress,
+                        alternatives: t.home.advisorAlternatives,
+                        more: work.moreSuggestionActions,
+                        feedback: t.home.advisorFeedback,
+                        alreadyDone: t.home.advisorAlreadyDone,
+                        irrelevant: t.home.advisorIrrelevant,
+                        later: t.home.advisorLater,
+                        lessLikeThis: t.home.advisorLessLikeThis,
+                        sourceIncorrect: t.home.advisorSourceIncorrect,
+                        minutes: t.home.advisorMinutes,
+                        setupTitle: t.home.advisorSetupTitle,
+                        setupHint: t.home.advisorSetupHint,
+                        configure: t.home.advisorConfigure,
+                        degradedStart: t.home.advisorDegradedStart,
+                        automationHint: t.home.advisorAutomationHint,
+                        automationAction: t.home.advisorAutomationAction,
+                      }}
+                      onRefresh={refreshAdvisor}
+                      onAction={actOnAdvisor}
+                      onFeedback={sendAdvisorFeedback}
+                      onClarification={discussClarification}
+                      onOpenHistory={() => setAdvisorHistoryOpen(true)}
+                      preflight={advisorPreflight}
+                      receipt={advisorReceipt}
+                    />
+                  ) : null}
+                </section>
+              ) : null}
+
+            </div> : null}
+            {backgroundSection}
+          </div>
+          {!isIdle && !deliverySection && deliveries.length > 0 ? (
+            <Button variant="ghost" className="self-start px-2 text-xs" onClick={() => openDelivery('history')}>{work.deliveryHistory}</Button>
           ) : null}
         </div>
       ) : null}
@@ -752,6 +951,6 @@ export function HomePage() {
           </button>
         </div>
       ) : null}
-    </main>
+    </div>
   );
 }

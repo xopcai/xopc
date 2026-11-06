@@ -150,18 +150,55 @@ describe('task routes', () => {
 
   it.each(['manual', 'verified_then_review', 'verified_auto'] as const)('records a human criterion review for %s and rejects stale task versions', async (acceptancePolicy) => {
     const task = new TaskRepository().create({ title: 'Review route', objective: 'Check result',
-      acceptanceCriteria: ['User accepts the result'], acceptancePolicy });
+      acceptanceCriteria: ['User accepts the result', 'User accepts the evidence'], acceptancePolicy });
     const url = `/api/tasks/${task.id}/criteria/0/review`;
     const input = { expectedVersion: task.version, contractVersion: task.latestContractVersion, status: 'passed' };
     const response = await app.request(url, { method: 'PUT',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ ok: true,
+    await expect(response.json()).resolves.toMatchObject({ ok: true, completed: false,
       review: { criterionIndex: 0, status: 'passed', reviewedBy: { kind: 'user', id: 'test-owner' } } });
     expect(new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)).toHaveLength(1);
     const stale = await app.request(url, { method: 'PUT',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
     expect(stale.status).toBe(409);
+    const cleared = await app.request(url, { method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...input, expectedVersion: task.version + 1, status: 'unverified' }) });
+    expect(cleared.status).toBe(200);
+    expect(new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)).toMatchObject([{ status: 'unverified' }]);
+    expect(new TaskCriterionReviewRepository().allPassed(task)).toBe(false);
+    await app.request(url, { method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...input, expectedVersion: task.version + 2 }) });
+    const lastUrl = `/api/tasks/${task.id}/criteria/1/review`;
+    const lastInput = { method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...input, expectedVersion: task.version + 3 }) };
+    const last = await app.request(lastUrl, lastInput);
+    expect(last.status).toBe(200);
+    await expect(last.json()).resolves.toMatchObject({ ok: true, completed: true, version: task.version + 5 });
+    expect((await app.request(lastUrl, lastInput)).status).toBe(409);
+    const tasks = new TaskRepository();
+    expect(tasks.require(task.id)).toMatchObject({ phase: 'closed', resolution: 'done' });
+    expect(tasks.phaseChanges(task.id).filter(change => change.toPhase === 'closed')).toHaveLength(1);
+  });
+
+  it.each(['execution', 'wait'])('leaves the final criterion unreviewed while blocked by %s', async (blocker) => {
+    const tasks = new TaskRepository();
+    const task = tasks.create({ title: 'Review with pending work', objective: 'Check result',
+      acceptanceCriteria: ['Result verified'], acceptancePolicy: 'manual' });
+    const runs = new TaskRunRepository();
+    if (blocker === 'execution') {
+      runs.create({ taskId: task.id, executorKind: 'agent', executorRef: { agentId: 'main' }, trigger: {},
+        correlationId: 'pending-run', idempotencyKey: 'pending-run', contractVersion: task.latestContractVersion });
+    } else {
+      runs.createWait({ taskId: task.id, kind: 'approval', reason: 'Pending approval', condition: {} });
+    }
+    const response = await app.request(`/api/tasks/${task.id}/criteria/0/review`, { method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedVersion: task.version, contractVersion: task.latestContractVersion, status: 'passed' }) });
+    expect(response.status).toBe(409);
+    expect(tasks.require(task.id).version).toBe(task.version);
+    expect(new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)).toEqual([]);
   });
 
   it('does not allow a device token to make a human criterion review', async () => {

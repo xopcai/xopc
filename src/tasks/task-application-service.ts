@@ -595,10 +595,10 @@ export class TaskApplicationService {
       const verifiedCriteria = verifiedTaskCriteria(input.receipt);
       const criteria = task.contract?.acceptanceCriteria ?? [];
       const criteriaVerified = criteria.length > 0 && criteria.every((criterion) => verifiedCriteria.has(criterion));
-      const humanRejected = new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)
-        .some(review => review.status === 'failed');
+      const humanReviewBlocksCompletion = new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)
+        .some(review => review.status !== 'passed');
       const hasWaits = this.#runs.listActiveWaits(task.id).length > 0;
-      const verified = !humanRejected && !hasWaits && criteriaVerified && input.receipt.verification.status === 'passed'
+      const verified = !humanReviewBlocksCompletion && !hasWaits && criteriaVerified && input.receipt.verification.status === 'passed'
         && input.receipt.completionVerdict === 'achieved'
         && input.receipt.remainingWork.length === 0
         && !input.receipt.needsUser;

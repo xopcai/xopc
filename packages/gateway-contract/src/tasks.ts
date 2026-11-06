@@ -221,7 +221,7 @@ export const TaskCriterionReviewSchema = z.object({
   contractVersion: z.number().int().positive(),
   criterionIndex: z.number().int().nonnegative(),
   criterionText: z.string(),
-  status: z.enum(['passed', 'failed']),
+  status: z.enum(['passed', 'failed', 'unverified']),
   note: z.string().optional(),
   reviewedBy: ActorRefSchema,
   reviewedAt: z.number().int().nonnegative(),
@@ -230,7 +230,7 @@ export const TaskCriterionReviewSchema = z.object({
 export const TaskCriterionReviewInputSchema = z.object({
   expectedVersion: z.number().int().positive(),
   contractVersion: z.number().int().positive(),
-  status: z.enum(['passed', 'failed']),
+  status: z.enum(['passed', 'failed', 'unverified']),
   note: z.string().trim().max(2000).optional(),
 }).strict();
 

@@ -26,6 +26,7 @@ import { TaskRepository } from '../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { TaskCollaborationRepository } from '../../../tasks/task-collaboration-repository.js';
 import { TaskCriterionReviewRepository } from '../../../tasks/task-criterion-review-repository.js';
+import { TaskApplicationService } from '../../../tasks/task-application-service.js';
 import { getTaskOrchestrationMetrics } from '../../../tasks/task-orchestration-metrics.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
@@ -134,16 +135,30 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     if (task.contract?.acceptanceCriteria[index] === undefined) {
       return c.json({ ok: false, error: 'Criterion not found' }, 404);
     }
-    const review = criterionReviews.set({ task, expectedVersion: parsed.data.expectedVersion,
-      criterionIndex: index, status: parsed.data.status, note: parsed.data.note,
-      actor: { kind: 'user', id: principal.principalId } });
-    if (!review) return c.json({ ok: false, error: 'Task changed; refresh before reviewing' }, 409);
-    runSqliteWriteTransaction((db) => enqueueTaskChangedEvent(db, {
-      taskId: task.id, projectId: task.projectId, version: task.version + 1,
-      changedFields: ['acceptance'], actor: { kind: 'user', id: principal.principalId },
-    }));
+    const actor = { kind: 'user' as const, id: principal.principalId };
+    const result = runSqliteWriteTransaction((db) => {
+      const completed = parsed.data.status === 'passed' && criterionReviews.allPassed(task, index);
+      if (completed && (runs.getActiveRoot(task.id) || runs.listActiveWaits(task.id).length > 0)) {
+        return { blocked: true } as const;
+      }
+      const review = criterionReviews.set({ task, expectedVersion: parsed.data.expectedVersion,
+        criterionIndex: index, status: parsed.data.status, note: parsed.data.note, actor });
+      if (!review) return undefined;
+      let version = task.version + 1;
+      if (completed) {
+        const closed = new TaskApplicationService().execute({ taskId: task.id, expectedVersion: version,
+          idempotencyKey: `criterion-completion:${task.id}:${version}`, actor, command: { type: 'close', resolution: 'done' } });
+        if (closed.ok === false) throw new Error(`Task completion failed after criterion review: ${closed.reason}`);
+        version = closed.model.task.version;
+      }
+      enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version,
+        changedFields: ['acceptance'], actor });
+      return { review, version, completed };
+    });
+    if (!result) return c.json({ ok: false, error: 'Task changed; refresh before reviewing' }, 409);
+    if ('blocked' in result) return c.json({ ok: false, error: 'Wait for execution and pending items before completing acceptance' }, 409);
     deps.service.dispatchTaskEvents();
-    return c.json({ ok: true, review, version: task.version + 1 });
+    return c.json({ ok: true, ...result });
   });
 
   authenticated.get('/api/tasks/:id/collaboration', async (c) => {

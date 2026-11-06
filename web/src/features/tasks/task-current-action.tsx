@@ -1,4 +1,7 @@
+import { taskDescriptionForDisplay } from '@xopcai/gateway-contract';
 import { Link } from 'react-router-dom';
+
+import { ChatMarkdownRenderer } from '@/features/chat/rendering/markdown/chat-markdown-renderer';
 
 import type { TaskDetail } from './home-api';
 import { currentTaskReceipt } from './task-detail-summary';
@@ -26,7 +29,7 @@ export function TaskCurrentAction({ detail, language, onUpdated }: {
     ?? (detail.task.phase === 'closed'
       ? (zh ? '任务已关闭，可查看交付物与执行结果。' : 'The task is closed. Review its deliverables and results.')
       : detail.task.phase === 'review'
-        ? (zh ? '请检查交付物与验收项，通过后确认完成。' : 'Review the deliverables and acceptance criteria before completing the task.')
+        ? (zh ? '请检查交付物并勾选通过的验收项。' : 'Review the deliverables and check the criteria that pass.')
         : running
           ? (zh ? 'Agent 正在执行任务，无需你操作。' : 'The agent is working. No action is needed from you.')
           : receipt?.summary ?? (zh ? '任务尚未开始，可开始执行或设置执行时间。' : 'Start the task or set an execution time.'));
@@ -47,7 +50,9 @@ export function TaskCurrentAction({ detail, language, onUpdated }: {
       : (zh ? '当前进展' : 'Current progress')}{actionableWaits.length > 1 ? ` · ${actionableWaits.length}` : ''}</h2>
     {actionableWaits.map((wait) => <TaskInputCard key={wait.id} wait={wait} detail={detail} zh={zh} onUpdated={onUpdated} />)}
     {actionableWaits.length > 0 ? attentionContent ? <details className="mt-3"><summary className="cursor-pointer text-xs text-fg-muted">{zh ? '等待详情' : 'Waiting details'}</summary>{attentionContent}</details> : null
-      : attentionContent ?? <TaskExpandableContent content={summary} contentKey={`${detail.task.id}:current-progress`} language={language} markdown={false} previewHeight={72} className="mt-2 text-sm leading-6 text-fg-muted" />}
+      : attentionContent ?? <TaskExpandableContent content={summary} contentKey={`${detail.task.id}:current-progress`} language={language} previewHeight={72} className="mt-2 text-sm leading-6 text-fg-muted">
+        <ChatMarkdownRenderer content={taskDescriptionForDisplay(summary)} compact />
+      </TaskExpandableContent>}
 
   </section>;
 }

@@ -351,7 +351,9 @@ class ProgressRepository(private val gateway: GatewaySession) {
         val criterion = criteria.getString(index)
         val review = (0 until (reviews?.length() ?: 0)).map { reviews!!.getJSONObject(it) }
           .firstOrNull { it.optInt("contractVersion") == version && it.optInt("criterionIndex") == index }
-        if (review != null && policy != "verified_auto") {
+        if (review?.optString("status") == "unverified") {
+          TaskCriterion(criterion, "pending", false)
+        } else if (review != null && policy != "verified_auto") {
           TaskCriterion(criterion, review.optString("status", "pending"), true)
         } else if (policy == "manual") {
           TaskCriterion(criterion, "pending", false)

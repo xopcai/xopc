@@ -26,6 +26,7 @@ interface HomeAdvisorCopy {
   history: string;
   viewProgress: string;
   alternatives: string;
+  more: string;
   feedback: string;
   alreadyDone: string;
   irrelevant: string;
@@ -102,7 +103,7 @@ function OpportunityBody({
           ))}
         </div>
       ) : null}
-      <details open className="mt-4 group">
+      <details className="mt-4 group">
         <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           {copy.evidence}
           <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />
@@ -229,35 +230,42 @@ export function HomeAdvisorCard({
               <MessageCircle className="size-4" aria-hidden />{copy.discuss}
             </Button>
           ) : null}
-          <Button type="button" variant="ghost" className="min-h-11" disabled={busy} onClick={onRefresh} title={copy.refresh}>
-            <RefreshCw className="size-4" aria-hidden />{copy.refresh}
-          </Button>
-          <details className="relative ml-auto">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg px-3 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{copy.feedback}</summary>
-            <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-edge bg-surface-overlay p-1 shadow-float">
-              {([
-                ['already_done', copy.alreadyDone],
-                ['irrelevant', copy.irrelevant],
-                ['too_early', copy.later],
-                ['source_incorrect', copy.sourceIncorrect],
-                ['less_like_this', copy.lessLikeThis],
-              ] as Array<[FeedbackKind, string]>).map(([kind, label]) => (
-                <button key={kind} type="button" disabled={busy} className="min-h-10 w-full rounded-lg px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => onFeedback(selected, kind)}>{label}</button>
-              ))}
-            </div>
-          </details>
         </div>
-      </div>
-      {opportunities.length > 1 ? (
-        <div className="border-t border-edge-subtle px-5 py-4 sm:px-6">
-          <p className="text-xs font-medium text-fg-subtle">{copy.alternatives}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {opportunities.filter((item) => item.id !== selected.id).map((item) => (
-              <button key={item.id} type="button" disabled={busy} className="min-h-10 rounded-lg border border-edge px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => setSelectedId(item.id)}>{item.title}</button>
-            ))}
+        <details className="mt-1">
+          <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg px-2 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent">
+            {copy.more}<ChevronDown className="size-3.5" aria-hidden />
+          </summary>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="ghost" className="min-h-11" disabled={busy} onClick={onRefresh} title={copy.refresh}>
+              <RefreshCw className="size-4" aria-hidden />{copy.refresh}
+            </Button>
+            <details className="relative">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg px-3 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{copy.feedback}</summary>
+              <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-edge bg-surface-overlay p-1 shadow-float">
+                {([
+                  ['already_done', copy.alreadyDone],
+                  ['irrelevant', copy.irrelevant],
+                  ['too_early', copy.later],
+                  ['source_incorrect', copy.sourceIncorrect],
+                  ['less_like_this', copy.lessLikeThis],
+                ] as Array<[FeedbackKind, string]>).map(([kind, label]) => (
+                  <button key={kind} type="button" disabled={busy} className="min-h-10 w-full rounded-lg px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => onFeedback(selected, kind)}>{label}</button>
+                ))}
+              </div>
+            </details>
           </div>
-        </div>
-      ) : null}
+          {opportunities.length > 1 ? (
+            <div className="border-t border-edge-subtle pt-2">
+              <p className="text-xs font-medium text-fg-subtle">{copy.alternatives}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {opportunities.filter((item) => item.id !== selected.id).map((item) => (
+                  <button key={item.id} type="button" disabled={busy} className="min-h-10 rounded-lg border border-edge px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => setSelectedId(item.id)}>{item.title}</button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </details>
+      </div>
     </section>
   );
 }

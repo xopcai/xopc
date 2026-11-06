@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { cn } from '@/lib/cn';
 import { setTaskPanelOpen } from './task-detail-disclosure';
-import { scrollTaskSection, type TaskSectionScroll } from './task-section-scroll';
+import { findTaskScroller, scrollTaskSection, type TaskSectionScroll } from './task-section-scroll';
 
 /** Section navigation shared by the full page and task dialog. */
 export function TaskDetailNavigation({ language, hasSchedule }: { language: 'zh' | 'en'; hasSchedule: boolean }) {
@@ -54,8 +54,7 @@ export function TaskDetailNavigation({ language, hasSchedule }: { language: 'zh'
     let frame = 0;
     const update = () => {
       if (scrollingTo.current) return;
-      let scroller: HTMLElement | null = pane;
-      while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+      const scroller = findTaskScroller(pane);
       const edge = toolbar.getBoundingClientRect().bottom + 24;
       let current: HTMLElement | undefined = targets[0];
       for (const target of targets) {
@@ -148,7 +147,7 @@ export function TaskDetailNavigation({ language, hasSchedule }: { language: 'zh'
     if (left !== nav.scrollLeft) nav.scrollTo({ left, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   }, [active, sections]);
 
-  return <SlidingTabList scrollFocusedItemIntoView={false} as="nav" ref={navRef} aria-label={language === 'zh' ? '任务详情分区' : 'Task detail sections'} className="flex w-full gap-1 overflow-x-auto rounded-xl bg-surface-hover p-1" indicatorClassName="rounded-lg bg-surface-panel shadow-sm duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]">
+  return <SlidingTabList scrollFocusedItemIntoView={false} as="nav" ref={navRef} aria-label={language === 'zh' ? '任务详情分区' : 'Task detail sections'} className="flex w-full gap-0.5 overflow-x-auto rounded-xl bg-surface-inset p-1" indicatorClassName="rounded-lg bg-surface-panel ring-1 ring-edge-subtle duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]">
     {sections.map(item => <button key={item.id} type="button" aria-current={active === item.id ? 'location' : undefined} aria-pressed={active === item.id} data-sliding-active={active === item.id} className={cn('relative z-10 min-h-9 min-w-max flex-1 touch-manipulation rounded-lg px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', active === item.id ? 'text-fg' : 'text-fg-muted hover:text-fg')} onClick={() => {
       syncedSection.current = item.id;
       setActive(item.id);
