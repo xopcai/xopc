@@ -2,30 +2,32 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getLocalAppFixGuidance: vi.fn(),
   getLocalAppSnapshot: vi.fn(),
+  resolveLocalAppDevelopmentConversation: vi.fn(),
   attach: vi.fn(),
-  fill: vi.fn(),
 }));
 
 vi.mock('@/features/local-apps/api', () => ({
   getLocalAppFixGuidance: mocks.getLocalAppFixGuidance,
   getLocalAppSnapshot: mocks.getLocalAppSnapshot,
+  resolveLocalAppDevelopmentConversation: mocks.resolveLocalAppDevelopmentConversation,
 }));
 vi.mock('@/features/local-apps/preview-channel', () => ({
   attachLocalAppPreviewChannel: mocks.attach,
 }));
-vi.mock('@/features/chat/composer/fill-composer-dispatch', () => ({
-  dispatchFillChatComposer: mocks.fill,
-}));
-
 import { InlineLocalApp } from '@/features/chat/product-delivery/inline-local-app';
 import { InlinePreviewSchedulerProvider } from '@/features/chat/product-delivery/inline-preview-scheduler';
+
+function RouteProbe() {
+  const location = useLocation();
+  return <span data-testid="route-probe">{location.pathname}{location.search}</span>;
+}
 
 describe('InlineLocalApp', () => {
   let container: HTMLDivElement;
@@ -47,6 +49,7 @@ describe('InlineLocalApp', () => {
       },
     });
     mocks.getLocalAppFixGuidance.mockResolvedValue({ prompt: 'Fix safely', diagnostics: [] });
+    mocks.resolveLocalAppDevelopmentConversation.mockResolvedValue('coder-conversation');
     mocks.attach.mockImplementation((_iframe: HTMLIFrameElement, onMessage: (value: unknown) => void) => {
       onRuntimeMessage = onMessage;
       return vi.fn();
@@ -72,6 +75,7 @@ describe('InlineLocalApp', () => {
               preferredHeight={480}
               language="en"
             />
+            <RouteProbe />
           </MemoryRouter>
         </SWRConfig>,
       );
@@ -110,7 +114,9 @@ describe('InlineLocalApp', () => {
       sourceHash: 'a'.repeat(64),
       diagnostics: [expect.objectContaining({ phase: 'runtime', code: 'script_error' })],
     }));
-    expect(mocks.fill).toHaveBeenCalledWith('Fix safely');
+    expect(mocks.resolveLocalAppDevelopmentConversation).toHaveBeenCalledWith('app-1');
+    expect(container.querySelector('[data-testid="route-probe"]')?.textContent)
+      .toBe('/chat/coder-conversation?skill=build-xopc-local-app&draft=Fix+safely');
   });
 
   it('does not request or mount a preview until the scheduler grants a lease', async () => {
