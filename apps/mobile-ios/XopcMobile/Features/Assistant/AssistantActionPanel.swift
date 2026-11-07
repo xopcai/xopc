@@ -298,19 +298,17 @@ struct AssistantActionPanel: View {
             .frame(maxHeight: .infinity, alignment: .top)
 
             HStack(alignment: .top, spacing: 8) {
-                ForEach(RealtimeVoiceMode.allCases, id: \.self) { mode in
-                    Button { onRealtimeVoice(mode) } label: {
-                        tile(title: Text(mode.title), image: mode == .natural ? "waveform" : "speaker.wave.2")
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canStartRealtimeVoice)
-                    .accessibilityLabel(Text(mode.title))
-                    .accessibilityHint(canStartRealtimeVoice
-                        ? ""
-                        : AppLocalization.string("请先打开对话或等待语音准备完成", locale: AppLocalization.selectedLocale))
-                    .frame(maxWidth: .infinity)
+                Button { onRealtimeVoice(.automatic) } label: {
+                    tile(title: Text("语音通话"), image: "waveform")
                 }
-                ForEach(0 ..< 2, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
+                .buttonStyle(.plain)
+                .disabled(!canStartRealtimeVoice)
+                .accessibilityLabel(Text("语音通话"))
+                .accessibilityHint(canStartRealtimeVoice
+                    ? ""
+                    : AppLocalization.string("请先打开对话或等待语音准备完成", locale: AppLocalization.selectedLocale))
+                .frame(maxWidth: .infinity)
+                ForEach(0 ..< 3, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
             }
             .padding(.horizontal, 6)
             .padding(.top, 4)

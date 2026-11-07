@@ -33,7 +33,7 @@ interface XopcVoicePendingReply {
 @ObservedV2
 export class XopcVoiceCall {
   @Trace phase: string = 'idle';
-  @Trace mode: string = 'natural';
+  @Trace mode: string = 'auto';
   @Trace name: string = '';
   @Trace expanded: boolean = true;
   @Trace muted: boolean = false;
@@ -96,14 +96,10 @@ export class XopcVoiceCall {
     this.phase = recovering ? 'recovering' : 'connecting'; this.error = '';
     try {
       await new XopcChatRepository().materialize(target.conversationId, 'voice');
-      const status = (JSON.parse(await gatewaySession.request('/api/voice/realtime/status')) as XopcVoicePayload<XopcVoiceStatus>).payload;
-      if (!status.enabled) throw new Error('VOICE_DISABLED');
-      const availability = this.mode === 'assistant' ? status.capabilities.assistant : status.capabilities.natural;
-      if (!availability.available) throw new Error(availability.reasonCode ?? 'PROVIDER_UNAVAILABLE');
       const request: XopcVoiceSessionRequest = { purpose: 'conversation', conversationId: target.conversationId,
         language: appSettings.effectiveLanguage().startsWith('zh') ? 'zh' : 'en',
-        mode: this.mode, supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] };
-      if (status.openingGreeting && this.mode === 'assistant') request.openingGreeting = {
+        mode: target.mode === 'auto' ? undefined : target.mode, supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] };
+      if (target.mode !== 'natural') request.openingGreeting = {
         logicalCallId: this.logicalCallId, initiation: recovering ? 'recovery' : 'user', supportsOutputReady: true };
       const preflight = JSON.parse(await gatewaySession.request('/api/voice/realtime/preflight', 'POST', JSON.stringify(request))) as XopcVoicePreflight;
       this.supportedTimingMetrics = preflight.timingMetrics ?? [];
@@ -111,6 +107,7 @@ export class XopcVoiceCall {
         JSON.stringify(request))) as XopcVoicePayload<XopcVoiceSession>).payload;
       if (generation !== this.generation) { await this.cancelSession(session); return; }
       this.session = session;
+      this.mode = session.route.engine === 'omni' ? 'natural' : 'assistant';
       await voiceCallAudio.start(context, target.background, {
         onInput: (bytes: Uint8Array, capturedAtMs: number): void => { if (generation === this.generation) this.sendAudio(bytes, capturedAtMs); },
         onBuffered: (id: string, milliseconds: number): void => { if (generation === this.generation) this.buffered(id, milliseconds); },
@@ -138,7 +135,7 @@ export class XopcVoiceCall {
       this.appliedMuted = undefined; this.syncInput();
       clearTimeout(this.limitTimer);
       this.limitTimer = setTimeout((): void => { if (generation === this.generation) this.pause('TIME_LIMIT'); }, session.limits.maxSessionMs);
-      if (this.mode === 'assistant') { this.loadApproval(); this.approvalTimer = setInterval((): void => { this.loadApproval(); }, 3000); }
+      { this.loadApproval(); this.approvalTimer = setInterval((): void => { this.loadApproval(); }, 3000); }
     } catch (error) {
       if (generation !== this.generation) return;
       const reason = (error as Error).message || 'SERVICE_UNAVAILABLE';

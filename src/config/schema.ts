@@ -856,7 +856,7 @@ export const VoiceConfigSchema = z
     realtime: z
       .object({
         enabled: z.boolean().default(false),
-        defaultEngine: z.enum(['agent', 'omni']).default('agent'),
+        defaultEngine: z.enum(['auto', 'agent', 'omni']).default('auto'),
         silenceDurationMs: z.number().int().min(300).max(2_000).default(1200),
         idleTimeoutMs: z.number().int().min(10_000).max(300_000).default(60_000),
         maxDictationMs: z.number().int().min(10_000).max(3_600_000).default(600_000),
@@ -881,13 +881,13 @@ export const VoiceConfigSchema = z
           voice: z.string().min(1).max(100),
           baseUrl: z.string().url().optional(),
           apiKey: z.string().min(1).optional(),
-          instructions: z.string().max(8_000).default('You are a friendly voice companion. Keep replies conversational and concise. You cannot execute tools or perform actions.'),
+          instructions: z.string().max(8_000).default('You are a friendly voice companion. Keep replies conversational and concise.'),
         }).strict().optional(),
       })
       .strict()
       .default({
         enabled: false,
-        defaultEngine: 'agent',
+        defaultEngine: 'auto',
         silenceDurationMs: 1200,
         idleTimeoutMs: 60_000,
         maxDictationMs: 600_000,

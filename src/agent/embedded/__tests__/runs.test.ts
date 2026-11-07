@@ -10,6 +10,21 @@ const identity = {
 };
 
 describe('EmbeddedRunRegistry', () => {
+  it('steers generated native voice tasks as hidden custom context instead of owner speech', async () => {
+    const registry = new EmbeddedRunRegistry();
+    const lease = registry.acquire(identity);
+    const steer = vi.fn();
+    const sendCustomMessage = vi.fn().mockResolvedValue(undefined);
+    await lease.attach({ steer, sendCustomMessage } as never, vi.fn());
+    try {
+      expect(await registry.steerByConversationId(identity.conversationId, 'Generated task', identity.runId,
+        { voiceAgentInstruction: true })).toBe(true);
+      expect(steer).not.toHaveBeenCalled();
+      expect(sendCustomMessage).toHaveBeenCalledWith({ customType: 'voice_agent_instruction', content: 'Generated task', display: false },
+        { deliverAs: 'steer', triggerTurn: true });
+    } finally { lease.release(); }
+  });
+
   it('steers image bytes while persisting media metadata for multiple queued messages', async () => {
     const registry = new EmbeddedRunRegistry();
     const lease = registry.acquire(identity);

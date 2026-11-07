@@ -93,6 +93,7 @@ export async function *runGatewayAgent(
   }
 
   const runId = runOptions?.runId ?? crypto.randomUUID();
+  const runTopic = `${runOptions?.presentation === 'voice' ? 'voice-run' : 'run'}:${runId}`;
   const {
     agentService,
     bus,
@@ -130,7 +131,7 @@ export async function *runGatewayAgent(
     if (runAbortControllers.get(runId)!.signal.aborted || runOptions?.signal?.aborted
       || (runOptions?.taskRunId && new TaskRunRepository().get(runOptions.taskRunId)?.status === 'cancelled')) {
       runAbortControllers.delete(runId);
-      completeRealtimeTopic(`run:${runId}`);
+      completeRealtimeTopic(runTopic);
       return { status: 'aborted', summary: 'Interrupted before startup' };
     }
   }
@@ -200,7 +201,7 @@ export async function *runGatewayAgent(
       }
       if (taskRun) captureTaskEvent(event);
       if (channel === 'webchat') {
-        publishRealtime(`run:${runId}`, event.type, event);
+        publishRealtime(runTopic, event.type, event);
       }
       yield event;
     }
@@ -292,7 +293,7 @@ export async function *runGatewayAgent(
         terminalStatus = endStatus;
         taskRunSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
-        completeRealtimeTopic(`run:${runId}`);
+        completeRealtimeTopic(runTopic);
         runTopicCompleted = true;
         return {
           status: cancelled ? 'aborted' : suspended ? 'suspended' : streamError ? 'error' : 'ok',
@@ -304,7 +305,7 @@ export async function *runGatewayAgent(
           taskRunStatus = 'cancelled';
           taskRunSummary = 'Interrupted';
           yield* emitAndYield(mapper.end('cancelled', 'Interrupted'));
-          completeRealtimeTopic(`run:${runId}`);
+          completeRealtimeTopic(runTopic);
           runTopicCompleted = true;
           return { status: 'aborted', summary: 'Interrupted' };
         }
@@ -327,7 +328,7 @@ export async function *runGatewayAgent(
         const errorContent = formatAgentRunErrorForClient(streamError);
         yield* emitAndYield(mapper.error(errorContent));
         yield* emitAndYield(mapper.end('error', streamError));
-        completeRealtimeTopic(`run:${runId}`);
+        completeRealtimeTopic(runTopic);
         runTopicCompleted = true;
         return { status: 'error', summary: streamError };
       } finally {
@@ -432,7 +433,7 @@ export async function *runGatewayAgent(
     if (channel === 'webchat' && !runTopicCompleted) {
       yield* emitAndYield(mapper.error(formatAgentRunErrorForClient(em)));
       yield* emitAndYield(mapper.end('error', em));
-      completeRealtimeTopic(`run:${runId}`);
+      completeRealtimeTopic(runTopic);
       runTopicCompleted = true;
       return { status: 'error', summary: em };
     }

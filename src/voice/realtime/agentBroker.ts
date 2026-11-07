@@ -9,6 +9,7 @@ const MAX_TRACKED_TASKS = 256;
 export interface VoiceAgentEvent { type: string; payload?: Record<string, unknown> }
 export interface VoiceAgentTask { taskId: string; runId: string; events: AsyncIterable<VoiceAgentEvent> }
 export interface VoiceAgentBroker {
+  restore?: (input: { conversationId: string; expectedTranscriptId: string; signal: AbortSignal }) => VoiceAgentTask[];
   delegate(input: { conversationId: string; expectedTranscriptId: string; turnId: string; text: string; signal: AbortSignal;
     clientMessageId?: string; origin?: SubmitSessionInput['origin'] }): Promise<VoiceAgentTask>;
   cancel(taskId: string): Promise<boolean>;
@@ -21,9 +22,10 @@ type BrokerDependencies = {
   submit(input: SubmitSessionInput): Promise<SubmitResult>;
   find(conversationId: string, clientMessageId: string): SessionInput | undefined;
   snapshot(conversationId: string): SessionInputState;
+  runTopic?: (conversationId: string, runId: string) => string;
   currentSequence(topic: string): number;
   subscribe(topic: string, afterSeq: number, listener: (event: RealtimeEvent) => void): RealtimeSubscriptionHandle;
-  cancelRun(runId: string): Promise<void>;
+  cancelRun(runId: string): Promise<boolean | void>;
 };
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -48,6 +50,22 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
   private readonly runByTask = new Map<string, string>();
   constructor(private readonly deps: BrokerDependencies) {}
 
+  restore(input: { conversationId: string; expectedTranscriptId: string; signal: AbortSignal }): VoiceAgentTask[] {
+    if (input.signal.aborted) return [];
+    const tasks = new Map<string, VoiceAgentTask>();
+    for (const row of this.deps.snapshot(input.conversationId).inputs) {
+      const runId = row.runId ?? row.targetRunId;
+      if (!runId || row.conversationId !== input.conversationId || tasks.has(runId) || tasks.size >= 32 || row.origin.type !== 'channel' || row.origin.channel !== 'voice'
+        || (row.expectedTranscriptId && row.expectedTranscriptId !== input.expectedTranscriptId)
+        || !['running', 'injecting'].includes(row.status)) continue;
+      this.runByTask.set(row.id, runId);
+      if (this.runByTask.size > MAX_TRACKED_TASKS) this.runByTask.delete(this.runByTask.keys().next().value!);
+      const topic = this.deps.runTopic?.(input.conversationId, runId) ?? `run:${runId}`;
+      tasks.set(runId, { taskId: row.id, runId, events: this.events(row.id, runId, topic, 0, input.signal, false) });
+    }
+    return [...tasks.values()];
+  }
+
   async delegate(input: { conversationId: string; expectedTranscriptId: string; turnId: string; text: string; signal: AbortSignal;
     clientMessageId?: string; origin?: SubmitSessionInput['origin'] }): Promise<VoiceAgentTask> {
     const clientMessageId = input.clientMessageId ?? `voice:${input.expectedTranscriptId}:${input.turnId}`;
@@ -57,7 +75,7 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
       && (activeRunId || state.inputs.some((item) => ['queued', 'running', 'injecting'].includes(item.status)))) {
       throw new Error('Task update cannot overtake an active or queued voice turn');
     }
-    const activeRunCursor = activeRunId ? this.deps.currentSequence(`run:${activeRunId}`) : 0;
+    const activeRunCursor = activeRunId ? this.deps.currentSequence(this.deps.runTopic?.(input.conversationId, activeRunId) ?? `run:${activeRunId}`) : 0;
     const result = await this.deps.submit({ conversationId: input.conversationId, expectedTranscriptId: input.expectedTranscriptId,
       clientMessageId, delivery: activeRunId ? 'steer' : 'next', content: input.text,
       origin: input.origin ?? { type: 'channel', channel: 'voice' } });
@@ -77,22 +95,22 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
     this.runByTask.set(row.id, runId);
     if (this.runByTask.size > MAX_TRACKED_TASKS) this.runByTask.delete(this.runByTask.keys().next().value!);
     const afterSeq = result.effectiveDelivery === 'steer' && runId === activeRunId ? activeRunCursor : 0;
-    return { taskId: row.id, runId, events: this.events(row.id, runId, afterSeq, input.signal, ['completed', 'cancelled', 'failed', 'interrupted'].includes(row.status)) };
+    return { taskId: row.id, runId, events: this.events(row.id, runId, this.deps.runTopic?.(input.conversationId, runId) ?? `run:${runId}`, afterSeq, input.signal, ['completed', 'cancelled', 'failed', 'interrupted'].includes(row.status)) };
   }
 
   async cancel(taskId: string): Promise<boolean> {
     const runId = this.runByTask.get(taskId);
     if (!runId) return false;
-    await this.deps.cancelRun(runId);
+    if (await this.deps.cancelRun(runId) === false) return false;
     this.runByTask.delete(taskId);
     return true;
   }
 
-  private async *events(taskId: string, runId: string, afterSeq: number, signal: AbortSignal, ended: boolean): AsyncGenerator<VoiceAgentEvent> {
+  private async *events(taskId: string, runId: string, topic: string, afterSeq: number, signal: AbortSignal, ended: boolean): AsyncGenerator<VoiceAgentEvent> {
     const queued: RealtimeDelivery[] = [];
     let wake: (() => void) | undefined;
     const push = (event: RealtimeDelivery) => { queued.push(event); wake?.(); wake = undefined; };
-    const subscription = this.deps.subscribe(`run:${runId}`, afterSeq, push);
+    const subscription = this.deps.subscribe(topic, afterSeq, push);
     subscription.initial.forEach(push);
     const abort = () => { wake?.(); wake = undefined; };
     signal.addEventListener('abort', abort, { once: true });

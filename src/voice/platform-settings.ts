@@ -22,6 +22,17 @@ export function voiceSettingsCatalog(config: Config): VoiceSettingsCatalog {
     models: (source?.models ?? []).flatMap(model => model.availability === 'available' && model.voice ? [{id: model.id, name: model.name, ...(model.displayNames ? { displayNames: model.displayNames } : {}), voice: model.voice}] : []) };
 }
 
+export function naturalVoiceModelOptions(config: Config): Array<{ id: string; name: string; tools?: boolean }> {
+  const models: Array<{ id: string; name: string; tools?: boolean }> = voiceSettingsCatalog(config).models
+    .filter(model => model.voice.modes.includes('conversation'))
+    .map(model => ({ id: `xopc-cloud/${model.id}`, name: model.name, tools: model.voice.tools }));
+  const current = config.voice?.realtime?.omni;
+  if (current && current.provider !== 'xopc-cloud' && !models.some(model => model.id === `${current.provider}/${current.model}`)) {
+    models.push({ id: `${current.provider}/${current.model}`, name: current.model });
+  }
+  return models;
+}
+
 export function selectPlatformVoice(config: Config, selection: VoiceSelection): Config {
   const model = requirePlatformVoiceModel(selection.model, selection.mode);
   const output = selection.mode === 'speech' || selection.mode === 'speech.stream' || selection.mode === 'conversation';
@@ -43,7 +54,7 @@ export function selectPlatformVoice(config: Config, selection: VoiceSelection): 
     next.voice.realtime.enabled = true;
     if (selection.mode === 'transcription.stream') next.voice.realtime.stt = selected;
     if (selection.mode === 'speech.stream') next.voice.realtime.tts = selected;
-    if (selection.mode === 'conversation') next.voice.realtime.omni = { ...selected, voice: voice!, instructions: next.voice.realtime.omni?.instructions ?? 'Keep replies conversational and concise. You cannot execute tools.' };
+    if (selection.mode === 'conversation') next.voice.realtime.omni = { ...selected, voice: voice!, instructions: next.voice.realtime.omni?.instructions ?? 'Keep replies conversational and concise.' };
   }
   return ConfigSchema.parse(next);
 }

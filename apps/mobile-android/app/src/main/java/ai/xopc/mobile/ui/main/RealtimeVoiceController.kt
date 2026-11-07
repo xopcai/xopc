@@ -73,7 +73,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   var speaking by mutableStateOf(false); private set
   var muted by mutableStateOf(false); private set
   var speaker by mutableStateOf(false); private set
-  var mode by mutableStateOf("natural"); private set
+  var mode by mutableStateOf("auto"); private set
   var clarification by mutableStateOf<ClarificationRequest?>(null); private set
   var clarificationBusy by mutableStateOf(false); private set
   var approval by mutableStateOf<VoiceApproval?>(null); private set
@@ -189,7 +189,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
           send("session.ping", JSONObject())
         }
       }
-      if (selectedMode == "assistant") approvalJob = scope.launch {
+      approvalJob = scope.launch {
         while (isActive && current == generation && phase == "connected") {
           runCatching { pendingApproval(conversationId) }.onSuccess { found ->
             approval = found

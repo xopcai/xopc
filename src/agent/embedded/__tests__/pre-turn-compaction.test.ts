@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { EmbeddedStreamEvent } from '../types.js';
 import { withModelUsageOrigin } from '../../../providers/model-usage.js';
+import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
+import { closeXopcDatabase, ensureSessionRecord, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/index.js';
 
 /**
  * Tests for pre-turn automatic compaction in runEmbeddedTurnForSession.
@@ -162,6 +164,27 @@ describe('pre-turn auto-compaction', () => {
     mockRunXopcEmbeddedTurn.mockResolvedValue({ ok: true });
     const mod = await import('../run-for-session.js');
     runEmbeddedTurnForSession = mod.runEmbeddedTurnForSession;
+  });
+
+  it.each(['smalltalk', 'task', 'published'] as const)('keeps fallback voice %s on the correct Chat boundary', async kind => {
+    const conversationId = crypto.randomUUID();
+    resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); seedTestAgentCatalog();
+    ensureSessionRecord(conversationId, '/tmp', { agentId: 'main' });
+    const store = { ...createMockSessionStore({ needsCompaction: false }), appendTranscriptCustomMessageEntry: vi.fn(async () => {}) };
+    mockRunXopcEmbeddedTurn.mockImplementationOnce(async input => {
+      if (kind !== 'smalltalk') input.onEvent({ type: 'tool_execution_end', toolName: 'lookup', toolCallId: 'lookup', result: { content: [] }, isError: false });
+      if (kind === 'published') await input.tools.find((tool: { name: string }) => tool.name === 'chat_publish')
+        .execute('publication', { text: 'Verified result.' });
+      return { ok: true, lastAssistantText: kind === 'smalltalk' ? 'Hello there.' : 'Verified result.' };
+    });
+    try {
+      await runEmbeddedTurnForSession({ conversationId, runId: 'voice-fallback', presentation: 'voice',
+        userMessage: { role: 'user', content: 'Hello', timestamp: Date.now() }, sessionStore: store as any,
+        agentManager: createMockAgentManager() as any, modelManager: createMockModelManager() as any });
+      expect(store.appendTranscriptCustomMessageEntry).toHaveBeenCalledTimes(kind === 'smalltalk' ? 0 : 1);
+      if (kind !== 'smalltalk') expect(store.appendTranscriptCustomMessageEntry).toHaveBeenCalledWith(conversationId,
+        expect.objectContaining({ customType: 'voice_chat_message', content: 'Verified result.', display: true }));
+    } finally { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); }
   });
 
   it('passes the live workspace trust policy to embedded execution', async () => {

@@ -4,8 +4,9 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { AgentRunCancelledError } from '../orchestration/run-termination.js';
 import { registerSteeringTranscript, type TranscriptUserMessage } from '../inbound/attachment-pipeline.js';
+import { VOICE_AGENT_INSTRUCTION_TYPE } from '../../session/voice-transcript.js';
 
-export type EmbeddedSteerOptions = { images?: ImageContent[]; transcriptMessage?: TranscriptUserMessage };
+export type EmbeddedSteerOptions = { images?: ImageContent[]; transcriptMessage?: TranscriptUserMessage; voiceAgentInstruction?: boolean };
 
 export type EmbeddedRunIdentity = {
   conversationId: string;
@@ -107,6 +108,11 @@ export class EmbeddedRunRegistry {
       return false;
     }
     const entry = this.byConversationId.get(conversationId)!;
+    if (options?.voiceAgentInstruction) {
+      await handle.session.sendCustomMessage({ customType: VOICE_AGENT_INSTRUCTION_TYPE, content: text, display: false },
+        { deliverAs: 'steer', triggerTurn: true });
+      return true;
+    }
     const transcript = options?.transcriptMessage;
     const unregister = transcript ? registerSteeringTranscript(conversationId, transcript) : undefined;
     if (transcript && options?.images?.length) entry.steeringImages.set(transcript, options.images);

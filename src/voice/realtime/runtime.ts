@@ -41,7 +41,7 @@ import type { TTSConfig } from '../tts/types.js';
 import { ALIBABA_REALTIME_TTS_MODEL } from '../tts/providers/alibaba-speech.js';
 import { claimOpeningGreeting, finishOpeningGreeting, openingGreetingText, type OpeningGreetingIdentity, type OpeningGreetingResult } from './opening-greeting.js';
 import { createAgentVoiceEngine } from './agentEngine.js';
-import { voiceConversationInstructions, type VoiceConversationContext } from './conversation-context.js';
+import { buildVoiceResumeHistory, voiceConversationInstructions, type VoiceConversationContext } from './conversation-context.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import { resolveOmniRoute, selectedNaturalModel, type OmniRoute } from './omniRoute.js';
 import { createOmniVoiceEngine } from './omniEngine.js';
@@ -206,6 +206,7 @@ export class VoiceRealtimeRuntime {
     ticketKey: string;
     engine?: VoiceEngine;
     shutdown: () => Promise<void>;
+    refreshContext?: () => Promise<void>;
   }>();
   private closed = false;
 
@@ -220,21 +221,28 @@ export class VoiceRealtimeRuntime {
     const testVoice = request.testHiggsVoice;
     const personal = request.conversationId ? getPersonalAgentByConversation(request.conversationId) : null;
     const preferences = personal?.voiceCallPreferences;
-    const defaultMode = personal ? preferences?.defaultMode ?? 'assistant'
-      : config.voice?.realtime?.defaultEngine === 'omni' ? 'natural' : 'assistant';
-    request = request.purpose === 'conversation' ? { ...request, mode: request.mode ?? defaultMode } : request;
-    const model = request.mode === 'natural'
+    const preferred = preferences?.enginePreference ?? (config.voice?.realtime?.defaultEngine === 'omni' ? 'natural'
+      : config.voice?.realtime?.defaultEngine === 'agent' ? 'assistant' : 'auto');
+    const automatic = request.purpose === 'conversation' && request.mode === undefined && preferred === 'auto';
+    const wantsNatural = request.purpose === 'conversation' && (automatic || (request.mode ?? preferred) === 'natural');
+    const model = wantsNatural
       ? testVoice || request.naturalBackend === 'higgs' ? HIGGS_REALTIME_REF : selectedNaturalModel(config, preferences)
       : undefined;
-    if (!config.voice?.realtime?.enabled && model !== HIGGS_REALTIME_REF) {
-      throw new VoiceSessionCreationError('VOICE_DISABLED', 'Realtime voice is disabled', 503);
-    }
     let omni: OmniRoute | undefined;
-    if (request.mode === 'natural') {
+    if (wantsNatural) {
       try {
         omni = await resolveOmniRoute(config, model, testVoice ?? preferences?.higgsVoice);
+        // Automatic calls must retain the same action capability as the fallback Agent.
+        if (automatic && !omni.tools) omni = undefined;
+        if (testVoice && omni) omni = { ...omni, tools: false,
+          instructions: `This standalone voice preview has no tools and cannot perform actions.\n\n${omni.instructions}` };
+      } catch {
+        if (!automatic) throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation is unavailable. Check its model, endpoint and credentials.', 503);
       }
-      catch { throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation is unavailable. Check its model, endpoint and credentials.', 503); }
+    }
+    if (request.purpose === 'conversation') request = { ...request, mode: omni ? 'natural' : 'assistant' };
+    if (!config.voice?.realtime?.enabled && !(omni && model === HIGGS_REALTIME_REF)) {
+      throw new VoiceSessionCreationError('VOICE_DISABLED', 'Realtime voice is disabled', 503);
     }
     if (omni && !testVoice && (!this.options.recordOmniTranscript || !this.options.getConversationContext)) {
       throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation storage is unavailable', 503);
@@ -277,7 +285,7 @@ export class VoiceRealtimeRuntime {
       if (!request.conversationId || !await this.options.sessionExists(request.conversationId)) {
         throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
       }
-      if (request.mode === 'natural' && this.options.sessionBusy(request.conversationId)) {
+      if (request.mode === 'natural' && this.options.sessionBusy(request.conversationId) && !this.options.agentBroker.restore) {
         throw new VoiceSessionCreationError('SESSION_CONFLICT', 'Conversation session already has an active response', 409);
       }
       if (this.conversationReservations.has(request.conversationId)) {
@@ -399,6 +407,11 @@ export class VoiceRealtimeRuntime {
     return session?.engine?.isConversationIdle?.() === true;
   }
 
+  refreshConversation(conversationId: string): void {
+    const id = this.conversationReservations.get(conversationId);
+    if (id) void this.activeSessions.get(id)?.refreshContext?.();
+  }
+
   canOfferTaskUpdate(conversationId: string): boolean {
     const sessionId = this.conversationReservations.get(conversationId);
     const session = sessionId ? this.activeSessions.get(sessionId) : undefined;
@@ -490,6 +503,8 @@ export class VoiceRealtimeRuntime {
     const abortController = new AbortController();
     const seenMessageIds = new Set<string>();
     let context: VoiceConversationContext | undefined;
+    let contextRefresh: Promise<void> | undefined;
+    let contextRefreshPending = false;
     let unsubscribeMemory: (() => void) | undefined;
     let unsubscribeSession: (() => void) | undefined;
     let openingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -553,7 +568,11 @@ export class VoiceRealtimeRuntime {
     const lifecycleTimer = setInterval(() => {
       if (!claim) return;
       if (this.options.isPrincipalActive?.(claim.principalId) === false) { socket.terminate(); return; }
-      if (context?.isCurrent && !context.isCurrent()) { invalidateContext(); return; }
+      if (context?.isCurrent && !context.isCurrent()) {
+        if (ready && engine?.updateContext) void refreshContext();
+        else invalidateContext();
+        return;
+      }
       if (context?.memory && !context.memory.isCurrent()) { invalidateContext(); return; }
       const now = Date.now();
       if (now - lastActivityAt > claim.idleTimeoutMs) void shutdown('idle_timeout', true);
@@ -564,6 +583,34 @@ export class VoiceRealtimeRuntime {
       if (closed) return;
       send('session.error', { code: 'CONTEXT_CHANGED', message: 'Conversation context changed. Reconnect to use the updated information.', recoverable: false });
       void shutdown('context_changed', true);
+    };
+
+    const refreshContext = (): Promise<void> => {
+      if (contextRefresh) { contextRefreshPending = true; return contextRefresh; }
+      if (!ready || closed || !claim?.omni || !claim.request.conversationId || !engine?.updateContext) return Promise.resolve();
+      const current = claim;
+      contextRefresh = (async () => {
+        try {
+          if (await this.options.getSessionIdentity?.(current.request.conversationId!) !== current.conversationSessionId
+            || context?.memory?.isCurrent() === false) { invalidateContext(); return; }
+          const next = await this.options.getConversationContext!(current.request.conversationId!, current.conversationSessionId!, current.omni!.instructions, current.omni!.tools === true);
+          if (closed) return;
+          if (next.isCurrent?.() === false || next.memory?.isCurrent() === false || (context?.user && !next.user)) { invalidateContext(); return; }
+          if (next.sharedChat !== context?.sharedChat || context?.isCurrent?.() === false) {
+            if (!engine!.updateContext!(voiceConversationInstructions(current.omni!.instructions, { ...next, history: [] }), next.sharedChat ?? '')) return;
+            unsubscribeMemory?.();
+            unsubscribeMemory = next.memory?.subscribe(invalidateContext);
+            context = next;
+          }
+        } catch (err) {
+          log.warn({ err, conversationId: current.request.conversationId }, 'Voice shared context refresh failed');
+          invalidateContext();
+        }
+      })().finally(() => {
+        contextRefresh = undefined;
+        if (contextRefreshPending) { contextRefreshPending = false; void refreshContext(); }
+      });
+      return contextRefresh;
     };
 
     const authenticate = async (message: Extract<VoiceClientMessage, { type: 'session.start' }>) => {
@@ -599,8 +646,9 @@ export class VoiceRealtimeRuntime {
       try {
         const conversationId = consumed.request.conversationId;
         const omni = consumed.omni;
+        let engineOmni = omni;
         const restoreInstructions = omni && conversationId ? async () => {
-          const snapshot = await this.options.getConversationContext!(conversationId, consumed.conversationSessionId!, omni.instructions);
+          const snapshot = await this.options.getConversationContext!(conversationId, consumed.conversationSessionId!, omni.instructions, omni.tools === true);
           if (closed) throw new Error('Voice session closed while restoring context');
           context = snapshot;
           if (snapshot.memory) unsubscribeMemory = snapshot.memory.subscribe(invalidateContext);
@@ -608,14 +656,17 @@ export class VoiceRealtimeRuntime {
             invalidateContext();
             throw new Error('Conversation context changed while dialing');
           }
-          return voiceConversationInstructions(omni.instructions, snapshot);
+          const instructions = voiceConversationInstructions(omni.instructions, { ...snapshot, history: [], actions: omni.tools === true });
+          log.info({ conversationId, sessionId: consumed.sessionId, contextChars: instructions.length,
+            identityChars: snapshot.identity.length, historyTurns: snapshot.history.length }, 'Voice conversation context prepared');
+          return instructions;
         } : undefined;
         if (restoreInstructions) {
           unsubscribeSession = onUserContextChange((change) => {
             if (change.kind === 'session-reset' && change.id === conversationId) invalidateContext();
           });
           if (omni && omni.route.provider !== 'boson') {
-            consumed.omni = { ...omni, instructions: await restoreInstructions() };
+            engineOmni = { ...omni, instructions: await restoreInstructions() };
           }
         }
         setupStage = 'engine';
@@ -631,11 +682,21 @@ export class VoiceRealtimeRuntime {
             outputMediaTimestampMs += 20;
           }
         };
-        engine = consumed.omni ? createOmniVoiceEngine({
+        engine = engineOmni ? createOmniVoiceEngine({
           callId: consumed.sessionId,
-          route: consumed.omni, silenceDurationMs: consumed.silenceDurationMs,
-          restoreInstructions: consumed.omni.route.provider === 'boson' ? restoreInstructions : undefined,
+          route: engineOmni, silenceDurationMs: consumed.silenceDurationMs,
+          restoreInstructions: engineOmni.route.provider === 'boson' ? restoreInstructions : undefined,
+          restoreHistory: () => {
+            const history = buildVoiceResumeHistory(context?.history ?? []);
+            log.info({ conversationId, sessionId: consumed.sessionId, historyChars: history.length }, 'Voice conversation history restored');
+            return history;
+          },
           bargeIn: consumed.config.voice?.realtime?.bargeIn ?? true, send, sendAudio,
+          ...(conversationId && consumed.conversationSessionId && engineOmni.tools ? {
+            agent: { broker: this.options.agentBroker, conversationId, transcriptId: consumed.conversationSessionId,
+              publish: publication => this.options.publishConversationContent?.(conversationId, consumed.conversationSessionId!, publication)
+                ?? Promise.reject(new Error('Chat publication is unavailable')) },
+          } : {}),
           onUserInput: conversationId ? () => this.options.onConversationInput?.(conversationId) : undefined,
           record: async (entry) => {
             if (conversationId) await this.options.recordOmniTranscript!(conversationId, consumed.sessionId, entry, consumed.conversationSessionId!);
@@ -673,6 +734,9 @@ export class VoiceRealtimeRuntime {
           route: consumed.omni ? { engine: 'omni', omni: consumed.omni.route } : consumed.tts ? { engine: 'agent', stt: consumed.stt!.route, tts: consumed.tts.route } : { engine: 'dictation', stt: consumed.stt!.route },
           heartbeatIntervalMs: VOICE_REALTIME_HEARTBEAT_INTERVAL_MS,
         });
+        const readySession = this.activeSessions.get(consumed.sessionId);
+        if (readySession) readySession.refreshContext = refreshContext;
+        engine.restoreTasks?.();
       } catch (error) {
         if (closed) return;
         log.warn({ err: error, sessionId: consumed.sessionId, provider: consumed.omni?.route.provider ?? consumed.stt?.route.provider }, 'Realtime voice setup failed');

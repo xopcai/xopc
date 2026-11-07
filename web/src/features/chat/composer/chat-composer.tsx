@@ -1003,7 +1003,7 @@ export const ChatComposer = memo(function ChatComposer({
           onThinkingChange={onThinkingChange}
           voiceActive={voice.voiceActive}
           onStartVoiceInput={voice.startVoiceInput}
-          voiceConversationEnabled={Boolean(conversationId || prepareVoiceSession) && !runBusyState}
+          voiceConversationEnabled={Boolean(conversationId || prepareVoiceSession)}
           onStartVoiceConversation={() => {
             if (preparingCallRef.current) return;
             if (conversationId) { call.open({ conversationId, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId, mode: voiceMode }); return; }

@@ -3,6 +3,14 @@ import Testing
 @testable import XopcMobile
 
 struct RealtimeVoiceProtocolTests {
+    @Test func automaticCallLeavesEngineSelectionToTheGateway() throws {
+        let request = RealtimeVoiceSessionRequest(conversationId: "personal", mode: nil, language: "zh")
+        let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+        #expect(object["mode"] == nil)
+        #expect(object["purpose"] as? String == "conversation")
+        #expect(object["conversationId"] as? String == "personal")
+    }
+
     @Test func encodesOpeningReadinessAndRecoveryIdentity() throws {
         let greeting = RealtimeVoiceSessionRequest.OpeningGreetingRequest(
             logicalCallId: "c3895c61-d123-4597-9d35-72f01ba723e7", initiation: "recovery"

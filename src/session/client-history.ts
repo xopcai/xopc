@@ -8,6 +8,7 @@ import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
 import { isRoutineTaskAllocationStatus } from './task-allocation-status.js';
 import { buildTranscriptOutline } from './transcript-outline.js';
+import { isVoiceConversationMessage, VOICE_CHAT_MESSAGE_TYPE } from './voice-transcript.js';
 
 /** Transcript row for TUI and HTTP clients (flattened from persisted session messages). */
 export interface ClientHistoryMessage {
@@ -287,6 +288,7 @@ export function messagesToClientHistory(
     .filter((turnId): turnId is string => Boolean(turnId)));
 
   for (const m of slice) {
+    if (isVoiceConversationMessage(m)) continue;
     if (m.role === 'tool' || m.role === 'toolResult') {
       continue;
     }
@@ -546,11 +548,14 @@ function customRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessag
       timestamp: parseTimestampValue(typeof r.timestamp === 'number' ? r.timestamp : undefined),
       metadata: { turnOutcome: delivery.outcome, taskResultDelivery: delivery } };
   }
-  if (customType === 'voice_omni_transcript') {
+  if (customType === 'voice_omni_transcript' || customType === VOICE_CHAT_MESSAGE_TYPE) {
+    if (r.display === false) return null;
     const details = r.details as Record<string, unknown> | undefined;
     if (details?.role !== 'user' && details?.role !== 'assistant') return null;
     const content = typeof r.content === 'string' ? r.content : '';
     return { role: details.role, kind: 'message', content, rawContent: content,
+      ...(customType === VOICE_CHAT_MESSAGE_TYPE ? { startsNewBubble: true,
+        turnId: `voice-publication:${String(details.publicationId ?? '')}` } : {}),
       timestamp: parseTimestampValue(typeof r.timestamp === 'string' || typeof r.timestamp === 'number' ? r.timestamp : undefined) };
   }
   const content = Array.isArray(r.content) || typeof r.content === 'string'
@@ -669,9 +674,13 @@ export function transcriptRowsToClientHistory(
   const assistantTurnIds = new Set(messages.filter((message) => message.role === 'assistant')
     .map((message) => message.turnId).filter((turnId): turnId is string => Boolean(turnId)));
   const out: ClientHistoryMessage[] = [];
+  const voiceTurnIds = new Set(rows.filter(isVoiceConversationMessage).map(row => (row as { turnId?: string }).turnId).filter(Boolean));
   const reviewTraceToolById = new Map<string, NonNullable<ClientHistoryMessage['toolCalls']>[number]>();
 
   for (const [offset, row] of slice.entries()) {
+    if (isVoiceConversationMessage(row)) continue;
+    if ((row as { customType?: string }).customType === 'turn_outcome'
+      && voiceTurnIds.has(parseTurnOutcome((row as { data?: unknown }).data)?.turnId)) continue;
     const localRowNumber = startIndex + offset + 1;
     const rowNumber = (opts?.rowNumberOffset ?? 0) + localRowNumber;
     const id = `row-${rowNumber}`;

@@ -83,6 +83,8 @@ import type { CompactionDiscardedAttempt } from '../memory/compaction.js';
 import { continuesAfterTool, trackAiUsageStream } from '../../usage/recorder.js';
 import { isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { findSessionInputByRunId } from '../../storage/sqlite/session-input-repository.js';
+import { isNaturalVoiceDelegation, VOICE_AGENT_INSTRUCTION_TYPE } from '../../session/voice-transcript.js';
 import { projectForgottenHistoryMessages, projectSuppressedMemoryBlocks, originalReadAuthorizationNotice } from '../../memory-learning/forgotten-history.js';
 import { getActiveTranscriptUserText } from '../inbound/attachment-pipeline.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
@@ -971,7 +973,13 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           } else {
             const text = userMessageToPromptText(userMessage);
             const images = params.images ?? [];
-            await session.prompt(text, images.length > 0 ? { images } : undefined);
+            const input = params.voiceHistoryTokens && isXopcDatabaseOpen()
+              ? findSessionInputByRunId(conversationId, runId) : undefined;
+            if (isNaturalVoiceDelegation(input)) {
+              await session.sendCustomMessage({ customType: VOICE_AGENT_INSTRUCTION_TYPE, content: text, display: false }, { triggerTurn: true });
+            } else {
+              await session.prompt(text, images.length > 0 ? { images } : undefined);
+            }
           }
           await session.agent.waitForIdle();
           clarificationStopped ||= isClarificationSuspended(conversationId, runId);

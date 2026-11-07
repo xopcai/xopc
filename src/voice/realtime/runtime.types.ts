@@ -8,6 +8,7 @@ import type { VoiceConversationContext } from './conversation-context.js';
 import type { OmniTranscript } from './omniEngine.js';
 import type { OmniRoute } from './omniRoute.js';
 import type { VoiceAgentBroker } from './agentBroker.js';
+import type { VoiceChatPublication } from './chat-publication.js';
 
 export interface ResolvedStreamingStt {
   plugin: MediaUnderstandingProvider & Required<Pick<MediaUnderstandingProvider, 'openAudioStream' | 'streamingAudio'>>;
@@ -47,11 +48,12 @@ export interface ResolvedStreamingTts {
 }
 
 export interface VoiceRealtimeRuntimeOptions {
+  publishConversationContent?: (conversationId: string, expectedTranscriptId: string, publication: VoiceChatPublication) => Promise<void>;
   /** Confirmed non-echo speech invalidates background reply drafts before turn commit. */
   onConversationInput?: (conversationId: string) => void;
   isPrincipalActive?: (principalId: string) => boolean;
   recordOmniTranscript?: (conversationId: string, callId: string, entry: OmniTranscript, expectedTranscriptId: string) => Promise<void>;
-  getConversationContext?: (conversationId: string, expectedTranscriptId: string, baseInstructions: string) => Promise<VoiceConversationContext>;
+  getConversationContext?: (conversationId: string, expectedTranscriptId: string, baseInstructions: string, actions?: boolean) => Promise<VoiceConversationContext>;
   getSessionIdentity?: (conversationId: string) => Promise<string | undefined>;
   getConfig: () => Config;
   sessionExists: (conversationId: string) => Promise<boolean>;
