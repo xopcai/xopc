@@ -11,10 +11,11 @@ import type { PersonalAgent } from './personal-page';
 
 type Voice = { id: string; name: string; description?: string; style?: string };
 
-export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChange, active = true }: {
+export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChange, onOpenServices, active = true }: {
   record: PersonalAgent;
   zh: boolean;
   onGreetingChange?: (enabled: boolean) => Promise<boolean>;
+  onOpenServices?: () => void;
   onSelectVoice: (voicePreference: PersonalAgent['voicePreference']) => Promise<boolean>;
   active?: boolean;
 }) {
@@ -139,7 +140,9 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChan
           </button>
         </div>
         {(selectedVoice?.description || selectedVoice?.style || !selected) && <p className="text-xs leading-relaxed text-fg-muted">{selectedVoice?.description || selectedVoice?.style || (zh ? '跟随语音服务的默认音色。' : 'Uses the voice service’s default voice.')}</p>}
-      </div> : <p className="mt-1 text-sm text-fg-muted">{zh ? '当前没有可用音色。' : 'No voice is ready.'} <Link to="/settings/capabilities/models?configure=speech&returnTo=%2Fpersonal" className="text-accent underline">{zh ? '设置语音服务' : 'Set up voice'}</Link></p>}
+      </div> : <p className="mt-1 text-sm text-fg-muted">{zh ? '当前没有可用音色。' : 'No voice is ready.'}{' '}
+        {onOpenServices ? <button type="button" onClick={onOpenServices} className="text-accent underline">{zh ? '设置语音服务' : 'Set up voice'}</button>
+          : <Link to="/settings/personal" className="text-accent underline">{zh ? '设置语音服务' : 'Set up voice'}</Link>}</p>}
     {onGreetingChange && greetingSupported && <label className="mt-4 flex items-center justify-between gap-3 text-sm text-fg">
       {zh ? '接通时问候' : 'Greet me when connected'}
       <input type="checkbox" checked={pendingGreeting ?? record.voiceCallPreferences?.openingGreetingEnabled ?? true} disabled={busy || pendingGreeting !== null}

@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -84,80 +84,24 @@ describe('Personal AI editor', () => {
     });
   });
 
-  it('opens a compact editor popover from the avatar while keeping the conversation mounted', async () => {
-    await act(async () => {
-      root.render(<MemoryRouter><PersonalPage /></MemoryRouter>);
-    });
+  it.each(["Edit Ada's profile", 'Ada settings'])('keeps quick controls at %s and opens the settings page only for more settings', async label => {
+    function Location() { return <output data-testid="location">{useLocation().pathname}</output>; }
+    await act(async () => root.render(<MemoryRouter initialEntries={['/personal']}><PersonalPage /><Location /></MemoryRouter>));
     act(() => headerRoot.render(<>{usePageHeaderStore.getState().main}{usePageHeaderStore.getState().end}</>));
-
-    const chat = container.querySelector('[data-testid="personal-chat"]');
-    expect(chat).not.toBeNull();
-    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit Ada\'s profile"]')?.click());
-
-    const editor = document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Edit Personal AI"]');
-    expect(editor).not.toBeNull();
-    expect(editor?.querySelector('[data-testid="personal-avatar"].size-16')).not.toBeNull();
-    const avatarButton = editor?.querySelector<HTMLButtonElement>('button[aria-label="Choose avatar"]');
-    expect(avatarButton?.parentElement?.className).toContain('items-center');
-    expect(avatarButton?.parentElement?.className).not.toContain('border-b');
-    expect(avatarButton?.querySelector('svg')).toBeNull();
-    expect(editor?.textContent).not.toContain('Edit Personal AI');
-    expect(avatarButton?.getAttribute('aria-expanded')).toBe('false');
-    expect(editor?.querySelector('#personal-appearance-options')).toBeNull();
-    act(() => avatarButton?.click());
-    expect(editor?.querySelector('#personal-appearance-options')).not.toBeNull();
-    await act(async () => [...(editor?.querySelectorAll<HTMLButtonElement>('#personal-appearance-options button') ?? [])].find(button => button.textContent === 'Curious')?.click());
-    expect(editor?.querySelector('#personal-appearance-options')).toBeNull();
-    expect(avatarButton?.getAttribute('aria-expanded')).toBe('false');
-    expect(avatarButton?.querySelector('[data-testid="personal-avatar"]')?.getAttribute('data-appearance')).toBe('loopi-curious');
-    const avatarPatch = vi.mocked(fetchJson).mock.calls.find(([url, options]) => String(url).includes('/profile') && options?.method === 'PATCH');
-    expect(JSON.parse(String(avatarPatch?.[1]?.body)).appearance).toBe('loopi-curious');
-    expect(editor?.querySelector('button[aria-label="Close editor"]')).toBeNull();
-    expect([...editor!.querySelectorAll('button')].some(button => button.textContent === 'Save')).toBe(false);
-    expect(document.querySelector('.xopc-drawer-right')).toBeNull();
-    expect(document.querySelector('[aria-label="Edit Personal AI"]')?.textContent).not.toContain('Choose a starting point');
-    expect(container.querySelector('[data-testid="personal-chat"]')).toBe(chat);
-
-    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit profile"]')?.click());
-    expect(document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Edit Personal AI"]')).toBeNull();
-    expect(container.querySelector('[data-testid="personal-chat"]')).toBe(chat);
-  });
-
-  it('keeps identity, voice and model controls without response or proactivity settings', async () => {
-    await act(async () => root.render(<MemoryRouter><PersonalPage /></MemoryRouter>));
-    act(() => headerRoot.render(usePageHeaderStore.getState().end));
-    await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit profile"]')?.click());
-    const editor = document.querySelector('[aria-label="Edit Personal AI"]');
-    expect(editor?.querySelector('#personal-name')).not.toBeNull();
-    expect(editor?.querySelector('[aria-label="Choose avatar"]')).not.toBeNull();
-    expect(editor?.textContent).toContain('Voice');
-    for (const label of ['Tone', 'When things get tricky', 'More preferences', 'Proactive messages', 'Quiet from', 'Length', 'Updates']) {
-      expect(editor?.textContent).not.toContain(label);
-    }
-    expect(vi.mocked(fetchJson).mock.calls.some(([url]) => String(url).includes('/proactivity'))).toBe(false);
-  });
-
-  it('saves the assistant name when the input loses focus', async () => {
-    await act(async () => {
-      root.render(<MemoryRouter><PersonalPage /></MemoryRouter>);
-    });
-    act(() => headerRoot.render(usePageHeaderStore.getState().end));
-    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit profile"]')?.click());
-
-    const name = document.querySelector<HTMLInputElement>('#personal-name');
-    expect(name).not.toBeNull();
-    expect(name?.getAttribute('aria-label')).toBe('Assistant name');
-    expect(name?.parentElement?.querySelector('[data-testid="personal-avatar"]')).not.toBeNull();
-    expect(document.querySelector('#personal-address')).toBeNull();
-    expect(container.querySelector('[data-testid="personal-chat"]')?.getAttribute('data-user-name')).toBe('Shared name');
-    await act(async () => {
-      name?.focus();
-      if (name) name.value = 'Nova';
-      name?.blur();
-    });
-
-    const patch = vi.mocked(fetchJson).mock.calls.find(([url, options]) => String(url).includes('/profile') && options?.method === 'PATCH');
-    expect(JSON.parse(String(patch?.[1]?.body)).displayName).toBe('Nova');
+    const trigger = [...headerContainer.querySelectorAll<HTMLButtonElement>('button')].find(button => button.getAttribute('aria-label') === label);
+    expect(trigger).toBeDefined();
+    await act(async () => trigger!.click());
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/personal');
+    const quick = document.querySelector('[aria-label="Ada quick settings"]');
+    expect(quick?.querySelector('[aria-label="Call engine"]')).not.toBeNull();
+    expect(quick?.querySelector('[aria-label="Natural voice model"]')).not.toBeNull();
+    expect(quick?.querySelector('#personal-name')).not.toBeNull();
+    expect(quick?.textContent).not.toContain('API Key');
+    expect(quick?.textContent).not.toContain('Privacy');
+    const more = [...quick!.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'More settings');
+    await act(async () => more!.click());
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/settings/personal');
+    expect(vi.mocked(fetchJson).mock.calls.some(([url, options]) => String(url).includes('/profile') && options?.method === 'PATCH')).toBe(false);
   });
 
   it('toggles the delegated tasks popover from the header button', async () => {
