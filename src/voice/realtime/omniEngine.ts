@@ -5,7 +5,7 @@ import WebSocket from 'ws';
 import { createLogger } from '../../utils/logger.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { PlaybackEchoCandidates } from './playback-echo.js';
-import { TurnCoordinator } from './turnPolicy.js';
+import { hasContinuationHint, TurnCoordinator } from './turnPolicy.js';
 import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import type { OmniRoute } from './omniRoute.js';
@@ -19,14 +19,21 @@ const UPLOAD_TIMEOUT_MS = 10_000;
 const RESPONSE_START_TIMEOUT_MS = 30_000;
 const CANCELLATION_ERROR_GRACE_MS = 5_000;
 const PLAYBACK_ECHO_TAIL_MS = 3_000;
+const HIGGS_ENDPOINT_MS = 180;
+const HIGGS_TRANSCRIPT_TIMEOUT_MS = 900;
+const HIGGS_GREETING_GRACE_MS = 1_100;
+const HIGGS_CONTINUATION_GRACE_MS = 1_800;
 const FAILURE_MESSAGES: Record<string, string> = {
   OMNI_UPLOAD_TIMEOUT: 'The connection to the voice service stopped uploading audio. Check the network to your configured endpoint and reconnect.',
   OMNI_INPUT_RESET_TIMEOUT: 'The voice service did not acknowledge clearing microphone input. Reconnect to continue.',
+  OMNI_CONTEXT_FAILED: 'The conversation context could not be restored. Reconnect and try again.',
   OMNI_START_TIMEOUT: 'The voice service did not become ready in time.',
   OMNI_RESPONSE_START_TIMEOUT: 'Your speech was transcribed, but the voice model did not start a reply within 30 seconds. Reconnect or select another realtime voice model.',
   OMNI_CONNECTION_FAILED: 'Could not connect to the voice service. Check network and service availability.',
   OMNI_CONNECTION_REJECTED: 'The voice service rejected the connection. Check account access, quota and route configuration.',
   OMNI_CONNECTION_CLOSED: 'The voice service closed the connection.',
+  BOSON_AUTH_FAILED: 'Boson rejected the API key. Update it in voice settings and try again.',
+  BOSON_QUOTA_EXCEEDED: 'Boson has no available quota. Check the account balance or usage limit.',
   OMNI_PROVIDER_ERROR: 'The voice service reported an error.',
   OMNI_RESPONSE_FAILED: 'The voice service could not complete its reply.',
   OMNI_INVALID_TRANSCRIPT: 'The voice service returned an invalid transcript.',
@@ -57,11 +64,13 @@ interface ResponseState {
   release: () => void;
   settled: Promise<void>;
   pcm: PcmFrameBuffer;
+  higgsAudio?: { itemId: string; contentIndex: number; playedMs: number };
 }
 
 export function createOmniVoiceEngine(options: {
   callId: string;
   route: OmniRoute;
+  restoreInstructions?: () => Promise<string>;
   silenceDurationMs: number;
   bargeIn: boolean;
   send: VoiceEventSink;
@@ -70,6 +79,7 @@ export function createOmniVoiceEngine(options: {
   record: (entry: OmniTranscript) => Promise<void>;
   onClose: (reason: string, notify: boolean) => Promise<void>;
 }): VoiceEngine {
+  const higgs = options.route.route.provider === 'boson';
   let socket: WebSocket | undefined;
   let closed = false;
   let ready = false;
@@ -99,6 +109,48 @@ export function createOmniVoiceEngine(options: {
   let turnSettled = false;
   let responseStartTimer: ReturnType<typeof setTimeout> | undefined;
   const speaking = new Set<string>();
+  let higgsEndpoint: { id: string; stoppedAt?: number; committedAt?: number; text?: string } | undefined;
+  let higgsEndpointTimer: ReturnType<typeof setTimeout> | undefined;
+  function resetHiggsEndpoint() {
+    clearTimeout(higgsEndpointTimer);
+    higgsEndpoint = undefined;
+  }
+  function writeInputTranscript(id: string, text: string) {
+    save({ itemId: id, role: 'user', text, interrupted: false });
+    options.send('input.transcript.final', { utteranceId: id, revision: 1, text });
+  }
+  function settleHiggsEndpoint() {
+    const endpoint = higgsEndpoint;
+    if (!endpoint || endpoint.committedAt === undefined || endpoint.stoppedAt === undefined) return;
+    clearTimeout(higgsEndpointTimer);
+    // Generation and transcription run in parallel. A late commit must not
+    // release its speculative reply before we can check the transcript.
+    if (endpoint.text === undefined) {
+      higgsEndpointTimer = setTimeout(() => {
+        if (closed || failed || higgsEndpoint !== endpoint) return;
+        discardInput();
+        options.send('session.error', { code: 'INPUT_DROPPED', message: 'Could not confirm this voice turn. Please repeat it.', recoverable: true });
+      }, Math.max(0, endpoint.committedAt + HIGGS_TRANSCRIPT_TIMEOUT_MS - Date.now()));
+      return;
+    }
+    let graceMs = 0;
+    if (hasContinuationHint(endpoint.text) || /(?:我想问(?:一下)?|等一下|等等|等一等)[\s。！？、，；：,.!?;:]*$/u.test(endpoint.text)) {
+      graceMs = HIGGS_CONTINUATION_GRACE_MS;
+    } else if (/^(?:你好|您好|嗨|哈喽|喂|hello|hi|hey)[\s。！？、，；：,.!?;:]*$/iu.test(endpoint.text)) {
+      graceMs = HIGGS_GREETING_GRACE_MS;
+    }
+    const release = () => {
+      if (closed || failed || higgsEndpoint !== endpoint) return;
+      resetHiggsEndpoint();
+      if (endpoint.text !== undefined) writeInputTranscript(endpoint.id, endpoint.text);
+      turnSettled = true;
+      options.send('turn.committed', { turnId: endpoint.id });
+      if (active) publish(active);
+    };
+    const remainingMs = endpoint.stoppedAt + graceMs - Date.now();
+    if (remainingMs > 0) higgsEndpointTimer = setTimeout(release, remainingMs);
+    else release();
+  }
   function maybeCreateResponse() {
     if (!responseCreateQueued || active || waitingForCancellation || closed || failed || muted || inputBlocked) return;
     responseCreateQueued = false;
@@ -159,7 +211,7 @@ export function createOmniVoiceEngine(options: {
       fail('TRANSCRIPT_WRITE_FAILED');
     });
   };
-  const cancel = (reason: 'barge_in' | 'client_cancelled' | 'session_closed') => {
+  const cancel = (reason: 'barge_in' | 'client_cancelled' | 'session_closed', upstreamStopped = false) => {
     const response = active;
     if (!response) return false;
     if (response.audio && response.text) recentPlayback = { text: response.text, expiresAt: Date.now() + PLAYBACK_ECHO_TAIL_MS };
@@ -170,10 +222,16 @@ export function createOmniVoiceEngine(options: {
       save({ itemId: response.id, role: 'assistant', text: response.text, interrupted: true });
       options.send('response.cancelled', { responseId: response.id, reason });
     }
-    if (reason !== 'session_closed' && response.generating && socket?.readyState === WebSocket.OPEN) {
-      waitingForCancellation = response.id;
-      cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
-      send('response.cancel');
+    if (reason !== 'session_closed' && socket?.readyState === WebSocket.OPEN) {
+      if (response.generating && !upstreamStopped) {
+        waitingForCancellation = response.id;
+        cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
+        send('response.cancel', higgs ? { response_id: response.id } : {});
+      }
+      if (response.higgsAudio) {
+        const { itemId, contentIndex, playedMs } = response.higgsAudio;
+        send('conversation.item.truncate', { item_id: itemId, content_index: contentIndex, audio_end_ms: playedMs });
+      }
     }
     return true;
   };
@@ -209,6 +267,7 @@ export function createOmniVoiceEngine(options: {
     if (closed || failed) return;
     failed = true;
     clearTimeout(responseStartTimer);
+    resetHiggsEndpoint();
     turn.reset();
     echoCandidates.clear();
     responseCreateQueued = false;
@@ -222,6 +281,8 @@ export function createOmniVoiceEngine(options: {
   }
   function discardInput() {
     clearTimeout(responseStartTimer);
+    if (higgsEndpoint?.text !== undefined) writeInputTranscript(higgsEndpoint.id, higgsEndpoint.text);
+    resetHiggsEndpoint();
     turn.reset();
     echoCandidates.clear();
     responseCreateQueued = false;
@@ -253,11 +314,37 @@ export function createOmniVoiceEngine(options: {
         });
         timer = setTimeout(() => { fail('OMNI_START_TIMEOUT'); engine.close(); }, 15_000);
         socket.on('error', () => fail('OMNI_CONNECTION_FAILED'));
-        socket.on('close', (closeCode) => { if (!closed) fail('OMNI_CONNECTION_CLOSED', { closeCode }); });
+        socket.on('close', (closeCode) => {
+          if (!closed) fail(higgs && closeCode === 3000 ? 'BOSON_AUTH_FAILED'
+            : higgs && closeCode === 4429 ? 'BOSON_QUOTA_EXCEEDED' : 'OMNI_CONNECTION_CLOSED', { closeCode });
+        });
         socket.on('unexpected-response', (_request, response) => {
           response.resume();
-          fail('OMNI_CONNECTION_REJECTED', { upstreamStatus: response.statusCode });
+          const status = response.statusCode;
+          fail(higgs && (status === 401 || status === 403) ? 'BOSON_AUTH_FAILED'
+            : higgs && status === 429 ? 'BOSON_QUOTA_EXCEEDED' : 'OMNI_CONNECTION_REJECTED', { upstreamStatus: status });
         });
+        const initializeHiggs = (instructions: string) => send('session.update', { session: {
+          type: 'realtime', model: options.route.route.model, instructions,
+          output_modalities: ['audio'],
+          audio: {
+            input: {
+              format: { type: 'audio/pcm', rate: 16_000 },
+              transcription: { model: 'higgs-stt-3.1' },
+              turn_detection: {
+                type: 'semantic_vad', silence_duration_ms: HIGGS_ENDPOINT_MS, threshold: 0.82, min_speech_duration: 0.08,
+              },
+            },
+            output: { format: { type: 'audio/pcm', rate: 24_000 }, voice: options.route.voice },
+          },
+        } });
+        if (higgs) {
+          const instructions = options.restoreInstructions?.() ?? Promise.resolve(options.route.instructions);
+          const connected = new Promise<void>(resolve => socket!.once('open', resolve));
+          void Promise.all([instructions, connected]).then(([text]) => {
+            if (!closed && !failed) initializeHiggs(text);
+          }).catch(() => fail('OMNI_CONTEXT_FAILED'));
+        }
         socket.on('message', (raw, binary) => {
           if (closed) return;
           try {
@@ -270,22 +357,25 @@ export function createOmniVoiceEngine(options: {
               const managedLateCancellation = options.route.route.managed
                 && event.error?.code === 'invalid_request_error'
                 && event.error?.message === 'The voice provider rejected the request.';
-              if (Date.now() <= cancellationPendingUntil && (lateCancellation || managedLateCancellation)) {
+              const higgsLateCancellation = higgs
+                && ['response_not_active', 'response_id_mismatch'].includes(event.error?.code);
+              if (Date.now() <= cancellationPendingUntil && (lateCancellation || managedLateCancellation || higgsLateCancellation)) {
                 cancellationPendingUntil = 0;
                 waitingForCancellation = undefined;
                 maybeCreateResponse();
                 return;
               }
-              fail('OMNI_PROVIDER_ERROR'); return;
+              fail(higgs && [event.error?.code, event.error?.type].includes('insufficient_quota')
+                ? 'BOSON_QUOTA_EXCEEDED' : 'OMNI_PROVIDER_ERROR'); return;
             }
-            if (event.type === 'session.created') {
+            if (event.type === 'session.created' && !higgs) {
               send('session.update', { session: {
                 modalities: ['text', 'audio'], voice: options.route.voice,
                 instructions: options.route.instructions,
                 ...(!options.route.route.managed ? { input_audio_format: 'pcm', output_audio_format: 'pcm', input_audio_transcription: { model: 'gummy-realtime-v1' } } : {}),
                 turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: options.silenceDurationMs, create_response: options.route.route.managed, interrupt_response: false },
               } });
-            } else if (event.type === 'session.updated' && !ready) {
+            } else if (event.type === (higgs ? 'session.created' : 'session.updated') && !ready) {
               if (options.route.route.managed && (event.session?.input_sample_rate !== 16000 || event.session?.output_sample_rate !== 24000)) throw new Error('Unsupported platform audio format');
               ready = true; clearTimeout(timer); rejectStart = undefined; resolve();
             } else if (event.type === 'input_audio_buffer.cleared') {
@@ -293,52 +383,82 @@ export function createOmniVoiceEngine(options: {
               clearTimeout(clearTimer);
             } else if (event.type === 'input_audio_buffer.speech_started') {
               lastInputAt = Date.now();
-              if (muted || clearingInput) { discardedInputs.add(String(event.item_id)); return; }
-              if (recorded.has(String(event.item_id)) || pendingInputs.has(String(event.item_id))) return;
-              echoCandidates.remember(String(event.item_id), active?.audio ? active.text
+              const id = String(event.item_id);
+              if (muted || clearingInput) { discardedInputs.add(id); return; }
+              // Semantic VAD can resume an uncommitted segment with the same item ID.
+              if (higgs ? speaking.has(id) : recorded.has(id) || pendingInputs.has(id)) return;
+              if (!higgs) echoCandidates.remember(id, active?.audio ? active.text
                 : recentPlayback && recentPlayback.expiresAt >= Date.now() ? recentPlayback.text : undefined);
               inputBlocked = false;
-              pendingInputs.add(String(event.item_id));
+              pendingInputs.add(id);
               clearTimeout(responseStartTimer);
               turnSettled = false;
-              speaking.add(String(event.item_id));
-              turn.start(String(event.item_id));
-              if (active && !active.published) cancel('barge_in');
-              options.send('input.speech_started', { utteranceId: String(event.item_id) });
+              speaking.add(id);
+              if (!higgs) {
+                turn.start(id);
+                if (active && !active.published) cancel('barge_in');
+              }
+              options.send('input.speech_started', { utteranceId: id });
+              if (higgs) {
+                if (higgsEndpoint?.text !== undefined && higgsEndpoint.id !== id) writeInputTranscript(higgsEndpoint.id, higgsEndpoint.text);
+                resetHiggsEndpoint();
+                higgsEndpoint = { id };
+                cancel('barge_in', true);
+              }
             } else if (event.type === 'input_audio_buffer.speech_stopped') {
               lastInputAt = Date.now();
-              if (muted || inputBlocked || discardedInputs.has(String(event.item_id)) || recorded.has(String(event.item_id))) return;
-              speaking.delete(String(event.item_id));
-              turn.stop(String(event.item_id));
-              options.send('input.speech_stopped', { utteranceId: String(event.item_id) });
+              const id = String(event.item_id);
+              if (muted || inputBlocked || discardedInputs.has(id)) return;
+              if (higgs) {
+                if (higgsEndpoint?.id !== id || higgsEndpoint.stoppedAt !== undefined) return;
+                higgsEndpoint.stoppedAt = Date.now();
+              } else if (recorded.has(id)) return;
+              speaking.delete(id);
+              if (!higgs) turn.stop(id);
+              options.send('input.speech_stopped', { utteranceId: id });
+              if (higgs) settleHiggsEndpoint();
+            } else if (higgs && event.type === 'input_audio_buffer.committed') {
+              if (higgsEndpoint && higgsEndpoint.id === event.item_id) {
+                higgsEndpoint.committedAt ??= Date.now();
+                clearTimeout(responseStartTimer);
+                if (!active) responseStartTimer = setTimeout(() => fail('OMNI_RESPONSE_START_TIMEOUT'), RESPONSE_START_TIMEOUT_MS);
+                settleHiggsEndpoint();
+              }
             } else if (event.type === 'conversation.item.input_audio_transcription.completed') {
               if (typeof event.transcript !== 'string' || event.transcript.length > 32_000 || typeof event.item_id !== 'string') { fail('OMNI_INVALID_TRANSCRIPT'); return; }
               if (muted || inputBlocked || discardedInputs.has(event.item_id) || recorded.has(event.item_id)) return;
+              const endpoint = higgsEndpoint?.id === event.item_id ? higgsEndpoint : undefined;
+              // A resumed item can receive the previous segment's final transcript
+              // before Boson commits the extended utterance.
+              if (endpoint && endpoint.committedAt === undefined) return;
               pendingInputs.delete(event.item_id);
               speaking.delete(event.item_id);
               const text = event.transcript.trim();
               const playbackText = active?.audio ? active.text
                 : recentPlayback && recentPlayback.expiresAt >= Date.now() ? recentPlayback.text : undefined;
-              if (echoCandidates.matches(event.item_id, text, playbackText)) {
+              if (!higgs && echoCandidates.matches(event.item_id, text, playbackText)) {
                 turn.final(event.item_id, '');
                 log.debug({ sessionId: options.callId, responseId: active?.id, transcriptCharacters: text.length }, 'Ignored native voice playback echo');
                 return;
               }
-              if (text && active?.published && options.bargeIn) {
+              if (!higgs && text && active?.published && options.bargeIn) {
                 log.info({ sessionId: options.callId, responseId: active.id, utteranceId: event.item_id,
                   transcriptCharacters: text.length }, 'Confirmed user speech interrupted native voice playback');
                 cancel('barge_in');
               }
-              turn.final(event.item_id, text);
+              if (!higgs) turn.final(event.item_id, text);
               if (text) { lastInputAt = Date.now(); options.onUserInput?.(); }
-              save({ itemId: event.item_id, role: 'user', text: event.transcript, interrupted: false });
-              options.send('input.transcript.final', { utteranceId: event.item_id, revision: 1, text: event.transcript });
+              if (endpoint) {
+                endpoint.text = event.transcript;
+                settleHiggsEndpoint();
+              } else writeInputTranscript(event.item_id, event.transcript);
             } else if (event.type === 'conversation.item.input_audio_transcription.failed') {
               if (muted || inputBlocked || discardedInputs.has(String(event.item_id))) return;
               // An endpoint cannot be certified without its transcript. Discard this turn, not the call.
               discardInput();
               options.send('session.error', { code: 'INPUT_DROPPED', message: 'Could not transcribe this voice turn. Please repeat it.', recoverable: true });
             } else if (event.type === 'response.created') {
+              if (higgs && speaking.size) return;
               if (muted || inputBlocked) {
                 cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
                 send('response.cancel');
@@ -360,15 +480,21 @@ export function createOmniVoiceEngine(options: {
               const settled = new Promise<void>((resolve) => { release = resolve; });
               active = { id, text: '', audio: false, generating: true, queuedBytes: 0, abort: new AbortController(), playback: new AudioPlaybackWindow(), tail: Promise.resolve(), published: false, settled, release, pcm: new PcmFrameBuffer() };
               if (turnSettled) publish(active);
-            } else if (active && event.response_id === active.id && event.type === 'response.audio_transcript.delta') {
+            } else if (active && event.response_id === active.id && event.type === (higgs ? 'response.output_audio_transcript.delta' : 'response.audio_transcript.delta')) {
               if (typeof event.delta !== 'string' || active.text.length + event.delta.length > 32_000) { fail('OMNI_TRANSCRIPT_LIMIT'); return; }
               active.text += event.delta;
               if (active.published) options.send('response.text.delta', { responseId: active.id, delta: event.delta });
-            } else if (active && event.response_id === active.id && event.type === 'response.audio.delta') {
+            } else if (active && event.response_id === active.id && event.type === (higgs ? 'response.output_audio.delta' : 'response.audio.delta')) {
+              // Boson can emit an empty delta in the middle of an otherwise valid audio stream.
+              if (higgs && event.delta === '') return;
               if (typeof event.delta !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(event.delta)) { fail('OMNI_INVALID_AUDIO'); return; }
               const audio = Buffer.from(event.delta, 'base64');
               if (!audio.length || audio.length % 2) { fail('OMNI_INVALID_AUDIO'); return; }
               const response = active;
+              if (higgs && !response.higgsAudio) {
+                if (typeof event.item_id !== 'string' || !Number.isInteger(event.content_index)) throw new Error('Invalid Higgs audio item');
+                response.higgsAudio = { itemId: event.item_id, contentIndex: event.content_index, playedMs: 0 };
+              }
               if (response.queuedBytes + audio.length > MAX_QUEUED_AUDIO_BYTES) { stopReply(response, 'OMNI_OUTPUT_BACKPRESSURE'); return; }
               response.queuedBytes += audio.length;
               response.tail = response.tail.then(async () => {
@@ -383,7 +509,7 @@ export function createOmniVoiceEngine(options: {
               }).catch(() => { if (!response.abort.signal.aborted) stopReply(response, 'OMNI_PLAYBACK_FAILED'); }).finally(() => { response.queuedBytes -= audio.length; });
             } else if (event.type === 'response.done' && active?.id === event.response?.id) {
               active.generating = false;
-              if (event.response.status === 'cancelled') cancel('barge_in');
+              if (event.response.status === 'cancelled') cancel('barge_in', true);
               else if (event.response.status !== 'completed') fail('OMNI_RESPONSE_FAILED');
               else {
                 const response = active;
@@ -392,6 +518,10 @@ export function createOmniVoiceEngine(options: {
             } else if (event.type === 'response.done' && event.response?.id === waitingForCancellation) {
               waitingForCancellation = undefined;
               maybeCreateResponse();
+            } else if (higgs && event.type === 'session.idle_timeout') {
+              void options.onClose('idle_timeout', true);
+            } else if (higgs && event.type === 'session.max_duration_reached') {
+              void options.onClose('session_limit', true);
             }
           } catch { fail('OMNI_PROTOCOL_ERROR'); }
         });
@@ -431,11 +561,19 @@ export function createOmniVoiceEngine(options: {
       return cancel(reason);
     },
     async cancelTask() { return false; },
-    acknowledge(responseId, playedDurationMs) { if (active?.id === responseId) active.playback.acknowledge(playedDurationMs * 48); },
+    acknowledge(responseId, playedDurationMs) {
+      if (active?.id !== responseId) return;
+      active.playback.acknowledge(playedDurationMs * 48);
+      if (active.higgsAudio) active.higgsAudio.playedMs = Math.max(active.higgsAudio.playedMs, playedDurationMs);
+    },
     close() {
       if (closed) return writes;
       closed = true; cancel('session_closed'); clearTimeout(timer); clearTimeout(clearTimer); clearTimeout(uploadTimer);
       clearTimeout(responseStartTimer);
+      if (higgsEndpoint?.text !== undefined) save({
+        itemId: higgsEndpoint.id, role: 'user', text: higgsEndpoint.text, interrupted: false,
+      });
+      resetHiggsEndpoint();
       turn.reset(); echoCandidates.clear(); speaking.clear();
       inputQueue = []; queuedInputBytes = 0;
       rejectStart?.(new Error('Omni connection closed')); rejectStart = undefined;

@@ -226,7 +226,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
       const allowAutoFocus =
         typeof globalThis.matchMedia === 'function' &&
         globalThis.matchMedia('(hover: hover) and (pointer: fine)').matches;
-      if (!allowAutoFocus) return;
+      if (!allowAutoFocus || document.activeElement?.closest('[role="dialog"]')) return;
       const el = editorRef.current;
       if (!el) return;
       el.focus({ preventScroll: true });

@@ -88,6 +88,22 @@ describe('composer autofocus', () => {
     expect(document.activeElement).not.toBe(container.firstElementChild);
   });
 
+  it('keeps focus in an open dialog when the chat becomes ready', () => {
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    const input = document.createElement('input');
+    dialog.append(input);
+    document.body.append(dialog);
+    try {
+      input.focus();
+      render('new');
+      flush();
+      expect(document.activeElement).toBe(input);
+    } finally {
+      dialog.remove();
+    }
+  });
+
   it('does not open the software keyboard on touch devices', () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })));
     render('new');

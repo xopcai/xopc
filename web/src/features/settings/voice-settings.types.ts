@@ -97,6 +97,7 @@ export interface VoiceSettingsState {
       };
     };
     realtime: {
+      boson?: { defaultForNatural: boolean; voice: import('@xopcai/realtime-protocol/voice').HiggsVoice };
       enabled: boolean;
       defaultEngine: 'agent' | 'omni';
       silenceDurationMs: number;

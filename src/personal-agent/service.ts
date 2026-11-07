@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { VoiceCallPreferencesPatch } from '@xopcai/realtime-protocol/voice';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { AgentCatalogService } from '../agent-catalog/service.js';
@@ -163,7 +164,7 @@ export async function patchPersonalProfile(
   displayName: string,
   appearance: PersonalAppearance,
   voicePreference?: { provider: string; model: string; voice: string } | null,
-  voiceCallPreferences?: { openingGreetingEnabled: boolean },
+  voiceCallPreferences?: VoiceCallPreferencesPatch,
 ): Promise<PersonalAgentRecord | null> {
   const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, appearance, voicePreference, voiceCallPreferences);
   if (!updated) return null;
@@ -178,18 +179,24 @@ export async function updatePersonalProfileRecord(
   displayName: string,
   appearance: PersonalAppearance,
   voicePreference?: { provider: string; model: string; voice: string } | null,
-  voiceCallPreferences?: { openingGreetingEnabled: boolean },
+  voiceCallPreferences?: VoiceCallPreferencesPatch,
 ): Promise<PersonalAgentRecord | null> {
   const repository = new AgentCatalogRepository();
   const current = repository.get(personalAgentId(ownerId));
   if (!current || current.provisioningState !== 'ready' || current.revision !== revision || getPersonalAgent(ownerId)?.state !== 'ready') return null;
+  const callPreferences = { openingGreetingEnabled: true, ...current.profile?.voiceCallPreferences, ...voiceCallPreferences };
   const profile = {
     ...current.profile,
     name: displayName,
     emoji: appearanceEmoji(appearance),
     avatar: appearanceAvatar(appearance),
     ...(voicePreference !== undefined ? { voicePreference: voicePreference ?? undefined } : {}),
-    ...(voiceCallPreferences ? { voiceCallPreferences } : {}),
+    ...(voiceCallPreferences ? { voiceCallPreferences: {
+      openingGreetingEnabled: callPreferences.openingGreetingEnabled,
+      defaultMode: callPreferences.defaultMode,
+      naturalModel: callPreferences.naturalModel ?? undefined,
+      higgsVoice: callPreferences.higgsVoice ?? undefined,
+    } } : {}),
     instructions: personalInstructions(),
   };
   try {

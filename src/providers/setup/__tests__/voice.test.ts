@@ -58,6 +58,13 @@ describe('shared voice setup', () => {
     const next = applySetupVoice(config,applyProviderSetup(data,{},preview.revision).voiceAssignments);
     expect(next.messages?.tts?.provider).toBe('xopc-cloud');
     expect(next.voice?.realtime.omni).toMatchObject({provider:'xopc-cloud',model:'voice-omni',voice:'voice-a'});
+    next.voice!.realtime.boson = { defaultForNatural: true, voice: 'chloe' };
+    next.voice!.realtime.defaultEngine = 'agent';
+    const selected = readSetupVoiceState('xopc-cloud', next);
+    expect(selected.current.conversation).toBe('boson/higgs-realtime');
+    const switched = applySetupVoice(next, [{ use: 'conversation', model: selected.choices.conversation[0]! }]);
+    expect(switched.voice?.realtime.boson).toEqual({ defaultForNatural: false, voice: 'chloe' });
+    expect(switched.voice?.realtime.defaultEngine).toBe('agent');
   });
   it('recommends a stable available Cloud voice when several models have no explicit recommendation', () => {
     getModelCatalogStore().replaceSourceModels('xopc-cloud', { providerId: 'xopc-cloud', baseUrl: 'https://test/v1', api: 'openai-completions', etag: null, recommendedModel: null, lastSuccessAt: 1 },

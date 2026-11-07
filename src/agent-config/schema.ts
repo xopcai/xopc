@@ -1,5 +1,6 @@
 import { SpecialistProfileSchema } from '@xopcai/gateway-contract';
 import { z } from 'zod';
+import { voiceCallPreferencesSchema } from '@xopcai/realtime-protocol/voice';
 
 export const DEFAULT_AGENT_MODEL_REF = 'xopc-cloud/auto';
 export const DEFAULT_CORE_SKILLS = [
@@ -159,7 +160,7 @@ export const AgentProfileSchema = z.object({
     model: z.string().trim().min(1).max(200),
     voice: z.string().trim().min(1).max(200),
   }).strict().optional(),
-  voiceCallPreferences: z.object({ openingGreetingEnabled: z.boolean() }).strict().optional(),
+  voiceCallPreferences: voiceCallPreferencesSchema.optional(),
   instructions: z.string().trim().min(1).optional(),
 }).strict();
 

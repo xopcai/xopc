@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { VoiceCallPreferences } from '@xopcai/realtime-protocol/voice';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import type { StoredAgent } from '../agent-catalog/types.js';
@@ -19,7 +20,7 @@ export interface PersonalAgentRecord {
   userCallName: string | null;
   appearance: PersonalAppearance;
   voicePreference: { provider: string; model: string; voice: string } | null;
-  voiceCallPreferences: { openingGreetingEnabled: boolean };
+  voiceCallPreferences: VoiceCallPreferences;
   revision: number;
   errorMessage: string | null;
 }

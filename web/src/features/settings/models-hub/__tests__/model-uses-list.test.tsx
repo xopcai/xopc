@@ -6,16 +6,17 @@ import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ModelSetupPreview, ModelSetupUse } from '@xopcai/gateway-contract';
 
-const api = vi.hoisted(() => ({ fetch: vi.fn(), preview: vi.fn(), apply: vi.fn(), defaults: vi.fn(), voiceConfig: vi.fn<() => unknown>() }));
+const api = vi.hoisted(() => ({ fetch: vi.fn(), preview: vi.fn(), apply: vi.fn(), defaults: vi.fn(), voiceConfig: vi.fn<() => unknown>(), boson: vi.fn(), saveBoson: vi.fn() }));
 vi.mock('@/features/settings/voice-config-api', async importOriginal => ({
   ...await importOriginal<typeof import('@/features/settings/voice-config-api')>(),
+  fetchBosonVoiceSettings: api.boson, saveBosonVoiceSettings: api.saveBoson,
   fetchVoiceProviders: async () => ({providers: []}),
   fetchVoiceSttProviders: async () => ({providers: []}),
 }));
 vi.mock('@/features/settings/image-generation-api', () => ({fetchImageCatalog: async () => ({providers: []})}));
 vi.mock('../provider-setup-api', () => ({ fetchModelSetup: api.fetch, previewModelSetup: api.preview, applyModelSetup: api.apply }));
 vi.mock('@/features/settings/global-defaults-api', () => ({ fetchGlobalDefaults: api.defaults }));
-vi.mock('@/features/gateway/gateway-config-swr', () => ({ useGatewayConfigSwr: () => ({ data: api.voiceConfig() }) }));
+vi.mock('@/features/gateway/gateway-config-swr', () => ({ useGatewayConfigSwr: () => ({ data: api.voiceConfig() }), revalidateGatewayConfig: vi.fn(async () => {}) }));
 vi.mock('@/components/ui/popover-select', () => ({ PopoverSelect: ({ options, value, disabled, ariaLabel, selectedLabel, onChange }: {
   options: Array<{ value: string; label: string }>; value: string; disabled: boolean; ariaLabel: string; selectedLabel?: string; onChange: (ref: string) => void;
 }) => <fieldset aria-label={ariaLabel} data-value={value}><legend>{selectedLabel}</legend>{options.map(option => <button key={option.value} data-value={option.value} disabled={disabled} onClick={() => onChange(option.value)}>{option.label}</button>)}</fieldset> }));
@@ -39,6 +40,7 @@ let current: string;
 beforeEach(() => {
   vi.clearAllMocks(); current = 'old/chat';
   api.voiceConfig.mockReturnValue(undefined);
+  api.boson.mockResolvedValue({ credentialSource: null, defaultForNatural: false, legacyModel: null });
   api.fetch.mockImplementation(async provider => preview(provider));
   api.preview.mockImplementation(async provider => preview(provider));
   api.apply.mockResolvedValue(undefined);
@@ -85,12 +87,23 @@ it('honors server restrictions for a model alias even when provider metadata loo
   expect(container.querySelector('[aria-label="选择 自动与后台任务"]')?.getAttribute('data-value')).toBe('');
 });
 
-it.each([[false, 'omni'], [true, 'agent']] as const)('does not show dormant Omni settings when enabled=%s and engine=%s', async (enabled, defaultEngine) => {
+it('selects Higgs in the same picker as Cloud without sending an unrelated voice change', async () => {
+  api.boson.mockResolvedValue({ credentialSource: 'env', defaultForNatural: false, legacyModel: null });
+  api.saveBoson.mockResolvedValue({ credentialSource: 'env', defaultForNatural: true, legacyModel: null });
+  await render();
+  const picker = container.querySelector('[aria-label="选择 自然语音模型"]');
+  expect(picker?.textContent).toContain(`${cloud} conversation`);
+  await choose('Higgs Realtime');
+  expect(api.saveBoson).toHaveBeenCalledExactlyOnceWith({ defaultForNatural: true });
+  expect(picker?.getAttribute('data-value')).toBe('boson/higgs-realtime');
+});
+
+it.each([[false, 'omni'], [true, 'agent']] as const)('shows the active natural model independently of the call mode when enabled=%s and engine=%s', async (enabled, defaultEngine) => {
   api.voiceConfig.mockReturnValue({ payload: { config: { voice: { realtime: { enabled, defaultEngine, omni: { provider: plan, model: 'conversation' } } } } } });
   await render();
-  expect(container.querySelector('[aria-label="选择 实时语音对话"]')?.getAttribute('data-value')).toBe(enabled && defaultEngine === 'agent' ? 'agent' : '');
-  await choose(`${plan} conversation`);
-  expect(api.apply).toHaveBeenCalledExactlyOnceWith(plan, { mode: 'replace', selected: ['conversation'], overrides: { conversation: `${plan}/conversation` } }, 'a'.repeat(64));
+  expect(container.querySelector('[aria-label="选择 自然语音模型"]')?.getAttribute('data-value')).toBe(enabled ? `${plan}/conversation` : '');
+  await choose(`${enabled ? cloud : plan} conversation`);
+  expect(api.apply).toHaveBeenCalledExactlyOnceWith(enabled ? cloud : plan, { mode: 'replace', selected: ['conversation'], overrides: { conversation: `${enabled ? cloud : plan}/conversation` } }, 'a'.repeat(64));
 });
 
 it.each([['chat', plan], ['transcription', plan], ['background', cloud]] as const)('switches only %s with a fresh server revision', async (use, provider) => {

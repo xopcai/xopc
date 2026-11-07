@@ -1,5 +1,5 @@
 import { withModelUsageOrigin } from '../../../providers/model-usage.js';
-import { VOICE_TIMING_METRICS, voiceSelectionSchema } from '@xopcai/realtime-protocol/voice';
+import { HIGGS_REALTIME_REF, higgsVoiceSchema, VOICE_TIMING_METRICS, voiceSelectionSchema } from '@xopcai/realtime-protocol/voice';
 import { voiceSettingsCatalog, selectPlatformVoice } from '../../../voice/platform-settings.js';
 /**
  * Voice routes — POST /api/voice/transcriptions (multipart).
@@ -11,7 +11,8 @@ import { voiceSettingsCatalog, selectPlatformVoice } from '../../../voice/platfo
 import type { Context, Hono } from 'hono';
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 import { createVoiceSessionRequestSchema } from '@xopcai/realtime-protocol/voice';
-import { isPersonalConversation } from '../../../personal-agent/repository.js';
+import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { getCredentialResolver } from '../../../auth/credentials.js';
 import { z } from 'zod';
 
 import type { Config } from '../../../config/schema.js';
@@ -32,10 +33,11 @@ import { listSttProvidersForApi } from '../../../voice/stt/list-providers.js';
 import { resolveSttProviderConfigSlice } from '../../../voice/stt/config-slice.js';
 import { resolveTtsProviderConfigSlice } from '../../../voice/tts/config-slice.js';
 import { resolveStreamingStt, resolveStreamingTts, VoiceSessionCreationError } from '../../../voice/realtime/runtime.js';
-import { resolveOmniRoute } from '../../../voice/realtime/omniRoute.js';
+import { legacyNaturalModel, resolveOmniRoute, selectedNaturalModel } from '../../../voice/realtime/omniRoute.js';
 import { speakStream } from '../../../voice/tts/speak-core.js';
 import { PlatformVoiceError } from '../../../voice/platform-streams.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
+import { withGatewayConfigWriteLock } from '../lib/config-write-lock.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -190,6 +192,68 @@ async function refineTranscript(
 
 export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+  const bosonSettings = async () => {
+    const config = service.currentConfig as Config;
+    const settings = config.voice?.realtime?.boson;
+    const current = config.voice?.realtime?.omni;
+    const legacyModelLabel = current?.provider === 'xopc-cloud'
+      ? getModelCatalogStore().getSource(current.provider)?.models.find(model => model.id === current.model)?.name
+      : undefined;
+    return {
+      credentialSource: await getCredentialResolver().resolveApiKeySource('boson'),
+      defaultForNatural: settings?.defaultForNatural ?? false,
+      voice: settings?.voice ?? 'default',
+      legacyModel: legacyNaturalModel(config) ?? null,
+      legacyModelLabel,
+    };
+  };
+  authenticated.get('/api/voice/boson', async c => {
+    if (getGatewayPrincipal(c).kind !== 'owner') return c.json({ ok: false, error: { message: 'Owner access is required' } }, 403);
+    return c.json({ ok: true, payload: await bosonSettings() });
+  });
+  authenticated.post('/api/voice/boson/reveal-api-key', strictRateLimitMiddleware, async c => {
+    c.header('Cache-Control', 'no-store');
+    if (getGatewayPrincipal(c).kind !== 'owner') return c.json({ ok: false, error: { message: 'Owner access is required' } }, 403);
+    const apiKey = await getCredentialResolver().revealGatewayStoredApiKey('boson');
+    return c.json({ ok: true, payload: { apiKey, source: apiKey ? 'credential' : 'none' } });
+  });
+  authenticated.put('/api/voice/boson', strictRateLimitMiddleware, async c => {
+    if (getGatewayPrincipal(c).kind !== 'owner') return c.json({ ok: false, error: { message: 'Owner access is required' } }, 403);
+    const parsed = z.union([
+      z.strictObject({ apiKey: z.string().trim().min(1).max(512).regex(/^[!-~]+$/).nullable() }),
+      z.strictObject({ defaultForNatural: z.boolean().optional(), voice: higgsVoiceSchema.optional() })
+        .refine(settings => settings.defaultForNatural !== undefined || settings.voice !== undefined),
+    ]).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: { message: 'Invalid Boson settings' } }, 400);
+    const input = parsed.data;
+    return withModelConfigLock('__voice_settings__', async () => {
+      try {
+        const credentials = getCredentialResolver();
+        if ('apiKey' in input) {
+          if (input.apiKey) await credentials.saveApiKey('boson', input.apiKey);
+          else await credentials.deleteProfile('boson:default');
+        } else if ('defaultForNatural' in input || 'voice' in input) {
+          if (input.defaultForNatural && !await credentials.hasCredentials('boson')) {
+            return c.json({ ok: false, error: { message: 'Connect Boson before selecting Higgs as the default' } }, 409);
+          }
+          const saved = await withGatewayConfigWriteLock(service, async () => {
+            const previous = structuredClone(service.currentConfig as Config);
+            const next = structuredClone(previous);
+            const current = previous.voice.realtime.boson;
+            next.voice.realtime.boson = {
+              defaultForNatural: input.defaultForNatural ?? current?.defaultForNatural ?? false,
+              voice: input.voice ?? current?.voice ?? 'default',
+            };
+            return service.saveConfig(next, previous);
+          });
+          if (!saved.saved) return c.json({ ok: false, error: { message: 'Could not save Boson settings' } }, saved.conflict ? 409 : 500);
+        }
+        return c.json({ ok: true, payload: await bosonSettings() });
+      } catch {
+        return c.json({ ok: false, error: { message: 'Could not save Boson settings' } }, 500);
+      }
+    });
+  });
 
   authenticated.get('/api/voice/catalog', (c) => c.json({ ok: true, payload: voiceSettingsCatalog(service.currentConfig as Config) }));
   authenticated.post('/api/voice/catalog/refresh', strictRateLimitMiddleware, async (c) => {
@@ -227,7 +291,9 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       capabilities: {
         dictation: availability(Boolean(stt)),
         assistant: availability(Boolean(stt && tts)),
-        natural: availability(Boolean(omni)),
+        natural: selectedNaturalModel(config) === HIGGS_REALTIME_REF
+          ? omni ? { available: true } : { available: false, reasonCode: 'PROVIDER_UNAVAILABLE' }
+          : availability(Boolean(omni)),
         languages: ['zh', 'en'],
         bargeIn: config.voice?.realtime?.bargeIn ?? true,
         mediaTransports: ['websocket-pcm'],
@@ -299,10 +365,8 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (!parsed.success) {
       return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Invalid realtime voice session request' } }, 400);
     }
-    if (parsed.data.conversationId && isPersonalConversation(parsed.data.conversationId) && parsed.data.mode !== 'assistant') {
-      return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Personal AI voice requires assistant mode' } }, 400);
-    }
     try {
+      if (parsed.data.testHiggsVoice && getGatewayPrincipal(c).kind !== 'owner') return c.json({ ok: false, error: { message: 'Owner access is required' } }, 403);
       const preparation = parsed.data.conversationId ? getSessionPreparation(parsed.data.conversationId) : undefined;
       if (preparation && preparation.state !== 'ready') return c.json({ ok: false, error: { code: 'SESSION_PREPARING', message: 'Session environment is not ready' } }, 409);
       if (action === 'preflight') {

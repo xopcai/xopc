@@ -51,7 +51,7 @@ export interface VoiceRealtimeRuntimeOptions {
   onConversationInput?: (conversationId: string) => void;
   isPrincipalActive?: (principalId: string) => boolean;
   recordOmniTranscript?: (conversationId: string, callId: string, entry: OmniTranscript, expectedTranscriptId: string) => Promise<void>;
-  getConversationContext?: (conversationId: string, expectedTranscriptId: string) => Promise<VoiceConversationContext>;
+  getConversationContext?: (conversationId: string, expectedTranscriptId: string, baseInstructions: string) => Promise<VoiceConversationContext>;
   getSessionIdentity?: (conversationId: string) => Promise<string | undefined>;
   getConfig: () => Config;
   sessionExists: (conversationId: string) => Promise<boolean>;
