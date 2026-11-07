@@ -54,9 +54,9 @@ it('switches immediately, retains the mounted assistant and keeps the latest cho
   expect(button('Natural voice').getAttribute('aria-pressed')).toBe('true');
   expect(assistant?.closest('[inert]')).not.toBeNull();
   await act(async () => button('Current assistant').click());
-  await act(async () => pending[0]!.resolve(true));
+  await act(async () => pending[0].resolve(true));
   expect(button('Current assistant').getAttribute('aria-pressed')).toBe('true');
-  await act(async () => pending[1]!.resolve(true));
+  await act(async () => pending[1].resolve(true));
   expect(button('Current assistant').getAttribute('aria-pressed')).toBe('true');
   expect(container.querySelector('[aria-label="Assistant voice"]')).toBe(assistant);
   expect(mounted).toHaveBeenCalledOnce();
@@ -65,6 +65,6 @@ it('switches immediately, retains the mounted assistant and keeps the latest cho
 it('restores the saved call mode when the latest save fails', async () => {
   await act(async () => button('Natural voice').click());
   expect(button('Natural voice').getAttribute('aria-pressed')).toBe('true');
-  await act(async () => pending[0]!.resolve(false));
+  await act(async () => pending[0].resolve(false));
   expect(button('Current assistant').getAttribute('aria-pressed')).toBe('true');
 });
