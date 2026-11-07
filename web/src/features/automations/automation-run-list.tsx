@@ -40,6 +40,7 @@ export function AutomationRunList({ automationId, projectId, language, selectedR
   const visible = currentRun?.automationId === automationId && !recent.some(run => run.id === currentRun.id) ? [currentRun, ...recent] : recent;
   const loadingMore = isValidating && (!data || data.length < size);
   const buttonClass = 'w-full rounded-lg px-3 py-2 text-left text-xs text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent';
+  if (data && visible.length === 0 && !error) return null;
   return <div className="space-y-1 pb-3 pl-8 pr-2" aria-label={zh ? '执行记录' : 'Execution history'}>
     {!data && !error ? <div aria-busy="true" className="space-y-2 px-3 py-2"><Skeleton className="h-8" /><Skeleton className="h-8" /></div> : null}
     {visible.map(run => {
@@ -56,7 +57,6 @@ export function AutomationRunList({ automationId, projectId, language, selectedR
         : <button key={run.id} type="button" className={className}
           aria-current={current} onClick={() => onSelectRun(run)}>{content}</button>;
     })}
-    {data && runs.length === 0 ? <p className="px-3 py-2 text-xs text-fg-muted">{zh ? '尚未执行' : 'No executions yet'}</p> : null}
     {error ? <div role="alert" className="px-3 py-2 text-xs text-danger"><p>{zh ? '执行记录加载失败' : 'Could not load history'}</p><button type="button" className={buttonClass} onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</button></div> : null}
     {!all && (runs.length > 3 || data?.[0]?.hasMore) ? <button type="button" className={buttonClass} onClick={() => setAll(true)}>{zh ? '查看全部执行' : 'View all executions'}</button> : null}
     {all && data?.at(-1)?.hasMore ? <button type="button" className={buttonClass} disabled={loadingMore} onClick={() => void setSize(size + 1)}>{loadingMore ? (zh ? '加载中…' : 'Loading…') : (zh ? '加载更多' : 'Load more')}</button> : null}
