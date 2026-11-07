@@ -27,6 +27,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build Node runtime for subprocess tests
+        run: pnpm run build:node
       - name: Rebuild and verify native terminal runtime
         run: |
           npm_config_build_from_source=true pnpm rebuild node-pty
