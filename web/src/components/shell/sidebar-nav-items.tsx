@@ -8,7 +8,7 @@ import {
   Puzzle,
   Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type DragEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
@@ -26,7 +26,9 @@ import {
   type ProductDomainId,
 } from '@/navigation/product-navigation';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useNavOrderStore } from '@/stores/nav-order-store';
 
+const DRAG_MIME = 'application/x-xopc-sidebar-nav';
 const DEFAULT_VISIBLE_ITEMS = 3;
 const SIDEBAR_DOMAIN_IDS = ['work', 'capabilities', 'automation', 'apps'] as const;
 
@@ -80,21 +82,20 @@ export function SidebarNavItems({
   const { profile, displayName } = usePersonalProfile();
   const personalUnreadCount = usePersonalUnread();
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const order = useNavOrderStore((state) => state.order);
+  const setOrder = useNavOrderStore((state) => state.setOrder);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{ id: string; after: boolean } | null>(null);
   const builtins: MenuItem[] = SIDEBAR_DOMAIN_IDS.map((domainId) => {
     const domain = PRODUCT_DOMAINS.find((item) => item.id === domainId)!;
     return {
-      id: domainId,
+      id: `builtin:${domainId === 'automation' ? 'automations' : domainId === 'apps' ? 'localApps' : domainId}`,
       label: copy.domains[domainId],
       to: domain.path,
       Icon: DOMAIN_ICONS[domainId],
       active: activeDomain === domainId,
     };
   });
-  const limit = Number.isFinite(visibleLimit)
-    ? Math.min(builtins.length, Math.max(1, Math.round(visibleLimit)))
-    : DEFAULT_VISIBLE_ITEMS;
-  const visibleItems = builtins.slice(0, limit);
-  const overflowItems = builtins.slice(limit);
   const extensionItems: MenuItem[] = uiExtensions.flatMap((extension) => {
     if (extension.activationEligible === false) return [];
     return (extension.ui?.contributions?.pages ?? [])
@@ -102,7 +103,7 @@ export function SidebarNavItems({
       .map((page) => {
         const to = extensionPagePath(extension.id, page);
         return {
-          id: `extension:${extension.id}:${page.id}`,
+          id: `ext:${extension.id}:${page.id}`,
           label: page.title,
           to,
           Icon: page.navIcon ? resolveLucideIcon(page.navIcon) ?? Puzzle : Puzzle,
@@ -110,14 +111,69 @@ export function SidebarNavItems({
         };
       });
   });
-  const overflowActive = overflowItems.some((item) => item.active) || extensionItems.some((item) => item.active);
+  const available = [...builtins, ...extensionItems];
+  const byId = new Map(available.map((item) => [item.id, item]));
+  const orderedIds = [...new Set([...order, ...byId.keys()])].filter((id) => byId.has(id));
+  const ordered = orderedIds.map((id) => byId.get(id)!);
+  const limit = Number.isFinite(visibleLimit)
+    ? Math.min(available.length, Math.max(1, Math.round(visibleLimit)))
+    : DEFAULT_VISIBLE_ITEMS;
+  const visibleItems = ordered.slice(0, limit);
+  const overflow = ordered.slice(limit);
+  const overflowItems = overflow.filter((item) => !item.id.startsWith('ext:'));
+  const overflowExtensions = overflow.filter((item) => item.id.startsWith('ext:'));
+  const overflowActive = overflow.some((item) => item.active);
+
+  const endDrag = () => {
+    setDraggingId(null);
+    setDropHint(null);
+  };
+  const isAfter = (event: DragEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return event.clientY >= rect.top + rect.height / 2;
+  };
+  const drop = (event: DragEvent<HTMLElement>, targetId?: string) => {
+    const id = event.dataTransfer.getData(DRAG_MIME);
+    if (!draggingId || id !== draggingId || !byId.has(id)) return;
+    event.preventDefault();
+    if (id !== targetId) {
+      const next = orderedIds.filter((existing) => existing !== id);
+      const index = targetId ? next.indexOf(targetId) + (isAfter(event) ? 1 : 0) : next.length;
+      next.splice(index, 0, id);
+      // Retain unavailable extensions so temporarily disabling one preserves its preference.
+      setOrder([...next, ...order.filter((existing) => !byId.has(existing))]);
+    }
+    endDrag();
+    setPopoverOpen(false);
+  };
 
   const renderLink = (item: MenuItem, inPopover = false) => (
     <Link
       key={item.id}
       to={item.to}
       aria-current={item.active ? 'page' : undefined}
-      className={rowClass(collapsed, item.active, inPopover)}
+      className={cn(
+        rowClass(collapsed, item.active, inPopover),
+        draggingId === item.id && 'opacity-40',
+        dropHint?.id === item.id && (dropHint.after
+          ? 'shadow-[inset_0_-2px_0_0_var(--color-accent)]'
+          : 'shadow-[inset_0_2px_0_0_var(--color-accent)]'),
+      )}
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData(DRAG_MIME, item.id);
+        event.dataTransfer.effectAllowed = 'move';
+        setDraggingId(item.id);
+      }}
+      onDragEnd={endDrag}
+      onDragOver={(event) => {
+        if (!draggingId || draggingId === item.id) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setDropHint({ id: item.id, after: isAfter(event) });
+      }}
+      onDragLeave={() => setDropHint(null)}
+      onDrop={(event) => drop(event, item.id)}
       title={item.label}
       onMouseEnter={() => preloadRouteForPath(item.to)}
       onFocus={() => preloadRouteForPath(item.to)}
@@ -153,16 +209,26 @@ export function SidebarNavItems({
         >{personalUnreadLabel(personalUnreadCount)}</span>}
       </Link>
       {visibleItems.map((item) => renderLink(item))}
-      {overflowItems.length > 0 || extensionItems.length > 0 ? <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
+      {overflow.length > 0 ? <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
         <Popover.Trigger asChild>
           <button
             type="button"
+            onDragOver={(event) => {
+              if (!draggingId) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'move';
+              setDropHint({ id: 'more', after: false });
+              setPopoverOpen(true);
+            }}
+            onDragLeave={() => setDropHint(null)}
+            onDrop={(event) => drop(event)}
             aria-label={m.sidebar.moreAppsAria}
             title={m.sidebar.moreApps}
             className={cn(
               'flex w-full items-center text-sm font-medium leading-6 transition-colors duration-200 ease-out',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
               collapsed ? 'justify-center rounded-xl p-2.5' : 'gap-2 rounded-lg px-3 py-2.5 text-left md:py-1.5',
+              dropHint?.id === 'more' && 'ring-2 ring-accent',
               popoverOpen || overflowActive
                 ? 'bg-surface-active text-fg'
                 : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
@@ -183,12 +249,12 @@ export function SidebarNavItems({
           >
             <nav className="flex flex-col gap-1" aria-label={m.sidebar.moreAppsAria}>
               {overflowItems.map((item) => renderLink(item, true))}
-              {extensionItems.length > 0 ? (
+              {overflowExtensions.length > 0 ? (
                 <section aria-labelledby="sidebar-more-extension-apps">
                   <div id="sidebar-more-extension-apps" className="px-2 pb-1 pt-1.5 text-[11px] font-semibold tracking-wide text-fg-subtle">
                     {m.sidebar.extensionAppsHeading}
                   </div>
-                  <div className="flex flex-col gap-0.5">{extensionItems.map((item) => renderLink(item, true))}</div>
+                  <div className="flex flex-col gap-0.5">{overflowExtensions.map((item) => renderLink(item, true))}</div>
                 </section>
               ) : null}
             </nav>
