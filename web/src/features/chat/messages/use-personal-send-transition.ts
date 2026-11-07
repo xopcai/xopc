@@ -20,17 +20,18 @@ function animateSend(source: Point, bubble: HTMLElement, viewport: HTMLElement):
   if (typeof bubble.animate !== 'function') return () => {};
   const article = bubble.closest<HTMLElement>('article');
   if (article) article.style.animation = 'none';
-  // Animate the real bubble with bounded motion; never replace visible content
-  // with a detached clone while transcript reconciliation can replace its row.
+  // Keep the real bubble in the transcript so reconciliation cannot strand a
+  // hidden row. The full displacement preserves continuity with the composer.
   const settledTarget = bubble.getBoundingClientRect();
-  const dx = Math.max(-8, Math.min(8, source.left - settledTarget.left));
-  const dy = Math.max(-8, Math.min(8, source.top - settledTarget.top));
+  const dx = source.left - settledTarget.left;
+  const dy = source.top - settledTarget.top;
+  const duration = 360;
   let animation: Animation;
   try {
     animation = bubble.animate([
       { transform: `translate3d(${dx}px, ${dy}px, 0)` },
       { transform: 'translate3d(0, 0, 0)' },
-    ], { duration: 180, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+    ], { duration, easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)' });
   } catch {
     return () => {};
   }
@@ -48,15 +49,17 @@ function animateSend(source: Point, bubble: HTMLElement, viewport: HTMLElement):
     animation.cancel();
   };
   const onScroll = () => {
-    const current = bubble.getBoundingClientRect();
-    if (Math.abs(current.top - settledTarget.top) > 1 || Math.abs(current.left - settledTarget.left) > 1) finish();
+    // The bubble's own animated rect moves every frame. Check its layout row
+    // instead, allowing automatic tail scrolling to accompany the flight.
+    const row = bubble.closest<HTMLElement>('[data-chat-message-row]');
+    if (!bubble.isConnected || (row && !visibleWithin(row.getBoundingClientRect(), viewport.getBoundingClientRect()))) finish();
   };
   viewport.addEventListener('scroll', onScroll, { passive: true });
   viewport.addEventListener('wheel', finish, { passive: true });
   viewport.addEventListener('touchstart', finish, { passive: true });
   window.addEventListener('resize', finish);
   // Settle interrupted animations promptly, including background tabs.
-  restoreTimer = window.setTimeout(finish, 350);
+  restoreTimer = window.setTimeout(finish, duration + 150);
   void animation.finished.then(finish, finish);
   return finish;
 }
@@ -75,6 +78,7 @@ export function usePersonalSendTransition({
 }) {
   const pendingRef = useRef<PendingSend | null>(null);
   const finishRef = useRef<(() => void) | null>(null);
+  const previousConversationRef = useRef(conversationId);
 
   const clear = useCallback(() => {
     if (pendingRef.current) window.clearTimeout(pendingRef.current.timeout);
@@ -85,7 +89,7 @@ export function usePersonalSendTransition({
 
   const onDispatched = useCallback((receipt: ComposerDispatchReceipt, source: DOMRect, draft: ComposerDraft) => {
     clear();
-    if (!enabled || !conversationId || draft.attachments.length > 0 || draft.contextRefs.length > 0
+    if (!enabled || draft.attachments.length > 0 || draft.contextRefs.length > 0
       || !draft.text.trim()
       || document.visibilityState === 'hidden'
       || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -98,7 +102,14 @@ export function usePersonalSendTransition({
       }, 500),
     };
     pendingRef.current = pending;
-  }, [clear, conversationId, enabled]);
+  }, [clear, enabled]);
+
+  useLayoutEffect(() => {
+    const previous = previousConversationRef.current;
+    previousConversationRef.current = conversationId;
+    // Creating the first conversation must not cancel its accepted send.
+    if (previous !== null && previous !== conversationId) clear();
+  }, [clear, conversationId]);
 
   useLayoutEffect(() => {
     const pending = pendingRef.current;
@@ -111,7 +122,7 @@ export function usePersonalSendTransition({
     if (bubble) finishRef.current = animateSend(pending.source, bubble, viewport);
   }, [messages, viewportRef]);
 
-  useEffect(() => clear, [clear, conversationId, enabled]);
+  useEffect(() => clear, [clear, enabled]);
 
   return onDispatched;
 }

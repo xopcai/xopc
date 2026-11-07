@@ -125,6 +125,7 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChan
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0 flex-1">
             <PopoverSelect value={selected} selectedLabel={selectedLabel} options={options}
+              side="top"
               placeholder={defaultLabel} emptyLabel={defaultLabel} ariaLabel={zh ? '选择通话音色' : 'Choose call voice'}
               disabled={busy} onChange={voice => void selectVoice(voice)}
               searchPlaceholder={voices.length > 8 ? (zh ? '搜索音色' : 'Search voices') : undefined}
