@@ -23,6 +23,7 @@ import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
 import { AutomationRunList } from '@/features/automations/automation-run-list';
+import { automationApi } from '@/features/automations/automation-api';
 
 import { allProjectOptions } from '@/features/sessions/session-filter-projects';
 import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
@@ -343,6 +344,12 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   const searchParams = new URLSearchParams(location.search);
   const selectedRunId = location.pathname === '/automations' && searchParams.get('automation') === automationId
     ? searchParams.get('run') ?? undefined : undefined;
+  const { data: automationHistory } = useSWR(
+    automationId ? ['sidebar-automation-history', automationId, session.projectId ?? ''] : null,
+    () => automationApi.runs(1, automationId, { projectId: session.projectId }),
+    { refreshInterval: 15000, revalidateOnFocus: true },
+  );
+  const hasExpandableContent = Boolean(taskGroup?.items.length || automationHistory?.runs.length || selectedRunId);
   const activeTaskId = /^\/chat\/task\/([^/]+)$/.exec(location.pathname)?.[1];
   const activeChild = Boolean(selectedRunId) || (taskGroup?.items.some((child) => child.taskId === activeTaskId
     || child.activeConversationId === chatConversationIdFromPath(location.pathname)) ?? false);
@@ -391,7 +398,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
     <SidebarSortableItem spec={sort}>
     <div>
     <div className={rowShellClass(isActive)}>
-      {taskGroup?.total || automationId ? (
+      {hasExpandableContent ? (
         <button type="button" className="absolute left-0 flex size-6 items-center justify-center text-fg-subtle hover:text-fg"
           aria-label={automationId
             ? tasksExpanded ? sb.automationRunsCollapse : sb.automationRunsExpand
