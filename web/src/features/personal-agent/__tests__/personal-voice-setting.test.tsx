@@ -98,7 +98,7 @@ describe('Personal AI call voice selector', () => {
   it('stops preview when its panel becomes inactive and retains the loaded voices', async () => {
     await render();
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Preview Mia"]')?.click());
-    const signal = mocks.preview.mock.calls[0]![0] as AbortSignal;
+    const signal = mocks.preview.mock.calls[0][0];
     await act(async () => root.render(<MemoryRouter><PersonalVoiceSetting record={{ voicePreference: { provider: 'dashscope', model: 'qwen', voice: 'mia' } } as PersonalAgent}
       zh={false} active={false} onSelectVoice={select} /></MemoryRouter>));
     expect(signal.aborted).toBe(true);
