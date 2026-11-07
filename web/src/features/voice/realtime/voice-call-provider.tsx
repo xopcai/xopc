@@ -1,5 +1,6 @@
 import { openCapabilitySettings } from '@/features/settings/models-hub/open-capability-settings';
 import * as Dialog from '@radix-ui/react-dialog';
+import { Presence } from '@radix-ui/react-presence';
 import { AudioLines, Captions, Ellipsis, Mic, MicOff, Minimize2, Phone, PhoneOff } from 'lucide-react';
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -27,6 +28,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const language = useLocaleStore((state) => state.language);
   const m = messages(language).chat;
   const [target, setTarget] = useState<VoiceCallTarget | null>(null);
+  const lastTargetName = useRef('');
   const [expanded, setExpanded] = useState(false);
   const [more, setMore] = useState(false);
   const captions = useVoicePreferencesStore((state) => state.captions);
@@ -79,6 +81,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const start = (next: VoiceCallTarget) => {
     if (starting.current || active) return;
     starting.current = true;
+    lastTargetName.current = next.name;
     const attempt = ++startAttempt.current;
     voice.cancelVoiceInput();
     setTarget(next);
@@ -89,6 +92,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     conversationId: active ? target?.conversationId ?? null : null,
     open: (next: VoiceCallTarget) => {
       start(next);
+      setMiniPosition(null);
       setExpanded(false);
     },
   };
@@ -110,26 +114,31 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setTarget(null);
     setExpanded(false);
     setMore(false);
-    setMiniPosition(null);
   };
   const settingsPath = `/settings/capabilities/models?configure=conversation&returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
   const settingsLink = <Link to={settingsPath} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); openCapabilitySettings('conversation'); setExpanded(false); } }} className="text-sm text-accent-fg hover:underline">{m.callSettings}</Link>;
 
   return <VoiceCallContext.Provider value={context}>
     {children}
-    {target && !expanded ? <div ref={miniCardRef} style={miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto' } : undefined} className="fixed right-5 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-overlay p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
-      <button type="button" aria-label={language === 'zh' ? '展开通话' : 'Expand call'} onClick={() => { if (suppressMiniClick.current) { suppressMiniClick.current = false; return; } setExpanded(true); }} onPointerDown={startMiniDrag} onPointerMove={moveMiniDrag} onPointerUp={endMiniDrag} onPointerCancel={cancelMiniDrag} className="min-w-0 touch-none select-none rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-        <span className="block truncate text-sm font-medium text-fg">{target.name}</span>
-        <span className="block text-xs text-fg-muted">{status}{connected ? ` · ${voice.elapsedLabel}` : ''}</span>
-      </button>
-      <Button variant="ghost" disabled={!connected} onClick={voice.toggleMute} aria-label={voice.muted ? m.callUnmute : m.callMute}>{voice.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</Button>
-      <Button variant="ghost" onClick={end} aria-label={m.callEnd}><PhoneOff className="size-4 text-red-500" /></Button>
-    </div> : null}
+    <Presence present={Boolean(target && !expanded)}>
+      <div ref={miniCardRef} data-state={target && !expanded ? 'open' : 'closed'} data-side="bottom"
+        inert={!target || expanded} aria-hidden={!target || expanded}
+        style={{ transformOrigin: 'top right', ...(miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto' } : {}) }}
+        className="xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-5 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-overlay p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
+        <button type="button" aria-label={language === 'zh' ? '展开通话' : 'Expand call'} onClick={() => { if (suppressMiniClick.current) { suppressMiniClick.current = false; return; } setExpanded(true); }} onPointerDown={startMiniDrag} onPointerMove={moveMiniDrag} onPointerUp={endMiniDrag} onPointerCancel={cancelMiniDrag} className="min-w-0 touch-none select-none rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <span className="block truncate text-sm font-medium text-fg">{target?.name ?? lastTargetName.current}</span>
+          <span className="block text-xs text-fg-muted">{status}{connected ? ` · ${voice.elapsedLabel}` : ''}</span>
+        </button>
+        <Button variant="ghost" disabled={!connected} onClick={voice.toggleMute} aria-label={voice.muted ? m.callUnmute : m.callMute}>{voice.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</Button>
+        <Button variant="ghost" onClick={end} aria-label={m.callEnd}><PhoneOff className="size-4 text-red-500" /></Button>
+      </div>
+    </Presence>
     <Dialog.Root open={Boolean(target && expanded)} onOpenChange={(open) => { if (!open) setExpanded(false); }} modal={false}>
       <Dialog.Portal>
-        <Dialog.Content onInteractOutside={(event) => event.preventDefault()} className="xopc-dialog-content-pane fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[71] flex h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-fg shadow-float focus:outline-none">
+        <Dialog.Content onInteractOutside={(event) => event.preventDefault()} data-side="bottom" style={{ transformOrigin: 'top right' }}
+          className="xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[71] flex h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-fg shadow-float focus:outline-none">
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
-            <div className="min-w-0"><Dialog.Title className="truncate font-medium">{target?.name}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{m.callSessionHint}</Dialog.Description></div>
+            <div className="min-w-0"><Dialog.Title className="truncate font-medium">{target?.name ?? lastTargetName.current}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{m.callSessionHint}</Dialog.Description></div>
             <div className="flex"><Button variant="ghost" onClick={() => setMore(!more)} aria-label={m.callMore} aria-expanded={more}><Ellipsis className="size-4" /></Button><Button variant="ghost" onClick={() => setExpanded(false)} aria-label={m.callMinimize}><Minimize2 className="size-4" /></Button></div>
           </header>
           {more ? <div className="flex shrink-0 items-center justify-between border-b border-edge px-4 py-2"><Button variant="ghost" aria-pressed={captions} onClick={() => setCaptions(!captions)}><Captions className="size-4" />{m.callCaptions}</Button>{settingsLink}</div> : null}
