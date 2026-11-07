@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ModelSetupUse } from '@xopcai/gateway-contract';
-import { voiceSupportsMode } from '@xopcai/realtime-protocol/voice';
+import { HIGGS_REALTIME_REF, voiceSupportsMode } from '@xopcai/realtime-protocol/voice';
 
 import { listSttProvidersForApi } from '../../voice/stt/list-providers.js';
 import { listTtsProvidersForApi } from '../../voice/tts/list-providers.js';
@@ -68,7 +68,8 @@ export function readSetupVoiceState(provider: string, config: Config): SetupVoic
   const current: SetupVoiceState['current'] = {};
   if (tts?.provider) current.speech = `${tts.provider}/${tts.providers?.[tts.provider]?.model ?? 'default'}`;
   if (stt?.provider) current.transcription = `${stt.provider}/${stt.providers?.[stt.provider]?.model ?? 'default'}`;
-  if (omni) current.conversation = `${omni.provider}/${omni.model}`;
+  if (config.voice?.realtime.boson?.defaultForNatural) current.conversation = HIGGS_REALTIME_REF;
+  else if (omni) current.conversation = `${omni.provider}/${omni.model}`;
   return { current, choices, revision: createHash('sha256').update(JSON.stringify([tts, stt, config.voice, choices])).digest('hex') };
 }
 
@@ -122,7 +123,11 @@ export function applySetupVoice(config: Config, assignments: Array<{ use: VoiceS
         providers: { ...current?.providers, [model.provider]: { ...current?.providers?.[model.provider], model: model.model } } };
     } else throw new Error('No realtime voice configuration binding for this provider');
     if (use === 'speech' && next.messages?.tts) next.messages.tts.fallback = { enabled: false, order: [] };
-    if (use === 'conversation' && next.voice) next.voice.realtime.defaultEngine = 'omni';
+    if (use === 'conversation' && next.voice) {
+      const realtime = next.voice.realtime;
+      if (realtime.boson?.defaultForNatural) realtime.boson.defaultForNatural = false;
+      else realtime.defaultEngine = 'omni';
+    }
     if (use === 'transcription' && next.tools.media?.audio) {
       next.tools.media.audio.fallback = { enabled: false, order: [] };
       next.tools.media.audio.models = [{ provider: model.provider, model: model.model, capabilities: ['audio'] }];

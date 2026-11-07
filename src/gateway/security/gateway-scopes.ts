@@ -81,7 +81,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
     return methodScope(method, 'automations.read', 'automations.write');
   }
 
-  if (path === '/api/voice/selection' || path === '/api/voice/catalog/refresh') return 'voice.configure';
+  if (path === '/api/voice/selection' || path === '/api/voice/catalog/refresh' || path === '/api/voice/boson' || path === '/api/voice/boson/reveal-api-key') return 'voice.configure';
   if (path.startsWith('/api/voice') || path.startsWith('/api/media') || path.startsWith('/api/clarifications')) {
     return 'sessions.write';
   }

@@ -1,6 +1,7 @@
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { higgsVoiceSchema, type HiggsVoice } from '@xopcai/realtime-protocol/voice';
 
 import type { SttSettings, SttProvidersPayload, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload } from './voice-settings.types';
 
@@ -38,6 +39,30 @@ export interface RealtimeVoiceStatus {
     bargeIn: boolean;
     mediaTransports: ['websocket-pcm'];
   };
+}
+
+export interface BosonVoiceSettings {
+  credentialSource: 'agent' | 'global' | 'oauth' | 'env' | null;
+  defaultForNatural: boolean;
+  voice: HiggsVoice;
+  legacyModel: string | null;
+  legacyModelLabel?: string;
+}
+
+export const bosonVoiceSettingsUrl = '/api/voice/boson';
+export async function fetchBosonVoiceSettings(): Promise<BosonVoiceSettings> {
+  return (await fetchJson<{ payload: BosonVoiceSettings }>(apiUrl(bosonVoiceSettingsUrl))).payload;
+}
+
+export async function revealBosonApiKey(): Promise<string | null> {
+  const result = await fetchJson<{ payload: { apiKey: string | null } }>(apiUrl(`${bosonVoiceSettingsUrl}/reveal-api-key`), { method: 'POST' });
+  return result.payload.apiKey;
+}
+
+export async function saveBosonVoiceSettings(change: { apiKey: string | null } | Partial<Pick<BosonVoiceSettings, 'defaultForNatural' | 'voice'>>): Promise<BosonVoiceSettings> {
+  return (await fetchJson<{ payload: BosonVoiceSettings }>(apiUrl(bosonVoiceSettingsUrl), {
+    method: 'PUT', body: JSON.stringify(change),
+  })).payload;
 }
 
 export async function fetchRealtimeVoiceStatus(): Promise<RealtimeVoiceStatus> {
@@ -191,6 +216,7 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
   const input = isRecord(voice.input) ? voice.input : {};
   const refinement = isRecord(input.refinement) ? input.refinement : {};
   const realtime = isRecord(voice.realtime) ? voice.realtime : {};
+  const boson = isRecord(realtime.boson) ? higgsVoiceSchema.safeParse(realtime.boson.voice) : undefined;
   const refinementMode =
     refinement.mode === 'punctuation' ||
     refinement.mode === 'light' ||
@@ -222,6 +248,9 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
         maxDictationMs: typeof realtime.maxDictationMs === 'number' ? realtime.maxDictationMs : 600_000,
         maxConversationMs: typeof realtime.maxConversationMs === 'number' ? realtime.maxConversationMs : 3_600_000,
         bargeIn: realtime.bargeIn !== false,
+        ...(boson?.success && isRecord(realtime.boson) ? {
+          boson: { defaultForNatural: realtime.boson.defaultForNatural === true, voice: boson.data },
+        } : {}),
         ...(isRecord(realtime.stt) && realtime.stt.provider === 'xopc-cloud' && typeof realtime.stt.model === 'string' ? {stt: {provider: 'xopc-cloud' as const, model: realtime.stt.model}} : {}),
         ...(isRecord(realtime.tts) && (realtime.tts.provider === 'alibaba' || realtime.tts.provider === 'xopc-cloud')
           ? { tts: {

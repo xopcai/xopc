@@ -35,8 +35,17 @@ export function CapabilitySettingsSheet() {
         if (!nearestDialog?.closest('[data-capability-settings-sheet]')) setPortalHost(nearestDialog?.parentElement?.closest<HTMLElement>('[role="dialog"]') ?? nearestDialog ?? null);
       } setUse(use); setPurpose(detail?.purpose === 'phone' || detail?.purpose === 'automation' ? detail.purpose : undefined); setOpen(true); setView(detail?.view === 'services' ? 'services' : 'settings'); }
     };
+    const close = () => {
+      if (pending) return;
+      returnFocus.current = null;
+      setOpen(false);
+    };
     window.addEventListener('open-capability-settings', open);
-    return () => window.removeEventListener('open-capability-settings', open);
+    window.addEventListener('close-capability-settings', close);
+    return () => {
+      window.removeEventListener('open-capability-settings', open);
+      window.removeEventListener('close-capability-settings', close);
+    };
   }, [pending]);
   useLayoutEffect(() => {
     const element = body.current;

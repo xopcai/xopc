@@ -29,6 +29,7 @@ function createVoice(
     mode: 'dictation',
     startVoiceInput: vi.fn(async () => {}),
     startVoiceConversation: vi.fn(async () => {}),
+    startHiggsTest: vi.fn(async () => {}),
     interruptResponse: vi.fn(),
     toggleMute: vi.fn(),
     cancelVoiceInput: vi.fn(),

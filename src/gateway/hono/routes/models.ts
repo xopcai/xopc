@@ -941,6 +941,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         return c.json({ ok: false, error: { message: 'Missing providerId' } }, 400);
       }
       const providerId = rawId.toLowerCase();
+      if (providerId === 'boson') return c.json({ ok: false, error: { message: 'Manage Boson credentials in voice settings' } }, 403);
       const resolver = new CredentialResolver();
       const stored = await resolver.revealGatewayStoredApiKey(providerId);
       if (stored) {

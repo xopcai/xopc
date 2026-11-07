@@ -1,4 +1,5 @@
 import { CheckCircle2, Copy, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useId } from 'react';
 import type { KeyboardEventHandler, Ref } from 'react';
 
 import { settingsInputFocusClass } from '@/lib/form-field-width';
@@ -88,6 +89,8 @@ export function SecretInput({
   } = useSecretField({ value, reveal, loadFailedLabel, baselineValue, allowUnrevealedCopy });
 
   const readOnly = readOnlyProp || concealedReadOnly;
+  const errorId = useId();
+  const descriptionIds = [ariaDescribedBy, revealErr ? errorId : undefined].filter(Boolean).join(' ');
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
@@ -97,7 +100,7 @@ export function SecretInput({
           ref={inputRef}
           id={id}
           name={name}
-          aria-describedby={ariaDescribedBy}
+          aria-describedby={descriptionIds || undefined}
           aria-invalid={ariaInvalid || undefined}
           type={inputType}
           autoComplete={autoComplete}
@@ -154,7 +157,7 @@ export function SecretInput({
       {masked && showKey && revealed === null && !revealErr && notInConfigFile ? (
         <p className="text-xs text-amber-700 dark:text-amber-400/90">{notInConfigFile}</p>
       ) : null}
-      {revealErr ? <p className="text-xs text-red-600 dark:text-red-400">{revealErr}</p> : null}
+      {revealErr ? <p id={errorId} role="alert" className="break-words text-xs text-danger">{revealErr}</p> : null}
     </div>
   );
 }

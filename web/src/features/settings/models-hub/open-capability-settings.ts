@@ -4,3 +4,7 @@ import type { ModelSetupUse } from '@xopcai/gateway-contract';
 export function openCapabilitySettings(use: ModelSetupUse, view: 'settings' | 'services' = 'settings', purpose?: 'phone' | 'automation') {
   window.dispatchEvent(new CustomEvent('open-capability-settings', { detail: { use, view, purpose } }));
 }
+
+export function closeCapabilitySettings() {
+  window.dispatchEvent(new Event('close-capability-settings'));
+}

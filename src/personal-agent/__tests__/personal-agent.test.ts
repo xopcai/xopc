@@ -128,7 +128,7 @@ describe('personal Agent identity', () => {
       expect(codeCandidates.find(candidate => candidate.id === 'researcher')).toMatchObject({ eligibility: 'blocked' });
       expect(await updatePersonalProfileRecord('local-owner', 999, '阿沐', 'spark')).toBeNull();
       const updated = await updatePersonalProfileRecord('local-owner', first.revision, '阿沐',
-        'cloud', undefined, { openingGreetingEnabled: false });
+        'cloud', undefined, { openingGreetingEnabled: false, defaultMode: 'natural', naturalModel: 'boson/higgs-realtime', higgsVoice: 'chloe' });
       expect(updated?.revision).toBe(first.revision + 1);
       expect(updated?.voiceCallPreferences.openingGreetingEnabled).toBe(false);
       const preserved = await updatePersonalProfileRecord('local-owner', updated!.revision, '阿沐',
@@ -149,7 +149,15 @@ describe('personal Agent identity', () => {
           appearance: 'loopi', preferences: { warmth: 'gentle' } }) });
       expect(obsoleteResponse.status).toBe(400);
 
-      expect(await profileResponse.json()).toMatchObject({ payload: { voiceCallPreferences: { openingGreetingEnabled: true } } });
+      expect(await profileResponse.json()).toMatchObject({ payload: { voiceCallPreferences: {
+        openingGreetingEnabled: true, defaultMode: 'natural', naturalModel: 'boson/higgs-realtime', higgsVoice: 'chloe',
+      } } });
+      const current = getPersonalAgent('local-owner')!;
+      const inheritResponse = await fetch(`${url}/profile`, { method: 'PATCH', headers,
+        body: JSON.stringify({ revision: current.revision, displayName: current.displayName, appearance: current.appearance,
+          voiceCallPreferences: { naturalModel: null, higgsVoice: null } }) });
+      expect(inheritResponse.status).toBe(200);
+      expect((await inheritResponse.json()).payload.voiceCallPreferences).toEqual({ openingGreetingEnabled: true, defaultMode: 'natural' });
       expect((await fetch(url)).status).toBe(401);
       const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
       expect(response.status).toBe(200);

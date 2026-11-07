@@ -1,6 +1,7 @@
 import { PhoneConfigSchema } from '../phone/contracts.js';
 import { getModelUsageOrigin } from '../providers/model-usage.js';
 import { z } from 'zod';
+import { higgsVoiceSchema } from '@xopcai/realtime-protocol/voice';
 
 import semver from 'semver';
 import { TracingConfigSchema } from '../observability/config.js';
@@ -861,6 +862,7 @@ export const VoiceConfigSchema = z
         maxDictationMs: z.number().int().min(10_000).max(3_600_000).default(600_000),
         maxConversationMs: z.number().int().min(10_000).max(7_200_000).default(3_600_000),
         bargeIn: z.boolean().default(true),
+        boson: z.strictObject({ defaultForNatural: z.boolean(), voice: higgsVoiceSchema }).optional(),
         stt: z.object({ provider: z.literal('xopc-cloud'), model: z.string().min(1).max(200) }).strict().optional(),
         /** Conversation output selection; credentials stay in the provider configuration. */
         tts: z.object({

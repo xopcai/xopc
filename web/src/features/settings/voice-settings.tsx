@@ -46,6 +46,7 @@ import { CapabilitySettingsLink } from './models-hub/capability-settings-link';
 import { DictationSettingsSummary } from './dictation-settings-summary';
 import { VoiceSetup } from './voice-setup';
 import { OmniVoiceSettings } from './omni-voice-settings';
+import { BosonVoiceSettings } from './boson-voice-settings';
 
 const credentialFieldWidthClass = selectFieldMaxWidthClass;
 
@@ -195,7 +196,10 @@ type VoiceSettingsPanelProps = { capability: 'transcription' | 'speech' | 'conve
 
 export function VoiceSettingsPanel(props: VoiceSettingsPanelProps) {
   const [generation, setGeneration] = useState(0);
-  return <VoiceSettingsEditor key={generation} {...props} onReload={() => setGeneration(value => value + 1)} />;
+  return <div className="space-y-4">
+    {props.capability === 'conversation' && <BosonVoiceSettings disabled={props.disabled} />}
+    <VoiceSettingsEditor key={generation} {...props} onReload={() => setGeneration(value => value + 1)} />
+  </div>;
 }
 
 function VoiceSettingsEditor({ capability, onPendingChange, disabled = false, onReload }: VoiceSettingsPanelProps & { onReload: () => void }) {

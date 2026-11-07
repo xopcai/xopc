@@ -15,6 +15,22 @@ const timestampSchema = z.number().int().nonnegative();
 
 export const voicePurposeSchema = z.enum(['dictation', 'conversation']);
 export const voiceModeSchema = z.enum(['natural', 'assistant']);
+export const HIGGS_REALTIME_REF = 'boson/higgs-realtime';
+export const HIGGS_REALTIME_VOICES = ['default', 'chloe', 'oliver'] as const;
+export const higgsVoiceSchema = z.enum(HIGGS_REALTIME_VOICES);
+export type HiggsVoice = z.infer<typeof higgsVoiceSchema>;
+export const voiceCallPreferencesSchema = z.strictObject({
+  openingGreetingEnabled: z.boolean(),
+  defaultMode: voiceModeSchema.optional(),
+  naturalModel: z.string().trim().min(1).max(300).optional(),
+  higgsVoice: higgsVoiceSchema.optional(),
+});
+export type VoiceCallPreferences = z.infer<typeof voiceCallPreferencesSchema>;
+export const voiceCallPreferencesPatchSchema = voiceCallPreferencesSchema.partial().extend({
+  naturalModel: voiceCallPreferencesSchema.shape.naturalModel.unwrap().nullable().optional(),
+  higgsVoice: higgsVoiceSchema.nullable().optional(),
+});
+export type VoiceCallPreferencesPatch = z.infer<typeof voiceCallPreferencesPatchSchema>;
 export const voiceInputModeSchema = z.literal('server_vad');
 export const voiceLanguageSchema = z.enum(['zh', 'en']);
 export const VOICE_TIMING_METRICS = [
@@ -65,6 +81,8 @@ export type RealtimeVoiceStatus = z.infer<typeof realtimeVoiceStatusSchema>;
 export const createVoiceSessionRequestSchema = z.strictObject({
   purpose: voicePurposeSchema,
   mode: voiceModeSchema.optional(),
+  naturalBackend: z.literal('higgs').optional(),
+  testHiggsVoice: higgsVoiceSchema.optional(),
   conversationId: z.string().min(1).max(512).optional(),
   language: voiceLanguageSchema.optional(),
   openingGreeting: z.strictObject({
@@ -75,11 +93,17 @@ export const createVoiceSessionRequestSchema = z.strictObject({
   supportedProtocolVersions: z.tuple([z.literal(VOICE_REALTIME_PROTOCOL_VERSION)]),
   mediaPreferences: z.tuple([z.literal('websocket-pcm')]),
 }).superRefine((value, context) => {
-  if (value.purpose === 'conversation' && !value.conversationId) {
+  if (value.purpose === 'conversation' && !value.conversationId && !value.testHiggsVoice) {
     context.addIssue({ code: 'custom', path: ['conversationId'], message: 'conversationId is required for conversation' });
   }
   if (value.purpose !== 'conversation' && value.mode !== undefined) {
     context.addIssue({ code: 'custom', path: ['mode'], message: 'mode is only supported for conversation' });
+  }
+  if (value.naturalBackend && value.mode !== 'natural') {
+    context.addIssue({ code: 'custom', path: ['naturalBackend'], message: 'naturalBackend requires natural mode' });
+  }
+  if (value.testHiggsVoice && (value.purpose !== 'conversation' || value.mode !== 'natural' || value.conversationId || value.naturalBackend || value.openingGreeting)) {
+    context.addIssue({ code: 'custom', path: ['testHiggsVoice'], message: 'A Higgs test call requires a standalone natural voice session' });
   }
 });
 
@@ -241,6 +265,7 @@ export type VoicePcmFormat = z.infer<typeof voicePcmFormatSchema>;
 export type VoiceProviderRoute = z.infer<typeof voiceProviderRouteSchema>;
 export type VoiceRoute = z.infer<typeof voiceRouteSchema>;
 export type CreateVoiceSessionRequest = z.infer<typeof createVoiceSessionRequestSchema>;
+export type NaturalVoiceBackend = CreateVoiceSessionRequest['naturalBackend'];
 export type CreateVoiceSessionResponse = z.infer<typeof createVoiceSessionResponseSchema>;
 export type VoiceClientMessage = z.infer<typeof voiceClientMessageSchema>;
 export type VoiceServerEvent = z.infer<typeof voiceServerEventSchema>;
