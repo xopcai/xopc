@@ -41,7 +41,7 @@ export function PersonalModelSetting({ conversationId, zh, onSaved }: {
     }
   }
   return <section>
-    <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '对话模型与思考强度' : 'Conversation model and thinking'}</h3>
+    <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '对话模型' : 'Chat model'}</h3>
     {loading ? <Skeleton className="h-9 w-full" /> : <ComposerModelConfigControl
       chat={messages(zh ? 'zh' : 'en').chat} sessionModel={session?.model ?? ''}
       thinkingLevel={session?.thinkingLevel ?? 'off'} modelDisabled={busy} thinkingDisabled={busy}

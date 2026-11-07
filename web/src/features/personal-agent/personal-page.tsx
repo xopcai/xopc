@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { ArrowUpRight, ChevronDown, ListTodo, Phone, Settings2, Upload, X } from 'lucide-react';
+import { ArrowUpRight, ListTodo, Phone, Settings2, Upload, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
-import { HIGGS_REALTIME_REF, type VoiceCallPreferences, type VoiceCallPreferencesPatch, type VoiceMode } from '@xopcai/realtime-protocol/voice';
+import type { VoiceCallPreferences, VoiceCallPreferencesPatch } from '@xopcai/realtime-protocol/voice';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatPage } from '@/features/chat/chat-page';
@@ -157,8 +157,8 @@ export function PersonalPage() {
   const { data: boson, error: bosonError } = useSWR(record?.state === 'ready' ? apiUrl(bosonVoiceSettingsUrl) : null, fetchBosonVoiceSettings);
 
 
-  const queueProfileUpdate = useCallback((changes: ProfileChanges): Promise<boolean> => {
-    setSavingCount(count => count + 1);
+  const queueProfileUpdate = useCallback((changes: ProfileChanges, lockFields = true): Promise<boolean> => {
+    if (lockFields) setSavingCount(count => count + 1);
     setError(null);
     const update = profileUpdateQueueRef.current.then(async () => {
       const current = recordRef.current;
@@ -184,7 +184,7 @@ export function PersonalPage() {
         setError(cause instanceof Error ? cause.message : String(cause));
         return false;
       }
-    }).finally(() => setSavingCount(count => count - 1));
+    }).finally(() => { if (lockFields) setSavingCount(count => count - 1); });
     profileUpdateQueueRef.current = update;
     return update;
   }, []);
@@ -293,11 +293,9 @@ export function PersonalPage() {
     const ready = record?.state === 'ready';
     const callLabel = zh ? '语音通话' : 'Voice call';
     const callClass = 'touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50';
-    const optionClass = 'block w-full rounded-md px-3 py-2 text-start text-sm hover:bg-surface-hover';
     const defaultMode = record?.voiceCallPreferences?.defaultMode ?? 'assistant';
-    const naturalModel = record?.voiceCallPreferences?.naturalModel ?? (boson?.defaultForNatural ? HIGGS_REALTIME_REF : boson?.legacyModel);
-    const openCall = (mode: VoiceMode) => {
-      if (ready) voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName, mode });
+    const openCall = () => {
+      if (ready) voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName, mode: defaultMode });
     };
     const avatar = ready ? record.appearance : appearance;
     const title = ready ? record.displayName : 'Ada';
@@ -312,25 +310,13 @@ export function PersonalPage() {
         <h1 className="min-w-0 truncate text-sm font-semibold text-fg sm:text-base">{title}</h1>
       </div>,
       end: ready ? <div className="flex items-center gap-1">
-          <button type="button" disabled={voiceCall.active} onClick={() => openCall(defaultMode)} className={callClass} aria-label={callLabel} title={callLabel}><Phone className="size-5" /></button>
-          {(naturalModel || defaultMode === 'natural') && <Popover.Root>
-            <Popover.Trigger type="button" disabled={voiceCall.active} className={callClass} aria-label={zh ? '选择通话方式' : 'Choose call mode'}><ChevronDown className="size-4" /></Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content align="end" sideOffset={8} aria-label={callLabel} className="z-50 w-64 rounded-xl border border-edge bg-surface-panel p-1.5">
-                <Popover.Close asChild><button type="button" className={optionClass} onClick={() => openCall('assistant')}>{zh ? '当前助手' : 'Current assistant'}</button></Popover.Close>
-                <Popover.Close asChild><button type="button" className={optionClass} onClick={() => openCall('natural')}>
-                  {zh ? '自然语音' : 'Natural voice'}
-                  {naturalModel && <span className="mt-1 block text-xs text-fg-muted">{naturalModel === HIGGS_REALTIME_REF ? 'Higgs Realtime' : naturalModel === boson?.legacyModel ? boson.legacyModelLabel ?? naturalModel : naturalModel}</span>}
-                </button></Popover.Close>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>}
+          <button type="button" disabled={voiceCall.active} onClick={openCall} className={callClass} aria-label={callLabel} title={callLabel}><Phone className="size-5" /></button>
           <Popover.Root open={showActivity} onOpenChange={open => { if (open) void openActivity(); else setShowActivity(false); }}>
             <Popover.Trigger asChild>
               <button type="button" aria-pressed={showActivity} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '正在做的事' : 'Activity'}><ListTodo className="size-5" /></button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label={zh ? '派发的任务' : 'Delegated tasks'} className="z-50 flex h-[min(34rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-1rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl focus:outline-none">
+              <Popover.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label={zh ? '派发的任务' : 'Delegated tasks'} className="xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex h-[min(34rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-1rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl focus:outline-none">
                 <div className="flex shrink-0 items-start justify-between gap-3 px-6 pb-3 pt-6">
                   <div className="min-w-0"><h2 className="text-base font-semibold tracking-tight text-fg">{zh ? '交给我推进的事' : 'Delegated work'}</h2><p className="mt-1 text-xs text-fg-muted">{activity ? (zh ? `最近更新 · 共 ${activity.total} 项` : `Recently updated · ${activity.total} total`) : (zh ? '查看任务进展与结果' : 'Follow progress and results')}</p></div>
                   <Popover.Close className="touch-target -mr-2 -mt-1 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭活动' : 'Close activity'}><X className="size-4" /></Popover.Close>
@@ -352,7 +338,7 @@ export function PersonalPage() {
         </div> : null,
     });
     return () => clearPageHeader();
-  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, appearance, boson, clearPageHeader, loadMoreActivity, openActivity, record, setPageHeader, showActivity, showSettings, toggleSettings, voiceCall.active, zh]);
+  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, appearance, clearPageHeader, loadMoreActivity, openActivity, record, setPageHeader, showActivity, showSettings, toggleSettings, voiceCall.active, zh]);
 
   function renderSettingsPopover() {
     if (!record) return null;
@@ -366,7 +352,7 @@ export function PersonalPage() {
           onInteractOutside={event => {
             if (event.target instanceof Node && (settingsButtonRef.current?.contains(event.target) || profileButtonRef.current?.contains(event.target) || profilePopoverRef.current?.contains(event.target))) event.preventDefault();
           }}
-          className="z-50 flex max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1rem))] flex-col rounded-2xl border border-edge bg-surface-overlay shadow-xl outline-none"
+          className="xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1rem))] flex-col rounded-2xl border border-edge bg-surface-overlay shadow-xl outline-none"
         >
           <div className="relative flex shrink-0 flex-col items-center px-4 pt-4 text-center">
             <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
@@ -388,7 +374,6 @@ export function PersonalPage() {
                 }
               }} maxLength={60} placeholder="Ada"
               className="mt-2 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-lg font-semibold text-fg outline-none transition-colors hover:border-edge focus:border-edge focus:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent" />
-            {savingCount > 0 && <span className="absolute right-4 top-4 text-xs text-fg-muted">{zh ? '正在保存…' : 'Saving…'}</span>}
           </div>
           <div className="min-h-0 space-y-4 overflow-y-auto px-4 py-4">
               {error && <p role="alert" className="text-sm text-danger">{error}</p>}
@@ -403,15 +388,14 @@ export function PersonalPage() {
                   <button type="button" disabled={uploadingAvatar} onClick={() => avatarInputRef.current?.click()} aria-pressed={appearance === 'custom'} className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${appearance === 'custom' ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-panel hover:bg-surface-hover'}`}><span className="flex size-8 items-center justify-center rounded-full bg-surface-panel">{appearance === 'custom' ? <PersonalAvatar appearance="custom" agentId={record.agentId} className="size-8" /> : <Upload className="size-4 text-fg-muted" aria-hidden />}</span><span className="truncate text-xs text-fg-muted">{uploadingAvatar ? (zh ? '上传中…' : 'Uploading…') : (zh ? '上传' : 'Upload')}</span></button>
                 </div>
               </section>}
-              <PersonalVoiceSetting onGreetingChange={openingGreetingEnabled => queueProfileUpdate({ voiceCallPreferences: { openingGreetingEnabled } })} record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />
+              <PersonalModelSetting conversationId={record.conversationId} zh={zh} onSaved={async () => {
+                const response = await fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent'));
+                if (response.ok && response.payload) { recordRef.current = response.payload; setRecord(response.payload); }
+              }} />
               <PersonalCallSettings preferences={record.voiceCallPreferences} settings={boson} failed={Boolean(bosonError)} disabled={savingCount > 0} zh={zh}
-                onChange={voiceCallPreferences => { void queueProfileUpdate({ voiceCallPreferences }); }} />
-              <div className="border-t border-edge pt-4">
-                <PersonalModelSetting conversationId={record.conversationId} zh={zh} onSaved={async () => {
-                  const response = await fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent'));
-                  if (response.ok && response.payload) { recordRef.current = response.payload; setRecord(response.payload); }
-                }} />
-              </div>
+                onChange={voiceCallPreferences => queueProfileUpdate({ voiceCallPreferences }, voiceCallPreferences.defaultMode === undefined)}>
+                {active => <PersonalVoiceSetting active={active} onGreetingChange={openingGreetingEnabled => queueProfileUpdate({ voiceCallPreferences: { openingGreetingEnabled } }, false)} record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />}
+              </PersonalCallSettings>
           </div>
         </Popover.Content>
       </Popover.Portal>

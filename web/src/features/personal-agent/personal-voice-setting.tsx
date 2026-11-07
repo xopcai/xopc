@@ -1,5 +1,5 @@
 import { Play, Square } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { PopoverSelect } from '@/components/ui/popover-select';
@@ -11,11 +11,12 @@ import type { PersonalAgent } from './personal-page';
 
 type Voice = { id: string; name: string; description?: string; style?: string };
 
-export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChange }: {
+export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChange, active = true }: {
   record: PersonalAgent;
   zh: boolean;
   onGreetingChange?: (enabled: boolean) => Promise<boolean>;
   onSelectVoice: (voicePreference: PersonalAgent['voicePreference']) => Promise<boolean>;
+  active?: boolean;
 }) {
   const [greetingSupported, setGreetingSupported] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -24,6 +25,7 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChan
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selected, setSelected] = useState(record.voicePreference?.voice ?? '');
   const [busy, setBusy] = useState(false);
+  const [pendingGreeting, setPendingGreeting] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const player = useRef<PcmPlayer | null>(null);
@@ -52,13 +54,15 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChan
 
   useEffect(() => () => { controller.current?.abort(); void player.current?.close(); }, []);
 
-  const stopPreview = () => {
+  const stopPreview = useCallback(() => {
     controller.current?.abort();
     controller.current = null;
     void player.current?.close();
     player.current = null;
     setPlaying(null);
-  };
+  }, []);
+
+  useEffect(() => { if (!active) stopPreview(); }, [active, stopPreview]);
 
   const preview = async (voice: string) => {
     if (playing !== null) { stopPreview(); return; }
@@ -113,10 +117,10 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChan
   const options = voices.filter(voice => !search || `${voice.name} ${voice.description ?? ''} ${voice.style ?? ''}`.toLocaleLowerCase().includes(search))
     .map(voice => ({ value: voice.id, label: voice.name }));
 
-  return <section className="border-t border-edge pt-5">
-    <h3 className="text-sm font-medium text-fg">{zh ? '通话声音' : 'Call voice'}</h3>
-    {loading ? <div className="mt-3" aria-busy="true"><Skeleton className="h-10 w-full" /></div>
-      : route && voices.length ? <div className="mt-3 space-y-2">
+  return <section>
+    <h4 className="text-sm text-fg">{zh ? '声音' : 'Voice'}</h4>
+    {loading ? <div className="mt-1" aria-busy="true"><Skeleton className="h-10 w-full" /></div>
+      : route && voices.length ? <div className="mt-1 space-y-2">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0 flex-1">
             <PopoverSelect value={selected} selectedLabel={selectedLabel} options={options}
@@ -134,13 +138,13 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChan
             {playing !== null ? (zh ? '停止' : 'Stop') : (zh ? '试听' : 'Preview')}
           </button>
         </div>
-        <p className="text-xs leading-relaxed text-fg-muted">{selectedVoice?.description || selectedVoice?.style || (selected ? (zh ? '选择后自动保存，用于之后的语音通话。' : 'Saved automatically for future voice calls.') : (zh ? '跟随语音服务的默认音色。' : 'Uses the voice service’s default voice.'))}</p>
-      </div> : <p className="mt-3 text-sm text-fg-muted">{zh ? '当前没有可用音色。' : 'No voice is ready.'} <Link to="/settings/capabilities/models?configure=speech&returnTo=%2Fpersonal" className="text-accent underline">{zh ? '设置语音服务' : 'Set up voice'}</Link></p>}
+        {(selectedVoice?.description || selectedVoice?.style || !selected) && <p className="text-xs leading-relaxed text-fg-muted">{selectedVoice?.description || selectedVoice?.style || (zh ? '跟随语音服务的默认音色。' : 'Uses the voice service’s default voice.')}</p>}
+      </div> : <p className="mt-1 text-sm text-fg-muted">{zh ? '当前没有可用音色。' : 'No voice is ready.'} <Link to="/settings/capabilities/models?configure=speech&returnTo=%2Fpersonal" className="text-accent underline">{zh ? '设置语音服务' : 'Set up voice'}</Link></p>}
     {onGreetingChange && greetingSupported && <label className="mt-4 flex items-center justify-between gap-3 text-sm text-fg">
-      {zh ? '连接时打招呼' : 'Greet me when connected'}
-      <input type="checkbox" checked={record.voiceCallPreferences?.openingGreetingEnabled ?? true} disabled={busy}
-        onChange={event => { const enabled = event.target.checked; setBusy(true);
-          void onGreetingChange(enabled).catch(cause => setError(String(cause))).finally(() => setBusy(false)); }} />
+      {zh ? '接通时问候' : 'Greet me when connected'}
+      <input type="checkbox" checked={pendingGreeting ?? record.voiceCallPreferences?.openingGreetingEnabled ?? true} disabled={busy || pendingGreeting !== null}
+        onChange={event => { const enabled = event.target.checked; setPendingGreeting(enabled);
+          void onGreetingChange(enabled).catch(cause => setError(String(cause))).finally(() => setPendingGreeting(null)); }} />
     </label>}
     {error && <p role="alert" className="mt-3 text-xs text-danger">{error}</p>}
   </section>;
