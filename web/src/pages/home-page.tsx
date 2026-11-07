@@ -696,7 +696,7 @@ export function HomePage() {
   const hasPrimary = needsUserCount > 0 || unreadDeliveries.length > 0 || resumable.length > 0 || advisorVisible;
 
   return (
-    <div className="@container/workbench flex w-full min-w-0 flex-1 flex-col px-3 pb-6 pt-3 sm:px-4">
+    <div className="@container/workbench mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col px-4 pb-6 pt-3 sm:px-6 lg:px-8">
       <input
         ref={attachments.fileInputRef}
         type="file"

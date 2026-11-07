@@ -77,6 +77,7 @@ describe('Personal AI editor', () => {
     });
     await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><PersonalPage /></MemoryRouter></SWRConfig>));
     act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    expect(headerContainer.querySelector('button[aria-label="Choose call mode"]')).toBeNull();
     act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Voice call"]')?.click());
     expect(openVoiceCall).toHaveBeenCalledExactlyOnceWith({
       conversationId: 'conversation-1', name: 'Ada', mode,
@@ -129,7 +130,7 @@ describe('Personal AI editor', () => {
     const editor = document.querySelector('[aria-label="Edit Personal AI"]');
     expect(editor?.querySelector('#personal-name')).not.toBeNull();
     expect(editor?.querySelector('[aria-label="Choose avatar"]')).not.toBeNull();
-    expect(editor?.textContent).toContain('Call voice');
+    expect(editor?.textContent).toContain('Voice');
     for (const label of ['Tone', 'When things get tricky', 'More preferences', 'Proactive messages', 'Quiet from', 'Length', 'Updates']) {
       expect(editor?.textContent).not.toContain(label);
     }

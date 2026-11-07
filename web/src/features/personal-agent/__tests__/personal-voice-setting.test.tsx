@@ -56,6 +56,23 @@ describe('Personal AI call voice selector', () => {
     expect(onGreetingChange).toHaveBeenCalledWith(false);
   });
 
+  it('saves the greeting switch independently of the voice selector and restores it on failure', async () => {
+    const save = Promise.withResolvers<boolean>();
+    const onGreetingChange = vi.fn(() => save.promise);
+    mocks.status.mockResolvedValue({ enabled: true, openingGreeting: true, tts: { provider: 'dashscope', model: 'qwen' } });
+    await act(async () => root.render(<MemoryRouter><PersonalVoiceSetting record={{ voicePreference: { provider: 'dashscope', model: 'qwen', voice: 'mia' } } as PersonalAgent}
+      zh={false} onSelectVoice={select} onGreetingChange={onGreetingChange} /></MemoryRouter>));
+    const toggle = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    const voice = container.querySelector<HTMLButtonElement>('[aria-label="Choose call voice"]')!;
+    await act(async () => toggle.click());
+    expect(toggle.checked).toBe(false);
+    expect(voice.disabled).toBe(false);
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="Preview Mia"]')?.disabled).toBe(false);
+    await act(async () => save.resolve(false));
+    expect(toggle.checked).toBe(true);
+    expect(voice.disabled).toBe(false);
+  });
+
   it('shows the selected voice compactly and saves a dropdown selection', async () => {
     await render();
     expect(container.querySelector('[aria-label="Choose call voice"]')?.textContent).toContain('Mia');
@@ -75,6 +92,18 @@ describe('Personal AI call voice selector', () => {
     expect(mocks.close).toHaveBeenCalled();
     expect(container.querySelector('[aria-label="Preview Mia"]')).not.toBeNull();
     expect(select).not.toHaveBeenCalled();
+  });
+
+  it('stops preview when its panel becomes inactive and retains the loaded voices', async () => {
+    await render();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Preview Mia"]')?.click());
+    const signal = mocks.preview.mock.calls[0]![0] as AbortSignal;
+    await act(async () => root.render(<MemoryRouter><PersonalVoiceSetting record={{ voicePreference: { provider: 'dashscope', model: 'qwen', voice: 'mia' } } as PersonalAgent}
+      zh={false} active={false} onSelectVoice={select} /></MemoryRouter>));
+    expect(signal.aborted).toBe(true);
+    expect(mocks.close).toHaveBeenCalled();
+    expect(mocks.voices).toHaveBeenCalledOnce();
+    expect(container.querySelector('[aria-label="Choose call voice"]')?.textContent).toContain('Mia');
   });
 
   it('can restore the default voice', async () => {
