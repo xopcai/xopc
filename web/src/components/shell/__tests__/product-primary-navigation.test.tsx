@@ -19,6 +19,7 @@ vi.mock('@/features/extensions/extension-provider', () => ({
 
 import { MobilePrimaryNav } from '@/components/shell/mobile-primary-nav';
 import { SidebarNavItems } from '@/components/shell/sidebar-nav-items';
+import { useNavOrderStore } from '@/stores/nav-order-store';
 
 let container: HTMLDivElement;
 let unmount: () => void;
@@ -26,6 +27,8 @@ let unmount: () => void;
 afterEach(() => {
   act(unmount);
   container.remove();
+  useNavOrderStore.getState().setOrder([]);
+  localStorage.removeItem('xopc-web-sidebar-nav-order');
   extensionState.items.length = 0;
   extensionState.unreadCount = 0;
 });
@@ -165,6 +168,64 @@ describe('product primary navigation', () => {
     expect(extensionLink?.textContent).toBe('Sample dashboard');
     expect(document.body.textContent).toContain('Plugin apps');
     expect(document.body.textContent).not.toContain('Hidden page');
+  });
+
+  it('drags a plugin app out of More, persists its position, and moves it back', () => {
+    extensionState.items.push({
+      id: 'reading', activationEligible: true,
+      ui: { contributions: { pages: [
+        { id: 'list', title: 'Reading list', path: '/list', entrypoint: 'list.js', showInNav: true },
+      ] } },
+    });
+    renderAt('/', <SidebarNavItems />);
+    openMore();
+    const plugin = document.body.querySelector<HTMLAnchorElement>('a[href="/extensions/reading/list"]')!;
+    const work = container.querySelector<HTMLAnchorElement>('a[href="/"]')!;
+    const data = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => data.set(type, value),
+      getData: (type: string) => data.get(type) ?? '',
+    };
+    const drag = (element: Element, type: string) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientY: -1 });
+      Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+      act(() => element.dispatchEvent(event));
+    };
+    expect(plugin.draggable).toBe(true);
+    drag(plugin, 'dragstart');
+    drag(work, 'dragover');
+    drag(work, 'drop');
+    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
+      '/personal', '/extensions/reading/list', '/', '/capabilities/extensions',
+    ]);
+    const saved = JSON.parse(localStorage.getItem('xopc-web-sidebar-nav-order')!);
+    expect(saved[0]).toBe('ext:reading:list');
+
+    act(unmount);
+    container.remove();
+    renderAt('/extensions/reading/list', <SidebarNavItems collapsed />);
+    const pinned = container.querySelector<HTMLAnchorElement>('a[href="/extensions/reading/list"]')!;
+    expect(pinned.getAttribute('aria-current')).toBe('page');
+    drag(pinned, 'dragstart');
+    const more = container.querySelector('button[aria-label="More navigation items"]')!;
+    drag(more, 'dragover');
+    drag(more, 'drop');
+    expect(container.querySelector('a[href="/extensions/reading/list"]')).toBeNull();
+    openMore();
+    expect(document.body.querySelector('a[href="/extensions/reading/list"]')).not.toBeNull();
+  });
+
+  it('ignores unrelated drops and safely reconciles unavailable and duplicate entries', () => {
+    useNavOrderStore.getState().setOrder(['ext:missing:page', 'builtin:automations', 'builtin:automations']);
+    renderAt('/', <SidebarNavItems />);
+    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
+      '/personal', '/automations', '/', '/capabilities/extensions',
+    ]);
+    const work = container.querySelector('a[href="/"]')!;
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { getData: () => 'builtin:localApps' } });
+    act(() => work.dispatchEvent(event));
+    expect(useNavOrderStore.getState().order).toEqual(['ext:missing:page', 'builtin:automations']);
   });
 
   it('hides extension pages disabled pending a gateway restart', () => {
