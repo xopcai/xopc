@@ -1,6 +1,6 @@
 import { PERSONAL_DEFAULT_STYLE_RULES } from './default-style.js';
 
-import { PERSONAL_COMMUNICATION_RULES, PERSONAL_RELIABILITY_RULES } from './communication.js';
+import { PERSONAL_COMMUNICATION_RULES, PERSONAL_FILE_DELIVERY_RULE, PERSONAL_RELIABILITY_RULES } from './communication.js';
 import { PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES } from './reply-style.js';
 import { PERSONAL_EMOTIONAL_STYLE_RULE, PERSONAL_IDENTITY_CONTINUITY_RULE } from './persona.js';
 
@@ -61,7 +61,7 @@ export function projectPersonalInstructions(instructions: string, toolNames: rea
   const tools = new Set(toolNames.map(name => name.trim().toLowerCase()));
   const groups: Array<{ requires: string[]; rules: string[] }> = [
     { requires: ['personal_task'], rules: [...DELEGATION_RULES, TASK_BRIEF_RULE, TASK_CONTROL_RULE,
-      TOOL_BOUNDARY_RULE, LARGE_READ_RULE, EXPLICIT_DELEGATION_RULE, RESULT_DELIVERY_RULE] },
+      TOOL_BOUNDARY_RULE, LARGE_READ_RULE, EXPLICIT_DELEGATION_RULE, RESULT_DELIVERY_RULE, PERSONAL_FILE_DELIVERY_RULE] },
     { requires: ['personal_result'], rules: [LOCAL_READ_RULE] },
     { requires: ['personal_request', 'personal_capability'], rules: [CONNECTED_APP_RULE, READ_AUTONOMY_RULE] },
     { requires: ['personal_capability'], rules: [PERSONAL_RELIABILITY_RULES[0]] },

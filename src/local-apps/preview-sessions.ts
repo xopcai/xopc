@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { fork, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ import { localAppCapabilities } from './capabilities/runtime.js';
 import { readPreviewFixtures } from './preview-fixtures.js';
 import { createLogger } from '../utils/logger.js';
 import { LOCAL_APP_RUNTIME_BRIDGE_HASH } from './preview-runtime-bridge.js';
+import { forkWorker } from '../process/fork-worker.js';
 
 const log = createLogger('LocalApps:Preview');
 
@@ -88,7 +89,7 @@ export class LocalAppPreviewSessions {
         lease.directory = mkdtempSync(join(root, 'run-'));
         const built = new URL('./preview-worker.js', import.meta.url);
         const compiled = existsSync(built);
-        lease.worker = fork(fileURLToPath(compiled ? built : new URL('./preview-worker.ts', import.meta.url)), [], {
+        lease.worker = forkWorker(fileURLToPath(compiled ? built : new URL('./preview-worker.ts', import.meta.url)), {
           cwd: lease.directory, execArgv: ['--max-old-space-size=192', ...(compiled ? [] : ['--import', import.meta.resolve('tsx')])],
           env: { PATH: process.env.PATH, XOPC_LOCAL_APP_PREVIEW_WORKER: '1', XOPC_STATE_DIR: lease.directory,
             XOPC_WORKSPACE: lease.directory, XOPC_SQLITE_ASSET_ROOT: process.env.XOPC_SQLITE_ASSET_ROOT,

@@ -74,7 +74,7 @@ function ActivityRow({ item, zh }: { item: ActivityItem; zh: boolean }) {
 
 export function PersonalPage() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const routerLocation = useLocation();
   const voiceCall = useVoiceCall();
   const voiceCallRef = useRef(voiceCall);
   voiceCallRef.current = voiceCall;
@@ -98,8 +98,8 @@ export function PersonalPage() {
   const [activityLoadedCount, setActivityLoadedCount] = useState(0);
   const activityRequestRef = useRef(0);
   const openSettings = useCallback(() => navigate('/settings/personal', {
-    state: { settingsBackPath: `${location.pathname}${location.search}${location.hash}` },
-  }), [location.pathname, location.search, location.hash, navigate]);
+    state: { settingsBackPath: `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}` },
+  }), [routerLocation.pathname, routerLocation.search, routerLocation.hash, navigate]);
   const toggleQuickSettings = useCallback(() => {
     setShowActivity(false);
     setShowSettings(open => !open);
