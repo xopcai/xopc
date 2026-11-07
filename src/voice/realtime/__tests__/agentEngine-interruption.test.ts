@@ -165,6 +165,68 @@ describe('Agent voice interruption cleanup', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it('prepares TTS while the user is speaking and transfers it to the confirmed reply', async () => {
+    const test = await setup(async function* () {
+      yield { type: 'assistant_delta', payload: { delta: '我是你的助手，可以继续聊。' } };
+    });
+    const close = vi.fn(async () => {});
+    const synthesize = vi.fn(async () => ({ outputFormat: 'pcm', release: vi.fn(async () => {}),
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }) }));
+    mocks.prepare.mockResolvedValue({ close, synthesize });
+    test.emit({ type: 'speech_started', utteranceId: 'one' });
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    expect(test.delegate).not.toHaveBeenCalled();
+    expect(synthesize).not.toHaveBeenCalled();
+    test.emit({ type: 'transcript_final', utteranceId: 'one', revision: 1, text: '介绍一下你自己' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.anything()));
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    expect(synthesize).toHaveBeenCalledWith('我是你的助手，');
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('aborts unused preparation when microphone input is discarded', async () => {
+    const test = await setup(async function* () {});
+    const cancelled = vi.fn();
+    mocks.prepare.mockImplementation((_config, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => { cancelled(); reject(new Error('Cancelled')); }, { once: true });
+    }));
+    test.emit({ type: 'speech_started', utteranceId: 'one' });
+    await engine.setInputMuted?.(true);
+    expect(cancelled).toHaveBeenCalledOnce();
+    expect(test.delegate).not.toHaveBeenCalled();
+  });
+
+  it('interrupts on a stable substantial partial without executing unfinalized input', async () => {
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      yield { type: 'assistant_delta', payload: { delta: '这是原来的回答。' } };
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    test.final('first');
+    await vi.waitFor(() => expect(test.delegate).toHaveBeenCalledOnce());
+    test.emit({ type: 'speech_started', utteranceId: 'second' });
+    test.emit({ type: 'transcript_delta', utteranceId: 'second', revision: 1, text: '换个话题聊聊明天的安排' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.cancelled', expect.objectContaining({ reason: 'barge_in' })));
+    expect(test.delegate).toHaveBeenCalledOnce();
+    test.emit({ type: 'transcript_final', utteranceId: 'second', revision: 2, text: '换个话题聊聊明天的安排' });
+    await vi.waitFor(() => expect(test.delegate).toHaveBeenCalledTimes(2));
+  });
+
+  it.each([true, false])('keeps partial playback echo from interrupting with bargeIn=%s', async enabled => {
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      yield { type: 'assistant_delta', payload: { delta: '今天天气很晴朗。' } };
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+    }, enabled);
+    mocks.speak.mockImplementation(async () => ({ outputFormat: 'pcm', release: vi.fn(async () => {}),
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(960)); controller.close(); } }) }));
+    test.final('first');
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    test.emit({ type: 'speech_started', utteranceId: 'echo' });
+    test.emit({ type: 'transcript_delta', utteranceId: 'echo', revision: 1, text: '今天天气很晴朗' });
+    await new Promise(resolve => setTimeout(resolve, 220));
+    expect(test.send).not.toHaveBeenCalledWith('response.cancelled', expect.anything());
+    expect(test.delegate).toHaveBeenCalledOnce();
+  });
+
   it('cancels preparation immediately when a reply finishes without speech', async () => {
     await setup(async function* () { yield { type: 'run_end', payload: { status: 'success' } }; });
     const cancelled = vi.fn();
@@ -248,8 +310,8 @@ describe('Agent voice interruption cleanup', () => {
     const audioLog = mocks.info.mock.calls.find(([, message]) => message === 'Realtime voice first audio ready')?.[0];
     expect(textLog).toMatchObject({ conversationId: 'chat', phase: 'first_response_text' });
     // The turn timer and latency timestamps sample Date.now() separately.
-    expect(textLog.inputToTextMs).toBeGreaterThanOrEqual(340);
-    expect(textLog.turnDecisionMs).toBeGreaterThanOrEqual(340);
+    expect(textLog.inputToTextMs).toBeGreaterThanOrEqual(30);
+    expect(textLog.turnDecisionMs).toBeGreaterThanOrEqual(30);
     expect(textLog.queueMs).toBeGreaterThanOrEqual(0);
     expect(textLog.inputToTextMs).toBeGreaterThanOrEqual(textLog.latencyMs);
     expect(audioLog.inputToAudioMs).toBeGreaterThanOrEqual(textLog.inputToTextMs);

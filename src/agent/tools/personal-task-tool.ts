@@ -23,6 +23,7 @@ import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
 import { TaskOriginRepository } from '../../tasks/task-origin-repository.js';
+import { TaskResultDeliveryRepository } from '../../tasks/task-result-delivery-repository.js';
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
 const PersonalTaskSchema = Type.Object({
@@ -343,6 +344,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           const limit = input.limit ?? 10;
           const read: Record<string, unknown> = input.section ? { ok: payload.ok, [input.section]: payload[input.section] } : { ...payload };
           read.revisionBaseline = new TaskReadModelProjector().get(input.taskId!)?.revisionBaseline;
+          read.fileDelivery = new TaskResultDeliveryRepository().fileDeliveryState(input.taskId!, conversationId);
           const pagination: Record<string, unknown> = {};
           for (const key of ['waits', 'runs', 'receipts', 'context', 'sessions', 'authorityGrants', 'dependencies', 'dependents', 'criterionReviews']) {
             const value = read[key];

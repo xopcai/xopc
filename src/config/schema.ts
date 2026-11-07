@@ -862,8 +862,13 @@ export const VoiceConfigSchema = z
         maxDictationMs: z.number().int().min(10_000).max(3_600_000).default(600_000),
         maxConversationMs: z.number().int().min(10_000).max(7_200_000).default(3_600_000),
         bargeIn: z.boolean().default(true),
+        assistant: z.object({
+          model: z.string().trim().min(1).max(200).optional(),
+          historyTokens: z.number().int().min(1000).max(16000).optional(),
+          thinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('off'),
+        }).strict().default({ thinkingLevel: 'off' }),
         boson: z.strictObject({ defaultForNatural: z.boolean(), voice: higgsVoiceSchema }).optional(),
-        stt: z.object({ provider: z.literal('xopc-cloud'), model: z.string().min(1).max(200) }).strict().optional(),
+        stt: z.object({ provider: z.enum(['alibaba', 'xopc-cloud']), model: z.string().min(1).max(200) }).strict().optional(),
         /** Conversation output selection; credentials stay in the provider configuration. */
         tts: z.object({
           provider: z.enum(['alibaba', 'xopc-cloud']),
@@ -888,6 +893,7 @@ export const VoiceConfigSchema = z
         maxDictationMs: 600_000,
         maxConversationMs: 3_600_000,
         bargeIn: true,
+        assistant: { thinkingLevel: 'off' },
       }),
   })
   .strict()

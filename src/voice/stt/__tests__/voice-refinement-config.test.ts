@@ -19,6 +19,7 @@ describe('VoiceConfigSchema', () => {
       maxDictationMs: 600_000,
       maxConversationMs: 3_600_000,
       bargeIn: true,
+      assistant: { thinkingLevel: 'off' },
     });
     expect(VoiceConfigSchema.safeParse({ realtime: { silenceDurationMs: 100 } }).success).toBe(false);
     expect(VoiceConfigSchema.safeParse({ realtime: { prefixPaddingMs: 300 } }).success).toBe(false);

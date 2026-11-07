@@ -105,7 +105,8 @@ export interface VoiceSettingsState {
       maxDictationMs: number;
       maxConversationMs: number;
       bargeIn: boolean;
-      stt?: { provider: 'xopc-cloud'; model: string };
+      assistant?: { model?: string; historyTokens?: number; thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' };
+      stt?: { provider: 'alibaba' | 'xopc-cloud'; model: string };
       tts?: { provider: 'alibaba' | 'xopc-cloud'; model?: string; voice?: string };
       omni?: {
         provider: 'alibaba' | 'xopc-cloud' | 'qwen-token-plan-cn';

@@ -29,6 +29,8 @@ import { submitTaskResearchResult, type ResearchReviewer } from '../task-researc
 import { TaskResultDeliveryService } from '../task-result-delivery-service.js';
 import { TaskMainUpdateDelivery } from '../task-main-update-delivery.js';
 import { TaskResultDeliveryRepository } from '../task-result-delivery-repository.js';
+import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
+import { PersonalPromptContext } from '../../personal-agent/prompt-context.js';
 import type { ClientHistoryMessage } from '../../session/client-history.js';
 import { SessionStore } from '../../session/store.js';
 import { resetSessionRecord } from '../../storage/sqlite/session-repository.js';
@@ -99,6 +101,35 @@ describe('background task result delivery', () => {
     getSqliteDatabase().prepare("UPDATE sessions SET agent_id = ?, custom_data_json = json_set(COALESCE(custom_data_json, '{}'), '$.personalAgent', 1) WHERE conversation_id = ?")
       .run(agentId, conversationId);
   }
+
+  it('confirms file delivery only after cards reach the originating current transcript', async () => {
+    const { main, coordinator, runId, taskId } = task(); markPersonal(main.key);
+    const results = new TaskResultDeliveryRepository();
+    coordinator.captureOutcome(await image(runId));
+    const initial = { status: 'not_delivered', availableFileCount: 0 };
+    expect(results.fileDeliveryState(taskId, main.key)).toEqual(initial);
+    expect(new PersonalPromptContext().build(undefined, main.key)).toContain('"fileDelivery":{"status":"not_delivered"');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => main.key, getCurrentAgentId: () => personalAgentId('local-owner') });
+    const read = await tool.execute('delivery-status', { command: 'get', taskId, section: 'receipts' });
+    expect(JSON.parse(read.content[0].text).fileDelivery).toEqual(initial);
+
+    const board = new TaskCollaborationRepository();
+    board.append({ taskId, taskRunId: runId, authorKind: 'worker_agent', authorId: 'worker', kind: 'progress',
+      body: 'The image is published and attached to the chat.', idempotencyKey: 'published-progress' });
+    const submitAndConfirm = vi.fn(async (_message: { conversationId: string; clientMessageId: string; content: string }) => true);
+    await new TaskMainUpdateDelivery().drain({ isAvailable: () => true,
+      decide: async () => ({ notify: true, userPreference: 'updates', reason: 'User requested progress' }), submitAndConfirm });
+    expect(submitAndConfirm.mock.calls[0]![0].content).toContain('Host file delivery state: {"status":"not_delivered","availableFileCount":0}');
+    expect(submitAndConfirm.mock.calls[0]![0].content).toContain('Worker publication and visual inspection do not confirm file delivery');
+
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready' });
+    expect(results.fileDeliveryState(taskId, main.key)).toMatchObject({ status: 'pending', availableFileCount: 0 });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    expect(results.fileDeliveryState(taskId, main.key)).toMatchObject({ status: 'delivered', availableFileCount: 1 });
+    expect(results.fileDeliveryState(taskId, createConversation({ agentId: 'other' }).key)).toEqual(initial);
+    resetSessionRecord(main.key, stateDir);
+    expect(results.fileDeliveryState(taskId, main.key)).toMatchObject(initial);
+  });
 
   it('atomically reopens the same Task, preserves the prior run and delivery, and retries one revision idempotently', async () => {
     const { main, worker, coordinator, runId, taskId } = task(); markPersonal(main.key);

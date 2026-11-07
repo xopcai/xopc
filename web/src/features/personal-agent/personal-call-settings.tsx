@@ -1,4 +1,5 @@
 import { HIGGS_REALTIME_REF, HIGGS_REALTIME_VOICES, type HiggsVoice, type VoiceCallPreferences, type VoiceCallPreferencesPatch, type VoiceMode } from '@xopcai/realtime-protocol/voice';
+import { Check } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -53,13 +54,15 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
     <h3 className="text-sm font-medium text-fg">{zh ? '默认通话方式' : 'Default call mode'}</h3>
     <div className="space-y-3">
       <SlidingSegmented<VoiceMode> aria-label={zh ? '默认通话方式' : 'Default call mode'} value={mode}
-        flush buttonClassName="h-9 text-sm"
-        options={[{ value: 'assistant', label: zh ? '当前助手' : 'Current assistant' },
-          { value: 'natural', label: zh ? '自然语音' : 'Natural voice' }]}
+        flush buttonClassName="h-9 text-sm aria-pressed:font-semibold aria-pressed:text-accent-fg"
+        indicatorClassName="bg-accent-soft ring-1 ring-inset ring-accent/35"
+        options={[{ value: 'assistant', label: zh ? '当前助手' : 'Current assistant', icon: mode === 'assistant' ? Check : undefined },
+          { value: 'natural', label: zh ? '自然语音' : 'Natural voice', icon: mode === 'natural' ? Check : undefined }]}
         onChange={defaultMode => { void changeMode(defaultMode); }} />
-      <p className="text-xs text-fg-muted">{mode === 'assistant'
-        ? (zh ? '使用对话模型，可交办任务' : 'Uses the chat model and can delegate tasks')
-        : (zh ? '使用实时语音模型聊天' : 'Talk using a realtime voice model')}</p>
+      <p className="text-xs text-fg-muted">{zh ? '下次通话使用' : 'Next call uses'}{' '}
+        <span className="font-medium text-fg">{mode === 'assistant' ? (zh ? '当前助手' : 'Current assistant') : (zh ? '自然语音' : 'Natural voice')}</span>
+        {mode === 'assistant' ? (zh ? ' · 可交办任务' : ' · Can delegate tasks') : (zh ? ' · 聊天与讨论' : ' · Chat and discussion')}
+      </p>
       <fieldset disabled={disabled} style={{ height: panelHeight }}
         className="relative min-w-0 overflow-hidden transition-[height] duration-200 ease-out motion-reduce:transition-none [&_button:focus-visible]:ring-inset">
         <div ref={assistantPanel} inert={mode !== 'assistant'} aria-hidden={mode !== 'assistant'}

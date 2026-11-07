@@ -404,7 +404,8 @@ export function createImageGenerateTool(options: {
         );
 
         const lines: string[] = [
-          `Generated and attached ${paths.length} image(s) with ${result.provider}/${result.model}.`,
+          `Generated and published ${paths.length} image(s) with ${result.provider}/${result.model}.`,
+          'In a Task, select the returned artifact IDs in publish_task_result.finalArtifactIds for final delivery. Publication alone does not confirm delivery to the originating chat.',
           ...paths.map((p) => `Saved: ${p}`),
         ];
 

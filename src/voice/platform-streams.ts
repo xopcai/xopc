@@ -1,7 +1,7 @@
 import { assertProviderUsage } from '../providers/model-usage.js';
 import WebSocket from 'ws';
 import type { StreamingSttOpenRequest, StreamingSttSession } from '../media-understanding/types.js';
-import type { SpeechSynthesisStreamResult } from './tts/speech-provider-types.js';
+import type { SpeechStreamSession, SpeechSynthesisStreamResult } from './tts/speech-provider-types.js';
 
 const MAX_BUFFERED_BYTES = 512 * 1024;
 const MAX_ERROR_BODY_BYTES = 16 * 1024;
@@ -147,12 +147,63 @@ export async function openPlatformStt(request: StreamingSttOpenRequest): Promise
   };
 }
 
-export async function openPlatformTts(request: {
+type PlatformTtsRequest = {
   baseUrl: string; apiKey: string; voice: string; text: string; instructions?: string; signal: AbortSignal; timeoutMs: number;
-}): Promise<SpeechSynthesisStreamResult> {
+};
+
+export async function openPlatformTts(request: PlatformTtsRequest): Promise<SpeechSynthesisStreamResult> {
+  const session = await openPlatformTtsConnection(request);
+  try { return await session.synthesize(request.text); }
+  catch (error) { await session.close(); throw error; }
+}
+
+/** Hides the first cloud handshake behind Agent generation without sending speculative text. */
+export async function openPlatformTtsSession(request: Omit<PlatformTtsRequest, 'text'>): Promise<SpeechStreamSession> {
+  const abort = new AbortController();
+  request = { ...request, signal: AbortSignal.any([request.signal, abort.signal]) };
+  let prepared: SpeechStreamSession | undefined = await openPlatformTtsConnection(request);
+  const active = new Set<SpeechStreamSession>([prepared]);
+  let closed = false;
+  return {
+    supportsConcurrentSynthesis: true,
+    async synthesize(text) {
+      request.signal.throwIfAborted();
+      if (closed) throw new Error('Platform TTS session closed');
+      // Cloud adapters have different flush boundaries. Keep each segment on its
+      // own connection rather than treating a text acknowledgement as audio done.
+      const initial = prepared;
+      prepared = undefined;
+      let session: SpeechStreamSession | undefined;
+      try {
+        session = initial ?? await openPlatformTtsConnection(request);
+        if (closed || request.signal.aborted) throw new Error('Platform TTS session closed');
+        active.add(session);
+        const result = await session.synthesize(text);
+        return { ...result, release: async () => {
+          try { await result.release?.(); }
+          finally { active.delete(session!); }
+        } };
+      } catch (error) {
+        await session?.close();
+        if (session) active.delete(session);
+        throw error;
+      }
+    },
+    async close() {
+      closed = true;
+      abort.abort(new DOMException('Platform TTS session closed', 'AbortError'));
+      await Promise.all([...active].map(session => session.close()));
+      prepared = undefined;
+      active.clear();
+    },
+  };
+}
+
+async function openPlatformTtsConnection(request: Omit<PlatformTtsRequest, 'text'>): Promise<SpeechStreamSession> {
   let controller!: ReadableStreamDefaultController<Uint8Array>;
   let resolveReady!: () => void, rejectReady!: (error: Error) => void;
-  let ready = false, ended = false, finishSent = false;
+  let ready = false, ended = false, finishSent = false, submitted = false;
+  let failure: Error | undefined;
   const readyPromise = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
   const stream = new ReadableStream<Uint8Array>({
     start(value) { controller = value; },
@@ -169,9 +220,6 @@ export async function openPlatformTts(request: {
     if (event.type === 'session.updated' && !ready) {
       if (event.session?.output_sample_rate !== 24000) throw new Error('Unsupported TTS audio format');
       ready = true; resolveReady();
-      const characters = [...request.text];
-      for (let i = 0; i < characters.length; i += 1000) connection.send({ type: 'input_text_buffer.append', text: characters.slice(i, i + 1000).join('') });
-      connection.send({ type: 'input_text_buffer.commit' });
     } else if ((event.type === 'response.done' || event.type === 'text.flushed') && !finishSent) {
       finishSent = true; connection.send({ type: 'session.finish' });
     } else if (event.type === 'response.audio.done') {
@@ -187,10 +235,25 @@ export async function openPlatformTts(request: {
     } else if (event.type === 'session.finished') {
       finishAudio(); connection.close();
     }
-  }, error => { rejectReady(error); if (!ended) { ended = true; controller.error(error); } clearTimeout(timer); });
-  const timer = setTimeout(() => connection.fail(new Error('Platform TTS timed out')), request.timeoutMs);
+  }, error => { failure = error; rejectReady(error); if (!ended) { ended = true; controller.error(error); } clearTimeout(timer); });
+  let timer = setTimeout(() => connection.fail(new Error('Platform TTS setup timed out')), request.timeoutMs);
   connection.socket.once('open', () => connection.send({ type: 'session.update', session: { voice: request.voice, ...(request.instructions ? { instructions: request.instructions } : {}) } }));
   await readyPromise;
-  return { audioStream: stream, outputFormat: 'pcm', fileExtension: 'pcm', voiceCompatible: false,
-    release: async () => { clearTimeout(timer); connection.close(); finishAudio(); } };
+  clearTimeout(timer);
+  const close = async () => { clearTimeout(timer); connection.close(); finishAudio(); };
+  return {
+    async synthesize(text) {
+      request.signal.throwIfAborted();
+      if (failure) throw failure;
+      if (ended || submitted) throw new Error('Platform TTS connection is not writable');
+      if (!text.trim()) throw new Error('Platform TTS requires nonempty text');
+      submitted = true;
+      timer = setTimeout(() => connection.fail(new Error('Platform TTS synthesis timed out')), request.timeoutMs);
+      const characters = [...text];
+      for (let i = 0; i < characters.length; i += 1000) connection.send({ type: 'input_text_buffer.append', text: characters.slice(i, i + 1000).join('') });
+      connection.send({ type: 'input_text_buffer.commit' });
+      return { audioStream: stream, outputFormat: 'pcm', fileExtension: 'pcm', voiceCompatible: false, release: close };
+    },
+    close,
+  };
 }

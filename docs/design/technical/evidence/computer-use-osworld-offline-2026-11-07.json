@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-07",
+  "status": "implemented-not-live-validated",
+  "intendedModel": "openai/gpt-6.1-sol",
+  "upstream": {
+    "repository": "https://github.com/xlang-ai/OSWorld",
+    "commit": "8903ebeb0efdf74331bd7dc37ed91ccbbff22317",
+    "developmentTasks": 24,
+    "holdoutTasks": 8,
+    "selectedTaskHashesVerified": 32
+  },
+  "validation": {
+    "computerTypeScriptRegression": { "passed": 429, "skippedOptInLive": 9 },
+    "focusedTypeScriptRegression": { "passed": 137 },
+    "bridgeProcessTest": { "passed": 1 },
+    "pythonOfflineTests": { "passed": 20 },
+    "rootAndElectronTypecheck": "passed",
+    "osworldBridgeTypecheck": "passed",
+    "gitDiffWhitespace": "passed",
+    "githubWorkflow": "added-not-executed"
+  },
+  "liveEvaluation": {
+    "status": "deferred-by-user-pending-authorization",
+    "completedGpt61TaskRuns": 0,
+    "completedOsworldTaskRuns": 0,
+    "nativeDesktopRuns": 0,
+    "successRate": null,
+    "measuredImprovement": null,
+    "nativeCertified": false,
+    "environmentVerified": false
+  },
+  "limitations": [
+    "First integration supports OSWorld V1 JSON tasks; OSWorld 2.1 task classes are a later stage.",
+    "The VM adapter exercises the shared model adapter, not the full product Agent/Broker/native Driver chain.",
+    "Local Docker reports aarch64; an official x86 guest has not been provisioned.",
+    "User deferred model and desktop execution after the existing ChatGPT OAuth refresh returned HTTP 403."
+  ]
+}

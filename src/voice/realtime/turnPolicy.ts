@@ -1,5 +1,4 @@
-const MIN_TURN_SILENCE_MS = 1_200;
-const FINAL_SETTLE_MS = 350;
+const FINAL_SETTLE_MS = 40;
 const INCOMPLETE_HOLD_MS = 1_800;
 const DECISION_TIMEOUT_MS = 750;
 const MAX_TRANSCRIPT_CHARACTERS = 32_000;
@@ -44,7 +43,6 @@ export class TurnCoordinator {
   private decisionGeneration = 0;
 
   constructor(
-    private readonly silenceDurationMs: number,
     private readonly onCommit: (text: string, decision: TurnDecision, turnId: string) => void,
     private readonly policy: TurnPolicy = heuristicTurnPolicy,
   ) {}
@@ -111,7 +109,9 @@ export class TurnCoordinator {
 
   private schedule(text: string, decision: TurnDecision, generation: number): void {
     if (generation !== this.decisionGeneration) return;
-    const holdMs = Math.max(FINAL_SETTLE_MS, MIN_TURN_SILENCE_MS - this.silenceDurationMs,
+    // ASR already waited for its endpoint. Only allow a brief event-ordering
+    // grace period here; incomplete speech can explicitly request a longer hold.
+    const holdMs = Math.max(FINAL_SETTLE_MS,
       Number.isFinite(decision.holdMs) ? Math.max(0, decision.holdMs) : 0);
     this.timer = setTimeout(() => {
       if (generation !== this.decisionGeneration) return;
@@ -119,6 +119,6 @@ export class TurnCoordinator {
       if (decision.disposition === 'wait') { this.evaluate(); return; }
       this.reset();
       if (decision.disposition !== 'backchannel') this.onCommit(text, decision, turnId);
-    }, Math.max(FINAL_SETTLE_MS, this.stoppedAt + holdMs - Date.now()));
+    }, Math.max(decision.disposition === 'wait' ? FINAL_SETTLE_MS : 0, this.stoppedAt + holdMs - Date.now()));
   }
 }

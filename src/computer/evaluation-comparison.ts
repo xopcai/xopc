@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ComputerEvaluationPlanSchema, ComputerEvaluationRunSchema, evaluateComputerRuns,
   isAutonomousComputerSuccess, type ComputerEvaluationRun } from './evaluation.js';
 
-const ReportSchema = z.object({ plan: ComputerEvaluationPlanSchema, runs: z.array(ComputerEvaluationRunSchema) });
+const ReportSchema = z.object({ plan: ComputerEvaluationPlanSchema, runs: z.array(ComputerEvaluationRunSchema), interrupted: z.boolean().optional() });
 
 /** Pair the same tasks and repetitions; never compare different environments or evidence classes. */
 export function compareComputerEvaluations(rawBaseline: unknown, rawCandidate: unknown) {
@@ -29,11 +29,22 @@ export function compareComputerEvaluations(rawBaseline: unknown, rawCandidate: u
     const candidateMean = measured.reduce((sum, [, after]) => sum + after[name]!, 0) / measured.length;
     return { pairedMeasurements: measured.length, baselineMean, candidateMean, deltaMean: candidateMean - baselineMean };
   };
+  const regressionReasons = [
+    ...(baseline.interrupted || candidate.interrupted ? ['interrupted_run'] : []),
+    ...(pairs.length === baselineSummary.expectedRuns ? [] : ['incomplete_pairs']),
+    ...(losses ? ['task_regressions'] : []),
+    ...(candidateSummary.falseSuccesses ? ['false_successes'] : []),
+    ...(candidateSummary.incidents ? ['input_incidents'] : []),
+    ...(candidateSummary.unmeasuredSafetyRuns ? ['unmeasured_safety'] : []),
+    ...(candidateSummary.unknown ? ['unknown_outcomes'] : []),
+    ...(candidate.runs.some(run => run.failure?.dispatch === 'unknown' || run.failure?.dispatch === 'started') ? ['uncertain_dispatch'] : []),
+  ];
   return { baseline: baselineSummary, candidate: candidateSummary,
     expectedPairs: baselineSummary.expectedRuns, pairedRuns: pairs.length,
     missingPairs: baselineSummary.expectedRuns - pairs.length,
     complete: pairs.length === baselineSummary.expectedRuns,
     wins, losses, ties, pairedSuccessRateDelta: pairs.length ? (wins - losses) / pairs.length : null,
+    regressionGate: { passed: regressionReasons.length === 0, reasons: regressionReasons },
     metrics: { durationMs: metric('durationMs'), modelRequests: metric('modelRequests'), actions: metric('actions'),
       unchangedInputs: metric('unchangedInputs'), observationChanges: metric('observationChanges'),
       rescueAttempts: metric('rescueAttempts'), rescueExhaustions: metric('rescueExhaustions'), cost: metric('cost') } };

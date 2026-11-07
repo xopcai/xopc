@@ -6,10 +6,10 @@ import { voiceSupportsMode } from '@xopcai/realtime-protocol/voice';
 import { compareCatalogModels } from '../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../providers/provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from '../../../providers/xopc-cloud-config.js';
-import { openPlatformTts } from '../../platform-streams.js';
+import { openPlatformTts, openPlatformTtsSession } from '../../platform-streams.js';
 import { requirePlatformVoiceModel } from '../../platform-catalog.js';
 import { registerSpeechProvider } from '../speech-registry.js';
-import type { SpeechProviderConfig, SpeechProviderPlugin, SpeechSynthesisResult } from '../speech-provider-types.js';
+import type { SpeechProviderConfig, SpeechProviderPlugin, SpeechStreamSessionRequest, SpeechSynthesisResult } from '../speech-provider-types.js';
 
 interface XopcCloudSpeechConfig extends Record<string, unknown> {
   model?: string;
@@ -41,6 +41,26 @@ function readSpeed(value: unknown): number | undefined {
 function extension(contentType: string | null, fallback: string): string {
   const mime = contentType?.split(';')[0];
   return ({ 'audio/mpeg': 'mp3', 'audio/opus': 'opus', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/flac': 'flac', 'audio/aac': 'aac', 'audio/pcm': 'pcm' } as Record<string, string>)[mime ?? ''] ?? fallback;
+}
+
+async function streamRequest(request: SpeechStreamSessionRequest) {
+  rejectUnbudgetedCloudTransport();
+  const config = readConfig(request.providerConfig);
+  const model = typeof request.providerOverrides?.model === 'string' ? request.providerOverrides.model : config.model;
+  const voice = typeof request.providerOverrides?.voice === 'string' ? request.providerOverrides.voice : config.voice;
+  if (!model || !voice) throw new Error('XOPC Cloud realtime TTS model or voice is unavailable');
+  const catalogModel = requirePlatformVoiceModel(model, 'speech.stream');
+  const token = await getProviderAuthService().resolveApiKey('xopc-cloud', request.signal);
+  if (!token) throw new Error('XOPC Cloud authorization is unavailable');
+  const relayUrl = new URL(`${config.baseUrl.replace(/\/+$/, '')}/audio/speech/realtime`);
+  relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  relayUrl.searchParams.set('model', model);
+  relayUrl.searchParams.set('service_version', String(catalogModel.voice.serviceVersion));
+  relayUrl.searchParams.set('voice', voice);
+  const instructions = typeof request.providerOverrides?.instructions === 'string'
+    ? request.providerOverrides.instructions.trim() : config.instructions;
+  return { apiKey: token, baseUrl: relayUrl.toString(), voice,
+    ...(instructions ? { instructions } : {}), signal: request.signal, timeoutMs: request.timeoutMs };
 }
 
 export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
@@ -115,32 +135,9 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
     });
   },
   synthesizeStream: async (request) => {
-    rejectUnbudgetedCloudTransport();
-    const config = readConfig(request.providerConfig);
-    const model = typeof request.providerOverrides?.model === 'string' ? request.providerOverrides.model : config.model;
-    const voice = typeof request.providerOverrides?.voice === 'string' ? request.providerOverrides.voice : config.voice;
-    if (!model || !voice) throw new Error('XOPC Cloud realtime TTS model or voice is unavailable');
-    const catalogModel = requirePlatformVoiceModel(model, 'speech.stream');
-    const token = await getProviderAuthService().resolveApiKey('xopc-cloud', request.signal);
-    if (!token) throw new Error('XOPC Cloud authorization is unavailable');
-    const relayUrl = new URL(`${config.baseUrl.replace(/\/+$/, '')}/audio/speech/realtime`);
-    relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-    relayUrl.searchParams.set('model', model);
-    relayUrl.searchParams.set('service_version', String(catalogModel.voice.serviceVersion));
-    relayUrl.searchParams.set('voice', voice);
-    const instructions = typeof request.providerOverrides?.instructions === 'string'
-      ? request.providerOverrides.instructions.trim()
-      : config.instructions;
-    return openPlatformTts({
-      apiKey: token,
-      baseUrl: relayUrl.toString(),
-      voice,
-      text: request.text,
-      ...(instructions ? { instructions } : {}),
-      signal: request.signal,
-      timeoutMs: request.timeoutMs,
-    });
+    return openPlatformTts({ ...await streamRequest(request), text: request.text });
   },
+  openStreamSession: async request => openPlatformTtsSession(await streamRequest(request)),
 };
 
 registerSpeechProvider(xopcCloudSpeechProvider);

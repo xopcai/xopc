@@ -60,6 +60,7 @@ import { configurationCapabilityCorrection } from './configuration-capability-co
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
+import { projectVoiceHistory, voiceHistoryNotice } from '../prompt/voice-history.js';
 import { assessContext, recoverContext as recoverContextUntraced } from '../memory/context-recovery.js';
 import { resolveCompactionPolicy, type ResolvedCompactionPolicy } from '../memory/compaction-policy.js';
 import { isContextOverflowError } from '../orchestration/context-overflow.js';
@@ -556,6 +557,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       params.promptCachePolicy,
     );
     let evidenceProjection: ReturnType<typeof projectWorkEvidence> | undefined;
+    let voiceTurnUserTimestamp: number | undefined;
     const baseTransformContext = session.agent.transformContext;
     const transformWorkEvidence: NonNullable<typeof session.agent.transformContext> = async (messages, signal) => {
       const transformed = await baseTransformContext?.(messages, signal) ?? messages;
@@ -593,6 +595,18 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       const loopGuard = detectToolLoops(recentToolCalls);
 
       let effectiveContext: typeof context = { ...context, messages: hygienicMessages };
+      if (params.voiceHistoryTokens) {
+        voiceTurnUserTimestamp ??= effectiveContext.messages.findLast(message => message.role === 'user')?.timestamp;
+        const voiceHistory = projectVoiceHistory(effectiveContext.messages, params.voiceHistoryTokens,
+          voiceTurnUserTimestamp);
+        if (voiceHistory.omittedMessages > 0) {
+          effectiveContext = { ...effectiveContext, messages: [...voiceHistory.messages,
+            { role: 'system' as const, content: '', sections: { 'xopc.voice-history': voiceHistoryNotice }, timestamp: 0 }] };
+          if (firstModelRequestAt === undefined) log.info({ conversationId, runId, phase: 'voice_history_projection',
+            omittedMessages: voiceHistory.omittedMessages, retainedMessages: voiceHistory.messages.length,
+            historyTokens: params.voiceHistoryTokens }, 'Projected recent voice history without changing stored transcript');
+        }
+      }
       const readAuthorization = originalReadAuthorizationNotice(historyContext,
         getActiveTranscriptUserText(conversationId) ?? (typeof userMessage === 'string' ? userMessage : ''));
       if (readAuthorization) effectiveContext = { ...effectiveContext, messages: [...effectiveContext.messages,

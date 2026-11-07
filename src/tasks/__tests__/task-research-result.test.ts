@@ -150,6 +150,30 @@ describe('personal research benchmark v1', () => {
     const listing = JSON.parse((await tool.execute('list-jobs', { command: 'get', section: 'evidence' })).content[0].text);
     expect(listing.items.map(item => item.toolCallId)).toContain('job-complete');
   });
+
+  it('reuses persisted image generation and visual observations for acceptance without regenerating', async () => {
+    const { worker } = execution(['The image shows a complete kitten on a beach']);
+    for (const [toolCallId, toolName, text, details] of [
+      ['generated', 'image_generate', 'Generated and published 1 image.', {}],
+      ['inspected', 'image', 'A complete kitten dances on a beach, centered with all paws visible.', { image: '/worker/kitten.jpg' }],
+      ['failed-vision', 'image', 'Image inspection failed.', { error: 'vision_failed' }],
+      ['failed-generation', 'image_generate', 'Image generation failed.', { error: 'generation_failed' }],
+    ] as const) appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId, toolName,
+      content: [{ type: 'text', text }], details, isError: false, timestamp: Date.now() });
+    const tool = createTaskCollaborationTool({ getCurrentConversationId: () => worker.key, getCurrentAgentId: () => 'worker' });
+    const listing = JSON.parse((await tool.execute('image-evidence', { command: 'get', section: 'evidence' })).content[0].text);
+    expect(listing.items.map(item => item.toolCallId)).toEqual(['read-1', 'generated', 'inspected']);
+    const read = JSON.parse((await tool.execute('image-observation', { command: 'get', section: 'evidence', toolCallId: 'inspected' })).content[0].text);
+    const review = vi.fn<ResearchReviewer>(async () => ({ claims: [{ id: 'appearance', support: 'supported', note: 'Supported by the visual observation.' }],
+      checks: [{ criterionIndex: 0, status: 'passed', claimIds: ['appearance'], note: 'The visual observation describes the complete subject and scene.' }] }));
+    const result = await submitTaskResearchResult(worker.key, 'image-result', {
+      sources: [{ id: 'vision', toolCallId: read.toolCallId, excerpt: read.text }],
+      claims: [{ id: 'appearance', statement: 'The image shows a complete kitten on a beach.', kind: 'fact', sourceIds: ['vision'] }],
+    }, undefined, review);
+    expect(result.sources[0]).toMatchObject({ toolName: 'image', toolCallId: 'inspected', excerpt: read.text });
+    expect(result.checks[0].status).toBe('passed');
+    expect(review).toHaveBeenCalledOnce();
+  });
   it('reads host-persisted nested outputs even when sandbox output was omitted or failed', async () => {
     const { worker } = execution();
     for (const [id, isError, details] of [

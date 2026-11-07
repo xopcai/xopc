@@ -216,6 +216,9 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
   const input = isRecord(voice.input) ? voice.input : {};
   const refinement = isRecord(input.refinement) ? input.refinement : {};
   const realtime = isRecord(voice.realtime) ? voice.realtime : {};
+  const assistant = isRecord(realtime.assistant) ? realtime.assistant : {};
+  const thinkingLevels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+  const thinkingLevel = thinkingLevels.find(level => level === assistant.thinkingLevel);
   const boson = isRecord(realtime.boson) ? higgsVoiceSchema.safeParse(realtime.boson.voice) : undefined;
   const refinementMode =
     refinement.mode === 'punctuation' ||
@@ -248,10 +251,17 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
         maxDictationMs: typeof realtime.maxDictationMs === 'number' ? realtime.maxDictationMs : 600_000,
         maxConversationMs: typeof realtime.maxConversationMs === 'number' ? realtime.maxConversationMs : 3_600_000,
         bargeIn: realtime.bargeIn !== false,
+        ...(isRecord(realtime.assistant) ? { assistant: {
+          ...(typeof assistant.model === 'string' ? { model: assistant.model } : {}),
+          ...(typeof assistant.historyTokens === 'number' && Number.isFinite(assistant.historyTokens)
+            ? { historyTokens: assistant.historyTokens } : {}),
+          ...(thinkingLevel ? { thinkingLevel } : {}),
+        } } : {}),
         ...(boson?.success && isRecord(realtime.boson) ? {
           boson: { defaultForNatural: realtime.boson.defaultForNatural === true, voice: boson.data },
         } : {}),
-        ...(isRecord(realtime.stt) && realtime.stt.provider === 'xopc-cloud' && typeof realtime.stt.model === 'string' ? {stt: {provider: 'xopc-cloud' as const, model: realtime.stt.model}} : {}),
+        ...(isRecord(realtime.stt) && (realtime.stt.provider === 'xopc-cloud' || realtime.stt.provider === 'alibaba') && typeof realtime.stt.model === 'string'
+          ? { stt: { provider: realtime.stt.provider, model: realtime.stt.model } } : {}),
         ...(isRecord(realtime.tts) && (realtime.tts.provider === 'alibaba' || realtime.tts.provider === 'xopc-cloud')
           ? { tts: {
               provider: realtime.tts.provider,

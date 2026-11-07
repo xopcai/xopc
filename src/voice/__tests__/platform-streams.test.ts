@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocketServer } from 'ws';
 import { once } from 'node:events';
 import type { StreamingSttEvent } from '../../media-understanding/types.js';
-import { openPlatformStt, openPlatformTts, PlatformVoiceError } from '../platform-streams.js';
+import { openPlatformStt, openPlatformTts, openPlatformTtsSession, PlatformVoiceError } from '../platform-streams.js';
 
 const servers: WebSocketServer[] = [];
 afterEach(async () => { for (const server of servers.splice(0)) { for (const socket of server.clients) socket.terminate(); await new Promise<void>(resolve => server.close(() => resolve())); } });
@@ -11,6 +11,50 @@ async function server() {
   return { server, url: `ws://127.0.0.1:${(server.address() as {port:number}).port}` };
 }
 describe('platform voice protocol', () => {
+  it('prewarms without text, separates setup and synthesis deadlines, and isolates segment completion', async () => {
+    const { server: s, url } = await server();
+    const received: string[] = [];
+    let connections = 0;
+    s.on('connection', socket => {
+      connections++;
+      socket.on('message', raw => {
+        const event = JSON.parse(raw.toString()); received.push(event.type);
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated', session: { output_sample_rate: 24000 } }));
+        if (event.type === 'input_text_buffer.commit') socket.send(JSON.stringify({ type: 'text.flushed' }));
+        if (event.type === 'session.finish') {
+          socket.send(JSON.stringify({ type: 'response.audio.delta', delta: Buffer.alloc(960, 1).toString('base64') }));
+          socket.send(JSON.stringify({ type: 'session.finished' }));
+        }
+      });
+    });
+    const session = await openPlatformTtsSession({ baseUrl: url, apiKey: 'test', voice: 'a',
+      signal: new AbortController().signal, timeoutMs: 100 });
+    expect(received).toEqual(['session.update']);
+    await new Promise(resolve => setTimeout(resolve, 130));
+    expect(session.supportsConcurrentSynthesis).toBe(true);
+    const results = await Promise.all(['First phrase.', 'Second phrase.'].map(text => session.synthesize(text)));
+    for (const result of results) {
+      const reader = result.audioStream.getReader();
+      expect((await reader.read()).value?.length).toBe(960);
+      expect((await reader.read()).done).toBe(true);
+      await result.release?.();
+    }
+    expect(connections).toBe(2);
+    await session.close();
+  });
+
+  it('closes a prepared connection on cancellation before submitting text', async () => {
+    const { server: s, url } = await server();
+    const abort = new AbortController();
+    s.on('connection', socket => socket.on('message', raw => {
+      expect(JSON.parse(raw.toString()).type).toBe('session.update');
+      socket.send(JSON.stringify({ type: 'session.updated', session: { output_sample_rate: 24000 } }));
+    }));
+    const session = await openPlatformTtsSession({ baseUrl: url, apiKey: 'test', voice: 'a', signal: abort.signal, timeoutMs: 1000 });
+    abort.abort();
+    await expect(session.synthesize('Do not speak')).rejects.toThrow();
+    await session.close();
+  });
   it('identifies an unsupported voice without reporting a credential failure', async () => {
     const { server: s, url } = await server();
     s.on('connection', socket => socket.on('message', () => socket.close(4400, 'Unsupported voice')));

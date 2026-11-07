@@ -159,7 +159,7 @@ export function createOmniVoiceEngine(options: {
     // Managed Cloud sessions generate replies after VAD and reject response.create.
     if (!options.route.route.managed) send('response.create');
   }
-  const turn = new TurnCoordinator(options.silenceDurationMs, (_text, decision, turnId) => {
+  const turn = new TurnCoordinator((_text, decision, turnId) => {
     if (closed || failed || muted || inputBlocked) return;
     options.send('turn.decision', { turnId, disposition: decision.disposition, confidence: decision.confidence, source: decision.source, committed: true });
     options.send('turn.committed', { turnId });

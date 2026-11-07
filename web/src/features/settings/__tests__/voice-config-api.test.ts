@@ -58,6 +58,14 @@ describe('voice-config-api', () => {
     expect(JSON.parse(String(fetchJson.mock.calls[0]?.[1].body)).voice.realtime.tts).toEqual(tts);
   });
 
+  it('preserves the voice execution budget and direct realtime recognition when saving', async () => {
+    fetchJson.mockResolvedValue({ ok: true });
+    const assistant = { model: 'deepseek/deepseek-flash', thinkingLevel: 'off', historyTokens: 4000 };
+    const stt = { provider: 'alibaba', model: 'qwen-audio-3.1-asr-flash-streaming' };
+    await patchVoiceSettings(normalizeVoiceSettings({ voice: { realtime: { assistant, stt } } }), 'conversation');
+    expect(JSON.parse(fetchJson.mock.calls[0][1].body).voice.realtime).toMatchObject({ assistant, stt });
+  });
+
   it('round-trips explicit refinement in the safe config patch', async () => {
     fetchJson.mockResolvedValue({ ok: true });
     const state = normalizeVoiceSettings({

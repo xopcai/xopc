@@ -103,6 +103,7 @@ import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
 import { ProjectTrustStore, hasTrustRequiringProjectResources, isProjectWorkspaceTrusted } from '../project-trust/trust-store.js';
 import { replaceAgentSystemPrompt } from './prompt/agent-system-prompt.js';
+import type { SystemPromptBuildOptions } from './prompt/service-prompt-builder.js';
 import {
   createAgentTurnPolicy as buildAgentTurnPolicy,
   type AgentTurnPolicy,
@@ -689,6 +690,7 @@ export class AgentManager implements AgentInstanceGateway {
     instance: AgentInstance,
     registeredToolNames: string[] = instance.registeredToolNames,
     activeCapabilityNames: readonly string[] = this.activeCapabilityNames(instance),
+    overrides?: Pick<SystemPromptBuildOptions, 'promptMode' | 'modelRef' | 'thinkingLevel'>,
   ): string {
     const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.conversationId);
     const rt = this.workspaceRuntimes.getOrCreate(
@@ -717,7 +719,14 @@ export class AgentManager implements AgentInstanceGateway {
         instance.activeProjectContext,
         this.buildActiveCapabilityContext(instance, activeCapabilityNames, registeredToolNames),
       ),
+      ...overrides,
     });
+  }
+
+  buildVoiceSystemPrompt(conversationId: string, modelRef: string, thinkingLevel?: string): string | undefined {
+    const instance = this.agents.get(conversationId);
+    return instance ? this.buildSystemPromptForInstance(instance, undefined, undefined,
+      { promptMode: 'voice', modelRef, thinkingLevel }) : undefined;
   }
 
   /** Structured SKILL.md preview for the gateway console. */

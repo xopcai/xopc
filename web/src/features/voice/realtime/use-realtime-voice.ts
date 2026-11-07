@@ -165,6 +165,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const responseDoneRef = useRef(false);
   const speechStoppedAtRef = useRef<number | null>(null);
   const firstAudioRef = useRef(false);
+  const speakingUtterancesRef = useRef(new Set<string>());
   const playedBytesRef = useRef(0);
   const maxSessionMsRef = useRef(600_000);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -224,6 +225,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     setActivities([]);
     setClarification(null);
     speechStoppedAtRef.current = null;
+    speakingUtterancesRef.current.clear();
     mutedRef.current = false;
     setMuted(false);
     setSettingsRequired(false);
@@ -468,7 +470,17 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
               setFinalTranscript([...dictationRef.current.values()].join(' '));
             }
           }
-          if (event.type === 'input.speech_stopped') speechStoppedAtRef.current = performance.now();
+          if (event.type === 'input.speech_started' && !mutedRef.current && clientRef.current?.session.bargeIn
+            && activeResponseIdRef.current && firstAudioRef.current) {
+            if (speakingUtterancesRef.current.size < 32) speakingUtterancesRef.current.add(event.payload.utteranceId);
+            playerRef.current?.duck(true);
+          }
+          if (event.type === 'input.speech_stopped') {
+            speechStoppedAtRef.current = performance.now();
+            if (speakingUtterancesRef.current.delete(event.payload.utteranceId) && speakingUtterancesRef.current.size === 0) {
+              playerRef.current?.duck(false);
+            }
+          }
           if (event.type === 'response.created') {
             if (activeResponseIdRef.current) {
               // A new response cannot own playback until the previous one has
@@ -477,6 +489,8 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
               return;
             }
             activeResponseIdRef.current = event.payload.responseId;
+            speakingUtterancesRef.current.clear();
+            playerRef.current?.duck(false);
             responseDoneRef.current = false;
             firstAudioRef.current = false;
             playedBytesRef.current = 0;
@@ -507,6 +521,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             }
           }
           if (event.type === 'response.cancelled' && activeResponseIdRef.current === event.payload.responseId) {
+            speakingUtterancesRef.current.clear();
             activeResponseIdRef.current = null;
             setResponsePhase('idle');
             playerRef.current?.clear();
@@ -706,6 +721,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     const startedAt = performance.now();
     const responseId = activeResponseIdRef.current;
     playerRef.current?.clear();
+    speakingUtterancesRef.current.clear();
     activeResponseIdRef.current = null;
     setResponsePhase('idle');
     if (responseId) {
@@ -716,6 +732,10 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const toggleMute = useCallback(() => {
     const next = !mutedRef.current;
     mutedRef.current = next;
+    if (next) {
+      speakingUtterancesRef.current.clear();
+      playerRef.current?.duck(false);
+    }
     mediaStreamRef.current?.getAudioTracks().forEach((track) => { track.enabled = !next; });
     // Discard partial frames so speech from before muting cannot leak on unmute.
     const capture = captureRef.current;
