@@ -27,6 +27,7 @@ export interface PreviewSource {
 interface Lease {
   session: LocalAppPreviewSession;
   owner: string;
+  lastUsedAt: number;
   scopes: ReturnType<typeof LocalAppResourceScopesSchema.parse>;
   storage: Map<string, unknown>;
   worker?: ChildProcess;
@@ -52,6 +53,12 @@ export class LocalAppPreviewSessions {
       if (lease.session.appId === appId && lease.session.sourceHash !== input.sourceHash) this.revoke(lease.session.id);
     }
     for (const lease of this.leases.values()) if (lease.session.expiresAt <= Date.now()) this.revoke(lease.session.id);
+    // Reclaim only this caller's idle workers; never interrupt another caller or a recent operation.
+    if (input.mode !== 'readonly' && [...this.leases.values()].filter(lease => lease.worker).length + this.closingWorkers.size >= 4) {
+      const idle = [...this.leases.values()].filter(lease => lease.worker && lease.owner === caller.principalId
+        && Date.now() - lease.lastUsedAt >= 30_000).sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0];
+      if (idle) this.revoke(idle.session.id);
+    }
     if (this.leases.size >= 12 || [...this.leases.values()].filter(lease => lease.owner === caller.principalId).length >= 6) {
       throw new CapabilityError('UNAVAILABLE', 'Close another preview before opening a new one');
     }
@@ -68,7 +75,7 @@ export class LocalAppPreviewSessions {
       bindings, permissions: source.permissions.filter(permission => ['theme', 'storage', 'notification'].includes(permission))
         .concat(bindings.map(binding => `capability:${binding.id}`)) };
     const timer = setTimeout(() => this.revoke(session.id), TTL); timer.unref?.();
-    const lease: Lease = { session, scopes, owner: caller.principalId, storage: new Map(), timer, queue: Promise.resolve() };
+    const lease: Lease = { session, scopes, owner: caller.principalId, lastUsedAt: Date.now(), storage: new Map(), timer, queue: Promise.resolve() };
     this.leases.set(session.id, lease);
     try {
       if (input.mode !== 'readonly') {
@@ -106,6 +113,7 @@ export class LocalAppPreviewSessions {
     if (caller.signal?.aborted) throw new CapabilityError('CANCELLED', 'Preview request cancelled');
     try { this.assertSource(lease.session.appId, lease.session.sourceHash); }
     catch (error) { this.revoke(id); throw error; }
+    lease.lastUsedAt = Date.now();
     return lease;
   }
 

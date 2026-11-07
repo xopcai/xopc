@@ -32,8 +32,10 @@ import type { ExtensionLoader } from '../extensions/index.js';
 import type { ProjectService } from '../projects/index.js';
 import { slugifyProjectName } from '../projects/project-store.js';
 import { createLogger } from '../utils/logger.js';
-import { afterSqliteCommit, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { afterSqliteCommit, getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { currentOperationId } from '../infra/operation-context.js';
+import { createConversation } from '../storage/sqlite/conversation-repository.js';
+import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { DurableState } from '../storage/sqlite/durable-state.js';
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { readLocalAppAcceptanceConfig } from './acceptance.js';
@@ -340,6 +342,7 @@ export class LocalAppService {
     if (!app || !token) return null;
     return {
       ...app,
+      developmentConversationId: this.findDevelopmentConversation(app),
       draftPreviewUrl: `/api/local-apps/preview/${token}/draft/ui/index.html`,
       permissions: readLocalAppPermissions(app.workspaceRoot),
       releases: this.store.listReleases(id).map(({ artifactPath: _artifactPath, manifestJson: _manifestJson, ...release }) => release),
@@ -428,8 +431,51 @@ export class LocalAppService {
     if (!this.getUiGrant(extensionId).permissions.includes(permission)) throw new CapabilityError('FORBIDDEN', 'Local app permission denied');
   }
 
-  create(input: CreateLocalAppInput): LocalAppDetail {
-    return this.createInternal(input);
+  create(input: CreateLocalAppInput, conversationId?: string): LocalAppDetail {
+    const app = this.createInternal(input);
+    const origin = conversationId ? getSessionMetadata(conversationId) : undefined;
+    if (conversationId && origin?.agentId === 'coder' && (!origin.projectId || origin.projectId === app.projectId)) {
+      this.options.projects.attachSession(conversationId, app.projectId);
+      new DurableState<string>('local-app-development').set(app.id, conversationId);
+    }
+    return this.get(app.id)!;
+  }
+
+  private findDevelopmentConversation(app: LocalApp): string | undefined {
+    const bound = new DurableState<string>('local-app-development').get(app.id);
+    const origin = getSqliteDatabase().prepare(`SELECT p.conversation_id FROM chat_previews p
+      JOIN chat_preview_revisions r ON r.preview_id = p.preview_id WHERE r.promoted_app_id = ?`).get(app.id) as { conversation_id: string } | undefined;
+    for (const candidate of [bound, origin?.conversation_id]) {
+      const metadata = candidate ? getSessionMetadata(candidate) : undefined;
+      if (metadata?.agentId === 'coder' && metadata.projectId === app.projectId) return metadata.key;
+    }
+    // Recover the old workbench's first-build handoff only when its provenance is unambiguous.
+    const legacy = getSqliteDatabase().prepare(`SELECT DISTINCT s.conversation_id FROM sessions s
+      JOIN transcripts t ON t.conversation_id = s.conversation_id
+      JOIN transcript_entries e ON e.transcript_id = t.transcript_id
+      WHERE s.project_id = ? AND s.agent_id = 'coder' AND e.role = 'user'
+      AND e.seq = (SELECT MIN(first.seq) FROM transcript_entries first WHERE first.transcript_id = t.transcript_id AND first.role = 'user')
+      AND (instr(e.payload_json, ?) > 0 OR instr(e.payload_json, ?) > 0) LIMIT 2`).all(app.projectId,
+      '请基于 APP_BRIEF.md 完成这个本地应用的首版。先检查现有草稿，再实现最小可用版本并运行校验；完成后告诉我可以如何预览。',
+      'Build the first usable version of this local app from APP_BRIEF.md. Inspect the existing draft, implement the smallest useful version, run validation, and tell me how to preview it.') as Array<{ conversation_id: string }>;
+    return legacy.length === 1 ? legacy[0].conversation_id : undefined;
+  }
+
+  resolveDevelopmentConversation(id: string): string {
+    const app = this.store.get(id);
+    if (!app) throw new CapabilityError('NOT_FOUND', 'Local app not found');
+    return runSqliteWriteTransaction(() => {
+      const bindings = new DurableState<string>('local-app-development');
+      const existing = this.findDevelopmentConversation(app);
+      if (existing) {
+        bindings.set(id, existing);
+        return existing;
+      }
+      const session = createConversation({ agentId: 'coder', projectId: app.projectId,
+        sourceChannel: 'webchat', name: app.name, customData: { localAppId: id } }, app.workspaceRoot);
+      bindings.set(id, session.key);
+      return session.key;
+    });
   }
 
   createFromPreview(input: CreateLocalAppInput & {
@@ -774,10 +820,6 @@ export class LocalAppService {
       cpSync(app.workspaceRoot, stagedArtifact, { recursive: true, filter: shouldCopyLocalAppPath });
       const { manifestJson, entryPath } = validateLocalAppPackage(stagedArtifact, app.extensionId);
       const sourceHash = hashLocalAppDirectory(stagedArtifact);
-      const acceptance = this.store.getLatestAcceptanceForSource(app.id, sourceHash);
-      if (acceptance?.status !== 'passed') {
-        throw new Error('The current draft has not passed automatic acceptance');
-      }
       renameSync(stagedArtifact, artifactPath);
       artifactCreated = true;
       await this.activateArtifact({

@@ -33,6 +33,13 @@ const validation: LocalAppValidationResult = {
 };
 
 describe('local app fix guidance', () => {
+  it('classifies legacy runtime resource exhaustion as a platform retry', () => {
+    const guidance = buildLocalAppFixGuidance(app, validation, { locale: 'zh', diagnostics: [
+      { phase: 'runtime', code: 'script_error', message: 'Too many isolated preview workers' },
+    ] });
+    expect(guidance.owner).toBe('platform');
+    expect(guidance.action).toBe('retry');
+  });
   it('bounds diagnostics and treats their content as untrusted data', () => {
     const input = parseLocalAppFixGuidanceInput({
       locale: 'zh',

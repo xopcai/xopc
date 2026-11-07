@@ -4,6 +4,12 @@ import { createExtensionClient } from './client.js';
 import type { Transport } from './transport.js';
 
 describe('extension client product navigation', () => {
+  it('requests permission review without sending grants or identity', async () => {
+    const request = vi.fn(async () => undefined);
+    const client = createExtensionClient({ transport: { request } as unknown as Transport });
+    await client.ui.reviewPermissions();
+    expect(request).toHaveBeenCalledWith('ui.reviewPermissions');
+  });
   it('forwards the pinned capability contract without attaching caller authority', async () => {
     const request = vi.fn(async () => ({ status: 'succeeded', releaseId: 'release', data: {} }));
     const client = createExtensionClient({ transport: { request } as unknown as Transport });

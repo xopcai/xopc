@@ -90,10 +90,10 @@ export function AcceptanceScenarioList({
                       <Button
                         variant="ghost"
                         className="mt-1 h-7 rounded-lg px-2 text-[11px] text-danger hover:text-danger"
-                        onClick={() => onAskCoder(scenario, result)}
+                        onClick={() => result.failureKind === 'runner' ? onRunScenario(scenario.id) : onAskCoder(scenario, result)}
                       >
                         <MessageSquareCode className="size-3" />
-                        {zh ? '让 Coder 修复' : 'Ask Coder to fix'}
+                        {result.failureKind === 'runner' ? (zh ? '恢复资源并重试' : 'Retry preview') : (zh ? '让 Coder 修复' : 'Ask Coder to fix')}
                       </Button>
                     </div>
                   ) : result?.status === 'passed' ? (

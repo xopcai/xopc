@@ -259,12 +259,12 @@ export function createOmniVoiceEngine(options: {
         clearTimeout(uploadTimer);
         uploadingBytes = 0;
         if (closed || failed) return;
-        if (error) { fail('OMNI_CONNECTION_FAILED'); return; }
+        if (error) { fail('OMNI_CONNECTION_FAILED', { err: error, phase: 'audio_upload' }); return; }
         pumpInput();
       });
-    } catch {
+    } catch (err) {
       clearTimeout(uploadTimer);
-      fail('OMNI_CONNECTION_FAILED');
+      fail('OMNI_CONNECTION_FAILED', { err, phase: 'audio_upload' });
     }
   }
   const save = (entry: OmniTranscript) => {
@@ -329,7 +329,7 @@ export function createOmniVoiceEngine(options: {
     cancel('client_cancelled');
     options.send('session.error', { code: 'RESPONSE_FAILED', message: 'Voice playback could not keep up. This reply was stopped; you can continue speaking.', recoverable: true });
   };
-  function fail(code: string, details: { closeCode?: number; upstreamStatus?: number } = {}) {
+  function fail(code: string, details: { closeCode?: number; upstreamStatus?: number; err?: unknown; phase?: string } = {}) {
     if (closed || failed) return;
     failed = true;
     agentTools?.close();
@@ -341,10 +341,14 @@ export function createOmniVoiceEngine(options: {
     responseCreateQueued = false;
     log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code,
       provider: options.route.route.provider, upstreamHost: new URL(options.route.url).hostname,
-      queuedInputBytes, uploadingBytes, bufferedAmount: socket?.bufferedAmount, ...details }, `Native voice conversation failed: ${code}`);
+      ready, queuedInputBytes, uploadingBytes, bufferedAmount: socket?.bufferedAmount, ...details,
+      ...(details.err !== undefined && !(details.err instanceof Error) ? { errorMessage: String(details.err) } : {}) }, `Native voice conversation failed: ${code}`);
     rejectStart?.(new Error(code));
     const reference = platformRequestId ?? options.callId;
-    options.send('session.error', { code, message: `${FAILURE_MESSAGES[code] ?? 'Natural conversation failed.'} (${code}; reference: ${reference})`, recoverable: false });
+    const message = code === 'OMNI_CONNECTION_FAILED' && ready
+      ? 'The connection to the voice service was lost. Reconnect to continue.'
+      : FAILURE_MESSAGES[code] ?? 'Natural conversation failed.';
+    options.send('session.error', { code, message: `${message} (${code}; reference: ${reference})`, recoverable: false });
     void options.onClose('omni_error', true);
   }
   function discardInput() {
@@ -389,7 +393,7 @@ export function createOmniVoiceEngine(options: {
           log.info({ sessionId: options.callId, platformRequestId, model: options.route.route.model, provider: options.route.route.provider }, 'Native voice upstream connected');
         });
         timer = setTimeout(() => { fail('OMNI_START_TIMEOUT'); engine.close(); }, 15_000);
-        socket.on('error', () => fail('OMNI_CONNECTION_FAILED'));
+        socket.on('error', (err) => fail('OMNI_CONNECTION_FAILED', { err, phase: ready ? 'connected' : 'connecting' }));
         socket.on('close', (closeCode) => {
           if (!closed) fail(higgs && closeCode === 3000 ? 'BOSON_AUTH_FAILED'
             : higgs && closeCode === 4429 ? 'BOSON_QUOTA_EXCEEDED' : 'OMNI_CONNECTION_CLOSED', { closeCode });

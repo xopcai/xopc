@@ -22,6 +22,12 @@ export type {
 } from '@xopcai/gateway-contract';
 export type LocalApp = LocalAppRecord;
 
+export async function resolveLocalAppDevelopmentConversation(id: string): Promise<string> {
+  return (await fetchJson<{ conversationId: string }>(apiUrl(`/api/local-apps/${encodeURIComponent(id)}/development-conversation`), {
+    method: 'POST',
+  })).conversationId;
+}
+
 export async function listLocalApps(): Promise<LocalApp[]> {
   return (await fetchJson<{ apps: LocalApp[] }>(apiUrl('/api/local-apps'))).apps;
 }
