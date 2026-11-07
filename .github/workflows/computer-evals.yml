@@ -1,0 +1,50 @@
+name: Computer Use Offline Evals
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/computer/**'
+      - 'scripts/osworld/**'
+      - 'scripts/compare-computer-evaluations.mts'
+      - 'scripts/__tests__/computer-evaluation-cli.test.ts'
+      - 'scripts/__tests__/osworld-bridge.test.ts'
+      - 'packages/computer-control-contract/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/computer-evals.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/computer/**'
+      - 'scripts/osworld/**'
+      - 'scripts/compare-computer-evaluations.mts'
+      - 'scripts/__tests__/computer-evaluation-cli.test.ts'
+      - 'scripts/__tests__/osworld-bridge.test.ts'
+      - 'packages/computer-control-contract/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/computer-evals.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26.12.1
+          cache: pnpm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      - name: Check OSWorld protocol and reports without model or desktop calls
+        run: pnpm run computer:osworld:check
+      - name: Check shared Computer Use adapters and native report comparisons
+        run: pnpm exec vitest run src/computer/__tests__/keyboard.test.ts src/computer/__tests__/model-adapter.test.ts src/computer/__tests__/evaluation.test.ts src/computer/__tests__/evaluation-harness.test.ts src/computer/__tests__/evaluation-comparison.test.ts scripts/__tests__/computer-evaluation-cli.test.ts scripts/__tests__/osworld-bridge.test.ts

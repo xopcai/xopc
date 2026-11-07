@@ -2,9 +2,25 @@
 
 ## First-audio latency
 
-In Current assistant mode, Alibaba TTS prepares its WebSocket session in parallel with Agent generation and reuses that connection for the segments of one reply. Each subsequent segment waits for the provider's `response.done` boundary. Completing or interrupting a reply releases the connection; preparation sends no text. Other streaming providers keep their existing synthesis path unless they implement connection preparation.
+In Current assistant mode, TTS connection preparation starts on recognized speech onset, before the input is committed. No text or Agent work is submitted speculatively. Alibaba reuses one connection for the segments of a reply and waits for the provider's `response.done` boundary. XOPC Cloud prepares the first connection and uses independent connections for later segments, preserving prefetch without assuming vendor-specific flush boundaries. Mute and input discard release unused preparation; completion, interruption and hangup release the reply's connections.
 
-The first complete sentence can be spoken immediately. If no sentence is ready after 300 ms, the gateway tries a short phrase boundary (comma or whitespace, after at least 12 characters), keeping the remaining text for later synthesis. It does not force a split inside a word, code block, table, incomplete link or inline code. A reply without a safe boundary still waits for more text or the end of the turn.
+The first complete sentence or Chinese clause of at least six characters can be spoken immediately. If no safe boundary is ready after 120 ms, the gateway tries a short phrase boundary, keeping the remaining text for later synthesis. It does not force a split inside a word, code block, table, incomplete link or inline code. A reply without a safe boundary still waits for more text or the end of the turn.
+
+Recognition owns the configured silence interval. Complete finalized input has a 40 ms event-ordering grace period, without a second minimum-silence floor. Incomplete phrases retain their longer continuation hold. Web playback requests interactive latency with a 20 ms first-frame scheduling lead. Speech onset reversibly ducks playback; substantial non-echo partial transcripts stable for 180 ms can stop the old reply. Only finalized input is submitted to the Agent. Stopping playback continues to leave durable background tasks running unless explicitly cancelled.
+
+## Voice execution and history
+
+`voice.realtime.assistant` accepts an optional `model`, a `thinkingLevel` (default `off`), and `historyTokens` (default 4000 estimated history tokens, configurable from 1000 to 16000). The model override applies only to voice turns. It does not replace the conversation's text model or remove tools. Explicit streaming recognition can select Alibaba or XOPC Cloud independently of batch transcription.
+
+Voice requests retain system instructions, complete recent user turns and the entire current execution, including tool results and steering inputs. A fitting prior compaction summary is retained. Older rows remain in SQLite and accessible through recall/search; the provider receives an explicit notice when history is omitted. This is an ephemeral provider projection, not a transcript rewrite or a second session. The current execution can exceed the history budget. A fitting projected request avoids foreground compaction of unrelated older history.
+
+Ada uses a per-turn spoken prompt that retains identity, workspace instructions, safety, trust, memory access and task coordination. Ordinary text prompts are unchanged.
+
+## Measuring the 1.5-second target
+
+Use `node --import tsx/esm scripts/benchmark-voice-latency.mts PCM16_16KHZ_FILE AGENT_ID ROUNDS` against a running gateway. It creates and cleans up a disposable conversation by default. The optional fourth argument uses an existing conversation and appends real turns: use a database snapshot for comparisons involving Ada's actual history. Existing conversations are never deleted by the benchmark.
+
+The fixture is paced at 20 ms and its final voiced PCM frame anchors the clock, so recognition endpoint waiting is included. Silence continues to feed the recognizer while waiting. Output includes endpoint, commit, model and TTS delays and nearest-rank p50/p95. Playback ACKs are simulated; results measure audio receipt, not physical speaker output. Small sample percentiles do not establish a production SLO. Cold starts, failures, interruptions and real devices require separate acceptance.
 
 Gateway logs record `first_response_text`, `first_speech_phrase`, `response_tts_ready`, `first_synthesis_requested`, `first_tts_text_submitted` (prepared routes), and `first_response_audio`. Compare `textToPhraseMs`, `phraseToSubmitMs`, and `submitToAudioMs` for the same `responseId` to distinguish segmentation, connection waiting and synthesis. The DashScope transport also records `setupMs` and `synthesisMs`.
 

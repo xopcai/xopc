@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../../config/schema.js';
 import { resolveStreamingStt, resolveStreamingTts } from '../runtime.js';
+import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { voiceFixture } from '../../__tests__/voice-fixture.js';
 
 function settings() {
   return ConfigSchema.parse({
@@ -14,7 +16,33 @@ function settings() {
 }
 
 describe('independent realtime voice settings', () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => { vi.unstubAllEnvs(); resetModelCatalogStore(); });
+
+  it('keeps explicitly selected stream-only Cloud recognition independent of batch availability', () => {
+    getModelCatalogStore().saveSource('xopc-cloud', { providerId: 'xopc-cloud', baseUrl: 'https://example.test/v1',
+      api: 'openai-completions', etag: null, recommendedModel: null, lastSuccessAt: 1,
+      models: [{ id: 'stream-only', name: 'Streaming STT', availability: 'available', kind: 'stt',
+        input: ['audio'], output: ['text'], operations: ['audio.transcription'], reasoning: false,
+        contextWindow: 0, maxOutputTokens: null, voice: voiceFixture(['transcription.stream']) }] });
+    const config = settings();
+    config.voice!.realtime.stt = { provider: 'xopc-cloud', model: 'stream-only' };
+    expect(resolveStreamingStt(config)?.route).toEqual({ provider: 'xopc-cloud', model: 'stream-only', managed: true });
+  });
+
+  it('pins direct streaming recognition independently of batch dictation and resolves its credential', () => {
+    const config = settings();
+    config.voice!.realtime.stt = { provider: 'alibaba', model: 'qwen-audio-3.1-asr-flash-streaming' };
+    config.tools.media!.audio!.provider = 'openai';
+    expect(resolveStreamingStt(config)).toMatchObject({ apiKey: 'input-key',
+      route: { provider: 'alibaba', model: 'qwen-audio-3.1-asr-flash-streaming', managed: false } });
+    expect(config.tools.media!.audio!.provider).toBe('openai');
+  });
+
+  it('does not silently replace an unavailable explicitly selected recognition route', () => {
+    const config = settings();
+    config.voice!.realtime.stt = { provider: 'alibaba', model: 'not-a-streaming-model' };
+    expect(resolveStreamingStt(config)).toBeUndefined();
+  });
 
   it('reuses the input credential without changing message readout', () => {
     const config = settings();

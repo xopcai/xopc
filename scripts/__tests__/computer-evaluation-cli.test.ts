@@ -35,6 +35,12 @@ describe('computer evaluation CLI process boundary', () => {
     const compared = cli('compare-computer-evaluations', f.output, f.output);
     expect(compared.status, compared.stderr).toBe(0);
     expect(JSON.parse(compared.stdout)).toMatchObject({ complete: true, pairedRuns: 2, ties: 2, metrics: { durationMs: { deltaMean: 0 } } });
+    const candidatePath = join(f.root, 'candidate.json');
+    writeFileSync(candidatePath, JSON.stringify({ ...report, runs: report.runs.map((run: any) => ({ ...run, outcome: 'failed' })) }));
+    expect(cli('compare-computer-evaluations', f.output, candidatePath).status).toBe(0);
+    const checked = cli('compare-computer-evaluations', f.output, candidatePath, '--check');
+    expect(checked.status).toBe(1);
+    expect(JSON.parse(checked.stdout)).toMatchObject({ regressionGate: { passed: false, reasons: ['task_regressions', 'false_successes'] } });
   });
   it('persists a real process failure and missing denominator without leaking stderr or claiming safe inputs', () => {
     const f = fixture(true);

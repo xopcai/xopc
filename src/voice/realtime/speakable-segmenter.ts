@@ -12,6 +12,7 @@ export class SpeakableSegmenter {
     private readonly maxCharacters = 120,
     private readonly minCharacters = 0,
     private readonly firstMinCharacters = minCharacters,
+    private readonly firstClauseCharacters = 0,
   ) {}
 
   push(delta: string): string[] {
@@ -59,6 +60,11 @@ export class SpeakableSegmenter {
         if (char === ')') parentheses = Math.max(0, parentheses - 1);
         if (inlineCode || brackets || parentheses || (char === ']' && this.pending[index + 1] === '(')) continue;
         const minCharacters = this.emitted ? this.minCharacters : this.firstMinCharacters;
+        if (!this.emitted && this.firstClauseCharacters > 0 && index >= this.firstClauseCharacters - 1
+          && /[，、,]/u.test(char) && /\p{Script=Han}/u.test(this.pending.slice(0, index))) {
+          boundary = index + 1;
+          break;
+        }
         if (SENTENCE_END.test(char) && index + 1 >= minCharacters) {
           boundary = index + 1;
           break;
@@ -101,7 +107,8 @@ export class SpeakableSegmenter {
       if (char === '(') parentheses += 1;
       if (char === ')') parentheses = Math.max(0, parentheses - 1);
       if (inlineCode || brackets || parentheses) continue;
-      if (index >= 11 && /[，、,\s]/u.test(char)) {
+      const shortCjkClause = index >= 5 && /[，、,]/u.test(char) && /\p{Script=Han}/u.test(this.pending.slice(0, index));
+      if (shortCjkClause || (index >= 11 && /[，、,\s]/u.test(char))) {
         const phrase = this.toSpeech(this.pending.slice(0, index + 1));
         if (!phrase) continue;
         this.pending = this.pending.slice(index + 1);

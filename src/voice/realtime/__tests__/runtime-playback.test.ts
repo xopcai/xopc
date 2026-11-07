@@ -42,6 +42,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
   let onSttEvent: (event: StreamingSttEvent) => void;
   let events: VoiceServerEvent[];
   let frames: number[];
+  let frameResponses: string[];
   let responseId: string;
   let fixtureDirectory: string | undefined;
   let previousStateDirectory: string | undefined;
@@ -77,6 +78,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     abortStt = vi.fn();
     events = [];
     frames = [];
+    frameResponses = [];
     vi.spyOn(alibabaTranscriptionProvider, 'openAudioStream').mockImplementation(async (request) => {
       onSttEvent = request.onEvent;
       request.signal.addEventListener('abort', () => request.onEvent({ type: 'error', error: new Error('Voice request aborted') }), { once: true });
@@ -112,7 +114,11 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     expect(session.bargeIn).toBe(bargeIn);
     socket = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}${session.websocketPath}`);
     socket.on('message', (data, binary) => {
-      if (binary) frames.push(decodeVoiceAudioFrame(data as Buffer).audio.byteLength);
+      if (binary) {
+        const frame = decodeVoiceAudioFrame(data as Buffer);
+        frames.push(frame.audio.byteLength);
+        frameResponses.push(frame.responseId);
+      }
       else events.push(parseVoiceServerEvent(JSON.parse(data.toString())));
     });
     await once(socket, 'open');
@@ -272,7 +278,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     }
     send('response.audio.played', { responseId, playedDurationMs: 2_000 });
     await roundTrip();
-    expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000);
+    expect(frames.reduce((sum, bytes, index) => sum + (frameResponses[index] === responseId ? bytes : 0), 0)).toBe(96_000);
     expect(events.some((event) => event.type === 'response.done' || event.type === 'session.error')).toBe(false);
   });
 

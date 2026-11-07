@@ -104,6 +104,8 @@ export type SpeechSynthesisStreamRequest = SpeechSynthesisRequest;
 
 /** A prepared connection owned by one reply; syntheses must be consumed in order. */
 export interface SpeechStreamSession {
+  /** Independent transports can open the next segment while current audio plays. */
+  supportsConcurrentSynthesis?: boolean;
   synthesize(text: string): Promise<SpeechSynthesisStreamResult>;
   close(): Promise<void>;
 }

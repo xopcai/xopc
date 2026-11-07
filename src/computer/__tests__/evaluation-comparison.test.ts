@@ -33,4 +33,20 @@ describe('paired computer evaluations', () => {
     expect(compareComputerEvaluations({ ...baseline, summary: { passed: 99 } }, candidate).baseline.passed).toBe(2);
     expect(() => compareComputerEvaluations({ ...baseline, runs: [row('a'), row('a')] }, candidate)).toThrow();
   });
+  it('fails a strict regression gate for a lost task even when another task improves', () => {
+    const before = { ...baseline, runs: [row('a'), { ...row('b'), outcome: 'failed' }] };
+    const after = { ...candidate, runs: [{ ...candidate.runs[0], outcome: 'failed' }, candidate.runs[1]] };
+    expect(compareComputerEvaluations(before, after)).toMatchObject({ wins: 1, losses: 1, pairedSuccessRateDelta: 0,
+      regressionGate: { passed: false, reasons: ['task_regressions'] } });
+  });
+  it('does not pass unknown safety or false-success evidence merely because both versions failed', () => {
+    const after = { ...candidate, runs: candidate.runs.map(run => ({ ...run, outcome: 'failed', claimedSuccess: true, duplicateInputs: null })) };
+    const result = compareComputerEvaluations({ ...baseline, runs: baseline.runs.map(run => ({ ...run, outcome: 'failed' })) }, after);
+    expect(result.regressionGate).toEqual({ passed: false, reasons: ['false_successes', 'unmeasured_safety'] });
+    expect(compareComputerEvaluations(baseline, candidate).regressionGate).toEqual({ passed: true, reasons: [] });
+  });
+  it('keeps an interrupted matrix from passing even when all recorded tasks passed', () => {
+    expect(compareComputerEvaluations(baseline, { ...candidate, interrupted: true }).regressionGate)
+      .toEqual({ passed: false, reasons: ['interrupted_run'] });
+  });
 });

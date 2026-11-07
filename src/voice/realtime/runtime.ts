@@ -33,7 +33,7 @@ import { createLogger } from '../../utils/logger.js';
 import { getPersonalAgentByConversation } from '../../personal-agent/repository.js';
 import { onUserContextChange } from '../../user-context/changes.js';
 import { mergeSttConfigFromAppConfig } from '../stt/config.js';
-import { resolveSTTProviderChain } from '../stt/factory.js';
+import { resolveSTTProviderChain, resolveSTTProviderConfig } from '../stt/factory.js';
 import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
 import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
 import { resolveSpeechProviderChain, type ResolvedSpeechProvider } from '../tts/factory.js';
@@ -89,13 +89,15 @@ function isStreamingProvider(
 export function resolveStreamingStt(config: Config, language?: string): ResolvedStreamingStt | undefined {
   const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
   const configured = config.voice?.realtime?.stt;
-  const chain = configured ? [{ id: configured.provider, model: configured.model }] : resolveSTTProviderChain(sttConfig);
+  const selected = configured?.provider === 'alibaba' ? resolveSTTProviderConfig(configured.provider, sttConfig) : undefined;
+  const chain = configured
+    ? configured.provider === 'xopc-cloud' ? [{ id: configured.provider, model: configured.model }]
+      : selected ? [{ ...selected, model: configured.model }] : []
+    : resolveSTTProviderChain(sttConfig);
   for (const entry of chain) {
     const plugin = getMediaUnderstandingProvider(entry.id);
     if (!isStreamingProvider(plugin)) continue;
-    const model = plugin.id === 'xopc-cloud'
-      ? config.voice?.realtime?.stt?.model ?? entry.model ?? plugin.streamingAudio.defaultModel
-      : plugin.streamingAudio.defaultModel;
+    const model = configured?.model ?? (plugin.id === 'xopc-cloud' ? entry.model : undefined) ?? plugin.streamingAudio.defaultModel;
     if (!plugin.streamingAudio.models.includes(model)) continue;
     return {
       plugin,

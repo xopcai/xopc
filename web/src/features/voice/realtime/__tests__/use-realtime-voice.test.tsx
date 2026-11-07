@@ -556,18 +556,23 @@ describe('useRealtimeVoice', () => {
     expect(mocks.connect).toHaveBeenCalledOnce();
   });
 
-  it.each([true, false])('ignores microphone echo with bargeIn=%s and waits for authoritative cancellation', async (enabled) => {
+  it.each([true, false])('only ducks confirmed speech with bargeIn=%s and waits for authoritative cancellation', async (enabled) => {
     await startResponse();
     bargeIn = enabled;
+    mocks.playerDuck.mockClear();
+    act(() => onAudioLevel({ level: 0.5, speaking: true }));
+    expect(mocks.playerDuck).not.toHaveBeenCalled();
     act(() => {
       onAudioLevel({ level: 0.5, speaking: true });
       onEvent({ type: 'input.speech_started', payload: { utteranceId: 'u1' } });
     });
     expect(mocks.playerClear).not.toHaveBeenCalled();
-    expect(mocks.playerDuck).not.toHaveBeenCalled();
+    if (enabled) expect(mocks.playerDuck).toHaveBeenLastCalledWith(true);
+    else expect(mocks.playerDuck).not.toHaveBeenCalled();
     expect(voice.audioLevel).toBe(1);
     act(() => onEvent({ type: 'input.speech_stopped', payload: { utteranceId: 'u1' } }));
-    expect(mocks.playerDuck).not.toHaveBeenCalled();
+    if (enabled) expect(mocks.playerDuck).toHaveBeenLastCalledWith(false);
+    else expect(mocks.playerDuck).not.toHaveBeenCalled();
     act(() => voice.interruptResponse());
     expect(cancelResponse).toHaveBeenCalledWith('r1');
   });

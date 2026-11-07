@@ -32,6 +32,7 @@ export function SlidingSegmented<T extends string>({
   flush = false,
   className,
   buttonClassName,
+  indicatorClassName,
 }: {
   value: T;
   onChange: (next: T) => void;
@@ -42,6 +43,7 @@ export function SlidingSegmented<T extends string>({
   className?: string;
   /** Extra classes for each segment button (e.g. height, padding). */
   buttonClassName?: string;
+  indicatorClassName?: string;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const thumb = useSlidingIndicator(trackRef, 'button', 'button[aria-pressed="true"]', flush ? 0 : 1);
@@ -62,6 +64,7 @@ export function SlidingSegmented<T extends string>({
         className={cn(
           'rounded-pill',
           flush ? 'bg-surface-active' : 'bg-surface-panel shadow-sm dark:ring-1 dark:ring-edge-strong/40',
+          indicatorClassName,
         )}
       />
       {options.map((opt) => {

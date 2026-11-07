@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { connectionObjectiveContext } from '../context/connection-objective-context.js';
 import { traceRun, startObservation, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
 import { voicePresentationPrompt } from '../prompt/voice-presentation.js';
+import { projectVoiceHistory } from '../prompt/voice-history.js';
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { parseTurnOutcome } from '@xopcai/gateway-contract';
 
@@ -156,21 +157,24 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       };
     };
     const mm = modelManager as any;
+    const voiceOptions = params.presentation === 'voice' ? config?.voice?.realtime?.assistant : undefined;
+    const voiceModelRef = voiceOptions?.model;
+    const voiceHistoryTokens = params.presentation === 'voice' ? voiceOptions?.historyTokens ?? 4000 : undefined;
     const configuredModelRef = String(mm.getModelForSession(conversationId));
     const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
       ? mm.getFallbackCandidatesForSession(conversationId)
       : [];
     const effective = config ? resolveEffectiveAgentProfileForSession(conversationId).config : undefined;
-    const background = getModelUsageOrigin() === 'background' && !mm.hasSessionModelOverride?.(conversationId)
+    const background = !voiceModelRef && getModelUsageOrigin() === 'background' && !mm.hasSessionModelOverride?.(conversationId)
       && configuredModelRef === effective?.models.chat.primary
       ? effective.models.background : undefined;
-    const candidateModelRefs = background ? [background.primary, ...background.fallbacks] : candidates.length > 0
+    const candidateModelRefs = voiceModelRef ? [voiceModelRef] : background ? [background.primary, ...background.fallbacks] : candidates.length > 0
       ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
       : [configuredModelRef];
-    const selectedRef = background?.primary ?? configuredModelRef;
+    const selectedRef = voiceModelRef ?? background?.primary ?? configuredModelRef;
     assertProviderUsage(selectedRef.split('/')[0]!);
     try {
-      const selected = !background && typeof mm.getResolvedModelForSession === 'function'
+      const selected = !voiceModelRef && !background && typeof mm.getResolvedModelForSession === 'function'
         ? mm.getResolvedModelForSession(conversationId) : resolveModel(selectedRef);
       assertProviderUsage(selected.provider, selected.baseUrl);
     } catch (error) {
@@ -182,7 +186,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     }> = [];
     for (const [index, ref] of candidateModelRefs.entries()) {
       try {
-        const resolved = !background && index === 0 && typeof mm.getResolvedModelForSession === 'function'
+        const resolved = !voiceModelRef && !background && index === 0 && typeof mm.getResolvedModelForSession === 'function'
           ? mm.getResolvedModelForSession(conversationId)
           : resolveModel(ref);
         resolvedCandidates.push({
@@ -213,7 +217,10 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       revision: `${baseToolPolicy.revision}:${source.id}` } : baseToolPolicy;
     const tools = source ? [] : filterExecutionTools(executionToolPolicy, agent.state.tools);
     const turnPolicy = agentManager.createAgentTurnPolicy(conversationId);
-    const baseSystemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
+    const thinkingLevel = voiceOptions?.thinkingLevel ?? (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
+    const spokenPrompt = params.presentation === 'voice' && personal
+      ? agentManager.buildVoiceSystemPrompt?.(conversationId, modelRef, thinkingLevel) : undefined;
+    const baseSystemPrompt = [spokenPrompt ?? agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
       .filter(Boolean).join('\n\n');
     const systemPrompt = appendDynamicPromptSection(baseSystemPrompt,
       [params.dynamicSystemContext, connectionObjectiveContext(conversationId), source
@@ -243,7 +250,6 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
         return committed ? 'committed' : 'stale';
       };
     }
-    const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
     if (executionToolPolicy.externalMaterialization) {
       tools.push(...await materializeNativeExternalTools({ conversationId, tools }));
@@ -273,6 +279,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
 
     try {
       await maybeAutoCompactBeforeTurn({
+        voiceHistoryTokens,
         conversationId,
         sessionStore,
         agentManager,
@@ -323,10 +330,10 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
         ? await sessionStore.loadTranscriptRows(conversationId)
         : undefined;
 
-      if (typeof mm.applyResolvedModel === 'function') {
-        mm.applyResolvedModel(agent, candidateModel, candidateModelRef);
+      if (isFallbackAttempt) {
+        if (typeof mm.applyResolvedModel === 'function') mm.applyResolvedModel(agent, candidateModel, candidateModelRef);
+        agentManager.setModelForSession(conversationId, candidateModelRef);
       }
-      agentManager.setModelForSession(conversationId, candidateModelRef);
 
       if (isFallbackAttempt) {
         log.info(
@@ -358,6 +365,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             tools,
             systemPrompt,
             thinkingLevel,
+            voiceHistoryTokens,
             codemode: config && executionToolPolicy.codemode
               ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.codemode : undefined,
             mcp,
@@ -474,6 +482,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
 // ---------------------------------------------------------------------------
 
 async function maybeAutoCompactBeforeTurn(opts: {
+  voiceHistoryTokens?: number;
   conversationId: string;
   sessionStore: SessionStore;
   agentManager: AgentInstanceGateway;
@@ -502,6 +511,15 @@ async function maybeAutoCompactBeforeTurn(opts: {
     onEvent,
   } = opts;
   const policy = resolveCompactionPolicy(config);
+
+  if (opts.voiceHistoryTokens) {
+    const messages = await sessionStore.load(conversationId);
+    const projected = projectVoiceHistory([...messages, userMessage], opts.voiceHistoryTokens, userMessage.timestamp);
+    const assessed = assessContext({ messages: projected.messages, contextWindow: model.contextWindow ?? 128_000,
+      systemPrompt, tools, imageCount, reserveTokens: policy.reserveTokens,
+      minToolResultKeepChars: policy.minToolResultKeepChars }, policy.maxActiveTranscriptBytes);
+    if (assessed.fits) return;
+  }
 
   if (policy.enabled && policy.personalIdle.enabled && isPersonalConversation(conversationId)) {
     const messages = await sessionStore.load(conversationId);
