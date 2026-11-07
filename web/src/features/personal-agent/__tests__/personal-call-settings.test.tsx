@@ -53,9 +53,8 @@ async function selectEngine(value: string) {
   await act(async () => { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); });
 }
 
-it('uses one call experience with automatic selection and keeps engine overrides in advanced settings', async () => {
-  expect(container.textContent).toContain('Call Ada');
-  expect(container.querySelector('details')?.open).toBe(false);
+it('shows call controls directly with automatic selection and preserves voice settings across engine changes', async () => {
+  expect(container.querySelector('[aria-label="Call engine"]')?.closest('details')).toBeNull();
   expect(container.querySelector<HTMLSelectElement>('[aria-label="Call engine"]')?.value).toBe('auto');
   const assistant = container.querySelector('[aria-label="Assistant voice"]');
   await selectEngine('natural');

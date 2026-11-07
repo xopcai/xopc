@@ -9,6 +9,8 @@ const api = vi.hoisted(() => ({ fetchJson: vi.fn() }));
 vi.mock('@/lib/fetch', () => api);
 vi.mock('@/stores/gateway-store', () => ({ useGatewayStore: (select: (state: { conversationId: string }) => unknown) =>
   select({ conversationId: 'browser-test' }) }));
+vi.mock('@/features/personal-agent/personal-profile-settings', () => ({ PersonalProfileSettings: () => <div data-testid="personal-profile-settings" /> }));
+vi.mock('../voice-settings', () => ({ VoiceSettingsPanel: () => <div data-testid="voice-service-settings" /> }));
 vi.mock('@/features/personal-agent/personal-proactivity-setting', () => ({ PersonalProactivitySetting: () => null }));
 vi.mock('@/features/extensions/extension-settings-nav', () => ({ ExtensionSettingsNav: () => null }));
 vi.mock('@/components/shell/settings-mode-toggle', () => ({ SettingsModeToggle: () => null }));
@@ -55,7 +57,7 @@ function expectName(name: string) {
 it('defaults the settings navigation and page titles to Ada', async () => {
   await render('zh');
   expectName('Ada');
-  expect(container.textContent).toContain('设置 Ada 主动联系你的方式和免打扰时段。');
+  expect(container.querySelector('[data-testid="personal-profile-settings"]')).not.toBeNull();
 });
 
 it.each(['zh', 'en'] as const)('keeps navigation, mobile title and description in sync after a rename (%s)', async language => {
@@ -67,7 +69,5 @@ it.each(['zh', 'en'] as const)('keeps navigation, mobile title and description i
     }));
   });
   expectName('Nova');
-  expect(container.textContent).toContain(language === 'zh'
-    ? '设置 Nova 主动联系你的方式和免打扰时段。'
-    : 'Manage proactive messages from Nova and quiet hours.');
+  expect(container.querySelector('[data-testid="personal-profile-settings"]')).not.toBeNull();
 });

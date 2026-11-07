@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { ArrowUpRight, ListTodo, Phone, Settings2, Upload, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import useSWR from 'swr';
-import type { VoiceCallPreferences, VoiceCallPreferencesPatch } from '@xopcai/realtime-protocol/voice';
+import { ArrowUpRight, ListTodo, Phone, Settings2, X } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import type { VoiceCallPreferences } from '@xopcai/realtime-protocol/voice';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatPage } from '@/features/chat/chat-page';
 import { useVoiceCall } from '@/features/voice/realtime/voice-call-context';
-import { bumpAgentAvatarCacheRevision } from '@/features/settings/agents/agent-avatar-cache';
-import { bosonVoiceSettingsUrl, fetchBosonVoiceSettings } from '@/features/settings/voice-config-api';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { fetchJson } from '@/lib/fetch';
 import { formatMediumDate } from '@/lib/date-formatters';
@@ -18,9 +15,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { PersonalAvatar, type PersonalAppearance } from './personal-avatar';
 import { PersonalOnboarding } from './personal-onboarding';
-import { PersonalVoiceSetting } from './personal-voice-setting';
-import { PersonalModelSetting } from './personal-model-setting';
-import { PersonalCallSettings } from './personal-call-settings';
+import { PersonalProfileSettings } from './personal-profile-settings';
 
 export type PersonalAgent = {
   agentId: string;
@@ -38,12 +33,6 @@ type ModelOption = { id: string; name: string };
 type ApiResult<T> = { ok: boolean; payload: T };
 type Activity = { items: Array<{ id: string; title: string; phase: string; operationalState?: string; runStatus?: string; updatedAt: number }>; total: number };
 type ActivityItem = Activity['items'][number];
-type ProfileChanges = {
-  displayName?: string;
-  appearance?: PersonalAppearance;
-  voicePreference?: PersonalAgent['voicePreference'];
-  voiceCallPreferences?: VoiceCallPreferencesPatch;
-};
 const ACTIVITY_PAGE_SIZE = 5;
 
 function activityTitle(title: string): string {
@@ -83,13 +72,9 @@ function ActivityRow({ item, zh }: { item: ActivityItem; zh: boolean }) {
   </Link>;
 }
 
-const APPEARANCES = [
-  { id: 'loopi', zh: 'Loopi', en: 'Loopi', color: 'bg-slate-100/50 dark:bg-slate-400/10' },
-  { id: 'loopi-curious', zh: '好奇', en: 'Curious', color: 'bg-blue-100/50 dark:bg-blue-400/10' },
-  { id: 'loopi-care', zh: '温和', en: 'Gentle', color: 'bg-violet-100/50 dark:bg-violet-400/10' },
-] as const;
-
 export function PersonalPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const voiceCall = useVoiceCall();
   const voiceCallRef = useRef(voiceCall);
   voiceCallRef.current = voiceCall;
@@ -97,22 +82,14 @@ export function PersonalPage() {
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const [record, setRecord] = useState<PersonalAgent | null>(null);
-  const recordRef = useRef<PersonalAgent | null>(null);
-  const profileUpdateQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const [models, setModels] = useState<ModelOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingCount, setSavingCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [avatarUploadFailed, setAvatarUploadFailed] = useState(false);
-  const [appearance, setAppearance] = useState<PersonalAppearance>('loopi');
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null!);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const profilePopoverRef = useRef<HTMLDivElement>(null);
-  const [displayName, setDisplayName] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
-  const [showAppearanceChoices, setShowAppearanceChoices] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [activityError, setActivityError] = useState(false);
@@ -120,15 +97,21 @@ export function PersonalPage() {
   const [activityMoreError, setActivityMoreError] = useState(false);
   const [activityLoadedCount, setActivityLoadedCount] = useState(0);
   const activityRequestRef = useRef(0);
-  const openSettings = useCallback(() => {
+  const openSettings = useCallback(() => navigate('/settings/personal', {
+    state: { settingsBackPath: `${location.pathname}${location.search}${location.hash}` },
+  }), [location.pathname, location.search, location.hash, navigate]);
+  const toggleQuickSettings = useCallback(() => {
     setShowActivity(false);
-    setShowAppearanceChoices(false);
-    setShowSettings(true);
-  }, []);
-  const toggleSettings = useCallback(() => {
-    setShowActivity(false);
-    setShowAppearanceChoices(false);
     setShowSettings(open => !open);
+  }, []);
+
+  useEffect(() => {
+    const updateProfile = (event: Event) => {
+      const next = (event as CustomEvent<PersonalAgent | null>).detail;
+      if (next) setRecord(next);
+    };
+    window.addEventListener('personal-agent-updated', updateProfile);
+    return () => window.removeEventListener('personal-agent-updated', updateProfile);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -137,15 +120,10 @@ export function PersonalPage() {
         fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent')),
         fetchJson<ApiResult<ModelOption[]>>(apiUrl('/api/personal-agent/models')),
       ]);
-      recordRef.current = personal.payload;
       setRecord(personal.payload);
       window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: personal.payload }));
       if (personal.payload) window.dispatchEvent(new Event('session-updated'));
       setModels(compatible.payload);
-      if (personal.payload) {
-        setDisplayName(personal.payload.displayName);
-        setAppearance(personal.payload.appearance);
-      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -154,41 +132,6 @@ export function PersonalPage() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  const { data: boson, error: bosonError } = useSWR(record?.state === 'ready' ? apiUrl(bosonVoiceSettingsUrl) : null, fetchBosonVoiceSettings);
-
-
-  const queueProfileUpdate = useCallback((changes: ProfileChanges, lockFields = true): Promise<boolean> => {
-    if (lockFields) setSavingCount(count => count + 1);
-    setError(null);
-    const update = profileUpdateQueueRef.current.then(async () => {
-      const current = recordRef.current;
-      if (!current) return false;
-      const displayName = changes.displayName?.trim() || current.displayName;
-      const appearance = changes.appearance ?? current.appearance;
-      const voicePreference = changes.voicePreference === undefined ? current.voicePreference : changes.voicePreference;
-      if (displayName === current.displayName && appearance === current.appearance
-        && JSON.stringify(voicePreference) === JSON.stringify(current.voicePreference)
-        && !changes.voiceCallPreferences) return true;
-      try {
-        const response = await fetchJson<ApiResult<PersonalAgent>>(apiUrl('/api/personal-agent/profile'), {
-          method: 'PATCH',
-          body: JSON.stringify({ revision: current.revision, displayName, appearance,
-            ...(changes.voicePreference !== undefined ? { voicePreference } : {}),
-            ...(changes.voiceCallPreferences ? { voiceCallPreferences: changes.voiceCallPreferences } : {}) }),
-        });
-        recordRef.current = response.payload;
-        setRecord(response.payload);
-        window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: response.payload }));
-        return true;
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-        return false;
-      }
-    }).finally(() => { if (lockFields) setSavingCount(count => count - 1); });
-    profileUpdateQueueRef.current = update;
-    return update;
-  }, []);
-
   const openActivity = useCallback(async () => {
     const request = ++activityRequestRef.current;
     setShowActivity(true);
@@ -256,39 +199,6 @@ export function PersonalPage() {
     };
   }, [activity, activityLoadedCount, activityLoadingMore, showActivity]);
 
-  const uploadAvatar = async (file: File) => {
-    if (!record || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      setError(zh ? '请选择 PNG、JPEG 或 WebP 图片。' : 'Choose a PNG, JPEG, or WebP image.');
-      return;
-    }
-    if (file.size === 0 || file.size > 512 * 1024) {
-      setError(zh ? '图片大小不能超过 512 KB。' : 'Image must be 512 KB or smaller.');
-      return;
-    }
-    setUploadingAvatar(true);
-    setError(null);
-    try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
-      await fetchJson<ApiResult<{ agentId: string }>>(apiUrl(`/api/agents/${encodeURIComponent(record.agentId)}/avatar`), {
-        method: 'PUT',
-        body: JSON.stringify({ base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: file.type }),
-      });
-      bumpAgentAvatarCacheRevision(record.agentId);
-      setAppearance('custom');
-      setShowAppearanceChoices(false);
-      await queueProfileUpdate({ appearance: 'custom' });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
-
   useLayoutEffect(() => {
     const ready = record?.state === 'ready';
     const callLabel = zh ? '语音通话' : 'Voice call';
@@ -296,13 +206,13 @@ export function PersonalPage() {
     const openCall = () => {
       if (ready) voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName });
     };
-    const avatar = ready ? record.appearance : appearance;
+    const avatar = ready ? record.appearance : 'loopi';
     const title = ready ? record.displayName : 'Ada';
     setPageHeader({
       startExtra: null,
       main: <div className="flex min-w-0 items-center gap-2.5">
         {ready ? (
-          <button ref={profileButtonRef} type="button" onClick={toggleSettings} aria-expanded={showSettings} className="touch-target -m-1 shrink-0 rounded-full p-1 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? `编辑${title}的资料` : `Edit ${title}'s profile`} title={zh ? '资料' : 'Profile'}>
+          <button ref={profileButtonRef} type="button" onClick={toggleQuickSettings} aria-expanded={showSettings} className="touch-target -m-1 shrink-0 rounded-full p-1 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? `编辑${title}的资料` : `Edit ${title}'s profile`} title={zh ? '设置' : 'Settings'}>
             <span className="flex size-8 items-center justify-center"><PersonalAvatar appearance={avatar} agentId={record?.agentId} className="size-8" /></span>
           </button>
         ) : <span className="flex size-8 shrink-0 items-center justify-center"><PersonalAvatar appearance={avatar} agentId={record?.agentId} className="size-8" /></span>}
@@ -333,75 +243,15 @@ export function PersonalPage() {
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>
-          <button ref={settingsButtonRef} type="button" onClick={toggleSettings} aria-expanded={showSettings} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '编辑资料' : 'Edit profile'}><Settings2 className="size-5" /></button>
+          <button ref={settingsButtonRef} type="button" onClick={toggleQuickSettings} aria-expanded={showSettings} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? 'Ada 设置' : 'Ada settings'}><Settings2 className="size-5" /></button>
         </div> : null,
     });
     return () => clearPageHeader();
-  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, appearance, clearPageHeader, loadMoreActivity, openActivity, record, setPageHeader, showActivity, showSettings, toggleSettings, voiceCall.active, zh]);
-
-  function renderSettingsPopover() {
-    if (!record) return null;
-    return <Popover.Root open={showSettings} onOpenChange={open => { setShowSettings(open); if (!open) setShowAppearanceChoices(false); }}>
-      <Popover.Anchor virtualRef={settingsButtonRef} />
-      <Popover.Portal>
-        <Popover.Content
-          ref={profilePopoverRef}
-          side="bottom" align="end" sideOffset={8} collisionPadding={8}
-          aria-label={zh ? '编辑 Personal AI' : 'Edit Personal AI'}
-          onInteractOutside={event => {
-            if (event.target instanceof Node && (settingsButtonRef.current?.contains(event.target) || profileButtonRef.current?.contains(event.target) || profilePopoverRef.current?.contains(event.target))) event.preventDefault();
-          }}
-          className="xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1rem))] flex-col rounded-2xl border border-edge bg-surface-overlay shadow-xl outline-none"
-        >
-          <div className="relative flex shrink-0 flex-col items-center px-4 pt-4 text-center">
-            <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
-              <PersonalAvatar appearance={appearance} agentId={record.agentId} className="size-16" />
-            </button>
-            <input id="personal-name" aria-label={zh ? '助手名称' : 'Assistant name'}
-              value={displayName} onChange={event => setDisplayName(event.target.value)}
-              onBlur={event => {
-                const next = event.currentTarget.value.trim();
-                if (next) { setDisplayName(next); void queueProfileUpdate({ displayName: next }); }
-                else setDisplayName(recordRef.current?.displayName ?? '');
-              }}
-              onKeyDown={event => {
-                if (event.key === 'Enter') event.currentTarget.blur();
-                if (event.key === 'Escape') {
-                  event.currentTarget.value = recordRef.current?.displayName ?? '';
-                  setDisplayName(event.currentTarget.value);
-                  event.currentTarget.blur();
-                }
-              }} maxLength={60} placeholder="Ada"
-              className="mt-2 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-lg font-semibold text-fg outline-none transition-colors hover:border-edge focus:border-edge focus:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent" />
-          </div>
-          <div className="min-h-0 space-y-4 overflow-y-auto px-4 py-4">
-              {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-              {showAppearanceChoices && <section id="personal-appearance-options">
-                <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '形象' : 'Appearance'}</h3>
-                <div className="grid grid-cols-4 gap-2">{APPEARANCES.map(item => <button key={item.id} type="button" onClick={() => { setAppearance(item.id); setShowAppearanceChoices(false); void queueProfileUpdate({ appearance: item.id }); }} aria-pressed={appearance === item.id} className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${appearance === item.id ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-panel hover:bg-surface-hover'}`}><span className={`flex size-8 items-center justify-center rounded-full ${item.color}`}><PersonalAvatar appearance={item.id} className="size-8" /></span><span className="truncate text-xs text-fg-muted">{zh ? item.zh : item.en}</span></button>)}
-                  <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label={zh ? '上传头像' : 'Upload avatar'} onChange={event => {
-                    const file = event.currentTarget.files?.[0];
-                    if (file) void uploadAvatar(file);
-                    event.currentTarget.value = '';
-                  }} />
-                  <button type="button" disabled={uploadingAvatar} onClick={() => avatarInputRef.current?.click()} aria-pressed={appearance === 'custom'} className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${appearance === 'custom' ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-panel hover:bg-surface-hover'}`}><span className="flex size-8 items-center justify-center rounded-full bg-surface-panel">{appearance === 'custom' ? <PersonalAvatar appearance="custom" agentId={record.agentId} className="size-8" /> : <Upload className="size-4 text-fg-muted" aria-hidden />}</span><span className="truncate text-xs text-fg-muted">{uploadingAvatar ? (zh ? '上传中…' : 'Uploading…') : (zh ? '上传' : 'Upload')}</span></button>
-                </div>
-              </section>}
-              <PersonalModelSetting conversationId={record.conversationId} zh={zh} onSaved={async () => {
-                const response = await fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent'));
-                if (response.ok && response.payload) { recordRef.current = response.payload; setRecord(response.payload); }
-              }} />
-              <PersonalCallSettings preferences={record.voiceCallPreferences} settings={boson} failed={Boolean(bosonError)} disabled={savingCount > 0} zh={zh}
-                onChange={voiceCallPreferences => queueProfileUpdate({ voiceCallPreferences }, voiceCallPreferences.enginePreference === undefined)}>
-                {active => <PersonalVoiceSetting active={active} onGreetingChange={openingGreetingEnabled => queueProfileUpdate({ voiceCallPreferences: { openingGreetingEnabled } }, false)} record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />}
-              </PersonalCallSettings>
-          </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>;
-  }
+  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, clearPageHeader, loadMoreActivity, openActivity, record, setPageHeader, showActivity, showSettings, toggleQuickSettings, voiceCall.active, zh]);
 
   if (loading) return <div className="mx-auto w-full max-w-2xl space-y-5 px-6 py-12"><Skeleton className="h-20 w-20 rounded-full" /><Skeleton className="h-9 w-72" /><Skeleton className="h-44 w-full rounded-2xl" /></div>;
+
+  if (error && !record) return <div role="alert" className="space-y-3 p-6 text-sm text-danger"><p>{error}</p><button type="button" onClick={() => void refresh()} className="text-accent hover:underline">{zh ? '重试' : 'Retry'}</button></div>;
 
   if (record?.state === 'ready') return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
@@ -412,14 +262,27 @@ export function PersonalPage() {
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1"><ChatPage embedded personal personalWelcome={{ name: record.displayName, addressAs: record.userCallName ?? undefined, avatar: <PersonalAvatar appearance={record.appearance} agentId={record.agentId} className="size-14" />, opening: zh ? '有什么想讨论或推进的事？直接告诉我就好。' : 'What would you like to discuss or move forward? Just tell me what is on your mind.' }} conversationId={record.conversationId} /></div>
       </div>
-      {renderSettingsPopover()}
+      <Popover.Root open={showSettings} onOpenChange={setShowSettings}>
+        <Popover.Anchor virtualRef={settingsButtonRef} />
+        <Popover.Portal>
+          <Popover.Content ref={profilePopoverRef} side="bottom" align="end" sideOffset={8} collisionPadding={8}
+            aria-label={zh ? 'Ada 快捷设置' : 'Ada quick settings'}
+            onInteractOutside={event => {
+              if (event.target instanceof Node && (settingsButtonRef.current?.contains(event.target) || profileButtonRef.current?.contains(event.target) || profilePopoverRef.current?.contains(event.target))) event.preventDefault();
+            }}
+            className="xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl outline-none">
+            <div className="min-h-0 overflow-y-auto p-4">
+              <PersonalProfileSettings zh={zh} onOpenVoiceServices={openSettings} />
+            </div>
+            <button type="button" onClick={openSettings} className="shrink-0 border-t border-edge px-4 py-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">{zh ? '更多设置' : 'More settings'}</button>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     </div>
   );
 
   return <PersonalOnboarding modelsAvailable={models.length > 0} onCreated={(created, avatarFailed) => {
-    recordRef.current = created;
     setRecord(created);
-    setDisplayName(created.displayName);
     setAvatarUploadFailed(avatarFailed);
     window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: created }));
     window.dispatchEvent(new Event('session-updated'));

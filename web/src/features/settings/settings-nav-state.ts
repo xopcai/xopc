@@ -1,4 +1,4 @@
-/** `location.state` key: when set, settings shell “back” returns to this path (must be in-app, single-segment root path). */
+/** `location.state` key: settings shell “back” returns to this in-app path outside settings. */
 export const SETTINGS_BACK_PATH_STATE_KEY = 'settingsBackPath' as const;
 
 export type SettingsNavLocationState = {
@@ -15,7 +15,7 @@ export function resolveSettingsBackTarget(state: unknown): string {
     return '/chat';
   }
   const path = raw.trim();
-  if (!path.startsWith('/') || path.startsWith('//')) {
+  if (!path.startsWith('/') || path.startsWith('//') || /^\/settings(?:[/?#]|$)/u.test(path)) {
     return '/chat';
   }
   return path;
