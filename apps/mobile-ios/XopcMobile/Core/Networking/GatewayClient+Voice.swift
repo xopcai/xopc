@@ -101,7 +101,7 @@ extension GatewayClient {
     }
 
     func preflightRealtimeVoice(conversationID: String, mode: RealtimeVoiceMode) async throws -> [String] {
-        let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode))
+        let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode == .automatic ? nil : mode))
         let result: RealtimeVoiceAcknowledgement = try await request(
             path: "/api/voice/realtime/preflight", method: "POST", body: body
         )
@@ -113,7 +113,7 @@ extension GatewayClient {
                                     openingGreeting: RealtimeVoiceSessionRequest.OpeningGreetingRequest? = nil) async throws -> RealtimeVoiceSession
     {
         let language = Locale.current.language.languageCode?.identifier == "zh" ? "zh" : "en"
-        let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode,
+        let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode == .automatic ? nil : mode,
                                                                   language: language, openingGreeting: openingGreeting))
         let result: VoicePayload<RealtimeVoiceSession> = try await request(
             path: "/api/voice/realtime/sessions", method: "POST", body: body

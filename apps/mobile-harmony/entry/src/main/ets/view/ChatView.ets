@@ -1685,8 +1685,7 @@ export struct XopcChatView {
     if (this.refs.length >= 5) ids.push('reference-note', 'reference-task');
     if (this.attachments.length >= MAX_ATTACHMENTS) ids.push('reference-file');
     if (this.chat.sending) ids.push('new-chat');
-    if (!this.chat.selectedId || this.call.phase !== 'idle') ids.push('voice-no-tools', 'voice-with-tools');
-    if (this.personalConversation) ids.push('voice-no-tools');
+    if (!this.chat.selectedId || this.call.phase !== 'idle') ids.push('voice-call');
     return ids;
   }
 
@@ -1697,11 +1696,11 @@ export struct XopcChatView {
     else if (id.startsWith('reference-')) this.openReference(id.slice('reference-'.length));
     else if (id === 'new-chat') this.newConversation();
     else if (id === 'record-voice' && !this.showVoice) this.toggleVoice();
-    else if ((id === 'voice-no-tools' || id === 'voice-with-tools') && this.chat.selectedId) {
+    else if (id === 'voice-call' && this.chat.selectedId) {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
       this.reader.stop(); this.voice.cancel();
       this.call.start(context, { conversationId: this.chat.selectedId,
-        mode: id === 'voice-with-tools' || this.personalConversation ? 'assistant' : 'natural', background: true,
+        mode: 'auto', background: true,
         name: this.personalConversation ? this.personalAgent?.displayName ?? 'Ada'
           : this.chat.title || this.options.modelName(appSettings.effectiveLanguage()) });
     }

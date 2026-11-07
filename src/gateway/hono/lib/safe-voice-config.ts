@@ -10,7 +10,7 @@ export function mergeRealtimeVoiceConfigPatch(previous: { realtime?: { omni?: { 
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return incoming;
   const patch = incoming as Record<string, unknown>;
   if (!patch.realtime || typeof patch.realtime !== 'object' || Array.isArray(patch.realtime)) return incoming;
-  const realtime = { ...patch.realtime } as Record<string, unknown>;
+  const realtime = { ...previous?.realtime, ...patch.realtime } as Record<string, unknown>;
   if (!('boson' in realtime) && previous?.realtime?.boson) realtime.boson = previous.realtime.boson;
   const omni = realtime?.omni as Record<string, unknown> | undefined;
   if (!omni || typeof omni !== 'object' || Array.isArray(omni)) return { ...patch, realtime };

@@ -108,3 +108,26 @@ describe('DurableVoiceAgentBroker', () => {
   });
 
 });
+
+it('restores only running voice tasks from the same conversation and transcript, retaining cancellation ownership', async () => {
+  const { broker, deps, unsubscribe } = setup({ row: input({ expectedTranscriptId: 'session' }) });
+  Object.assign(deps, { runTopic: (_conversationId: string, runId: string) => `voice-run:${runId}` });
+  const controller = new AbortController();
+  const tasks = broker.restore({ conversationId: 'chat', expectedTranscriptId: 'session', signal: controller.signal });
+  expect(tasks.map(task => task.taskId)).toEqual(['task-1']);
+  const iterator = tasks[0].events[Symbol.asyncIterator]();
+  const next = iterator.next();
+  expect(deps.subscribe).toHaveBeenCalledWith('voice-run:run-1', 0, expect.any(Function));
+  await expect(broker.cancel('task-1')).resolves.toBe(true);
+  controller.abort(); await next; await iterator.return?.();
+  expect(unsubscribe).toHaveBeenCalledOnce();
+  expect(broker.restore({ conversationId: 'chat', expectedTranscriptId: 'another-transcript', signal: new AbortController().signal })).toEqual([]);
+  expect(broker.restore({ conversationId: 'other-chat', expectedTranscriptId: 'session', signal: new AbortController().signal })).toEqual([]);
+});
+
+it('does not report a successful cancellation when execution already ended', async () => {
+  const { broker, deps } = setup();
+  Object.assign(deps, { cancelRun: vi.fn(async () => false) });
+  broker.restore({ conversationId: 'chat', expectedTranscriptId: 'session', signal: new AbortController().signal });
+  await expect(broker.cancel('task-1')).resolves.toBe(false);
+});

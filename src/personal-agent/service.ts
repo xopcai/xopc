@@ -194,6 +194,7 @@ export async function updatePersonalProfileRecord(
     ...(voiceCallPreferences ? { voiceCallPreferences: {
       openingGreetingEnabled: callPreferences.openingGreetingEnabled,
       defaultMode: callPreferences.defaultMode,
+      enginePreference: callPreferences.enginePreference,
       naturalModel: callPreferences.naturalModel ?? undefined,
       higgsVoice: callPreferences.higgsVoice ?? undefined,
     } } : {}),

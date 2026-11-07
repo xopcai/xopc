@@ -11,7 +11,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 
 import type { TranscriptCompactionRecord } from './transcript-format.js';
-import { VOICE_CALL_TYPE, VOICE_TRANSCRIPT_TYPE, voiceTranscriptMessage } from './voice-transcript.js';
+import { VOICE_CALL_TYPE, VOICE_CHAT_MESSAGE_TYPE, VOICE_TRANSCRIPT_TYPE, voiceTranscriptMessage } from './voice-transcript.js';
 import {
   isTranscriptContextEntry,
   isTranscriptCustomMessageEntry,
@@ -172,7 +172,7 @@ export function storedRowsToFileEntries(params: {
     }
     if (isTranscriptCustomMessageEntry(row)) {
       if (row.customType === VOICE_CALL_TYPE) continue;
-      const voiceMessage = row.customType === VOICE_TRANSCRIPT_TYPE ? voiceTranscriptMessage(row) : null;
+      const voiceMessage = row.customType === VOICE_TRANSCRIPT_TYPE || row.customType === VOICE_CHAT_MESSAGE_TYPE ? voiceTranscriptMessage(row) : null;
       if (row.customType === VOICE_TRANSCRIPT_TYPE && !voiceMessage) continue;
       const entry = voiceMessage ? agentMessageToEntry(voiceMessage, parentId, byId) : customMessageRowToEntry(row, parentId, byId);
       byId.add(entry.id);

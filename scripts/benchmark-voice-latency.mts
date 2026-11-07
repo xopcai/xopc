@@ -9,6 +9,13 @@ import { decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame } from '@xopcai/real
 
 const [file, agentId = 'main', count = '5', existingConversation] = process.argv.slice(2);
 const rounds = Number(count);
+const mode = process.env.XOPC_VOICE_BENCHMARK_MODE ?? 'auto';
+const naturalBackend = process.env.XOPC_VOICE_BENCHMARK_BACKEND;
+const expectAction = process.env.XOPC_VOICE_BENCHMARK_ACTION === '1';
+const cancelAfterMs = Number(process.env.XOPC_VOICE_BENCHMARK_CANCEL_AFTER_MS);
+const interruptReply = process.env.XOPC_VOICE_BENCHMARK_INTERRUPT === '1';
+let cancelTimer: ReturnType<typeof setTimeout> | undefined;
+if (!['auto', 'assistant', 'natural'].includes(mode) || (naturalBackend && naturalBackend !== 'higgs')) throw new Error('Invalid benchmark mode/backend');
 if (!file || !Number.isInteger(rounds) || rounds < 1 || rounds > 30) {
   throw new Error('Usage: benchmark-voice-latency.mts PCM16_16KHZ_FILE [AGENT_ID] [ROUNDS=5] [EXISTING_CONVERSATION_ID]');
 }
@@ -34,11 +41,14 @@ async function request(path: string, method = 'GET', body?: object) {
 const conversationId = existingConversation ?? crypto.randomUUID();
 const samples: Array<Record<string, number>> = [];
 let socket: WebSocket | undefined;
-let session: { sessionId: string; ticket: string; websocketPath: string } | undefined;
+let session: { sessionId: string; ticket: string; websocketPath: string; mode?: string; route: { engine: string } } | undefined;
 let epoch = 0, seq = 0, failure: Error | undefined;
 let taskId: string | undefined;
 let taskFinished = true;
-let active: { end: number; stopped?: number; created?: number; text?: number; audio?: number; done?: number; bytes: number } | undefined;
+let interruptedReply = false;
+let active: { end: number; inputComplete?: boolean; stopped?: number; created?: number; text?: number; audio?: number; done?: number;
+  submitted?: number; taskDone?: number; resultResponseId?: string; bytes: number } | undefined;
+const playedBytes = new Map<string, number>();
 const send = (type: string, payload: object) => socket!.send(JSON.stringify({ protocolVersion: 3,
   messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
 async function waitFor(condition: () => boolean, ms: number) {
@@ -63,7 +73,7 @@ try {
     if (!ready) throw new Error('Diagnostic conversation did not become ready');
   }
   session = await request('/api/voice/realtime/sessions', 'POST', {
-    purpose: 'conversation', mode: 'assistant', conversationId, language: 'zh',
+    purpose: 'conversation', ...(mode === 'auto' ? {} : { mode }), ...(naturalBackend ? { naturalBackend } : {}), conversationId, language: 'zh',
     supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'],
   });
   socket = new WebSocket(base.replace('http:', 'ws:') + session!.websocketPath);
@@ -74,25 +84,49 @@ try {
       const frame = decodeVoiceAudioFrame(data as Buffer);
       if (!active) return;
       if (active.audio === undefined) {
+        if (!active.inputComplete) {
+          failure = new Error('Reply started before the diagnostic utterance ended; split input is not a valid latency sample');
+          return;
+        }
         active.audio = performance.now();
         console.log(JSON.stringify({ stage: 'first_audio', round: samples.length + 1,
           speechEndToAudioMs: Math.round(active.audio - active.end) }));
       }
+      if (interruptReply && taskId && !taskFinished && !interruptedReply) {
+        interruptedReply = true;
+        send('response.stop_playback', { responseId: frame.responseId });
+        console.log(JSON.stringify({ stage: 'playback_interrupted', taskWasRunning: true }));
+      }
       active.bytes += frame.audio.length;
       // Simulates an immediately draining sink, so this is network receipt, not acoustic playback.
-      send('response.audio.played', { responseId: frame.responseId, playedDurationMs: Math.floor(active.bytes / 48) });
+      const bytes = (playedBytes.get(frame.responseId) ?? 0) + frame.audio.length;
+      playedBytes.set(frame.responseId, bytes);
+      send('response.audio.played', { responseId: frame.responseId, playedDurationMs: Math.floor(bytes / 48) });
       return;
     }
     const event = JSON.parse(data.toString());
     if (event.type === 'session.ready') epoch = event.payload.connectionEpoch;
     if (event.type === 'session.error') failure = new Error(`${event.payload.code}: ${event.payload.message}`);
     if (!active) return;
-    if (event.type === 'task.created') { taskId = event.payload.taskId; taskFinished = false; }
-    if (event.type === 'task.done' && taskId === event.payload.taskId) taskFinished = true;
+    if (event.type === 'task.created') {
+      clearTimeout(cancelTimer);
+      taskId = event.payload.taskId; taskFinished = false; active.submitted ??= performance.now();
+      console.log(JSON.stringify({ stage: 'task_submitted', speechEndToTaskSubmittedMs: Math.round(active.submitted - active.end) }));
+      if (Number.isFinite(cancelAfterMs) && cancelAfterMs >= 0) cancelTimer = setTimeout(() => {
+        if (taskId && !taskFinished) send('task.cancel', { taskId });
+      }, cancelAfterMs);
+    }
+    if (event.type === 'task.done' && taskId === event.payload.taskId) {
+      clearTimeout(cancelTimer);
+      taskFinished = true; active.taskDone = performance.now();
+      console.log(JSON.stringify({ stage: 'task_done', status: event.payload.status, speechEndToTaskDoneMs: Math.round(active.taskDone - active.end) }));
+    }
     if (event.type === 'input.speech_stopped') active.stopped = performance.now();
-    if (event.type === 'response.created') active.created = performance.now();
+    if (event.type === 'response.created') active.created ??= performance.now();
     if (event.type === 'response.text.delta') active.text ??= performance.now();
+    if (event.type === 'response.audio.started' && active.taskDone) active.resultResponseId = event.payload.responseId;
     if (event.type === 'response.done') {
+      if (session?.route.engine === 'omni' && (!event.payload.audio || (expectAction && event.payload.responseId !== active.resultResponseId))) return;
       if (!active.bytes || !event.payload.audio) failure = new Error('Reply completed without audio');
       active.done = performance.now();
     }
@@ -100,8 +134,9 @@ try {
   await once(socket, 'open');
   send('session.start', { sessionId: session!.sessionId, ticket: session!.ticket });
   await waitFor(() => epoch !== 0, 40_000);
-  console.log(JSON.stringify({ stage: 'ready', conversation: existingConversation ? 'existing' : 'disposable', fixtureMs: audio.length / 32 }));
+  console.log(JSON.stringify({ stage: 'ready', mode, naturalBackend, expectAction, conversation: existingConversation ? 'existing' : 'disposable', fixtureMs: audio.length / 32 }));
   for (let round = 0; round < rounds; round++) {
+    interruptedReply = false;
     seq = 0;
     const started = performance.now();
     active = { end: started + audio.length / 32, bytes: 0 };
@@ -114,7 +149,7 @@ try {
       const frame = offset < audio.length ? audio.subarray(offset, offset + 640) : Buffer.alloc(640);
       socket.send(encodeVoiceUplinkAudioFrame({ connectionEpoch: epoch, utteranceId, audioSeq: ++seq,
         capturedAtMonotonicMs: performance.now(), durationMs: 20, audio: frame }));
-      if (offset + 640 === audio.length) active.end = performance.now();
+      if (offset + 640 === audio.length) { active.end = performance.now(); active.inputComplete = true; }
     }
     if (failure) throw failure;
     const sample = { round: round + 1, speechEndToAudioMs: Math.round(active.audio! - active.end),
@@ -122,7 +157,9 @@ try {
       speechEndToAsrStopMs: Math.round(active.stopped! - active.end),
       asrStopToResponseMs: Math.round(active.created! - active.stopped!),
       responseToTextMs: Math.round(active.text! - active.created!),
-      textToAudioMs: Math.round(active.audio! - active.text!), audioBytes: active.bytes };
+      textToAudioMs: Math.round(active.audio! - active.text!), audioBytes: active.bytes,
+      ...(active.submitted ? { speechEndToTaskSubmittedMs: Math.round(active.submitted - active.end) } : {}),
+      ...(active.taskDone ? { speechEndToTaskDoneMs: Math.round(active.taskDone - active.end) } : {}) };
     if (Object.values(sample).some(value => !Number.isFinite(value))) throw new Error('Incomplete timing sample');
     samples.push(sample);
     console.log(JSON.stringify(sample));
@@ -135,6 +172,7 @@ try {
     rounds: samples.length, p50Ms: percentile(0.5), p95Ms: percentile(0.95), maxMs: values.at(-1),
     targetMs: 1500, withinTarget: values.filter(value => value <= 1500).length }));
 } finally {
+  clearTimeout(cancelTimer);
   if (taskId && !taskFinished && socket?.readyState === WebSocket.OPEN) {
     send('task.cancel', { taskId });
     const deadline = performance.now() + 5000;
@@ -143,6 +181,7 @@ try {
   if (socket?.readyState === WebSocket.OPEN) send('session.stop', { reason: 'user_finished' });
   socket?.terminate();
   if (session) await request('/api/voice/realtime/sessions/cancel', 'POST', { sessionId: session.sessionId, ticket: session.ticket }).catch(() => undefined);
-  if (!existingConversation && taskFinished) await request(`/api/sessions/${conversationId}`, 'DELETE').catch(() => undefined);
+  if (!existingConversation && process.env.XOPC_VOICE_BENCHMARK_KEEP === '1') console.log(JSON.stringify({ stage: 'retained_conversation', conversationId }));
+  else if (!existingConversation && taskFinished) await request(`/api/sessions/${conversationId}`, 'DELETE').catch(() => undefined);
   else if (!existingConversation) console.error(`Diagnostic conversation retained for unfinished task: ${conversationId}`);
 }

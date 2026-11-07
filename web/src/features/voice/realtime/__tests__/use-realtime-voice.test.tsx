@@ -88,6 +88,7 @@ describe('useRealtimeVoice', () => {
   const setInputMuted = vi.fn();
   const stop = vi.fn();
   const cancelResponse = vi.fn();
+  const cancelTask = vi.fn();
   const acknowledgeAudio = vi.fn();
   let onAudioLevel: (level: { level: number; speaking: boolean }) => void;
   let bargeIn = true;
@@ -130,6 +131,7 @@ describe('useRealtimeVoice', () => {
         commit,
         stop,
         cancelResponse,
+        cancelTask,
         acknowledgeAudio,
       };
     });
@@ -142,6 +144,23 @@ describe('useRealtimeVoice', () => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
+  });
+
+  it('keeps a natural voice task cancellable after its originating response ends or is interrupted', async () => {
+    render();
+    await act(async () => voice.startVoiceConversation('conversation', 'natural'));
+    act(() => {
+      onEvent({ type: 'response.created', payload: { responseId: 'r1' } });
+      onEvent({ type: 'response.done', payload: { responseId: 'r1', audio: false } });
+      onEvent({ type: 'task.created', payload: { responseId: 'r1', taskId: 'task-1' } });
+    });
+    expect(voice.activeTaskIds).toEqual(['task-1']);
+    act(() => voice.interruptResponse());
+    expect(cancelTask).not.toHaveBeenCalled();
+    act(() => voice.cancelTask('task-1'));
+    expect(cancelTask).toHaveBeenCalledExactlyOnceWith('task-1');
+    act(() => onEvent({ type: 'task.done', payload: { taskId: 'task-1', status: 'cancelled' } }));
+    expect(voice.activeTaskIds).toEqual([]);
   });
 
   afterEach(() => {

@@ -9,6 +9,7 @@ import { applyWorkCandidates } from '../../memory-learning/work-capture.js';
 import { failLearningJob, finishLearningJob, learningPolicyHash, type LearningJob } from '../../memory-learning/repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
+import { learningTranscriptMessage } from '../../memory-learning/transcript-source.js';
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { resolveModelIntentRef, resolveModelSelector } from '../../config/agent-model-intents.js';
@@ -370,25 +371,27 @@ async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => 
   let through = startSeq;
   for (const row of rows) {
     if (evidence.length >= config.userContext.userModel.extraction.maxHistoryMessages) break;
-    const message = JSON.parse(row.payload_json) as AgentMessage;
-    const text = row.role === 'user' ? stripRuntimeContextFromUserMessage(messageText(message)) : messageText(message);
+    const message = learningTranscriptMessage(row);
+    if (!message) { through = row.seq; continue; }
+    const role = message.role;
+    const text = role === 'user' ? stripRuntimeContextFromUserMessage(messageText(message)) : messageText(message);
     if (chars + text.length > maxChars && evidence.length) break;
     through = row.seq;
-    if (!['user', 'assistant', 'toolResult'].includes(row.role)) continue;
+    if (!['user', 'assistant', 'toolResult'].includes(role)) continue;
     const sourceContexts = (message as unknown as { metadata?: { sourceContexts?: unknown[] } }).metadata?.sourceContexts;
     if (Array.isArray(sourceContexts) && sourceContexts.length > 0) {
       // Keep the owner's wrapped utterance, never the attached device/note/recall snapshots.
       const raw = messageText(message);
       const wrapped = /<source_contexts>[\s\S]*<\/source_contexts>\s*<user_message>\r?\n[\s\S]*\r?\n<\/user_message>\s*$/u.test(raw);
-      if (row.role !== 'user' || !wrapped || raw === text || /<source_contexts>|<\/?user_message>/u.test(text)) continue;
+      if (role !== 'user' || !wrapped || raw === text || /<source_contexts>|<\/?user_message>/u.test(text)) continue;
     }
-    if (row.role === 'toolResult' && /(?:memory|user_context|knowledge|session|history|recall)/i.test(
+    if (role === 'toolResult' && /(?:memory|user_context|knowledge|session|history|recall)/i.test(
       (message as unknown as { toolName?: string }).toolName ?? '')) continue;
     // Oversized or recalled material cannot become fresh supporting evidence.
     if (text.length > maxChars || /<xopc_user_context>|<xopc_task_execution>|<user-context>/.test(text)) continue;
     chars += text.length;
-    evidence.push({ ref: row.entry_id, role: row.role as CaptureEvidence['role'], text, createdAt: row.created_at,
-      message: { role: 'user', content: `[source_role:${row.role}]\n${text}`, timestamp: row.created_at } });
+    evidence.push({ ref: row.entry_id, role: role as CaptureEvidence['role'], text, createdAt: row.created_at,
+      message: { role: 'user', content: `[source_role:${role}]\n${text}`, timestamp: row.created_at } });
   }
   if (!evidence.length) { finishLearningJob(job, () => {}, through); return; }
   const agentId = extractProfileAgentId(job.conversation_id);

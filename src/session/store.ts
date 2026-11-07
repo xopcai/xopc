@@ -380,6 +380,7 @@ export class SessionStore {
         offset: hasBeforeCursor ? undefined : offset,
         beforeIndex: hasBeforeCursor ? parsedBefore : undefined,
         includeContext: true,
+        excludeVoiceConversation: true,
         userTurns: options.compact,
       });
       const endIndex = hasBeforeCursor
@@ -737,6 +738,7 @@ export class SessionStore {
   async appendTranscriptCustomMessageEntry(
     key: string,
     entry: {
+      entryId?: string;
       expectedTranscriptId?: string;
       customType: string;
       content?: string | unknown[];
@@ -759,7 +761,7 @@ export class SessionStore {
         details: entry.details,
         timestamp: Date.now(),
       };
-      appendTranscriptEntry(key, row);
+      appendTranscriptEntry(key, row, entry.entryId ? { entryId: entry.entryId } : undefined);
     });
   }
 

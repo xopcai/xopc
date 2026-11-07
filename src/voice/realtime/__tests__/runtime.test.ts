@@ -45,6 +45,30 @@ describe('VoiceRealtimeRuntime session creation', () => {
     return runtime;
   }
 
+  it.each([true, false])('automatically chooses an actionable realtime route or the Agent fallback (tools=%s)', async tools => {
+    const current = config();
+    current.voice!.realtime.omni = { provider: 'alibaba', apiKey: 'native-key', voice: 'Cherry', instructions: '',
+      model: tools ? 'qwen3.5-omni-flash-realtime' : 'qwen3-omni-flash-realtime' };
+    runtime = new VoiceRealtimeRuntime({ getConfig: () => current, sessionExists: async () => true, sessionBusy: () => false,
+      getSessionIdentity: async () => 'stored-session', getConversationContext: async () => ({ identity: '', history: [] }),
+      recordOmniTranscript: async () => {}, recordInterruption: async () => {},
+      agentBroker: { delegate: vi.fn(), cancel: vi.fn(async () => true) } });
+    const result = await runtime.createSession({ purpose: 'conversation', conversationId: 'chat', ...negotiation }, 'owner');
+    expect(result.mode).toBe(tools ? 'natural' : 'assistant');
+    expect(result.route.engine).toBe(tools ? 'omni' : 'agent');
+  });
+
+  it('allows a continuous call to reconnect while its durable Agent task is still running', async () => {
+    const current = config();
+    current.voice!.realtime.omni = { provider: 'alibaba', apiKey: 'native-key', voice: 'Cherry', instructions: '', model: 'qwen3.5-omni-flash-realtime' };
+    runtime = new VoiceRealtimeRuntime({ getConfig: () => current, sessionExists: async () => true, sessionBusy: () => true,
+      getSessionIdentity: async () => 'stored-session', getConversationContext: async () => ({ identity: '', history: [] }),
+      recordOmniTranscript: async () => {}, recordInterruption: async () => {},
+      agentBroker: { delegate: vi.fn(), cancel: vi.fn(async () => true), restore: () => [] } });
+    const result = await runtime.createSession({ purpose: 'conversation', conversationId: 'chat', ...negotiation }, 'owner');
+    expect(result.mode).toBe('natural');
+  });
+
   it.each([null, { state: 'ready', userCallName: '小明', voiceCallPreferences: { openingGreetingEnabled: false } }])
     ('declines opening for ordinary conversations and disabled preferences', async personal => {
       vi.spyOn(personalRepository, 'getPersonalAgentByConversation').mockReturnValue(personal as never);

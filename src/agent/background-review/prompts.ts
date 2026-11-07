@@ -1,6 +1,7 @@
 import type { AssertionAuthority, AssertionStatus, AssertionSubject, UserModelScope } from '../../user-model/domain.js';
 import { USER_UNDERSTANDING_MAINTENANCE_POLICY } from '../../user-model/maintenance-policy.js';
 import { USER_FACING_UNDERSTANDING_WRITING_GUIDANCE } from '../../user-context/understanding-writing.js';
+import { USER_PROFILE_IDENTITY_RULE } from '../../user-model/profile.js';
 
 export interface AvailableUserAssertion {
   id: string;
@@ -93,6 +94,7 @@ Rules:
 - Use user_explicit only for a fact or preference the user directly states, user_observed for repeated behavior, and system_inferred for synthesis. No separate remember command is required for an ordinary direct statement.
 - A project-specific choice stays scoped to that project. If no exact project ID is supplied, use the known session scope rather than inventing an ID or broadening to global. Do not generalize it into a global preference.
 - Existing memory, assistant output, repeated summaries, and lack of objection are not new supporting evidence.
+- ${USER_PROFILE_IDENTITY_RULE}
 - If evidence is insufficient, return assertions=[] and explain abstentionReason.
 ${existing}`;
 }

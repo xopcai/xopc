@@ -10,7 +10,10 @@ import { getConversation, getConversationRouting } from '../../routing/session-k
 import { getSessionConfig } from '../../storage/sqlite/config-repository.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { getUserAssertion } from '../../user-model/index.js';
+import { canUseAssertion } from '../../user-model/usage-policy.js';
+import { onUserContextChange } from '../../user-context/changes.js';
 import { stripRuntimeContextFromUserMessage } from '../../session/user-message-display.js';
+import { isVoiceAgentInstruction, isVoiceDelegationMessage } from '../../session/voice-transcript.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('Voice:Memory');
@@ -34,7 +37,7 @@ export function voiceMemoryEnabled(config: Config, conversationId: string): bool
 }
 
 export function voiceMemoryQuery(history: AgentMessage[]): string {
-  return history.filter((message) => message.role === 'user').slice(-2).map((message) => {
+  return history.filter((message) => message.role === 'user').filter(message => !isVoiceAgentInstruction(message) && !isVoiceDelegationMessage(message)).slice(-2).map((message) => {
     const text = typeof message.content === 'string' ? message.content : message.content
       .filter((part) => part.type === 'text').map((part) => part.type === 'text' ? part.text : '').join('\n');
     return stripRuntimeContextFromUserMessage(text).slice(-300);
@@ -56,7 +59,7 @@ export function buildVoiceMemoryContext(input: {
     const session = getSessionMetadata(input.conversationId);
     const context = buildExecutionContext({
       query: voiceMemoryQuery(input.history),
-      agentId: session?.routing?.agentId ?? 'main',
+      agentId: session?.agentId ?? 'main',
       workspaceId: input.workspaceId,
       projectId: input.projectId,
       conversationId: input.conversationId,
@@ -65,37 +68,43 @@ export function buildVoiceMemoryContext(input: {
       includeKnowledge: resolveUserContextSessionAccess(config, input.conversationId).knowledge,
       knowledgePolicy: resolveKnowledgeReadPolicy(config.userContext.knowledgeMemory),
     });
-    const block = JSON.stringify({
-      backgroundMemory: {
-        userFacts: context.assertions.map((item) => item.assertion.statement),
-        priorities: context.priorities.map((item) => `${item.rank}: ${item.targetType}/${item.targetId}`),
-        knowledge: context.knowledge.map((item) => item.content),
-      },
-    });
-    if (block.length > input.maxChars || block === '{"backgroundMemory":{"userFacts":[],"priorities":[],"knowledge":[]}}') return;
-    const references: VoiceMemorySnapshot['references'] = [
-      ...context.assertions.map((item) => ({
-        kind: 'assertion' as const,
-        id: item.assertion.id,
-        updatedAt: item.assertion.recordedAt,
-      })),
-      ...context.knowledge.map((item) => ({ kind: 'knowledge' as const, id: item.id, updatedAt: item.updatedAt })),
-    ];
+    const memory = { confirmedFacts: [] as string[], workingAssumptions: [] as string[], priorities: [] as string[], knowledge: [] as string[] };
+    let omittedItems = 0;
+    const serialize = () => JSON.stringify({ backgroundMemory: { ...memory, omittedItems } });
+    if (serialize().length > input.maxChars) return;
+    const references: VoiceMemorySnapshot['references'] = [];
+    const add = (target: string[], text: string, reference?: VoiceMemorySnapshot['references'][number]) => {
+      target.push(text);
+      // Reserve enough space for the final omission count without cutting a fact in half.
+      if (serialize().length + 8 > input.maxChars) { target.pop(); omittedItems++; return; }
+      if (reference) references.push(reference);
+    };
+    for (const item of [...context.assertions].sort((left, right) => Number(right.usage === 'confirmed') - Number(left.usage === 'confirmed'))) {
+      add(item.usage === 'confirmed' ? memory.confirmedFacts : memory.workingAssumptions,
+        item.assertion.statement, { kind: 'assertion', id: item.assertion.id, updatedAt: item.assertion.recordedAt });
+    }
+    for (const item of context.priorities) add(memory.priorities, `${item.rank}: ${item.targetType}/${item.targetId}`);
+    for (const item of context.knowledge) add(memory.knowledge, item.content, { kind: 'knowledge', id: item.id, updatedAt: item.updatedAt });
+    if (!Object.values(memory).some(items => items.length)) return;
+    const block = serialize();
     const configVersion = JSON.stringify(config.userContext);
     const isCurrent = () => {
       if (!voiceMemoryEnabled(input.getConfig(), input.conversationId)
         || JSON.stringify(input.getConfig().userContext) !== configVersion) return false;
       return references.every((reference) => reference.kind === 'assertion'
-        ? getUserAssertion(reference.id)?.recordedAt === reference.updatedAt
+        ? (() => { const item = getUserAssertion(reference.id); return Boolean(item && item.recordedAt === reference.updatedAt
+          && canUseAssertion(item, Date.now(), { use: 'answer', agentId: session?.agentId ?? 'main' })); })()
         : (() => { const item = getKnowledgeItem(reference.id); return Boolean(item && item.updatedAt === reference.updatedAt
-          && canUseKnowledge(item, { agentId: session?.routing?.agentId ?? 'main', workspaceId: input.workspaceId,
+          && canUseKnowledge(item, { agentId: session?.agentId ?? 'main', workspaceId: input.workspaceId,
             projectId: input.projectId, conversationId: input.conversationId }, resolveKnowledgeReadPolicy(input.getConfig().userContext.knowledgeMemory))); })());
     };
     log.debug({ conversationId: input.conversationId, selectedCount: references.length,
       contextChars: block.length, durationMs: performance.now() - started }, 'Native voice memory selected');
-    return { block, references, isCurrent, subscribe: () => () => {} };
-  } catch {
-    log.warn({ conversationId: input.conversationId, durationMs: performance.now() - started },
+    return { block, references, isCurrent, subscribe: invalidate => onUserContextChange(change => {
+      if (change.kind === 'policy' || change.id === input.conversationId) invalidate();
+    }) };
+  } catch (err) {
+    log.warn({ err, conversationId: input.conversationId, durationMs: performance.now() - started },
       'Native voice memory unavailable; continuing with chat history');
     return;
   }

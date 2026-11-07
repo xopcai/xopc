@@ -20,6 +20,8 @@ function createVoice(
     partialTranscript: '',
     finalTranscript: '',
     responseText: '',
+    activeTaskIds: [],
+    cancelTask: vi.fn(),
     activities: [], clarification: null, dismissClarification: vi.fn(),
     responsePhase: 'idle',
     callConnectionStage: null,

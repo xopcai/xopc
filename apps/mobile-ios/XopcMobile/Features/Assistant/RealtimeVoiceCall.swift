@@ -9,7 +9,7 @@ final class RealtimeVoiceCall {
     enum Phase: Equatable { case idle, connecting, connected, recovering, paused, ending }
 
     private(set) var phase: Phase = .idle
-    private(set) var mode: RealtimeVoiceMode = .natural
+    private(set) var mode: RealtimeVoiceMode = .automatic
     private(set) var name = ""
     private(set) var startedAt = Date()
     private(set) var muted = false
@@ -154,16 +154,10 @@ final class RealtimeVoiceCall {
         connectedAt = nil
         errorCode = nil
         do {
-            let status = try await gateway.fetchRealtimeVoiceStatus()
-            guard generation == current else { return }
-            let availability = mode == .natural ? status.capabilities.natural : status.capabilities.assistant
-            guard status.enabled, availability.available else {
-                throw RealtimeVoiceCallError.unavailable(availability.reasonCode ?? "VOICE_DISABLED")
-            }
             let metrics = try await gateway.preflightRealtimeVoice(conversationID: conversationID, mode: mode)
             guard generation == current else { return }
             supportedTimingMetrics = Set(metrics)
-            let greeting: RealtimeVoiceSessionRequest.OpeningGreetingRequest? = status.openingGreeting == true && mode == .assistant
+            let greeting: RealtimeVoiceSessionRequest.OpeningGreetingRequest? = mode != .natural
                 ? .init(logicalCallId: logicalCallID, initiation: recovering ? "recovery" : "user") : nil
             let session = try await gateway.createRealtimeVoiceSession(conversationID: conversationID, mode: mode, openingGreeting: greeting)
             guard generation == current else {

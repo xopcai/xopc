@@ -5,6 +5,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { VoiceCallPreferences, VoiceCallPreferencesPatch } from '@xopcai/realtime-protocol/voice';
 
 import { PersonalCallSettings } from '../personal-call-settings';
+vi.mock('@/components/ui/popover-select', () => ({
+  Select: ({ children, ...props }: import('react').SelectHTMLAttributes<HTMLSelectElement>) => <select {...props}>{children}</select>,
+  SelectOption: ({ children, ...props }: import('react').OptionHTMLAttributes<HTMLOptionElement>) => <option {...props}>{children}</option>,
+}));
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -17,10 +21,10 @@ function Assistant() {
 }
 
 function Harness() {
-  const [preferences, setPreferences] = useState<VoiceCallPreferences>({ defaultMode: 'assistant', openingGreetingEnabled: true });
+  const [preferences, setPreferences] = useState<VoiceCallPreferences>({ enginePreference: 'auto', openingGreetingEnabled: true });
   const save = async (patch: VoiceCallPreferencesPatch) => {
     const saved = await new Promise<boolean>(resolve => pending.push({ patch, resolve }));
-    if (saved) setPreferences(current => ({ ...current, defaultMode: patch.defaultMode ?? current.defaultMode }));
+    if (saved) setPreferences(current => ({ ...current, enginePreference: patch.enginePreference ?? current.enginePreference }));
     return saved;
   };
   return <PersonalCallSettings preferences={preferences} settings={{ credentialSource: 'env', defaultForNatural: true, voice: 'default', legacyModel: null }}
@@ -44,27 +48,44 @@ afterEach(() => {
   container.remove();
 });
 
-function button(label: string) {
-  return [...container.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent === label)!;
+async function selectEngine(value: string) {
+  const select = container.querySelector<HTMLSelectElement>('[aria-label="Call engine"]')!;
+  await act(async () => { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); });
 }
 
-it('switches immediately, retains the mounted assistant and keeps the latest choice during queued saves', async () => {
+it('uses one call experience with automatic selection and keeps engine overrides in advanced settings', async () => {
+  expect(container.textContent).toContain('Call Ada');
+  expect(container.querySelector('details')?.open).toBe(false);
+  expect(container.querySelector<HTMLSelectElement>('[aria-label="Call engine"]')?.value).toBe('auto');
   const assistant = container.querySelector('[aria-label="Assistant voice"]');
-  await act(async () => button('Natural voice').click());
-  expect(button('Natural voice').getAttribute('aria-pressed')).toBe('true');
+  await selectEngine('natural');
   expect(assistant?.closest('[inert]')).not.toBeNull();
-  await act(async () => button('Current assistant').click());
   await act(async () => pending[0].resolve(true));
-  expect(button('Current assistant').getAttribute('aria-pressed')).toBe('true');
+  await selectEngine('assistant');
   await act(async () => pending[1].resolve(true));
-  expect(button('Current assistant').getAttribute('aria-pressed')).toBe('true');
+  expect(pending.map(item => item.patch)).toEqual([{ enginePreference: 'natural' }, { enginePreference: 'assistant' }]);
   expect(container.querySelector('[aria-label="Assistant voice"]')).toBe(assistant);
   expect(mounted).toHaveBeenCalledOnce();
 });
 
-it('restores the saved call mode when the latest save fails', async () => {
-  await act(async () => button('Natural voice').click());
-  expect(button('Natural voice').getAttribute('aria-pressed')).toBe('true');
+it('restores automatic selection when an advanced override fails to save', async () => {
+  await selectEngine('natural');
   await act(async () => pending[0].resolve(false));
-  expect(button('Current assistant').getAttribute('aria-pressed')).toBe('true');
+  expect(container.querySelector<HTMLSelectElement>('[aria-label="Call engine"]')?.value).toBe('auto');
+});
+
+it('shows a published Cloud realtime model without a global model and saves its per-Ada selection', async () => {
+  const save = vi.fn(async () => true);
+  await act(async () => root.render(<PersonalCallSettings preferences={{ enginePreference: 'natural', openingGreetingEnabled: true,
+    naturalModel: 'xopc-cloud/realtime' }} settings={{ credentialSource: 'env', defaultForNatural: true, voice: 'default', legacyModel: null,
+      naturalModels: [{ id: 'xopc-cloud/realtime', name: 'XOPC Cloud Realtime', tools: false }] }}
+    failed={false} disabled={false} zh onChange={save}>{() => null}</PersonalCallSettings>));
+  const select = container.querySelector<HTMLSelectElement>('[aria-label="自然语音模型"]')!;
+  expect([...select.options].map(option => option.textContent)).toContain('XOPC Cloud Realtime · 仅对话');
+  expect(container.textContent).toContain('不能交办任务');
+  expect(container.textContent).not.toContain('不可用');
+  await act(async () => { select.value = 'inherit'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+  expect(save).toHaveBeenLastCalledWith({ naturalModel: null });
+  await act(async () => { select.value = 'xopc-cloud/realtime'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+  expect(save).toHaveBeenLastCalledWith({ naturalModel: 'xopc-cloud/realtime' });
 });

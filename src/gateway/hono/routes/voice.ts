@@ -1,6 +1,6 @@
 import { withModelUsageOrigin } from '../../../providers/model-usage.js';
 import { HIGGS_REALTIME_REF, higgsVoiceSchema, VOICE_TIMING_METRICS, voiceSelectionSchema } from '@xopcai/realtime-protocol/voice';
-import { voiceSettingsCatalog, selectPlatformVoice } from '../../../voice/platform-settings.js';
+import { voiceSettingsCatalog, selectPlatformVoice, naturalVoiceModelOptions } from '../../../voice/platform-settings.js';
 /**
  * Voice routes — POST /api/voice/transcriptions (multipart).
  *
@@ -205,6 +205,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       voice: settings?.voice ?? 'default',
       legacyModel: legacyNaturalModel(config) ?? null,
       legacyModelLabel,
+      naturalModels: naturalVoiceModelOptions(config),
     };
   };
   authenticated.get('/api/voice/boson', async c => {
@@ -298,7 +299,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
         bargeIn: config.voice?.realtime?.bargeIn ?? true,
         mediaTransports: ['websocket-pcm'],
       },
-      defaultMode: config.voice?.realtime?.defaultEngine === 'omni' ? 'natural' : 'assistant',
+      defaultMode: config.voice?.realtime?.defaultEngine === 'agent' ? 'assistant' : omni?.tools ? 'natural' : 'assistant',
       omni: omni?.route ?? null,
       stt: stt?.route ?? null,
       tts: tts ? {

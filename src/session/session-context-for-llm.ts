@@ -11,7 +11,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { projectSourceContextsForLlm } from '../agent/source-context/source-context-projection.js';
 import { TASK_RESULT_DELIVERY_TYPE, parseTaskResultDelivery } from '@xopcai/gateway-contract';
 import { isRoutineTaskAllocationStatus } from './task-allocation-status.js';
-import { VOICE_CALL_TYPE, VOICE_TRANSCRIPT_TYPE, voiceTranscriptMessage } from './voice-transcript.js';
+import { isVoiceConversationMessage, VOICE_AGENT_INSTRUCTION_TYPE, VOICE_CALL_TYPE, VOICE_CHAT_MESSAGE_TYPE, VOICE_TRANSCRIPT_TYPE, voiceTranscriptMessage } from './voice-transcript.js';
 
 import {
   isCompactionAudit,
@@ -283,6 +283,7 @@ function customMessageRowToLlmMessage(
     role: 'user',
     content,
     timestamp: parseTimestampValue(row.timestamp),
+    ...(row.customType === VOICE_AGENT_INSTRUCTION_TYPE ? { customType: VOICE_AGENT_INSTRUCTION_TYPE } : {}),
   } as AgentMessage;
 }
 
@@ -594,7 +595,7 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
         continue;
       }
       if (r.customType === VOICE_CALL_TYPE) continue;
-      if (r.customType === VOICE_TRANSCRIPT_TYPE) {
+      if (r.customType === VOICE_TRANSCRIPT_TYPE || r.customType === VOICE_CHAT_MESSAGE_TYPE) {
         const message = voiceTranscriptMessage(r);
         if (message) out.push(message);
         continue;
@@ -613,7 +614,13 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
 export function buildSessionDisplayMessages(rows: TranscriptStoredRow[]): AgentMessage[] {
   const out: AgentMessage[] = [];
   for (const r of rows) {
+    if (isVoiceConversationMessage(r)) continue;
     if (isTranscriptCustomMessageEntry(r)) {
+      if (r.customType === VOICE_CHAT_MESSAGE_TYPE) {
+        const message = voiceTranscriptMessage(r);
+        if (message) out.push(message);
+        continue;
+      }
       if (r.customType === 'task_allocation_status' && isRoutineTaskAllocationStatus(r.details)) continue;
       if (r.customType === 'personal_request_status' || r.customType === 'connection_control_status' || r.customType === 'device_interaction_result') {
         out.push({ role: 'assistant', content: [{ type: 'text', text: typeof r.content === 'string' ? r.content : '' }],

@@ -1,9 +1,12 @@
 import { getActiveAssertionForSlot, reconcileAssertion, setAssertionStatus } from './repository.js';
 import type { AssertionCandidate } from './domain.js';
+import { canUseAssertion } from './usage-policy.js';
 
 export type UserProfileField = 'callName' | 'role' | 'pronouns' | 'timezone' | 'locale';
 export type UserProfilePatch = Partial<Record<UserProfileField, string>>;
 export type UserProfileSnapshot = Partial<Record<UserProfileField, string>>;
+
+export const USER_PROFILE_IDENTITY_RULE = 'Use confirmed profile data or explicit user self-identification for identity. A preferred callName is not necessarily a legal name. Current explicit corrections take priority. Assistant guesses, examples and user questions about a name are not confirmation. Missing details are unknown: consult permitted memory/history before answering, preserve uncertainty and never invent an identity.';
 
 const PROFILE_FIELDS = {
   callName: {
@@ -47,6 +50,17 @@ export function getUserProfileSnapshot(): UserProfileSnapshot {
     const value = activeProfileAssertion(key as UserProfileField)?.value;
     return typeof value === 'string' ? [[key, value]] : [];
   }));
+}
+
+/** Confirmed profile data shared by text and voice; UI snapshots are not model authorization. */
+export function getUserProfileContext(agentId: string, now = Date.now()) {
+  return Object.keys(PROFILE_FIELDS).flatMap(key => {
+    const field = key as UserProfileField;
+    const assertion = activeProfileAssertion(field);
+    return assertion?.authority === 'user_explicit' && typeof assertion.value === 'string'
+      && canUseAssertion(assertion, now, { use: 'answer', agentId })
+      ? [{ field, predicate: PROFILE_FIELDS[field].predicate, assertion, value: assertion.value }] : [];
+  });
 }
 
 export function applyUserProfilePatch(input: UserProfilePatch, now = Date.now()): UserProfileSnapshot {

@@ -157,13 +157,14 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
               {voice.responseText ? <div><span className="mb-1 block text-xs text-fg-subtle">{target?.name}</span><MarkdownView content={voice.responseText} compact codeCopy={false} renderMermaid={false} /></div> : null}
             </div> : null}
             {target?.taskId ? <TaskSessionBanner taskId={target.taskId} /> : null}
-            {connected && target && target.mode !== 'natural' ? <VoiceDelegatedTasks conversationId={target.conversationId} /> : null}
-            {connected && target && target.mode !== 'natural' ? <VoiceCallWork key={target.conversationId} voice={voice} conversationId={target.conversationId} m={m} /> : null}
+            {connected && target ? <VoiceDelegatedTasks conversationId={target.conversationId} /> : null}
+            {connected && target ? <VoiceCallWork key={target.conversationId} voice={voice} conversationId={target.conversationId} m={m} /> : null}
           </div>
           <footer className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-edge px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3">
             {active ? <>
               <Button variant="secondary" disabled={!connected} onClick={voice.toggleMute} aria-pressed={voice.muted}>{voice.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}{voice.muted ? m.callUnmute : m.callMute}</Button>
               {voice.responsePhase !== 'idle' ? <Button variant="ghost" onClick={voice.interruptResponse}>{m.voiceResponseInterrupt}</Button> : null}
+              {voice.activeTaskIds.map((taskId) => <Button key={taskId} variant="secondary" onClick={() => voice.cancelTask(taskId)}>{m.voiceCancelTask}</Button>)}
             </> : <Button variant="primary" onClick={() => { if (target) start(target); }}><Phone className="size-4" />{m.callReconnect}</Button>}
             <Button variant="secondary" onClick={end}><PhoneOff className="size-4 text-red-500" />{m.callEnd}</Button>
           </footer>

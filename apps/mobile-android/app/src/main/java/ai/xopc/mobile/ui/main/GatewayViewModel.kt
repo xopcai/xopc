@@ -11,6 +11,7 @@ import ai.xopc.mobile.gateway.GatewayProbe
 import ai.xopc.mobile.gateway.GatewaySession
 import ai.xopc.mobile.gateway.GatewayHttpException
 import ai.xopc.mobile.gateway.VoiceCallConnection
+import ai.xopc.mobile.gateway.voiceConversationRequest
 import ai.xopc.mobile.gateway.ClarificationRepository
 import ai.xopc.mobile.gateway.ClarificationRequest
 import ai.xopc.mobile.gateway.ClarificationCommand
@@ -1165,22 +1166,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
 
   suspend fun createVoiceCall(conversationId: String, mode: String, logicalCallId: String, recovery: Boolean): VoiceCallConnection =
     runInterruptible(Dispatchers.IO) {
-      require(mode == "natural" || mode == "assistant") { "INVALID_VOICE_MODE" }
+      require(mode == "auto" || mode == "natural" || mode == "assistant") { "INVALID_VOICE_MODE" }
       conversations.materializeForVoice(conversationId)
-      val status = org.json.JSONObject(session.request("/api/voice/realtime/status"))
-        .getJSONObject("payload")
-      val availability = status.getJSONObject("capabilities").getJSONObject(mode)
-      require(status.getBoolean("enabled") && availability.getBoolean("available")) {
-        availability.optString("reasonCode", "VOICE_UNAVAILABLE")
-      }
-      val body = org.json.JSONObject().put("purpose", "conversation")
-        .put("conversationId", conversationId).put("mode", mode)
-        .put("language", if (java.util.Locale.getDefault().language == "zh") "zh" else "en")
-        .apply { if (status.optBoolean("openingGreeting") && mode == "assistant") put("openingGreeting",
-          org.json.JSONObject().put("logicalCallId", logicalCallId).put("initiation", if (recovery) "recovery" else "user")
-            .put("supportsOutputReady", true)) }
-        .put("supportedProtocolVersions", org.json.JSONArray().put(3))
-        .put("mediaPreferences", org.json.JSONArray().put("websocket-pcm")).toString()
+      val body = voiceConversationRequest(conversationId, mode,
+        if (java.util.Locale.getDefault().language == "zh") "zh" else "en", logicalCallId, recovery).toString()
       val timing = org.json.JSONObject(session.request("/api/voice/realtime/preflight", "POST", body))
         .optJSONArray("timingMetrics")
       val timingMetrics = (0 until (timing?.length() ?: 0)).map { timing!!.getString(it) }

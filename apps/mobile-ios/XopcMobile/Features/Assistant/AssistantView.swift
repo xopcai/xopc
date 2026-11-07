@@ -676,7 +676,7 @@ struct AssistantView<Dock: View>: View {
             isActionPanelExpanded: $isActionPanelExpanded,
             attachmentError: attachmentError,
             canReferenceFiles: conversation?.isDraft == false,
-            canStartRealtimeVoice: conversation != nil && !startingVoice && !state.isRunActive
+            canStartRealtimeVoice: conversation != nil && !startingVoice
                 && !state.isSending && realtimeVoiceCall.phase == .idle,
             isRunActive: state.isRunActive,
             onInputFocusChanged: onInputFocusChanged,
@@ -687,7 +687,7 @@ struct AssistantView<Dock: View>: View {
             onSteer: { send(delivery: .steer) },
             onNewConversation: { requestConversation(state.selectedAgentID ?? "main") },
             onRealtimeVoice: { mode in
-                guard let conversation, !startingVoice, !state.isRunActive, !state.isSending else { return }
+                guard let conversation, !startingVoice, !state.isSending else { return }
                 startingVoice = true
                 Task {
                     defer { startingVoice = false }

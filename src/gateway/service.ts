@@ -27,12 +27,16 @@ import { getBrowserTabBindingById } from '../storage/sqlite/browser-tab-binding-
 import crypto from 'node:crypto';
 import { WorkDiscoveryService } from '../work-discovery/service.js';
 
-import { findSessionInput, insertSessionInput, bumpSessionInputRevision } from '../storage/sqlite/session-input-repository.js';
+import { findSessionInput, findSessionInputByRunId, insertSessionInput, bumpSessionInputRevision } from '../storage/sqlite/session-input-repository.js';
 import { ConnectionRecoveryService } from '../connectors/connection-recovery-service.js';
 
 import { buildVoiceMemoryContext } from '../voice/realtime/memory-context.js';
 import { buildVoicePersonaContext } from '../voice/realtime/persona-context.js';
-import { voiceMemoryBudget, voicePersonaBudget } from '../voice/realtime/conversation-context.js';
+import { buildVoiceUserContext } from '../voice/realtime/user-context.js';
+import { projectForgottenHistoryMessages } from '../memory-learning/forgotten-history.js';
+import { publishVoiceChatMessage } from '../voice/realtime/chat-publication.js';
+import { buildVoiceHistory, voiceMemoryBudget, voicePersonaBudget } from '../voice/realtime/conversation-context.js';
+import { buildSessionDisplayMessages } from '../session/session-context-for-llm.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { notifyUserContextChange } from '../user-context/changes.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
@@ -232,27 +236,40 @@ export class GatewayService {
   readonly realtime = new RealtimeRuntime(this.endpointTools, this.isRealtimePrincipalActive);
   readonly phoneStreams = new PhoneStreamGateway(this.isRealtimePrincipalActive);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
+    publishConversationContent: async (conversationId, transcriptId, publication) => {
+      await publishVoiceChatMessage(this.sessionIndex.getStore(), conversationId, transcriptId, publication);
+      this.emit('session.transcript_updated', { key: conversationId });
+    },
     isPrincipalActive: this.isRealtimePrincipalActive,
-    getConversationContext: async (conversationId, expectedTranscriptId, baseInstructions) => {
+    getConversationContext: async (conversationId, expectedTranscriptId, baseInstructions, actions = false) => {
       const before = await this.sessionIndex.getSessionMetadata(conversationId);
       if (before?.transcriptId !== expectedTranscriptId) throw new Error('Conversation changed before voice connection');
-      const messages = await this.sessionIndex.loadMessages(conversationId);
+      const loadedMessages = await this.sessionIndex.loadMessages(conversationId);
       const after = await this.sessionIndex.getSessionMetadata(conversationId);
       if (after?.transcriptId !== expectedTranscriptId) throw new Error('Conversation changed while loading voice context');
       const profile = resolveEffectiveAgentProfileForSession(conversationId);
+      const workspaceId = getSessionConfig(conversationId)?.workingDirectoryOverride ?? profile.resolvedWorkspacePath;
+      // No new utterance exists at call setup; a sentinel prevents treating an old user row as the current turn.
+      const sentinel = { role: 'user' as const, content: '', timestamp: Date.now() };
+      const messages = projectForgottenHistoryMessages([...loadedMessages, sentinel], { conversationId,
+        agentId: profile.agentId, workspaceId, projectId: after?.projectId }).filter(message => message !== sentinel);
+      const user = buildVoiceUserContext({ getConfig: () => this.config, conversationId, history: messages });
       const persona = buildVoicePersonaContext({
         getConfig: () => this.config,
         conversationId,
-        maxChars: voicePersonaBudget(baseInstructions),
+        maxChars: voicePersonaBudget(baseInstructions, undefined, actions, user),
       });
       const context = {
+        actions,
+        user,
         identity: persona.block,
         history: messages,
-        isCurrent: persona.isCurrent,
+        sharedChat: buildVoiceHistory(buildSessionDisplayMessages(await this.sessionIndex.getStore().loadTranscriptRows(conversationId)), 2_400),
+        isCurrent: () => persona.isCurrent() && user?.isCurrent() !== false,
       };
       const memory = buildVoiceMemoryContext({
         getConfig: () => this.config, conversationId,
-        workspaceId: getSessionConfig(conversationId)?.workingDirectoryOverride ?? profile.resolvedWorkspacePath,
+        workspaceId,
         projectId: after?.projectId, history: messages,
         maxChars: voiceMemoryBudget(baseInstructions, context),
       });
@@ -264,7 +281,7 @@ export class GatewayService {
         expectedTranscriptId,
         customType: 'voice_omni_transcript',
         content: entry.text,
-        display: true,
+        display: false,
         details: { callId, itemId: entry.itemId, role: entry.role, interrupted: entry.interrupted, engine: 'omni' },
       });
       this.emit('session.transcript_updated', { key: conversationId });
@@ -289,9 +306,13 @@ export class GatewayService {
       submit: (input) => this.agentRunner.submitSessionInput(input),
       find: findSessionInput,
       snapshot: (conversationId) => this.agentRunner.inputs.snapshot(conversationId),
+      runTopic: (conversationId, runId) => {
+        const origin = findSessionInputByRunId(conversationId, runId)?.origin;
+        return `${origin?.type === 'channel' && origin.channel === 'voice' ? 'voice-run' : 'run'}:${runId}`;
+      },
       currentSequence: (topic) => this.realtime.broker.currentSequence(topic),
       subscribe: (topic, afterSeq, listener) => this.realtime.broker.subscribe(topic, afterSeq, listener),
-      cancelRun: async (runId) => { await this.agentRunner.abortAgentRun(runId); },
+      cancelRun: async (runId) => (await this.agentRunner.abortAgentRun(runId)).aborted,
     }),
   });
 
@@ -2275,6 +2296,9 @@ export class GatewayService {
   }
 
   emit(type: string, payload: unknown): void {
+    if (type === 'session.transcript_updated' && payload && typeof payload === 'object' && typeof (payload as { key?: unknown }).key === 'string') {
+      this.voiceRealtime.refreshConversation((payload as { key: string }).key);
+    }
     if (type === 'config.reload') notifyUserContextChange({ kind: 'policy' });
     if (type === 'connector.learning.updated' && payload && typeof payload === 'object') {
       const job = payload as Record<string, unknown>;

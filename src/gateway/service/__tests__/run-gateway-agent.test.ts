@@ -306,7 +306,8 @@ describe('runGatewayAgent', () => {
     }]);
   });
 
-  it.each([false, true])('emits one global terminal event with safe session metadata (personal=%s)', async (personal) => {
+  it.each([{ personal: false, voice: false }, { personal: true, voice: false }, { personal: true, voice: true }])(
+    'emits one global terminal event with safe session metadata (%j)', async ({ personal, voice }) => {
     const conversationId = "1f0d2f37-a857-4724-82d9-3eee13a09dff";
     if (personal) {
       const agentId = personalAgentId('local-owner');
@@ -381,7 +382,7 @@ describe('runGatewayAgent', () => {
       { type: 'system', source: 'internal' },
       undefined,
       undefined,
-      { runId: 'run-terminal', inputReceivedAtMs: Date.now() - 1000 },
+      { runId: 'run-terminal', inputReceivedAtMs: Date.now() - 1000, ...(voice ? { presentation: 'voice' as const } : {}) },
     )) {
       // Drain the run.
     }
@@ -420,14 +421,17 @@ describe('runGatewayAgent', () => {
       },
     ]);
     expect(realtimeEvents.some((event) => event.event === 'turn_outcome')).toBe(true);
-    const runEventCount = realtimeEvents.filter(event => event.topic === 'run:run-terminal').length;
+    const runTopic = `${voice ? 'voice-run' : 'run'}:run-terminal`;
+    const runEventCount = realtimeEvents.filter(event => event.topic === runTopic).length;
+    expect(runEventCount).toBeGreaterThan(0);
+    if (voice) expect(realtimeEvents.some(event => event.topic === 'run:run-terminal')).toBe(false);
     deliverAudio({ type: 'tts_audio', uri: 'media://tts/reply.mp3', name: 'reply.mp3', mimeType: 'audio/mpeg' });
     expect(realtimeEvents.at(-1)).toMatchObject({
       topic: 'sessions', event: 'session.audio_ready',
       data: { conversationId, runId: 'run-terminal', uri: 'media://tts/reply.mp3' },
     });
     expect(emitted.at(-1)).toEqual({ type: 'session.transcript_updated', payload: { key: conversationId } });
-    expect(realtimeEvents.filter(event => event.topic === 'run:run-terminal')).toHaveLength(runEventCount);
+    expect(realtimeEvents.filter(event => event.topic === runTopic)).toHaveLength(runEventCount);
 
   });
 

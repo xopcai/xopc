@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Config } from '../config/schema.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
+import { learningRoleSql } from './transcript-source.js';
 
 export interface LearningJob {
   job_id: string; conversation_id: string; transcript_id: string; through_seq: number;
@@ -36,14 +37,14 @@ export function enqueueConversationLearning(config: Config, conversationId: stri
       WHERE conversation_id = ? AND transcript_id = ? AND extractor_version = ? AND policy_hash = ?`)
       .get(conversationId, id, rebuild.version, learningPolicyHash(config))) return;
     const last = db.prepare(`SELECT MAX(seq) AS seq, MAX(created_at) AS last_at FROM transcript_entries
-      WHERE transcript_id = ? AND role = 'assistant'`).get(id) as { seq: number | null; last_at: number | null };
+      WHERE transcript_id = ? AND ${learningRoleSql('assistant')}`).get(id) as { seq: number | null; last_at: number | null };
     if (!last.seq) return;
     db.prepare(`INSERT OR IGNORE INTO memory_learning_cursors(conversation_id, transcript_id, updated_at) VALUES (?, ?, ?)`)
       .run(conversationId, id, now);
     const cursor = db.prepare('SELECT processed_seq FROM memory_learning_cursors WHERE conversation_id = ? AND transcript_id = ?')
       .get(conversationId, id) as { processed_seq: number };
     if (!force && cursor.processed_seq >= last.seq) return;
-    const count = db.prepare(`SELECT COUNT(*) AS n FROM transcript_entries WHERE transcript_id = ? AND seq > ? AND role = 'user'`)
+    const count = db.prepare(`SELECT COUNT(*) AS n FROM transcript_entries WHERE transcript_id = ? AND seq > ? AND ${learningRoleSql('user')}`)
       .get(id, cursor.processed_seq) as { n: number };
     const due = force || count.n >= config.userContext.userModel.extraction.reviewIntervalTurns
       || now - (last.last_at ?? now) >= idleMs;

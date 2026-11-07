@@ -2,13 +2,22 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 import { ConfigSchema } from '../../config/schema.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../providers/model-catalog-store.js';
-import { selectPlatformVoice, voiceSettingsCatalog } from '../platform-settings.js';
+import { naturalVoiceModelOptions, selectPlatformVoice, voiceSettingsCatalog } from '../platform-settings.js';
 import { requirePlatformVoiceModel } from '../platform-catalog.js';
 
 const voice = voiceManifestSchema.parse({ protocolVersion:1, serviceVersion:3, modes:['transcription','transcription.stream','speech','speech.stream','conversation'], transport:'websocket-pcm', inputFormat:{encoding:'pcm_s16le',sampleRate:16000,channels:1}, outputFormat:{encoding:'pcm_s16le',sampleRate:24000,channels:1}, turnDetection:['server_vad'], bargeIn:true,tools:false,resumable:false, voices:[{id:'new-voice',name:'New Voice',displayNames:{'zh-CN':'默认音色',en:'Default voice'},languages:['zh']}], limits:{maxFrameBytes:65536,maxSessionSeconds:1800} });
 beforeEach(() => getModelCatalogStore().saveSource('xopc-cloud', {providerId:'xopc-cloud',baseUrl:'https://example.test/v1',api:'openai-completions',etag:'v3',recommendedModel:null,lastSuccessAt:1,models:[{id:'future-provider-model',name:'Future provider',displayNames:{'zh-CN':'XOPC 云端实时语音',en:'XOPC Cloud Realtime'},availability:'available',kind:'omni',input:['audio'],output:['audio','text'],operations:['audio.conversation'],contextWindow:128000,maxOutputTokens:null,reasoning:false,voice}]}));
 afterEach(resetModelCatalogStore);
 describe('shared platform voice settings', () => {
+  it('lists published conversation models without a globally selected native engine', () => {
+    const config = ConfigSchema.parse({});
+    expect(config.voice?.realtime?.omni).toBeUndefined();
+    expect(naturalVoiceModelOptions(config)).toEqual([
+      { id: 'xopc-cloud/future-provider-model', name: 'Future provider', tools: false },
+    ]);
+    getModelCatalogStore().removeSource('xopc-cloud');
+    expect(naturalVoiceModelOptions(config)).toEqual([]);
+  });
   it('rejects a voice that belongs to the model but does not support the selected mode', () => {
     const source = getModelCatalogStore().getSource('xopc-cloud')!;
     source.models[0].voice!.voices = [

@@ -65,7 +65,7 @@ describe('Personal AI editor', () => {
     vi.clearAllMocks();
   });
 
-  it.each(['assistant', 'natural'] as const)('starts Ada’s configured default call mode (%s)', async mode => {
+  it.each(['assistant', 'natural'] as const)('starts one automatic Ada call regardless of the legacy mode (%s)', async mode => {
     const fetchPersonal = vi.mocked(fetchJson).getMockImplementation()!;
     vi.mocked(fetchJson).mockImplementation(async (url, options) => {
       if (String(url).includes('/api/voice/boson')) return { payload: { credentialSource: 'env', defaultForNatural: true, voice: 'default', legacyModel: null } };
@@ -80,7 +80,7 @@ describe('Personal AI editor', () => {
     expect(headerContainer.querySelector('button[aria-label="Choose call mode"]')).toBeNull();
     act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Voice call"]')?.click());
     expect(openVoiceCall).toHaveBeenCalledExactlyOnceWith({
-      conversationId: 'conversation-1', name: 'Ada', mode,
+      conversationId: 'conversation-1', name: 'Ada',
     });
   });
 

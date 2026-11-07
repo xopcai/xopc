@@ -114,7 +114,8 @@ function withSessionInputContextMetadata(
   conversationId: string,
   row: TranscriptStoredRow,
 ): TranscriptStoredRow {
-  if (!isUserMessageRow(row)) return row;
+  const classified = classifyStoredRow(row);
+  if (classified.entryKind !== 'message' || !['user', 'assistant', 'toolResult'].includes(classified.role ?? '')) return row;
   const message = row as AgentMessage & { turnId?: unknown; metadata?: unknown };
   const turnId = typeof message.turnId === 'string' ? message.turnId.trim() : '';
   if (!turnId) return row;
@@ -122,11 +123,16 @@ function withSessionInputContextMetadata(
     ? message.metadata as Record<string, unknown>
     : {};
   const input = db.prepare(
-    `SELECT client_message_id, context_refs_json FROM session_inputs
+    `SELECT client_message_id, context_refs_json, origin_json FROM session_inputs
      WHERE conversation_id = ? AND run_id = ?
      LIMIT 1`,
-  ).get(conversationId, turnId) as { client_message_id: string; context_refs_json: string | null } | undefined;
+  ).get(conversationId, turnId) as { client_message_id: string; context_refs_json: string | null; origin_json: string } | undefined;
   if (!input) return row;
+  const origin = JSON.parse(input.origin_json) as { type?: string; channel?: string };
+  const voiceConversation = origin.type === 'channel' && origin.channel === 'voice';
+  const voiceDelegation = voiceConversation && input.client_message_id.startsWith('voice-action:');
+  if (!isUserMessageRow(row)) return voiceConversation
+    ? { ...message, metadata: { ...metadata, voiceConversation: true, voiceDelegation } } as unknown as TranscriptStoredRow : row;
 
   let sourceContexts = metadata.sourceContexts;
   try {
@@ -141,6 +147,7 @@ function withSessionInputContextMetadata(
     ...message,
     metadata: {
       ...metadata,
+      ...(voiceConversation ? { voiceConversation: true, voiceDelegation, hiddenFromClient: true } : {}),
       clientMessageId: input.client_message_id,
       ...(Array.isArray(sourceContexts) && sourceContexts.length > 0 ? { sourceContexts } : {}),
     },
@@ -150,7 +157,7 @@ function withSessionInputContextMetadata(
 export function appendTranscriptEntry(
   conversationId: string,
   row: TranscriptStoredRow,
-  opts?: { transcriptId?: string; tokenDelta?: number },
+  opts?: { transcriptId?: string; tokenDelta?: number; entryId?: string },
 ): TranscriptEntryRow {
   if (isRuntimeOnlyTranscriptMessage(row)) {
     throw new Error('Runtime-only messages cannot be persisted in a session transcript');
@@ -160,8 +167,15 @@ export function appendTranscriptEntry(
     if (!transcriptId) {
       throw new Error(`Session not found: ${conversationId}`);
     }
+    if (opts?.entryId) {
+      const existing = db.prepare('SELECT * FROM transcript_entries WHERE entry_id = ?').get(opts.entryId) as TranscriptEntryRow | undefined;
+      if (existing) {
+        if (existing.transcript_id !== transcriptId) throw new Error('Transcript publication belongs to another session');
+        return existing;
+      }
+    }
     const persistedRow = withSessionInputContextMetadata(db, conversationId, row);
-    const inserted = insertEntry(db, { transcriptId, conversationId, row: persistedRow });
+    const inserted = insertEntry(db, { transcriptId, conversationId, row: persistedRow, entryId: opts?.entryId });
     if (classifyStoredRow(persistedRow).entryKind === 'message') {
       const tokenDelta = opts?.tokenDelta ?? 0;
       const now = Date.now();
@@ -487,6 +501,8 @@ export function paginateTranscriptMessages(
     limit?: number;
     beforeIndex?: number;
     includeContext?: boolean;
+    /** Main Chat excludes the durable voice side stream; raw exports remain complete. */
+    excludeVoiceConversation?: boolean;
     /** Include reset/rollover transcripts for read-only conversation history. */
     includeArchived?: boolean;
     /** Count user turns rather than diagnostic rows for compact chat history. */
@@ -512,6 +528,13 @@ export function paginateTranscriptMessages(
   const transcriptWhere = includeArchived
     ? `t.conversation_id = ? AND (t.status = 'active' OR t.archive_reason IN ('reset', 'stale'))`
     : 'e.transcript_id = ?';
+  const visibleWhere = options.excludeVoiceConversation ? ` AND COALESCE(json_extract(e.payload_json, '$.metadata.voiceConversation'), 0) != 1
+    AND NOT (COALESCE(e.role, '') = 'custom' AND COALESCE(json_extract(e.payload_json, '$.customType'), '') IN ('voice_omni_transcript', 'voice_agent_instruction')
+      AND COALESCE(json_extract(e.payload_json, '$.display'), 1) = 0)
+    AND NOT (COALESCE(json_extract(e.payload_json, '$.customType'), '') = 'turn_outcome' AND EXISTS (
+      SELECT 1 FROM session_inputs vi WHERE vi.conversation_id = t.conversation_id
+        AND vi.run_id = json_extract(e.payload_json, '$.data.turnId')
+        AND json_extract(vi.origin_json, '$.type') = 'channel' AND json_extract(vi.origin_json, '$.channel') = 'voice'))` : '';
   const transcriptArg = includeArchived ? conversationId : transcriptId;
 
   const countRow = db
@@ -519,7 +542,7 @@ export function paginateTranscriptMessages(
       `SELECT COUNT(*) AS total
        FROM transcript_entries e
        JOIN transcripts t ON t.transcript_id = e.transcript_id
-       WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})`,
+       WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})${visibleWhere}`,
     )
     .get(transcriptArg, ...kinds) as { total: number };
   const total = countRow.total;
@@ -538,7 +561,7 @@ export function paginateTranscriptMessages(
     const anchors = db.prepare(`SELECT idx FROM (
       SELECT e.role, ROW_NUMBER() OVER (ORDER BY t.created_at ASC, t.rowid ASC, e.seq ASC) - 1 AS idx
       FROM transcript_entries e JOIN transcripts t ON t.transcript_id = e.transcript_id
-      WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})
+      WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})${visibleWhere}
     ) WHERE role = 'user' AND idx < ? ORDER BY idx DESC LIMIT ?`)
       .all(transcriptArg, ...kinds, end, limit + 1) as Array<{ idx: number }>;
     const start = anchors.length > limit ? anchors[limit - 1]!.idx : 0;
@@ -557,7 +580,7 @@ export function paginateTranscriptMessages(
                   ROW_NUMBER() OVER (ORDER BY t.created_at ASC, t.rowid ASC, e.seq ASC) - 1 AS idx
            FROM transcript_entries e
            JOIN transcripts t ON t.transcript_id = e.transcript_id
-           WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})
+           WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})${visibleWhere}
          )
          WHERE idx >= ? AND idx < ?
          ORDER BY idx ASC`,
@@ -569,7 +592,7 @@ export function paginateTranscriptMessages(
         `SELECT e.entry_id, e.transcript_id, e.seq, e.entry_kind, e.role, e.payload_json, e.created_at
          FROM transcript_entries e
          JOIN transcripts t ON t.transcript_id = e.transcript_id
-         WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})
+         WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})${visibleWhere}
          ORDER BY t.created_at DESC, t.rowid DESC, e.seq DESC
          LIMIT ? OFFSET ?`,
       )

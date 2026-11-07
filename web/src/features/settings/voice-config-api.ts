@@ -47,6 +47,7 @@ export interface BosonVoiceSettings {
   voice: HiggsVoice;
   legacyModel: string | null;
   legacyModelLabel?: string;
+  naturalModels?: Array<{ id: string; name: string; tools?: boolean }>;
 }
 
 export const bosonVoiceSettingsUrl = '/api/voice/boson';
@@ -245,7 +246,7 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
       },
       realtime: {
         enabled: realtime.enabled === true,
-        defaultEngine: realtime.defaultEngine === 'omni' ? 'omni' : 'agent',
+        defaultEngine: realtime.defaultEngine === 'omni' ? 'omni' : realtime.defaultEngine === 'agent' ? 'agent' : 'auto',
         silenceDurationMs: typeof realtime.silenceDurationMs === 'number' ? realtime.silenceDurationMs : 1200,
         idleTimeoutMs: typeof realtime.idleTimeoutMs === 'number' ? realtime.idleTimeoutMs : 60_000,
         maxDictationMs: typeof realtime.maxDictationMs === 'number' ? realtime.maxDictationMs : 600_000,

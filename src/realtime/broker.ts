@@ -32,7 +32,7 @@ export interface RealtimeSubscriptionHandle {
 const DEFAULT_TOPIC_POLICY: RealtimeTopicPolicy = { replayCapacity: 0 };
 
 export function defaultRealtimeTopicPolicy(topic: string): RealtimeTopicPolicy {
-  if (topic.startsWith('run:')) return { replayCapacity: 8_000 };
+  if (topic.startsWith('run:') || topic.startsWith('voice-run:')) return { replayCapacity: 8_000 };
   if (topic.startsWith('session:')) return { replayCapacity: 200 };
   if (topic === 'logs') return { replayCapacity: 500 };
   if (topic === 'gateway' || topic === 'sessions') return { replayCapacity: 1_000 };

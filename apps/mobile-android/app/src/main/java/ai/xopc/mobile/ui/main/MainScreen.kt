@@ -1167,7 +1167,7 @@ internal fun MainContent(
   var voicePermissionDenied by remember(connection.profile?.gatewayId) { mutableStateOf(false) }
   val voicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
     if (granted) {
-      pendingVoiceMode = pendingVoiceMode ?: "natural"
+      pendingVoiceMode = pendingVoiceMode ?: "auto"
       if (connection.selectedConversationId == null) onCreateConversation()
     }
     else { pendingVoiceMode = null; voicePermissionDenied = true }
@@ -1470,6 +1470,7 @@ internal fun MainContent(
                 fadeOut(animationSpec = tween(180)), label = "assistant-actions") {
               AssistantActionPanel(
                 canCreate = !connection.creatingConversation && !connection.sending,
+                canCall = !connection.creatingConversation && (connection.selectedConversationId != null || !connection.sending),
                 canReference = !connection.sending && connection.pendingInput == null,
                 canPick = !connection.sending && !connection.attachmentLoading &&
                   connection.pendingInput == null && connection.draftAttachments.size < 10,
@@ -2314,6 +2315,7 @@ private fun VoiceInputToggle(active: Boolean, disabled: Boolean, onClick: () -> 
 
 @Composable
 private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () -> Unit,
+  canCall: Boolean = canCreate,
   canReference: Boolean = false, onOpenReference: (String) -> Unit = {},
   canPick: Boolean = false, onPick: (String) -> Unit = {},
   onVoiceAction: (String) -> Unit = {},
@@ -2329,8 +2331,7 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
     Triple(R.string.assistant_action_new_chat, R.drawable.action_new_chat, "new-chat"),
   )
   val secondPage = listOf(
-    Triple(R.string.assistant_action_voice_natural, R.drawable.action_waveform, "voice-natural"),
-    Triple(R.string.assistant_action_voice_assistant, R.drawable.action_speaker, "voice-assistant"),
+    Triple(R.string.assistant_action_voice_natural, R.drawable.action_waveform, "voice-call"),
   )
   val pages = listOf(firstPage, secondPage)
   val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -2345,17 +2346,16 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
           Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             row.forEach { (label, icon, id) ->
               val enabled = (id == "new-chat" && canCreate) ||
-                (id in setOf("voice", "voice-natural", "voice-assistant") && canCreate) ||
+                (id == "voice" && canCreate) || (id == "voice-call" && canCall) ||
                 (id in setOf("reference-note", "reference-task") && canReference) ||
                 (id == "reference-file" && canPick) ||
                 (id in setOf("photos", "camera", "local-files") && canPick)
               TextButton(onClick = {
                 if (id == "new-chat") onCreateConversation()
-                else if (id in setOf("voice", "voice-natural", "voice-assistant"))
+                else if (id in setOf("voice", "voice-call"))
                   onVoiceAction(when (id) {
-                    "voice-assistant" -> "assistant"
                     "voice" -> "record"
-                    else -> "natural"
+                    else -> "auto"
                   })
                 else if (id in setOf("photos", "camera", "local-files")) onPick(id)
                 else onOpenReference(when (id) {

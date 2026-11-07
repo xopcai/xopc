@@ -5,6 +5,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 
 import { createOmniVoiceEngine } from '../omniEngine.js';
 import type { VoiceEngine } from '../engine.js';
+import type { VoiceAgentBroker, VoiceAgentEvent } from '../agentBroker.js';
 
 describe('Omni voice engine', () => {
   let server: WebSocketServer;
@@ -20,7 +21,9 @@ describe('Omni voice engine', () => {
   async function setup(recordOverride?: () => Promise<void>, bargeIn = true, managed = false, provider = 'test', context?: {
     restore: () => Promise<string>;
     onConnected: () => void;
-  }) {
+    history?: () => string;
+    historyAcknowledged?: () => void;
+  }, agent?: VoiceAgentBroker) {
     server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
     await once(server, 'listening');
     const received: Array<Record<string, any>> = [];
@@ -35,20 +38,100 @@ describe('Omni voice engine', () => {
           type: provider === 'boson' ? 'session.created' : 'session.updated',
           session: { input_sample_rate: 16000, output_sample_rate: 24000 },
         }));
+        if (event.type === 'conversation.item.create' && context?.history) {
+          context.historyAcknowledged?.();
+          socket.send(JSON.stringify({ type: provider === 'boson' ? 'conversation.item.added' : 'conversation.item.created', item: event.item }));
+        }
       });
     });
     const onUserInput = vi.fn();
     const send = vi.fn(); const sendAudio = vi.fn(); const record = vi.fn(recordOverride ?? (async () => {}));
     engine = createOmniVoiceEngine({
       callId: 'test-call',
-      route: { url: `ws://127.0.0.1:${(server.address() as { port: number }).port}`, apiKey: 'test', voice: 'Cherry', instructions: 'Test', route: { provider, model: 'test', managed } },
+      route: { url: `ws://127.0.0.1:${(server.address() as { port: number }).port}`, apiKey: 'test', voice: 'Cherry', instructions: 'Test', tools: Boolean(agent), route: { provider, model: 'test', managed } },
+      ...(agent ? { agent: { broker: agent, conversationId: 'chat', transcriptId: 'transcript' } } : {}),
       silenceDurationMs: 700, bargeIn, send, sendAudio, record, onUserInput,
       restoreInstructions: context?.restore,
+      restoreHistory: context?.history,
       onClose: vi.fn(async () => engine.close()),
     });
     await engine.start();
     return { received, send, sendAudio, record, onUserInput, emit: (event: object) => upstream.send(JSON.stringify(event)) };
   }
+
+  it.each([{ provider: 'boson', managed: false }, { provider: 'xopc-cloud', managed: true }])(
+    'delegates once and reports asynchronous results through %j', async ({ provider, managed }) => {
+    const outcome = Promise.withResolvers<VoiceAgentEvent>();
+    const broker = { delegate: vi.fn(async () => ({ taskId: 'task-1', runId: 'run-1', events: (async function* () {
+      yield { type: 'assistant_delta', payload: { delta: '今天有两场会议。' } };
+      yield await outcome.promise;
+    })() })), cancel: vi.fn(async () => true) };
+    const test = await setup(undefined, true, managed, provider, undefined, broker);
+    expect(test.received[0].session.tools.map((tool: { name: string }) => tool.name)).toEqual(['chat_publish', 'agent_execute', 'agent_task_status', 'agent_cancel']);
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'question' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'question' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'question' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'question', transcript: '查询今天的日程。' });
+    test.emit({ type: 'response.created', response: { id: 'action' } });
+    const call = { type: 'function_call', call_id: 'call-1', name: 'agent_execute', arguments: '{"task":"查询今天的日程。"}' };
+    test.emit({ ...call, type: 'response.function_call_arguments.done', response_id: 'action' });
+    test.emit({ type: 'response.done', response: { id: 'action', status: 'completed', output: [call] } });
+    await vi.waitFor(() => expect(broker.delegate).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(test.received).toContainEqual(expect.objectContaining({ type: 'conversation.item.create',
+      item: expect.objectContaining({ type: 'function_call_output', call_id: 'call-1', output: expect.stringContaining('running') }) })));
+    expect(test.send).toHaveBeenCalledWith('task.created', { responseId: 'action', taskId: 'task-1' });
+    test.emit({ type: 'response.created', response: { id: 'ack' } });
+    test.emit({ type: provider === 'boson' ? 'response.output_audio.delta' : 'response.audio.delta', response_id: 'ack', item_id: 'ack-spoken', content_index: 0,
+      delta: Buffer.alloc(960, 1).toString('base64') });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalled());
+    expect(engine.cancel('ack', 'client_cancelled')).toBe(true);
+    test.emit({ type: 'response.done', response: { id: 'ack', status: 'cancelled' } });
+    test.emit({ type: 'input_audio_buffer.cleared' });
+    // Playback interruption does not cancel Agent execution.
+    expect(broker.cancel).not.toHaveBeenCalled();
+    outcome.resolve({ type: 'run_end', payload: { status: 'completed' } });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('task.done', { taskId: 'task-1', status: 'completed' }));
+    await vi.waitFor(() => expect(test.received).toContainEqual(expect.objectContaining({ type: 'conversation.item.create',
+      item: expect.objectContaining({ type: 'message', content: [expect.objectContaining({ text: expect.stringContaining('今天有两场会议。') })] }) })));
+    expect(test.record.mock.calls.filter(([entry]) => entry.role === 'user')).toHaveLength(1);
+  });
+
+  it('updates shared Chat and identity in a call without speaking or executing the quoted update', async () => {
+    const test = await setup(undefined, true, false, 'boson');
+    expect(engine.updateContext?.('Latest confirmed profile and context', '{"recentTurns":[{"role":"user","text":"先不要发送"}]}')).toBe(true);
+    await vi.waitFor(() => expect(test.received.some(item => item.type === 'conversation.item.create')).toBe(true));
+    expect(test.received.filter(item => item.type === 'session.update').at(-1)?.session.instructions).toBe('Latest confirmed profile and context');
+    expect(test.received.filter(item => item.type === 'response.create')).toEqual([]);
+  });
+
+  it('reports a verified background reply once during a quiet gap and defers while the user speaks', async () => {
+    const test = await setup(undefined, true, false, 'boson');
+    const reply = { deliveryId: 'background-result-1', text: '草稿已整理好，还没有发送。' };
+    await expect(engine.offerReply?.(reply)).resolves.toBe(true);
+    await expect(engine.offerReply?.(reply)).resolves.toBe(true);
+    await vi.waitFor(() => expect(test.received.filter(item => item.type === 'response.create')).toHaveLength(1));
+    expect(JSON.stringify(test.received)).toContain('do not execute or publish it again');
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'new-speech' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_started', expect.anything()));
+    await expect(engine.offerReply?.({ ...reply, deliveryId: 'background-result-2' })).resolves.toBe(false);
+  });
+
+  it('does not execute a speculative native tool call interrupted before the turn commits', async () => {
+    const broker = { delegate: vi.fn(), cancel: vi.fn(async () => true) };
+    const test = await setup(undefined, true, false, 'boson', undefined, broker);
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'partial' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'partial' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'partial' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'partial', transcript: '等一下。' });
+    test.emit({ type: 'response.created', response: { id: 'speculative' } });
+    test.emit({ type: 'response.done', response: { id: 'speculative', status: 'completed', output: [
+      { type: 'function_call', call_id: 'premature', name: 'agent_execute', arguments: '{"task":"delete a file"}' },
+    ] } });
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'continuation' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_started', { utteranceId: 'continuation' }));
+    expect(broker.delegate).not.toHaveBeenCalled();
+    expect(broker.cancel).not.toHaveBeenCalled();
+  });
 
   it('opens the Higgs connection while loading context and initializes it with the restored instructions', async () => {
     const connected = Promise.withResolvers<void>();
@@ -66,6 +149,20 @@ describe('Omni voice engine', () => {
       type: 'session.update', session: expect.objectContaining({ instructions: 'Ada, continue discussing the updated travel budget.' }),
     })]);
   });
+
+  it.each([{ provider: 'boson', managed: false }, { provider: 'xopc-cloud', managed: true }])(
+    'restores hidden conversation before becoming ready without speaking or executing it on %j', async ({ provider, managed }) => {
+      const historyAcknowledged = vi.fn();
+      const test = await setup(undefined, true, managed, provider, {
+        restore: async () => 'Ada', onConnected: () => {}, history: () => '{"recentTurns":[{"role":"user","text":"预算三千，不要订票"}]}', historyAcknowledged,
+      });
+      expect(historyAcknowledged).toHaveBeenCalledOnce();
+      expect(test.received.map(event => event.type)).toEqual(['session.update', 'conversation.item.create']);
+      expect(test.received[1].item.content[0].text).toContain('预算三千，不要订票');
+      expect(test.received[1].item.content[0].text).toContain('NOT a new user request');
+      expect(test.sendAudio).not.toHaveBeenCalled();
+      expect(test.record).not.toHaveBeenCalled();
+    });
 
   it('uses the Higgs endpoint and truncates an interrupted reply at acknowledged playback', async () => {
     const test = await setup(undefined, true, false, 'boson');

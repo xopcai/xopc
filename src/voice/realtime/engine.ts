@@ -7,6 +7,8 @@ export type VoiceEventSink = <T extends VoiceServerEvent['type']>(
 ) => void;
 
 export interface VoiceEngine {
+  restoreTasks?(): void;
+  updateContext?(instructions: string, chat: string): boolean;
   start(): Promise<void>;
   prepareOpeningGreeting?(input: { responseId: string; text: string }): Promise<void>;
   offerOpeningGreeting?(input: { responseId: string; text: string; deadlineAt: number }): Promise<OpeningGreetingResult>;

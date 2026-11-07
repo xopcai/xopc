@@ -293,9 +293,8 @@ export function PersonalPage() {
     const ready = record?.state === 'ready';
     const callLabel = zh ? '语音通话' : 'Voice call';
     const callClass = 'touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50';
-    const defaultMode = record?.voiceCallPreferences?.defaultMode ?? 'assistant';
     const openCall = () => {
-      if (ready) voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName, mode: defaultMode });
+      if (ready) voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName });
     };
     const avatar = ready ? record.appearance : appearance;
     const title = ready ? record.displayName : 'Ada';
@@ -393,7 +392,7 @@ export function PersonalPage() {
                 if (response.ok && response.payload) { recordRef.current = response.payload; setRecord(response.payload); }
               }} />
               <PersonalCallSettings preferences={record.voiceCallPreferences} settings={boson} failed={Boolean(bosonError)} disabled={savingCount > 0} zh={zh}
-                onChange={voiceCallPreferences => queueProfileUpdate({ voiceCallPreferences }, voiceCallPreferences.defaultMode === undefined)}>
+                onChange={voiceCallPreferences => queueProfileUpdate({ voiceCallPreferences }, voiceCallPreferences.enginePreference === undefined)}>
                 {active => <PersonalVoiceSetting active={active} onGreetingChange={openingGreetingEnabled => queueProfileUpdate({ voiceCallPreferences: { openingGreetingEnabled } }, false)} record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />}
               </PersonalCallSettings>
           </div>

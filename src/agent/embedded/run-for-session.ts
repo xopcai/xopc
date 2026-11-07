@@ -5,6 +5,10 @@ import { connectionObjectiveContext } from '../context/connection-objective-cont
 import { traceRun, startObservation, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
 import { voicePresentationPrompt } from '../prompt/voice-presentation.js';
 import { projectVoiceHistory } from '../prompt/voice-history.js';
+import { createVoiceChatPublicationTool, publishVoiceChatMessage, voiceChatPublicationInstructions } from '../../voice/realtime/chat-publication.js';
+import { isNaturalVoiceDelegation } from '../../session/voice-transcript.js';
+import { isXopcDatabaseOpen, getSessionMetadata } from '../../storage/sqlite/index.js';
+import { findSessionInputByRunId } from '../../storage/sqlite/session-input-repository.js';
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { parseTurnOutcome } from '@xopcai/gateway-contract';
 
@@ -77,6 +81,9 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
   let idleJob: Parameters<typeof idleScheduler.endTurn>[2];
   let turnCompleted = false;
   const runId = params.runId ?? crypto.randomUUID();
+  const voiceTranscriptId = params.presentation === 'voice' && isXopcDatabaseOpen() ? getSessionMetadata(conversationId)?.transcriptId : undefined;
+  let voiceToolExecuted = false;
+  let voiceContentPublished = false;
   const taskContinuation = getTaskContinuation(conversationId, runId);
   const config = params.getConfig?.();
   if (config) setTraceIdentity({ agentId: resolveEffectiveAgentProfileForSession(conversationId).agentId });
@@ -99,6 +106,21 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       deadlineAtMs: supervisor.deadlineAtMs,
     }, result.ok ? 'Agent run completed' : `Agent run ended: ${result.errorMessage ?? 'unknown failure'}`);
     turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required' && result.stopReason !== 'phone_assistance_required';
+    if (voiceTranscriptId && (isNaturalVoiceDelegation(findSessionInputByRunId(conversationId, runId))
+      || (voiceToolExecuted && !voiceContentPublished))) {
+      const text = result.ok ? result.lastAssistantText
+        : result.terminationReason === 'user_cancelled' || result.terminationReason === 'parent_cancelled'
+          ? (config?.voice?.language === 'en' ? 'The task was cancelled. Actions already completed remain in effect.' : '刚才的任务已取消，已完成的操作不会撤销。')
+          : (config?.voice?.language === 'en' ? 'The task could not be completed. We can review the issue here.' : '刚才的任务未能完成，可以在这里继续处理。');
+      if (text?.trim() && text.trim() !== 'NO_REPLY') {
+        try {
+          await publishVoiceChatMessage(sessionStore, conversationId, voiceTranscriptId, {
+            text: text.length <= 16_000 ? text : `${text.slice(0, 15_900)}\n\n${config?.voice?.language === 'en' ? '[Long result excerpted.]' : '（结果较长，此处为节选。）'}`,
+            publicationId: `voice-result:${runId}`, source: 'agent_result', turnId: runId,
+          });
+        } catch (err) { log.warn({ err, conversationId, runId }, 'Voice task result could not be shared in Chat'); }
+      }
+    }
     if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required' || result.stopReason === 'phone_assistance_required') return result;
     try {
       const rows = await sessionStore.loadTranscriptRows(conversationId);
@@ -216,11 +238,15 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     const executionToolPolicy = source ? { ...baseToolPolicy, codemode: false, externalMaterialization: false,
       revision: `${baseToolPolicy.revision}:${source.id}` } : baseToolPolicy;
     const tools = source ? [] : filterExecutionTools(executionToolPolicy, agent.state.tools);
+    if (voiceTranscriptId && !isNaturalVoiceDelegation(findSessionInputByRunId(conversationId, runId))) {
+      tools.push(createVoiceChatPublicationTool({ store: sessionStore, conversationId, transcriptId: voiceTranscriptId, runId,
+        onPublished: () => { voiceContentPublished = true; } }));
+    }
     const turnPolicy = agentManager.createAgentTurnPolicy(conversationId);
     const thinkingLevel = voiceOptions?.thinkingLevel ?? (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
     const spokenPrompt = params.presentation === 'voice' && personal
       ? agentManager.buildVoiceSystemPrompt?.(conversationId, modelRef, thinkingLevel) : undefined;
-    const baseSystemPrompt = [spokenPrompt ?? agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
+    const baseSystemPrompt = [spokenPrompt ?? agent.state.systemPrompt ?? '', params.presentation === 'voice' ? `${voicePresentationPrompt}\n\n${voiceChatPublicationInstructions}` : '']
       .filter(Boolean).join('\n\n');
     const systemPrompt = appendDynamicPromptSection(baseSystemPrompt,
       [params.dynamicSystemContext, connectionObjectiveContext(conversationId), source
@@ -378,6 +404,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             turnPolicy,
             abortSignal: supervisor.signal,
             onEvent: event => {
+              if (event.type === 'tool_execution_end' && event.toolName !== 'chat_publish') voiceToolExecuted = true;
               if (event.type === 'error') {
                 log.warn({ conversationId, runId, modelRef: candidateModelRef, errorMessage: event.content }, 'Model attempt failed');
                 return;

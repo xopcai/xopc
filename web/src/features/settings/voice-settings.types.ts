@@ -99,7 +99,7 @@ export interface VoiceSettingsState {
     realtime: {
       boson?: { defaultForNatural: boolean; voice: import('@xopcai/realtime-protocol/voice').HiggsVoice };
       enabled: boolean;
-      defaultEngine: 'agent' | 'omni';
+      defaultEngine: 'auto' | 'agent' | 'omni';
       silenceDurationMs: number;
       idleTimeoutMs: number;
       maxDictationMs: number;
