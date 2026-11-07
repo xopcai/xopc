@@ -6,6 +6,23 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('routes preview leases separately from installed capabilities and public assets', () => {
+    for (const path of ['/api/local-app-previews/app/sessions', '/api/local-app-previews/sessions/lease', '/api/local-app-previews/sessions/lease/requests']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('local-app-previews');
+    }
+    for (const path of ['/api/local-app-previews/app/sessions/extra', '/api/local-app-previews/sessions/lease/requests/extra', '/api/local-apps/preview/token/draft/ui/index.html', '/api/local-app-capabilities/catalog']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('local-app-previews');
+    }
+  });
+  it('keeps Local App catalog, grants and resource options in their owning bundles', () => {
+    for (const path of ['/api/local-app-capabilities/catalog', '/api/local-app-capabilities/app', '/api/local-app-capabilities/app/xopc.notes.get/invocations']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('local-app-capabilities');
+    }
+    for (const path of ['/api/extensions/app/ui-grant', '/api/extensions/app/resource-options', '/api/extensions/app/access-audit']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('auth-registry-extensions');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/local-app-capabilities/app/resource-options')?.id).not.toBe('local-app-capabilities');
+  });
   it('maps device host enrollment independently', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/hosts/enrollment')?.id).toBe('device-hosts');
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/hosts/enrollment/extra')).toBeUndefined();

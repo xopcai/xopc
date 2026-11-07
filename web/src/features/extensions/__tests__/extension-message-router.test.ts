@@ -32,13 +32,14 @@ describe('extension iframe identity', () => {
     send(iframe.contentWindow, 'other-extension');
     await Promise.resolve();
     expect(handler).toHaveBeenCalledWith('trusted', { key: 'key' });
-    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ type: 'response', result: 'result' }), '*');
+    await vi.waitFor(() => expect(reply).toHaveBeenCalledWith(expect.objectContaining({ type: 'response', result: 'result' }), '*'));
   });
   it.each(['unregister', 'permissions', 'logout'] as const)('drops pending responses after %s', async (change) => {
     const { router, iframe, handler, reply, send } = setup();
     let resolve!: (value: string) => void;
     handler.mockReturnValue(new Promise<string>(done => { resolve = done; }));
     send(iframe.contentWindow);
+    await Promise.resolve();
     const previous = useGatewayStore.getState().conversationId;
     if (change === 'unregister') router.unregisterIframe('trusted');
     if (change === 'permissions') router.registerIframe('trusted', iframe, []);

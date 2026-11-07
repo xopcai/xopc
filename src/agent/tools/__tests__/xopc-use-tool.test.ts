@@ -1,3 +1,4 @@
+import { LocalAppResourceScopesSchema } from '@xopcai/gateway-contract';
 import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
 import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
 function seedConversationFixtures(): void {
@@ -262,13 +263,13 @@ describe('xopc_use tool', () => {
     const dispatcher = createProductDispatcher(() => notes);
     const descriptor = dispatcher.describe('xopc.notes.create', { principalId: 'agent:main', scopes: ['gateway.admin'], surface: 'extension', authorize: () => true });
     const binding = { id: descriptor.id, majorVersion: descriptor.majorVersion, descriptorDigest: descriptor.descriptorDigest };
-    const access = vi.fn(() => ({ releaseId: 'release', bindings: [binding] }));
+    const access = vi.fn(() => ({ releaseId: 'release', grantRevision: 'revision', resourceScopes: LocalAppResourceScopesSchema.parse({ notesWrite: { mode: 'workspace' } }), bindings: [binding] }));
     const tool = createXopcUseTool({ getNotesService: () => notes, getLocalAppService: () => ({ getCapabilityAccess: access,
       getUiGrant: () => ({ manifestDigest: 'b'.repeat(64) }) }) as unknown as LocalAppService });
     const discovered = parseToolJson(await tool.execute('discover', { mode: 'local_app', command: 'capabilities', args: { extensionId: 'fixture' } }));
     expect(discovered.manifestDigest).toBe('b'.repeat(64));
     expect(discovered.capabilities[0].id).toBe('xopc.notes.create');
-    const input = { mode: 'local_app' as const, command: 'invoke', args: { extensionId: 'fixture', manifestDigest: 'b'.repeat(64),
+    const input = { mode: 'local_app' as const, command: 'invoke', args: { extensionId: 'fixture', manifestDigest: 'b'.repeat(64), grantRevision: 'revision',
       capabilityId: binding.id, call: { ...binding, input: { title: 'Local App note' }, idempotencyKey: 'intent' } } };
     const { id: _id, ...call } = input.args.call;
     const request = { ...input, args: { ...input.args, call } };

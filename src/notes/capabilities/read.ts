@@ -4,6 +4,7 @@ import {
 
 import { CapabilityError, defineReadCapability, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import type { NotesService } from '../service.js';
+import { LocalAppNoteOutputSchema, LocalAppNoteListSchema } from '../../local-apps/capabilities/projections.js';
 
 export function registerNoteReadCapabilities(dispatcher: CapabilityDispatcher, getNotes: () => Pick<NotesService, 'getNote' | 'listNotes' | 'listProjectSummaries' | 'listNoteHistory' | 'getNoteSnapshot' | 'createAiEditPatch'>): void {
   const policy = { majorVersion: 1, effect: 'read' as const, surfaces: ['http', 'agent', 'cli'] as const, scopes: ['workspace.read'] as const };
@@ -39,6 +40,7 @@ export function registerNoteReadCapabilities(dispatcher: CapabilityDispatcher, g
     id: 'xopc.notes.get', majorVersion: 1, description: 'Read a note by its stable ID.',
     effect: 'read', surfaces: ['http', 'agent', 'cli', 'extension'], scopes: ['workspace.read'],
     ...ProductReadContracts['xopc.notes.get'],
+    extensionOutput: LocalAppNoteOutputSchema,
     async execute({ id }) {
       const note = await getNotes().getNote(id);
       if (!note) throw new CapabilityError('NOT_FOUND', `Note not found: ${id}`);
@@ -49,8 +51,11 @@ export function registerNoteReadCapabilities(dispatcher: CapabilityDispatcher, g
     id: 'xopc.notes.list', majorVersion: 1, description: 'List notes using explicit filters and pagination.',
     effect: 'read', surfaces: ['http', 'agent', 'cli', 'extension'], scopes: ['workspace.read'],
     ...ProductReadContracts['xopc.notes.list'],
-    async execute(input) {
-      const result = await getNotes().listNotes(input);
+    extensionOutput: LocalAppNoteListSchema,
+    async execute(input, context) {
+      const result = await getNotes().listNotes({ ...input, ...(context.localApp ? {
+        resourceRestriction: { extensionId: context.localApp.extensionId, scope: context.localApp.resourceScopes.notesRead },
+      } : {}) });
       return { ...result, items: result.items.map(item => ({ ...item })) };
     },
   }));

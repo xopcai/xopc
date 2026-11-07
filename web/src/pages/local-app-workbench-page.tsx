@@ -56,19 +56,22 @@ import {
   type LocalAppCriteriaScenarioResult,
   type LocalAppRuntimeIssue,
 } from '@/features/local-apps/runtime-health';
-import { attachLocalAppPreviewChannel } from '@/features/local-apps/preview-channel';
+import { LocalAppPreviewFrame } from '@/features/local-apps/local-app-preview-frame';
+import { LocalAppResourceFields } from '@/features/extensions/local-app-resource-fields';
+import { Select, SelectOption } from '@/components/ui/popover-select';
+import { LocalAppResourceScopesSchema, type LocalAppResourceScopes, type LocalAppPreviewMode } from '@xopcai/gateway-contract';
 import {
   AcceptanceScenarioList,
   type LocalAppAcceptanceScenarioSummary,
 } from '@/features/local-apps/acceptance-scenario-list';
 import { fetchProjectSessions } from '@/features/projects/api';
-import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
+import { LocalAppAccessPanel } from '@/features/local-apps/local-app-access-panel';
 import { formatShortMonthDateTime } from '@/lib/date-formatters';
 
-const LOCAL_APP_PREVIEW_SANDBOX = 'allow-scripts allow-forms';
 
 function formatReleaseDate(timestamp: number, language: string): string {
   return formatShortMonthDateTime(timestamp, language);
@@ -92,6 +95,9 @@ export function LocalAppWorkbenchPage() {
   const isNew = appId === 'new';
   const zh = useLocaleStore((state) => state.language) === 'zh';
   const language = useLocaleStore((state) => state.language);
+  const gatewayUrl = useGatewayStore(state => state.baseUrl);
+  const namespace = useGatewayStore(state => state.conversationId);
+  const previewIdentity = JSON.stringify([appId, gatewayUrl, namespace]);
   const navigate = useNavigate();
   const { mutate } = useSWRConfig();
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
@@ -109,6 +115,26 @@ export function LocalAppWorkbenchPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [uninstallOpen, setUninstallOpen] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [previewMode, setPreviewMode] = useState<LocalAppPreviewMode>('sample');
+  const [readonlyReview, setReadonlyReview] = useState(false);
+  const [readonlyReviewHash, setReadonlyReviewHash] = useState('');
+  const [readonlySourceHash, setReadonlySourceHash] = useState('');
+  const [readonlyIdentity, setReadonlyIdentity] = useState('');
+  const [readonlyReviewIdentity, setReadonlyReviewIdentity] = useState('');
+  const [readonlyRunKey, setReadonlyRunKey] = useState(0);
+  const [readonlyScopes, setReadonlyScopes] = useState<LocalAppResourceScopes>(() => LocalAppResourceScopesSchema.parse({}));
+  const [previewScopes, setPreviewScopes] = useState<LocalAppResourceScopes | undefined>();
+  const effectivePreviewMode = previewMode === 'readonly' && (readonlySourceHash !== validation?.sourceHash || readonlyIdentity !== previewIdentity) ? 'sample' : previewMode;
+  const effectivePreviewScopes = effectivePreviewMode === 'readonly' ? previewScopes : undefined;
+  const visiblePreviewKey = effectivePreviewMode === 'readonly' ? readonlyRunKey : previewKey;
+  useEffect(() => {
+    setReadonlyScopes(LocalAppResourceScopesSchema.parse({})); setReadonlyReview(false); setReadonlyReviewHash('');
+  }, [previewIdentity]);
+  useEffect(() => {
+    if (previewMode === 'readonly' && effectivePreviewMode !== 'readonly') {
+      setPreviewMode('sample'); setPreviewScopes(undefined); setReadonlySourceHash(''); setReadonlyIdentity('');
+    }
+  }, [previewMode, effectivePreviewMode]);
   const [changeRequest, setChangeRequest] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [checkingDraft, setCheckingDraft] = useState(false);
@@ -125,11 +151,11 @@ export function LocalAppWorkbenchPage() {
   const [savingAcceptance, setSavingAcceptance] = useState(false);
   const coderConversationIdsRef = useRef(new Set<string>());
   const validationTimerRef = useRef<number | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const criteriaIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const previewMessageRef = useRef<((value: unknown) => void) | null>(null);
+  const criteriaMessageRef = useRef<((value: unknown) => void) | null>(null);
   const previewSourceHashRef = useRef<string | null>(null);
   const acceptancePersistKeyRef = useRef('');
-  const acceptanceScenarios = validation?.acceptanceScenarios ?? [];
+  const acceptanceScenarios = useMemo(() => validation?.acceptanceScenarios ?? [], [validation?.sourceHash]);
   const criteriaResult = useMemo(() => {
     if (!acceptanceScenarios.length) return null;
     const scenarios = acceptanceScenarios
@@ -177,15 +203,17 @@ export function LocalAppWorkbenchPage() {
   const runDraftChecks = useCallback(async (refreshPreview = true): Promise<LocalAppValidationResult | null> => {
     if (!app) return null;
     setCheckingDraft(true);
+    setActionError(null);
     try {
       const next = await validateLocalApp(app.id);
-      await mutateValidation(next, { revalidate: false });
       if (refreshPreview) {
+        const sameSource = previewSourceHashRef.current === next.sourceHash;
         previewSourceHashRef.current = next.sourceHash ?? null;
         setCriteriaRunTarget('all');
         setCriteriaScenarioIndex(0);
-        setPreviewKey((value) => value + 1);
+        if (sameSource) setPreviewKey((value) => value + 1);
       }
+      await mutateValidation(next, { revalidate: false });
       return next;
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause));
@@ -236,7 +264,6 @@ export function LocalAppWorkbenchPage() {
     previewSourceHashRef.current = validation.sourceHash;
     setCriteriaRunTarget('all');
     setCriteriaScenarioIndex(0);
-    setPreviewKey((value) => value + 1);
   }, [app?.id, validation?.sourceHash]);
 
   useLayoutEffect(() => {
@@ -251,6 +278,7 @@ export function LocalAppWorkbenchPage() {
       current === 'failed' ? current : 'timeout'
     )), 7_000);
     const onPreviewMessage = (value: unknown) => {
+      if (value && typeof value === 'object' && 'sourceHash' in value && value.sourceHash !== validation?.sourceHash) return;
       const message = parseLocalAppRuntimeMessage(value);
       if (!message) return;
       if (message.type === 'ready') {
@@ -260,7 +288,8 @@ export function LocalAppWorkbenchPage() {
       if (message.type === 'acceptance') {
         window.clearTimeout(timeout);
         setBaseAcceptanceResult(message.detail);
-        setAcceptanceSourceHash(previewSourceHashRef.current);
+        setAcceptanceSourceHash(value && typeof value === 'object' && 'sourceHash' in value
+          ? String(value.sourceHash) : validation?.sourceHash ?? null);
         return;
       }
       if (message.type === 'criteria') return;
@@ -268,14 +297,12 @@ export function LocalAppWorkbenchPage() {
       setRuntimeIssue(message.detail);
       setRuntimeHealth('failed');
     };
-    const detachChannel = iframeRef.current
-      ? attachLocalAppPreviewChannel(iframeRef.current, onPreviewMessage)
-      : () => {};
+    previewMessageRef.current = onPreviewMessage;
     return () => {
       window.clearTimeout(timeout);
-      detachChannel();
+      previewMessageRef.current = null;
     };
-  }, [app, previewKey]);
+  }, [app?.id, validation?.sourceHash, visiblePreviewKey, effectivePreviewMode, effectivePreviewScopes, previewIdentity]);
 
   useLayoutEffect(() => {
     if (!app || validation?.status !== 'healthy' || !acceptanceScenarios.length) {
@@ -312,10 +339,11 @@ export function LocalAppWorkbenchPage() {
       setCriteriaRunningTarget(null);
     };
     const timeout = window.setTimeout(() => failTargetScenarios(runnerReady
-      ? (zh ? '场景在 10 秒内未完成。' : 'Scenario did not finish within 10 seconds.')
+      ? (zh ? '场景在 20 秒内未完成。' : 'Scenario did not finish within 20 seconds.')
       : (zh ? '验收执行器未能连接，请重新验收。' : 'The acceptance runner did not connect. Run acceptance again.')),
-    10_000);
+    20_000);
     const onCriteriaMessage = (value: unknown) => {
+      if (value && typeof value === 'object' && 'sourceHash' in value && value.sourceHash !== validation?.sourceHash) return;
       const message = parseLocalAppRuntimeMessage(value);
       if (!message) return;
       if (message.type === 'ready') {
@@ -340,14 +368,12 @@ export function LocalAppWorkbenchPage() {
         failTargetScenarios(formatLocalAppRuntimeIssue(message.detail));
       }
     };
-    const detachChannel = criteriaIframeRef.current
-      ? attachLocalAppPreviewChannel(criteriaIframeRef.current, onCriteriaMessage)
-      : () => {};
+    criteriaMessageRef.current = onCriteriaMessage;
     return () => {
       window.clearTimeout(timeout);
-      detachChannel();
+      criteriaMessageRef.current = null;
     };
-  }, [acceptanceScenarios, app, criteriaRunKey, criteriaRunTarget, criteriaScenarioIndex, previewKey, validation?.status, zh]);
+  }, [acceptanceScenarios, app?.id, criteriaRunKey, criteriaRunTarget, criteriaScenarioIndex, previewKey, validation?.status, zh, previewIdentity]);
 
   useEffect(() => {
     if (!app || !acceptanceResult || !acceptanceSourceHash) return;
@@ -363,6 +389,7 @@ export function LocalAppWorkbenchPage() {
         .slice(0, 20));
     }).catch((cause) => {
       if (acceptancePersistKeyRef.current !== key) return;
+      if (previewSourceHashRef.current !== acceptanceSourceHash) return;
       acceptancePersistKeyRef.current = '';
       setSavingAcceptance(false);
       setActionError(cause instanceof Error ? cause.message : String(cause));
@@ -614,23 +641,40 @@ export function LocalAppWorkbenchPage() {
 
       <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-edge-subtle px-3"><div className="flex items-center gap-2 text-xs font-medium text-fg-muted"><span className={`size-2 rounded-full ${validation?.status === 'failed' || runtimeHealth === 'failed' || runtimeHealth === 'timeout' || acceptanceResult?.status === 'failed' ? 'bg-danger' : validation?.status === 'healthy' && runtimeHealth === 'healthy' && acceptanceResult?.status === 'passed' && currentAcceptanceRun?.sourceHash === validation.sourceHash && !savingAcceptance ? 'bg-success' : 'bg-fg-subtle'}`} />{runtimeHealth === 'failed' || runtimeHealth === 'timeout' ? (zh ? '预览运行异常' : 'Preview runtime issue') : validation?.status === 'failed' || acceptanceResult?.status === 'failed' ? (zh ? '自动验收未通过' : 'Acceptance needs attention') : runtimeHealth === 'booting' || !acceptanceResult ? (zh ? '自动验收中' : 'Running acceptance') : savingAcceptance || currentAcceptanceRun?.sourceHash !== validation?.sourceHash ? (zh ? '正在保存验收快照' : 'Saving acceptance snapshot') : (zh ? '草稿已通过验收' : 'Draft accepted')}</div><Button variant="ghost" className="h-8 px-2" onClick={() => void runDraftChecks(true)} disabled={checkingDraft}>{checkingDraft ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}{zh ? '重新验收' : 'Run again'}</Button></div>
-        <iframe ref={iframeRef} key={previewKey} title={`${app.name} preview`} src={apiUrl(app.draftPreviewUrl)} sandbox={LOCAL_APP_PREVIEW_SANDBOX} className="min-h-0 w-full flex-1 bg-white" onError={() => { setRuntimeIssue({ kind: 'script_error', message: 'Preview document failed to load' }); setRuntimeHealth('failed'); }} />
-        {validation?.status === 'healthy' && validation.acceptanceScenarioCount > 0 ? (
-          <iframe
-            ref={criteriaIframeRef}
-            key={`criteria-${previewKey}-${criteriaRunKey}-${criteriaScenarioIndex}`}
-            title={`${app.name} acceptance runner`}
-            src={`${apiUrl(app.draftPreviewUrl)}?xopcAcceptance=1&xopcScenario=${encodeURIComponent(
-              criteriaRunTarget === 'all'
-                ? acceptanceScenarios[criteriaScenarioIndex]?.id ?? ''
-                : criteriaRunTarget,
-            )}`}
-            sandbox={LOCAL_APP_PREVIEW_SANDBOX}
-            aria-hidden="true"
-            tabIndex={-1}
-            className="pointer-events-none fixed left-[-200vw] top-0 h-[720px] w-[1024px] opacity-0"
-          />
-        ) : null}
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-subtle px-3 py-2">
+          <div className="w-44 shrink-0"><Select aria-label={zh ? '预览数据' : 'Preview data'} value={effectivePreviewMode} onChange={event => {
+            if (event.target.value === 'readonly') { setReadonlyReviewHash(validation?.sourceHash ?? ''); setReadonlyReviewIdentity(previewIdentity); setReadonlyReview(true); }
+            else { setPreviewMode(event.target.value as LocalAppPreviewMode); setPreviewScopes(undefined); }
+          }}>
+            <SelectOption value="sample">{zh ? '示例数据' : 'Sample data'}</SelectOption>
+            <SelectOption value="readonly">{zh ? '真实数据 · 只读' : 'Real data · read only'}</SelectOption>
+            <SelectOption value="isolated">{zh ? '隔离写入体验' : 'Isolated writes'}</SelectOption>
+          </Select></div>
+          <p className="order-last basis-full text-[11px] text-fg-muted">{effectivePreviewMode === 'readonly'
+            ? (zh ? '仅使用本次授权的数据，写入已禁止。' : 'Only approved live data. Production writes are blocked.')
+            : (zh ? '使用独立示例数据；修改和存储不会影响正式数据。自动验收始终使用独立隔离环境。' : 'Separate example data and storage. Acceptance always runs in its own isolated environment.')}</p>
+          {effectivePreviewMode === 'readonly' ? <Button variant="ghost" onClick={() => { setPreviewMode('sample'); setPreviewScopes(undefined); }}>{zh ? '停止真实数据预览' : 'Stop live preview'}</Button> : null}
+        </div>
+        {validation?.sourceHash ? <LocalAppPreviewFrame appId={app.id} sourceHash={validation.sourceHash} mode={effectivePreviewMode} resourceScopes={effectivePreviewScopes}
+          runKey={visiblePreviewKey} title={`${app.name} preview`} onMessage={value => previewMessageRef.current?.(value)} /> : <Skeleton className="min-h-0 flex-1" />}
+        {validation?.status === 'healthy' && validation.sourceHash && acceptanceScenarios.length > 0 ? <LocalAppPreviewFrame
+          appId={app.id} sourceHash={validation.sourceHash} mode="isolated" hidden
+          scenarioId={criteriaRunTarget === 'all' ? acceptanceScenarios[criteriaScenarioIndex]?.id : criteriaRunTarget}
+          runKey={previewKey * 1000000 + criteriaRunKey} title={`${app.name} acceptance runner`}
+          onMessage={value => criteriaMessageRef.current?.(value)} /> : null}
+        <Dialog.Root open={readonlyReview} onOpenChange={setReadonlyReview}>
+          <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-scrim" />
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(680px,calc(100vh-32px))] w-[min(520px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay p-5">
+              <Dialog.Title className="text-base font-semibold text-fg">{zh ? '选择本次只读预览的数据' : 'Choose data for this read-only preview'}</Dialog.Title>
+              <Dialog.Description className="mt-2 text-sm text-fg-muted">{zh ? '仅授权当前草稿，15 分钟后过期。源码变化或停止预览后授权失效；自动验收不会使用这些真实数据。' : 'Applies to this draft for 15 minutes. Editing the source or stopping preview revokes access. Acceptance never uses this live data.'}</Dialog.Description>
+              <div className="min-h-0 flex-1 overflow-y-auto"><LocalAppResourceFields extensionId={app.extensionId}
+                permissions={(validation?.permissions ?? app.permissions).filter(permission => /capability:xopc.(notes|tasks).(get|list)$/.test(permission))}
+                value={readonlyScopes} onChange={setReadonlyScopes} zh={zh} /></div>
+              <div className="mt-4 flex justify-end gap-2"><Dialog.Close asChild><Button>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close>
+                <Button variant="primary" disabled={readonlyReviewHash !== validation?.sourceHash || readonlyReviewIdentity !== previewIdentity} onClick={() => { setPreviewScopes(readonlyScopes); setReadonlySourceHash(readonlyReviewHash); setReadonlyIdentity(readonlyReviewIdentity); setReadonlyRunKey(value => value + 1); setPreviewMode('readonly'); setReadonlyReview(false); }}>{zh ? '启动只读预览' : 'Start read-only preview'}</Button></div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
       </section>
 
       <aside className="min-h-0 overflow-y-auto rounded-xl border border-edge-subtle bg-surface-base p-4 shadow-surface">
@@ -695,6 +739,7 @@ export function LocalAppWorkbenchPage() {
         <div className="mt-5 border-t border-edge-subtle pt-4">
           <div className="flex items-center gap-2 text-xs font-semibold text-fg"><ShieldCheck className="size-4 text-accent" />{zh ? '权限' : 'Permissions'}</div>
           <div className="mt-2 flex flex-wrap gap-1.5">{(validation?.permissions ?? app.permissions).map((permission) => <span key={permission} className="rounded-md bg-surface-hover px-2 py-1 text-[11px] text-fg-muted">{permission}</span>)}</div>
+          {app.installationState === 'installed' ? <LocalAppAccessPanel extensionId={app.extensionId} name={app.name} zh={zh} /> : null}
         </div>
 
         <Button variant="primary" className="mt-5 w-full" onClick={() => void onReviewInstall()} disabled={busy || validationLoading || checkingDraft || savingAcceptance || validation?.status === 'failed' || runtimeHealth !== 'healthy' || acceptanceResult?.status !== 'passed' || !currentAcceptanceRun || currentAcceptanceRun.sourceHash !== validation?.sourceHash || (app.installationState === 'installed' && validation?.hasDraftChanges === false)}>

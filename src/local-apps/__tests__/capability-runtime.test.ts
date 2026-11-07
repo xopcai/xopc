@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { LocalAppResourceScopesSchema } from '@xopcai/gateway-contract';
 import { CapabilityDispatcher, CapabilityError, defineAtomicCapability, type CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { localAppCapabilities } from '../capabilities/runtime.js';
@@ -21,13 +22,13 @@ function fixture() {
   const caller: CapabilityContext = { principalId: 'owner', surface: 'http', scopes: ['workspace.write'], authorize: () => true };
   const descriptor = dispatcher.describe('xopc.notes.create', { ...caller, surface: 'extension' });
   const binding = { id: 'xopc.notes.create' as const, majorVersion: descriptor.majorVersion, descriptorDigest: descriptor.descriptorDigest };
-  const apps = { getCapabilityAccess: () => { if (!granted) throw new CapabilityError('FORBIDDEN', 'Revoked'); return { releaseId, bindings: [binding] }; } };
+  const apps = { getCapabilityAccess: () => { if (!granted) throw new CapabilityError('FORBIDDEN', 'Revoked'); return { releaseId, grantRevision: 'revision', resourceScopes: LocalAppResourceScopesSchema.parse({ notesWrite: { mode: 'workspace' } }), bindings: [binding] }; } };
   const runtime = (extensionId = 'app', context = caller) => localAppCapabilities(apps, dispatcher, extensionId, 'b'.repeat(64), context);
   const call = { majorVersion: binding.majorVersion, descriptorDigest: binding.descriptorDigest, input: { title: 'Fixture' }, idempotencyKey: 'intent' };
   return { runtime, call, caller, execute, afterCommit, revoke: () => { granted = false; }, restore: () => { granted = true; }, upgrade: () => { releaseId = 'release-2'; } };
 }
 describe('Local App writes', () => {
-  it('replays the same intent once and isolates keys across apps and releases', async () => {
+  it('replays the same intent once and isolates apps and preserves retry keys across releases', async () => {
     const f = fixture();
     await f.runtime().call('xopc.notes.create', f.call);
     await f.runtime().call('xopc.notes.create', f.call);
@@ -36,7 +37,7 @@ describe('Local App writes', () => {
     const stale = f.runtime(); f.upgrade();
     await expect(stale.call('xopc.notes.create', f.call)).rejects.toMatchObject({ code: 'CONTRACT_CHANGED' });
     await f.runtime().call('xopc.notes.create', f.call);
-    expect(f.execute).toHaveBeenCalledTimes(3);
+    expect(f.execute).toHaveBeenCalledTimes(2);
   });
   it('rejects missing keys, caller scope restrictions and delegation narrowing', async () => {
     const f = fixture();

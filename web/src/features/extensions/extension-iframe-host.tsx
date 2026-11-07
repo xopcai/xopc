@@ -1,4 +1,5 @@
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
+import type { LocalAppResourceScopes } from '@xopcai/gateway-contract';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 
@@ -29,6 +30,9 @@ type IframeHostUi = {
   grantError: string | null;
   manifestDigest: string | null;
   grantedPermissions: string[];
+  grantRevision?: string;
+  localApp?: boolean;
+  resourceScopes?: LocalAppResourceScopes;
 };
 
 export type ExtensionIframeHostProps = {
@@ -103,6 +107,9 @@ export function ExtensionIframeHost({
           grantResolved: true,
           manifestDigest: grant.manifestDigest,
           grantedPermissions: grant.permissions,
+          grantRevision: grant.grantRevision,
+          localApp: Boolean(grant.appId),
+          resourceScopes: grant.resourceScopes,
         },
       });
     }).catch((cause) => {
@@ -134,7 +141,8 @@ export function ExtensionIframeHost({
     if (!allowed) return;
     const el = iframeRef.current;
     if (!el) return;
-    router.registerIframe(extensionId, el, ui.grantedPermissions, ui.manifestDigest ?? undefined);
+    if (ui.localApp) router.registerIframe(extensionId, el, ui.grantedPermissions, ui.manifestDigest ?? undefined, ui.grantRevision, true);
+    else router.registerIframe(extensionId, el, ui.grantedPermissions, ui.manifestDigest ?? undefined);
     const unsubscribe = router.subscribeExtensionEvents(extensionId, (msg) => {
       if (msg.event !== 'ui.resize') return;
       if (!msg.data || typeof msg.data !== 'object' || msg.data === null) return;
@@ -149,7 +157,7 @@ export function ExtensionIframeHost({
       unsubscribe();
       router.unregisterIframe(extensionId);
     };
-  }, [allowed, extensionId, fixedHeight, maxHeight, minHeight, ui.grantedPermissions, ui.manifestDigest, router, reloadKey]);
+  }, [allowed, extensionId, fixedHeight, maxHeight, minHeight, ui.grantedPermissions, ui.manifestDigest, ui.grantRevision, ui.localApp, router, reloadKey]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -162,16 +170,18 @@ export function ExtensionIframeHost({
       ? { width: '100%', height: fixedHeight, border: 'none' }
       : { width: '100%', height: dynamicHeight, border: 'none' };
 
-  const handleConfirmGrant = () => {
+  const handleConfirmGrant = (resourceScopes?: LocalAppResourceScopes) => {
     if (confirming.current || !ui.manifestDigest) return;
     confirming.current = true;
     const current = generation.current;
     const isCurrent = () => generation.current === current && useGatewayStore.getState().baseUrl === gatewayUrl
       && useGatewayStore.getState().conversationId === namespace;
-    void confirmExtensionUiGrant(extensionId, ui.manifestDigest).then((grant) => {
+    const confirmation = ui.localApp ? confirmExtensionUiGrant(extensionId, ui.manifestDigest, resourceScopes)
+      : confirmExtensionUiGrant(extensionId, ui.manifestDigest);
+    void confirmation.then((grant) => {
       if (!isCurrent()) return;
       if (!grant.granted || grant.extensionId !== extensionId || grant.manifestDigest !== ui.manifestDigest) throw new Error('Permission grant was not persisted');
-      dispatch({ type: 'patch', patch: { allowed: true, grantError: null } });
+      dispatch({ type: 'patch', patch: { allowed: true, dialogOpen: false, grantError: null, grantRevision: grant.grantRevision, resourceScopes: grant.resourceScopes } });
     }).catch((cause) => {
       if (!isCurrent()) return;
       dispatch({
@@ -194,6 +204,9 @@ export function ExtensionIframeHost({
           extensionId={extensionId}
           extensionName={displayName}
           permissions={ui.grantedPermissions}
+          localApp={ui.localApp}
+          resourceScopes={ui.resourceScopes}
+          error={grantError}
           confirmDisabled={!ui.manifestDigest}
           onConfirm={handleConfirmGrant}
         />
@@ -244,7 +257,7 @@ export function ExtensionIframeHost({
         title={iframeTitle}
         src={src}
         style={style}
-        sandbox={EXTENSION_IFRAME_SANDBOX}
+        sandbox={ui.localApp ? 'allow-scripts' : EXTENSION_IFRAME_SANDBOX}
         referrerPolicy="no-referrer"
         onError={() => dispatch({ type: 'patch', patch: { loadError: true } })}
         onLoad={() => {

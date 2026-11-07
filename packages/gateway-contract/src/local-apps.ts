@@ -1,4 +1,21 @@
 import { z } from 'zod';
+import { LocalAppResourceScopesSchema, ExtensionCapabilityBindingSchema } from './extension-capabilities.js';
+
+export const LocalAppPreviewModeSchema = z.enum(['sample', 'readonly', 'isolated']);
+export const LocalAppPreviewCreateSchema = z.strictObject({
+  sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
+  mode: LocalAppPreviewModeSchema,
+  resourceScopes: LocalAppResourceScopesSchema.optional(),
+  scenarioId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/).optional(),
+});
+export const LocalAppPreviewSessionSchema = z.strictObject({
+  id: z.uuid(), appId: z.string(), extensionId: z.string(), sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
+  mode: LocalAppPreviewModeSchema, expiresAt: z.number(), previewUrl: z.string().startsWith('/api/local-apps/preview/'),
+  permissions: z.array(z.string()), bindings: z.array(ExtensionCapabilityBindingSchema),
+});
+export type LocalAppPreviewMode = z.infer<typeof LocalAppPreviewModeSchema>;
+export type LocalAppPreviewCreate = z.infer<typeof LocalAppPreviewCreateSchema>;
+export type LocalAppPreviewSession = z.infer<typeof LocalAppPreviewSessionSchema>;
 
 export const LOCAL_APP_MAX_DIAGNOSTICS = 20;
 export const LocalAppSourceHashSchema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -177,6 +194,8 @@ export const LocalAppCriteriaResultSchema = z.strictObject({
 const runtimeEnvelope = z.strictObject({
   source: z.literal('xopc-local-app-preview'),
   version: z.literal(1),
+  runId: z.string().max(128).optional(),
+  sourceHash: LocalAppSourceHashSchema.optional(),
 });
 
 export const LocalAppRuntimeMessageSchema = z.discriminatedUnion('type', [

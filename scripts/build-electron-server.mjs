@@ -66,7 +66,24 @@ const gatewayBuild = await esbuild.build({
   metafile: true,
 });
 
-writeDependencyRecords(join(root, 'out/server/dependency-records.json'), Object.keys(gatewayBuild.metafile.inputs), root);
+const previewWorkerBuild = await esbuild.build({
+  entryPoints: [join(root, 'src/local-apps/preview-worker.ts')],
+  outfile: join(root, 'out/server/preview-worker.js'),
+  bundle: true, platform: 'node', target: 'node22', format: 'esm', external,
+  plugins: [electronPiCredentialsPlugin(), electronPiRuntimePlugin()],
+  define: { PI_BUNDLED_NODE: 'true' }, minify, sourcemap: false, metafile: true,
+  banner: { js: [
+    "import { createRequire as __xopcCreateRequire } from 'module';",
+    "import { fileURLToPath as __xopcFileURLToPath } from 'node:url';",
+    "import { dirname as __xopcDirname } from 'node:path';",
+    'const __filename = __xopcFileURLToPath(import.meta.url);',
+    'const __dirname = __xopcDirname(__filename);',
+    'globalThis.require = __xopcCreateRequire(import.meta.url);',
+  ].join('\n') },
+});
+writeDependencyRecords(join(root, 'out/server/dependency-records.json'), [
+  ...Object.keys(gatewayBuild.metafile.inputs), ...Object.keys(previewWorkerBuild.metafile.inputs),
+], root);
 
 for (const module of ['extensions/mcp/oauth.js', 'core/auth-storage.js']) {
   if (!Object.keys(gatewayBuild.metafile.inputs).some(input =>

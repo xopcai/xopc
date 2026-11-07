@@ -14,16 +14,22 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { resourceScopePredicate, type ResourceRestriction } from '../storage/sqlite/resource-scope.js';
 
 export type TaskExecutionSource = 'chat' | 'cli' | 'cron' | 'channel' | 'api';
 export type TaskUiLocale = 'en' | 'zh';
 export type TaskAggregate = Task;
 
-type TaskListQuery = { search?: string; phase?: TaskPhase; excludeClosed?: boolean; priority?: TaskPriority; projectId?: string; limit?: number; offset?: number; order?: 'recent' | 'board' };
+type TaskListQuery = { resourceRestriction?: ResourceRestriction; search?: string; phase?: TaskPhase; excludeClosed?: boolean; priority?: TaskPriority; projectId?: string; limit?: number; offset?: number; order?: 'recent' | 'board' };
 
 function taskListFilter(input: TaskListQuery): { where: string; params: Array<string | number> } {
   const clauses: string[] = [];
   const params: Array<string | number> = [];
+  if (input.resourceRestriction) {
+    const restriction = resourceScopePredicate('task', input.resourceRestriction);
+    clauses.push(restriction.sql);
+    params.push(...restriction.params);
+  }
   if (input.excludeClosed) clauses.push("phase != 'closed'");
   for (const [column, value] of [['phase', input.phase], ['priority', input.priority], ['project_id', input.projectId]]) {
     if (value) { clauses.push(`${column} = ?`); params.push(value); }

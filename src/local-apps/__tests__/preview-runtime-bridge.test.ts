@@ -137,14 +137,16 @@ describe('local app preview runtime bridge', () => {
     const dom = new JSDOM(html, {
       runScripts: 'dangerously',
       pretendToBeVisual: true,
-      url: 'http://localhost/preview?xopcAcceptance=1',
+      url: 'http://localhost/preview?xopcAcceptance=1&xopcHostRun=1',
       beforeParse(window) {
+        window.HTMLElement.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, width: 100, height: 20, top: 0, left: 0, bottom: 20, right: 100, toJSON() {} });
         window.requestAnimationFrame = () => 1;
         window.setTimeout = () => 1;
       },
     });
     const messages: unknown[] = [];
     const port = {
+      onmessage: null as ((event: { data: unknown }) => void) | null,
       close() {},
       start() {},
       postMessage(value: unknown) { messages.push(value); },
@@ -156,6 +158,7 @@ describe('local app preview runtime bridge', () => {
       ports: [port],
     }));
 
+    port.onmessage?.({ data: { type: 'run', runId: 'test-background' } });
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(messages).toContainEqual(expect.objectContaining({
@@ -165,7 +168,37 @@ describe('local app preview runtime bridge', () => {
         scenarios: [expect.objectContaining({ id: 'add', status: 'passed' })],
       }),
     }));
-    expect(messages).not.toContainEqual(expect.objectContaining({ type: 'acceptance' }));
+    expect(messages).toContainEqual(expect.objectContaining({ type: 'acceptance' }));
     dom.window.close();
   });
+  it('waits past load initialization and asynchronous DOM updates without clicking twice', async () => {
+    const html = injectLocalAppRuntimeBridge(`<!doctype html><html><head></head><body>
+      <button data-xopc-test-id="start">Start</button><output></output>
+      <script>
+        window.clicks = 0;
+        addEventListener('load', () => {
+          document.querySelector('button').addEventListener('click', () => {
+            window.clicks++;
+            setTimeout(() => { document.querySelector('output').textContent = 'Saved after async work'; }, 40);
+          });
+        });
+      </script>
+    </body></html>`, { schemaVersion: 1, scenarios: [{ id: 'start', name: 'Start', steps: [
+      { action: 'click', target: 'start' }, { assert: 'text_visible', text: 'Saved after async work' },
+    ] }] });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true,
+      url: 'http://localhost/preview?xopcAcceptance=1', beforeParse(window) {
+        window.HTMLElement.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, width: 100, height: 20, top: 0, left: 0, bottom: 20, right: 100, toJSON() {} });
+      } });
+    const messages: unknown[] = [];
+    await new Promise(resolve => setTimeout(resolve, 10));
+    dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window,
+      data: { source: 'xopc-local-app-host', version: 1, type: 'connect' },
+      ports: [{ close() {}, start() {}, postMessage(message: unknown) { messages.push(message); } } as MessagePort] }));
+    await vi.waitFor(() => expect(messages).toContainEqual(expect.objectContaining({ type: 'criteria', detail: expect.objectContaining({ status: 'passed' }) })));
+    expect((dom.window as unknown as { clicks: number }).clicks).toBe(1);
+    expect(messages).not.toContainEqual(expect.objectContaining({ type: 'criteria', detail: expect.objectContaining({ status: 'failed' }) }));
+    dom.window.close();
+  });
+
 });

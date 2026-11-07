@@ -34,4 +34,20 @@ describe('local app preview channel', () => {
     cleanup();
     expect(hostPorts[1]?.close).toHaveBeenCalledOnce();
   });
+
+  it('ignores a queued message from a replaced port and from a disposed frame', () => {
+    const ports: Array<{ close: () => void; start: () => void; onmessage: ((event: { data: unknown }) => void) | null }> = [];
+    vi.stubGlobal('MessageChannel', class {
+      port1 = { close() {}, start() {}, onmessage: null }; port2 = {};
+      constructor() { ports.push(this.port1); }
+    });
+    const iframe = document.createElement('iframe'); Object.defineProperty(iframe, 'contentWindow', { value: { postMessage() {} } });
+    const receive = vi.fn(); const cleanup = attachLocalAppPreviewChannel(iframe, receive);
+    const stale = ports[0].onmessage!;
+    iframe.dispatchEvent(new Event('load'));
+    stale({ data: { type: 'criteria', detail: { status: 'failed' } } });
+    expect(receive).not.toHaveBeenCalled();
+    const current = ports[1].onmessage!; cleanup(); current({ data: { type: 'ready' } });
+    expect(receive).not.toHaveBeenCalled();
+  });
 });

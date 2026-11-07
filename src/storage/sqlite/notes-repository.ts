@@ -2,6 +2,7 @@ import type { Note, NoteIndexEntry, NoteProjectSummary, NotesListQuery } from '.
 import { buildNoteIndexMeta, extractAttachmentFileNames, notePlainText } from '../../notes/note-index-meta.js';
 import { escapeFts5Query } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+import { resourceScopePredicate } from './resource-scope.js';
 
 type NoteRow = {
   note_id: string;
@@ -234,6 +235,12 @@ export function listNoteRecords(
   const db = getSqliteDatabase();
   const conditions: string[] = [];
   const params: Array<string | number> = [];
+
+  if (query.resourceRestriction) {
+    const restriction = resourceScopePredicate('note', query.resourceRestriction);
+    conditions.push(restriction.sql);
+    params.push(...restriction.params);
+  }
 
   if (query.status) {
     conditions.push(`status = ?`);

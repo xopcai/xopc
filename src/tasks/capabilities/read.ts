@@ -11,6 +11,7 @@ import { TaskConversationRepository } from '../task-conversation-repository.js';
 import { TaskDependencyService } from '../task-dependency-service.js';
 import { TaskCriterionReviewRepository } from '../task-criterion-review-repository.js';
 import { TaskValueMetricsService } from '../task-value-metrics-service.js';
+import { LocalAppTaskOutputSchema, LocalAppTaskListSchema } from '../../local-apps/capabilities/projections.js';
 
 export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): void {
   dispatcher.register(defineReadCapability({
@@ -50,6 +51,13 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
     id: 'xopc.tasks.get', majorVersion: 1, description: 'Read a task, its current execution, context and dependencies.',
     effect: 'read', surfaces: ['http', 'agent', 'cli', 'extension'], scopes: ['tasks.read'],
     ...ProductReadContracts['xopc.tasks.get'],
+    extensionOutput: LocalAppTaskOutputSchema,
+    extensionExecute({ id }) {
+      const task = tasks.get(id);
+      if (!task) throw new CapabilityError('NOT_FOUND', 'Task not found');
+      const model = projector.project(task);
+      return { ok: true, ...model };
+    },
     execute({ id }) {
       const task = tasks.get(id);
       if (!task) throw new CapabilityError('NOT_FOUND', `Task not found: ${id}`);
@@ -68,8 +76,12 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
     id: 'xopc.tasks.list', majorVersion: 1, description: 'List tasks with filters and pagination.',
     effect: 'read', surfaces: ['http', 'agent', 'cli', 'extension'], scopes: ['tasks.read'],
     ...ProductReadContracts['xopc.tasks.list'],
-    execute(input) {
-      return { ok: true as const, items: tasks.list(input).map(task => projector.project(task)), total: tasks.count(input) };
+    extensionOutput: LocalAppTaskListSchema,
+    execute(input, caller) {
+      const query = { ...input, ...(caller.localApp ? {
+        resourceRestriction: { extensionId: caller.localApp.extensionId, scope: caller.localApp.resourceScopes.tasksRead },
+      } : {}) };
+      return { ok: true as const, items: tasks.list(query).map(task => projector.project(task)), total: tasks.count(query) };
     },
   }));
 }

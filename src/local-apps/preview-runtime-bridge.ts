@@ -5,9 +5,12 @@ import { encodeLocalAppAcceptanceConfig } from './acceptance.js';
 
 export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
   let hostPort = null;
+  let runId = '';
+  let started = false;
+  const hosted = new URLSearchParams(location.search).get('xopcHostRun') === '1';
   const latest = new Map();
   const send = (type, detail) => {
-    const message = { source: 'xopc-local-app-preview', version: 1, type, detail };
+    const message = { source: 'xopc-local-app-preview', version: 1, type, detail, ...(runId ? { runId } : {}) };
     latest.set(type, message);
     hostPort?.postMessage(message);
   };
@@ -17,6 +20,13 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
     event.stopImmediatePropagation();
     hostPort?.close();
     hostPort = event.ports[0];
+    hostPort.onmessage = (event) => {
+      if (event.data?.type === 'tick') checkWaiters();
+      if (event.data?.type === 'run' && typeof event.data.runId === 'string' && !started) {
+        started = true; runId = event.data.runId;
+        void runCriteria().then(runAcceptance);
+      }
+    };
     hostPort.start();
     for (const message of latest.values()) hostPort.postMessage(message);
   };
@@ -35,9 +45,28 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
   };
   const target = (id) => Array.from(document.querySelectorAll('[data-xopc-test-id]'))
     .find((element) => element.getAttribute('data-xopc-test-id') === id);
-  const settle = async () => {
-    await Promise.resolve();
-    await Promise.resolve();
+  const waiters = new Set();
+  let deadline = 0;
+  const checkWaiters = () => {
+    for (const waiter of Array.from(waiters)) {
+      try {
+        if (runtimeFailure) throw new Error(runtimeFailure);
+        const result = waiter.check();
+        if (result) { waiters.delete(waiter); waiter.resolve(result); }
+        else if (Date.now() >= deadline) { waiters.delete(waiter); waiter.reject(new Error(waiter.message)); }
+      } catch (error) { waiters.delete(waiter); waiter.reject(error); }
+    }
+  };
+  new MutationObserver(checkWaiters).observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+  const waitFor = (check, message) => new Promise((resolve, reject) => {
+    const waiter = { check, message, resolve, reject };
+    waiters.add(waiter); checkWaiters();
+    const poll = () => { if (!waiters.has(waiter)) return; checkWaiters(); setTimeout(poll, 25); };
+    setTimeout(poll, 25);
+  });
+  const control = (id) => {
+    const element = target(id);
+    return element instanceof HTMLElement && visible(element) && !element.disabled && element.getAttribute('aria-disabled') !== 'true' ? element : null;
   };
   const readCriteria = () => {
     const encoded = document.querySelector('meta[name="xopc-local-app-acceptance"]')?.content;
@@ -112,18 +141,16 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
     }
     const scenarios = [];
     for (const scenario of selectedScenarios) {
+      deadline = Date.now() + 8000;
       let failure = '';
       for (let index = 0; index < scenario.steps.length; index += 1) {
         const step = scenario.steps[index];
         try {
           if (step.action === 'click') {
-            const element = target(step.target);
-            if (!(element instanceof HTMLElement)) throw new Error('Target "' + step.target + '" was not found');
-            if ('disabled' in element && element.disabled || element.getAttribute('aria-disabled') === 'true') throw new Error('Target "' + step.target + '" is disabled');
+            const element = await waitFor(() => control(step.target), 'Target "' + step.target + '" was not ready');
             element.click();
-            await settle();
           } else if (step.action === 'fill') {
-            const element = target(step.target);
+            const element = await waitFor(() => control(step.target), 'Target "' + step.target + '" was not ready');
             if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) throw new Error('Target "' + step.target + '" cannot be filled');
             const prototype = element instanceof HTMLInputElement ? HTMLInputElement.prototype : element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLSelectElement.prototype;
             const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
@@ -131,15 +158,12 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
             else element.value = step.value;
             element.dispatchEvent(new Event('input', { bubbles: true }));
             element.dispatchEvent(new Event('change', { bubbles: true }));
-            await settle();
           } else if (step.assert === 'text_visible') {
-            const found = Array.from(document.body.querySelectorAll('*')).some((element) => visible(element) && text(element.textContent).includes(step.text));
-            if (!found) throw new Error('Visible text was not found: "' + step.text + '"');
+            await waitFor(() => Array.from(document.body.querySelectorAll('*')).some((element) => visible(element) && text(element.textContent).includes(step.text)), 'Visible text was not found: "' + step.text + '"');
           } else if (step.assert === 'element_exists') {
-            if (!target(step.target)) throw new Error('Target "' + step.target + '" was not found');
+            await waitFor(() => target(step.target), 'Target "' + step.target + '" was not found');
           } else if (step.assert === 'value_equals') {
-            const element = target(step.target);
-            if (!element || !('value' in element) || element.value !== step.value) throw new Error('Target "' + step.target + '" does not have the expected value');
+            await waitFor(() => { const element = target(step.target); return element && 'value' in element && element.value === step.value; }, 'Target "' + step.target + '" does not have the expected value');
           }
           if (runtimeFailure) throw new Error(runtimeFailure);
         } catch (error) {
@@ -157,9 +181,8 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
   };
   const loaded = () => {
     send('ready', { readyState: document.readyState });
-    void runCriteria();
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(runAcceptance));
-    else setTimeout(runAcceptance, 0);
+    // Defer past all load listeners. Hosted runs start only after the SDK/data bridge is ready.
+    if (!hosted) setTimeout(() => { if (started) return; started = true; void runCriteria().then(runAcceptance); }, 0);
   };
   if (document.readyState === 'complete') queueMicrotask(loaded);
   else addEventListener('load', loaded, { once: true });
