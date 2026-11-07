@@ -101,7 +101,10 @@ export class LocalAppPreviewSessions {
         lease.worker.unref(); lease.worker.channel?.unref();
         const directory = lease.directory;
         lease.worker.once('exit', (code, signal) => {
-          if (this.leases.has(session.id)) log.error({ sessionId: session.id, code, signal, workerStderr }, 'Isolated preview worker exited unexpectedly');
+          if (this.leases.has(session.id)) {
+            log.error({ sessionId: session.id, code, signal, workerStderr }, 'Isolated preview worker exited unexpectedly');
+            if (process.env.VITEST) process.stderr.write(`Preview worker exit: ${JSON.stringify({ code, signal, workerStderr })}\n`);
+          }
           this.revoke(session.id); rmSync(directory, { recursive: true, force: true });
         });
         await this.rpc(lease, { type: 'init', fixtures: readPreviewFixtures(source.root), bindings });
