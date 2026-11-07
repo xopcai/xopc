@@ -57,8 +57,9 @@ describe('Personal AI call voice selector', () => {
   });
 
   it('saves the greeting switch independently of the voice selector and restores it on failure', async () => {
-    const save = Promise.withResolvers<boolean>();
-    const onGreetingChange = vi.fn(() => save.promise);
+    let resolveSave!: (saved: boolean) => void;
+    const save = new Promise<boolean>(resolve => { resolveSave = resolve; });
+    const onGreetingChange = vi.fn(() => save);
     mocks.status.mockResolvedValue({ enabled: true, openingGreeting: true, tts: { provider: 'dashscope', model: 'qwen' } });
     await act(async () => root.render(<MemoryRouter><PersonalVoiceSetting record={{ voicePreference: { provider: 'dashscope', model: 'qwen', voice: 'mia' } } as PersonalAgent}
       zh={false} onSelectVoice={select} onGreetingChange={onGreetingChange} /></MemoryRouter>));
@@ -68,7 +69,7 @@ describe('Personal AI call voice selector', () => {
     expect(toggle.checked).toBe(false);
     expect(voice.disabled).toBe(false);
     expect(container.querySelector<HTMLButtonElement>('[aria-label="Preview Mia"]')?.disabled).toBe(false);
-    await act(async () => save.resolve(false));
+    await act(async () => resolveSave(false));
     expect(toggle.checked).toBe(true);
     expect(voice.disabled).toBe(false);
   });
