@@ -59,6 +59,22 @@ describe('Local App preview isolation', () => {
     expect(f.fingerprint()).toEqual(before);
   }, 20000);
 
+  it('reclaims the caller idle workers before retrying but preserves recent and foreign leases', async () => {
+    const f = fixture();
+    const leases = [];
+    for (let i = 0; i < 4; i++) leases.push(await previews.create('app', { sourceHash: hash, mode: 'sample' }, caller));
+    await expect(previews.create('app', { sourceHash: hash, mode: 'sample' }, caller)).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 31_000);
+    await expect(previews.create('app', { sourceHash: hash, mode: 'sample' }, { ...caller, principalId: 'other' })).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    previews.describe(leases[1].id, caller, f.dispatcher);
+    const next = await previews.create('app', { sourceHash: hash, mode: 'sample' }, caller);
+    expect(next.id).not.toBe(leases[0].id);
+    expect(() => previews.describe(leases[0].id, caller, f.dispatcher)).toThrow('revoked');
+    expect(previews.describe(leases[1].id, caller, f.dispatcher).session.id).toBe(leases[1].id);
+    clock.mockRestore();
+  }, 20000);
+
   it('starts every scenario with fresh fixtures, receipts and storage', async () => {
     const f = fixture();
     const first = await previews.create('app', { sourceHash: hash, mode: 'isolated' }, caller);

@@ -42,7 +42,8 @@ function uniqueDiagnostics(
       code: issue.code,
       message: issue.message,
     })),
-    ...reported,
+    ...reported.map(diagnostic => /Too many isolated preview workers|Close another preview/.test(diagnostic.message) || diagnostic.code === 'runner_error'
+      ? { ...diagnostic, phase: 'runner' as const } : diagnostic),
   ];
   const seen = new Set<string>();
   return combined.filter((diagnostic) => {

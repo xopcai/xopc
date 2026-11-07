@@ -17,6 +17,7 @@ export type MethodHandler = (extensionId: string, params: unknown) => Promise<un
 
 const METHOD_PERMISSION_MAP: Record<string, string | null> = {
   'ui.navigate': null,
+  'ui.reviewPermissions': null,
   'agent.sendMessage': 'agent.send',
   'session.list': 'session.read',
   'session.navigate': 'session.read',
@@ -405,10 +406,10 @@ export class ExtensionMessageRouter {
       && useGatewayStore.getState().conversationId === gateway.conversationId;
     try {
       budget.pending++;
-      await this.assertGrantCurrent(effectiveExtensionId);
+      if (msg.method !== 'ui.reviewPermissions') await this.assertGrantCurrent(effectiveExtensionId);
       if (!isCurrent()) return;
       const result = await handler(effectiveExtensionId, params);
-      await this.assertGrantCurrent(effectiveExtensionId);
+      if (msg.method !== 'ui.reviewPermissions') await this.assertGrantCurrent(effectiveExtensionId);
       if (!isCurrent()) return;
       this.postResponse(iframe, event, requestId, result);
     } catch (e) {
@@ -462,6 +463,12 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       const normalized = path.startsWith('/') ? path : `/${path}`;
       window.location.hash = `#${normalized}`;
     }
+  });
+  router.registerMethod('ui.reviewPermissions', async extensionId => {
+    if (router.isPreview(extensionId)) throw new Error('Permission review is unavailable in previews');
+    router.getReleaseDigest(extensionId);
+    window.dispatchEvent(new CustomEvent('extension-review-permissions', { detail: { extensionId } }));
+    return { opened: true };
   });
 
   router.registerMethod('ui.notification', async (extensionId, params) => {

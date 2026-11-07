@@ -122,3 +122,18 @@ For concurrent workspace builds, build the console into a separate output direct
 `XOPC_SMOKE_UI_ROOT` to that directory. `XOPC_SMOKE_BROWSER` overrides Chrome's executable path;
 `XOPC_SMOKE_ARTIFACT_DIR` retains screenshots. [Restricted Agent delegation](./local-app-delegation.md)
 is available to explicitly authorized installed apps and is excluded from all preview modes.
+
+## Installation and acceptance
+
+Automatic acceptance is advisory. A failed, missing or still-running acceptance result does not
+block installing or updating a statically valid app. The installation review displays failed checks
+or an incomplete status, and stored diagnostics remain available after installation. Package
+validation, capability contract validation, artifact integrity and permission review still apply.
+
+Development and repair actions return to the app's persisted development conversation. Legacy
+workbench apps recover an unambiguous first-build handoff; unrelated Coder chats in the project are
+never used as a fallback. If no developer can be identified, the host creates a dedicated conversation.
+
+When preview workers are exhausted, the host reclaims the caller's idle workers and the UI retries
+allocation a bounded number of times. Acceptance workers are released as soon as a run ends. Host
+resource failures offer a preview retry rather than a request to modify generated app code.

@@ -7,10 +7,11 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import '@/components/ui/content-block-actions.css';
 import { Skeleton } from '@/components/ui/skeleton';
-import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
+import { localAppConversationUrl } from '@/features/local-apps/conversation';
 import { useInlinePreviewLease } from '@/features/chat/product-delivery/inline-preview-scheduler';
 import {
   getLocalAppFixGuidance,
+  resolveLocalAppDevelopmentConversation,
   getLocalAppSnapshot,
   type LocalAppDiagnostic,
 } from '@/features/local-apps/api';
@@ -204,7 +205,9 @@ export function InlineLocalApp({
         locale: language,
         diagnostics,
       });
-      dispatchFillChatComposer(guidance.prompt);
+      if (guidance.action === 'retry') { retry(); return; }
+      const conversationId = await resolveLocalAppDevelopmentConversation(reference.id);
+      navigate(localAppConversationUrl(conversationId, guidance.prompt));
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause));
     } finally {

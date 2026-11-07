@@ -1670,7 +1670,7 @@ export function ProjectDetailPage() {
           'mt-3 min-h-0 flex-1',
           tab === 'overview'
               ? 'overflow-y-auto pr-1 [scrollbar-gutter:stable] xl:overflow-hidden xl:pr-0'
-              : tab === 'tasks'
+              : tab === 'tasks' || tab === 'automations'
                 ? 'overflow-hidden'
               : 'overflow-y-auto pr-1 [scrollbar-gutter:stable]',
         )}
@@ -1901,7 +1901,7 @@ export function ProjectDetailPage() {
           id="project-panel-automations"
           role="tabpanel"
           aria-labelledby="project-primary-tab-automations"
-          className="grid min-h-full content-start gap-4"
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           <AutomationsWorkspace
             projectId={project.id}

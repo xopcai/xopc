@@ -95,6 +95,8 @@ export interface ExtensionClient {
     keys(): Promise<string[]>;
   };
   ui: {
+    /** Open the host's permission review. This never grants access automatically. */
+    reviewPermissions(): Promise<void>;
     resize(height: number): void;
     showNotification(options: {
       type?: 'success' | 'error' | 'info';

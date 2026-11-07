@@ -90,6 +90,12 @@ endpoints or carry credentials or grants itself. Build-time contract discovery m
 catalog, not the broader HTTP operation descriptor. Apps with old pinned output contracts must
 refresh their bindings and pass validation before the next release.
 
+An app can request `client.ui.reviewPermissions()` to open the host-owned permission review.
+The host derives identity from the registered frame. Opening the review grants nothing, including
+when the previous grant has been revoked. The running frame retains its original authority during
+review; explicit confirmation replaces the frame before applying the new grant. Application input
+cannot supply a manifest identity, resource grant or grant revision through this method.
+
 ## Verification
 
 Run the Local App and capability regression tests, then build the console and execute:

@@ -81,6 +81,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'local-app-development',
+    match: path => /^\/api\/local-apps\/[^/]+\/development-conversation$/.test(path),
+    load: async () => {
+      const { registerLocalAppDevelopmentRoutes } = await import('./local-app-development.js');
+      return { register: registerLocalAppDevelopmentRoutes };
+    },
+  },
+  {
     id: 'local-app-capabilities',
     match: path => /^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations)?$/.test(path),
     load: async () => {

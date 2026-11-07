@@ -1247,7 +1247,7 @@ async function handleLocalApp(
     if (!idea) return { ok: false, error: 'idea is required' };
     const input = { name, idea, description: trimString(args.description) };
     if (dryRun) return { ok: true, dryRun: true, action: 'create_local_app', input };
-    return { ok: true, app: localApps.create(input) };
+    return { ok: true, app: localApps.create(input, deps.getCurrentConversationId?.()) };
   }
 
   return { ok: false, error: `Unsupported local_app command: ${command}` };

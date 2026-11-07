@@ -85,6 +85,7 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
     },
 
     ui: {
+      async reviewPermissions() { await transport.request('ui.reviewPermissions'); },
       resize(height: number) {
         transport.emit('ui.resize', { height });
       },
