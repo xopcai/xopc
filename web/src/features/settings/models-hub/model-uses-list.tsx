@@ -1,7 +1,9 @@
 import { compareModelNamesDescending } from '@/lib/model-sort';
 import { modelDisplayName } from '@/lib/model-display-name';
 import useSWR from 'swr';
-import { fetchVoiceProviders, fetchVoiceSttProviders } from '@/features/settings/voice-config-api';
+import { HIGGS_REALTIME_REF } from '@xopcai/realtime-protocol/voice';
+import { apiUrl } from '@/lib/url';
+import { bosonVoiceSettingsUrl, fetchBosonVoiceSettings, fetchVoiceProviders, fetchVoiceSttProviders, saveBosonVoiceSettings } from '@/features/settings/voice-config-api';
 import { modelsJsonPresetKeyForProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchImageCatalog } from '@/features/settings/image-generation-api';
 import { capabilityDescriptions, serviceDisplayName } from './capability-presentation';
@@ -13,10 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PopoverSelect, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { fetchGlobalDefaults } from '@/features/settings/global-defaults-api';
-import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { revalidateGatewayConfig, useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { normalizeVoiceSettings } from '@/features/settings/voice-config-api';
 import type { ConnectedProvidersData } from './connected-providers-grid';
 import { applyModelSetup, fetchModelSetup, previewModelSetup } from './provider-setup-api';
+
+const CLEAR_NATURAL_MODEL = 'clear-natural-model';
 
 type ModelUseOption = PopoverSelectOption & { searchText?: string };
 
@@ -50,6 +54,8 @@ function ModelUsePicker({ label, value, currentLabel, options, loading, disabled
 export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disabled = false, onPendingChange }: { data: ConnectedProvidersData; zh: boolean; onChange: (use: ModelSetupUse) => void; onSettings?: (use: ModelSetupUse) => void; onlyUse?: ModelSetupUse; disabled?: boolean; onPendingChange?: (pending: boolean) => void }) {
   const { data: result, error, mutate } = useSWR('settings-agent-defaults', fetchGlobalDefaults);
   const { data: voiceConfig } = useGatewayConfigSwr(true);
+  const { data: boson, mutate: mutateBoson } = useSWR(!onlyUse || onlyUse === 'conversation'
+    ? apiUrl(bosonVoiceSettingsUrl) : null, fetchBosonVoiceSettings);
   const { data: media, isLoading: loadingMedia, error: mediaError, mutate: refreshMedia } = useSWR('model-capability-media-sources', async () => {
     const results = await Promise.allSettled([fetchVoiceProviders(), fetchVoiceSttProviders(), fetchImageCatalog()]);
     return { ids: [...new Set(results.flatMap(result => result.status === 'fulfilled' ? (Array.isArray(result.value) ? result.value : result.value.providers).filter(entry => entry.configured).map(entry => entry.id) : []))], failed: results.some(result => result.status === 'rejected') };
@@ -73,14 +79,20 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
   const switchModel = async (use: ModelSetupUse, model: string) => {
     if (savingRef.current || disabled) return;
     const source = catalog?.previews.find(preview => preview.uses.some(row => row.id === use && row.choices.some(choice => choice.id === model)));
-    if (!source) return;
+    const selectsBoson = use === 'conversation' && (model === HIGGS_REALTIME_REF || model === CLEAR_NATURAL_MODEL);
+    if (!source && !selectsBoson) return;
     savingRef.current = true; onPendingChange?.(true);
     setSaving(use); setFeedback(null);
     const request: ModelSetupRequest = { mode: 'replace', selected: [use], overrides: { [use]: model } };
     try {
-      const preview = await previewModelSetup(source.providerId, request);
-      await applyModelSetup(source.providerId, request, preview.revision);
-      await Promise.all([mutate(), refreshCatalog()]);
+      if (selectsBoson) {
+        await mutateBoson(await saveBosonVoiceSettings({ defaultForNatural: model === HIGGS_REALTIME_REF }), { revalidate: false });
+        await revalidateGatewayConfig();
+      } else if (source) {
+        const preview = await previewModelSetup(source.providerId, request);
+        await applyModelSetup(source.providerId, request, preview.revision);
+        await Promise.all([mutate(), refreshCatalog(), ...(use === 'conversation' ? [mutateBoson(), revalidateGatewayConfig()] : [])]);
+      }
       setFeedback({ use });
     } catch (cause) {
       setFeedback({ use, error: cause instanceof Error ? cause.message : String(cause) });
@@ -94,6 +106,9 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
   if (!result && !error) return <Skeleton className="h-48 w-full rounded-xl" />;
   if (error) return <div role="alert" className="text-sm text-danger">{zh ? '模型用途加载失败' : 'Could not load model uses'}<Button variant="ghost" onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></div>;
   const models = result!.defaults.models;
+  const realtime = voice?.voice.realtime;
+  const legacyNaturalRef = realtime?.enabled && realtime.omni ? `${realtime.omni.provider}/${realtime.omni.model}` : undefined;
+  const naturalRef = (boson?.defaultForNatural ?? realtime?.boson?.defaultForNatural) ? HIGGS_REALTIME_REF : legacyNaturalRef;
   const backgroundFallback = models.background?.primary ?? models.chat.primary;
   const backgroundAllowed = data.builtinRows.find(row => row.id === backgroundFallback.split('/')[0])?.setupProfile?.interactiveOnly !== true;
   const backgroundState = catalog?.previews[0]?.uses.find(use => use.id === 'background');
@@ -105,7 +120,7 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
     { id: 'background', label: zh ? '后台任务' : 'Background tasks', ref: backgroundRef, inherited: !models.background && Boolean(backgroundRef) },
     { id: 'transcription', label: zh ? '录音与听写' : 'Recording and dictation', ref: voice?.stt.enabled ? `${voice.stt.provider}/${voice.stt.providers?.[voice.stt.provider]?.model ?? 'default'}` : undefined },
     { id: 'speech', label: zh ? '语音合成' : 'Speech synthesis', ref: voice?.tts.enabled ? `${voice.tts.provider}/${voice.tts.providers?.[voice.tts.provider]?.model ?? 'default'}` : undefined },
-    { id: 'conversation', label: zh ? '实时语音对话' : 'Realtime conversation', ref: voice?.voice.realtime.enabled ? voice.voice.realtime.defaultEngine === 'omni' && voice.voice.realtime.omni ? `${voice.voice.realtime.omni.provider}/${voice.voice.realtime.omni.model}` : voice.voice.realtime.defaultEngine === 'agent' ? 'agent' : undefined : undefined },
+    { id: 'conversation', label: zh ? '自然语音模型' : 'Natural voice model', ref: naturalRef },
   ];
   return <section ref={listRef} className="@container min-w-0">
     <h2 className={onlyUse ? "mb-2 text-sm font-semibold text-fg" : "sr-only"}>{onlyUse ? (zh ? '当前模型' : 'Current model') : (zh ? '能力总览' : 'Capabilities')}</h2>
@@ -114,18 +129,27 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
       <div className={onlyUse ? "divide-y divide-edge-subtle" : "divide-y divide-edge-subtle px-4"}>{group.uses.filter(id => !onlyUse || id === onlyUse).map(id => {
       const row = rows.find(row => row.id === id)!;
       const options = modelUseOptions(catalog?.previews ?? [], row.id, zh);
-      const current = row.id === 'conversation' && voice?.voice.realtime.enabled && voice.voice.realtime.defaultEngine === 'agent' ? (zh ? '语音助手 · 使用对话、听写和语音输出配置' : 'Voice assistant · Uses chat, dictation and voice output') : row.ref ? ((model) => model ? modelDisplayName(model, zh ? 'zh' : 'en') : row.ref)(data.allModels.find(model => model.id === row.ref)) : undefined;
+      if (row.id === 'conversation') {
+        if (boson?.credentialSource || row.ref === HIGGS_REALTIME_REF) options.push({
+          value: HIGGS_REALTIME_REF, label: 'Higgs Realtime', group: 'Boson AI', disabled: !boson?.credentialSource,
+        });
+        if (row.ref === HIGGS_REALTIME_REF && !options.some(option => option.value !== HIGGS_REALTIME_REF)) {
+          options.push({ value: CLEAR_NATURAL_MODEL, label: zh ? '取消默认模型' : 'Clear default model' });
+        }
+      }
+      const model = row.ref ? data.allModels.find(model => model.id === row.ref) : undefined;
+      const current = model ? modelDisplayName(model, zh ? 'zh' : 'en') : row.ref;
       return <div key={row.id} data-capability={row.id}><div className={onlyUse ? 'py-2' : `grid grid-cols-1 items-center gap-x-3 gap-y-2 py-3 @min-[40rem]:gap-x-4 ${onSettings ? '@min-[40rem]:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_auto]' : '@min-[40rem]:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]'}`}>
-        <div className={onlyUse ? 'hidden' : 'col-start-1 row-start-1 min-w-0'}><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><p className="text-sm font-medium text-fg">{capabilityLabels[row.id][zh ? 0 : 1]}</p><span className="text-xs text-fg-subtle">{row.ref ? (options.some(option => option.value === row.ref || (row.ref?.endsWith('/default') && option.value.split('/')[0] === row.ref.split('/')[0])) || row.ref === 'agent' ? null : (zh ? '待连接' : 'Connection needed')) : (zh ? '未配置' : 'Not set up')}</span></div><p className="mt-1 text-xs leading-relaxed text-fg-muted">{capabilityDescriptions[row.id][zh ? 0 : 1]}</p>
+        <div className={onlyUse ? 'hidden' : 'col-start-1 row-start-1 min-w-0'}><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><p className="text-sm font-medium text-fg">{capabilityLabels[row.id][zh ? 0 : 1]}</p><span className="text-xs text-fg-subtle">{row.ref ? (options.some(option => option.value === row.ref || (row.ref?.endsWith('/default') && option.value.split('/')[0] === row.ref.split('/')[0])) ? null : (zh ? '待连接' : 'Connection needed')) : (zh ? '未配置' : 'Not set up')}</span></div><p className="mt-1 text-xs leading-relaxed text-fg-muted">{capabilityDescriptions[row.id][zh ? 0 : 1]}</p>
           {row.inherited ? <p className="mt-1 text-xs text-fg-muted">{zh ? '继承默认对话' : 'Inherits chat default'}</p> : null}
         </div>
         <div className={onlyUse ? "w-full min-w-0 space-y-1" : "row-start-2 w-full min-w-0 space-y-1 @min-[40rem]:col-span-1 @min-[40rem]:col-start-2 @min-[40rem]:row-start-1"}>
-          <ModelUsePicker label={capabilityLabels[row.id][zh ? 0 : 1]} value={row.ref} currentLabel={current} options={options} loading={data.loading || loadingCatalog || loadingMedia} disabled={saving !== null || disabled}
+          <ModelUsePicker label={row.id === 'conversation' ? row.label : capabilityLabels[row.id][zh ? 0 : 1]} value={row.ref} currentLabel={current} options={options} loading={data.loading || loadingCatalog || loadingMedia} disabled={saving !== null || disabled}
             zh={zh} onConnect={() => onChange(row.id)} onSelect={ref => { if (ref !== row.ref) void switchModel(row.id, ref); }} />
           {saving === row.id ? <p role="status" className="text-xs text-fg-muted">{zh ? '正在切换…' : 'Switching…'}</p> : null}
           {feedback?.use === row.id ? <div role={feedback.error ? 'alert' : 'status'} className="text-xs text-fg-muted">{feedback.error ? <><p className="text-danger">{zh ? '未能切换模型，请重试。' : 'Could not switch models. Please retry.'}</p><details className="mt-1"><summary className="cursor-pointer">{zh ? '查看详情' : 'Show details'}</summary><p className="mt-1 break-words">{feedback.error}</p></details></> : (zh ? '已切换' : 'Model changed')}</div> : null}
         </div>
-        {onSettings && (options.length > 0 || loadingCatalog || loadingMedia) ? <div className="row-start-3 flex flex-wrap items-center justify-end gap-1 @min-[40rem]:col-start-3 @min-[40rem]:row-start-1"><Button variant="ghost" disabled={saving !== null || disabled} onClick={() => onSettings(row.id)}>{zh ? '设置' : 'Settings'}</Button><Button variant="ghost" disabled={saving !== null || disabled} onClick={() => onChange(row.id)}>{zh ? '管理服务' : 'Manage services'}</Button></div> : null}
+        {onSettings && (row.id === 'conversation' || options.length > 0 || loadingCatalog || loadingMedia) ? <div className="row-start-3 flex flex-wrap items-center justify-end gap-1 @min-[40rem]:col-start-3 @min-[40rem]:row-start-1"><Button variant="ghost" disabled={saving !== null || disabled} onClick={() => onSettings(row.id)}>{zh ? '设置' : 'Settings'}</Button><Button variant="ghost" disabled={saving !== null || disabled} onClick={() => onChange(row.id)}>{zh ? '管理服务' : 'Manage services'}</Button></div> : null}
       </div></div>;
     })}</div></section>)}</div>
     {(!onSettings || onlyUse) && (catalog?.failed || media?.failed || mediaError) ? <p role="alert" className="mt-2 text-xs text-danger">{zh ? '部分服务的模型加载失败' : 'Some model services could not be loaded'}<Button variant="ghost" onClick={() => void Promise.all([refreshMedia(), refreshCatalog()])}>{zh ? '重试' : 'Retry'}</Button></p> : null}

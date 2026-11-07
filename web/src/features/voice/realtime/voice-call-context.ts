@@ -1,10 +1,12 @@
 import { createContext, useContext } from 'react';
+import type { NaturalVoiceBackend, VoiceMode } from '@xopcai/realtime-protocol/voice';
 
 export interface VoiceCallTarget {
   conversationId: string;
   name: string;
   taskId?: string;
-  mode?: 'assistant';
+  mode?: VoiceMode;
+  naturalBackend?: NaturalVoiceBackend;
 }
 
 export interface VoiceCallContextValue {

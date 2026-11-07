@@ -74,6 +74,10 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
       <fieldset hidden={inlineView !== 'services'} disabled={connectionPending} className="min-w-0 space-y-3">
         <CapabilityServiceConnections key={inlineUse} inline onEditingChange={setConnectionEditing} use={inlineUse} data={providerData} language={language} labels={c.addProviderDialog} onPendingChange={setConnectionPending} onSaved={() => connected(inlineUse)} />
         {inlineUse === 'transcription' || inlineUse === 'speech' ? <div hidden={connectionEditing}><MediaServiceConnections key={inlineUse} kind={inlineUse === 'transcription' ? 'stt' : 'tts'} modelServiceIds={providerData.builtinRows.map(row => row.id)} zh={zh} onPendingChange={setConnectionPending} onSaved={() => connected(inlineUse)} /></div> : null}
+        {inlineUse === 'conversation' && !connectionEditing && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge p-3">
+          <span className="text-sm text-fg">Boson AI · Higgs Realtime</span>
+          <Button variant="secondary" onClick={() => onViewChange?.('settings')}>{zh ? '配置 Boson' : 'Configure Boson'}</Button>
+        </div>}
         {inlineUse === 'image' ? <ImageModelsSettingsPanel connectOnly onPendingChange={setConnectionPending} onConnected={() => connected(inlineUse)} /> : null}
       </fieldset>
       <div hidden={inlineView === 'services'} className="space-y-4">

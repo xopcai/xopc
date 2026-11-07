@@ -11,7 +11,7 @@ import { getLanguage } from '@/lib/storage';
 import { apiUrl } from '@/lib/url';
 import { fetchJson } from '@/lib/fetch';
 import type { ChatMessages } from '@/i18n/messages';
-import type { VoiceMode } from '@xopcai/realtime-protocol/voice';
+import type { HiggsVoice, NaturalVoiceBackend, VoiceMode } from '@xopcai/realtime-protocol/voice';
 
 import { PcmFrameCapture, PcmStreamEncoder, PcmWavRecorder } from '@xopcai/composer-core/pcm-wav-recorder';
 
@@ -76,6 +76,7 @@ export interface UseRealtimeVoiceOptions {
   disabled: boolean;
   chat: ChatMessages;
   onTranscript: (text: string) => void;
+  onTestAudioPlayed?: () => void;
 }
 
 export interface UseRealtimeVoiceReturn {
@@ -108,7 +109,8 @@ export interface UseRealtimeVoiceReturn {
   endedReason: string | null;
   mode: VoiceSessionMode;
   startVoiceInput: () => Promise<void>;
-  startVoiceConversation: (conversationId: string, mode?: VoiceMode) => Promise<void>;
+  startVoiceConversation: (conversationId: string, mode?: VoiceMode, naturalBackend?: NaturalVoiceBackend) => Promise<void>;
+  startHiggsTest: (voice: HiggsVoice) => Promise<void>;
   interruptResponse: () => void;
   toggleMute: () => void;
   cancelVoiceInput: () => void;
@@ -150,6 +152,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const clientRef = useRef<VoiceSessionClient | null>(null);
   const logicalCallIdRef = useRef<string | undefined>(undefined);
   const callModeRef = useRef<VoiceMode | undefined>(undefined);
+  const naturalBackendRef = useRef<NaturalVoiceBackend>(undefined);
   const playerRef = useRef<PcmPlayer | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordStartPerfRef = useRef<number | null>(null);
@@ -168,6 +171,8 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const slowConnectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
+  const onTestAudioPlayed = useRef(options.onTestAudioPlayed);
+  onTestAudioPlayed.current = options.onTestAudioPlayed;
 
   const updatePhase = useCallback((next: VoiceInputPhase) => {
     phaseRef.current = next;
@@ -333,9 +338,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     }, 200);
   }, [finishIdle, stopTimer]);
 
-  const beginCapture = useCallback(async (purpose: VoiceSessionMode, callMode?: VoiceMode, conversationKey?: string, recovery = false) => {
+  const beginCapture = useCallback(async (purpose: VoiceSessionMode, callMode?: VoiceMode, conversationKey?: string, naturalBackend?: NaturalVoiceBackend, recovery = false, testHiggsVoice?: HiggsVoice) => {
     if (disabled || phaseRef.current !== 'idle') return;
-    if (purpose === 'conversation' && !conversationKey) return;
+    if (purpose === 'conversation' && !conversationKey && !testHiggsVoice) return;
     if (!acquireMicrophoneLease(ownerRef.current)) {
       setError(m.callCaptureBusy);
       if (purpose === 'dictation') showComposerNotification('error', m.callCaptureBusy);
@@ -353,6 +358,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     setCallConnectionStage(purpose === 'conversation' ? 'preparing' : null);
     if (!recovery || !logicalCallIdRef.current) logicalCallIdRef.current = crypto.randomUUID();
     callModeRef.current = callMode;
+    naturalBackendRef.current = naturalBackend;
     setResponseText('');
     updatePhase('connecting');
     const startedAt = performance.now();
@@ -376,7 +382,12 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         throw unavailable;
       }
       const recorded = route?.mode === 'recorded';
-      const timingMetrics = recorded ? [] : await wait(VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}), signal: controller.signal }), 20_000);
+      const callTarget = purpose === 'conversation' ? {
+        mode: callMode, ...(naturalBackend ? { naturalBackend } : {}), ...(testHiggsVoice ? { testHiggsVoice } : {}),
+        conversationId: conversationKey,
+      } : {};
+      const timingMetrics = recorded ? [] : await wait(VoiceSessionClient.preflight({ purpose, ...callTarget, signal: controller.signal }), 20_000);
+      let testAudioPlayed = false;
       if (!isCurrent()) return;
       stage = 'permission';
       const electronSystem = window.electronAPI?.system;
@@ -439,7 +450,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         language: getLanguage(),
         purpose,
         signal: controller.signal,
-        ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}),
+        ...callTarget,
         onEvent: (event) => {
           if (!isCurrent()) return;
           if (event.type === 'input.transcript.delta' || event.type === 'input.transcript.final') {
@@ -540,6 +551,10 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             if (activeResponseIdRef.current !== responseId) return;
             playedBytesRef.current += audio.byteLength;
             clientRef.current?.acknowledgeAudio(responseId, playedBytesRef.current);
+            if (testHiggsVoice && !testAudioPlayed && new Int16Array(audio).some(sample => Math.abs(sample) > 96)) {
+              testAudioPlayed = true;
+              onTestAudioPlayed.current?.();
+            }
             if (responseDoneRef.current && !playerRef.current?.hasPendingAudio) {
               activeResponseIdRef.current = null;
               setResponsePhase('idle');
@@ -681,11 +696,12 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     if (recordedBlobRef.current) { void finishRecordedDictation(); return; }
     reset();
     updatePhase('idle');
-    void beginCapture(mode, callModeRef.current, callConversationIdRef.current, true);
+    void beginCapture(mode, callModeRef.current, callConversationIdRef.current, naturalBackendRef.current, true);
   }, [beginCapture, finishRecordedDictation, mode, reset, updatePhase]);
 
   const startVoiceInput = useCallback(() => beginCapture('dictation'), [beginCapture]);
-  const startVoiceConversation = useCallback((key: string, callMode?: VoiceMode) => beginCapture('conversation', callMode, key), [beginCapture]);
+  const startVoiceConversation = useCallback((key: string, callMode?: VoiceMode, naturalBackend?: NaturalVoiceBackend) => beginCapture('conversation', callMode, key, naturalBackend), [beginCapture]);
+  const startHiggsTest = useCallback((voice: HiggsVoice) => beginCapture('conversation', 'natural', undefined, undefined, false, voice), [beginCapture]);
   const interruptResponse = useCallback(() => {
     const startedAt = performance.now();
     const responseId = activeResponseIdRef.current;
@@ -736,6 +752,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     mode,
     startVoiceInput,
     startVoiceConversation,
+    startHiggsTest,
     interruptResponse,
     toggleMute,
     cancelVoiceInput,

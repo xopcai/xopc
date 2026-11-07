@@ -3,17 +3,20 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PersonalPage } from '@/features/personal-agent/personal-page';
 import { fetchJson } from '@/lib/fetch';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
+const { openVoiceCall } = vi.hoisted(() => ({ openVoiceCall: vi.fn() }));
+
 vi.mock('@/features/chat/chat-page', () => ({
   ChatPage: ({ personalWelcome }: { personalWelcome?: { addressAs?: string } }) => <div data-testid="personal-chat" data-user-name={personalWelcome?.addressAs} />,
 }));
 vi.mock('@/features/voice/realtime/voice-call-context', () => ({
-  useVoiceCall: () => ({ active: false, open: vi.fn() }),
+  useVoiceCall: () => ({ active: false, open: openVoiceCall }),
 }));
 vi.mock('@/features/personal-agent/personal-avatar', () => ({
   PersonalAvatar: ({ appearance, className }: { appearance: string; className?: string }) => <span data-testid="personal-avatar" data-appearance={appearance} className={className} />,
@@ -60,6 +63,24 @@ describe('Personal AI editor', () => {
     container.remove();
     headerContainer.remove();
     vi.clearAllMocks();
+  });
+
+  it.each(['assistant', 'natural'] as const)('starts Ada’s configured default call mode (%s)', async mode => {
+    const fetchPersonal = vi.mocked(fetchJson).getMockImplementation()!;
+    vi.mocked(fetchJson).mockImplementation(async (url, options) => {
+      if (String(url).includes('/api/voice/boson')) return { payload: { credentialSource: 'env', defaultForNatural: true, voice: 'default', legacyModel: null } };
+      const result = await fetchPersonal(url, options) as { payload: Record<string, unknown> };
+      if (String(url).endsWith('/api/personal-agent') && mode === 'natural') {
+        return { ...result, payload: { ...result.payload, voiceCallPreferences: { openingGreetingEnabled: true, defaultMode: 'natural' } } };
+      }
+      return result;
+    });
+    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><PersonalPage /></MemoryRouter></SWRConfig>));
+    act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Voice call"]')?.click());
+    expect(openVoiceCall).toHaveBeenCalledExactlyOnceWith({
+      conversationId: 'conversation-1', name: 'Ada', mode,
+    });
   });
 
   it('opens a compact editor popover from the avatar while keeping the conversation mounted', async () => {

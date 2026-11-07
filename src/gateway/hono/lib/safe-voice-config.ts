@@ -6,12 +6,14 @@ export function maskRealtimeVoiceConfigForWeb(voice: { realtime?: { omni?: { api
   return { ...voice, realtime: { ...voice.realtime, omni: maskProviderSlice(voice.realtime.omni) } };
 }
 
-export function mergeRealtimeVoiceConfigPatch(previous: { realtime?: { omni?: { apiKey?: string } } } | undefined, incoming: unknown): unknown {
+export function mergeRealtimeVoiceConfigPatch(previous: { realtime?: { omni?: { apiKey?: string }; boson?: unknown } } | undefined, incoming: unknown): unknown {
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return incoming;
   const patch = incoming as Record<string, unknown>;
-  const realtime = patch.realtime as Record<string, unknown> | undefined;
+  if (!patch.realtime || typeof patch.realtime !== 'object' || Array.isArray(patch.realtime)) return incoming;
+  const realtime = { ...patch.realtime } as Record<string, unknown>;
+  if (!('boson' in realtime) && previous?.realtime?.boson) realtime.boson = previous.realtime.boson;
   const omni = realtime?.omni as Record<string, unknown> | undefined;
-  if (!omni || typeof omni !== 'object' || Array.isArray(omni)) return incoming;
+  if (!omni || typeof omni !== 'object' || Array.isArray(omni)) return { ...patch, realtime };
   const apiKey = omni.apiKey === '' ? undefined : mergeApiKeyField(omni.apiKey, previous?.realtime?.omni?.apiKey);
   return { ...patch, realtime: { ...realtime, omni: { ...omni, ...(omni.apiKey !== undefined ? { apiKey } : {}) } } };
 }

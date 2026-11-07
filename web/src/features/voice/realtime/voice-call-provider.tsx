@@ -82,7 +82,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     const attempt = ++startAttempt.current;
     voice.cancelVoiceInput();
     setTarget(next);
-    void voice.startVoiceConversation(next.conversationId, next.mode).finally(() => { if (attempt === startAttempt.current) starting.current = false; });
+    void voice.startVoiceConversation(next.conversationId, next.mode, next.naturalBackend).finally(() => { if (attempt === startAttempt.current) starting.current = false; });
   };
   const context = {
     active,
@@ -137,14 +137,19 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             <AudioLines className="size-10 text-accent-fg" aria-hidden="true" />
             <div><p className="text-lg font-medium" role="status">{status}</p>{connected || !active ? <p className="mt-1 text-xs tabular-nums text-fg-muted">{connected ? voice.elapsedLabel : m.callContinuity}{connected && voice.muted && voice.responsePhase !== 'idle' ? ` · ${m.callMicMuted}` : ''}</p> : null}</div>
             {voice.error ? <details className="text-sm text-fg-muted"><summary className="cursor-pointer">{m.callErrorDetails}</summary><p role="alert" className="mt-2 break-words text-xs">{voice.error}</p></details> : null}
-            {!active && voice.failureKind === 'session' ? <div className="space-y-2 text-sm text-fg-muted"><p>{m.callSetupHint}</p>{settingsLink}</div> : null}
+            {!active && voice.failureKind === 'session' ? <div className="space-y-2 text-sm text-fg-muted">
+              <p>{m.callSetupHint}</p>{settingsLink}
+              {target?.mode === 'natural' && <Button type="button" variant="ghost" onClick={() => start({ ...target, mode: 'assistant', naturalBackend: undefined })}>
+                {language === 'zh' ? '改用当前助手' : 'Use current assistant'}
+              </Button>}
+            </div> : null}
             {connected && captions ? <div className="space-y-3 text-sm leading-relaxed">
               {(voice.partialTranscript || voice.finalTranscript) ? <p><span className="mb-1 block text-xs text-fg-subtle">{m.callYou}</span>{voice.partialTranscript || voice.finalTranscript}</p> : null}
               {voice.responseText ? <div><span className="mb-1 block text-xs text-fg-subtle">{target?.name}</span><MarkdownView content={voice.responseText} compact codeCopy={false} renderMermaid={false} /></div> : null}
             </div> : null}
             {target?.taskId ? <TaskSessionBanner taskId={target.taskId} /> : null}
-            {connected && target ? <VoiceDelegatedTasks conversationId={target.conversationId} /> : null}
-            {connected && target ? <VoiceCallWork key={target.conversationId} voice={voice} conversationId={target.conversationId} m={m} /> : null}
+            {connected && target && target.mode !== 'natural' ? <VoiceDelegatedTasks conversationId={target.conversationId} /> : null}
+            {connected && target && target.mode !== 'natural' ? <VoiceCallWork key={target.conversationId} voice={voice} conversationId={target.conversationId} m={m} /> : null}
           </div>
           <footer className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-edge px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3">
             {active ? <>

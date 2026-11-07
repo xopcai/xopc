@@ -1,12 +1,14 @@
 import { registerProactivityRoutes } from '../../../personal-agent/proactivity/routes.js';
 import type { Hono } from 'hono';
 import { z } from 'zod';
+import { HIGGS_REALTIME_REF, voiceCallPreferencesPatchSchema } from '@xopcai/realtime-protocol/voice';
 
 import { writeAgentAvatarFromBase64 } from '../../agents-admin.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
 import { markPersonalRead, personalUnreadSnapshot } from '../../../personal-agent/unread.js';
 import { getPersonalAgent } from '../../../personal-agent/repository.js';
+import { legacyNaturalModel } from '../../../voice/realtime/omniRoute.js';
 import { finishPersonalWelcome, getPersonalOnboarding, PersonalOnboardingDraftSchema, PersonalOnboardingStepSchema, savePersonalOnboarding } from '../../../personal-agent/onboarding.js';
 import { TaskOriginRepository } from '../../../tasks/task-origin-repository.js';
 import { getPersonalRequest, listPersonalRequests } from '../../../personal-agent/request-repository.js';
@@ -33,7 +35,7 @@ const OnboardingSchema = z.object({
   draft: PersonalOnboardingDraftSchema,
 }).strict();
 const ProfileSchema = z.object({
-  voiceCallPreferences: z.object({ openingGreetingEnabled: z.boolean() }).strict().optional(),
+  voiceCallPreferences: voiceCallPreferencesPatchSchema.optional(),
   revision: z.number().int().positive(),
   displayName: z.string().trim().min(1).max(60),
   appearance: PersonalAppearanceSchema,
@@ -195,6 +197,11 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
     const parsed = ProfileSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid profile' }, 400);
     const { revision, displayName, appearance, voicePreference, voiceCallPreferences } = parsed.data;
+    const naturalModel = voiceCallPreferences?.naturalModel;
+    if (naturalModel && naturalModel !== HIGGS_REALTIME_REF && naturalModel !== legacyNaturalModel(deps.service.currentConfig)
+      && naturalModel !== getPersonalAgent(ownerId)?.voiceCallPreferences.naturalModel) {
+      return c.json({ ok: false, error: 'Selected natural voice model is unavailable' }, 400);
+    }
     if (voicePreference) {
       const { resolveStreamingTts } = await import('../../../voice/realtime/runtime.js');
       const route = resolveStreamingTts(deps.service.currentConfig);

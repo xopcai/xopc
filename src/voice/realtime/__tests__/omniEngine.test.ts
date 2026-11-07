@@ -17,30 +17,164 @@ describe('Omni voice engine', () => {
     vi.restoreAllMocks();
   });
 
-  async function setup(recordOverride?: () => Promise<void>, bargeIn = true, managed = false) {
+  async function setup(recordOverride?: () => Promise<void>, bargeIn = true, managed = false, provider = 'test', context?: {
+    restore: () => Promise<string>;
+    onConnected: () => void;
+  }) {
     server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
     await once(server, 'listening');
     const received: Array<Record<string, any>> = [];
     let upstream!: WebSocket;
     server.on('connection', (socket) => {
       upstream = socket;
-      socket.send(JSON.stringify({ type: 'session.created' }));
+      context?.onConnected();
+      if (provider !== 'boson') socket.send(JSON.stringify({ type: 'session.created' }));
       socket.on('message', (raw) => {
         const event = JSON.parse(raw.toString()); received.push(event);
-        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated', session: {input_sample_rate:16000, output_sample_rate:24000} }));
+        if (event.type === 'session.update') socket.send(JSON.stringify({
+          type: provider === 'boson' ? 'session.created' : 'session.updated',
+          session: { input_sample_rate: 16000, output_sample_rate: 24000 },
+        }));
       });
     });
     const onUserInput = vi.fn();
     const send = vi.fn(); const sendAudio = vi.fn(); const record = vi.fn(recordOverride ?? (async () => {}));
     engine = createOmniVoiceEngine({
       callId: 'test-call',
-      route: { url: `ws://127.0.0.1:${(server.address() as { port: number }).port}`, apiKey: 'test', voice: 'Cherry', instructions: 'Test', route: { provider: 'test', model: 'test', managed } },
+      route: { url: `ws://127.0.0.1:${(server.address() as { port: number }).port}`, apiKey: 'test', voice: 'Cherry', instructions: 'Test', route: { provider, model: 'test', managed } },
       silenceDurationMs: 700, bargeIn, send, sendAudio, record, onUserInput,
+      restoreInstructions: context?.restore,
       onClose: vi.fn(async () => engine.close()),
     });
     await engine.start();
     return { received, send, sendAudio, record, onUserInput, emit: (event: object) => upstream.send(JSON.stringify(event)) };
   }
+
+  it('opens the Higgs connection while loading context and initializes it with the restored instructions', async () => {
+    const connected = Promise.withResolvers<void>();
+    const instructions = Promise.withResolvers<string>();
+    const restore = vi.fn(() => instructions.promise);
+    const starting = setup(undefined, true, false, 'boson', { restore, onConnected: connected.resolve });
+    try {
+      await connected.promise;
+      expect(restore).toHaveBeenCalledOnce();
+    } finally {
+      instructions.resolve('Ada, continue discussing the updated travel budget.');
+    }
+    const test = await starting;
+    expect(test.received).toEqual([expect.objectContaining({
+      type: 'session.update', session: expect.objectContaining({ instructions: 'Ada, continue discussing the updated travel budget.' }),
+    })]);
+  });
+
+  it('uses the Higgs endpoint and truncates an interrupted reply at acknowledged playback', async () => {
+    const test = await setup(undefined, true, false, 'boson');
+    expect(test.received[0]).toMatchObject({
+      type: 'session.update',
+      session: {
+        output_modalities: ['audio'],
+        audio: { input: { format: { rate: 16_000 }, transcription: { model: 'higgs-stt-3.1' },
+          turn_detection: { type: 'semantic_vad', silence_duration_ms: 180, threshold: 0.82, min_speech_duration: 0.08 } }, output: { format: { rate: 24_000 } } },
+      },
+    });
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'question' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'question' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'question' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'question', transcript: '介绍一下西湖。' });
+    test.emit({ type: 'response.created', response: { id: 'reply' } });
+    test.emit({ type: 'response.output_audio_transcript.delta', response_id: 'reply', delta: '西湖有许多景点。' });
+    test.emit({ type: 'response.output_audio.delta', response_id: 'reply', item_id: 'spoken', content_index: 0, delta: '' });
+    test.emit({ type: 'response.output_audio.delta', response_id: 'reply', item_id: 'spoken', content_index: 0, delta: Buffer.alloc(1920, 1).toString('base64') });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(2));
+    engine.acknowledge('reply', 20);
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'interrupt' });
+    await vi.waitFor(() => expect(test.received).toContainEqual(expect.objectContaining({
+      type: 'conversation.item.truncate', item_id: 'spoken', content_index: 0, audio_end_ms: 20,
+    })));
+    expect(test.send).toHaveBeenCalledWith('response.cancelled', { responseId: 'reply', reason: 'barge_in' });
+    expect(test.received.some(event => event.type === 'response.create' || event.type === 'response.cancel')).toBe(false);
+    test.emit({ type: 'response.done', response: { id: 'reply', status: 'cancelled' } });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'interrupt' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'interrupt' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'interrupt', transcript: '只讲断桥。' });
+    test.emit({ type: 'response.created', response: { id: 'next' } });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.created', { responseId: 'next' }));
+  });
+
+  it.each([['我想问一下。', 1_500], ['你好。', 900]])('keeps a premature Higgs reply silent after %s', async (prefix, pauseMs) => {
+    const test = await setup(undefined, true, false, 'boson');
+    vi.useFakeTimers();
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'prefix' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'prefix' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'prefix' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'prefix', transcript: prefix });
+    test.emit({ type: 'response.created', response: { id: 'premature' } });
+    test.emit({ type: 'response.output_audio.delta', response_id: 'premature', item_id: 'unheard', content_index: 0, delta: Buffer.alloc(960, 1).toString('base64') });
+    await vi.waitFor(() => expect(test.onUserInput).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(pauseMs);
+    expect(test.sendAudio).not.toHaveBeenCalled();
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'question' });
+    await vi.waitFor(() => expect(test.received).toContainEqual(expect.objectContaining({
+      type: 'conversation.item.truncate', item_id: 'unheard', audio_end_ms: 0,
+    })));
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'question' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'question' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'question', transcript: '上海为什么夏天这么闷热？' });
+    test.emit({ type: 'response.created', response: { id: 'answer' } });
+    test.emit({ type: 'response.output_audio.delta', response_id: 'answer', item_id: 'spoken', content_index: 0, delta: Buffer.alloc(960, 1).toString('base64') });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledExactlyOnceWith('answer', expect.any(Uint8Array)));
+    expect(test.send).not.toHaveBeenCalledWith('response.created', { responseId: 'premature' });
+  });
+
+  it('persists the extended Higgs transcript when Boson reuses an utterance ID', async () => {
+    const test = await setup(undefined, true, false, 'boson');
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'same' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'same' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'same' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'same', transcript: '等一下。' });
+    await vi.waitFor(() => expect(test.onUserInput).toHaveBeenCalledOnce());
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'same' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'same', transcript: '等一下。' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'same' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'same' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'same', transcript: '等一下，改成只讲断桥。' });
+    await vi.waitFor(() => expect(test.record).toHaveBeenCalledExactlyOnceWith({
+      itemId: 'same', role: 'user', text: '等一下，改成只讲断桥。', interrupted: false,
+    }));
+  });
+
+  it('keeps Higgs playback gated when commit arrives late', async () => {
+    const test = await setup(undefined, true, false, 'boson');
+    vi.useFakeTimers();
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'prefix' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'prefix' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_stopped', { utteranceId: 'prefix' }));
+    await vi.advanceTimersByTimeAsync(450);
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'prefix' });
+    test.emit({ type: 'response.created', response: { id: 'early' } });
+    test.emit({ type: 'response.output_audio.delta', response_id: 'early', item_id: 'spoken', content_index: 0, delta: Buffer.alloc(960, 1).toString('base64') });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(test.sendAudio).not.toHaveBeenCalled();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'prefix', transcript: '我想问一下。' });
+    await vi.waitFor(() => expect(test.onUserInput).toHaveBeenCalledOnce());
+    expect(test.sendAudio).not.toHaveBeenCalled();
+  });
+
+  it('waits for Higgs to commit a resumed semantic VAD segment', async () => {
+    const test = await setup(undefined, true, false, 'boson');
+    vi.useFakeTimers();
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'same' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'same' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_stopped', { utteranceId: 'same' }));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(test.send).not.toHaveBeenCalledWith('turn.committed', expect.anything());
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'same' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'same' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'same' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'same', transcript: '你好，请解释瑞利散射。' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('turn.committed', { turnId: 'same' }));
+    expect(test.send.mock.calls.filter(([type]) => type === 'input.speech_stopped')).toHaveLength(2);
+  });
 
   function delayUploadCompletion() {
     const original = WebSocket.prototype.send;

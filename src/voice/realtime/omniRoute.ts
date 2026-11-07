@@ -1,8 +1,9 @@
 import { requirePlatformVoiceModel } from '../platform-catalog.js';
-import { voiceSupportsMode, type VoiceProviderRoute } from '@xopcai/realtime-protocol/voice';
+import { HIGGS_REALTIME_REF, voiceSupportsMode, type HiggsVoice, type VoiceCallPreferences, type VoiceProviderRoute } from '@xopcai/realtime-protocol/voice';
 
 import type { Config } from '../../config/schema.js';
 import { getProviderAuthService } from '../../providers/provider-auth-service.js';
+import { getCredentialResolver } from '../../auth/credentials.js';
 import { BAILIAN_PLAN_HOST, BAILIAN_PLAN_PROVIDER } from '../token-plan.js';
 import { resolveXopcModelRouterUrl } from '../../providers/xopc-cloud-config.js';
 
@@ -15,9 +16,32 @@ export interface OmniRoute {
   maxSessionSeconds?: number;
 }
 
-export async function resolveOmniRoute(config: Config): Promise<OmniRoute> {
+export function legacyNaturalModel(config: Config): string | undefined {
+  const model = config.voice?.realtime?.omni;
+  return model ? `${model.provider}/${model.model}` : undefined;
+}
+
+export function selectedNaturalModel(config: Config, preferences?: VoiceCallPreferences): string | undefined {
+  return preferences?.naturalModel ?? (config.voice?.realtime?.boson?.defaultForNatural ? HIGGS_REALTIME_REF : legacyNaturalModel(config));
+}
+
+export async function resolveHiggsRoute(config: Config, voice?: HiggsVoice): Promise<OmniRoute> {
+  const apiKey = await getCredentialResolver().resolveApiKey('boson');
+  if (!apiKey) throw new Error('Boson API key is unavailable');
+  return {
+    route: { provider: 'boson', model: 'higgs-realtime', managed: false },
+    url: 'wss://api.boson.ai/v1/realtime?model=higgs-realtime',
+    apiKey,
+    voice: voice ?? config.voice.realtime.boson?.voice ?? 'default',
+    instructions: 'You are Ada. Speak naturally in the user’s language. Start with the answer, skip greetings and filler, and use one brief sentence unless the user asks for detail. You cannot use tools or take actions.',
+    maxSessionSeconds: 3600,
+  };
+}
+
+export async function resolveOmniRoute(config: Config, model = selectedNaturalModel(config), voice?: HiggsVoice): Promise<OmniRoute> {
+  if (model === HIGGS_REALTIME_REF) return resolveHiggsRoute(config, voice);
   const slice = config.voice?.realtime?.omni;
-  if (!slice) throw new Error('Natural conversation is not configured');
+  if (!slice || model !== legacyNaturalModel(config)) throw new Error('Selected natural voice model is unavailable');
   let maxSessionSeconds: number | undefined;
   let serviceVersion: number | undefined;
   if (slice.provider === 'xopc-cloud') {

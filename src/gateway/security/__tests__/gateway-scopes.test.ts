@@ -10,6 +10,7 @@ import {
 describe('gateway scopes', () => {
   it('requires voice configuration permission without granting general administration', () => {
     expect(requiredGatewayScope('PUT', '/api/voice/selection')).toBe('voice.configure');
+    expect(requiredGatewayScope('POST', '/api/voice/boson/reveal-api-key')).toBe('voice.configure');
     expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'voice.configure')).toBe(true);
     expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'gateway.admin')).toBe(false);
     expect(hasGatewayScope(DEFAULT_BROWSER_EXTENSION_SCOPES, 'voice.configure')).toBe(false);

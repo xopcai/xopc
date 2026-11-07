@@ -233,7 +233,7 @@ export class GatewayService {
   readonly phoneStreams = new PhoneStreamGateway(this.isRealtimePrincipalActive);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
     isPrincipalActive: this.isRealtimePrincipalActive,
-    getConversationContext: async (conversationId, expectedTranscriptId) => {
+    getConversationContext: async (conversationId, expectedTranscriptId, baseInstructions) => {
       const before = await this.sessionIndex.getSessionMetadata(conversationId);
       if (before?.transcriptId !== expectedTranscriptId) throw new Error('Conversation changed before voice connection');
       const messages = await this.sessionIndex.loadMessages(conversationId);
@@ -243,7 +243,7 @@ export class GatewayService {
       const persona = buildVoicePersonaContext({
         getConfig: () => this.config,
         conversationId,
-        maxChars: voicePersonaBudget(this.config.voice.realtime.omni.instructions),
+        maxChars: voicePersonaBudget(baseInstructions),
       });
       const context = {
         identity: persona.block,
@@ -254,7 +254,7 @@ export class GatewayService {
         getConfig: () => this.config, conversationId,
         workspaceId: getSessionConfig(conversationId)?.workingDirectoryOverride ?? profile.resolvedWorkspacePath,
         projectId: after?.projectId, history: messages,
-        maxChars: voiceMemoryBudget(this.config.voice.realtime.omni.instructions, context),
+        maxChars: voiceMemoryBudget(baseInstructions, context),
       });
       return { ...context, ...(memory ? { memory } : {}) };
     },

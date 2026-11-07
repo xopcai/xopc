@@ -6,6 +6,8 @@ import {
   decodeVoiceAudioFrame,
   encodeVoiceUplinkAudioFrame,
   type CreateVoiceSessionResponse,
+  type NaturalVoiceBackend,
+  type HiggsVoice,
   type VoiceMode,
   type VoiceClientMessage,
   type VoiceServerEvent,
@@ -20,6 +22,8 @@ interface VoiceSessionClientOptions {
   timingMetrics?: readonly string[];
   purpose: 'dictation' | 'conversation';
   mode?: VoiceMode;
+  naturalBackend?: NaturalVoiceBackend;
+  testHiggsVoice?: HiggsVoice;
   conversationId?: string;
   language?: 'zh' | 'en';
   logicalCallId?: string;
@@ -61,11 +65,11 @@ export class VoiceSessionClient {
     private readonly timingMetrics: readonly string[] = [],
   ) { this.receive = new VoiceReceiveState(session); }
 
-  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'conversationId' | 'signal'>): Promise<string[]> {
+  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'naturalBackend' | 'testHiggsVoice' | 'conversationId' | 'signal'>): Promise<string[]> {
     if (options.purpose === 'conversation' && options.conversationId) await new SessionManager().materialize(options.conversationId, 'voice');
     const result = await fetchJson<{ timingMetrics?: string[] }>(apiUrl('/api/voice/realtime/preflight'), {
       method: 'POST', signal: options.signal,
-      body: JSON.stringify({ purpose: options.purpose, mode: options.mode, conversationId: options.conversationId,
+      body: JSON.stringify({ purpose: options.purpose, mode: options.mode, naturalBackend: options.naturalBackend, testHiggsVoice: options.testHiggsVoice, conversationId: options.conversationId,
         supportedProtocolVersions: [VOICE_REALTIME_PROTOCOL_VERSION], mediaPreferences: ['websocket-pcm'] }),
     });
     return result.timingMetrics ?? [];
@@ -87,6 +91,8 @@ export class VoiceSessionClient {
             logicalCallId: options.logicalCallId, initiation: options.recovery ? 'recovery' : 'user', supportsOutputReady: true,
           } } : {}),
           ...(options.mode ? { mode: options.mode } : {}),
+          ...(options.naturalBackend ? { naturalBackend: options.naturalBackend } : {}),
+          ...(options.testHiggsVoice ? { testHiggsVoice: options.testHiggsVoice } : {}),
           ...(options.conversationId ? { conversationId: options.conversationId } : {}),
           supportedProtocolVersions: [VOICE_REALTIME_PROTOCOL_VERSION],
           mediaPreferences: ['websocket-pcm'],
