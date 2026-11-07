@@ -37,6 +37,7 @@ it('marks configuration chats with an icon in the existing list without a duplic
   const config = { ...session('config', 'Daily news setup'), customData: { automationSetup: { automationId: 'news' } } };
   const draft = { ...session('draft', 'Draft automation'), customData: { automationSetup: {} } };
   const run = { ...session('run', 'Automatic execution'), sourceChannel: 'automation' };
+  vi.mocked(automationApi.runs).mockResolvedValue({ runs: [], hasMore: false });
   // Mixed responses also cover cached sidebar data from a gateway predating the filter.
   vi.mocked(fetchSidebarChatList).mockResolvedValue({ ok: true, projects: { items: [], total: 0, limit: 12, offset: 0, hasMore: false },
     inbox: { items: [chat, config, draft, run], total: 4, limit: 20, offset: 0, hasMore: false }, pinned: [], layouts: {}, childrenByConversationId: {} });
@@ -53,6 +54,7 @@ it('marks configuration chats with an icon in the existing list without a duplic
   expect(chats.textContent).not.toContain('Automatic execution');
   expect(container.querySelectorAll('a[href="/chat/config"]')).toHaveLength(1);
   expect(chats.querySelectorAll('[title="Automation setup"] svg')).toHaveLength(2);
+  expect(chats.querySelector('button[aria-label="Expand execution history"]')).toBeNull();
   expect(listSessions).toHaveBeenCalledWith(expect.objectContaining({ excludeAutomationRuns: true, rootConversationsOnly: true }));
 });
 
@@ -82,7 +84,7 @@ it('expands executions below the configuration chat and opens the selected run',
   await act(async () => root.render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0 }}>
     <MemoryRouter><SidebarTaskList onNavigate={onNavigate} /><LocationProbe /></MemoryRouter>
   </SWRConfig>));
-  expect(automationApi.runs).not.toHaveBeenCalled();
+  expect(automationApi.runs).toHaveBeenCalledWith(1, 'news', { projectId: 'project-a' });
   expect(container.querySelectorAll('a[href="/chat/config"]')).toHaveLength(1);
   expect(container.querySelector('[aria-label="Execution history"]')).toBeNull();
   await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand execution history"]')!.click());
@@ -138,10 +140,10 @@ it('keeps the recent timeline independent of project previews and lists pinned c
     await act(async () => control!.click());
   };
   expect(container.querySelector('button[aria-pressed="true"][title="Recent"]')).not.toBeNull();
-  expect(container.querySelector('section[aria-label="Today"] a[aria-current="page"]')?.textContent).toContain('Another project');
+  expect(container.querySelector('section[aria-label="Today"] a[aria-current="page"]')?.getAttribute('title')).toContain('Another project');
   expect(container.querySelector('section[aria-label="Yesterday"]')?.textContent).toContain('Standalone chat');
   expect(container.querySelectorAll('a[href="/chat/pinned"]')).toHaveLength(1);
-  expect(container.querySelector('section[aria-label="Pinned"]')?.textContent).toContain('First project');
+  expect(container.querySelector('section[aria-label="Pinned"] a')?.getAttribute('title')).toContain('First project');
   expect(container.querySelector('input[type="search"]')).toBeNull();
 
   await click('Load more');
