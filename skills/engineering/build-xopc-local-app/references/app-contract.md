@@ -48,6 +48,16 @@ Before marking a draft ready:
 - UI remains usable at narrow desktop widths, with keyboard navigation and both color schemes.
 - The user-facing acceptance checks pass in preview.
 
+## Sandbox interactions and storage
+
+The host uses `sandbox="allow-scripts"`, without `allow-forms` or `allow-same-origin`.
+A submit button is blocked before the form's submit handler runs. Use `type="button"`, bind its click
+handler, and handle Enter explicitly on the input. Preserve labels and keyboard access.
+Browser origin storage is unavailable: use `createExtensionClient()` from the UI SDK, bundle it into
+`ui/`, await `client.whenReady()`, then call `client.storage.get/set/remove`. These methods use
+lease-isolated storage in previews and host-owned extension storage after installation. Catch and
+surface storage failures. Do not relax the sandbox or use network requests to work around it.
+
 ## Acceptance scenarios
 
 Use at most 10 scenarios and 20 steps per scenario. Targets are exact `data-xopc-test-id` values
@@ -60,4 +70,5 @@ using letters, numbers, dashes, or underscores. Supported steps are:
 - `{ "assert": "value_equals", "target": "title-input", "value": "" }`
 
 Do not use selectors, scripts, timing commands, network calls, or host APIs. The workbench runs these
-scenarios in an isolated preview and requires them to pass before installation.
+scenarios in an isolated preview. Failed or incomplete acceptance remains visible as advisory feedback;
+users can still install a statically valid draft.

@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('routes app development handoffs without capturing previews or other app routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/local-apps/app/development-conversation')?.id).toBe('local-app-development');
+    for (const path of ['/api/local-apps/app', '/api/local-apps/app/validate', '/api/local-apps/app/development-conversation/extra', '/api/local-apps/preview/token/draft/ui/index.html']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('local-app-development');
+    }
+  });
   it('routes preview leases separately from installed capabilities and public assets', () => {
     for (const path of ['/api/local-app-previews/app/sessions', '/api/local-app-previews/sessions/lease', '/api/local-app-previews/sessions/lease/requests']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('local-app-previews');

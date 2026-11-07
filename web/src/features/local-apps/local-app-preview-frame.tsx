@@ -31,7 +31,7 @@ export function LocalAppPreviewFrame({ appId, sourceHash, mode, resourceScopes, 
   const fail = (cause: unknown) => {
     const message = cause instanceof Error ? cause.message : String(cause);
     setError(message);
-    callback.current({ source: 'xopc-local-app-preview', version: 1, type: 'error', detail: { kind: 'script_error', message: message.slice(0, 500) } });
+    callback.current({ source: 'xopc-local-app-preview', version: 1, type: 'error', detail: { kind: 'runner_error', message: message.slice(0, 500) } });
   };
   const failure = useRef(fail); failure.current = fail;
 
@@ -45,9 +45,26 @@ export function LocalAppPreviewFrame({ appId, sourceHash, mode, resourceScopes, 
     const dispose = () => { active = false; controller.abort(); if (created) void remove(created.id); };
     window.addEventListener('pagehide', dispose);
     setSession(null); setError('');
-    void fetchJson<{ session: LocalAppPreviewSession }>(apiUrl(`/api/local-app-previews/${encodeURIComponent(appId)}/sessions`), {
-      method: 'POST', signal: controller.signal, body: JSON.stringify({ sourceHash, mode, resourceScopes, scenarioId }),
-    }).then(result => {
+    const create = async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await fetchJson<{ session: LocalAppPreviewSession }>(apiUrl(`/api/local-app-previews/${encodeURIComponent(appId)}/sessions`), {
+            method: 'POST', signal: controller.signal, body: JSON.stringify({ sourceHash, mode, resourceScopes, scenarioId }),
+          });
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          if (!active || attempt >= 2 || !/Too many isolated preview workers|Close another preview/.test(message)) throw cause;
+          // Give revoked workers time to exit before asking the host to reclaim an idle slot again.
+          await new Promise<void>(resolve => {
+            const done = () => { clearTimeout(timer); controller.signal.removeEventListener('abort', done); resolve(); };
+            const timer = setTimeout(done, 1000);
+            controller.signal.addEventListener('abort', done, { once: true });
+          });
+          if (!active) throw cause;
+        }
+      }
+    };
+    void create().then(result => {
       created = LocalAppPreviewSessionSchema.parse(result.session);
       if (created.appId !== appId || created.sourceHash !== sourceHash || created.mode !== mode) throw new Error('Preview authorization does not match the requested draft');
       if (!active) { void remove(created.id); return; }
@@ -79,7 +96,7 @@ export function LocalAppPreviewFrame({ appId, sourceHash, mode, resourceScopes, 
     if (session) routerRef.current?.sendEvent(session.extensionId, 'theme.changed', buildThemeInfo(theme));
   }, [session, theme]);
 
-  const src = session ? `${apiUrl(session.previewUrl)}${session.previewUrl.includes('?') ? '&' : '?'}xopcHostRun=1${scenarioId ? `&xopcAcceptance=1&xopcScenario=${encodeURIComponent(scenarioId)}` : ''}` : '';
+  const src = session ? `${apiUrl(session.previewUrl)}${session.previewUrl.includes('?') ? '&' : '?'}xopcHostRun=1&xopcPreviewMode=${session.mode}${scenarioId ? `&xopcAcceptance=1&xopcScenario=${encodeURIComponent(scenarioId)}` : ''}` : '';
   if (error && !hidden) return <p role="alert" className="p-4 text-sm text-danger">{error}</p>;
   if (!session) return hidden ? null : <Skeleton className="min-h-0 w-full flex-1" />;
   return <iframe ref={iframeRef} key={session.id} title={title} src={src} sandbox="allow-scripts" referrerPolicy="no-referrer"

@@ -81,6 +81,7 @@ export const LocalAppRecordSchema = z.strictObject({
 export const LocalAppAcceptanceRunSchema = LocalAppAcceptanceOutputSchema;
 
 export const LocalAppDetailSchema = LocalAppRecordSchema.extend({
+  developmentConversationId: z.string().min(1).optional(),
   draftPreviewUrl: z.string().startsWith('/api/local-apps/preview/'),
   permissions: z.array(z.string()),
   releases: z.array(LocalAppReleaseSchema),
@@ -170,7 +171,7 @@ export const LocalAppFixGuidanceSchema = z.strictObject({
 });
 
 export const LocalAppRuntimeIssueSchema = z.strictObject({
-  kind: z.enum(['script_error', 'unhandled_rejection']),
+  kind: z.enum(['script_error', 'unhandled_rejection', 'runner_error']),
   message: z.string().trim().min(1).max(500),
   filename: z.string().max(500).optional(),
   line: z.number().nonnegative().optional(),

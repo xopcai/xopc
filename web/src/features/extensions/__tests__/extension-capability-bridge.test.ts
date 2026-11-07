@@ -20,6 +20,18 @@ function setup(permissions = ['capability:xopc.notes.list']) {
 }
 const call = { majorVersion: 1, descriptorDigest: 'a'.repeat(64), input: {} };
 describe('extension capability bridge', () => {
+  it('allows a revoked frame to request a host review without acquiring replacement authority', async () => {
+    const { router, reply, send } = setup([]);
+    const iframe = document.querySelector('iframe')!;
+    router.registerIframe('trusted', iframe, [], 'b'.repeat(64), 'old-grant', true);
+    const review = vi.fn(); window.addEventListener('extension-review-permissions', review);
+    cleanups.push(() => window.removeEventListener('extension-review-permissions', review));
+    send('ui.reviewPermissions', {});
+    await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+    expect(review).toHaveBeenCalledTimes(1);
+    expect((review.mock.calls[0][0] as CustomEvent).detail.extensionId).toBe('trusted');
+    expect(router.getGrantRevision('trusted')).toBe('old-grant'); expect(mocks.fetch).not.toHaveBeenCalled();
+  });
   it.each(['unregister', 'logout', 'dispose'] as const)('aborts a delegation transport on %s', change => {
     const { router } = setup(['capability:xopc.agent.delegate']);
     const signal = router.delegationSignal('trusted');

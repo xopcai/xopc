@@ -39,6 +39,30 @@ async function render(sourceHash = hash, runKey = 0) {
 }
 
 describe('snapshot preview frame authority', () => {
+  it('retries resource exhaustion and reports persistent host failures as runner errors', async () => {
+    vi.useFakeTimers();
+    const onMessage = vi.fn();
+    mocks.fetch.mockRejectedValue(new Error('Too many isolated preview workers'));
+    try {
+      await act(async () => root.render(<LocalAppPreviewFrame appId="app" sourceHash={hash} mode="sample" runKey={0} title="Preview" onMessage={onMessage} />));
+      expect(onMessage).not.toHaveBeenCalled();
+      await act(async () => vi.advanceTimersByTimeAsync(2000));
+      expect(mocks.fetch).toHaveBeenCalledTimes(3);
+      expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ detail: expect.objectContaining({ kind: 'runner_error' }) }));
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('recovers on the next preview allocation without reporting an app error', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockRejectedValueOnce(new Error('Too many isolated preview workers'));
+    try {
+      await render();
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+      expect(container.querySelector('iframe')).not.toBeNull();
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
   it('uses an immutable preview and registers only the host-created lease', async () => {
     await render();
     expect(container.querySelector('iframe')?.getAttribute('src')).toContain(`/snapshots/${hash}/ui/index.html?xopcHostRun=1`);

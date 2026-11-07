@@ -46,7 +46,11 @@ change, preserve working behaviour, and leave the draft previewable after every 
   feedback.
 - Support light and dark color schemes without assuming access to the host DOM.
 - Keep scripts and styles local. The preview CSP blocks network access and inline scripts.
-- Use browser storage only for user-owned local preferences or app data.
+- The iframe permits scripts but has an opaque origin. Use the bundled `@xopcai/extension-ui-sdk`
+  client and `client.storage` for app data; never use `localStorage`, `sessionStorage`, or IndexedDB.
+  Bundle the SDK into a local `ui/` asset, await `client.whenReady()`, and disable controls until ready.
+- Native form submission is blocked by the sandbox. Use `type="button"` actions and explicit keyboard
+  handlers for Enter. Do not rely on a submit button or form `submit` listener to run app actions.
 - Ask before expanding permissions. A permission change must be visible in the install review.
 - Mark scenario targets with stable `data-xopc-test-id` values. Never encode CSS selectors or
   executable JavaScript in acceptance scenarios.

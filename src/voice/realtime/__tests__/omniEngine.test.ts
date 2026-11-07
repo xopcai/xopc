@@ -616,9 +616,28 @@ describe('Omni voice engine', () => {
     const callbacks = delayUploadCompletion();
     engine.appendAudio(Buffer.alloc(640));
     engine.appendAudio(Buffer.alloc(640));
-    callbacks.shift()!(new Error('Connection reset'));
-    expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ code: 'OMNI_CONNECTION_FAILED', recoverable: false }));
+    const err = Object.assign(new Error('Connection reset'), { code: 'ECONNRESET' });
+    callbacks.shift()!(err);
+    expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ code: 'OMNI_CONNECTION_FAILED',
+      message: expect.stringContaining('connection to the voice service was lost'), recoverable: false }));
     expect(callbacks).toHaveLength(0);
+  });
+
+  it('reports a dropped socket connection once', async () => {
+    const test = await setup();
+    let client!: WebSocket;
+    const original = WebSocket.prototype.send;
+    vi.spyOn(WebSocket.prototype, 'send').mockImplementation(function (this: WebSocket, ...args) {
+      client = this;
+      return original.apply(this, args);
+    });
+    engine.appendAudio(Buffer.alloc(640));
+    const err = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+    client.emit('error', err);
+    expect(test.send.mock.calls.filter(([type]) => type === 'session.error')).toEqual([
+      ['session.error', expect.objectContaining({ code: 'OMNI_CONNECTION_FAILED', recoverable: false,
+        message: expect.stringContaining('reference: test-call') })],
+    ]);
   });
 
   it('configures native audio and sends PCM without invoking STT or Agent', async () => {

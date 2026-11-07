@@ -163,6 +163,7 @@ try {
   }
   const save = () => page.getByRole('button', { name: /^(Add to sidebar|添加到左侧导航)$/ });
   async function accepted() {
+    await page.getByText(/^(Draft accepted|草稿已通过验收)$/, { exact: true }).waitFor();
     await page.waitForFunction(() => {
       const buttons = [...document.querySelectorAll('button')];
       return buttons.some(button => /^(Add to sidebar|添加到左侧导航)$/.test(button.textContent?.trim() ?? '') && !button.disabled);
@@ -250,6 +251,24 @@ try {
   await page.screenshot({ path: join(evidence, 'isolated-acceptance.png') });
   assert.equal((await request(`/api/local-apps/${app.id}`)).app.installationState, 'not_installed');
   console.log('PASS: immutable draft binding, edit invalidates access without automatic regrant, repeated delayed-load/async-write acceptance passes without retries or production effects.');
+  const handoff = await request(`/api/local-apps/${app.id}/development-conversation`, 'POST');
+  assert.equal((await request(`/api/local-apps/${app.id}/development-conversation`, 'POST')).conversationId, handoff.conversationId);
+  const { app: advisory } = await request('/api/local-apps', 'POST', { name: 'Advisory acceptance fixture', idea: 'Install with a failing scenario' });
+  writeFileSync(join(advisory.workspaceRoot, '.xopc', 'acceptance.json'), JSON.stringify({ schemaVersion: 1, scenarios: [{
+    id: 'expected-failure', name: 'Advisory failure', steps: [{ assert: 'text_visible', text: 'Deliberately missing acceptance text' }],
+  }] }));
+  await page.goto(`${origin}/#/local-apps/${advisory.id}`);
+  await page.getByText(/^(Acceptance needs attention|自动验收未通过)$/, { exact: true }).waitFor();
+  await save().click();
+  const installDialog = page.getByRole('dialog');
+  await installDialog.getByText(/Automatic acceptance failed or is incomplete|自动验收未通过或尚未完成/).waitFor();
+  await installDialog.getByText(/Deliberately missing acceptance text/).waitFor();
+  await installDialog.getByRole('button', { name: /^(Install|确认安装)$/, exact: true }).click();
+  await page.getByRole('button', { name: /^(Disable|禁用)$/, exact: true }).waitFor();
+  const installedAdvisory = (await request(`/api/local-apps/${advisory.id}`)).app;
+  assert.equal(installedAdvisory.installationState, 'installed');
+  assert.equal(installedAdvisory.acceptanceRuns[0].status, 'failed');
+  console.log('PASS: stable app development handoff and installation with failed acceptance, visible diagnostics retained.');
   db.close();
 } catch (error) {
   console.error('Gateway output:', output);

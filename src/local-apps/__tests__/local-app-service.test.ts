@@ -39,6 +39,7 @@ import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
 import { createXopcUseTool } from '../../agent/tools/xopc-use-tool.js';
 import { ChatPreviewService } from '../../chat-previews/index.js';
+import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { listAutomationEvents } from '../../automations/events/index.js';
 
@@ -79,6 +80,31 @@ describe('LocalAppService', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(paths.root, { recursive: true, force: true });
+  });
+
+  it('binds a dedicated development conversation instead of reusing project Coder chats', () => {
+    const app = service.create({ name: 'Bound app', idea: 'Test binding' });
+    const unrelated = createConversation({ agentId: 'coder', projectId: app.projectId, name: 'Unrelated topic' });
+    const id = service.resolveDevelopmentConversation(app.id);
+    expect(id).not.toBe(unrelated.key);
+    expect(service.resolveDevelopmentConversation(app.id)).toBe(id);
+    expect(service.get(app.id)?.developmentConversationId).toBe(id);
+    expect(service.resolveDevelopmentConversation(service.create({ name: 'Other app', idea: 'Other' }).id)).not.toBe(id);
+  });
+
+  it('recovers only the original workbench handoff for legacy apps', () => {
+    const app = service.create({ name: 'Legacy app', idea: 'Legacy' });
+    const original = createConversation({ agentId: 'coder', projectId: app.projectId }, app.workspaceRoot);
+    const unrelated = createConversation({ agentId: 'coder', projectId: app.projectId }, app.workspaceRoot);
+    appendTranscriptEntry(original.key, { role: 'user', content: '请基于 APP_BRIEF.md 完成这个本地应用的首版。先检查现有草稿，再实现最小可用版本并运行校验；完成后告诉我可以如何预览。', timestamp: Date.now() });
+    appendTranscriptEntry(unrelated.key, { role: 'user', content: 'Explain GSB', timestamp: Date.now() });
+    expect(service.resolveDevelopmentConversation(app.id)).toBe(original.key);
+  });
+
+  it('records the creating Coder conversation as app provenance', () => {
+    const original = createConversation({ agentId: 'coder' });
+    const app = service.create({ name: 'Created here', idea: 'Use current developer' }, original.key);
+    expect(service.resolveDevelopmentConversation(app.id)).toBe(original.key);
   });
 
   function acceptCurrentDraft(appId: string) {
@@ -230,7 +256,11 @@ describe('LocalAppService', () => {
 
   it('orders install, disable and uninstall and releases the lock after rejection', async () => {
     const app = service.create({ name: 'Ordered app', idea: 'Serialize release lifecycle' });
-    await expect(service.install(app.id)).rejects.toThrow('acceptance');
+    const entry = join(app.workspaceRoot, '.xopc/runtime/local-ui.js');
+    const trusted = readFileSync(entry, 'utf8');
+    writeFileSync(entry, 'export default { untrusted: true };');
+    await expect(service.install(app.id)).rejects.toThrow();
+    writeFileSync(entry, trusted);
     acceptCurrentDraft(app.id);
     await Promise.all([service.install(app.id), service.setEnabled(app.id, false), service.uninstall(app.id)]);
     expect(service.get(app.id)?.installationState).not.toBe('installed');
@@ -398,10 +428,26 @@ describe('LocalAppService', () => {
     expect(service.materializeSnapshot(app.id).sourceHash).toBe(second.sourceHash);
   });
 
+  it('allows installing drafts with missing or failed acceptance while retaining their diagnostics', async () => {
+    const untested = service.create({ name: 'Untested', idea: 'Install before acceptance' });
+    expect((await service.install(untested.id)).installationState).toBe('installed');
+    const failed = service.create({ name: 'Failed scenario', idea: 'Allow installing failed scenarios' });
+    const validation = service.validate(failed.id);
+    const result = service.recordAcceptance(failed.id, { sourceHash: validation.sourceHash!, status: 'failed', interactiveCount: 1,
+      checks: [
+        { id: 'document', status: 'passed', message: 'Loaded' },
+        { id: 'content', status: 'passed', message: 'Visible' },
+        { id: 'interaction', status: 'passed', message: 'Named' },
+        { id: 'criteria', status: 'failed', message: 'Book was not added' },
+      ] });
+    const installed = await service.install(failed.id);
+    expect(installed.installationState).toBe('installed');
+    expect(installed.acceptanceRuns).toContainEqual(expect.objectContaining({ id: result.id, status: 'failed' }));
+  });
+
   it('installs the current draft, enables it, and preserves its stable id', async () => {
     config = { extensions: { disabled: [] } } as unknown as Config;
     const created = service.create({ name: 'Focus Board', idea: 'A simple personal focus board' });
-    await expect(service.install(created.id)).rejects.toThrow('has not passed automatic acceptance');
     const acceptance = acceptCurrentDraft(created.id);
 
     const installed = await service.install(created.id);

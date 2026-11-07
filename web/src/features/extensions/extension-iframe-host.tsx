@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { LocalAppResourceScopes } from '@xopcai/gateway-contract';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -10,7 +10,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 import { buildExtensionAssetUrl } from './extension-asset-url';
 import { ExtensionPermissionDialog } from './extension-permission-dialog';
-import { confirmExtensionUiGrant, resolveExtensionUiGrant } from './extension-authoritative-grants';
+import { confirmExtensionUiGrant, resolveExtensionUiGrant, type ExtensionUiGrant } from './extension-authoritative-grants';
 import { useExtensionRouter } from './extension-provider';
 import { buildThemeInfo } from './theme-bridge';
 
@@ -68,6 +68,7 @@ export function ExtensionIframeHost({
   const namespace = useGatewayStore(state => state.conversationId);
   const generation = useRef(0);
   const confirming = useRef(false);
+  const [reviewGrant, setReviewGrant] = useState<ExtensionUiGrant | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const resolved = useThemeStore((s) => s.resolved);
   const displayName = extensionName?.trim() || extensionId;
@@ -95,6 +96,7 @@ export function ExtensionIframeHost({
   useEffect(() => {
     let active = true;
     confirming.current = false;
+    setReviewGrant(null);
     dispatch({ type: 'patch', patch: { allowed: false, dialogOpen: false, grantResolved: false, grantError: null, manifestDigest: null, grantedPermissions: [] } });
     void resolveExtensionUiGrant(extensionId).then((grant) => {
       if (!active) return;
@@ -131,6 +133,20 @@ export function ExtensionIframeHost({
     (open: boolean) => dispatch({ type: 'patch', patch: { dialogOpen: open } }),
     [],
   );
+
+  useEffect(() => {
+    const review = (event: Event) => {
+      if ((event as CustomEvent<{ extensionId: string }>).detail?.extensionId !== extensionId) return;
+      const current = generation.current;
+      void resolveExtensionUiGrant(extensionId).then(grant => {
+        if (current !== generation.current || useGatewayStore.getState().baseUrl !== gatewayUrl || useGatewayStore.getState().conversationId !== namespace) return;
+        // Keep the running frame's authority unchanged until explicit confirmation replaces the frame.
+        setReviewGrant(grant); dispatch({ type: 'patch', patch: { dialogOpen: true, grantError: null } });
+      }).catch(() => dispatch({ type: 'patch', patch: { grantError: t.loadFailed } }));
+    };
+    window.addEventListener('extension-review-permissions', review);
+    return () => window.removeEventListener('extension-review-permissions', review);
+  }, [extensionId, gatewayUrl, namespace, t.loadFailed]);
 
   const src = useMemo(
     () => buildExtensionAssetUrl(extensionId, entrypoint),
@@ -171,17 +187,21 @@ export function ExtensionIframeHost({
       : { width: '100%', height: dynamicHeight, border: 'none' };
 
   const handleConfirmGrant = (resourceScopes?: LocalAppResourceScopes) => {
-    if (confirming.current || !ui.manifestDigest) return;
+    const reviewedDigest = reviewGrant?.manifestDigest ?? ui.manifestDigest;
+    if (confirming.current || !reviewedDigest) return;
     confirming.current = true;
     const current = generation.current;
     const isCurrent = () => generation.current === current && useGatewayStore.getState().baseUrl === gatewayUrl
       && useGatewayStore.getState().conversationId === namespace;
-    const confirmation = ui.localApp ? confirmExtensionUiGrant(extensionId, ui.manifestDigest, resourceScopes)
-      : confirmExtensionUiGrant(extensionId, ui.manifestDigest);
+    const confirmation = ui.localApp ? confirmExtensionUiGrant(extensionId, reviewedDigest, resourceScopes)
+      : confirmExtensionUiGrant(extensionId, reviewedDigest);
     void confirmation.then((grant) => {
       if (!isCurrent()) return;
-      if (!grant.granted || grant.extensionId !== extensionId || grant.manifestDigest !== ui.manifestDigest) throw new Error('Permission grant was not persisted');
-      dispatch({ type: 'patch', patch: { allowed: true, dialogOpen: false, grantError: null, grantRevision: grant.grantRevision, resourceScopes: grant.resourceScopes } });
+      if (!grant.granted || grant.extensionId !== extensionId || grant.manifestDigest !== reviewedDigest) throw new Error('Permission grant was not persisted');
+      setReviewGrant(null);
+      dispatch({ type: 'patch', patch: { allowed: true, dialogOpen: false, grantError: null, manifestDigest: grant.manifestDigest,
+        grantedPermissions: grant.permissions, grantRevision: grant.grantRevision, resourceScopes: grant.resourceScopes,
+        reloadKey: allowed ? reloadKey + 1 : reloadKey } });
     }).catch((cause) => {
       if (!isCurrent()) return;
       dispatch({
@@ -191,6 +211,11 @@ export function ExtensionIframeHost({
     }).finally(() => { if (isCurrent()) confirming.current = false; });
   };
 
+  const permissionDialog = <ExtensionPermissionDialog open={dialogOpen} onOpenChange={setDialogOpen} extensionId={extensionId}
+    extensionName={displayName} permissions={reviewGrant?.permissions ?? ui.grantedPermissions} localApp={ui.localApp}
+    resourceScopes={reviewGrant?.resourceScopes ?? ui.resourceScopes}
+    error={grantError} confirmDisabled={!(reviewGrant?.manifestDigest ?? ui.manifestDigest)} onConfirm={handleConfirmGrant} />;
+
   if (!grantResolved) {
     return <div className={`${className ?? ''} min-h-32 animate-pulse rounded-lg bg-surface-inset`} />;
   }
@@ -198,18 +223,7 @@ export function ExtensionIframeHost({
   if (!allowed) {
     return (
       <>
-        <ExtensionPermissionDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          extensionId={extensionId}
-          extensionName={displayName}
-          permissions={ui.grantedPermissions}
-          localApp={ui.localApp}
-          resourceScopes={ui.resourceScopes}
-          error={grantError}
-          confirmDisabled={!ui.manifestDigest}
-          onConfirm={handleConfirmGrant}
-        />
+        {permissionDialog}
         {!dialogOpen ? (
           <div
             className={
@@ -235,6 +249,8 @@ export function ExtensionIframeHost({
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 flex-col">
+      {permissionDialog}
+      {grantError ? <p role="alert" className="p-3 text-sm text-danger">{grantError}</p> : null}
       {loadError ? (
         <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-fg">
           <p>{t.loadFailed}</p>

@@ -32,7 +32,7 @@ describe('AcceptanceScenarioList', () => {
     expect(html).toContain('Rerun Delete an item');
   });
 
-  it('offers Coder diagnostics when the runner failed', () => {
+  it('offers a preview retry when the runner failed', () => {
     const html = renderToStaticMarkup(
       <AcceptanceScenarioList
         scenarios={[scenarios[0]]}
@@ -53,7 +53,8 @@ describe('AcceptanceScenarioList', () => {
       />,
     );
 
-    expect(html).toContain('Ask Coder to fix');
+    expect(html).not.toContain('Ask Coder to fix');
+    expect(html).toContain('Retry preview');
     expect(html).toContain('Rerun Create an item');
   });
 

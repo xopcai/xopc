@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ resolve: vi.fn(), confirm: vi.fn(), router: { 
 vi.mock('../extension-authoritative-grants', () => ({ resolveExtensionUiGrant: mocks.resolve, confirmExtensionUiGrant: mocks.confirm }));
 vi.mock('../extension-provider', () => ({ useExtensionRouter: () => mocks.router }));
 vi.mock('../extension-permission-dialog', () => ({ ExtensionPermissionDialog: (props: { permissions: string[]; confirmDisabled?: boolean; onConfirm: () => void }) =>
-  <button disabled={props.confirmDisabled} onClick={props.onConfirm}>Allow {props.permissions.join(',')}</button> }));
+  <button disabled={props.confirmDisabled} onClick={() => props.onConfirm()}>Allow {props.permissions.join(',')}</button> }));
 import { ExtensionIframeHost } from '../extension-iframe-host';
 
 const digest = 'a'.repeat(64);
@@ -24,6 +24,23 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 async function render(node: ReactNode) { await act(async () => root.render(node)); }
 const button = () => container.querySelector('button')!;
 describe('extension grant review', () => {
+  it('keeps the old frame authority during review and replaces the frame only after confirmation', async () => {
+    const old = { ...grant, granted: true, appId: 'app', grantRevision: 'old-grant' };
+    mocks.resolve.mockResolvedValue(old);
+    await render(<ExtensionIframeHost extensionId="fixture" entrypoint="ui/index.html" />);
+    const originalFrame = container.querySelector('iframe'); expect(originalFrame).not.toBeNull();
+    const next = { ...old, manifestDigest: 'b'.repeat(64), grantRevision: 'new-grant', permissions: ['theme', 'storage'] };
+    mocks.resolve.mockResolvedValue(next);
+    await act(async () => window.dispatchEvent(new CustomEvent('extension-review-permissions', { detail: { extensionId: 'fixture' } })));
+    expect(container.querySelector('iframe') === originalFrame).toBe(true);
+    expect(mocks.router.registerIframe.mock.calls.at(-1)?.[3]).toBe(digest);
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    mocks.confirm.mockResolvedValue(next);
+    await act(async () => button().click());
+    expect(mocks.confirm).toHaveBeenCalledWith('fixture', next.manifestDigest, undefined);
+    expect(container.querySelector('iframe') === originalFrame).toBe(false);
+    expect(mocks.router.registerIframe.mock.calls.at(-1)?.[3]).toBe(next.manifestDigest);
+  });
   it('shows authoritative permissions and confirms the exact reviewed digest', async () => {
     mocks.confirm.mockResolvedValue({ ...grant, granted: true });
     await render(<ExtensionIframeHost extensionId="fixture" entrypoint="ui/index.html" permissions={['config.write']} />);

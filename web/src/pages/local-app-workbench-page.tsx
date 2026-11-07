@@ -33,6 +33,7 @@ import {
   createLocalApp,
   getLocalApp,
   getLocalAppFixGuidance,
+  resolveLocalAppDevelopmentConversation,
   installLocalApp,
   recordLocalAppAcceptance,
   rollbackLocalApp,
@@ -44,10 +45,7 @@ import {
   type LocalAppDiagnostic,
   type LocalAppValidationResult,
 } from '@/features/local-apps/api';
-import {
-  localAppConversationUrl,
-  selectLocalAppCoderSession,
-} from '@/features/local-apps/conversation';
+import { localAppConversationUrl } from '@/features/local-apps/conversation';
 import {
   formatLocalAppRuntimeIssue,
   getLocalAppAcceptanceFailures,
@@ -64,7 +62,6 @@ import {
   AcceptanceScenarioList,
   type LocalAppAcceptanceScenarioSummary,
 } from '@/features/local-apps/acceptance-scenario-list';
-import { fetchProjectSessions } from '@/features/projects/api';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -189,15 +186,9 @@ export function LocalAppWorkbenchPage() {
   }, [baseAcceptanceResult, criteriaResult, validation?.acceptanceScenarioCount]);
 
   const openCoderConversation = useCallback(async (targetApp: LocalAppDetail, draft?: string) => {
-    const sessions = await fetchProjectSessions(targetApp.projectId);
-    const session = selectLocalAppCoderSession(sessions);
-    if (!session) {
-      const params = new URLSearchParams({ projectId: targetApp.projectId, ...(draft ? { draft } : {}) });
-      navigate(`/chat/new?${params}`, { state: { agentId: 'coder', forceNewChat: true } });
-      return;
-    }
-    coderConversationIdsRef.current.add(session.key);
-    navigate(localAppConversationUrl(session.key, draft));
+    const conversationId = await resolveLocalAppDevelopmentConversation(targetApp.id);
+    coderConversationIdsRef.current.add(conversationId);
+    navigate(localAppConversationUrl(conversationId, draft));
   }, [navigate]);
 
   const runDraftChecks = useCallback(async (refreshPreview = true): Promise<LocalAppValidationResult | null> => {
@@ -225,15 +216,7 @@ export function LocalAppWorkbenchPage() {
 
   useEffect(() => {
     if (!app) return;
-    let cancelled = false;
-    void fetchProjectSessions(app.projectId).then((sessions) => {
-      if (cancelled) return;
-      coderConversationIdsRef.current = new Set(
-        sessions
-          .filter((session) => (session.routing?.agentId ?? session.agentId)?.toLowerCase() === 'coder')
-          .map((session) => session.key),
-      );
-    }).catch(() => {});
+    coderConversationIdsRef.current = new Set(app.developmentConversationId ? [app.developmentConversationId] : []);
     const onTranscriptUpdate = (event: Event) => {
       const key = (event as CustomEvent<{ key?: string }>).detail?.key;
       if (!key || !coderConversationIdsRef.current.has(key)) return;
@@ -245,7 +228,6 @@ export function LocalAppWorkbenchPage() {
     };
     window.addEventListener('session-transcript-updated', onTranscriptUpdate);
     return () => {
-      cancelled = true;
       window.removeEventListener('session-transcript-updated', onTranscriptUpdate);
       if (validationTimerRef.current !== null) window.clearTimeout(validationTimerRef.current);
     };
@@ -500,6 +482,11 @@ export function LocalAppWorkbenchPage() {
         locale: zh ? 'zh' : 'en',
         diagnostics,
       });
+      if (guidance.action === 'retry') {
+        setPreviewKey(value => value + 1);
+        onRunAllScenarios();
+        return;
+      }
       await onContinueDevelopment(guidance.prompt);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause));
@@ -509,9 +496,9 @@ export function LocalAppWorkbenchPage() {
   function onAskCoderToFix() {
     const diagnostics: LocalAppDiagnostic[] = [
       ...(validation?.issues.map((issue) => ({ phase: 'build' as const, code: issue.code, message: issue.message })) ?? []),
-      ...(runtimeIssue ? [{ phase: 'runtime' as const, code: runtimeIssue.kind, message: formatLocalAppRuntimeIssue(runtimeIssue) }] : []),
+      ...(runtimeIssue ? [{ phase: runtimeIssue.kind === 'runner_error' ? 'runner' as const : 'runtime' as const, code: runtimeIssue.kind, message: formatLocalAppRuntimeIssue(runtimeIssue) }] : []),
       ...(acceptanceResult?.checks
-        .filter((check) => check.status === 'failed' && check.id !== 'criteria')
+        .filter((check) => check.status === 'failed' && check.id !== 'criteria' && runtimeIssue?.kind !== 'runner_error')
         .map((check) => ({ phase: 'acceptance' as const, code: check.id, message: check.message })) ?? []),
       ...Object.values(criteriaResults)
         .filter((result) => result.status === 'failed')
@@ -524,7 +511,7 @@ export function LocalAppWorkbenchPage() {
         ? [{ phase: 'boot' as const, code: 'boot_timeout', message: 'Preview did not report ready within 7 seconds.' }]
         : []),
     ];
-    void continueWithFixGuidance(diagnostics);
+    void continueWithFixGuidance(diagnostics.filter(diagnostic => diagnostic.phase !== 'runner'));
   }
 
   function onRunAllScenarios() {
@@ -543,8 +530,9 @@ export function LocalAppWorkbenchPage() {
     scenario: LocalAppAcceptanceScenarioSummary,
     result: LocalAppCriteriaScenarioResult,
   ) {
+    if (result.failureKind === 'runner') { onRunScenario(scenario.id); return; }
     void continueWithFixGuidance([{
-      phase: result.failureKind === 'runner' ? 'runner' : 'acceptance',
+      phase: 'acceptance',
       code: scenario.id,
       message: `${scenario.name}: ${result.message}`,
     }]);
@@ -564,29 +552,16 @@ export function LocalAppWorkbenchPage() {
     ? previousAcceptanceRun.checks.filter((check) => check.status === 'failed').map((check) => check.message)
     : [];
   const hasCoderFixableIssue = validation?.status === 'failed'
-    || runtimeHealth === 'failed'
-    || runtimeHealth === 'timeout'
-    || acceptanceResult?.status === 'failed'
-    || Object.values(criteriaResults).some((result) => result.status === 'failed');
+    || (runtimeHealth === 'failed' && runtimeIssue?.kind !== 'runner_error')
+    || acceptanceResult?.checks.some(check => check.status === 'failed' && check.id !== 'criteria' && runtimeIssue?.kind !== 'runner_error')
+    || Object.values(criteriaResults).some((result) => result.status === 'failed' && result.failureKind !== 'runner');
   const fixedAcceptanceCount = previousAcceptanceFailures.filter((message) => (
     !currentAcceptanceFailures.includes(message)
   )).length;
 
   async function onReviewInstall() {
     const result = await runDraftChecks(false);
-    if (result?.status === 'healthy' && result.sourceHash !== acceptanceSourceHash) {
-      previewSourceHashRef.current = result.sourceHash ?? null;
-      setCriteriaScenarioIndex(0);
-      setPreviewKey((value) => value + 1);
-      return;
-    }
-    if (result?.status === 'healthy'
-      && runtimeHealth === 'healthy'
-      && acceptanceResult?.status === 'passed'
-      && currentAcceptanceRun
-      && currentAcceptanceRun.sourceHash === result.sourceHash) {
-      setReviewOpen(true);
-    }
+    if (result?.status === 'healthy') setReviewOpen(true);
   }
 
   if (isNew) {
@@ -657,7 +632,7 @@ export function LocalAppWorkbenchPage() {
         </div>
         {validation?.sourceHash ? <LocalAppPreviewFrame appId={app.id} sourceHash={validation.sourceHash} mode={effectivePreviewMode} resourceScopes={effectivePreviewScopes}
           runKey={visiblePreviewKey} title={`${app.name} preview`} onMessage={value => previewMessageRef.current?.(value)} /> : <Skeleton className="min-h-0 flex-1" />}
-        {validation?.status === 'healthy' && validation.sourceHash && acceptanceScenarios.length > 0 ? <LocalAppPreviewFrame
+        {validation?.status === 'healthy' && validation.sourceHash && acceptanceScenarios.length > 0 && criteriaRunningTarget !== null ? <LocalAppPreviewFrame
           appId={app.id} sourceHash={validation.sourceHash} mode="isolated" hidden
           scenarioId={criteriaRunTarget === 'all' ? acceptanceScenarios[criteriaScenarioIndex]?.id : criteriaRunTarget}
           runKey={previewKey * 1000000 + criteriaRunKey} title={`${app.name} acceptance runner`}
@@ -731,6 +706,7 @@ export function LocalAppWorkbenchPage() {
                   onAskCoder={onAskCoderToFixScenario}
                 />
               </div>
+              {runtimeIssue?.kind === 'runner_error' || runtimeHealth === 'timeout' ? <Button className="mt-3 w-full" onClick={() => { setPreviewKey(value => value + 1); onRunAllScenarios(); }}>{zh ? '恢复资源并重试' : 'Retry preview'}</Button> : null}
               {hasCoderFixableIssue ? <Button className="mt-3 w-full" onClick={onAskCoderToFix} disabled={chatBusy}><MessageSquareCode className="size-4" />{zh ? '让 Coder 修复' : 'Ask Coder to fix'}</Button> : null}
             </div>
           ) : <Skeleton className="mt-2 h-12 rounded-lg" />}
@@ -742,7 +718,7 @@ export function LocalAppWorkbenchPage() {
           {app.installationState === 'installed' ? <LocalAppAccessPanel extensionId={app.extensionId} name={app.name} zh={zh} /> : null}
         </div>
 
-        <Button variant="primary" className="mt-5 w-full" onClick={() => void onReviewInstall()} disabled={busy || validationLoading || checkingDraft || savingAcceptance || validation?.status === 'failed' || runtimeHealth !== 'healthy' || acceptanceResult?.status !== 'passed' || !currentAcceptanceRun || currentAcceptanceRun.sourceHash !== validation?.sourceHash || (app.installationState === 'installed' && validation?.hasDraftChanges === false)}>
+        <Button variant="primary" className="mt-5 w-full" onClick={() => void onReviewInstall()} disabled={busy || validationLoading || checkingDraft || validation?.status !== 'healthy' || (app.installationState === 'installed' && validation?.hasDraftChanges === false)}>
           {app.installationState === 'installed' ? (zh ? '安装当前更新' : 'Install current update') : (zh ? '添加到左侧导航' : 'Add to sidebar')}
         </Button>
 
@@ -788,9 +764,13 @@ export function LocalAppWorkbenchPage() {
               <h4 className="mt-5 text-xs font-semibold text-fg">{zh ? '本次迭代' : 'This iteration'}</h4>
               <dl className="mt-2 grid grid-cols-2 gap-3 text-xs">
                 <div><dt className="text-fg-subtle">{zh ? '文件变化' : 'Changed files'}</dt><dd className="mt-1 font-medium text-fg">{validation?.changedFileCount ?? 0}</dd></div>
-                <div><dt className="text-fg-subtle">{zh ? '自动验收' : 'Acceptance'}</dt><dd className="mt-1 flex items-center gap-1.5 font-medium text-success"><CircleCheck className="size-3.5" />{zh ? '已通过并保存' : 'Passed and saved'}</dd></div>
+                <div><dt className="text-fg-subtle">{zh ? '自动验收' : 'Acceptance'}</dt><dd className={`mt-1 font-medium ${acceptanceResult?.status === 'passed' && acceptanceSourceHash === validation?.sourceHash ? 'text-success' : 'text-warning'}`}>{acceptanceResult?.status === 'passed' && acceptanceSourceHash === validation?.sourceHash ? (zh ? '已通过' : 'Passed') : (zh ? '未通过或尚未完成' : 'Failed or incomplete')}</dd></div>
               </dl>
               {validation?.changedFiles.length ? <ul className="mt-3 space-y-1">{validation.changedFiles.slice(0, 5).map((file) => <li key={file.path} className="flex min-w-0 items-center gap-2 text-[11px] text-fg-muted"><span className="w-4 shrink-0 font-medium text-fg-subtle">{file.status === 'added' ? '+' : file.status === 'deleted' ? '−' : '•'}</span><span className="truncate font-mono">{file.path}</span></li>)}</ul> : null}
+              {acceptanceResult?.status !== 'passed' || acceptanceSourceHash !== validation?.sourceHash ? <div role="status" className="mt-4 rounded-xl bg-warning-soft p-3 text-xs leading-5 text-warning">
+                <p>{zh ? '自动验收未通过或尚未完成。你仍可安装，部分功能可能无法正常使用。' : 'Automatic acceptance failed or is incomplete. You can still install; some features may not work.'}</p>
+                {currentAcceptanceFailures.length ? <ul className="mt-2 list-inside list-disc">{currentAcceptanceFailures.map(message => <li key={message}>{message}</li>)}</ul> : null}
+              </div> : null}
               <h4 className="mt-5 text-xs font-semibold text-fg">{zh ? '请求权限' : 'Requested permissions'}</h4>
               <ul className="mt-2 space-y-2">{(validation?.permissions ?? app.permissions).map((permission) => <li key={permission} className="flex items-center gap-2 text-sm text-fg"><Check className="size-4 text-success" />{permission}{app.installationState === 'installed' && validation?.permissionDelta.added.includes(permission) ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] text-warning">{zh ? '新增' : 'New'}</span> : null}</li>)}</ul>
               {app.installationState === 'installed' && validation?.permissionDelta.added.length ? <p className="mt-4 rounded-xl bg-warning-soft p-3 text-xs leading-5 text-warning">{zh ? '此更新增加了权限，请确认这些能力符合你的修改意图。' : 'This update adds permissions. Confirm they match the change you requested.'}</p> : null}
