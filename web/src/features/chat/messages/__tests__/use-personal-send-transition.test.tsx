@@ -19,11 +19,11 @@ describe('Personal AI send transition', () => {
     timestamp: 1, clientSubmissionId: 'send-1', deliveryStatus: 'sending',
   };
 
-  function Harness({ messages }: { messages: Message[] }) {
+  function Harness({ messages, conversationId = 'personal' }: { messages: Message[]; conversationId?: string | null }) {
     const viewportRef = useRef<HTMLDivElement>(null);
-    dispatch = usePersonalSendTransition({ enabled: true, conversationId: 'personal', messages, viewportRef });
+    dispatch = usePersonalSendTransition({ enabled: true, conversationId, messages, viewportRef });
     return <div data-viewport ref={viewportRef}>{messages.map((item) => (
-      <div key={item.clientSubmissionId} data-client-submission-id={item.clientSubmissionId}>
+      <div key={item.clientSubmissionId} data-chat-message-row data-client-submission-id={item.clientSubmissionId}>
         <div className="chat-user-message">Hello</div>
       </div>
     ))}</div>;
@@ -70,6 +70,10 @@ describe('Personal AI send transition', () => {
     expect(bubble?.style.visibility).toBe('');
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
     expect(HTMLElement.prototype.animate).toHaveBeenCalledTimes(1);
+    expect(HTMLElement.prototype.animate).toHaveBeenCalledWith([
+      { transform: 'translate3d(-268px, 350px, 0)' },
+      { transform: 'translate3d(0, 0, 0)' },
+    ], { duration: 360, easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)' });
     await act(async () => finishAnimation());
     expect(bubble?.style.visibility).toBe('');
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
@@ -83,6 +87,7 @@ describe('Personal AI send transition', () => {
 
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
     expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
+    expect(HTMLElement.prototype.animate).not.toHaveBeenCalled();
   });
 
   it('keeps the real bubble visible through automatic list scrolling', async () => {
@@ -99,13 +104,15 @@ describe('Personal AI send transition', () => {
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
   });
 
-  it('reveals the real bubble as soon as streaming growth moves its target', async () => {
+  it('does not mistake the animated bubble position for a scroll interruption', async () => {
     await act(async () => root.render(<Harness messages={[]} />));
     act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
     await act(async () => root.render(<Harness messages={[message]} />));
     const bubble = container.querySelector<HTMLElement>('.chat-user-message')!;
     bubble.getBoundingClientRect = () => ({ left: 300, top: 200, right: 420, bottom: 250 }) as DOMRect;
     act(() => container.querySelector('[data-viewport]')?.dispatchEvent(new Event('scroll')));
+    const animation = vi.mocked(HTMLElement.prototype.animate).mock.results[0].value;
+    expect(animation.cancel).not.toHaveBeenCalled();
     expect(bubble.style.visibility).toBe('');
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
   });
@@ -116,7 +123,8 @@ describe('Personal AI send transition', () => {
       await act(async () => root.render(<Harness messages={[]} />));
       act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
       await act(async () => root.render(<Harness messages={[message]} />));
-      act(() => vi.advanceTimersByTime(350));
+      act(() => vi.advanceTimersByTime(510));
+      expect(vi.mocked(HTMLElement.prototype.animate).mock.results[0].value.cancel).toHaveBeenCalled();
       expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
       expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
     } finally {
@@ -139,7 +147,21 @@ describe('Personal AI send transition', () => {
     await act(async () => root.render(<Harness messages={[message]} />));
 
     act(() => container.querySelector('[data-viewport]')?.dispatchEvent(new Event('wheel')));
+    expect(vi.mocked(HTMLElement.prototype.animate).mock.results[0].value.cancel).toHaveBeenCalled();
     expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
+  });
+
+  it('preserves the first send when dispatch creates a conversation', async () => {
+    await act(async () => root.render(<Harness messages={[]} conversationId={null} />));
+    act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
+    await act(async () => root.render(<Harness messages={[message]} conversationId="created" />));
+
+    expect(HTMLElement.prototype.animate).toHaveBeenCalledTimes(1);
+    const animation = vi.mocked(HTMLElement.prototype.animate).mock.results[0].value;
+    expect(animation.cancel).not.toHaveBeenCalled();
+
+    await act(async () => root.render(<Harness messages={[]} conversationId="other" />));
+    expect(animation.cancel).toHaveBeenCalled();
   });
 });
