@@ -19,6 +19,7 @@ import { CapabilityDispatcher, CapabilityError } from './dispatcher.js';
 import { registerSettingsCapability } from './settings.js';
 import { registerAppContextCapability } from './app-context.js';
 import { registerAgentCapabilities } from '../../agent-catalog/capabilities.js';
+import { registerLocalAppDelegation } from '../../local-apps/capabilities/delegate.js';
 
 export function createProductDispatcher(getNotes?: () => NotesService | undefined, taskWrites?: TaskWriteCapabilityDeps & ProjectWriteCapabilityDeps & {
   getAutomations?: () => AutomationService | undefined;
@@ -28,6 +29,7 @@ export function createProductDispatcher(getNotes?: () => NotesService | undefine
   registerSettingsCapability(dispatcher);
   registerAppContextCapability(dispatcher);
   registerAgentCapabilities(dispatcher);
+  registerLocalAppDelegation(dispatcher);
   const localApps = taskWrites?.getLocalApps?.();
   if (localApps) {
     registerLocalAppReadCapabilities(dispatcher, localApps);

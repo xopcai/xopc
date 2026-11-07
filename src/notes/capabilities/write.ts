@@ -5,6 +5,8 @@ import { CapabilityError, defineAtomicCapability, type CapabilityDispatcher } fr
 import { NoteRevisionConflictError, type NotesService } from '../service.js';
 import type { ProjectService } from '../../projects/index.js';
 import type { Note } from '../types.js';
+import { DurableState } from '../../storage/sqlite/durable-state.js';
+import { LocalAppNoteOutputSchema } from '../../local-apps/capabilities/projections.js';
 
 export function registerNoteWriteCapabilities(dispatcher: CapabilityDispatcher, deps: {
   getNotes: () => NotesService;
@@ -47,6 +49,7 @@ export function registerNoteWriteCapabilities(dispatcher: CapabilityDispatcher, 
     id: 'xopc.notes.append', majorVersion: 1, description: 'Append text once without replacing concurrent content.',
     effect: 'local-write', surfaces: ['http', 'agent', 'extension'], scopes: ['workspace.write'],
     input: NoteAppendInputSchema, output: NoteGetOutputSchema,
+    extensionOutput: LocalAppNoteOutputSchema,
     execute: input => result(() => deps.getNotes().appendTextToNoteAtomically(input.id, input.content, input.heading, input.expectedRevision)),
     afterCommit() { deps.getNotes().flushCommittedEffects(); },
   }));
@@ -61,10 +64,12 @@ export function registerNoteWriteCapabilities(dispatcher: CapabilityDispatcher, 
     id: 'xopc.notes.create', majorVersion: 1, description: 'Create a note with a durable receipt and optional project link.',
     effect: 'local-write', surfaces: ['http', 'agent', 'extension'], scopes: ['workspace.write'],
     input: NoteCreateInputSchema, output: NoteGetOutputSchema,
+    extensionOutput: LocalAppNoteOutputSchema,
     execute({ projectId, ...input }, context) {
       const project = projectId ? deps.getProjects?.()?.get(projectId) : undefined;
       if (projectId && !project) throw new CapabilityError('NOT_FOUND', 'Project not found');
-      const note = deps.getNotes().createNoteAtomically(input, context.idempotencyKey);
+      const note = deps.getNotes().createNoteAtomically(context.localApp ? { ...input, capturedVia: { channel: 'web' } } : input, context.idempotencyKey);
+      if (context.localApp) new DurableState('local-app-owned-notes', context.localApp.extensionId).set(note.id, { createdAt: note.createdAt });
       if (project) new ObjectLinkService().create({ id: `note:${note.id}:project:${project.id}`,
         from: { kind: 'note', id: note.id, title: note.title }, to: { kind: 'project', id: project.id, title: project.name },
         relation: 'belongs_to', source: 'user' });
@@ -76,6 +81,7 @@ export function registerNoteWriteCapabilities(dispatcher: CapabilityDispatcher, 
     id: 'xopc.notes.update', majorVersion: 1, description: 'Update a note at an exact revision; file cleanup is durable and post-commit.',
     effect: 'local-write', surfaces: ['http', 'agent', 'extension'], scopes: ['workspace.write'],
     input: NoteUpdateInputSchema, output: NoteGetOutputSchema,
+    extensionOutput: LocalAppNoteOutputSchema,
     execute(input, context) {
       return result(() => deps.getNotes().updateNoteAtomically(input.id, input.patch as Partial<Note>, context.surface === 'agent' ? 'ai_edit' : input.trigger ?? 'edit', input.expectedRevision));
     },

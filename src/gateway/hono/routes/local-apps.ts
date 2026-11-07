@@ -52,6 +52,8 @@ function servePreviewAsset(
   const fullPath = existsSync(unresolvedPath) ? realpathSync(unresolvedPath) : unresolvedPath;
   const rel = relative(root, fullPath);
   if (rel.startsWith('..') || rel === '') return c.json({ error: 'Path traversal denied' }, 403, cors);
+  if (!assetPath.startsWith('ui/') || assetPath.split('/').some(part => part.startsWith('.'))
+    || /\.(?:map|txt|env)$/i.test(assetPath)) return c.json({ error: 'Not found' }, 404, cors);
   if (!existsSync(fullPath) || !statSync(fullPath).isFile()) return c.json({ error: 'Not found' }, 404, cors);
   const mimeType = extensionAssetMimeType(assetPath);
   const content = readFileSync(fullPath);

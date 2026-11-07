@@ -89,6 +89,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'local-app-previews',
+    match: path => /^\/api\/local-app-previews\/(?:[^/]+\/sessions|sessions\/[^/]+(?:\/requests)?)$/.test(path),
+    load: async () => {
+      const { registerLocalAppPreviewRoutes } = await import('./local-app-previews.js');
+      return { register: registerLocalAppPreviewRoutes };
+    },
+  },
+  {
     id: 'capability-operations',
     match: path => startsWithAny(path, ['/api/capabilities/operations']),
     load: async () => {

@@ -1,4 +1,34 @@
-# Phase 1 local app contract
+# Local App contract
+
+## Host capability bindings
+
+UI-only apps may use declared host capabilities through `@xopcai/extension-ui-sdk`; this does not
+authorize direct HTTP, network access or backend code. Discover bindings through the authenticated
+`GET /api/local-app-capabilities/catalog`, pin each capability's version and descriptor digest in
+`ui.capabilities`, and let the host handle user review and execution. The extension output contract
+differs from the full HTTP/Agent business contract. Never manufacture grants, use Gateway tokens in
+app code, or silently enlarge permissions.
+
+Data access defaults to none. Explain the smallest useful note-read, note-write and task-read scopes
+to the user. They select resources in the host permission dialog. App-created ownership is recorded
+by the host; names, tags and app-supplied IDs cannot claim ownership. Handle denied access explicitly.
+The default draft preview uses example data; `.xopc/fixtures.json` can provide bounded note/task examples.
+Only the user can start a scoped real-data read-only preview. Automatic acceptance always uses fresh
+isolated fixtures, receipts and storage, never that live-data grant. Do not fake a successful acceptance
+or request production writes from an automated preview. Use the SDK capability methods in all modes.
+Keep controls disabled until their data and event handlers are ready. Await `client.whenReady()` for
+SDK initialization, and handle an already-complete document when adding load handlers after async work.
+
+Installed apps may declare `xopc.agent.delegate` for one bounded text inference after the user separately
+approves delegation in the host permission dialog. Use explicit instruction/context and at most three
+approved notes/tasks `get` references; each referenced read capability must also be declared. There are
+no tools, history, memory, filesystem, Agent/model selection or automatic writes. All preview modes
+omit this capability: show a clear unavailable state and use example content for presentation checks.
+Keep a stable idempotency key for each delegation intent; never automatically retry an uncertain outcome
+with a new key. See `docs/local-app-delegation.md` for budgets and the SDK contract.
+
+Only supported non-hidden files beneath the public UI directory can be served. Keep secrets, manifests,
+briefs and runtime files outside that directory. For details see `docs/local-app-security.md` in xopc.
 
 Required files:
 

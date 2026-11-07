@@ -173,6 +173,8 @@ export interface NoteSnapshotEntry {
 }
 
 export interface NotesListQuery {
+  /** Supplied by the trusted capability runtime only. */
+  resourceRestriction?: import('../storage/sqlite/resource-scope.js').ResourceRestriction;
   status?: NoteStatus;
   kind?: NoteKind;
   tag?: string;

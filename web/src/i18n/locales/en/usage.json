@@ -54,6 +54,7 @@
     "reasons": {
       "agentAnswer": "Answer a conversation",
       "continueAfterTool": "Continue after a tool result",
+      "localAppDelegation": "Delegate bounded reasoning for a Local App",
       "backgroundReview": "Run a background review",
       "sessionCompaction": "Compact a long session",
       "sessionTitle": "Generate a session title",

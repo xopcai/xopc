@@ -10,6 +10,9 @@ export { CapabilityError } from './errors.js';
 
 /** Constructed by a trusted entry point, never parsed from tool or HTTP input. */
 export interface CapabilityContext {
+  /** Host-owned Local App identity and data policy, shared by UI and Agent invocation. */
+  localApp?: { extensionId: string; resourceScopes: import('@xopcai/gateway-contract').LocalAppResourceScopes;
+    bindings?: import('@xopcai/gateway-contract').ExtensionCapabilityBinding[]; releaseId?: string; grantRevision?: string };
   principalId: string;
   surface: CapabilitySurface;
   scopes: readonly GatewayScope[];
@@ -32,6 +35,9 @@ export interface ReadCapability<I extends z.ZodType = z.ZodType, O extends z.Zod
   scopes: readonly GatewayScope[];
   input: I;
   output: O;
+  /** A narrower public contract for untrusted embedded applications. */
+  extensionOutput?: z.ZodType;
+  extensionExecute?: (input: z.output<I>, context: CapabilityContext) => unknown | Promise<unknown>;
   execute: (input: z.output<I>, context: CapabilityContext) => z.input<O> | Promise<z.input<O>>;
 }
 
@@ -83,7 +89,7 @@ export function canonicalCapabilityJson(value: unknown): string {
 }
 
 export class CapabilityDispatcher {
-  private readonly entries = new Map<string, { definition: CapabilityDefinition; descriptor: CapabilityDescriptor }>();
+  private readonly entries = new Map<string, { definition: CapabilityDefinition; descriptor: CapabilityDescriptor; extensionDescriptor?: CapabilityDescriptor }>();
 
   register<I extends z.ZodType, O extends z.ZodType>(definition: CapabilityDefinition<I, O>): void {
     if (!/^(xopc|extension)\.[a-zA-Z0-9_.-]+$/.test(definition.id) || !Number.isSafeInteger(definition.majorVersion) || definition.majorVersion < 1) {
@@ -102,9 +108,17 @@ export class CapabilityDispatcher {
     const descriptorDigest = createHash('sha256').update(canonicalCapabilityJson({ ...descriptor, scopes: definition.scopes,
       ...(definition.effect === 'external-write' ? { recovery: definition.recovery } : {}),
     })).digest('hex');
+    const extensionDescriptor = definition.extensionOutput ? { ...descriptor,
+      outputSchema: z.toJSONSchema(definition.extensionOutput, { io: 'output' }),
+    } : undefined;
     this.entries.set(definition.id, {
       definition: { ...definition, scopes: [...definition.scopes], surfaces: [...definition.surfaces] },
       descriptor: { ...descriptor, descriptorDigest },
+      extensionDescriptor: extensionDescriptor ? { ...extensionDescriptor,
+        descriptorDigest: createHash('sha256').update(canonicalCapabilityJson({ ...extensionDescriptor, scopes: definition.scopes,
+          ...(definition.effect === 'external-write' ? { recovery: definition.recovery } : {}),
+        })).digest('hex'),
+      } : undefined,
     });
   }
 
@@ -117,13 +131,13 @@ export class CapabilityDispatcher {
 
   list(context: CapabilityContext): CapabilityDescriptor[] {
     return [...this.entries.values()].filter(entry => this.visible(entry.definition, context))
-      .map(entry => structuredClone(entry.descriptor));
+      .map(entry => structuredClone(context.surface === 'extension' && entry.extensionDescriptor ? entry.extensionDescriptor : entry.descriptor));
   }
 
   describe(id: string, context: CapabilityContext): CapabilityDescriptor {
     const entry = this.entries.get(id);
     if (!entry || !this.visible(entry.definition, context)) throw new CapabilityError('NOT_FOUND', 'Capability not available');
-    return structuredClone(entry.descriptor);
+    return structuredClone(context.surface === 'extension' && entry.extensionDescriptor ? entry.extensionDescriptor : entry.descriptor);
   }
 
   async validateInput(id: string, input: unknown, context: CapabilityContext): Promise<unknown> {
@@ -144,6 +158,8 @@ export class CapabilityDispatcher {
     }
     const { definition } = this.entries.get(id)!;
     const parsed = { data: await this.validateInput(id, input, context) } as { data: z.output<typeof definition.input> };
+    const validateResult = (result: unknown) => this.validateResult(
+      context.surface === 'extension' && definition.extensionOutput ? { ...definition, output: definition.extensionOutput } : definition, result);
     if (definition.effect === 'external-write') {
       const key = expected?.idempotencyKey;
       if (!key?.trim() || key.length > 200) throw new CapabilityError('INVALID_INPUT', 'A stable idempotencyKey is required');
@@ -154,7 +170,7 @@ export class CapabilityDispatcher {
         requestDigest: createHash('sha256').update(canonicalCapabilityJson(identity)).digest('hex'),
         descriptorDigest: descriptor.descriptorDigest, surface: context.surface, recovery: definition.recovery,
       }, operationId => definition.execute(parsed.data, { ...context, operationId, idempotencyKey: key }),
-      result => this.validateResult(definition, result));
+      validateResult);
     }
     if (definition.effect === 'local-write') {
       const key = expected?.idempotencyKey;
@@ -175,7 +191,7 @@ export class CapabilityDispatcher {
             if (!prepared) throw preparationRequired;
             const output = definition.execute(parsed.data, { ...context, operationId, idempotencyKey: key });
             if (output && typeof (output as { then?: unknown }).then === 'function') throw new Error('Atomic capability handlers must be synchronous');
-            return this.validateResult(definition, output);
+            return validateResult(output);
           });
         };
         let result: unknown;
@@ -201,7 +217,8 @@ export class CapabilityDispatcher {
         throw error;
       }
     }
-    return this.validateResult(definition, await definition.execute(parsed.data, context));
+    return validateResult(await (context.surface === 'extension' && definition.extensionExecute
+      ? definition.extensionExecute(parsed.data, context) : definition.execute(parsed.data, context)));
   }
 
   private validateResult(definition: CapabilityDefinition, result: unknown): unknown {
