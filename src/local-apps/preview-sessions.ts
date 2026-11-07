@@ -90,15 +90,20 @@ export class LocalAppPreviewSessions {
         const built = new URL('./preview-worker.js', import.meta.url);
         const compiled = existsSync(built);
         lease.worker = forkWorker(fileURLToPath(compiled ? built : new URL('./preview-worker.ts', import.meta.url)), {
-          cwd: lease.directory, execArgv: ['--max-old-space-size=192', ...(compiled ? [] : ['--import', import.meta.resolve('tsx')])],
+          cwd: lease.directory, execArgv: ['--max-old-space-size=384', ...(compiled ? [] : ['--import', import.meta.resolve('tsx')])],
           env: { PATH: process.env.PATH, XOPC_LOCAL_APP_PREVIEW_WORKER: '1', XOPC_STATE_DIR: lease.directory,
             XOPC_WORKSPACE: lease.directory, XOPC_SQLITE_ASSET_ROOT: process.env.XOPC_SQLITE_ASSET_ROOT,
             XOPC_LOG_LEVEL: 'fatal', XOPC_LOG_CONSOLE: 'false', ELECTRON_RUN_AS_NODE: '1' },
-          stdio: ['ignore', 'ignore', 'ignore', 'ipc'], serialization: 'json',
+          stdio: ['ignore', 'ignore', 'pipe', 'ipc'], serialization: 'json',
         });
+        let workerStderr = '';
+        lease.worker.stderr?.on('data', (chunk: Buffer) => { workerStderr = (workerStderr + chunk.toString()).slice(-4000); });
         lease.worker.unref(); lease.worker.channel?.unref();
         const directory = lease.directory;
-        lease.worker.once('exit', () => { this.revoke(session.id); rmSync(directory, { recursive: true, force: true }); });
+        lease.worker.once('exit', (code, signal) => {
+          if (this.leases.has(session.id)) log.error({ sessionId: session.id, code, signal, workerStderr }, 'Isolated preview worker exited unexpectedly');
+          this.revoke(session.id); rmSync(directory, { recursive: true, force: true });
+        });
         await this.rpc(lease, { type: 'init', fixtures: readPreviewFixtures(source.root), bindings });
       }
       this.current(session.id, caller);
