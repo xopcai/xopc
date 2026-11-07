@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { Check, ChevronsUpDown, Search } from 'lucide-react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { Children, Fragment, isValidElement, useId, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -177,32 +177,27 @@ export function PopoverSelect({
           className={cn(
             popoverZ,
             selectPopoverContentLayoutClass,
-            'w-[var(--radix-popover-trigger-width)] min-w-[min(16rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] rounded-lg border border-edge bg-surface-overlay shadow-popover outline-none',
+            'w-[var(--radix-popover-trigger-width)] min-w-[16rem] rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover outline-none',
             contentClassName,
           )}
         >
           {searchPlaceholder ? (
-            <div className="shrink-0 border-b border-edge p-2">
-              <div className="flex h-9 items-center gap-2 rounded-md border border-edge bg-surface-inset px-2.5 focus-within:border-accent focus-within:ring-1 focus-within:ring-accent">
-                <Search className="size-4 shrink-0 text-fg-subtle" aria-hidden="true" />
-                <input
-                  type="search"
-                  aria-label={searchPlaceholder}
-                  placeholder={searchPlaceholder}
-                  value={searchValue}
-                  onChange={(event) => onSearchChange?.(event.target.value)}
-                  className="h-full w-full min-w-0 border-0 bg-transparent p-0 text-base text-fg outline-none placeholder:text-fg-subtle sm:text-sm"
-                />
-              </div>
-            </div>
+            <input
+              type="search"
+              aria-label={searchPlaceholder}
+              placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={(event) => onSearchChange?.(event.target.value)}
+              className="mb-1 w-full shrink-0 rounded-md bg-surface-base px-3 py-2 text-base text-fg placeholder:text-fg-subtle sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            />
           ) : null}
-          <div data-select-scroll-region className={cn(selectPopoverScrollAreaClass, 'max-h-64 flex-auto p-1')}>
+          <div data-select-scroll-region className={cn(selectPopoverScrollAreaClass, 'max-h-64')}>
             {allowEmpty ? (
               <button
                 type="button"
                 disabled={emptyDisabled}
                 className={cn(
-                  'touch-target flex min-h-9 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+                  'touch-target flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-fg hover:bg-surface-hover',
                   value === '' && 'bg-surface-active font-medium',
                   emptyDisabled && 'cursor-not-allowed opacity-45 hover:bg-transparent',
                 )}
@@ -212,8 +207,8 @@ export function PopoverSelect({
                   setOpen(false);
                 }}
               >
-                <span className="min-w-0 flex-1 truncate text-fg-subtle">{emptyLabel}</span>
-                <Check className={cn('size-4 shrink-0 text-accent', value !== '' && 'invisible')} aria-hidden="true" />
+                <Check className={cn('size-4 shrink-0', value !== '' && 'invisible')} aria-hidden="true" />
+                <span className="min-w-0 truncate text-fg-subtle">{emptyLabel}</span>
               </button>
             ) : null}
             {loading ? <div className="space-y-2 p-2" aria-busy="true">{[0, 1, 2].map((n) => <Skeleton key={n} className="h-8 w-full" />)}</div> : null}
@@ -234,7 +229,7 @@ export function PopoverSelect({
                     type="button"
                     disabled={disabled}
                     className={cn(
-                      'touch-target flex min-h-9 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+                      'touch-target flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-fg hover:bg-surface-hover',
                       option.value === value && 'bg-surface-active font-medium',
                       disabled && 'cursor-not-allowed opacity-45 hover:bg-transparent',
                     )}
@@ -244,9 +239,12 @@ export function PopoverSelect({
                       setOpen(false);
                     }}
                   >
-                    {option.icon}
-                    <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                    <Check className={cn('size-4 shrink-0 text-accent', option.value !== value && 'invisible')} aria-hidden="true" />
+                    {option.icon ?? <Check
+                      className={cn('size-4 shrink-0', option.value !== value && 'invisible')}
+                      aria-hidden="true"
+                    />}
+                    <span className="min-w-0 truncate">{option.label}</span>
+                    {option.icon ? <Check className={cn('ml-auto size-4 shrink-0', option.value !== value && 'invisible')} aria-hidden /> : null}
                   </button>
                 </Fragment>
               );

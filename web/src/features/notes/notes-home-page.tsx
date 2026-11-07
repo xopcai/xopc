@@ -203,8 +203,8 @@ export function NotesHomePage() {
   const emptyHome = !loading && !error && total === 0 && !projectId && !unassigned && !search && view === 'all';
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-surface-panel">
-      <aside className="hidden w-44 shrink-0 flex-col gap-1 overflow-y-auto px-3 py-6 xl:flex" aria-label={h.homeNav}>
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 overflow-hidden bg-surface-panel px-4 sm:px-6 lg:px-8">
+      <aside className="hidden w-44 shrink-0 flex-col gap-1 overflow-y-auto py-6 xl:flex" aria-label={h.homeNav}>
         {navigation.map(({ id, label, Icon }) => <button key={id} type="button" onClick={() => chooseScope('', id)}
           aria-current={!projectId && (id === 'unassigned' ? unassigned : !unassigned && view === id) ? 'page' : undefined}
           className={cn(quietButton, 'justify-start px-2 text-left text-xs', !projectId && (id === 'unassigned' ? unassigned : !unassigned && view === id) && 'bg-surface-hover font-medium text-fg')}>
@@ -220,7 +220,7 @@ export function NotesHomePage() {
         <button type="button" onClick={() => navigate('/projects')} className={cn(quietButton, 'mt-2 justify-start px-2 text-xs')}>{h.allProjects}<ArrowRight className="ml-auto size-3" aria-hidden /></button>
       </aside>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto flex w-full max-w-7xl flex-col px-4 pb-4 pt-3 sm:px-6 sm:pb-7 lg:px-8 lg:pb-9 lg:pt-4">
+        <div className="flex w-full flex-col pb-4 pt-3 sm:pb-7 lg:pb-9 lg:pt-4 xl:pl-8">
           <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-fg">{projectId ? currentProjectLabel : unassigned ? h.unassigned : emptyHome ? h.firstNoteTitle : h.continueTitle}</h2>
