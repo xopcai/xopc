@@ -460,7 +460,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
           '[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
           hasRunPresence ? 'right-7' : 'right-1',
-          (menuOpen || isPinned || isActive) && 'pointer-events-auto opacity-100',
+          (menuOpen || pinBusy) && 'pointer-events-auto opacity-100',
         )}
       >
         <button
@@ -479,10 +479,13 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         >
           {pinBusy ? (
             <Loader2 className="size-4 animate-spin" strokeWidth={1.75} aria-hidden />
-          ) : isPinned ? (
-            <PinOff className="size-4 rotate-45" strokeWidth={1.75} aria-hidden />
           ) : (
-            <Pin className="size-4 rotate-45" strokeWidth={1.75} aria-hidden />
+            <Pin
+              className="size-4 rotate-45"
+              fill={isPinned ? 'currentColor' : 'none'}
+              strokeWidth={1.75}
+              aria-hidden
+            />
           )}
         </button>
         <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
