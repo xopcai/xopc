@@ -25,13 +25,28 @@ describe('Task source identity', () => {
     expect(source[0].toolCallId).toBe('call_00_actual');
   });
 
-  it('exposes exact published artifact IDs so final selection never requires guessing filenames', async () => {
-    const tool = { name: 'publish_artifacts', label: 'Publish', description: '', parameters: {} as never,
+  it.each(['publish_artifacts', 'image_generate'])('exposes exact %s artifact IDs so final selection never requires guessing filenames', async name => {
+    const tool = { name, label: 'Publish', description: '', parameters: {} as never,
       execute: async () => ({ content: [{ type: 'text' as const, text: '1 artifact published: report.md' }],
         details: { artifacts: [{ artifactId: 'opaque-id', title: 'report.md', availability: 'available' }] } }) };
     const result = await withTaskEvidenceIdentity(tool).execute('actual-call', {});
     expect(JSON.stringify(result.content)).toContain('opaque-id');
     expect(JSON.stringify(result.content)).toContain('report.md');
+  });
+
+  it('binds visual inspection receipts and does not advertise failed image results as evidence', async () => {
+    const tool = { name: 'image', label: 'Inspect', description: '', parameters: {} as never,
+      execute: async () => ({ content: [{ type: 'text' as const, text: 'The kitten is centered and fully visible.' }], details: {} }) };
+    const result = await withTaskEvidenceIdentity(tool).execute('vision-call', {});
+    const receipt = JSON.parse(result.content.find(item => item.text.includes('excerptRanges'))!.text).evidence;
+    expect(bindResearchSources({ sources: [{ id: 'vision', toolCallId: receipt.toolCallId,
+      excerptRange: receipt.excerptRanges[0] }], claims: [] }, [{ toolCallId: 'vision-call', toolName: 'image',
+      body: result.content.map(item => item.text).join('\n'), observedAt: 1 }])[0].excerpt)
+      .toBe('The kitten is centered and fully visible.');
+    const failed = { ...tool, execute: async () => ({ content: [{ type: 'text' as const, text: 'Image inspection failed' }],
+      details: { error: 'inspection_failed' } }) };
+    expect(JSON.stringify((await withTaskEvidenceIdentity(failed).execute('failed-vision', {})).content))
+      .not.toContain('excerptRanges');
   });
 
   it('keeps the model submission schema aligned with the strict host ledger schema', () => {

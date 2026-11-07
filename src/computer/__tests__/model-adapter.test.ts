@@ -15,6 +15,32 @@ describe('Windows model key normalization', () => {
       .toEqual({ kind: 'action', action: { kind: 'pressKeys', keys: ['backspace'] } });
   });
 });
+describe('platform-specific model keyboard protocol', () => {
+  it.each(['win32', 'linux', 'darwin'])('uses %s shortcuts and preserves Backspace through Responses', async platform => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ status: 'completed', output: [{ type: 'function_call',
+      name: 'computer_proposal', arguments: JSON.stringify({ proposal: { kind: 'action', action: { kind: 'pressKeys', keys: ['Backspace'] } } }),
+    }] }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'gpt-6.1-sol', api: 'openai-responses',
+      baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    expect(await adapter.predict({ goal: 'Remove the previous character', image: new Uint8Array([1]), mimeType: 'image/png',
+      width: 100, height: 100, summary: JSON.stringify({ platform, elements: [] }) }))
+      .toEqual({ kind: 'action', action: { kind: 'pressKeys', keys: [platform === 'darwin' ? 'delete' : 'backspace'] } });
+    const prompt = JSON.parse(fetch.mock.calls[0][1].body).instructions;
+    expect(prompt).toContain(platform === 'darwin' ? '["cmd","alt","f"]' : '["ctrl","alt","f"]');
+    if (platform !== 'darwin') {
+      expect(prompt).not.toContain('["cmd","alt","f"]');
+      expect(prompt).toContain('delete removes the following character');
+    }
+  });
+  it('rejects a macOS-only chord on Linux before any execution', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { tool_calls: [{ function: {
+      name: 'computer_proposal', arguments: JSON.stringify({ proposal: { kind: 'action', action: { kind: 'pressKeys', keys: ['cmd', 'a'] } } }),
+    } }] } }] }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    await expect(adapter.predict({ goal: 'Select all', image: new Uint8Array([1]), mimeType: 'image/png',
+      width: 100, height: 100, summary: '{"platform":"linux","elements":[]}' })).rejects.toThrow('COMPUTER_INVALID_MODEL_OUTPUT');
+  });
+});
 describe('GUI-Plus adapter', () => {
   it('maps a mixed native batch without flattening its actions into separate decisions', () => {
     const actions = [{ kind: 'setValue', ref: 'field', text: 'Draft' }, { kind: 'pressKeys', keys: ['return'] }];

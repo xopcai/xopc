@@ -42,6 +42,8 @@ export interface AgentInstanceGateway {
   // ── Per-session runtime mutators ───────────────────────────────────────
   setThinkingLevel(conversationId: string, level: ThinkingLevel): void;
   setModelForSession(conversationId: string, modelId: string): boolean;
+  /** Build a per-turn spoken prompt without changing the stored or ordinary Agent prompt. */
+  buildVoiceSystemPrompt?(conversationId: string, modelRef: string, thinkingLevel?: string): string | undefined;
 
   // ── Agent instance lifecycle ───────────────────────────────────────────
   getOrCreateAgent(conversationId: string): Agent;

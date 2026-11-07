@@ -65,6 +65,8 @@ export type RunXopcEmbeddedTurnParams = {
   tools: import('@earendil-works/pi-agent-core').AgentTool[];
   systemPrompt: string;
   thinkingLevel?: ThinkingLevel;
+  /** Ephemeral voice history budget; current execution and system instructions are never dropped. */
+  voiceHistoryTokens?: number;
   compactionPolicy?: import('../memory/compaction-policy.js').ResolvedCompactionPolicy;
   promptCachePolicy?: import('../../providers/prompt-cache-plan.js').PromptCachePolicy;
   codemode?: import('./codemode-extension.js').CodemodePolicy;

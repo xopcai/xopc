@@ -3,9 +3,9 @@ export function normalizeComputerKeys(input: string[], platform: NodeJS.Platform
   const aliases: Record<string, string> = { enter: 'return', esc: 'escape', backspace: 'delete', arrowup: 'up', arrowdown: 'down',
     arrowleft: 'left', arrowright: 'right', command: 'cmd', meta: 'cmd', super: 'cmd', '⌘': 'cmd', control: 'ctrl', option: 'alt', '⌥': 'alt' };
   const keys = input.map(key => aliases[key.toLowerCase()] ?? key.toLowerCase());
-  if (platform === 'win32') {
+  if (platform === 'win32' || platform === 'linux') {
     if (keys.includes('cmd') || keys.some(key => ['win', 'windows', 'fn'].includes(key))) throw new Error('COMPUTER_KEY_NOT_SUPPORTED');
-    // Cua's Windows key vocabulary distinguishes forward delete from backspace.
+    // Windows and Linux distinguish forward delete from backspace.
     const main = input.at(-1)?.toLowerCase();
     if (main === 'backspace') keys[keys.length - 1] = 'backspace';
   }

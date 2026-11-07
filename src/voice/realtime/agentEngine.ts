@@ -7,7 +7,7 @@ import type { SpeechStreamSession } from '../tts/speech-provider-types.js';
 import { PlatformVoiceError } from '../platform-streams.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { TurnCoordinator } from './turnPolicy.js';
-import { PlaybackEchoCandidates } from './playback-echo.js';
+import { isLikelyPlaybackEcho, PlaybackEchoCandidates } from './playback-echo.js';
 import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
 import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
@@ -17,11 +17,13 @@ import type { VoiceEngine, VoiceEventSink } from './engine.js';
 const log = createLogger('Voice:Agent');
 const AGENT_TTS_MAX_SEGMENT_CHARACTERS = 180;
 const AGENT_TTS_MIN_SEGMENT_CHARACTERS = 24;
-const FIRST_PHRASE_WAIT_MS = 300;
+const FIRST_PHRASE_WAIT_MS = 120;
 const PLAYBACK_ECHO_TAIL_MS = 3_000;
 const TASK_UPDATE_QUIET_MS = 1_500;
+const BARGE_IN_STABILITY_MS = 180;
 
 type SpeechOpening = Promise<{ result: SpeakStreamResult } | { error: unknown }>;
+type SpeechPreparation = Promise<{ session: SpeechStreamSession } | { error: unknown }>;
 
 interface SpeechJob {
   phrase: string;
@@ -53,7 +55,8 @@ interface ActiveVoiceResponse {
   firstSynthesisAtMs?: number;
   firstSubmitAtMs?: number;
   firstPhraseTimer?: ReturnType<typeof setTimeout>;
-  preparedSpeech?: Promise<{ session: SpeechStreamSession } | { error: unknown }>;
+  preparedSpeech?: SpeechPreparation;
+  concurrentSpeech?: boolean;
   awaitingClarification: boolean;
   taskId?: string;
   taskDone: boolean;
@@ -99,7 +102,62 @@ export function createAgentVoiceEngine(options: {
   let openingInputSeen = false;
   let preparedGreeting: { responseId: string; audio: SpeechOpening } | undefined;
   const greetingAbort = new AbortController();
-  const turn = new TurnCoordinator(claim.silenceDurationMs, (text, decision, turnId) => {
+  let inputSpeech: { abort: AbortController; ready: SpeechPreparation } | undefined;
+  let bargeInCandidate: { utteranceId: string; text: string; timer: ReturnType<typeof setTimeout> } | undefined;
+
+  function clearBargeInCandidate(): void {
+    clearTimeout(bargeInCandidate?.timer);
+    bargeInCandidate = undefined;
+  }
+
+  function considerPartialInterruption(utteranceId: string, text: string): void {
+    const response = activeResponse;
+    if (!response || response.awaitingClarification || !claim.config.voice?.realtime?.bargeIn) return;
+    const characters = text.replace(/[^\p{L}\p{N}]/gu, '');
+    if (characters.length < (/\p{Script=Han}/u.test(characters) ? 6 : 12)
+      || isLikelyPlaybackEcho(text, response.audibleText)) {
+      clearBargeInCandidate(); return;
+    }
+    if (bargeInCandidate?.utteranceId === utteranceId && bargeInCandidate.text === text) return;
+    clearBargeInCandidate();
+    bargeInCandidate = { utteranceId, text, timer: setTimeout(() => {
+      clearBargeInCandidate();
+      if (activeResponse !== response || muted || closed || response.awaitingClarification
+        || isLikelyPlaybackEcho(text, response.audibleText)) return;
+      log.info({ sessionId: claim.sessionId, responseId: response.id, phase: 'partial_barge_in',
+        stabilityMs: BARGE_IN_STABILITY_MS }, 'Stable non-echo speech interrupted voice playback');
+      cancelActiveResponse('barge_in');
+      prepareInputSpeech();
+    }, BARGE_IN_STABILITY_MS) };
+  }
+
+  function prepareInputSpeech(): void {
+    if (inputSpeech || !claim.tts || activeResponse || claim.request.purpose !== 'conversation') return;
+    const abort = new AbortController();
+    const startedAt = Date.now();
+    try {
+      const opening = prepareSpeechStreamSession(claim.tts.config, {
+        appConfig: claim.config, signal: AbortSignal.any([options.signal, abort.signal]), allowFallback: false,
+      });
+      if (opening) inputSpeech = { abort, ready: opening.then(session => {
+        log.info({ sessionId: claim.sessionId, conversationId: claim.request.conversationId,
+          phase: 'input_tts_ready', setupMs: Date.now() - startedAt }, 'Voice TTS prepared during user speech');
+        return { session };
+      }, (error: unknown) => ({ error })) };
+    } catch (error) {
+      log.debug({ err: error, sessionId: claim.sessionId, phase: 'input_tts_prepare' }, 'Voice TTS preparation deferred until response');
+    }
+  }
+
+  async function releaseInputSpeech(): Promise<void> {
+    const preparation = inputSpeech;
+    inputSpeech = undefined;
+    if (!preparation) return;
+    preparation.abort.abort('input_discarded');
+    const opened = await preparation.ready;
+    if ('session' in opened) await opened.session.close();
+  }
+  const turn = new TurnCoordinator((text, decision, turnId) => {
     if (closed || muted) return;
     const receivedAtMs = turnReceivedAtMs ?? Date.now();
     turnReceivedAtMs = undefined;
@@ -122,6 +180,7 @@ export function createAgentVoiceEngine(options: {
     }).finally(() => { if (generation === inputGeneration) queuedTurns -= 1; });
   });
   function cancelActiveResponse(reason: 'barge_in' | 'client_cancelled' | 'session_closed'): boolean {
+    clearBargeInCandidate();
     const response = activeResponse;
     if (!response) return false;
     if (response.audioStarted && response.audibleText) {
@@ -165,6 +224,7 @@ export function createAgentVoiceEngine(options: {
     if (response.preparedSpeech) {
       job.opening = response.preparedSpeech.then(async prepared => {
         if ('error' in prepared) return prepared;
+        response.concurrentSpeech = prepared.session.supportsConcurrentSynthesis;
         response.abortController.signal.throwIfAborted();
         if (response.firstSubmitAtMs === undefined) {
           response.firstSubmitAtMs = Date.now();
@@ -191,7 +251,7 @@ export function createAgentVoiceEngine(options: {
 
   function prefetchNextSpeech(response: ActiveVoiceResponse): void {
     // A reusable connection accepts the next segment only after response.done.
-    if (response.preparedSpeech) return;
+    if (response.preparedSpeech && !response.concurrentSpeech) return;
     const next = response.speechQueue[0];
     if (!next || next.opening || response.abortController.signal.aborted) return;
     openSpeech(response, next);
@@ -346,6 +406,7 @@ export function createAgentVoiceEngine(options: {
         AGENT_TTS_MAX_SEGMENT_CHARACTERS,
         AGENT_TTS_MIN_SEGMENT_CHARACTERS,
         0,
+        6,
       ),
       text: '',
       audibleText: '',
@@ -371,7 +432,13 @@ export function createAgentVoiceEngine(options: {
       }
     }, Math.max(0, opening.deadlineAt - Date.now()));
     try {
-      const speechOpening = opening && preparedGreeting?.responseId === response.id ? undefined : prepareSpeechStreamSession(claim.tts.config, {
+      const preparation = !opening && !directReply ? inputSpeech : undefined;
+      if (preparation) {
+        inputSpeech = undefined;
+        response.abortController.signal.addEventListener('abort', () => preparation.abort.abort(response.abortController.signal.reason), { once: true });
+        response.preparedSpeech = preparation.ready;
+      }
+      const speechOpening = response.preparedSpeech || (opening && preparedGreeting?.responseId === response.id) ? undefined : prepareSpeechStreamSession(claim.tts.config, {
         appConfig: claim.config, signal: response.abortController.signal, allowFallback: false,
       });
       if (speechOpening) {
@@ -572,6 +639,7 @@ export function createAgentVoiceEngine(options: {
     }
     if (muted || finalizedUtterances.has(event.utteranceId)) return;
     if (event.type === 'speech_started') {
+      prepareInputSpeech();
       openingInputSeen = true;
       if (activeResponse?.opening && !activeResponse.firstFrameSent) cancelActiveResponse('barge_in');
       lastUserSpeechAt = Date.now();
@@ -589,10 +657,12 @@ export function createAgentVoiceEngine(options: {
       send('input.speech_started', { utteranceId: event.utteranceId });
     }
     if (event.type === 'speech_stopped') {
+      if (bargeInCandidate?.utteranceId === event.utteranceId) clearBargeInCandidate();
       if (claim.request.purpose === 'conversation') turn.stop(event.utteranceId);
       send('input.speech_stopped', { utteranceId: event.utteranceId });
     }
     if (event.type === 'transcript_delta') {
+      considerPartialInterruption(event.utteranceId, event.text);
       send('input.transcript.delta', {
         utteranceId: event.utteranceId,
         revision: event.revision,
@@ -600,6 +670,7 @@ export function createAgentVoiceEngine(options: {
       });
     }
     if (event.type === 'transcript_final') {
+      if (bargeInCandidate?.utteranceId === event.utteranceId) clearBargeInCandidate();
       lastUserSpeechAt = Date.now();
       const text = event.text.trim();
       if (text) openingInputSeen = true;
@@ -637,8 +708,8 @@ export function createAgentVoiceEngine(options: {
       if (claim.request.purpose === 'conversation') {
         if (claim.request.conversationId) options.runtime.onConversationInput?.(claim.request.conversationId);
         if (activeResponse?.awaitingClarification) { turn.reset(); return; }
-        // Partial ASR and VAD can be caused by the current playback. Only a
-        // finalized, non-echo utterance may cancel the response.
+        // A final can also interrupt short utterances that did not qualify for
+        // early interruption. Only finals are committed to the Agent.
         if (activeResponse?.opening || claim.config.voice?.realtime?.bargeIn) cancelActiveResponse('barge_in');
         bufferFinal(event.utteranceId, text);
       }
@@ -647,6 +718,8 @@ export function createAgentVoiceEngine(options: {
 
 
   function discardInput(): Promise<void> {
+    clearBargeInCandidate();
+    void releaseInputSpeech().catch(error => log.warn({ err: error, sessionId: claim.sessionId }, 'Unused voice preparation cleanup failed'));
     turn.reset();
     echoCandidates.clear();
     pendingTurn = undefined;
@@ -809,7 +882,7 @@ export function createAgentVoiceEngine(options: {
       cancelActiveResponse('session_closed');
       sttAbort.abort('session_closed');
       sttSession?.abort('session_closed');
-      closing = Promise.all([conversationTail, interruptionWrites, inputReset]).then(() => {});
+      closing = Promise.all([conversationTail, interruptionWrites, inputReset, releaseInputSpeech()]).then(() => {});
       return closing;
     },
   };

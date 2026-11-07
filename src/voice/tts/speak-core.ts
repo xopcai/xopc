@@ -543,6 +543,7 @@ export function prepareSpeechStreamSession(
   // and the combined reply must not inherit a single synthesis deadline.
   const sessionRequest = { ...request, signal: options.signal ?? new AbortController().signal };
   return resolved.plugin.openStreamSession(sessionRequest).then(session => ({
+    supportsConcurrentSynthesis: session.supportsConcurrentSynthesis,
     close: () => session.close(),
     synthesize: text => session.synthesize(preprocessText(text, {
       maxLength: config.maxTextLength || 4096, stripMarkdown: true, normalizeWhitespace: true,

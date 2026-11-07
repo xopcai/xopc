@@ -309,6 +309,44 @@ describe('pre-turn auto-compaction', () => {
     expect(mockRunXopcEmbeddedTurn.mock.calls.at(-1)?.[0].systemPrompt).not.toContain('live voice conversation');
   });
 
+  it('uses the configured voice model and thinking budget only for voice turns', async () => {
+    const agentManager = createMockAgentManager();
+    const modelManager = createMockModelManager();
+    const input = {
+      conversationId: 'voice-model-test',
+      userMessage: { role: 'user', content: 'Hello' } as AgentMessage,
+      sessionStore: createMockSessionStore({ needsCompaction: false }) as any,
+      agentManager: agentManager as any,
+      modelManager: modelManager as any,
+      getConfig: () => ({ ...configWithCompaction(false), voice: { realtime: {
+        assistant: { model: 'fast/voice-model', thinkingLevel: 'off' },
+      } } }) as any,
+    };
+    await runEmbeddedTurnForSession({ ...input, presentation: 'voice' });
+    expect(mockRunXopcEmbeddedTurn.mock.calls.at(-1)?.[0]).toMatchObject({
+      model: { provider: 'fast', id: 'voice-model' }, thinkingLevel: 'off',
+    });
+    expect(modelManager.getModelForSession()).toBe('test-model');
+    expect(agentManager.getOrCreateAgent().state.thinkingLevel).toBe('medium');
+    await runEmbeddedTurnForSession(input);
+    expect(mockRunXopcEmbeddedTurn.mock.calls.at(-1)?.[0]).toMatchObject({
+      model: { id: 'test-model' }, thinkingLevel: 'medium',
+    });
+  });
+
+  it('does not block a bounded voice request on compacting the entire stored history', async () => {
+    const sessionStore = createMockSessionStore({ needsCompaction: true });
+    await runEmbeddedTurnForSession({
+      conversationId: 'long-voice-history', presentation: 'voice',
+      userMessage: { role: 'user', content: 'Hello', timestamp: 123 } as AgentMessage,
+      sessionStore: sessionStore as any, agentManager: createMockAgentManager() as any,
+      modelManager: createMockModelManager() as any, getConfig: () => configWithCompaction(true) as any,
+    });
+    expect(sessionStore.compact).not.toHaveBeenCalled();
+    expect(mockRunXopcEmbeddedTurn.mock.calls.at(-1)?.[0].voiceHistoryTokens).toBe(4000);
+    expect(JSON.stringify(await sessionStore.load())).toContain('x'.repeat(1000));
+  });
+
   it('does NOT trigger compaction when below threshold', async () => {
     const sessionStore = createMockSessionStore({ needsCompaction: false });
     const agentManager = createMockAgentManager();

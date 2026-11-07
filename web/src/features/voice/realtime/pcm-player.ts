@@ -1,7 +1,7 @@
 export const REALTIME_VOICE_OUTPUT_GAIN = 1.7;
 
 export class PcmPlayer {
-  private readonly context = new AudioContext({ sampleRate: 24_000 });
+  private readonly context = new AudioContext({ sampleRate: 24_000, latencyHint: 'interactive' });
   private readonly output = this.context.createGain();
   private readonly ringbackOutput = this.context.createGain();
   private readonly limiter = this.context.createDynamicsCompressor();
@@ -102,7 +102,7 @@ export class PcmPlayer {
     const source = this.context.createBufferSource();
     source.buffer = buffer;
     source.connect(this.output);
-    const schedulingLead = this.hasStartedAudio ? 0.015 : 0.08;
+    const schedulingLead = this.hasStartedAudio ? 0.015 : 0.02;
     const startAt = Math.max(this.context.currentTime + schedulingLead, this.nextStartTime);
     source.start(startAt);
     this.hasStartedAudio = true;

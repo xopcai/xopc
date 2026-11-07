@@ -135,6 +135,7 @@
     "computer:benchmark": "node --import tsx scripts/benchmark-computer-regressions.mts",
     "computer:benchmark:windows": "node --import tsx scripts/benchmark-computer-windows.mts",
     "computer:benchmark:check": "tsc -p scripts/computer-benchmark/tsconfig.json",
+    "computer:osworld:check": "python3 -m unittest discover -s scripts/osworld -p 'test_*.py' && tsc -p scripts/osworld/tsconfig.json",
     "computer:evaluate": "node --import tsx scripts/evaluate-computer.mts",
     "computer:evaluate:run": "node --import tsx scripts/run-computer-evaluation.mts",
     "computer:evaluate:compare": "node --import tsx scripts/compare-computer-evaluations.mts",

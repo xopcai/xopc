@@ -53,6 +53,19 @@ describe('SpeakableSegmenter', () => {
     expect(segmenter.flush()).toEqual(['然后我们']);
   });
 
+  it('releases a short Chinese clause at a comma while preserving the rest', () => {
+    const segmenter = new SpeakableSegmenter(180, 24, 0);
+    segmenter.push('我是你的助手，可以帮你安排事情');
+    expect(segmenter.flushFirstPhrase()).toEqual(['我是你的助手，']);
+    expect(segmenter.flush()).toEqual(['可以帮你安排事情']);
+  });
+
+  it('can speak the first Chinese clause immediately without waiting for a timer', () => {
+    const segmenter = new SpeakableSegmenter(180, 24, 0, 6);
+    expect(segmenter.push('我是你的助手，可以帮你安排事情')).toEqual(['我是你的助手，']);
+    expect(segmenter.flush()).toEqual(['可以帮你安排事情']);
+  });
+
   it.each([
     '```ts\nconst hidden = 1;\n',
     '| hidden table content |',

@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "repository": "https://github.com/xlang-ai/OSWorld",
+  "commit": "8903ebeb0efdf74331bd7dc37ed91ccbbff22317",
+  "defaultModel": "openai/gpt-6.1-sol",
+  "smokeTaskIds": [
+    "e0df059f-28a6-4169-924f-b9623e7184cc",
+    "f9be0997-4b7c-45c5-b05c-4612b44a6118"
+  ],
+  "settings": {
+    "screenSize": [
+      1920,
+      1080
+    ],
+    "observationType": "screenshot_a11y_tree",
+    "actionSpace": "pyautogui",
+    "maxSteps": 30,
+    "maxOutputTokens": 2048,
+    "sleepAfterExecution": 1,
+    "setupWaitSeconds": 60,
+    "evaluationWaitSeconds": 20
+  },
+  "splits": {
+    "development": [
+      {
+        "domain": "chrome",
+        "id": "ae78f875-5b98-4907-bbb5-9c737fc68c03",
+        "sha256": "b75547d58400605d17c0d36d1ffd05441b52981220f3e6bb92e4a7e72ca9827f"
+      },
+      {
+        "domain": "chrome",
+        "id": "2888b4e6-5b47-4b57-8bf5-c73827890774",
+        "sha256": "c11641afa87520ef90d1840e1dab4b47619169c1d916ca5b93bf2dd13a74fe8f"
+      },
+      {
+        "domain": "chrome",
+        "id": "9f3f70fc-5afc-4958-a7b7-3bb4fcb01805",
+        "sha256": "4a9f289382782a26d203e1d3269f4d2bc20ccd366cad0ac2414560cb8dc18249"
+      },
+      {
+        "domain": "libreoffice_calc",
+        "id": "abed40dc-063f-4598-8ba5-9fe749c0615d",
+        "sha256": "e0f67b3c0dfdfff58a311fb78e9371dff848643a04ad489ea35f050e08bc7d2c"
+      },
+      {
+        "domain": "libreoffice_calc",
+        "id": "12382c62-0cd1-4bf2-bdc8-1d20bf9b2371",
+        "sha256": "875aac2be74f38494801c68a6a45d4dfec12aac180434badbe20c3cdb42733d6"
+      },
+      {
+        "domain": "libreoffice_calc",
+        "id": "a01fbce3-2793-461f-ab86-43680ccbae25",
+        "sha256": "2b0798000358a3888228ee9d6940bcca1780d05f9f72e8e14769c7453e482458"
+      },
+      {
+        "domain": "libreoffice_writer",
+        "id": "0e763496-b6bb-4508-a427-fad0b6c3e195",
+        "sha256": "2f6a974907368e79518a7379e8d05a0153024f40756c0e2c2e180e54ae3b3818"
+      },
+      {
+        "domain": "libreoffice_writer",
+        "id": "4bcb1253-a636-4df4-8cb0-a35c04dfef31",
+        "sha256": "d4db8ac40c0080e3a24150bc5cac670f6fe1a99458fe62434c3ce3ad815de0b7"
+      },
+      {
+        "domain": "libreoffice_writer",
+        "id": "66399b0d-8fda-4618-95c4-bfc6191617e9",
+        "sha256": "2c7a0804af650196c71036b6d7f9137230b08d0dd7efa6e084f3f98289c7ad00"
+      },
+      {
+        "domain": "libreoffice_impress",
+        "id": "bf4e9888-f10f-47af-8dba-76413038b73c",
+        "sha256": "28103c0720c55c27f05ae72a541e74c05d97fb67997ebef3133e93e1dd84df51"
+      },
+      {
+        "domain": "libreoffice_impress",
+        "id": "550ce7e7-747b-495f-b122-acdc4d0b8e54",
+        "sha256": "a974293524335d36d0505f7fc8b3a97f90beba8e675bda3452ba0fc9923d43b9"
+      },
+      {
+        "domain": "libreoffice_impress",
+        "id": "05dd4c1d-c489-4c85-8389-a7836c4f0567",
+        "sha256": "ac8fe4b98fb5d3497939f5f5cd5a0897dd5ab0c401551d1fa249d13c6e3094fd"
+      },
+      {
+        "domain": "gimp",
+        "id": "d16c99dc-2a1e-46f2-b350-d97c86c85c15",
+        "sha256": "25cb2ebad76ad5fa3d3c45279b20f877619cd8409cc7987ac93a9d64c1890bed"
+      },
+      {
+        "domain": "gimp",
+        "id": "045bf3ff-9077-4b86-b483-a1040a949cff",
+        "sha256": "72b5a4c5ca3cf16e1251d91669ca9d5e4c3d3a1eed2d1b0f25a4585eeef16496"
+      },
+      {
+        "domain": "gimp",
+        "id": "38f48d40-764e-4e77-a7cf-51dfce880291",
+        "sha256": "89a9b7f19ea0df7d9086f15f0a132e9cdb23d56bc17668c087a6f04d1bd89266"
+      },
+      {
+        "domain": "vlc",
+        "id": "215dfd39-f493-4bc3-a027-8a97d72c61bf",
+        "sha256": "c6c65aef0c54fa36eef8b5dd3e93bb32fcb31c35e9b1c7bcef63a808018e8bde"
+      },
+      {
+        "domain": "vlc",
+        "id": "cb130f0d-d36f-4302-9838-b3baf46139b6",
+        "sha256": "81813fbcb4fabd0463bf6ab470b2f93f839dfa5d3bb59bf70e0e0206690666cc"
+      },
+      {
+        "domain": "vlc",
+        "id": "8d9fd4e2-6fdb-46b0-b9b9-02f06495c62f",
+        "sha256": "80a5c26d4dba1af13d57fce396f4e6ab5582adb756d41a72f1afbfb4ec8e459c"
+      },
+      {
+        "domain": "vs_code",
+        "id": "5e2d93d8-8ad0-4435-b150-1692aacaa994",
+        "sha256": "e4b488780d5cf5660e2a359f003a7c227e2ac4f3906963bd8c9431ad582abfff"
+      },
+      {
+        "domain": "vs_code",
+        "id": "53ad5833-3455-407b-bbc6-45b4c79ab8fb",
+        "sha256": "69cdaccf130530f66d22f0b8b0ef30b192ddf520d620f17aa0c8e047bec5eb7f"
+      },
+      {
+        "domain": "vs_code",
+        "id": "eabc805a-bfcf-4460-b250-ac92135819f6",
+        "sha256": "b6875b49dca8d1ce0d8e9ed0d995d8daddfa62773f1d037f5695ccd210735149"
+      },
+      {
+        "domain": "os",
+        "id": "f9be0997-4b7c-45c5-b05c-4612b44a6118",
+        "sha256": "6a4884ce7c438983aa25645e52981edd76600800f7ccee5f762d4d4d5538a1d2"
+      },
+      {
+        "domain": "os",
+        "id": "e0df059f-28a6-4169-924f-b9623e7184cc",
+        "sha256": "a507ec6c35284c1413efe0d8a325b41a1626522221efc14f153742a865f1c04d"
+      },
+      {
+        "domain": "os",
+        "id": "bedcedc4-4d72-425e-ad62-21960b11fe0d",
+        "sha256": "10f64270277d26bb9291722f4eabb4933fc95e5afec63cfc57ff3547f37b8e8d"
+      }
+    ],
+    "holdout": [
+      {
+        "domain": "chrome",
+        "id": "7a5a7856-f1b6-42a4-ade9-1ca81ca0f263",
+        "sha256": "6902a90ffdc1ec971eacd295588a090eeb117bc305ac24ec000299081137b6f4"
+      },
+      {
+        "domain": "libreoffice_calc",
+        "id": "4de54231-e4b5-49e3-b2ba-61a0bec721c0",
+        "sha256": "9c0ee133ecd121efda206f98ff023b7e92c8d8884bfec07c138dd80da91e4186"
+      },
+      {
+        "domain": "libreoffice_writer",
+        "id": "d53ff5ee-3b1a-431e-b2be-30ed2673079b",
+        "sha256": "50cebf79a1c2abcc63cdc4da51a4ff1cf31d0e86ae204c34327230f4b481f9a0"
+      },
+      {
+        "domain": "libreoffice_impress",
+        "id": "08aced46-45a2-48d7-993b-ed3fb5b32302",
+        "sha256": "ed01cef07e1c1a000326b245f8aba48cf6f02918c648e78aaeafb223e1e307c2"
+      },
+      {
+        "domain": "gimp",
+        "id": "734d6579-c07d-47a8-9ae2-13339795476b",
+        "sha256": "0584d833e04b6d408b5b7c4c6a534f215cb306c4828ee655603dd88655488059"
+      },
+      {
+        "domain": "vlc",
+        "id": "fba2c100-79e8-42df-ae74-b592418d54f4",
+        "sha256": "1da8403e299e71fdf0aaebac9197ca29887007556a872a128c45bd2a57d76a4d"
+      },
+      {
+        "domain": "vs_code",
+        "id": "ea98c5d7-3cf9-4f9b-8ad3-366b58e0fcae",
+        "sha256": "754b42cd95a098df9f68de23787d10c8415024f1d64a2a8e3810006b78e953ae"
+      },
+      {
+        "domain": "os",
+        "id": "4127319a-8b79-4410-b58a-7a151e15f3d7",
+        "sha256": "ebfa1d3284675a98ec44b2ba8cc873dad35b4996ed6ea681288d9e2613fe753d"
+      }
+    ]
+  }
+}

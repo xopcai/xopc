@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["./model-bridge.mts"],
+  "exclude": ["../../node_modules", "../../dist"]
+}

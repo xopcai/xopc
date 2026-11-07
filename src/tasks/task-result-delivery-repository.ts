@@ -31,6 +31,33 @@ export interface TaskResultDeliveryRow {
 }
 
 export class TaskResultDeliveryRepository {
+  /** Only cards persisted in this conversation's current transcript confirm file delivery. */
+  fileDeliveryState(taskId: string, conversationId: string): {
+    status: 'not_delivered' | 'pending' | 'delivered' | 'stale' | 'failed';
+    availableFileCount: number;
+    resultId?: string;
+  } {
+    const db = getSqliteDatabase();
+    const run = new TaskRunRepository().getLatestRoot(taskId);
+    const row = run && db.prepare(`SELECT payload_json, status, message_entry_id FROM task_result_deliveries
+      WHERE task_run_id = ? AND conversation_id = ?`).get(run.id, conversationId) as
+        { payload_json: string; status: TaskResultDeliveryRow['status']; message_entry_id: string | null } | undefined;
+    if (!row) return { status: 'not_delivered', availableFileCount: 0 };
+    const delivery = TaskResultDeliverySchema.parse(JSON.parse(row.payload_json));
+    const task = new TaskRepository().get(taskId);
+    if (delivery.contractVersion !== undefined && delivery.contractVersion !== task?.latestContractVersion
+      || delivery.instructionSequence !== undefined && delivery.instructionSequence !== taskInstructionSequence(taskId)) {
+      return { status: 'stale', availableFileCount: 0 };
+    }
+    const availableFileCount = delivery.outcome.deliverables.filter(item => item.availability === 'available').length;
+    const inCurrentTranscript = row.message_entry_id && db.prepare(`SELECT 1 FROM transcript_entries entry
+      JOIN sessions session ON session.active_transcript_id = entry.transcript_id
+      WHERE entry.entry_id = ? AND session.conversation_id = ?`).get(row.message_entry_id, conversationId);
+    return { status: row.status === 'delivered' && (!availableFileCount || !inCurrentTranscript)
+      ? 'not_delivered' : row.status, availableFileCount: row.status === 'delivered' && inCurrentTranscript ? availableFileCount : 0,
+      resultId: delivery.deliveryId };
+  }
+
   capture(runId: string, value: TurnOutcome): void {
     const outcome = TurnOutcomeSchema.parse({ ...value, evidence: [], changeSet: undefined });
     if (outcome.deliverables.length > 50 || JSON.stringify(outcome).length > 256_000) {

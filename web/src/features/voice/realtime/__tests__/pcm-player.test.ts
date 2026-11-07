@@ -110,10 +110,10 @@ describe('PcmPlayer', () => {
   it('reports the scheduled start delay including buffered audio', () => {
     const player = new PcmPlayer();
     const played = vi.fn();
-    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(80);
-    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(100);
+    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(20);
+    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(40);
     player.clear();
-    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(80);
+    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(20);
   });
 
   it('keeps a fast audio burst and acknowledges only completed playback', () => {
@@ -121,7 +121,7 @@ describe('PcmPlayer', () => {
     const played = vi.fn();
     for (let i = 0; i < 4; i += 1) player.enqueue(new ArrayBuffer(48_000), played);
     expect(context.sources).toHaveLength(4);
-    expect(context.sources[3].start).toHaveBeenCalledWith(3.08);
+    expect(context.sources[3].start).toHaveBeenCalledWith(3.02);
     expect(played).not.toHaveBeenCalled();
     expect(player.hasPendingAudio).toBe(true);
     context.sources.forEach((source) => source.onended?.());

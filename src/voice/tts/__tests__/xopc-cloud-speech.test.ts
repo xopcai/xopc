@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Config } from '../../../config/schema.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
 
-const { resolveApiKey, openPlatformTts } = vi.hoisted(() => ({ resolveApiKey: vi.fn(), openPlatformTts: vi.fn() }));
-vi.mock('../../platform-streams.js', () => ({ openPlatformTts }));
+const { resolveApiKey, openPlatformTts, openPlatformTtsSession } = vi.hoisted(() => ({ resolveApiKey: vi.fn(), openPlatformTts: vi.fn(), openPlatformTtsSession: vi.fn() }));
+vi.mock('../../platform-streams.js', () => ({ openPlatformTts, openPlatformTtsSession }));
 
 vi.mock('../../../providers/provider-auth-service.js', () => ({
   getProviderAuthService: () => ({ resolveApiKey }),
@@ -36,6 +36,20 @@ function seedCatalog(): void {
 }
 
 describe('xopcCloudSpeechProvider', () => {
+  it('prepares the same frozen cloud route without sending any synthesis text', async () => {
+    const source = getModelCatalogStore().getSource('xopc-cloud')!;
+    source.models[0].voice!.modes.push('speech.stream');
+    getModelCatalogStore().saveSource('xopc-cloud', source);
+    const session = { synthesize: vi.fn(), close: vi.fn() };
+    openPlatformTtsSession.mockResolvedValue(session);
+    const result = await xopcCloudSpeechProvider.openStreamSession!({ cfg: {} as Config,
+      providerConfig: { model: 'cloud-tts', voice: 'voice-a', baseUrl: 'https://models.example/v1' },
+      target: 'audio-file', timeoutMs: 1000, signal: new AbortController().signal });
+    expect(result).toBe(session);
+    expect(openPlatformTtsSession).toHaveBeenCalledWith(expect.objectContaining({ voice: 'voice-a' }));
+    expect(openPlatformTtsSession.mock.calls.at(-1)![0]).not.toHaveProperty('text');
+    expect(session.synthesize).not.toHaveBeenCalled();
+  });
   it('sends the public voice ID in the handshake so the cloud can select its routing target', async () => {
     const source = getModelCatalogStore().getSource('xopc-cloud')!;
     source.models[0].voice!.modes = ['speech', 'speech.stream'];
