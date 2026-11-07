@@ -50,6 +50,7 @@ import { isElectronDarwin } from '@/lib/electron-window-chrome';
 import { loadTaskDetailPage, loadWorkDiscoveryOverlay } from '@/lib/route-preload';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSettingsNavigationOrigin } from '@/features/settings/use-settings-navigation-origin';
 
 const WorkDiscoveryOverlay = lazy(() =>
   loadWorkDiscoveryOverlay().then((module) => ({ default: module.WorkDiscoveryOverlay })),
@@ -98,6 +99,7 @@ export function AppShell() {
 }
 
 function AppShellContent() {
+  useSettingsNavigationOrigin();
   const token = useGatewayStore((s) => s.conversationId);
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
