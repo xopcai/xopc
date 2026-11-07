@@ -29,6 +29,32 @@ describe('persistent memory learning', () => {
   beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
 
+  it('recovers native voice turns in canonical owner conversations without routing JSON', async () => {
+    ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sourceChatId: '', sessionType: 'chat' });
+    for (const [role, content] of [['user', '以后叫我小林。'], ['assistant', '好的，小林。']] as const) {
+      appendTranscriptEntry(id, { role: 'custom', customType: 'voice_omni_transcript', content,
+        details: { role, itemId: role, callId: 'voice-test', interrupted: false }, display: true, timestamp: Date.now() });
+    }
+    getSqliteDatabase().prepare('UPDATE transcript_entries SET created_at = ?').run(Date.now() - 61_000);
+    const execute = async (job: Parameters<typeof finishLearningJob>[0]) => { finishLearningJob(job, () => {}); };
+    const service = new MemoryLearningService({ getConfig: () => config, workspaceForSession: () => '/workspace', execute });
+    await service.runNow(); service.stop();
+    expect(getSqliteDatabase().prepare('SELECT state FROM memory_learning_jobs').get()).toMatchObject({ state: 'succeeded' });
+    expect(getSqliteDatabase().prepare('SELECT processed_seq FROM memory_learning_cursors').get()).toMatchObject({ processed_seq: 2 });
+  });
+
+  it('does not infer owner speech from missing routing on internal conversations', async () => {
+    ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'subagent' });
+    for (const role of ['user', 'assistant'] as const) appendTranscriptEntry(id, {
+      role: 'custom', customType: 'voice_omni_transcript', content: 'Internal text is not owner identity evidence.',
+      details: { role, itemId: role, callId: 'internal-test', interrupted: false }, timestamp: Date.now(),
+    });
+    const service = new MemoryLearningService({ getConfig: () => config, workspaceForSession: () => '/workspace',
+      execute: async () => { throw new Error('Internal evidence must not be selected'); } });
+    await service.runNow(); service.stop();
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM memory_learning_jobs').get()).toEqual({ n: 0 });
+  });
+
   it('recovers idle short conversations without an in-memory turn counter', () => {
     seed();
     const now = Date.now();

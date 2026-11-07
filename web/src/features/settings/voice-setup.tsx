@@ -61,8 +61,8 @@ export function VoiceSetup({ section, v, form, pending, onChange }: {
       {section === 'listening' ? <>
       <label className="flex items-center justify-between gap-3 text-sm font-medium text-fg"><span>{s.enable}</span><input type="checkbox" role="switch" aria-checked={realtime.enabled} className="ui-checkbox" checked={realtime.enabled} onChange={(e) => updateRealtime({ enabled: e.target.checked })} /></label>
       <label className="block space-y-2 text-sm"><span>{v.experience.defaultMode}</span>
-        <Select value={realtime.defaultEngine} className={selectTriggerClass} onChange={(e) => updateRealtime({ defaultEngine: e.target.value as 'agent' | 'omni' })}>
-          <SelectOption value="agent">{v.experience.assistant}</SelectOption><SelectOption value="omni">{v.experience.natural}</SelectOption>
+        <Select value={realtime.defaultEngine} className={selectTriggerClass} onChange={(e) => updateRealtime({ defaultEngine: e.target.value as 'auto' | 'agent' | 'omni' })}>
+          <SelectOption value="auto">{language === 'zh' ? '自动选择' : 'Automatic'}</SelectOption><SelectOption value="agent">{v.experience.assistant}</SelectOption><SelectOption value="omni">{v.experience.natural}</SelectOption>
         </Select>
       </label>
       <p className="text-xs text-fg-muted">{realtime.defaultEngine === 'agent' ? v.experience.assistantHint : v.experience.naturalHint} {v.experience.nextCall}</p>

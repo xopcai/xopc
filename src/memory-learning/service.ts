@@ -5,6 +5,7 @@ import { createLogger } from '../utils/logger.js';
 import { claimLearningJob, enqueueConversationLearning, failLearningJob, renewLearningLease, learningPolicyHash, PERSONAL_UNDERSTANDING_VERSION, type LearningJob } from './repository.js';
 import { learnTaskReceipts } from './task-receipts.js';
 import { pruneSourceRetention, recoverKnowledgeIndexes, recoverSourceLearning, runSourceLearning } from './source-learning.js';
+import { learningRoleSql, OWNER_LEARNING_SESSION_SQL } from './transcript-source.js';
 
 const log = createLogger('MemoryLearning');
 
@@ -41,14 +42,9 @@ export class MemoryLearningService {
       const sessions = getSqliteDatabase().prepare(`SELECT s.conversation_id FROM sessions s
         LEFT JOIN session_config cfg ON cfg.conversation_id = s.conversation_id
         WHERE s.updated_at >= ? AND COALESCE(cfg.user_context_mode, 'enabled') = 'enabled'
-        AND json_extract(s.routing_json, '$.peerKind') = 'direct'
-        AND (json_extract(s.routing_json, '$.source') IN ('webchat','cli','tui') OR EXISTS (
-          SELECT 1 FROM owner_identity_bindings b WHERE b.revoked_at IS NULL
-          AND b.channel = json_extract(s.routing_json, '$.source')
-          AND b.account_id = json_extract(s.routing_json, '$.accountId')
-          AND b.peer_id = json_extract(s.routing_json, '$.peerId')))
+        AND ${OWNER_LEARNING_SESSION_SQL}
         AND EXISTS (SELECT 1 FROM transcript_entries e WHERE e.transcript_id = s.active_transcript_id
-          AND e.role = 'assistant' AND e.seq > COALESCE((SELECT processed_seq FROM memory_learning_cursors c
+          AND ${learningRoleSql('assistant', 'e')} AND e.seq > COALESCE((SELECT processed_seq FROM memory_learning_cursors c
             WHERE c.conversation_id = s.conversation_id AND c.transcript_id = s.active_transcript_id), 0))
         ORDER BY COALESCE((SELECT MAX(j.updated_at) FROM memory_learning_jobs j
           WHERE j.conversation_id = s.conversation_id), 0), s.updated_at DESC LIMIT 200`)
@@ -61,12 +57,7 @@ export class MemoryLearningService {
           JOIN memory_learning_cursors c ON c.conversation_id = s.conversation_id
           LEFT JOIN session_config cfg ON cfg.conversation_id = s.conversation_id
           WHERE c.processed_seq > 0 AND COALESCE(cfg.user_context_mode, 'enabled') = 'enabled'
-          AND json_extract(s.routing_json, '$.peerKind') = 'direct'
-          AND (json_extract(s.routing_json, '$.source') IN ('webchat','cli','tui') OR EXISTS (
-            SELECT 1 FROM owner_identity_bindings b WHERE b.revoked_at IS NULL
-            AND b.channel = json_extract(s.routing_json, '$.source')
-            AND b.account_id = json_extract(s.routing_json, '$.accountId')
-            AND b.peer_id = json_extract(s.routing_json, '$.peerId')))
+          AND ${OWNER_LEARNING_SESSION_SQL}
           AND EXISTS (SELECT 1 FROM memory_learning_jobs old WHERE old.conversation_id = s.conversation_id
             AND old.transcript_id = c.transcript_id AND old.state = 'succeeded'
             AND (old.extractor_version LIKE '2:%' OR old.extractor_version LIKE 'rebuild:%'))

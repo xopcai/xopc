@@ -88,6 +88,8 @@ export interface UseRealtimeVoiceReturn {
   partialTranscript: string;
   finalTranscript: string;
   responseText: string;
+  activeTaskIds: string[];
+  cancelTask: (taskId: string) => void;
   activities: Array<{ toolCallId: string; toolName: string; status: 'running' | 'completed' | 'failed' }>;
   clarification: (ClarificationPresentation & {
     responseId: string;
@@ -161,7 +163,8 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const confirmRef = useRef<() => void>(() => {});
   const transcriptRevisionsRef = useRef(new Map<string, { revision: number; final: boolean }>());
   const activeResponseIdRef = useRef<string | null>(null);
-  const activeTaskIdRef = useRef<string | null>(null);
+  const runningTaskIdsRef = useRef(new Set<string>());
+  const [activeTaskIds, setActiveTaskIds] = useState<string[]>([]);
   const responseDoneRef = useRef(false);
   const speechStoppedAtRef = useRef<number | null>(null);
   const firstAudioRef = useRef(false);
@@ -233,7 +236,8 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     dictationRef.current.clear();
     finalizingRef.current = false;
     activeResponseIdRef.current = null;
-    activeTaskIdRef.current = null;
+    runningTaskIdsRef.current.clear();
+    setActiveTaskIds([]);
   }, [stopMedia, stopTimer]);
 
   const finishIdle = useCallback(() => {
@@ -495,17 +499,26 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             firstAudioRef.current = false;
             playedBytesRef.current = 0;
             setResponseText('');
-            setActivities([]);
-            setClarification(null);
+            if (!runningTaskIdsRef.current.size) {
+              setActivities([]);
+              setClarification(null);
+            }
             setResponsePhase('thinking');
           }
-          if (event.type === 'task.created' && activeResponseIdRef.current === event.payload.responseId) activeTaskIdRef.current = event.payload.taskId;
-          if (event.type === 'task.activity' && activeTaskIdRef.current === event.payload.taskId) {
+          if (event.type === 'task.created') {
+            runningTaskIdsRef.current.add(event.payload.taskId);
+            setActiveTaskIds([...runningTaskIdsRef.current]);
+          }
+          if (event.type === 'task.activity' && runningTaskIdsRef.current.has(event.payload.taskId)) {
             const activity = { toolCallId: event.payload.toolCallId, toolName: event.payload.toolName, status: event.payload.status };
             setActivities((current) => [...current.filter((value) => value.toolCallId !== activity.toolCallId), activity].slice(-8));
           }
-          if (event.type === 'task.done' && activeTaskIdRef.current === event.payload.taskId) { activeTaskIdRef.current = null; setActivities([]); }
-          if (event.type === 'response.clarification' && activeResponseIdRef.current === event.payload.responseId) setClarification(event.payload);
+          if (event.type === 'task.done') {
+            runningTaskIdsRef.current.delete(event.payload.taskId);
+            setActiveTaskIds([...runningTaskIdsRef.current]);
+            if (!runningTaskIdsRef.current.size) setActivities([]);
+          }
+          if (event.type === 'response.clarification') setClarification(event.payload);
           if (event.type === 'response.text.delta' && activeResponseIdRef.current === event.payload.responseId) {
             setResponsePhase('speaking');
             setResponseText((current) => current + event.payload.delta);
@@ -759,6 +772,8 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     partialTranscript,
     finalTranscript,
     responseText,
+    activeTaskIds,
+    cancelTask: (taskId) => { if (runningTaskIdsRef.current.has(taskId)) clientRef.current?.cancelTask(taskId); },
     activities,
     clarification,
     dismissClarification: (requestId) => setClarification((current) => current?.requestId === requestId ? null : current),

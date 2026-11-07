@@ -201,7 +201,7 @@ describe('Harmony voice connection recovery', () => {
       } } });
       if (path.endsWith('/preflight')) return JSON.stringify({ ok: true });
       if (path.endsWith('/sessions')) return JSON.stringify({ payload: {
-        sessionId: `session-${++issued}`, ticket: `ticket-${issued}`, limits: { maxSessionMs: 600000 }
+        sessionId: `session-${++issued}`, ticket: `ticket-${issued}`, route: { engine: 'omni' }, limits: { maxSessionMs: 600000 }
       } });
       return JSON.stringify({ ok: true });
     });
@@ -217,7 +217,7 @@ describe('Harmony voice connection recovery', () => {
       if (path.endsWith('/sessions')) {
         const request = JSON.parse(body); bodies.push(request);
         return JSON.stringify({ payload: { sessionId: `session-${++issued}`, ticket: 'ticket', connectionEpoch: issued,
-          limits: { maxSessionMs: 600000 }, openingGreeting: { accepted: request.openingGreeting.initiation === 'user', greetingResponseId: 'greeting' } } });
+          route: { engine: 'agent' }, limits: { maxSessionMs: 600000 }, openingGreeting: { accepted: request.openingGreeting.initiation === 'user', greetingResponseId: 'greeting' } } });
       }
       return JSON.stringify({ ok: true });
     });

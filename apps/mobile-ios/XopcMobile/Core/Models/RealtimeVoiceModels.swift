@@ -24,11 +24,13 @@ struct RealtimeVoiceStatus: Decodable, Sendable {
 }
 
 enum RealtimeVoiceMode: String, CaseIterable, Sendable {
+    case automatic
     case natural
     case assistant
 
     var title: LocalizedStringResource {
         switch self {
+        case .automatic: "语音通话"
         case .natural: "实时语音"
         case .assistant: "语音助手"
         }
@@ -38,7 +40,7 @@ enum RealtimeVoiceMode: String, CaseIterable, Sendable {
 struct RealtimeVoiceSessionRequest: Encodable, Sendable {
     let purpose = "conversation"
     let conversationId: String
-    let mode: RealtimeVoiceMode
+    let mode: RealtimeVoiceMode?
     var language: String?
     var openingGreeting: OpeningGreetingRequest?
 

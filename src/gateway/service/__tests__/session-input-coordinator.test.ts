@@ -227,6 +227,26 @@ describe('SessionInputCoordinator', () => {
     expect(coordinator.snapshot(conversationId).inputs).toEqual([]);
   });
 
+  it('preserves generated native voice provenance when steering an active run', async () => {
+    let complete!: (value: { status: string; summary: string }) => void;
+    const steer = vi.fn(async () => true);
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true,
+      execute: () => new Promise<{ status: string; summary: string }>(resolve => { complete = resolve; }),
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
+      steer, emit: () => {},
+    });
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
+    const clientMessageId = 'voice-action:transcript:tool';
+    await coordinator.submit({ conversationId, clientMessageId, delivery: 'steer', content: 'Generated task',
+      origin: { type: 'channel', channel: 'voice' } });
+    expect(steer).toHaveBeenCalledWith(conversationId, 'Generated task', coordinator.snapshot(conversationId).activeRunId,
+      expect.objectContaining({ voiceAgentInstruction: true }));
+    complete({ status: 'ok', summary: 'done' });
+    await coordinator.waitForCompletion(conversationId, clientMessageId);
+  });
+
   it('allows a verified endpoint submission to steer an active run', async () => {
     let complete!: (value: { status: string; summary: string }) => void;
     const steer = vi.fn(async () => true);

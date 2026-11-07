@@ -12,7 +12,7 @@ import type { VoiceConversationContext } from '../conversation-context.js';
 
 vi.mock('../../../gateway/security/device-request-proof.js', () => ({ verifyDeviceConnectionProof: () => true }));
 
-const engine = vi.hoisted(() => ({ start: vi.fn(async () => {}), close: vi.fn(async () => {}), appendAudio: vi.fn(), setInputMuted: vi.fn(), cancel: vi.fn(), acknowledge: vi.fn(), commit: vi.fn() }));
+const engine = vi.hoisted(() => ({ start: vi.fn(async () => {}), close: vi.fn(async () => {}), appendAudio: vi.fn(), setInputMuted: vi.fn(), cancel: vi.fn(), acknowledge: vi.fn(), commit: vi.fn(), updateContext: vi.fn(() => true), restoreTasks: vi.fn() }));
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../omniEngine.js', () => ({ createOmniVoiceEngine: (options: unknown) => { create(options); return engine; } }));
 
@@ -23,7 +23,9 @@ describe('native voice memory lifecycle', () => {
   let events: VoiceServerEvent[];
   const conversationId = 'agent:main:webchat:default:direct:test';
   afterEach(async () => {
-    socket?.terminate(); runtime?.close();
+    socket?.terminate();
+    if (runtime) await vi.waitFor(() => expect(runtime.hasConversation(conversationId)).toBe(false));
+    runtime?.close();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
     vi.clearAllMocks();
   });
@@ -31,11 +33,15 @@ describe('native voice memory lifecycle', () => {
     events = [];
     const config = ConfigSchema.parse({ voice: { realtime: { enabled: true, defaultEngine: 'omni', omni: { provider: 'alibaba', apiKey: 'test', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', instructions: '' } } } });
     runtime = new VoiceRealtimeRuntime({ getConfig: () => config, sessionExists: async () => true,
-      sessionBusy: () => false, getSessionIdentity: async () => 'stored', getConversationContext: async () => context,
+      sessionBusy: () => false, getSessionIdentity: async () => 'stored', getConversationContext: async () => ({ ...context }),
       recordOmniTranscript: async () => {}, recordInterruption: async () => {},
       agentBroker: { delegate: vi.fn(), cancel: vi.fn(async () => true) } });
     server = createServer(); server.on('upgrade', (request, client, head) => runtime.handleUpgrade(request, client as Socket, head));
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
+    await dial(ready);
+  }
+  async function dial(ready = true) {
+    events = [];
     const session = await runtime.createSession({ purpose: 'conversation', mode: 'natural', conversationId,
       supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'owner');
     socket = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}${session.websocketPath}`);
@@ -49,6 +55,35 @@ describe('native voice memory lifecycle', () => {
     subscribe: (invalidate) => onUserContextChange(() => invalidate()),
   } });
 
+  it('reloads private history on redial independently of the visible shared Chat snapshot', async () => {
+    const value: VoiceConversationContext = { identity: 'Ada', history: [], sharedChat: '' };
+    await start(value);
+    expect(create.mock.calls[0][0].restoreHistory()).toBe('');
+    value.history.push({ role: 'user', content: '周四去杭州，预算三千，不要订票。', timestamp: Date.now() });
+    socket.close();
+    await vi.waitFor(() => expect(runtime.hasConversation(conversationId)).toBe(false));
+    await dial();
+    const options = create.mock.calls[1][0];
+    expect(options.restoreHistory()).toContain('周四去杭州');
+    expect(options.route.instructions).not.toContain('周四去杭州');
+    expect(value.sharedChat).toBe('');
+    expect(events.some(event => JSON.stringify(event).includes('周四去杭州'))).toBe(false);
+  });
+
+  it('synchronizes a new shared Chat snapshot once and restores tasks after the client is ready', async () => {
+    const value = { ...context(), sharedChat: 'previous snapshot' };
+    await start(value);
+    expect(engine.restoreTasks).toHaveBeenCalledOnce();
+    value.sharedChat = '{"recentTurns":[{"role":"user","text":"Keep the draft private"}]}';
+    runtime.refreshConversation(conversationId);
+    await vi.waitFor(() => expect(engine.updateContext).toHaveBeenCalledOnce());
+    expect(engine.updateContext).toHaveBeenCalledWith(create.mock.calls[0][0].route.instructions, value.sharedChat);
+    runtime.refreshConversation(conversationId);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(engine.updateContext).toHaveBeenCalledOnce();
+    expect(engine.close).not.toHaveBeenCalled();
+  });
+
   it('injects memory only upstream and ends the connection when its source changes', async () => {
     await start(context());
     expect(create.mock.calls[0][0].route.instructions).toContain('Mic');
@@ -61,6 +96,20 @@ describe('native voice memory lifecycle', () => {
     expect(runtime.hasConversation(conversationId)).toBe(false);
     notifyUserContextChange({ kind: 'policy' }); await Promise.resolve();
     expect(engine.close).toHaveBeenCalledOnce();
+  });
+
+  it('retains a newer Chat change arriving during an in-flight refresh', async () => {
+    const value = { ...context(), sharedChat: 'before' };
+    await start(value);
+    engine.updateContext.mockImplementationOnce(() => {
+      value.sharedChat = 'latest';
+      runtime.refreshConversation(conversationId);
+      return true;
+    });
+    value.sharedChat = 'first';
+    runtime.refreshConversation(conversationId);
+    await vi.waitFor(() => expect(engine.updateContext).toHaveBeenCalledTimes(2));
+    expect(engine.updateContext).toHaveBeenLastCalledWith(expect.any(String), 'latest');
   });
 
   it('rejects a stale snapshot before opening an upstream connection', async () => {

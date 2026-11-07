@@ -21,6 +21,7 @@ export const higgsVoiceSchema = z.enum(HIGGS_REALTIME_VOICES);
 export type HiggsVoice = z.infer<typeof higgsVoiceSchema>;
 export const voiceCallPreferencesSchema = z.strictObject({
   openingGreetingEnabled: z.boolean(),
+  enginePreference: z.enum(['auto', 'natural', 'assistant']).optional(),
   defaultMode: voiceModeSchema.optional(),
   naturalModel: z.string().trim().min(1).max(300).optional(),
   higgsVoice: higgsVoiceSchema.optional(),

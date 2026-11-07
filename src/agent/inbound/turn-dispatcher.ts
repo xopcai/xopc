@@ -184,10 +184,14 @@ export class TurnDispatcher {
   async steerWebchatSession(conversationId: string, text: string, expectedRunId?: string, options?: {
     attachments?: DirectAttachment[];
     sourceContexts?: AgentSourceContext[];
+    voiceAgentInstruction?: boolean;
   }): Promise<boolean> {
     const trimmed = text.trim();
     if (!trimmed && !options?.attachments?.length && !options?.sourceContexts?.length) return false;
     try {
+      if (options?.voiceAgentInstruction) {
+        return await queueEmbeddedSteer(conversationId, trimmed, expectedRunId, { voiceAgentInstruction: true });
+      }
       if (options?.attachments?.length || options?.sourceContexts?.length) {
         const c = this.cfg;
         const modelRef = c.modelManager.getModelForSession(conversationId);

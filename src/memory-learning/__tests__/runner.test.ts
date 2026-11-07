@@ -40,6 +40,24 @@ const id = '4dffa204-0300-4d2d-89ce-55305490c550';
 describe('learning worker integration', () => {
   beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); seedTestAgentCatalog(); prompt.mockReset(); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
+  it('learns native user transcription with its original provenance and keeps assistant speech non-authoritative', async () => {
+    ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sourceChatId: '', sessionType: 'chat' });
+    for (const [role, content] of [['user', 'Use SQLite for local deployment.'], ['assistant', 'A speculative assistant name.']] as const) {
+      appendTranscriptEntry(id, { role: 'custom', customType: 'voice_omni_transcript', content,
+        details: { role, callId: 'voice-test', itemId: role, interrupted: role === 'assistant' }, display: true, timestamp: Date.now() });
+    }
+    const config = ConfigSchema.parse({});
+    expect(enqueueConversationLearning(config, id, '/workspace', true)).toBeTypeOf('string');
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(prompt).toHaveBeenCalledOnce();
+    const evidence = JSON.stringify(prompt.mock.calls[0][1]);
+    expect(evidence).toContain('[source_role:user]');
+    expect(evidence).toContain('Use SQLite for local deployment.');
+    expect(evidence).toContain('[source_role:assistant]');
+    expect(evidence).not.toContain('A speculative assistant name.');
+    expect(getSqliteDatabase().prepare('SELECT status, content FROM knowledge_items').get()).toMatchObject({
+      status: 'active', content: 'Atlas uses SQLite for local deployment.' });
+  });
   it('runs a persisted job without a live main Agent and commits grounded work knowledge with progress', async () => {
     ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sourceChatId: 'owner', sessionType: 'chat',
       routing: { agentId: 'main', source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner' } });

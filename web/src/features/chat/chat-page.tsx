@@ -1436,7 +1436,6 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 currentAgentId={agents.displayAgentId}
                 voiceAgentName={personal && personalWelcome ? personalWelcome.name : welcomeAgent.name}
                 voiceTaskId={taskId ?? undefined}
-                voiceMode={personal ? 'assistant' : undefined}
                 prepareVoiceSession={session.projectPreparation ? projectComposer.prepareSession : undefined}
               />
               </div>

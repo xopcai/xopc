@@ -128,7 +128,7 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain('XopcChatActionPanel({ open: this.panelOpen');
     expect(actionPanel).toContain("this.actionTile('photos', $r('app.string.chat_photos')");
     expect(actionPanel).toContain("this.actionTile('reference-note', $r('app.string.chat_reference_note')");
-    expect(actionPanel).toContain("this.actionTile('voice-with-tools', $r('app.string.voice_call_action_assistant')");
+    expect(actionPanel).toContain("this.actionTile('voice-call', $r('app.string.voice_call_action_natural')");
     expect(home).toContain("SymbolGlyph(this.quickPanelOpen ? $r('sys.symbol.xmark_circle') : $r('sys.symbol.plus_circle'))");
     expect(home).not.toContain('showQuickAttachments');
     expect(home).not.toContain("showActionSheet({ title: '', message: '', sheets:");
@@ -335,7 +335,7 @@ describe('chat bottom region composition', () => {
 
   it('uses a compact horizontally swipeable action grid with common actions on the first page', () => {
     const panel = actionPanel;
-    const secondPage = panel.indexOf("this.actionTile('voice-no-tools'");
+    const secondPage = panel.indexOf("this.actionTile('voice-call'");
 
     expect(panel).toContain('Swiper()');
     expect(panel).toContain(".id(this.idPrefix + '-panel').width('100%').height(196).loop(false).autoPlay(false)");
@@ -348,7 +348,7 @@ describe('chat bottom region composition', () => {
       expect(panel.indexOf(`this.actionTile('${id}'`)).toBeLessThan(secondPage);
     }
     expect(secondPage).toBeGreaterThan(0);
-    expect(panel.indexOf("this.actionTile('voice-with-tools'")).toBeGreaterThan(secondPage);
+    expect(panel).not.toContain("this.actionTile('voice-with-tools'");
   });
 
   it('keeps voice and rich follow-up capture available while an agent run is active', () => {

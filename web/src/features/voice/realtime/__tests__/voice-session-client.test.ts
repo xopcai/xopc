@@ -12,12 +12,12 @@ describe('voice client timing negotiation', () => {
 
   it.each([undefined, 'assistant'] as const)('negotiates an opening before any input when the requested mode is %s', async (mode) => {
     const stopped = new Error('Stop before opening WebSocket');
-    vi.mocked(fetchJson).mockResolvedValueOnce({ payload: { openingGreeting: true } }).mockRejectedValueOnce(stopped);
+    vi.mocked(fetchJson).mockRejectedValueOnce(stopped);
     const logicalCallId = crypto.randomUUID();
     await expect(VoiceSessionClient.connect({ purpose: 'conversation', mode, logicalCallId,
       conversationId: 'personal-call', onEvent: vi.fn() })).rejects.toThrow(stopped);
-    expect(fetchJson).toHaveBeenNthCalledWith(1, '/api/voice/realtime/status', expect.any(Object));
-    const request = JSON.parse(String(vi.mocked(fetchJson).mock.calls[1][1]?.body));
+    expect(fetchJson).toHaveBeenCalledExactlyOnceWith('/api/voice/realtime/sessions', expect.any(Object));
+    const request = JSON.parse(String(vi.mocked(fetchJson).mock.calls[0][1]?.body));
     expect(request.openingGreeting).toEqual({ logicalCallId, initiation: 'user', supportsOutputReady: true });
   });
 

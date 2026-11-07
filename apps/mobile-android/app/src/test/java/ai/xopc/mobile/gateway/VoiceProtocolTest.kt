@@ -8,6 +8,17 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class VoiceProtocolTest {
+  @Test fun automaticCallLeavesEngineSelectionToTheGateway() {
+    val request = voiceConversationRequest("chat", "auto", "zh", "logical-call", false)
+    assertEquals(false, request.has("mode"))
+    assertEquals("conversation", request.getString("purpose"))
+    assertEquals("logical-call", request.getJSONObject("openingGreeting").getString("logicalCallId"))
+    assertEquals("user", request.getJSONObject("openingGreeting").getString("initiation"))
+    val explicit = voiceConversationRequest("chat", "natural", "zh", "logical-call", true)
+    assertEquals("natural", explicit.getString("mode"))
+    assertEquals(false, explicit.has("openingGreeting"))
+  }
+
   @Test fun uplinkMatchesHarmonyProtocolHeader() {
     val audio = ByteArray(640) { it.toByte() }
     val bytes = voiceUplink(7, "utterance-1", 1, 1234.5, true, false, audio)

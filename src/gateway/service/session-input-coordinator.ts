@@ -13,6 +13,7 @@ import { consumeConnectionResume, publishConnectionWait, getActiveConnectionWait
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { emitSessionTranscriptUpdate } from '../../session/transcript-events.js';
+import { isNaturalVoiceDelegation } from '../../session/voice-transcript.js';
 import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-repository.js';
 import {
   consumeClarificationResume,
@@ -168,6 +169,7 @@ export class SessionInputCoordinator {
     steer: (conversationId: string, content: string, runId?: string, options?: {
       attachments?: UserTurnAttachment[];
       sourceContexts?: AgentSourceContext[];
+      voiceAgentInstruction?: boolean;
     }) => Promise<boolean>;
     emit: (type: string, payload: unknown) => void;
   }) {}
@@ -523,9 +525,11 @@ export class SessionInputCoordinator {
 
   private steerInput(row: SessionInput, runId?: string): Promise<boolean> {
     const text = steeringText(row.content, row.contextSnapshots);
-    if (!row.attachments?.length && !row.contextSnapshots?.length) return this.deps.steer(row.conversationId, text, runId);
+    const voiceAgentInstruction = isNaturalVoiceDelegation(row);
+    if (!voiceAgentInstruction && !row.attachments?.length && !row.contextSnapshots?.length) return this.deps.steer(row.conversationId, text, runId);
     return this.deps.steer(row.conversationId, text, runId, {
       attachments: row.attachments as UserTurnAttachment[] | undefined, sourceContexts: row.contextSnapshots,
+      ...(voiceAgentInstruction ? { voiceAgentInstruction: true } : {}),
     });
   }
 

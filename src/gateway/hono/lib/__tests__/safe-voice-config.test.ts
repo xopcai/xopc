@@ -10,6 +10,14 @@ import {
 } from '../safe-voice-config.js';
 
 describe('safe-voice-config', () => {
+  it('retains enabled engines and routes when changing only one realtime setting', () => {
+    const previous = { realtime: { enabled: true, defaultEngine: 'auto', silenceDurationMs: 1200,
+      omni: { provider: 'xopc-cloud', model: 'realtime', voice: 'default' },
+      stt: { provider: 'xopc-cloud', model: 'stt' }, assistant: { thinkingLevel: 'off', historyTokens: 4000 },
+      boson: { defaultForNatural: true, voice: 'chloe' } } };
+    expect(mergeRealtimeVoiceConfigPatch(previous, { realtime: { silenceDurationMs: 400 } }))
+      .toEqual({ realtime: { ...previous.realtime, silenceDurationMs: 400 } });
+  });
   it('masks Omni secrets and preserves masked saves without carrying keys across connection changes', () => {
     const previous = { realtime: { omni: { provider: 'alibaba', apiKey: 'sk-secret', model: 'qwen3-omni-flash-realtime' } } };
     const masked = maskRealtimeVoiceConfigForWeb(previous);

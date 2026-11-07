@@ -45,8 +45,7 @@ export struct XopcChatActionPanel {
         }.width('100%').padding({ left: 6, right: 6, top: 4, bottom: 20 })
         Column({ space: 4 }) {
           Row() {
-            this.actionTile('voice-no-tools', $r('app.string.voice_call_action_natural'), $r('sys.symbol.waveform'))
-            this.actionTile('voice-with-tools', $r('app.string.voice_call_action_assistant'), $r('sys.symbol.speaker_wave_2'))
+            this.actionTile('voice-call', $r('app.string.voice_call_action_natural'), $r('sys.symbol.waveform'))
           }.width('100%')
         }.width('100%').padding({ left: 6, right: 6, top: 4, bottom: 20 })
       }.id(this.idPrefix + '-panel').width('100%').height(196).loop(false).autoPlay(false)

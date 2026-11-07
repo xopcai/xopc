@@ -1,10 +1,8 @@
-import { HIGGS_REALTIME_REF, HIGGS_REALTIME_VOICES, type HiggsVoice, type VoiceCallPreferences, type VoiceCallPreferencesPatch, type VoiceMode } from '@xopcai/realtime-protocol/voice';
-import { Check } from 'lucide-react';
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { HIGGS_REALTIME_REF, HIGGS_REALTIME_VOICES, type HiggsVoice, type VoiceCallPreferences, type VoiceCallPreferencesPatch } from '@xopcai/realtime-protocol/voice';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
-import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { openCapabilitySettings } from '@/features/settings/models-hub/open-capability-settings';
 import type { BosonVoiceSettings } from '@/features/settings/voice-config-api';
@@ -18,59 +16,42 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
   onChange: (patch: VoiceCallPreferencesPatch) => Promise<boolean>;
   children: (active: boolean) => ReactNode;
 }) {
-  const [pendingMode, setPendingMode] = useState<VoiceMode | null>(null);
+  type EnginePreference = 'auto' | 'natural' | 'assistant';
+  const [pendingMode, setPendingMode] = useState<EnginePreference | null>(null);
   const modeRequest = useRef(0);
-  const mode = pendingMode ?? preferences?.defaultMode ?? 'assistant';
-  const assistantPanel = useRef<HTMLDivElement>(null);
-  const naturalPanel = useRef<HTMLDivElement>(null);
-  const [panelHeight, setPanelHeight] = useState<number>();
-
-  useLayoutEffect(() => {
-    const panel = mode === 'assistant' ? assistantPanel.current : naturalPanel.current;
-    if (!panel) return;
-    const measure = () => setPanelHeight(Math.ceil(panel.getBoundingClientRect().height));
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
-    observer?.observe(panel);
-    return () => observer?.disconnect();
-  }, [mode]);
-
-  async function changeMode(defaultMode: VoiceMode) {
-    if (defaultMode === mode) return;
+  const mode = pendingMode ?? preferences?.enginePreference ?? 'auto';
+  async function changeMode(enginePreference: EnginePreference) {
+    if (enginePreference === mode) return;
     const request = ++modeRequest.current;
-    setPendingMode(defaultMode);
-    try {
-      await onChange({ defaultMode });
-    } finally {
-      if (request === modeRequest.current) setPendingMode(null);
-    }
+    setPendingMode(enginePreference);
+    try { await onChange({ enginePreference }); }
+    finally { if (request === modeRequest.current) setPendingMode(null); }
   }
   const defaultModel = settings?.defaultForNatural ? HIGGS_REALTIME_REF : settings?.legacyModel;
   const selected = preferences?.naturalModel;
   const effective = selected ?? defaultModel;
   const higgs = effective === HIGGS_REALTIME_REF;
-  const missingModel = selected && selected !== HIGGS_REALTIME_REF && selected !== settings?.legacyModel;
+  const models = settings?.naturalModels ?? (settings?.legacyModel
+    ? [{ id: settings.legacyModel, name: settings.legacyModelLabel ?? settings.legacyModel, tools: undefined }] : []);
+  const effectiveModel = models.find(model => model.id === effective);
+  const missingModel = selected && selected !== HIGGS_REALTIME_REF && !models.some(model => model.id === selected);
   return <section className="space-y-3" aria-label={zh ? '语音通话设置' : 'Voice call settings'}>
-    <h3 className="text-sm font-medium text-fg">{zh ? '默认通话方式' : 'Default call mode'}</h3>
-    <div className="space-y-3">
-      <SlidingSegmented<VoiceMode> aria-label={zh ? '默认通话方式' : 'Default call mode'} value={mode}
-        flush buttonClassName="h-9 text-sm aria-pressed:font-semibold aria-pressed:text-accent-fg"
-        indicatorClassName="bg-accent-soft ring-1 ring-inset ring-accent/35"
-        options={[{ value: 'assistant', label: zh ? '当前助手' : 'Current assistant', icon: mode === 'assistant' ? Check : undefined },
-          { value: 'natural', label: zh ? '自然语音' : 'Natural voice', icon: mode === 'natural' ? Check : undefined }]}
-        onChange={defaultMode => { void changeMode(defaultMode); }} />
-      <p className="text-xs text-fg-muted">{zh ? '下次通话使用' : 'Next call uses'}{' '}
-        <span className="font-medium text-fg">{mode === 'assistant' ? (zh ? '当前助手' : 'Current assistant') : (zh ? '自然语音' : 'Natural voice')}</span>
-        {mode === 'assistant' ? (zh ? ' · 可交办任务' : ' · Can delegate tasks') : (zh ? ' · 聊天与讨论' : ' · Chat and discussion')}
-      </p>
-      <fieldset disabled={disabled} style={{ height: panelHeight }}
-        className="relative min-w-0 overflow-hidden transition-[height] duration-200 ease-out motion-reduce:transition-none [&_button:focus-visible]:ring-inset">
-        <div ref={assistantPanel} inert={mode !== 'assistant'} aria-hidden={mode !== 'assistant'}
-          className={`absolute inset-x-0 top-0 min-w-0 transition-opacity duration-150 motion-reduce:transition-none ${mode === 'assistant' ? 'visible opacity-100' : 'invisible opacity-0'}`}>
-          {children(mode === 'assistant')}
+    <h3 className="text-sm font-medium text-fg">{zh ? '和 Ada 通话' : 'Call Ada'}</h3>
+    <p className="text-xs text-fg-muted">{zh ? '自然交流，需要时交办任务。重要内容和结果会留在聊天里。' : 'Talk naturally and delegate when needed. Useful content and results stay in Chat.'}</p>
+    <details className="space-y-3">
+      <summary className="cursor-pointer text-xs text-fg-muted">{zh ? '高级通话设置' : 'Advanced call settings'}</summary>
+      <fieldset disabled={disabled} className="space-y-3">
+        <label className="block space-y-1 text-sm"><span>{zh ? '通话引擎' : 'Call engine'}</span>
+          <Select aria-label={zh ? '通话引擎' : 'Call engine'} value={mode} onChange={event => { void changeMode(event.target.value as EnginePreference); }}>
+            <SelectOption value="auto">{zh ? '自动选择' : 'Automatic'}</SelectOption>
+            <SelectOption value="natural">{zh ? '实时语音' : 'Realtime voice'}</SelectOption>
+            <SelectOption value="assistant">{zh ? '识别、执行与合成' : 'Transcription, Agent and speech'}</SelectOption>
+          </Select>
+        </label>
+        <div inert={mode === 'natural'} aria-hidden={mode === 'natural'} className={mode === 'natural' ? 'hidden' : ''}>
+          {children(mode !== 'natural')}
         </div>
-        <div ref={naturalPanel} inert={mode !== 'natural'} aria-hidden={mode !== 'natural'}
-          className={`absolute inset-x-0 top-0 min-w-0 space-y-3 transition-opacity duration-150 motion-reduce:transition-none ${mode === 'natural' ? 'visible opacity-100' : 'invisible opacity-0'}`}>
+        <div inert={mode === 'assistant'} aria-hidden={mode === 'assistant'} className={`space-y-3 ${mode === 'assistant' ? 'hidden' : ''}`}>
           {!settings && !failed && <Skeleton className="h-10 w-full" />}
           {failed && <p role="alert" className="text-sm text-danger">{zh ? '无法读取自然语音模型。' : 'Could not load natural voice models.'}</p>}
           {settings && <>
@@ -78,10 +59,13 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
               <span className="block">{zh ? '模型' : 'Model'}</span>
               <Select aria-label={zh ? '自然语音模型' : 'Natural voice model'} value={selected ?? 'inherit'} onChange={event => onChange({ naturalModel: event.target.value === 'inherit' ? null : event.target.value })}>
                 <SelectOption value="inherit">{zh ? '跟随系统' : 'Follow system'}{defaultModel ? ` · ${defaultModel === HIGGS_REALTIME_REF ? 'Higgs Realtime' : settings.legacyModelLabel ?? defaultModel}` : ''}</SelectOption>
-                {settings.legacyModel && <SelectOption value={settings.legacyModel}>{settings.legacyModelLabel ?? settings.legacyModel}</SelectOption>}
+                {models.map(model => <SelectOption key={model.id} value={model.id}>{model.name}{model.tools === false ? (zh ? ' · 仅对话' : ' · Conversation only') : ''}</SelectOption>)}
                 {(settings.credentialSource || selected === HIGGS_REALTIME_REF) && <SelectOption value={HIGGS_REALTIME_REF}>Higgs Realtime</SelectOption>}
                 {missingModel && <SelectOption value={selected}>{selected} · {zh ? '不可用' : 'Unavailable'}</SelectOption>}
               </Select>
+              {effectiveModel?.tools === false && <p className="text-xs text-fg-muted">{zh
+                ? '此模型仅支持语音交流，不能交办任务。自动选择时会使用具备行动能力的备用引擎。'
+                : 'This model supports conversation only. Automatic selection uses the fallback Agent engine to retain actions.'}</p>}
             </div>
             {higgs && <div className="space-y-1 text-sm">
               <span className="block">{zh ? '声音' : 'Voice'}</span>
@@ -92,7 +76,7 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
             </div>}
             {higgs && <details className="text-xs text-fg-muted">
               <summary className="cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '音频与隐私说明' : 'Audio and privacy'}</summary>
-              <p className="mt-2 leading-relaxed">{zh ? 'Boson 处理本次音频和同一 Ada 对话的有限上下文，通话字幕保存到原对话。' : 'Boson processes call audio and limited context from the same Ada chat. Captions are saved in that chat.'}</p>
+              <p className="mt-2 leading-relaxed">{zh ? 'Boson 处理本次音频和同一 Ada 对话的有限上下文，语音上下文保留，重要内容和结果进入聊天。' : 'Boson processes call audio and limited context from the same Ada chat. Voice context is retained; useful content and results are shared in Chat.'}</p>
             </details>}
             {(!effective || missingModel || (higgs && !settings.credentialSource)) && <Button type="button" variant="ghost" onClick={() => openCapabilitySettings('conversation')}>
               {zh ? '设置自然语音服务' : 'Set up natural voice'}
@@ -100,6 +84,6 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
           </>}
         </div>
       </fieldset>
-    </div>
+    </details>
   </section>;
 }

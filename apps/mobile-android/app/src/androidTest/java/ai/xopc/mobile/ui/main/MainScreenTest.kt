@@ -2382,7 +2382,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("tab-Assistant").assertExists()
   }
 
-  @Test fun assistantSecondActionPageOffersBothRealtimeVoiceModes() {
+  @Test fun assistantSecondActionPageOffersOneAutomaticVoiceCall() {
     val id = "11111111-2222-3333-4444-555555555555"
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
@@ -2393,10 +2393,10 @@ class MainScreenTest {
     val firstRowTop = composeTestRule.onNodeWithTag("assistant-action-photos").fetchSemanticsNode().boundsInRoot.top
     composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
     composeTestRule.waitForIdle()
-    val secondRowTop = composeTestRule.onNodeWithTag("assistant-action-voice-natural").fetchSemanticsNode().boundsInRoot.top
+    val secondRowTop = composeTestRule.onNodeWithTag("assistant-action-voice-call").fetchSemanticsNode().boundsInRoot.top
     org.junit.Assert.assertEquals(firstRowTop, secondRowTop, 1f)
-    composeTestRule.onNodeWithTag("assistant-action-voice-natural").assertIsEnabled()
-    composeTestRule.onNodeWithTag("assistant-action-voice-assistant").assertIsEnabled()
+    composeTestRule.onNodeWithTag("assistant-action-voice-call").assertIsEnabled()
+    composeTestRule.onNodeWithTag("assistant-action-voice-assistant").assertDoesNotExist()
   }
 
   @Test fun assistantKeepsConversationHeaderCompactAndMovesConfigurationIntoOptions() {

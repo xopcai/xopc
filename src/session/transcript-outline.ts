@@ -11,6 +11,7 @@ import {
   type TranscriptStoredRow,
 } from './session-context-for-llm.js';
 import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
+import { isVoiceConversationMessage, VOICE_CHAT_MESSAGE_TYPE, VOICE_TRANSCRIPT_TYPE } from './voice-transcript.js';
 
 export type SessionTimelineItemKind =
   | 'turn'
@@ -416,6 +417,9 @@ function titleForEntry(params: {
 }
 
 function isDisplayMessageRow(row: TranscriptStoredRow): boolean {
+  if (isVoiceConversationMessage(row)) return false;
+  if (isTranscriptCustomMessageEntry(row) && row.display === false
+    && [VOICE_TRANSCRIPT_TYPE, 'voice_agent_instruction'].includes(row.customType ?? '')) return false;
   if (isTranscriptSideChatOriginEntry(row)) return false;
   if (isTranscriptContextEntry(row)) return false;
   if (isTranscriptLabelEntry(row)) return false;
@@ -437,6 +441,9 @@ function displayIndexForRow(params: {
   const { row, role, nextDisplayIndex, lastDisplayRole } = params;
   if (!isDisplayMessageRow(row)) {
     return { nextDisplayIndex, lastDisplayRole };
+  }
+  if (isTranscriptCustomMessageEntry(row) && row.customType === VOICE_CHAT_MESSAGE_TYPE) {
+    return { rowDisplayIndex: nextDisplayIndex, nextDisplayIndex: nextDisplayIndex + 1, lastDisplayRole: 'other' };
   }
   if (role === 'assistant') {
     if (lastDisplayRole === 'assistant') {

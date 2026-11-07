@@ -7,6 +7,17 @@ import org.json.JSONObject
 
 internal const val VOICE_WS_PATH = "/api/voice/realtime/v3/ws"
 internal const val VOICE_PROXY_WS_PATH = "/api/realtime/v1/ws?transport=voice-v3"
+
+internal fun voiceConversationRequest(conversationId: String, mode: String, language: String,
+  logicalCallId: String, recovery: Boolean): JSONObject {
+  require(mode in setOf("auto", "natural", "assistant")) { "INVALID_VOICE_MODE" }
+  return JSONObject().put("purpose", "conversation").put("conversationId", conversationId)
+    .apply { if (mode != "auto") put("mode", mode) }.put("language", language)
+    .apply { if (mode != "natural") put("openingGreeting", JSONObject().put("logicalCallId", logicalCallId)
+      .put("initiation", if (recovery) "recovery" else "user").put("supportsOutputReady", true)) }
+    .put("supportedProtocolVersions", org.json.JSONArray().put(3))
+    .put("mediaPreferences", org.json.JSONArray().put("websocket-pcm"))
+}
 data class VoiceCallConnection(val sessionId: String, val ticket: String, val websocketPath: String,
   val connectionEpoch: Int, val origin: String, val bearer: String, val maxSessionMs: Long,
   val routeEngine: String, val bargeIn: Boolean = true, val timingMetrics: List<String> = emptyList(), val greetingResponseId: String? = null)

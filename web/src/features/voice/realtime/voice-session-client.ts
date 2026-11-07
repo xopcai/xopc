@@ -77,8 +77,6 @@ export class VoiceSessionClient {
 
   static async connect(options: VoiceSessionClientOptions): Promise<VoiceSessionClient> {
     options.signal?.throwIfAborted();
-    const status = options.purpose === 'conversation' && options.mode !== 'natural'
-      ? await fetchJson<{ payload: { openingGreeting?: boolean } }>(apiUrl('/api/voice/realtime/status'), { signal: options.signal }) : null;
     const response = await fetchJson<{ ok: true; payload: CreateVoiceSessionResponse }>(
       apiUrl('/api/voice/realtime/sessions'),
       {
@@ -87,7 +85,7 @@ export class VoiceSessionClient {
         body: JSON.stringify({
           purpose: options.purpose,
           ...(options.language ? { language: options.language } : {}),
-          ...(status?.payload.openingGreeting && options.logicalCallId ? { openingGreeting: {
+          ...(options.purpose === 'conversation' && options.mode !== 'natural' && options.logicalCallId ? { openingGreeting: {
             logicalCallId: options.logicalCallId, initiation: options.recovery ? 'recovery' : 'user', supportsOutputReady: true,
           } } : {}),
           ...(options.mode ? { mode: options.mode } : {}),
@@ -201,6 +199,10 @@ export class VoiceSessionClient {
 
   cancelResponse(responseId: string): void {
     this.sendControl('response.stop_playback', { responseId });
+  }
+
+  cancelTask(taskId: string): void {
+    this.sendControl('task.cancel', { taskId });
   }
 
   acknowledgeAudio(responseId: string, playedBytes: number): void {

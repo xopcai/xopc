@@ -13,6 +13,7 @@ export interface OmniRoute {
   apiKey: string;
   voice: string;
   instructions: string;
+  tools?: boolean;
   maxSessionSeconds?: number;
 }
 
@@ -33,24 +34,44 @@ export async function resolveHiggsRoute(config: Config, voice?: HiggsVoice): Pro
     url: 'wss://api.boson.ai/v1/realtime?model=higgs-realtime',
     apiKey,
     voice: voice ?? config.voice.realtime.boson?.voice ?? 'default',
-    instructions: 'You are Ada. Speak naturally in the user’s language. Start with the answer, skip greetings and filler, and use one brief sentence unless the user asks for detail. You cannot use tools or take actions.',
+    instructions: 'You are Ada. Speak naturally in the user’s language. Start with the answer, skip greetings and filler, and use one brief sentence unless the user asks for detail.',
+    tools: true,
     maxSessionSeconds: 3600,
   };
 }
 
 export async function resolveOmniRoute(config: Config, model = selectedNaturalModel(config), voice?: HiggsVoice): Promise<OmniRoute> {
   if (model === HIGGS_REALTIME_REF) return resolveHiggsRoute(config, voice);
-  const slice = config.voice?.realtime?.omni;
-  if (!slice || model !== legacyNaturalModel(config)) throw new Error('Selected natural voice model is unavailable');
+  let slice = config.voice?.realtime?.omni;
+  if (model?.startsWith('xopc-cloud/')) {
+    const id = model.slice('xopc-cloud/'.length);
+    const published = requirePlatformVoiceModel(id, 'conversation');
+    const voices = published.voice.voices.filter(item => voiceSupportsMode(item, 'conversation'));
+    const selected = slice?.provider === 'xopc-cloud' && slice.model === id ? slice : undefined;
+    const selectedVoice = selected?.voice ?? voices.find(item => item.id === published.voice.defaultVoice)?.id ?? voices[0]?.id;
+    if (!selectedVoice) throw new Error('Selected voice is unavailable');
+    slice = { ...selected, provider: 'xopc-cloud', model: id, voice: selectedVoice,
+      instructions: selected?.instructions ?? 'Keep replies conversational and concise.' };
+  } else if (!slice || model !== legacyNaturalModel(config)) {
+    throw new Error('Selected natural voice model is unavailable');
+  }
   let maxSessionSeconds: number | undefined;
   let serviceVersion: number | undefined;
+  let tools = /^(?:qwen3\.[58]-omni-(?:flash|plus)-realtime)(?:-|$)/u.test(slice.model);
   if (slice.provider === 'xopc-cloud') {
     const model = requirePlatformVoiceModel(slice.model, 'conversation');
     maxSessionSeconds = model.voice.limits.maxSessionSeconds;
     serviceVersion = model.voice.serviceVersion;
+    tools = model.voice.tools;
     if (!model.voice.voices.some(voice => voice.id === slice.voice && voiceSupportsMode(voice, 'conversation'))) throw new Error('Selected voice is unavailable');
   }
   const managed = slice.provider === 'xopc-cloud';
+  const legacyInstructions = [
+    'Keep replies conversational and concise. You cannot execute tools.',
+    'You are a friendly voice companion. Keep replies conversational and concise. You cannot execute tools or perform actions.',
+  ];
+  const instructions = tools && legacyInstructions.includes(slice.instructions)
+    ? 'Keep replies conversational and concise.' : slice.instructions;
   const url = new URL(managed
     ? `${resolveXopcModelRouterUrl(slice.baseUrl)}/audio/conversations/realtime`
     : slice.provider === BAILIAN_PLAN_PROVIDER ? `${BAILIAN_PLAN_HOST.replace('https:', 'wss:')}/api-ws/v1/realtime` : slice.baseUrl ?? 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime');
@@ -64,5 +85,5 @@ export async function resolveOmniRoute(config: Config, model = selectedNaturalMo
   if (!apiKey) throw new Error('Omni credentials are unavailable');
   url.search = new URLSearchParams({ model: slice.model }).toString();
   if (serviceVersion) url.searchParams.set('service_version', String(serviceVersion));
-  return { maxSessionSeconds, route: { provider: slice.provider, model: slice.model, managed }, url: url.toString(), apiKey, voice: slice.voice, instructions: slice.instructions };
+  return { maxSessionSeconds, tools, route: { provider: slice.provider, model: slice.model, managed }, url: url.toString(), apiKey, voice: slice.voice, instructions };
 }
