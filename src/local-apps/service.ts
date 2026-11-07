@@ -15,10 +15,15 @@ import { join, resolve, sep } from 'node:path';
 import {
   ExtensionCapabilityBindingsSchema,
   extensionCapabilityPermissions,
+  LocalAppResourceScopesSchema,
+  type LocalAppResourceScopes,
   type LocalAppPreviewSnapshot,
 } from '@xopcai/gateway-contract';
 import { CapabilityError } from '../capabilities/runtime/errors.js';
 import { validateLocalAppCapabilityContracts } from './capabilities/contracts.js';
+import { recordPublicAssets, resolvePublicAsset } from './public-assets.js';
+import { LocalAppPreviewSessions, type PreviewSource } from './preview-sessions.js';
+import { readPreviewFixtures } from './preview-fixtures.js';
 import { buildLocalAppFixGuidance } from './fix-guidance.js';
 
 import { resolveExtensionsDir, resolveStateDir } from '../config/paths.js';
@@ -29,6 +34,7 @@ import { slugifyProjectName } from '../projects/project-store.js';
 import { createLogger } from '../utils/logger.js';
 import { afterSqliteCommit, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { currentOperationId } from '../infra/operation-context.js';
+import { DurableState } from '../storage/sqlite/durable-state.js';
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { readLocalAppAcceptanceConfig } from './acceptance.js';
 import {
@@ -186,6 +192,7 @@ function validateLocalAppPackage(root: string, extensionId: string): {
     throw new Error(`Phase 1 local apps cannot request: ${unsupported.join(', ')}`);
   }
   validateLocalAppCapabilityContracts(manifest.ui.capabilities);
+  readPreviewFixtures(root);
   const html = readFileSync(join(root, manifest.ui.main), 'utf8');
   if (/<script\b(?![^>]*\bsrc=)[^>]*>/i.test(html)) {
     throw new Error('Inline scripts are blocked in local app previews');
@@ -206,6 +213,10 @@ function validateLocalAppPackage(root: string, extensionId: string): {
 }
 
 export class LocalAppService {
+  readonly previews = new LocalAppPreviewSessions(() => resolveStateDir(),
+    (appId, hash) => this.previewSource(appId, hash), (appId, hash) => {
+      if (this.validate(appId).sourceHash !== hash) throw new CapabilityError('CONTRACT_CHANGED', 'Draft changed; refresh the preview');
+    });
   constructor(
     private readonly options: LocalAppServiceOptions,
     private readonly store = new LocalAppStore(),
@@ -289,6 +300,40 @@ export class LocalAppService {
     return this.store.list();
   }
 
+  private previewSource(appId: string, hash: string): PreviewSource {
+    const app = this.store.get(appId);
+    if (!app) throw new CapabilityError('NOT_FOUND', 'Local app not found');
+    const snapshot = this.getSnapshot(appId, hash) ?? this.materializeSnapshot(appId);
+    if (snapshot.sourceHash !== hash || snapshot.status !== 'ready' || !snapshot.previewUrl) {
+      throw new CapabilityError('CONTRACT_CHANGED', 'A validated current snapshot is required');
+    }
+    const root = this.snapshots.packageRoot(appId, hash)!;
+    const manifest = JSON.parse(readFileSync(join(root, 'xopc.extension.json'), 'utf8'));
+    return { appId, extensionId: app.extensionId, sourceHash: hash, previewUrl: snapshot.previewUrl,
+      root, bindings: ExtensionCapabilityBindingsSchema.parse(manifest.ui?.capabilities ?? []),
+      permissions: readLocalAppPermissions(root), scenarioIds: readLocalAppAcceptanceConfig(root).scenarios.map(scenario => scenario.id) };
+  }
+
+  isLocalApp(extensionId: string): boolean {
+    return Boolean(this.store.findByExtensionId(extensionId));
+  }
+
+  resolveUiAsset(extensionId: string, assetPath: string): string | null | undefined {
+    const app = this.store.findByExtensionId(extensionId);
+    if (!app) return undefined;
+    if (!app.enabled || !app.activeReleaseId || app.installationState !== 'installed' || existsSync(this.recoveryMarker(app.id))) return null;
+    const release = this.store.getRelease(app.id, app.activeReleaseId);
+    if (!release) return null;
+    // Existing releases get a public inventory only from their validated immutable artifact.
+    const manifest = JSON.parse(release.manifestJson) as { ui: { main: string } };
+    if (!new DurableState('local-app-public-assets', app.id).get(release.sourceHash)) {
+      validateLocalAppPackage(release.artifactPath, extensionId);
+      if (hashLocalAppDirectory(release.artifactPath) !== release.sourceHash) return null;
+      recordPublicAssets(app.id, release.sourceHash, release.artifactPath, manifest.ui.main);
+    }
+    return resolvePublicAsset(app.id, release.sourceHash, release.artifactPath, assetPath);
+  }
+
   get(id: string): LocalAppDetail | null {
     const app = this.store.get(id);
     const token = app ? this.store.getPreviewToken(id) : null;
@@ -326,10 +371,12 @@ export class LocalAppService {
       manifestDigest,
       permissions,
       grantedAt: granted ? grant?.grantedAt : undefined,
+      grantRevision: granted ? grant?.grantRevision : undefined,
+      resourceScopes: grant?.resourceScopes ?? LocalAppResourceScopesSchema.parse({}),
     };
   }
 
-  getCapabilityAccess(extensionId: string, expectedManifestDigest: string) {
+  getCapabilityAccess(extensionId: string, expectedManifestDigest: string, expectedGrantRevision?: string) {
     const app = this.store.findByExtensionId(extensionId);
     const config = extensionConfigRecord(this.options.getConfig());
     if (app && existsSync(this.recoveryMarker(app.id))) {
@@ -342,13 +389,17 @@ export class LocalAppService {
     const grant = this.getUiGrant(extensionId);
     if (!grant.granted) throw new CapabilityError('FORBIDDEN', 'Local app permissions have not been granted');
     if (grant.manifestDigest !== expectedManifestDigest) throw new CapabilityError('CONTRACT_CHANGED', 'Local app release changed');
+    if (expectedGrantRevision && grant.grantRevision !== expectedGrantRevision) {
+      throw new CapabilityError('FORBIDDEN', 'Local app authorization changed; review permissions again');
+    }
     const release = this.store.getRelease(app.id, app.activeReleaseId);
     if (!release) throw new CapabilityError('FORBIDDEN', 'Local app release is unavailable');
     const manifest = JSON.parse(release.manifestJson) as { ui?: { capabilities?: unknown } };
-    return { releaseId: release.id, bindings: ExtensionCapabilityBindingsSchema.parse(manifest.ui?.capabilities ?? []) };
+    return { releaseId: release.id, grantRevision: grant.grantRevision, resourceScopes: grant.resourceScopes!,
+      bindings: ExtensionCapabilityBindingsSchema.parse(manifest.ui?.capabilities ?? []) };
   }
 
-  grantUiPermissions(extensionId: string, expectedManifestDigest: string): LocalAppUiGrant {
+  grantUiPermissions(extensionId: string, expectedManifestDigest: string, resourceScopes?: LocalAppResourceScopes): LocalAppUiGrant {
     const current = this.getUiGrant(extensionId);
     if (!current.manifestDigest) throw new Error('Extension UI manifest not found');
     if (current.manifestDigest !== expectedManifestDigest) throw new Error('Extension release changed; review permissions again');
@@ -357,7 +408,24 @@ export class LocalAppService {
       appId: current.appId,
       manifestDigest: current.manifestDigest,
       permissions: current.permissions,
+      resourceScopes: LocalAppResourceScopesSchema.parse(resourceScopes ?? {}),
     });
+  }
+
+  revokeUiPermissions(extensionId: string, expectedManifestDigest: string): LocalAppUiGrant {
+    const current = this.getUiGrant(extensionId);
+    if (current.manifestDigest !== expectedManifestDigest) throw new CapabilityError('CONTRACT_CHANGED', 'Local app release changed');
+    this.store.revokeUiGrant(extensionId);
+    if (current.appId) this.previews.revokeApp(current.appId);
+    this.options.emit('local_app.permissions_changed', { extensionId });
+    return this.getUiGrant(extensionId);
+  }
+
+  assertUiPermission(extensionId: string, manifestDigest: string | undefined, grantRevision: string | undefined, permission: string): void {
+    if (!this.store.findByExtensionId(extensionId)) return;
+    if (!manifestDigest || !grantRevision) throw new CapabilityError('FORBIDDEN', 'Current Local App authorization is required');
+    this.getCapabilityAccess(extensionId, manifestDigest, grantRevision);
+    if (!this.getUiGrant(extensionId).permissions.includes(permission)) throw new CapabilityError('FORBIDDEN', 'Local app permission denied');
   }
 
   create(input: CreateLocalAppInput): LocalAppDetail {
@@ -666,7 +734,10 @@ export class LocalAppService {
       configSaved = true;
       this.refreshExtensions(input.source);
       this.assertInstalledRuntime(input.app, target);
-      input.commit();
+      runSqliteWriteTransaction(() => {
+        input.commit();
+        this.store.revokeUiGrant(input.app.extensionId);
+      });
       canCleanup = true;
     } catch (error) {
       if (targetInstalled && existsSync(target)) rmSync(target, { recursive: true, force: true });
@@ -701,7 +772,7 @@ export class LocalAppService {
     let artifactCreated = false;
     try {
       cpSync(app.workspaceRoot, stagedArtifact, { recursive: true, filter: shouldCopyLocalAppPath });
-      const { manifestJson } = validateLocalAppPackage(stagedArtifact, app.extensionId);
+      const { manifestJson, entryPath } = validateLocalAppPackage(stagedArtifact, app.extensionId);
       const sourceHash = hashLocalAppDirectory(stagedArtifact);
       const acceptance = this.store.getLatestAcceptanceForSource(app.id, sourceHash);
       if (acceptance?.status !== 'passed') {
@@ -715,6 +786,7 @@ export class LocalAppService {
         nextConfig: setExtensionActivation(this.options.getConfig(), app.extensionId, true),
         source: 'local-app-install',
         commit: () => {
+          recordPublicAssets(app.id, sourceHash, artifactPath, entryPath);
           this.store.markInstalled({
             id: app.id,
             version: app.draftVersion,
@@ -779,7 +851,10 @@ export class LocalAppService {
     const saved = await this.options.saveConfig(setExtensionActivation(previousConfig, app.extensionId, enabled));
     if (!saved.saved) throw new Error(saved.error ?? 'Failed to update local app state');
     try {
-      this.store.setEnabled(id, enabled);
+      runSqliteWriteTransaction(() => {
+        this.store.setEnabled(id, enabled);
+        if (!enabled) this.store.revokeUiGrant(app.extensionId);
+      });
     } catch (error) {
       await this.options.saveConfig(previousConfig);
       throw error;
@@ -813,7 +888,10 @@ export class LocalAppService {
       const saved = await this.options.saveConfig(removeExtensionActivation(previousConfig, app.extensionId));
       if (!saved.saved) throw new Error(saved.error ?? 'Failed to uninstall local app');
       configSaved = true;
-      this.store.markUninstalled(id);
+      runSqliteWriteTransaction(() => {
+        this.store.markUninstalled(id);
+        this.store.revokeUiGrant(app.extensionId);
+      });
       canCleanup = true;
     } catch (error) {
       if (moved && existsSync(backup)) renameSync(backup, target);

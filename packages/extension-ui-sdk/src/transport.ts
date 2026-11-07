@@ -24,14 +24,18 @@ export class Transport {
   private initPromise: Promise<HostInit>;
   private disposed = false;
   private readonly timeout: number;
+  private readonly delegationTimeout: number;
   private requestCounter = 0;
 
   constructor(options?: TransportOptions) {
     this.timeout = options?.timeout ?? 10_000;
+    this.delegationTimeout = options?.timeout ?? 35_000;
     this.initPromise = new Promise<HostInit>((resolve) => {
       this.initResolve = resolve;
     });
     window.addEventListener('message', this.handleMessage);
+    // A module can await whenReady before window.load. Request init instead of waiting for load.
+    window.parent.postMessage({ source: 'xopc-extension', extensionId: '', type: 'event', event: 'ui.connect' }, '*');
   }
 
   get ready(): Promise<HostInit> {
@@ -60,6 +64,8 @@ export class Transport {
       throw new Error('Transport disposed');
     }
     const requestId = this.nextRequestId();
+    const timeout = method === 'capability.call' && params && typeof params === 'object'
+      && 'id' in params && params.id === 'xopc.agent.delegate' ? this.delegationTimeout : this.timeout;
     const message: ExtensionRequest = {
       source: 'xopc-extension',
       extensionId: this.extensionId,
@@ -71,8 +77,8 @@ export class Transport {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error(`Request '${method}' timed out after ${this.timeout}ms`));
-      }, this.timeout);
+        reject(new Error(`Request '${method}' timed out after ${timeout}ms`));
+      }, timeout);
       this.pending.set(requestId, {
         resolve: resolve as (v: unknown) => void,
         reject,

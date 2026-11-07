@@ -64,3 +64,4 @@ export * from './desktop-host.js';
 export * from './desktop-execution-stop.js';
 
 export * from './device-request-proof.js';
+export * from './local-app-delegation.js';

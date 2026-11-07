@@ -13,6 +13,7 @@ const SCENARIOS: Readonly<Record<string, Scenario>> = {
   'agent.answer': { category: 'chat', reasonKey: 'usage.reason.agentAnswer', trigger: 'user' },
   'agent.continue_after_tool': { category: 'tool_loop', reasonKey: 'usage.reason.continueAfterTool', trigger: 'agent' },
   'agent.background_review': { category: 'delegation', reasonKey: 'usage.reason.backgroundReview', trigger: 'agent' },
+  'local_app.delegation': { category: 'delegation', reasonKey: 'usage.reason.localAppDelegation', trigger: 'agent' },
   'session.compact': { category: 'compaction', reasonKey: 'usage.reason.sessionCompaction', trigger: 'system' },
   'session.generate_title': { category: 'session_title', reasonKey: 'usage.reason.sessionTitle', trigger: 'system' },
   'media.understand_image': { category: 'image_understanding', reasonKey: 'usage.reason.imageUnderstanding', trigger: 'user' },

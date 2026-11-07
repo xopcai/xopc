@@ -38,6 +38,8 @@ export type {
 };
 
 export interface LocalAppUiGrant {
+  grantRevision?: string;
+  resourceScopes?: import('@xopcai/gateway-contract').LocalAppResourceScopes;
   granted: boolean;
   extensionId: string;
   appId?: string;

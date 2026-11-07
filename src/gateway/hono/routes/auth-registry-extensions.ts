@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
 import type { Config as SurfaceConfig } from '../../../config/config-surface.js';
@@ -15,6 +15,12 @@ import { extensionAssetMimeType } from '../lib/extension-assets.js';
 import { loadExtensionStore, saveExtensionStore } from '../lib/extension-store.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { listAgentPluginInventory } from '../../../extensions/agent-plugins/inventory.js';
+import { ExtensionUiGrantInputSchema } from '@xopcai/gateway-contract';
+import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
+import { CapabilityError } from '../../../capabilities/runtime/errors.js';
+import { bodyLimit } from 'hono/body-limit';
+import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
+import { listLocalAppAccess, recordLocalAppAccess } from '../../../local-apps/access-audit.js';
 
 const EXTENSION_ASSET_CSP =
   "default-src 'self'; " +
@@ -103,10 +109,15 @@ export function registerPublicExtensionAssetRoutes(app: Hono, service: GatewaySe
       return c.json({ error: 'Invalid asset path' }, 400, corsHdr);
     }
 
-    const root = resolve(ext.path);
-    const fullPath = resolve(root, assetPath);
+    const localAsset = service.localApps?.resolveUiAsset(extensionId, assetPath);
+    if (localAsset === null) return c.json({ error: 'Not found' }, 404, corsHdr);
+    const root = realpathSync(resolve(ext.path));
+    const unresolvedPath = localAsset ?? resolve(root, assetPath);
+    const fullPath = existsSync(unresolvedPath) ? realpathSync(unresolvedPath) : unresolvedPath;
+    // Managed Local Apps are served from their release inventory, outside the discovery directory.
+    const managed = localAsset !== undefined;
     const rel = relative(root, fullPath);
-    if (rel.startsWith('..') || rel === '') {
+    if (!managed && (rel.startsWith('..') || rel === '')) {
       return c.json({ error: 'Path traversal denied' }, 403, corsHdr);
     }
 
@@ -120,12 +131,16 @@ export function registerPublicExtensionAssetRoutes(app: Hono, service: GatewaySe
     const body: string | Uint8Array = mimeType.startsWith('text/html')
       ? rewriteExtensionAssetHtml(rawContent.toString('utf-8'), extensionId, assetPath)
       : new Uint8Array(rawContent);
+    const assetBase = new URL(`/api/extensions/${encodeURIComponent(extensionId)}/assets/`, c.req.url).href;
+    const localAppCsp = `default-src 'none'; script-src ${assetBase}; style-src ${assetBase} 'unsafe-inline'; `
+      + `img-src ${assetBase} data: blob:; font-src ${assetBase} data:; connect-src 'none'; `
+      + "frame-ancestors 'self'; frame-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; sandbox allow-scripts";
 
     return new Response(body, {
       status: 200,
       headers: {
         'Content-Type': mimeType,
-        'Content-Security-Policy': EXTENSION_ASSET_CSP,
+        'Content-Security-Policy': managed ? localAppCsp : EXTENSION_ASSET_CSP,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
         'Access-Control-Allow-Origin': acao,
@@ -324,15 +339,63 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     return c.json({ grant: service.localApps.getUiGrant(c.req.param('id')) });
   });
 
+  authenticated.get('/api/extensions/:id/resource-options', c => {
+    const kind = c.req.query('kind');
+    if (!['notes', 'tasks', 'projects'].includes(kind ?? '')) return c.json({ error: 'Invalid resource kind' }, 400);
+    const search = (c.req.query('search') ?? '').slice(0, 200);
+    const table = kind === 'notes' ? 'notes' : kind === 'tasks' ? 'tasks' : 'projects';
+    const column = kind === 'notes' ? 'note_id' : kind === 'tasks' ? 'task_id' : 'project_id';
+    const title = kind === 'projects' ? 'name' : 'title';
+    const items = getSqliteDatabase().prepare(`SELECT ${column} AS id, coalesce(${title}, ${column}) AS title FROM ${table}
+      WHERE instr(lower(coalesce(${title}, '')), lower(?)) > 0 ORDER BY updated_at DESC, ${column} LIMIT 100`).all(search);
+    return c.json({ items });
+  });
+
+  authenticated.get('/api/extensions/:id/access-audit', c => c.json({ items: listLocalAppAccess(c.req.param('id')) }));
+
   authenticated.post('/api/extensions/:id/ui-grant', async (c) => {
-    const body = await c.req.json().catch(() => null);
-    if (!body || typeof body.manifestDigest !== 'string' || !/^[a-f0-9]{64}$/.test(body.manifestDigest)) {
-      return c.json({ error: 'The reviewed manifestDigest is required' }, 400);
-    }
+    const parsed = ExtensionUiGrantInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'A valid reviewed manifest and resource policy are required' }, 400);
+    const body = parsed.data;
     if (service.localApps.getUiGrant(c.req.param('id')).manifestDigest !== body.manifestDigest) {
       return c.json({ error: 'Extension release changed; review permissions again' }, 409);
     }
-    return c.json({ grant: service.localApps.grantUiPermissions(c.req.param('id'), body.manifestDigest) });
+    const grant = service.localApps.grantUiPermissions(c.req.param('id'), body.manifestDigest, body.resourceScopes);
+    recordLocalAppAccess(c.req.param('id'), { principalId: capabilityHttpContext(c).principalId, action: 'grant', status: 'succeeded', grantRevision: grant.grantRevision });
+    return c.json({ grant });
+  });
+
+  authenticated.delete('/api/extensions/:id/ui-grant', async c => {
+    const parsed = ExtensionUiGrantInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'The reviewed manifestDigest is required' }, 400);
+    try {
+      const grant = service.localApps.revokeUiPermissions(c.req.param('id'), parsed.data.manifestDigest);
+      recordLocalAppAccess(c.req.param('id'), { principalId: capabilityHttpContext(c).principalId, action: 'revoke', status: 'succeeded' });
+      return c.json({ grant });
+    }
+    catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  // Old UI SDK storage calls must obey the same release and grant boundary as capabilities.
+  authenticated.use('/api/extensions/:id/storage/*', (c, next) => service.localApps.isLocalApp(c.req.param('id'))
+    ? bodyLimit({ maxSize: 1_050_000 })(c, next) : next());
+  authenticated.use('/api/extensions/:id/storage', async (c, next) => {
+    try { service.localApps.assertUiPermission(c.req.param('id'), c.req.header('X-Xopc-Extension-Manifest'), c.req.header('X-Xopc-Extension-Grant'), 'storage'); }
+    catch (error) { return capabilityHttpError(c, error); }
+    await next();
+    try { service.localApps.assertUiPermission(c.req.param('id'), c.req.header('X-Xopc-Extension-Manifest'), c.req.header('X-Xopc-Extension-Grant'), 'storage'); }
+    catch (error) { return capabilityHttpError(c, error); }
+  });
+  authenticated.use('/api/extensions/:id/storage/*', async (c, next) => {
+    let key: string;
+    try { key = c.req.param('key') ?? decodeURIComponent(c.req.path.split('/').at(-1)!); }
+    catch { return c.json({ error: 'Invalid storage key' }, 400); }
+    if (key.length > 512 || ['__proto__', 'prototype', 'constructor'].includes(key)) return c.json({ error: 'Invalid storage key' }, 400);
+    try { service.localApps.assertUiPermission(c.req.param('id'), c.req.header('X-Xopc-Extension-Manifest'), c.req.header('X-Xopc-Extension-Grant'), 'storage'); }
+    catch (error) { return capabilityHttpError(c, error); }
+    await next();
+    try { service.localApps.assertUiPermission(c.req.param('id'), c.req.header('X-Xopc-Extension-Manifest'), c.req.header('X-Xopc-Extension-Grant'), 'storage'); }
+    catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/extensions/:id/storage', async (c) => {
@@ -343,9 +406,9 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
 
   authenticated.get('/api/extensions/:id/storage/:key', async (c) => {
     const extensionId = c.req.param('id');
-    const key = decodeURIComponent(c.req.param('key'));
+    const key = c.req.param('key');
     const store = await loadExtensionStore(extensionId);
-    if (!(key in store)) {
+    if (!Object.hasOwn(store, key)) {
       return c.json({ error: 'Key not found' }, 404);
     }
     return c.json({ value: store[key] });
@@ -353,22 +416,25 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
 
   authenticated.put('/api/extensions/:id/storage/:key', async (c) => {
     const extensionId = c.req.param('id');
-    const key = decodeURIComponent(c.req.param('key'));
+    const key = c.req.param('key');
     const body = (await c.req.json().catch(() => null)) as { value?: unknown } | null;
     if (body === null || !('value' in body)) {
       return c.json({ error: 'Request body must contain a "value" field' }, 400);
     }
     const store = await loadExtensionStore(extensionId);
     store[key] = body.value;
+    if (service.localApps.isLocalApp(extensionId) && Buffer.byteLength(JSON.stringify(store)) > 5_000_000) return capabilityHttpError(c, new CapabilityError('INVALID_INPUT', 'App storage quota exceeded'));
+    service.localApps.assertUiPermission(extensionId, c.req.header('X-Xopc-Extension-Manifest'), c.req.header('X-Xopc-Extension-Grant'), 'storage');
     await saveExtensionStore(extensionId, store);
     return c.json({ ok: true });
   });
 
   authenticated.delete('/api/extensions/:id/storage/:key', async (c) => {
     const extensionId = c.req.param('id');
-    const key = decodeURIComponent(c.req.param('key'));
+    const key = c.req.param('key');
     const store = await loadExtensionStore(extensionId);
     delete store[key];
+    service.localApps.assertUiPermission(extensionId, c.req.header('X-Xopc-Extension-Manifest'), c.req.header('X-Xopc-Extension-Grant'), 'storage');
     await saveExtensionStore(extensionId, store);
     return c.json({ ok: true });
   });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import type { LocalAppAcceptanceCheck } from '@xopcai/gateway-contract';
+import { LocalAppResourceScopesSchema, type LocalAppAcceptanceCheck, type LocalAppResourceScopes } from '@xopcai/gateway-contract';
+import { DurableState } from '../storage/sqlite/durable-state.js';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/index.js';
 import type {
@@ -219,7 +220,12 @@ export class LocalAppStore {
         WHERE extension_id = ? AND manifest_digest = ? AND revoked_at IS NULL`)
       .get(extensionId, manifestDigest) as LocalAppGrantRow | undefined;
     if (!row) return null;
+    const policy = new DurableState<{ grantRevision: string; resourceScopes: LocalAppResourceScopes }>('local-app-resource-grants', extensionId).get(manifestDigest);
+    // Old action-only grants cannot implicitly authorize workspace data.
+    if (row.app_id && !policy) return null;
     return {
+      grantRevision: policy?.grantRevision,
+      resourceScopes: policy?.resourceScopes,
       granted: true,
       extensionId: row.extension_id,
       appId: row.app_id ?? undefined,
@@ -234,30 +240,46 @@ export class LocalAppStore {
     appId?: string;
     manifestDigest: string;
     permissions: string[];
+    resourceScopes?: LocalAppResourceScopes;
   }): LocalAppUiGrant {
     const grantedAt = Date.now();
-    getSqliteDatabase().prepare(`INSERT INTO extension_ui_grants (
-      extension_id, app_id, manifest_digest, permissions_json, granted_at, revoked_at
-    ) VALUES (?, ?, ?, ?, ?, NULL)
-    ON CONFLICT(extension_id, manifest_digest) DO UPDATE SET
-      app_id = excluded.app_id,
-      permissions_json = excluded.permissions_json,
-      granted_at = excluded.granted_at,
-      revoked_at = NULL`).run(
-      input.extensionId,
-      input.appId ?? null,
-      input.manifestDigest,
-      JSON.stringify(input.permissions),
-      grantedAt,
-    );
-    return {
-      granted: true,
-      extensionId: input.extensionId,
-      appId: input.appId,
-      manifestDigest: input.manifestDigest,
-      permissions: input.permissions,
-      grantedAt,
-    };
+    const grantRevision = randomUUID();
+    const resourceScopes = LocalAppResourceScopesSchema.parse(input.resourceScopes ?? {});
+    return runSqliteWriteTransaction(() => {
+      getSqliteDatabase().prepare(`INSERT INTO extension_ui_grants (
+        extension_id, app_id, manifest_digest, permissions_json, granted_at, revoked_at
+      ) VALUES (?, ?, ?, ?, ?, NULL)
+      ON CONFLICT(extension_id, manifest_digest) DO UPDATE SET
+        app_id = excluded.app_id,
+        permissions_json = excluded.permissions_json,
+        granted_at = excluded.granted_at,
+        revoked_at = NULL`).run(
+        input.extensionId,
+        input.appId ?? null,
+        input.manifestDigest,
+        JSON.stringify(input.permissions),
+        grantedAt,
+      );
+      new DurableState('local-app-resource-grants', input.extensionId).set(input.manifestDigest, { grantRevision, resourceScopes });
+      new DurableState('local-app-resource-grant-history', input.extensionId).set(grantRevision, {
+        manifestDigest: input.manifestDigest, resourceScopes, grantedAt,
+      });
+      return {
+        grantRevision,
+        resourceScopes,
+        granted: true,
+        extensionId: input.extensionId,
+        appId: input.appId,
+        manifestDigest: input.manifestDigest,
+        permissions: input.permissions,
+        grantedAt,
+      };
+    });
+  }
+
+  revokeUiGrant(extensionId: string): void {
+    getSqliteDatabase().prepare('UPDATE extension_ui_grants SET revoked_at = ? WHERE extension_id = ? AND revoked_at IS NULL')
+      .run(Date.now(), extensionId);
   }
 
   recordAcceptance(appId: string, input: RecordLocalAppAcceptanceInput): LocalAppAcceptanceRun {

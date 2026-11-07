@@ -636,6 +636,38 @@ describe('LocalAppService', () => {
     expect(() => service.getCapabilityAccess(created.extensionId, grant.manifestDigest!)).toThrow('not enabled and installed');
   });
 
+  it('requires explicit data scope review and invalidates old authorization revisions', async () => {
+    const created = service.create({ name: 'Scoped grant', idea: 'Keep data access bounded' });
+    acceptCurrentDraft(created.id); await service.install(created.id);
+    const digest = service.getUiGrant(created.extensionId).manifestDigest!;
+    const first = service.grantUiPermissions(created.extensionId, digest);
+    expect(first.resourceScopes).toEqual({ notesRead: { mode: 'none' }, notesWrite: { mode: 'none' }, tasksRead: { mode: 'none' }, agentDelegate: false });
+    const next = service.grantUiPermissions(created.extensionId, digest, {
+      notesRead: { mode: 'workspace' }, notesWrite: { mode: 'none' }, tasksRead: { mode: 'none' },
+    });
+    expect(next.grantRevision).not.toBe(first.grantRevision);
+    expect(() => service.getCapabilityAccess(created.extensionId, digest, first.grantRevision)).toThrow('authorization changed');
+    service.revokeUiPermissions(created.extensionId, digest);
+    expect(() => service.getCapabilityAccess(created.extensionId, digest, next.grantRevision)).toThrow('not been granted');
+    service.grantUiPermissions(created.extensionId, digest);
+    await service.setEnabled(created.id, false); await service.setEnabled(created.id, true);
+    expect(service.getUiGrant(created.extensionId).granted).toBe(false);
+  });
+
+  it('serves only inventoried public files from an intact release', async () => {
+    const created = service.create({ name: 'Public assets', idea: 'Keep package files private' });
+    writeFileSync(join(created.workspaceRoot, 'private.txt'), 'secret');
+    acceptCurrentDraft(created.id); const installed = await service.install(created.id);
+    const publicPath = service.resolveUiAsset(created.extensionId, 'ui/app.js');
+    expect(publicPath).toBeTruthy();
+    for (const path of ['private.txt', 'APP_BRIEF.md', 'xopc.extension.json', '.xopc/runtime/local-ui.js']) {
+      expect(service.resolveUiAsset(created.extensionId, path)).toBeNull();
+    }
+    writeFileSync(publicPath!, '// modified after publication');
+    expect(service.resolveUiAsset(created.extensionId, 'ui/app.js')).toBeNull();
+    expect(installed.activeVersion).toBe(1);
+  });
+
   it('stores ordinary extension UI grants in the same authoritative store', () => {
     const extensionId = 'third-party-extension';
     const extensionRoot = join(paths.root, 'extensions', extensionId);

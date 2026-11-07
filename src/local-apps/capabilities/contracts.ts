@@ -3,6 +3,7 @@ import { CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import { registerNoteReadCapabilities } from '../../notes/capabilities/read.js';
 import { registerNoteWriteCapabilities } from '../../notes/capabilities/write.js';
 import { registerTaskReadCapabilities } from '../../tasks/capabilities/read.js';
+import { registerLocalAppDelegation } from './delegate.js';
 
 /** Validate release bindings against the same production definitions without executing a domain service. */
 export function validateLocalAppCapabilityContracts(value: unknown): void {
@@ -13,6 +14,7 @@ export function validateLocalAppCapabilityContracts(value: unknown): void {
   registerNoteReadCapabilities(dispatcher, unavailable);
   registerNoteWriteCapabilities(dispatcher, { getNotes: unavailable });
   registerTaskReadCapabilities(dispatcher);
+  registerLocalAppDelegation(dispatcher);
   const context = { principalId: 'release-validator', surface: 'extension' as const, scopes: ['gateway.admin'] as const, authorize: () => false };
   for (const binding of bindings) {
     const descriptor = dispatcher.describe(binding.id, context);

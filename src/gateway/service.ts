@@ -1805,6 +1805,7 @@ export class GatewayService {
   }
 
   async stop(): Promise<void> {
+    await this.localApps.previews.close();
     await flushTracing();
     if (!this.running) return;
     this.stopping = true;

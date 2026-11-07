@@ -59,7 +59,7 @@ export function scaffoldLocalApp(input: {
     type: 'module',
   }, null, 2)}\n`);
   writeText(workspaceRoot, LOCAL_APP_RUNTIME_ENTRY, LOCAL_APP_RUNTIME_SOURCE);
-  writeText(workspaceRoot, 'APP_BRIEF.md', `# ${name}\n\n${idea}\n\n## Product constraints\n\n- Keep the app local to this XOPC installation.\n- Preserve the extension id: \`${extensionId}\`.\n- Phase 1 is UI-only. Use only the declared theme and storage permissions.\n- Do not edit the manifest \`main\` field or \`${LOCAL_APP_RUNTIME_ENTRY}\`; xopc owns the trusted runtime entry.\n- Keep critical user journeys in \`.xopc/acceptance.json\`. Target only elements marked with \`data-xopc-test-id\`.\n- Run the local-app validation script before asking the user to install an update.\n`);
+  writeText(workspaceRoot, 'APP_BRIEF.md', `# ${name}\n\n${idea}\n\n## Product constraints\n\n- Keep the app local to this XOPC installation.\n- Preserve the extension id: \`${extensionId}\`.\n- Phase 1 is UI-only. Use declared UI permissions and explicitly approved host capability bindings only. Data access defaults to none; the user reviews resource scopes in the host.\n- Do not edit the manifest \`main\` field or \`${LOCAL_APP_RUNTIME_ENTRY}\`; xopc owns the trusted runtime entry.\n- Keep critical user journeys in \`.xopc/acceptance.json\`. Target only elements marked with \`data-xopc-test-id\`.\n- Run the local-app validation script before asking the user to install an update.\n`);
   writeText(workspaceRoot, '.xopc/app.json', `${JSON.stringify({
     schemaVersion: 1,
     extensionId,

@@ -54,6 +54,7 @@
     "reasons": {
       "agentAnswer": "回答会话问题",
       "continueAfterTool": "根据工具结果继续处理",
+      "localAppDelegation": "执行 Local App 受限委托",
       "backgroundReview": "执行后台检查",
       "sessionCompaction": "压缩较长会话",
       "sessionTitle": "生成会话标题",
