@@ -44,7 +44,7 @@ class AboutYouScreenTest {
     assertEquals("a-1", opened)
   }
 
-  @Test fun detailShowsGatewayPublicMetadataWithoutMutationControls() {
+  @Test fun detailExpandsReadableSourcesAndScope() {
     val assertion = PersonalAssertion("a-1", "Prefers concise answers", "user_explicit",
       scope = "global", confidence = 0.9, sources = listOf("Project chat"))
     rule.setContent {
@@ -54,8 +54,11 @@ class AboutYouScreenTest {
         onRetryDetail = {}, onOpenNotes = {})
     }
     rule.onNodeWithTag("about-you-detail-statement").assertExists()
+    rule.onNodeWithText("Project chat").assertDoesNotExist()
+    rule.onNodeWithTag("about-you-sources-toggle").performClick()
     rule.onNodeWithText("Project chat").assertExists()
-    rule.onNodeWithText("90%").assertExists()
+    rule.onNodeWithText("All conversations").assertExists()
+    rule.onNodeWithText("90%").assertDoesNotExist()
   }
 
   @Test fun profileEditorValidatesTimezoneAndClosesAfterConfirmedRevision() {
