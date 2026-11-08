@@ -118,10 +118,13 @@ export class TuiBottomBar implements Component {
     }
 
     const state = this.getState();
+    const policy = state.sessionInfo.interactionPolicy;
+    const policyLabel = policy?.mode === 'plan' ? 'Plan · read only' : policy?.access === 'read-only' ? 'Read only' : policy?.sandbox === 'workspace-write' ? `Workspace sandbox · network ${policy.network ? 'on' : 'off'}` : '';
     const cwdRaw = state.sessionInfo.effectiveWorkspacePath;
     const cwdWithBranch = cwdRaw
       ? (() => {
           const cwd = shortenPath(cwdRaw);
+          if (policyLabel) return `${cwd} · ${policyLabel}`;
           const branch = getGitBranchCached(cwdRaw);
           return branch ? `${cwd} (${branch})` : cwd;
         })()

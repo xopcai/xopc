@@ -96,15 +96,15 @@ it('includes model cycle and session picker descriptions', () => {
     expect(getSlashCommands(true).some((command) => command.name === 'copy')).toBe(true);
   });
 
-  it('exposes pi-style name command', () => {
-    expect(getSlashCommands(true).some((command) => command.name === 'name')).toBe(true);
+  it('exposes the rename command', () => {
+    expect(getSlashCommands(true).some((command) => command.name === 'rename')).toBe(true);
   });
 
-  it('exposes pi-style session command', () => {
-    expect(getSlashCommands(true).some((command) => command.name === 'session')).toBe(true);
+  it('exposes the canonical status command', () => {
+    expect(getSlashCommands(true).some((command) => command.name === 'status')).toBe(true);
   });
 
-  it('exposes pi-style quit command', () => {
-    expect(getSlashCommands(true).some((command) => command.name === 'quit')).toBe(true);
+  it('exposes one exit command', () => {
+    expect(getSlashCommands(true).some((command) => command.name === 'exit')).toBe(true);
   });
 });

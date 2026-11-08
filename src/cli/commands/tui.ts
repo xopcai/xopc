@@ -27,6 +27,7 @@ function createTuiCommand(ctx: CLIContext): Command {
     .option('-s, --session <key>', 'Session key to resume (omitted: start a fresh TUI session)')
     .option('--agent <id>', 'Agent id for a fresh TUI session')
     .option('--set-default-agent <id>', 'Persist default agent for new TUI sessions and exit')
+    .option('-i, --image <files...>', 'Attach local images to the first message')
     .option('-m, --message <text>', 'Send a message on launch')
     .option('--workdir <dir>', 'Workspace directory for the new TUI session')
     .option('--no-cwd', 'Do not use the launch directory as the new TUI session workspace')

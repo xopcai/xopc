@@ -105,6 +105,7 @@ export interface TuiExtensionRuntime {
   shortcuts: TuiExtensionShortcut[];
   autocompleteProvider: AutocompleteProvider;
   handleShortcut(data: string): boolean;
+  createContext(extensionId: string): TuiSlashCommandContext;
   activate(): Promise<void>;
   dispose(): void;
 }
@@ -880,6 +881,7 @@ export function createTuiExtensionRuntime(
     slashCommands,
     shortcuts,
     autocompleteProvider,
+    createContext: createActionContext,
     handleShortcut(data: string): boolean {
       for (const shortcut of shortcuts) {
         if (data !== shortcut.key && !matchesKey(data, shortcut.key as never)) {

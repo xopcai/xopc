@@ -187,7 +187,10 @@ export function parseReviewTargetArgs(args: string): ReviewTarget {
 async function buildUncommittedReview(cwd: string, target: ReviewTarget & { kind: 'uncommitted' }): Promise<ReviewDiffBundle> {
   const status = await git(['status', '--short'], cwd).catch(() => '');
   const stat = await git(['diff', '--stat', 'HEAD', '--'], cwd).catch(() => '');
-  const trackedDiff = await git(['diff', '--find-renames', 'HEAD', '--'], cwd).catch(() => '');
+  const hasHead = await git(['rev-parse', '--verify', 'HEAD'], cwd).then(() => true, () => false);
+  const trackedDiff = hasHead
+    ? await git(['diff', '--find-renames', 'HEAD', '--'], cwd)
+    : [await git(['diff', '--cached', '--find-renames', '--'], cwd), await git(['diff', '--find-renames', '--'], cwd)].filter(Boolean).join('\n');
   const untrackedDiff = await untrackedFileDiff(cwd);
   return {
     cwd,

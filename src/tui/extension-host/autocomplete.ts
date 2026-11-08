@@ -42,12 +42,17 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
     cursorCol: number,
     options: { signal: AbortSignal; force?: boolean },
   ): Promise<AutocompleteSuggestions | null> {
-    const primary = await this.primary.getSuggestions(lines, cursorLine, cursorCol, options);
+    let primary = await this.primary.getSuggestions(lines, cursorLine, cursorCol, options);
 
     const line = lines[cursorLine] ?? '';
     const beforeCursor = line.slice(0, cursorCol);
 
     const slashMatch = beforeCursor.match(/^\/([\w:-]*)$/);
+    if (slashMatch && primary) {
+      const query = (slashMatch[1] ?? '').toLowerCase();
+      const items = primary.items.filter(item => item.value.replace(/^\//, '').toLowerCase().startsWith(query));
+      primary = items.length ? { ...primary, items } : null;
+    }
     const slashCommands = [...this.additionalSlashCommands, ...this.extensionSlashCommands];
     if (slashMatch && slashCommands.length > 0) {
       const query = (slashMatch[1] ?? '').toLowerCase();

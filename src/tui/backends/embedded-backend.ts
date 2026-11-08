@@ -1,14 +1,24 @@
+import { normalizeClarificationSubmission, type ClarificationResponseCommand } from '@xopcai/gateway-contract';
 import { sessionInputCommandSchema, canonicalSessionCommand } from '@xopcai/gateway-contract';
+import { isAbsolute, join, relative, resolve } from 'node:path';
+
+import { commandRegistry } from '../../agent/commands/command-registry.js';
+import { resumeChildRun } from '../../agent/orchestration/child-run-resume.js';
+import { manageTuiCapability, type TuiManagementCommand } from '../tui-management.js';
+import { listTuiCapabilities, type TuiCapabilityKind } from '../tui-capabilities.js';
+import { getChildRunMessages, steerChildRun, listChildRuns, getChildRun, stopChildRun } from '../../agent/orchestration/child-run-monitor.js';
+import type { TuiClarification } from '../tui-clarification.js';
+import type { ClarifyRequestPayload, ClarifyRequestResult } from '../../agent/tools/clarify-tool.js';
+import { getSessionInteractionPolicy, setSessionInteractionPolicy, type SessionInteractionPolicy } from '../../agent/session/interaction-policy.js';
+import { searchTuiHistory, resizeTuiJob, getTuiWorkspaceDiff, listTuiJobs, getTuiJob, stopTuiJob, writeTuiJob } from '../backend-services.js';
 import { EmbeddedDraftStore } from './embedded-drafts.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../../config/agent-profile.js';
 import { acceptSessionCommand } from '../../storage/sqlite/session-creation-repository.js';
 import { cancelQueuedSessionInput, claimNextSessionInput, finishSessionInputRun, getSessionInputById, getSessionInputState, setSessionInputStatus } from '../../storage/sqlite/session-input-repository.js';
 import type { ExtensionRegistryImpl } from '../../extensions/extension-registry-impl.js';
-import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { AgentService } from '../../agent/service.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
-
 import { parseModelRef } from '../../agent/models/selection.js';
 import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/create-share-tool.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
@@ -21,13 +31,15 @@ import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
 import { buildReviewContext, resolveGitRoot } from '../../review/review-git.js';
 import { effectiveWorkspacePathForSession } from '../../session/session-workspace.js';
-import type { ExportFormat } from '../../session/types.js';
+import { SessionStatus, type ExportFormat } from '../../session/types.js';
 import { SessionIndex } from '../../session/index.js';
 import {
   appendComposerInputHistory,
   getSessionMetadata,
+  getSessionConfig,
   listComposerInputHistory,
   openXopcDatabase,
+  isXopcDatabaseOpen,
 } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
 import type {
@@ -64,7 +76,7 @@ const log = createLogger('TUI:Embedded');
 function clampHistoryWindowSpan(value: number | undefined, fallback: number): number {
   const parsed = Math.trunc(value ?? fallback);
   if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(200, Math.max(0, parsed));
+  return Math.min(2000, Math.max(0, parsed));
 }
 
 interface EmbeddedBackendOptions {
@@ -107,6 +119,13 @@ export class EmbeddedBackend implements TuiBackend {
   private sessionIndex: SessionIndex | null = null;
   private sessionIndexReady: Promise<void> | null = null;
   private running = false;
+  private readonly visitedConversations = new Set<string>();
+  private readonly clarificationWaits = new Map<string, {
+    request: TuiClarification;
+    resolve: (result: ClarifyRequestResult) => void;
+    reject: (error: Error) => void;
+    dispose: () => void;
+  }>();
   private chatAbort: AbortController | null = null;
   private readonly chatInputStates = new Map<string, TuiChatInputState>();
   private readonly drafts = new EmbeddedDraftStore();
@@ -199,6 +218,7 @@ export class EmbeddedBackend implements TuiBackend {
       config,
       sessionStore: sessionIndex.getStore(),
       extensionRegistry: this.opts?.extensionRegistry,
+      gatewayClarify: { requestClarification: (context, request) => this.askClarification(context.conversationId, context.runId, request) },
       isWorkspaceTrusted: (workspaceDir) => this.isWorkspaceTrusted(workspaceDir),
     });
     this.agent = agent;
@@ -227,12 +247,20 @@ export class EmbeddedBackend implements TuiBackend {
     }
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.running = false;
+    for (const wait of this.clarificationWaits.values()) { wait.dispose(); wait.reject(new Error('TUI stopped')); }
+    this.clarificationWaits.clear();
     this.chatAbort?.abort();
     this.chatAbort = null;
     this.bus.shutdown();
-    void this.agent?.stop();
+    const jobs: Array<Promise<unknown>> = [];
+    for (const conversationId of this.visitedConversations) {
+      for (const child of listChildRuns(conversationId)) if (child.status === 'running') stopChildRun(conversationId, child.id);
+      for (const job of isXopcDatabaseOpen() ? commandRegistry().list(conversationId) : []) if (job.status === 'running') jobs.push(commandRegistry().cancel(conversationId, job.id));
+    }
+    await Promise.allSettled(jobs);
+    await this.agent?.stop();
     this.agent = null;
   }
 
@@ -630,18 +658,18 @@ export class EmbeddedBackend implements TuiBackend {
   }): Promise<{ messages: HistoryMessage[] }> {
     const draft = this.drafts.read(opts.conversationId);
     if (draft && (!draft.command || !getSessionMetadata(opts.conversationId))) return { messages: [] };
-    if (!this.agent) {
-      return { messages: [] };
-    }
+    await this.sessionIndexReady;
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) throw new Error('Session store is unavailable.');
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(opts.conversationId);
+      const rows = await store.loadTranscriptRows(opts.conversationId);
       return {
         messages: transcriptRowsToClientHistory(rows, { limit: opts.limit }),
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, errorMessage }, `Embedded loadHistory failed: ${errorMessage}`);
-      return { messages: [] };
+      throw error;
     }
   }
 
@@ -651,11 +679,11 @@ export class EmbeddedBackend implements TuiBackend {
     before?: number;
     after?: number;
   }) {
-    if (!this.agent) {
-      return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
-    }
+    await this.sessionIndexReady;
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) throw new Error('Session store is unavailable.');
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(opts.conversationId);
+      const rows = await store.loadTranscriptHistoryRows(opts.conversationId);
       const totalRows = rows.length;
       if (totalRows === 0) {
         return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows };
@@ -677,31 +705,33 @@ export class EmbeddedBackend implements TuiBackend {
         { err: error, conversationId: opts.conversationId, rowNumber: opts.rowNumber, errorMessage },
         `Embedded loadHistoryWindow failed: ${errorMessage}`,
       );
-      return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
+      throw error;
     }
   }
 
   async loadTranscriptTree(conversationId: string): Promise<TuiTranscriptTreeEntry[]> {
-    if (!this.agent) return [];
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) throw new Error('Session store is not ready.');
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(conversationId);
+      const rows = await store.loadTranscriptRows(conversationId);
       return buildTuiTranscriptTree(rows);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, conversationId, errorMessage }, `Embedded loadTranscriptTree failed: ${errorMessage}`);
-      return [];
+      throw error;
     }
   }
 
   async loadTimeline(conversationId: string): Promise<SessionTimelineItem[]> {
-    if (!this.agent) return [];
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) throw new Error('Session store is not ready.');
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(conversationId);
+      const rows = await store.loadTranscriptRows(conversationId);
       return buildSessionTimeline(rows);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, conversationId, errorMessage }, `Embedded loadTimeline failed: ${errorMessage}`);
-      return [];
+      throw error;
     }
   }
 
@@ -718,10 +748,82 @@ export class EmbeddedBackend implements TuiBackend {
     }
   }
 
-  async listSessions(): Promise<TuiSessionItem[]> {
-    if (!this.agent) return [];
+  private askClarification(conversationId: string, runId: string, request: ClarifyRequestPayload): Promise<ClarifyRequestResult> {
+    const id = crypto.randomUUID();
+    const signal = this.chatAbort?.signal;
+    const expiresAt = request.kind === 'approval' ? Date.now() + 10 * 60_000 : undefined;
+    const presentation: TuiClarification = { ...request, id, conversationId, version: 1, kind: request.kind ?? 'input', expiresAt };
+    return new Promise((resolveAnswer, reject) => {
+      const cancel = () => { this.clarificationWaits.delete(id); clearTimeout(timer); reject(new Error('Clarification cancelled')); };
+      const timer = expiresAt ? setTimeout(cancel, Math.max(0, expiresAt - Date.now())) : undefined;
+      const dispose = () => { clearTimeout(timer); signal?.removeEventListener('abort', cancel); };
+      signal?.addEventListener('abort', cancel, { once: true });
+      this.clarificationWaits.set(id, { request: presentation, resolve: resolveAnswer, reject, dispose });
+      if (signal?.aborted) { cancel(); return; }
+      this.onEvent?.({ event: 'clarify_request', data: { runId, conversationId, payload: { ...presentation, requestId: id } }, source: 'embedded' });
+    });
+  }
+  async getClarification(conversationId: string): Promise<TuiClarification | null> {
+    return [...this.clarificationWaits.values()].find(wait => wait.request.conversationId === conversationId)?.request ?? null;
+  }
+  async submitClarification(conversationId: string, id: string, command: ClarificationResponseCommand): Promise<void> {
+    const wait = this.clarificationWaits.get(id);
+    if (!wait || wait.request.conversationId !== conversationId || wait.request.version !== command.expectedVersion) throw new Error('This question is no longer active.');
+    if (wait.request.expiresAt && wait.request.expiresAt <= Date.now()) throw new Error('This approval has expired.');
+    const answer = command.action === 'answer' ? normalizeClarificationSubmission(wait.request, {
+      ...(command.schemaVersion ? { schemaVersion: command.schemaVersion } : {}),
+      ...(command.answers ? { answers: command.answers } : {}),
+      ...(command.response ? { response: command.response } : {}),
+      ...(command.decision ? { decision: command.decision } : {}),
+    }).answer : undefined;
+    this.clarificationWaits.delete(id);
+    wait.dispose();
+    if (answer === undefined) wait.reject(new Error('Clarification cancelled by the user.'));
+    else wait.resolve({ status: 'answered', answer });
+  }
+
+  async manageCapability(conversationId: string, command: TuiManagementCommand) {
+    const info = await this.getSessionInfo(conversationId);
+    if (!info.effectiveWorkspacePath) throw new Error('Workspace is unavailable');
+    return manageTuiCapability({ command, conversationId, config: this.activeConfig(), workspace: info.effectiveWorkspacePath, owner: 'gateway-owner' });
+  }
+  async listCapabilities(conversationId: string, kind: TuiCapabilityKind) {
+    const info = await this.getSessionInfo(conversationId);
+    if (!info.effectiveWorkspacePath) throw new Error('Workspace is unavailable.');
+    return listTuiCapabilities({ config: this.activeConfig(), workspace: info.effectiveWorkspacePath,
+      agentId: info.agentId, kind, trusted: this.isWorkspaceTrusted(info.effectiveWorkspacePath) });
+  }
+
+  async listSubagents(conversationId: string) { return listChildRuns(conversationId); }
+  async getSubagent(conversationId: string, id: string) { return getChildRun(conversationId, id); }
+  async steerSubagent(conversationId: string, id: string, text: string) { await steerChildRun(conversationId, id, text); }
+  async resumeSubagent(conversationId: string, id: string, text: string) { await resumeChildRun(conversationId, id, text, this.activeConfig()); }
+  async getSubagentTranscript(conversationId: string, id: string) { return JSON.stringify(getChildRunMessages(conversationId, id), null, 2); }
+  async stopSubagent(conversationId: string, id: string) { stopChildRun(conversationId, id); }
+
+  async getInteractionPolicy(conversationId: string) { return getSessionInteractionPolicy(conversationId); }
+  async setInteractionPolicy(conversationId: string, policy: SessionInteractionPolicy) {
+    return setSessionInteractionPolicy(conversationId, policy);
+  }
+  async getWorkspaceDiff(conversationId: string) {
+    const info = await this.getSessionInfo(conversationId);
+    if (!info.effectiveWorkspacePath) throw new Error('Workspace is unavailable.');
+    return getTuiWorkspaceDiff(info.effectiveWorkspacePath);
+  }
+  async searchHistory(conversationId: string, query: string) { return searchTuiHistory(conversationId, query); }
+  async listJobs(conversationId: string) { return listTuiJobs(conversationId); }
+  async getJob(conversationId: string, id: string) { return getTuiJob(conversationId, id); }
+  async resizeJob(conversationId: string, id: string, cols: number, rows: number) { resizeTuiJob(conversationId, id, cols, rows); }
+  async stopJob(conversationId: string, id: string) { await stopTuiJob(conversationId, id); }
+  async writeJob(conversationId: string, id: string, text: string) { writeTuiJob(conversationId, id, text); }
+
+  async listSessions(options?: { archived?: boolean }): Promise<TuiSessionItem[]> {
+    await this.sessionIndexReady;
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) throw new Error('Session store is unavailable.');
     try {
-      const result = await this.agent.sessionStore.list({
+      const result = await store.list({
+        status: options?.archived ? [SessionStatus.ARCHIVED] : [SessionStatus.ACTIVE, SessionStatus.PINNED],
         limit: 200,
         sortBy: 'updatedAt',
         sortOrder: 'desc',
@@ -730,7 +832,7 @@ export class EmbeddedBackend implements TuiBackend {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, errorMessage }, `Embedded listSessions failed: ${errorMessage}`);
-      return [];
+      throw error;
     }
   }
 
@@ -753,15 +855,25 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async renameSession(conversationId: string, name: string): Promise<{ ok: boolean }> {
-    if (!this.agent) return { ok: false };
+    await this.sessionIndexReady;
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) return { ok: false };
     try {
-      await this.agent.sessionStore.updateMetadata(conversationId, { name: name.trim() });
+      await store.updateMetadata(conversationId, { name: name.trim() });
       return { ok: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, conversationId, errorMessage }, `Embedded renameSession failed: ${errorMessage}`);
       return { ok: false };
     }
+  }
+
+  async restoreSession(conversationId: string) { await this.sessionIndexReady; const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore(); if (!store) throw new Error('Session store is unavailable'); await store.unarchive(conversationId); }
+  async archiveSession(conversationId: string): Promise<void> {
+    await this.sessionIndexReady;
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store || !getSessionMetadata(conversationId)) throw new Error('Only saved conversations can be archived.');
+    await store.archive(conversationId);
   }
 
   async deleteSession(conversationId: string): Promise<{ ok: boolean }> {
@@ -804,6 +916,7 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async getSessionInfo(conversationId: string): Promise<SessionInfo> {
+    this.visitedConversations.add(conversationId);
     const draft = this.drafts.read(conversationId);
     if (draft) {
       const model = parseModelRef(draft.creation.model);
@@ -816,8 +929,18 @@ export class EmbeddedBackend implements TuiBackend {
         effectiveWorkspacePath: project?.workspaceRoot || draft.config.workingDirectoryOverride || profile.resolvedWorkspacePath };
     }
     if (!this.agent) {
-      const model = getAgentDefaultModelRef();
-      return { model: model ?? undefined };
+      await this.sessionIndexReady;
+      const metadata = getSessionMetadata(conversationId);
+      if (!metadata) throw new Error('Session not found.');
+      const profile = resolveEffectiveAgentProfile(metadata.agentId);
+      const cfg = getSessionConfig(conversationId);
+      const project = metadata.projectId ? new ProjectService().get(metadata.projectId) : null;
+      const parsed = parseModelRef(cfg?.modelOverride ?? profile.primaryModelRef);
+      return { agentId: metadata.agentId, displayName: metadata.name, model: parsed?.model,
+        modelProvider: parsed?.provider, thinkingLevel: cfg?.thinkingLevel, reasoningLevel: cfg?.reasoningLevel,
+        verboseLevel: cfg?.verboseLevel, projectId: metadata.projectId,
+        effectiveWorkspacePath: effectiveWorkspacePathForSession(this.activeConfig(), conversationId, cfg, project),
+        workingDirectoryLocked: Boolean(project), interactionPolicy: getSessionInteractionPolicy(conversationId) };
     }
     try {
       const cfg = await this.agent.sessionInspector.agentConfig(conversationId);
@@ -840,8 +963,7 @@ export class EmbeddedBackend implements TuiBackend {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, conversationId, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
-      const model = getAgentDefaultModelRef();
-      return { model: model ?? undefined };
+      throw err;
     }
   }
 
@@ -948,10 +1070,13 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async exportSession(conversationId: string, format: ExportFormat): Promise<string> {
-    if (!this.agent) {
-      throw new Error('Agent not started');
+    if (this.drafts.read(conversationId) && !getSessionMetadata(conversationId)) {
+      throw new Error('This conversation is an unsent draft; there is no persisted transcript yet.');
     }
-    return this.agent.sessionStore.exportSession(conversationId, format);
+    await this.sessionIndexReady;
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) throw new Error('Session store is unavailable.');
+    return store.exportSession(conversationId, format);
   }
 
   async importSession(
@@ -1027,11 +1152,11 @@ export class EmbeddedBackend implements TuiBackend {
     };
   }
 
-  async btwQuery(conversationId: string, question: string): Promise<{ text: string; error?: string }> {
-    if (!this.agent) {
-      return { text: '', error: 'Agent not started' };
-    }
-    return this.agent.sessionInspector.btwQuery(conversationId, question);
+  async sideQuery(conversationId: string, question: string, options?: { signal?: AbortSignal; onDelta?: (text: string) => void }): Promise<{ text: string; error?: string }> {
+    const agent = await this.ensureAgent();
+    const draft = this.drafts.read(conversationId);
+    return agent.sessionInspector.btwQuery(conversationId, question, { signal: options?.signal, onTextDelta: options?.onDelta,
+      ...(draft ? { agentId: draft.creation.agentId, modelRef: draft.creation.model, includeSessionContext: false } : {}) });
   }
 
   async forkSession(

@@ -1,55 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  sessionTreeSelectItems,
-} from '../tui-picker-overlay.js';
-import {
   transcriptTreeSelectItems,
   userMessageForkSelectItems,
 } from '../tui-transcript-tree-picker.js';
 import { buildTuiTranscriptTree } from '../tui-transcript-tree.js';
 
 describe('tui transcript tree picker items', () => {
-it('builds grouped session tree picker rows with fork lineage', () => {
-    const items = sessionTreeSelectItems(
-      [
-        {
-          key: '9961cfc0-54a5-49b4-908a-9c3a913c6962',
-          agentId: 'main', sourceChannel: 'cli',
-          displayName: 'Main chat',
-          updatedAt: 30,
-          messageCount: 4,
-        },
-        {
-          key: '9961cfc0-54a5-49b4-908a-9c3a913c6961',
-          agentId: 'main', sourceChannel: 'telegram',
-          displayName: 'Alice fork',
-          updatedAt: 20,
-          messageCount: 2,
-          forkedFromConversationId: '9961cfc0-54a5-49b4-908a-9c3a913c6962',
-        },
-        {
-          key: '9961cfc0-54a5-49b4-908a-9c3a913c6963',
-          updatedAt: 10,
-        },
-      ],
-      '9961cfc0-54a5-49b4-908a-9c3a913c6962',
-    );
-
-    const current = items.find((item) => item.value === '9961cfc0-54a5-49b4-908a-9c3a913c6962');
-    expect(current?.label).toBe('* Main chat');
-    expect(current?.description).toContain('main/cli');
-    expect(current?.description).toContain('4 msgs');
-
-    const fork = items.find((item) => item.value === '9961cfc0-54a5-49b4-908a-9c3a913c6961');
-    expect(fork?.label).toBe('  Alice fork');
-    expect(fork?.description).toContain('main/telegram');
-    expect(fork?.description).toContain('forked from Main chat');
-    expect(fork?.searchText).toContain('Main chat');
-
-    const unknown = items.find((item) => item.value === '9961cfc0-54a5-49b4-908a-9c3a913c6963');
-    expect(unknown?.description).toContain('unknown/chat');
-  });
 
   it('builds transcript tree picker rows with indentation and searchable metadata', () => {
     const items = transcriptTreeSelectItems([

@@ -21,7 +21,7 @@ export function registerAutomationDraftCapabilities(dispatcher: CapabilityDispat
     return config;
   };
   dispatcher.register(defineReadCapability({
-    id: 'xopc.automations.simulate', majorVersion: 1, effect: 'read', surfaces: ['http', 'agent'], scopes: ['automations.read'],
+    id: 'xopc.automations.simulate', majorVersion: 1, effect: 'read', surfaces: ['http', 'agent', 'extension'], scopes: ['automations.read'],
     description: 'Validate and explain an automation without running it or calling a model.',
     input: AutomationCreateCapabilityInputSchema, output: z.object({ simulation: simulationSchema }),
     execute(input) {

@@ -159,6 +159,7 @@
 		F1FEAB68D2E6A104BE59D44D /* DeviceEndpointTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2EC88A60E669DCF29DDA0C3 /* DeviceEndpointTypes.swift */; };
 		F326396C31D71504BB2D4B3E /* XopcMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1BAC3B4F53556FD5305510A /* XopcMobileApp.swift */; };
 		F3C23325BCC8986E485591D5 /* PersonalAgentAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01D9DD109BB37799192FCCE /* PersonalAgentAvatar.swift */; };
+		F567A3D8263D2CA2F82AE02E /* ToolApprovalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86396613790F083C70E92374 /* ToolApprovalUITests.swift */; };
 		F8D09691A61C2D7A64935BBB /* PhoneWorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1611527C3882520B53DBDA16 /* PhoneWorkspaceModel.swift */; };
 		F9065B5A8ED7BC4C38261110 /* FileTransferPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E9A2F253F1027DFD2F82C1 /* FileTransferPolicy.swift */; };
 		FA4EA63AEACD1C8233385ED5 /* GatewayProfilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 945CE29DD9EAD63F09B42935 /* GatewayProfilesView.swift */; };
@@ -302,6 +303,7 @@
 		82A4C345FC38C417144E0473 /* NoteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDetailView.swift; sourceTree = "<group>"; };
 		83A517E377063C2B77AE832B /* XopcMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = XopcMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		84B97AE5CFBC755AB95D8A12 /* PhonePairingIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhonePairingIntegrationTests.swift; sourceTree = "<group>"; };
+		86396613790F083C70E92374 /* ToolApprovalUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolApprovalUITests.swift; sourceTree = "<group>"; };
 		875A5594A4C2C741BA3F20BB /* VoiceAttachmentRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAttachmentRecorderView.swift; sourceTree = "<group>"; };
 		8D6F01B616406DFB58C80DA4 /* NoteEditorDiscardUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorDiscardUITests.swift; sourceTree = "<group>"; };
 		8FDDA0C2E058A5B28288921F /* ChatImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatImageLoader.swift; sourceTree = "<group>"; };
@@ -550,6 +552,7 @@
 				07951C88BA92367C46247DD4 /* ParityAcceptanceUITests.swift */,
 				6BA5E76E6D4EECA1632EF970 /* PhoneWorkspaceUITests.swift */,
 				605A9AB9937FE45A97DB7F1B /* ProjectTaskRoundTripUITests.swift */,
+				86396613790F083C70E92374 /* ToolApprovalUITests.swift */,
 				B77774BD21464B10E3A9EC2D /* VoiceRecoveryUITests.swift */,
 			);
 			path = XopcMobileUITests;
@@ -988,6 +991,7 @@
 				2173016DCD4D634A7750BB32 /* ParityAcceptanceUITests.swift in Sources */,
 				18DACAA3332042001AD33001 /* PhoneWorkspaceUITests.swift in Sources */,
 				A6A69590BE314D5487153752 /* ProjectTaskRoundTripUITests.swift in Sources */,
+				F567A3D8263D2CA2F82AE02E /* ToolApprovalUITests.swift in Sources */,
 				5A4EF5B7B5331BCDB79D1CD5 /* VoiceRecoveryUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

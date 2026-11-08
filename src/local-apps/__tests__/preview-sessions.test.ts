@@ -36,6 +36,9 @@ function fixture() {
   const privateProject = projects.create({ name: 'Private project' });
   const dispatcher = createProductDispatcher(() => notes, { getProjects: () => projects });
   const bindings = dispatcher.list({ ...caller, surface: 'extension' }).map(({ id, majorVersion, descriptorDigest }) => ({ id, majorVersion, descriptorDigest }));
+  bindings.push(...['list', 'get', 'run', 'get_run', 'cancel'].map(command => ({
+    id: `xopc.automations.${command}`, majorVersion: 1, descriptorDigest: 'a'.repeat(64),
+  })));
   mkdirSync(join(directory, '.xopc'));
   writeFileSync(join(directory, '.xopc', 'fixtures.json'), JSON.stringify({ schemaVersion: 1,
     notes: [{ id: note.id, title: 'Example note', markdown: 'fixture only' }], tasks: [] }));
@@ -93,6 +96,10 @@ describe('Local App preview isolation', () => {
     const f = fixture();
     const session = await previews.create('app', { sourceHash: hash, mode: 'sample' }, caller);
     expect(session.bindings.some(binding => binding.id === 'xopc.agent.delegate')).toBe(false);
+    expect(session.bindings.some(binding => binding.id.startsWith('xopc.automations.'))).toBe(false);
+    await expect(previews.call(session.id, 'xopc.automations.run', {
+      majorVersion: 1, descriptorDigest: 'a'.repeat(64), input: { id: 'must-not-run' }, idempotencyKey: 'no-production',
+    }, caller, f.dispatcher)).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(previews.call(session.id, 'xopc.agent.delegate', f.call('xopc.agent.delegate', { instruction: 'Do not submit' }), caller, f.dispatcher)).rejects.toMatchObject({ code: 'FORBIDDEN' });
     const result = await previews.call(session.id, 'xopc.notes.list', f.call('xopc.notes.list'), caller, f.dispatcher);
     expect(result.data).toMatchObject({ total: 1, items: [{ title: 'Example note' }] });
@@ -111,6 +118,8 @@ describe('Local App preview isolation', () => {
     expect(f.fingerprint()).toEqual(before);
     await expect(previews.create('app', { sourceHash: hash, mode: 'readonly', resourceScopes: { ...resourceScopes, notesWrite: { mode: 'workspace' } } }, caller)).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(previews.create('app', { sourceHash: hash, mode: 'readonly', resourceScopes: { ...resourceScopes, agentDelegate: true } }, caller)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(previews.create('app', { sourceHash: hash, mode: 'readonly', resourceScopes: { ...resourceScopes,
+      automationsRun: { mode: 'selected', approvals: [] } } }, caller)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('does not inherit installed authorization and binds the lease to caller, source and expiry', async () => {

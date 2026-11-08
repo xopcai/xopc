@@ -18,7 +18,7 @@ import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
 import type { BtwQueryOptions } from '../../chat-commands/index.js';
-import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
+import { resolveEffectiveAgentProfile, resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { resolveDefaultAgentWorkspaceDir } from '../../config/workspace-defaults.js';
 import {
   effectiveWorkspacePathForSession,
@@ -149,7 +149,7 @@ export class SessionInspector {
     options?: BtwQueryOptions,
   ): Promise<{ text: string; error?: string }> {
     const config = this.opts.getConfig();
-    const profile = config ? resolveEffectiveAgentProfileForSession(conversationId) : undefined;
+    const profile = config ? options?.agentId ? resolveEffectiveAgentProfile(options.agentId) : resolveEffectiveAgentProfileForSession(conversationId) : undefined;
     return runBtwQuery({
       conversationId,
       question,
@@ -160,6 +160,7 @@ export class SessionInspector {
       temperature: options?.temperature,
       includeSessionContext: options?.includeSessionContext,
       onTextDelta: options?.onTextDelta,
+      signal: options?.signal,
       credentialOptions: profile && config
         ? { agentId: profile.agentId, appConfig: config }
         : undefined,

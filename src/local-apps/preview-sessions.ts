@@ -70,11 +70,11 @@ export class LocalAppPreviewSessions {
     const scopes = LocalAppResourceScopesSchema.parse(input.resourceScopes ?? {});
     if (input.mode === 'readonly' && (scopes.notesWrite.mode !== 'none' || scopes.tasksWrite.mode !== 'none' || scopes.projectsWrite.mode !== 'none'
       || scopes.filesExport || scopes.filesImport || scopes.connectors.mode !== 'none'
-      || scopes.agentDelegate)) throw new CapabilityError('FORBIDDEN', 'Real preview is read-only');
+      || scopes.agentDelegate || scopes.automationProposals || scopes.automationsRun.mode !== 'none')) throw new CapabilityError('FORBIDDEN', 'Real preview is read-only');
     if (input.mode !== 'readonly' && input.resourceScopes) throw new CapabilityError('INVALID_INPUT', 'Synthetic previews do not accept production resource grants');
     const bindings = source.bindings.filter(binding => binding.id !== 'xopc.agent.delegate'
       && !/xopc\.(files|connectors|apps)\./.test(binding.id)
-      && (input.mode !== 'readonly' || /\.(get|list|list_milestones|list_updates)$/.test(binding.id)));
+      && !binding.id.startsWith('xopc.automations.') && (input.mode !== 'readonly' || /\.(get|list|list_milestones|list_updates)$/.test(binding.id)));
     const session: LocalAppPreviewSession = { id: randomUUID(), appId, extensionId: source.extensionId, sourceHash: source.sourceHash,
       mode: input.mode, expiresAt: Date.now() + TTL, previewUrl: `${source.previewUrl}?xopcRuntime=${encodeURIComponent(LOCAL_APP_RUNTIME_BRIDGE_HASH)}`,
       bindings, permissions: source.permissions.filter(permission => ['theme', 'storage', 'notification'].includes(permission))

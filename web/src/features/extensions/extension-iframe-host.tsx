@@ -10,6 +10,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 import { buildExtensionAssetUrl } from './extension-asset-url';
 import { ExtensionPermissionDialog } from './extension-permission-dialog';
+import { AutomationProposalDialog } from './automation-proposal-dialog';
 import { ResourceRequestDialog } from './resource-request-dialog';
 import { AttachmentPicker, type AttachmentPrompt } from './attachment-picker';
 import { confirmExtensionUiGrant, resolveExtensionUiGrant, type ExtensionUiGrant } from './extension-authoritative-grants';
@@ -71,6 +72,7 @@ export function ExtensionIframeHost({
   const generation = useRef(0);
   const confirming = useRef(false);
   const [reviewGrant, setReviewGrant] = useState<ExtensionUiGrant | null>(null);
+  const [proposalReview, setProposalReview] = useState<{ id: string; identity: string } | null>(null);
   const [resourceReview, setResourceReview] = useState<{ id: string; identity: string } | null>(null);
   const [attachment, setAttachment] = useState<{ prompt: AttachmentPrompt; identity: string } | null>(null);
   const proposalIdentity = JSON.stringify([extensionId, gatewayUrl, namespace]);
@@ -83,6 +85,14 @@ export function ExtensionIframeHost({
       if (prompt?.extensionId === extensionId) setAttachment({ prompt, identity: proposalIdentity }); };
     window.addEventListener('extension-review-resource-request', review); window.addEventListener('extension-pick-attachment', pick);
     return () => { window.removeEventListener('extension-review-resource-request', review); window.removeEventListener('extension-pick-attachment', pick); };
+  }, [extensionId, proposalIdentity]);
+  useEffect(() => {
+    const review = (event: Event) => {
+      const detail = (event as CustomEvent<{ extensionId: string; proposalId: string }>).detail;
+      if (detail?.extensionId === extensionId) setProposalReview({ id: detail.proposalId, identity: proposalIdentity });
+    };
+    window.addEventListener('extension-review-automation-proposal', review);
+    return () => window.removeEventListener('extension-review-automation-proposal', review);
   }, [extensionId, proposalIdentity]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const resolved = useThemeStore((s) => s.resolved);
@@ -267,6 +277,8 @@ export function ExtensionIframeHost({
       {ui.localApp && resourceReview?.identity === proposalIdentity ? <ResourceRequestDialog key={resourceReview.id} extensionId={extensionId}
         requestId={resourceReview.id} zh={language === 'zh'} onClose={() => setResourceReview(null)} /> : null}
       {ui.localApp && attachment?.identity === proposalIdentity ? <AttachmentPicker prompt={attachment.prompt} zh={language === 'zh'} onClose={() => setAttachment(null)} /> : null}
+      {ui.localApp && proposalReview?.identity === proposalIdentity ? <AutomationProposalDialog key={proposalReview.id}
+        extensionId={extensionId} proposalId={proposalReview.id} zh={language === 'zh'} onClose={() => setProposalReview(null)} /> : null}
       {permissionDialog}
       {grantError ? <p role="alert" className="p-3 text-sm text-danger">{grantError}</p> : null}
       {loadError ? (

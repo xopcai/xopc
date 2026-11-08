@@ -9,6 +9,8 @@ import { AutomationTriggerSchema, CreateAutomationSchema, UpdateAutomationSchema
 import type { AutomationTrigger } from '../domain/types.js';
 import type { ProjectService } from '../../projects/project-service.js';
 import { getAutomationEventForRun } from '../events/index.js';
+import { DurableState } from '../../storage/sqlite/durable-state.js';
+import { LocalAppAutomationSubmitSchema } from '../../local-apps/capabilities/projections.js';
 
 const triggerRequest = z.union([AutomationTriggerSchema, z.object({ kind: z.literal('schedule'),
   schedule: z.object({ kind: z.literal('once'), afterMs: z.number().int().min(1).max(366 * 86400000) }).strict() }).strict()]);
@@ -96,6 +98,7 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
   }));
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.automations.cancel',
+    surfaces: ['http', 'agent', 'extension'],
     description: 'Persist cancellation intent for a run. Only queued work is confirmed stopped immediately; receipts describe acceptance time.',
     input: CapabilityResourceInputSchema, output: AutomationCancelOutputSchema,
     execute: ({ id }) => ({ ok: true as const, ...service.cancelRunAtomically(id) }),
@@ -119,6 +122,8 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
   for (const command of ['run', 'rerun'] as const) {
     dispatcher.register(defineAtomicCapability({
       ...policy, id: `xopc.automations.${command}`,
+      surfaces: command === 'run' ? ['http', 'agent', 'extension'] : ['http', 'agent'],
+      extensionOutput: LocalAppAutomationSubmitSchema,
       description: command === 'run' ? 'Queue a manual run with the currently accepted execution configuration.' : 'Queue a rerun with current configuration and the original trigger event.',
       input: CapabilityResourceInputSchema, output: AutomationRunMutationOutputSchema,
       execute({ id }, context) {
@@ -126,6 +131,14 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
         const automation = automationId ? getAutomation(automationId) : null;
         if (!automation) throw new CapabilityError('NOT_FOUND', 'Automation or source run not found');
         assertManagedOperation(automation, 'run');
+        if (context.localApp) {
+          context.assertCurrent?.();
+          new DurableState<{ start: number; count: number }>('local-app-automation-budget', context.localApp.extensionId).update('hour', previous => {
+            const budget = previous && Date.now() - previous.start < 3600000 ? previous : { start: Date.now(), count: 0 };
+            if (budget.count >= 20) throw new CapabilityError('UNAVAILABLE', 'This app has reached its hourly automation budget');
+            return { value: { ...budget, count: budget.count + 1 }, result: undefined };
+          });
+        }
         try {
           const request = {
             id: `${command}:${context.operationId}`,
@@ -141,6 +154,22 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
           } as const;
           const executionEvent = command === 'rerun' ? getAutomationEventForRun(id) ?? request : request;
           const run = service.queueTriggerAtomically(automation.id, request, executionEvent);
+          if (context.localApp) new DurableState('local-app-automation-runs', context.localApp.extensionId)
+            .set(run.id, { automationId: automation.id });
+          if (context.localApp) {
+            const app = context.localApp;
+            const approval = app.resourceScopes.automationsRun.mode === 'selected'
+              ? app.resourceScopes.automationsRun.approvals.find(item => item.id === automation.id) : undefined;
+            if (!approval || !app.releaseId || !app.grantRevision) throw new CapabilityError('FORBIDDEN', 'Bounded execution approval is required');
+            if (!app.manifestDigest) throw new CapabilityError('FORBIDDEN', 'Release identity is required');
+            new DurableState<number>('local-app-execution-runs', app.extensionId).update(`${app.grantRevision}:${automation.id}`, previous => {
+              if ((previous ?? 0) >= approval.authority.maxRuns) throw new CapabilityError('FORBIDDEN', 'Execution count exhausted');
+              return { value: (previous ?? 0) + 1, result: undefined };
+            });
+            new DurableState('local-app-run-authority').set(run.id, { extensionId: app.extensionId, automationId: automation.id,
+              manifestDigest: app.manifestDigest, releaseId: app.releaseId, grantRevision: app.grantRevision,
+              configurationDigest: approval.configurationDigest, authority: approval.authority });
+          }
           return { ok: true as const, automation: { ...automation }, run: { ...run } };
         } catch (error) {
           if (error instanceof AutomationAlreadyRunningError) throw new CapabilityError('IN_PROGRESS', error.message);

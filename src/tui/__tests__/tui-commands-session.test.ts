@@ -48,6 +48,15 @@ describe('TUI session slash commands', () => {
   beforeAll(() => initializeTestAgentCatalog());
   afterAll(() => closeXopcDatabase());
 
+  it.each(['quit', 'clone', 'aside', 'btw', 'name', 'restart', 'cancel', 'sessions', 'scopedmodels', 'reload-keybindings'])(
+    'rejects retired /%s instead of forwarding it to a model', (name) => {
+      const { handler, sendMessage, chatLog } = makeHandler();
+      handler(`/${name}`);
+      expect(sendMessage).not.toHaveBeenCalled();
+      expect(chatLog.render(100).join('\n')).toContain(`Unknown command /${name}`);
+    },
+  );
+
   it('/new switches session without forwarding to agent', async () => {
     const { handler, sendMessage, setSession } = makeHandler();
     handler('/new');
@@ -73,22 +82,15 @@ describe('TUI session slash commands', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it('/clear only clears the TUI view without resetting the session', () => {
-    const systems: string[] = [];
+  it('/clear clears the view and creates a new conversation', async () => {
     const clearAll = vi.fn();
-    const { handler, resetSession } = makeHandler({
-      chatLog: {
-        addSystem: (text: string) => systems.push(text),
-        setToolsExpanded: () => {},
-        clearAll,
-      } as never,
-    });
-
+    const newSession = vi.fn(async () => {});
+    const { handler, resetSession } = makeHandler({ newSession,
+      chatLog: { addSystem: vi.fn(), setToolsExpanded: vi.fn(), clearAll } as never });
     handler('/clear');
-
+    await vi.waitFor(() => expect(newSession).toHaveBeenCalledOnce());
     expect(resetSession).not.toHaveBeenCalled();
     expect(clearAll).toHaveBeenCalledOnce();
-    expect(systems.at(-1)).toBe('TUI view cleared. Session transcript was not reset.');
   });
 
   it('/fork calls forkSession and does not forward slash to agent', async () => {
@@ -321,7 +323,7 @@ describe('TUI session slash commands', () => {
 
     expect(systems.at(-1)).toContain('Extension commands:');
     expect(systems.at(-1)).toContain('/demo — Demo extension command');
-    expect(systems.at(-1)).toContain('/aside — Alias for /btw');
+    expect(systems.at(-1)).not.toContain('/aside');
   });
 
   it('/help lists skill slash commands', () => {
@@ -375,7 +377,6 @@ describe('TUI session slash commands', () => {
         openModelPicker: vi.fn(),
         openReviewLauncher,
         openSessionPicker: vi.fn(),
-        openSessionTree: vi.fn(),
         openTranscriptTree: vi.fn(),
         openUserMessageFork: vi.fn(),
         openScopedModels: vi.fn(),
@@ -601,7 +602,6 @@ describe('TUI session slash commands', () => {
         openModelPicker: () => {},
         openAgentPicker: () => {},
         openSessionPicker: () => {},
-        openSessionTree: () => {},
         openTranscriptTree: () => {},
         openUserMessageFork: () => {},
         openScopedModels: () => {},
@@ -623,7 +623,6 @@ describe('TUI session slash commands', () => {
       openModelPicker: vi.fn(),
       openAgentPicker: vi.fn(),
       openSessionPicker: vi.fn(),
-      openSessionTree: vi.fn(),
       openTranscriptTree: vi.fn(),
       openUserMessageFork: vi.fn(),
       openScopedModels: vi.fn(),
@@ -641,7 +640,7 @@ describe('TUI session slash commands', () => {
     expect(overlayFns.openAgentPicker).toHaveBeenCalledOnce();
 
     handler('/resume');
-    handler('/sessions');
+    handler('/resume');
     expect(overlayFns.openSessionPicker).toHaveBeenCalledTimes(2);
 
     handler('/tree');
@@ -651,7 +650,7 @@ describe('TUI session slash commands', () => {
     expect(overlayFns.openUserMessageFork).toHaveBeenCalledOnce();
 
     handler('/scoped-models');
-    handler('/scopedmodels');
+    handler('/scoped-models');
     expect(overlayFns.openScopedModels).toHaveBeenCalledTimes(2);
 
     handler('/think');
@@ -718,10 +717,10 @@ describe('TUI session slash commands', () => {
     handler('/copy');
     expect(systems.at(-1)).toContain('Copy is not available');
 
-    handler('/name next');
+    handler('/rename next');
     expect(systems.at(-1)).toContain('Session rename is not available');
 
-    handler('/switch openai/gpt-5');
+    handler('/model openai/gpt-5');
     expect(systems.at(-1)).toContain('Model switching is not available');
 
     handler('/compact');
@@ -771,7 +770,6 @@ describe('TUI session slash commands', () => {
         openModelPicker: () => {},
         openAgentPicker: () => {},
         openSessionPicker: () => {},
-        openSessionTree: () => {},
         openTranscriptTree: () => {},
         openUserMessageFork: () => {},
         openScopedModels: () => {},

@@ -12,6 +12,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { buildThemeInfo } from './theme-bridge';
+import { watchLocalAppRun } from './local-app-run-subscription';
 import type { AttachmentPrompt, AttachmentSelection } from './attachment-picker';
 
 export type MethodHandler = (extensionId: string, params: unknown) => Promise<unknown>;
@@ -19,6 +20,9 @@ export type MethodHandler = (extensionId: string, params: unknown) => Promise<un
 const METHOD_PERMISSION_MAP: Record<string, string | null> = {
   'apps.reviewRequest': null,
   'files.pickAttachment': 'capability:xopc.files.read',
+  'automation.watchRun': 'capability:xopc.automations.get_run',
+  'automation.unwatchRun': null,
+  'automation.reviewProposal': 'capability:xopc.automations.propose',
   'ui.navigate': null,
   'ui.reviewPermissions': null,
   'agent.sendMessage': 'agent.send',
@@ -63,6 +67,7 @@ export class ExtensionMessageRouter {
   private releaseBindings = new Map<string, { digest: string; grantRevision?: string; previewSessionId?: string; localApp: boolean; baseUrl: string; namespace: string | undefined }>();
   private requestBudgets = new Map<string, { start: number; count: number; pending: number }>();
   private delegationControllers = new Map<string, AbortController>();
+  private runSubscriptions = new Map<string, Map<string, AbortController>>();
   private attachmentRequests = new Set<string>();
   private unsubscribeGateway: () => void;
   private eventSubscribers = new Map<string, Set<(e: { event: string; data?: unknown }) => void>>();
@@ -77,11 +82,15 @@ export class ExtensionMessageRouter {
     this.unsubscribeGateway = useGatewayStore.subscribe((state, previous) => {
       if (state.baseUrl !== previous.baseUrl || state.conversationId !== previous.conversationId) {
         for (const controller of this.delegationControllers.values()) controller.abort();
+        for (const group of this.runSubscriptions.values()) for (const controller of group.values()) controller.abort();
+        this.runSubscriptions.clear();
       }
     });
   }
 
   dispose(): void {
+    for (const group of this.runSubscriptions.values()) for (const controller of group.values()) controller.abort();
+    this.runSubscriptions.clear();
     this.unsubscribeGateway();
     for (const controller of this.delegationControllers.values()) controller.abort();
     this.delegationControllers.clear();
@@ -113,6 +122,8 @@ export class ExtensionMessageRouter {
   }
 
   unregisterIframe(extensionId: string): void {
+    for (const subscription of this.runSubscriptions.get(extensionId)?.values() ?? []) subscription.abort();
+    this.runSubscriptions.delete(extensionId);
     this.delegationControllers.get(extensionId)?.abort();
     this.delegationControllers.delete(extensionId);
     const iframe = this.iframes.get(extensionId);
@@ -208,6 +219,24 @@ export class ExtensionMessageRouter {
     const controller = this.delegationControllers.get(extensionId);
     if (!controller) throw new Error('Delegation frame unavailable');
     return controller.signal;
+  }
+
+  watchRun(extensionId: string, runId: string): void {
+    if (this.isPreview(extensionId)) throw new Error('Run subscriptions are unavailable in previews');
+    const manifestDigest = this.getReleaseDigest(extensionId), grantRevision = this.getGrantRevision(extensionId);
+    const subscriptions = this.runSubscriptions.get(extensionId) ?? new Map<string, AbortController>();
+    if (subscriptions.has(runId)) return;
+    if (subscriptions.size >= 4) throw new Error('Close another run subscription first');
+    const controller = new AbortController(); subscriptions.set(runId, controller); this.runSubscriptions.set(extensionId, subscriptions);
+    const url = apiUrl(`/api/local-app-capabilities/${encodeURIComponent(extensionId)}/runs/${encodeURIComponent(runId)}/events?manifestDigest=${manifestDigest}&grantRevision=${grantRevision ?? ''}`);
+    void watchLocalAppRun(url, controller.signal, data => {
+      if (!controller.signal.aborted) this.sendEvent(extensionId, `automation.run.${runId}`, data);
+    }).finally(() => { if (subscriptions.get(runId) === controller) subscriptions.delete(runId); });
+  }
+
+  unwatchRun(extensionId: string, runId: string): void {
+    this.runSubscriptions.get(extensionId)?.get(runId)?.abort();
+    this.runSubscriptions.get(extensionId)?.delete(runId);
   }
 
   async pickAttachment(extensionId: string): Promise<AttachmentSelection> {
@@ -479,6 +508,19 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
   });
   router.registerMethod('files.pickAttachment', async (extensionId, params) => {
     z.strictObject({}).parse(params ?? {}); return router.pickAttachment(extensionId);
+  });
+  router.registerMethod('automation.watchRun', async (extensionId, params) => {
+    const { runId } = z.strictObject({ runId: z.uuid() }).parse(params); router.watchRun(extensionId, runId); return { subscribed: true };
+  });
+  router.registerMethod('automation.unwatchRun', async (extensionId, params) => {
+    const { runId } = z.strictObject({ runId: z.uuid() }).parse(params); router.unwatchRun(extensionId, runId); return { unsubscribed: true };
+  });
+  router.registerMethod('automation.reviewProposal', async (extensionId, params) => {
+    if (router.isPreview(extensionId)) throw new Error('Proposal review is unavailable in previews');
+    router.getReleaseDigest(extensionId);
+    const { proposalId } = z.strictObject({ proposalId: z.uuid() }).parse(params);
+    window.dispatchEvent(new CustomEvent('extension-review-automation-proposal', { detail: { extensionId, proposalId } }));
+    return { opened: true };
   });
   const describeInput = z.strictObject({ id: ExtensionCapabilityBindingSchema.shape.id });
   const callInput = describeInput.extend({ call: CapabilityCallSchema });

@@ -92,7 +92,19 @@ Installed Local Apps may declare `ui.capabilities` entries with an exact `id`,
 `majorVersion`, and `descriptorDigest` from the authenticated Gateway catalog.
 Currently supported bindings are `xopc.notes.get`, `xopc.notes.list`,
 `xopc.tasks.get`, and `xopc.tasks.list` for reads, plus `xopc.notes.create`,
-`xopc.notes.update`, and `xopc.notes.append` for local writes. Wildcards, duplicate
+`xopc.notes.update`, and `xopc.notes.append` for local writes. `xopc.agent.delegate`
+provides bounded text or validated JSON inference (128–4096 output tokens, with a 1024-token default),
+without tools or implicit context. `xopc.automations.list`, `get`, `run`, `get_run` and `cancel`
+provide scoped automation summaries and execution of individually reviewed configurations.
+Run results and cancellation are restricted to runs submitted by the same app. These capabilities
+do not directly create or alter automation definitions. Apps may additionally declare
+`xopc.automations.simulate`, `propose` and `get_proposal` to submit immutable changes for
+`client.automation.reviewProposal(proposalId)` in the host. `history` and `run_events` support
+`client.automation.watchRun(runId, handler)` and reopening an app after a run starts.
+Execution approvals separately bound tools, writes, external delivery, expiry, run count and model
+reservation costs. Shell, browser, MCP and nested delegation are excluded from bounded app runs. AI and automation calls are unavailable
+in previews. See [execution boundaries](../../docs/local-app-automations.md).
+Wildcards, duplicate
 IDs, undeclared operations, and supplied implementation code are rejected.
 
 Bindings are included in the release source hash and permission review. Obtain a

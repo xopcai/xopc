@@ -15,5 +15,9 @@ describe('keybindings file', () => {
     expect(XOPC_TUI_KEYBINDINGS['app.transcript.open'].defaultKeys).toBe('ctrl+t');
     expect(XOPC_TUI_KEYBINDINGS['app.transcript.raw'].defaultKeys).toBe('alt+r');
     expect(XOPC_TUI_KEYBINDINGS['app.thinking.toggle'].defaultKeys).toEqual([]);
+    expect(XOPC_TUI_KEYBINDINGS['app.mode.cycle'].defaultKeys).toBe('shift+tab');
+    expect(XOPC_TUI_KEYBINDINGS['app.response.copy'].defaultKeys).toBe('ctrl+o');
+    expect(XOPC_TUI_KEYBINDINGS['app.view.clear'].defaultKeys).toBe('ctrl+l');
+    expect(XOPC_TUI_KEYBINDINGS['app.history.search'].defaultKeys).toBe('ctrl+r');
   });
 });

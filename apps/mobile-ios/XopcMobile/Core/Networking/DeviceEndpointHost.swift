@@ -102,7 +102,10 @@ actor DeviceEndpointHost {
                                        "nonce": UUID().uuidString.lowercased(), "signedAt": Self.now(), "tools": tools]
         endpoint["signature"] = try key.signature(for: Self.json(endpoint)).rawRepresentation.base64URL()
         let url = try websocketURL()
-        let socket = client.session.webSocketTask(with: url)
+        var request = URLRequest(url: url)
+        try await request.setValue(GatewayPairingService.shared.connectionProof(url: url, ticket: ticket.ticket),
+                                   forHTTPHeaderField: "X-Xopc-Proof")
+        let socket = client.session.webSocketTask(with: request)
         self.socket = socket; socket.resume()
         do {
             try await send("realtime.hello", ["ticket": ticket.ticket, "clientId": endpointId, "clientKind": "mobile", "subscriptions": [], "endpoint": endpoint, "capabilities": ["endpoint.tools.v3"]])
@@ -350,8 +353,10 @@ actor DeviceEndpointHost {
         }
 
         guard let socket else { throw GatewayClientError.transport }
-        try await socket.send(.data(Self.json(["protocolVersion": 2, "messageId": UUID().uuidString.lowercased(),
-                                               "sentAt": Self.now(), "kind": kind, "payload": payload])))
+        let data = try Self.json(["protocolVersion": 2, "messageId": UUID().uuidString.lowercased(),
+                                  "sentAt": Self.now(), "kind": kind, "payload": payload])
+        guard let text = String(data: data, encoding: .utf8) else { throw GatewayClientError.invalidResponse }
+        try await socket.send(.string(text))
     }
 
     private func receive(_ socket: URLSessionWebSocketTask) async throws -> [String: Any] {

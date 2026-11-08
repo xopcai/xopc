@@ -3,6 +3,13 @@ import { ExtensionCapabilityBindingsSchema, extensionCapabilityPermissions, Loca
 
 const binding = { id: 'xopc.notes.get', majorVersion: 1, descriptorDigest: 'a'.repeat(64) };
 describe('extension capability bindings', () => {
+  it('keeps existing grants denied for newly introduced automation authority', () => {
+    const scopes = LocalAppResourceScopesSchema.parse({ notesRead: { mode: 'workspace' } });
+    expect(scopes.automationsRead).toEqual({ mode: 'none' });
+    expect(scopes.automationsRun).toEqual({ mode: 'none' });
+    expect(LocalAppResourceScopesSchema.safeParse({ automationsRun: { mode: 'workspace' } }).success).toBe(false);
+    expect(LocalAppResourceScopesSchema.safeParse({ automationsRun: { mode: 'selected', approvals: [{ id: 'automation' }] } }).success).toBe(false);
+  });
   it('denies new P1 resources for existing grants and rejects workspace-wide file or connector access', () => {
     expect(LocalAppResourceScopesSchema.parse({})).toMatchObject({
       tasksWrite: { mode: 'none' }, projectsRead: { mode: 'none' }, projectsWrite: { mode: 'none' },

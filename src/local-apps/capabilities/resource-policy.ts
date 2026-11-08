@@ -2,6 +2,7 @@ import type { LocalAppResourceScope, LocalAppResourceScopes } from '@xopcai/gate
 
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { resourceScopePredicate } from '../../storage/sqlite/resource-scope.js';
+import { localAppAutomationAllowed } from './automation-policy.js';
 
 export function localAppResourceAllowed(extensionId: string, scopes: LocalAppResourceScopes, capabilityId: string, input: unknown): boolean {
   if (capabilityId === 'xopc.files.read') return scopes.filesRead.mode === 'selected' && scopes.filesRead.ids.includes((input as { id: string }).id);
@@ -42,6 +43,7 @@ export function localAppResourceAllowed(extensionId: string, scopes: LocalAppRes
       || args.contract?.approvalRequired?.length) return false;
     return scope.mode === 'workspace' || (args.projectId ? scope.projectIds.includes(args.projectId) : scope.includeCreated);
   }
+  if (capabilityId.startsWith('xopc.automations.')) return localAppAutomationAllowed(extensionId, scopes, capabilityId, input);
   if (capabilityId === 'xopc.agent.delegate') {
     const sources = (input as { sources?: Array<{ capabilityId: string; id: string }> })?.sources ?? [];
     return scopes.agentDelegate === true && sources.every(source => ['xopc.notes.get', 'xopc.tasks.get'].includes(source.capabilityId)

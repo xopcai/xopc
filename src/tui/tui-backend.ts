@@ -1,8 +1,15 @@
+import type { ClarificationResponseCommand } from '@xopcai/gateway-contract';
+
+import type { TuiManagementCommand } from './tui-management.js';
+import type { TuiCapability, TuiCapabilityKind } from './tui-capabilities.js';
+import type { ChildRunView } from '../agent/orchestration/child-run-monitor.js';
+import type { TuiClarification } from './tui-clarification.js';
+import type { SessionInteractionPolicy } from '../agent/session/interaction-policy.js';
+import type { TuiJob, TuiHistoryMatch } from './backend-services.js';
 import type { ClientHistoryMessage } from '../session/client-history.js';
 import type { SessionTimelineItem } from '../session/transcript-outline.js';
 import type { ExportFormat } from '../session/types.js';
 import type { ReviewContext } from '../review/review-git.js';
-
 import type { SessionInfo, TuiEventSource } from './tui-types.js';
 import type { TuiChatInputDelivery, TuiChatInputState } from './tui-chat-input-state.js';
 
@@ -197,7 +204,7 @@ export interface TuiBackend {
   start(): void;
 
   /** Stop the backend. */
-  stop(): void;
+  stop(): void | Promise<void>;
 
   /** Current active chat abort signal, if a run is in progress. */
   getActiveSignal?(): AbortSignal | undefined;
@@ -284,8 +291,31 @@ export interface TuiBackend {
   /** Compute transcript message/token statistics. */
   getSessionStats(conversationId: string): Promise<TuiSessionStats>;
 
+  getClarification(conversationId: string): Promise<TuiClarification | null>;
+  submitClarification(conversationId: string, requestId: string, command: ClarificationResponseCommand): Promise<void>;
+
+  manageCapability(conversationId: string, command: TuiManagementCommand): Promise<unknown>;
+  listCapabilities(conversationId: string, kind: TuiCapabilityKind): Promise<TuiCapability[]>;
+
+  listSubagents(conversationId: string): Promise<ChildRunView[]>;
+  getSubagent(conversationId: string, id: string): Promise<ChildRunView>;
+  steerSubagent(conversationId: string, id: string, text: string): Promise<void>;
+  resumeSubagent(conversationId: string, id: string, text: string): Promise<void>;
+  getSubagentTranscript(conversationId: string, id: string): Promise<string>;
+  stopSubagent(conversationId: string, id: string): Promise<void>;
+
+  getInteractionPolicy(conversationId: string): Promise<SessionInteractionPolicy>;
+  setInteractionPolicy(conversationId: string, policy: SessionInteractionPolicy): Promise<SessionInteractionPolicy>;
+  getWorkspaceDiff(conversationId: string): Promise<string>;
+  searchHistory(conversationId: string, query: string): Promise<TuiHistoryMatch[]>;
+  listJobs(conversationId: string): Promise<TuiJob[]>;
+  getJob(conversationId: string, id: string): Promise<TuiJob>;
+  resizeJob(conversationId: string, id: string, cols: number, rows: number): Promise<void>;
+  stopJob(conversationId: string, id: string): Promise<void>;
+  writeJob(conversationId: string, id: string, text: string): Promise<void>;
+
   /** List sessions. */
-  listSessions(): Promise<TuiSessionItem[]>;
+  listSessions(options?: { archived?: boolean }): Promise<TuiSessionItem[]>;
 
   /** List agents available for TUI agent switching. */
   listAgents(): Promise<TuiAgentInfo[]>;
@@ -308,6 +338,9 @@ export interface TuiBackend {
 
   /** Rename session display name. */
   renameSession(conversationId: string, name: string): Promise<{ ok: boolean }>;
+
+  restoreSession(conversationId: string): Promise<void>;
+  archiveSession(conversationId: string): Promise<void>;
 
   /** Delete session and transcript. */
   deleteSession(conversationId: string): Promise<{ ok: boolean }>;
@@ -341,7 +374,7 @@ export interface TuiBackend {
   ): Promise<TuiShareResult>;
 
   /** Ask an ephemeral side question using this session as read-only background. */
-  btwQuery(conversationId: string, question: string): Promise<{ text: string; error?: string }>;
+  sideQuery(conversationId: string, question: string, options?: { signal?: AbortSignal; onDelta?: (text: string) => void }): Promise<{ text: string; error?: string }>;
 
   /** Fork one session transcript into a new session key. */
   forkSession(

@@ -403,3 +403,47 @@ it('projects passive prose closeout without enabling coding verification or anot
       .toMatchObject({ data: { required: false, evidence: [] } });
   } finally { evictEmbeddedSessionRunner(conversationId); await rm(root, { recursive: true, force: true }); }
 }, 15_000);
+
+it('suspends a blocked approval request without recording a denial, execution failure or verification evidence', async () => {
+  const { initializeTestAgentCatalog } = await import('../../../agent-catalog/test-support.js');
+  const { closeXopcDatabase, createClarificationWait, ensureSessionRecord } = await import('../../../storage/sqlite/index.js');
+  const root = await mkdtemp(join(tmpdir(), 'approval-harness-'));
+  const conversationId = crypto.randomUUID(), runId = 'approval-wait-test';
+  initializeTestAgentCatalog();
+  ensureSessionRecord(conversationId, root, { agentId: 'main' });
+  const runtime = new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: root });
+  const tool = createExecCommandTool(root, { getConversationId: () => conversationId });
+  const execute = vi.spyOn(tool, 'execute');
+  const ended: Array<{ isError?: boolean; result?: unknown }> = [];
+  scripted.stream.mockImplementation(() => {
+    const message: AssistantMessage = { role: 'assistant', api: 'openai-completions', provider: 'openai', model: 'gpt-4.1',
+      content: [{ type: 'toolCall', id: 'command-needing-approval', name: 'exec_command', arguments: { cmd: 'pnpm test' } }],
+      stopReason: 'toolUse', timestamp: Date.now(), usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+    const stream = createAssistantMessageEventStream(); stream.push({ type: 'done', reason: 'toolUse', message }); return stream;
+  });
+  try {
+    const result = await runXopcEmbeddedTurn({ conversationId, runId, workspaceDir: root, transcriptRuntime: runtime,
+      userMessage: { role: 'user', content: 'Run after approval', timestamp: Date.now() }, systemPrompt: 'Ask first.',
+      model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      modelRef: 'openai/gpt-4.1', timeoutMs: 10000, tools: [tool],
+      turnPolicy: createAgentTurnPolicy({ maxTurns: 1, authorizeToolCall: async () => {
+        createClarificationWait({ conversationId, runId, toolCallId: 'approval-key', kind: 'approval', question: 'Run once?', approval: { operation: 'exec_command' } });
+        return { block: true, terminate: true, reason: 'User did not approve exec_command.' };
+      } }),
+      onEvent: event => { if (event.type === 'tool_execution_end') ended.push(event); },
+    });
+    expect(result).toMatchObject({ ok: true, stopReason: 'clarification_required' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(ended).toHaveLength(1);
+    expect(ended[0]).toMatchObject({ isError: false, result: { details: { status: 'waiting', kind: 'approval' } } });
+    const messages = await runtime.loadMessages();
+    expect(messages.find(message => message.role === 'toolResult')).toMatchObject({
+      isError: false, details: { status: 'waiting', kind: 'approval' },
+    });
+    expect(runtime.openSessionManager(root).getBranch().findLast(entry => entry.type === 'custom' && entry.customType === 'coding_verification'))
+      .toMatchObject({ data: { evidence: [] } });
+    const transcript = JSON.stringify(messages);
+    expect(transcript).toContain('This operation has not executed.');
+    expect(transcript).not.toContain('User did not approve');
+  } finally { evictEmbeddedSessionRunner(conversationId); closeXopcDatabase(); await rm(root, { recursive: true, force: true }); }
+});

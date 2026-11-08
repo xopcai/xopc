@@ -1,3 +1,4 @@
+import type { SessionInteractionPolicy } from '../agent/session/interaction-policy.js';
 import type { GatewayCredential } from '../gateway/credential.js';
 import { createEmptyChatInputState, type TuiChatInputState } from './tui-chat-input-state.js';
 
@@ -15,6 +16,7 @@ export interface TuiOptions {
   thinking?: string;
   /** Single message to send on start, then stay open. */
   message?: string;
+  images?: string[];
   /** Workspace directory for the new TUI session. */
   workdir?: string;
   /** Use the launch directory as the new TUI session workspace when no workdir is set. */
@@ -38,6 +40,7 @@ export type ActivityStatus =
   | 'idle'
   | 'sending'
   | 'waiting'
+  | 'awaiting-input'
   | 'streaming'
   | 'running'
   | 'compacting'
@@ -72,6 +75,7 @@ export interface TuiRunStatus {
 
 /** Session metadata shown in the TUI footer. */
 export interface SessionInfo {
+  interactionPolicy?: SessionInteractionPolicy;
   agentId?: string;
   model?: string;
   modelProvider?: string;
