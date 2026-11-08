@@ -38,7 +38,7 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
   return <section className="space-y-3" aria-label={zh ? '语音通话设置' : 'Voice call settings'}>
     <fieldset disabled={disabled} className="space-y-3">
       <label className="block space-y-1 text-sm"><span>{zh ? '通话引擎' : 'Call engine'}</span>
-        <Select aria-label={zh ? '通话引擎' : 'Call engine'} value={mode} onChange={event => { void changeMode(event.target.value as EnginePreference); }}>
+        <Select side="top" aria-label={zh ? '通话引擎' : 'Call engine'} value={mode} onChange={event => { void changeMode(event.target.value as EnginePreference); }}>
           <SelectOption value="auto">{zh ? '自动选择' : 'Automatic'}</SelectOption>
           <SelectOption value="natural">{zh ? '实时语音' : 'Realtime voice'}</SelectOption>
           <SelectOption value="assistant">{zh ? '识别、执行与合成' : 'Transcription, Agent and speech'}</SelectOption>
@@ -53,7 +53,7 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
         {settings && <>
           <div className="space-y-1 text-sm">
             <span className="block">{zh ? '通话模型' : 'Call model'}</span>
-            <Select aria-label={zh ? '自然语音模型' : 'Natural voice model'} value={selected ?? 'inherit'} onChange={event => onChange({ naturalModel: event.target.value === 'inherit' ? null : event.target.value })}>
+            <Select side="top" aria-label={zh ? '自然语音模型' : 'Natural voice model'} value={selected ?? 'inherit'} onChange={event => onChange({ naturalModel: event.target.value === 'inherit' ? null : event.target.value })}>
               <SelectOption value="inherit">{zh ? '跟随系统' : 'Follow system'}{defaultModel ? ` · ${defaultModel === HIGGS_REALTIME_REF ? 'Higgs Realtime' : settings.legacyModelLabel ?? defaultModel}` : ''}</SelectOption>
               {models.map(model => <SelectOption key={model.id} value={model.id}>{model.name}{model.tools === false ? (zh ? ' · 仅对话' : ' · Conversation only') : ''}</SelectOption>)}
               {(settings.credentialSource || selected === HIGGS_REALTIME_REF) && <SelectOption value={HIGGS_REALTIME_REF}>Higgs Realtime</SelectOption>}
@@ -65,7 +65,7 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
           </div>
           {higgs && <div className="space-y-1 text-sm">
             <span className="block">{zh ? '声音' : 'Voice'}</span>
-            <Select aria-label={zh ? '自然语音音色' : 'Natural voice'} value={preferences?.higgsVoice ?? 'inherit'} onChange={event => onChange({ higgsVoice: event.target.value === 'inherit' ? null : event.target.value as HiggsVoice })}>
+            <Select side="top" aria-label={zh ? '自然语音音色' : 'Natural voice'} value={preferences?.higgsVoice ?? 'inherit'} onChange={event => onChange({ higgsVoice: event.target.value === 'inherit' ? null : event.target.value as HiggsVoice })}>
               <SelectOption value="inherit">{zh ? '跟随系统音色' : 'Follow system voice'} · {settings.voice === 'default' ? (zh ? '模型默认' : 'Model default') : settings.voice}</SelectOption>
               {HIGGS_REALTIME_VOICES.map(id => <SelectOption key={id} value={id}>{id === 'default' ? (zh ? '模型默认' : 'Model default') : id}</SelectOption>)}
             </Select>
