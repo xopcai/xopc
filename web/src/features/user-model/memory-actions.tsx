@@ -2,6 +2,11 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Bot, Globe2, MoreHorizontal, Pencil, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import useSWR from 'swr';
+
+import { fetchJson } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import { Button } from '@/components/ui/button';
 
@@ -19,6 +24,25 @@ export function MemoryActions({ language, busy, statement, scope, onEdit, onDele
   const [confirming, setConfirming] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
   const zh = language === 'zh';
+  const { data: scopeData, isLoading: scopeLoading, error: scopeError } = useSWR(scopeOpen ? 'memory-scope-options' : null, async () => {
+    const [agents, projects] = await Promise.all([
+      fetchJson<{ ok: boolean; payload?: { agents?: Array<{ id: string; name?: string }> } }>(apiUrl('/api/agents')),
+      fetchJson<{ items?: Array<{ id: string; name: string }> }>(apiUrl('/api/projects')),
+    ]);
+    return { agents: agents.payload?.agents ?? [], projects: projects.items ?? [] };
+  });
+  const choices: Array<{ value: Scope; icon: typeof Globe2; title: string; detail: string }> = [
+    { value: { type: 'global' }, icon: Globe2, title: zh ? '所有协作' : 'All work', detail: zh ? '任何助手和对话都可按需使用' : 'Available when relevant across all work' },
+    ...(scopeData?.agents ?? []).map(agent => ({ value: { type: 'agent' as const, id: agent.id }, icon: Bot,
+      title: zh ? `仅助手：${agent.name || agent.id}` : `Assistant: ${agent.name || agent.id}`, detail: zh ? '不会分享给其他助手' : 'Not shared with other assistants' })),
+    ...(scopeData?.projects ?? []).map(project => ({ value: { type: 'project' as const, id: project.id }, icon: Globe2,
+      title: zh ? `仅项目：${project.name}` : `Project: ${project.name}`, detail: zh ? '仅在此项目中按需使用' : 'Available only in this project' })),
+  ];
+  if (scope && !choices.some(choice => choice.value.type === scope.type && choice.value.id === scope.id)) {
+    choices.push({ value: scope, icon: Bot, title: zh ? '保留现有范围' : 'Keep existing scope', detail: (zh
+      ? { global: '所有协作', agent: '指定助手', workspace: '指定工作区', project: '指定项目', session: '指定会话' }
+      : { global: 'All work', agent: 'Assigned assistant', workspace: 'Assigned workspace', project: 'Assigned project', session: 'Assigned conversation' })[scope.type] });
+  }
   const itemClass = 'flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-fg outline-none focus:bg-surface-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
   return <>
     <Dialog.Root open={confirming} onOpenChange={setConfirming}>
@@ -57,15 +81,14 @@ export function MemoryActions({ language, busy, statement, scope, onEdit, onDele
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[120] flex h-[min(25rem,calc(100dvh-2rem))] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover">
           <header className="shrink-0 border-b border-edge px-5 py-4">
             <Dialog.Title className="font-semibold text-fg">{zh ? '这条记忆在哪里生效？' : 'Where should this memory apply?'}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">{zh ? '你可以让它用于所有协作，或只用于当前助手。' : 'Use it across all work, or keep it only for this assistant.'}</Dialog.Description>
+            <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">{zh ? '选择明确的助手或项目。工作区和会话范围也可在对应聊天中设置。' : 'Choose an assistant or project. Workspace and conversation scopes can also be set in the corresponding chat.'}</Dialog.Description>
           </header>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
-            {[
-              { value: { type: 'global' } as Scope, icon: Globe2, title: zh ? '所有协作' : 'All work', detail: zh ? '任何助手和对话都可按需使用' : 'Available when relevant in any assistant or conversation' },
-              { value: { type: 'agent', id: scope.type === 'agent' ? scope.id ?? 'main' : 'main' } as Scope, icon: Bot, title: zh ? '仅当前助手' : 'This assistant only', detail: zh ? '不会分享给其他助手' : 'Not shared with other assistants' },
-            ].map(({ value, icon: Icon, title, detail }) => {
+            {scopeLoading ? <Skeleton className="h-20 w-full rounded-xl" /> : null}
+            {scopeError ? <p role="status" className="px-4 py-2 text-sm text-fg-muted">{zh ? '无法载入范围，请重试；现有范围未改变。' : 'Could not load scopes. Your existing scope is unchanged.'}</p> : null}
+            {choices.map(({ value, icon: Icon, title, detail }) => {
               const selected = scope.type === value.type && (scope.id ?? '') === (value.id ?? '');
-              return <button key={value.type} type="button" className={`flex min-h-20 w-full items-center gap-3 rounded-xl px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${selected ? 'bg-surface-active' : 'hover:bg-surface-hover'}`} disabled={busy} onClick={() => { setScopeOpen(false); onScopeChange(value); }}>
+              return <button key={`${value.type}:${value.id ?? ''}`} type="button" className={`flex min-h-20 w-full items-center gap-3 rounded-xl px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${selected ? 'bg-surface-active' : 'hover:bg-surface-hover'}`} disabled={busy} onClick={() => { setScopeOpen(false); onScopeChange(value); }}>
                 <Icon className="size-5 shrink-0 text-fg-muted" aria-hidden="true" />
                 <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{title}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{detail}</span></span>
                 {selected ? <span className="text-xs font-medium text-accent-fg">{zh ? '当前' : 'Current'}</span> : null}

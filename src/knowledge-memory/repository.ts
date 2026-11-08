@@ -271,8 +271,11 @@ export function transitionKnowledgeStatus(input: {
   reason: string;
   expectedStatus?: KnowledgeStatus;
   content?: string;
+  evidence?: WriteKnowledgeInput['evidence'];
+  source?: Record<string, unknown>;
   now?: number;
 }): KnowledgeItem | undefined {
+  if (input.evidence && input.actor !== 'user') throw new Error('Only a user review can replace explicit evidence.');
   const reason = input.reason.trim();
   if (!reason) throw new Error('A knowledge status change reason is required.');
   const content = input.content?.trim();
@@ -298,6 +301,13 @@ export function transitionKnowledgeStatus(input: {
         .run(randomUUID(), input.id, current.content, current.source_json, now);
       db.prepare('DELETE FROM knowledge_evidence_links WHERE knowledge_id = ?').run(input.id);
       db.prepare("UPDATE knowledge_items SET claim_mode = 'explicit', verification = 'supported', source_json = '{}' WHERE knowledge_id = ?").run(input.id);
+    }
+    if (input.evidence) {
+      writeEvidence(db, input.id, { ...fromRow(current), content: content ?? current.content,
+        originClass: 'owner', claimMode: 'explicit', verification: 'supported',
+        sensitivity: inferMemorySensitivity(content ?? current.content), evidence: input.evidence });
+      db.prepare('UPDATE knowledge_items SET source_json = ? WHERE knowledge_id = ?')
+        .run(JSON.stringify(input.source ?? {}), input.id);
     }
     if (input.actor === 'user' && (input.status === 'rejected' || input.status === 'archived')) {
       suppressMemory(db, knowledgeFingerprints(fromRow(current)), now);
@@ -332,6 +342,8 @@ export function reviewKnowledgeItem(input: {
   reason: string;
   expectedStatus?: KnowledgeStatus;
   content?: string;
+  evidence?: WriteKnowledgeInput['evidence'];
+  source?: Record<string, unknown>;
   now?: number;
 }): KnowledgeItem | undefined {
   const current = getKnowledgeItem(input.id);
@@ -350,6 +362,7 @@ export function reviewKnowledgeItem(input: {
     reason: input.reason,
     expectedStatus: input.expectedStatus ?? current.status,
     ...(input.content === undefined ? {} : { content: input.content }),
+    ...(input.evidence ? { evidence: input.evidence, source: input.source } : {}),
     ...(input.now === undefined ? {} : { now: input.now }),
   });
 }
@@ -473,6 +486,30 @@ function knowledgeFingerprints(input: Pick<WriteKnowledgeInput, 'principalId' | 
     memoryFingerprint(['knowledge-key', principal, input.scope.type, input.scope.id ?? '', input.canonicalKey]),
     memoryFingerprint(['knowledge-content', principal, input.scope.type, input.scope.id ?? '', input.content]),
   ];
+}
+
+/** Move memory without allowing source replay to restore its former scope. */
+export function setKnowledgeScope(id: string, scope: UserModelScope): KnowledgeItem {
+  validateScope(scope);
+  return runSqliteWriteTransaction(db => {
+    const item = getKnowledgeItem(id);
+    if (!item || item.recordClass !== 'memory') throw new Error('Work memory not found.');
+    if (JSON.stringify(item.scope) === JSON.stringify(scope)) return item;
+    const conflict = db.prepare(`SELECT 1 FROM knowledge_items WHERE principal_id = ? AND canonical_key = ?
+      AND scope_type = ? AND COALESCE(scope_id, '') = ? AND knowledge_id != ?`)
+      .get(item.principalId, item.canonicalKey, scope.type, scope.id ?? '', id);
+    if (conflict) throw new Error('A memory with this scope already exists.');
+    const now = Date.now();
+    suppressMemory(db, knowledgeFingerprints(item), now);
+    restoreMemory(db, knowledgeFingerprints({ ...item, scope }));
+    db.prepare('INSERT INTO knowledge_revisions(revision_id, knowledge_id, content, source_json, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(randomUUID(), id, item.content, JSON.stringify({ ...item.source, previousScope: item.scope }), now);
+    db.prepare("UPDATE knowledge_items SET scope_type = ?, scope_id = ?, origin_class = 'owner', updated_at = ? WHERE knowledge_id = ?")
+      .run(scope.type, scope.id ?? null, now, id);
+    insertStatusEvent(db, { knowledgeId: id, fromStatus: item.status, toStatus: item.status,
+      actor: 'user', reason: 'Memory scope changed by user.', now });
+    return getKnowledgeItem(id)!;
+  });
 }
 
 export function deleteKnowledgeItem(id: string, now = Date.now(), options: { includeRelated?: boolean } = {}): boolean {

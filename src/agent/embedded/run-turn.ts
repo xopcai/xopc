@@ -35,6 +35,8 @@ import { acquireEmbeddedRunLease, EmbeddedRunConflictError, restoreEmbeddedSteer
 import { projectSourceContextsForLlm } from '../source-context/source-context-projection.js';
 import { projectRepeatedReadResults, retainReadProjectionDetails } from '../memory/repeated-read-projection.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
+import { recallAnswerCorrection } from '../context/recall-grounding.js';
+import { implicitMemoryClaimCorrection } from '../context/memory-claim-grounding.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import {
   classifyLlmFailure,
@@ -895,6 +897,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (session.agent.beforeToolCall === beforeTool) session.agent.beforeToolCall = nativeBeforeTool;
       if (session.agent.afterToolCall === afterTool) session.agent.afterToolCall = nativeAfterTool;
     };
+    let recallGroundingFailed = false;
+    let memoryClaimFailed = false;
     const baseFinishTurn = session.agent.finishTurn;
     session.agent.finishTurn = async (context, signal): Promise<AgentTurnDecision | undefined> => {
       const baseDecision = await baseFinishTurn?.(context, signal);
@@ -1072,6 +1076,26 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             await session.agent.waitForIdle();
             await recoverSettledTurn();
           }
+          const recallCorrection = recallAnswerCorrection(systemPrompt, lastAssistantPlainText(session));
+          if (recallCorrection && !policyStopped && !connectionStopped && !clarificationStopped && !phoneStopped
+            && !runAbortSignal.aborted && !isAssistantTurnFailed(session.agent) && !isAssistantTurnAborted(session.agent)) {
+            await session.sendCustomMessage({ customType: 'recall_grounding_correction', content: recallCorrection, display: false }, { triggerTurn: true });
+            await session.agent.waitForIdle();
+            await recoverSettledTurn();
+            recallGroundingFailed = Boolean(recallAnswerCorrection(systemPrompt, lastAssistantPlainText(session)));
+            runner.piSm.appendCustomEntry('memory.recall-grounding', { runId, status: recallGroundingFailed ? 'failed' : 'corrected' });
+          }
+          const memoryCorrection = implicitMemoryClaimCorrection(userMessageToPromptText(userMessage), lastAssistantPlainText(session),
+            session.agent.state.messages.slice(configurationTurnStart));
+          if (memoryCorrection && !policyStopped && !connectionStopped && !clarificationStopped && !phoneStopped
+            && !runAbortSignal.aborted && !isAssistantTurnFailed(session.agent) && !isAssistantTurnAborted(session.agent)) {
+            await session.sendCustomMessage({ customType: 'memory_claim_correction', content: memoryCorrection, display: false }, { triggerTurn: true });
+            await session.agent.waitForIdle();
+            await recoverSettledTurn();
+            memoryClaimFailed = Boolean(implicitMemoryClaimCorrection(userMessageToPromptText(userMessage), lastAssistantPlainText(session),
+              session.agent.state.messages.slice(configurationTurnStart)));
+            runner.piSm.appendCustomEntry('memory.claim-grounding', { runId, status: memoryClaimFailed ? 'failed' : 'corrected' });
+          }
           // One bounded continuation closes accidental early completion without
           // forcing impossible checks or bypassing user cancellation and budgets.
           const pending = await verification.pendingContext();
@@ -1128,6 +1152,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           lastAssistantText: lastAssistantPlainText(session),
         };
       }
+
+      if (recallGroundingFailed) return { ok: false, retryable: false, errorMessage: 'Historical source citations could not be verified', lastAssistantText: lastAssistantPlainText(session) };
+      if (memoryClaimFailed) return { ok: false, retryable: false, errorMessage: 'Memory save claim has no verified receipt', lastAssistantText: lastAssistantPlainText(session) };
 
       if (params.requireVisibleReply && !sentVisibleMessage
         && lastAssistantPlainText(session).trim() === NO_REPLY) {

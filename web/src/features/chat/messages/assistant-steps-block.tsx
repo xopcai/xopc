@@ -11,6 +11,7 @@ import type {
 } from '@/features/chat/messages/messages.types';
 import {
   buildMemoryActivityView,
+  buildMemoryMutationView,
   type MemoryActivityLabels,
 } from '@/features/chat/messages/memory-activity';
 import type {
@@ -758,7 +759,7 @@ function StepRow({
 
   const kind = classifyTool(block.name, block.activity);
   const hasCard = KINDS_WITH_CARD.has(kind);
-  const memoryActivity = kind === 'memorySearch'
+  const memoryActivity = block.name === 'personal_memory' ? buildMemoryMutationView(block, outputLanguage === 'zh') : kind === 'memorySearch'
     ? buildMemoryActivityView(block, stepLabels.memoryActivity)
     : null;
 

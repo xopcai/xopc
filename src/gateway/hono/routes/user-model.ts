@@ -16,8 +16,10 @@ import {
   KnowledgeReviewConflictError,
   listKnowledgeItems,
   reviewKnowledgeItem,
+  setKnowledgeScope,
   searchKnowledgeItems,
 } from '../../../knowledge-memory/index.js';
+import { memoryVersion } from '../../../user-context/memory-version.js';
 import { listMemoryMaintenanceRuns } from '../../../memory-maintenance/index.js';
 import { listUnderstandingSourceGrants } from '../../../user-context/sources/repository.js';
 import { getActiveUnderstandingConsent } from '../../../user-context/sources/consent-repository.js';
@@ -134,6 +136,7 @@ function assertionView(
     predicate: slot.predicate,
     subject: slot.subject,
     scope: slot.scope,
+    version: memoryVersion({ assertion, scope: slot.scope }),
     sources,
     usable: canUseAssertion(assertion, Date.now(), {
       use: 'answer',
@@ -265,7 +268,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       priorities,
       rules: listCollaborationRules(),
       ruleSuggestions: listActionRuleSuggestions(),
-      knowledge,
+      knowledge: knowledge.map(item => ({ ...item, version: memoryVersion(item) })),
       maintenance: { lastRun: listMemoryMaintenanceRuns(1)[0] ?? null },
       profile,
       sources,
@@ -546,10 +549,16 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
   authenticated.patch('/api/user-model/assertions/:id/scope', write, async (c) => {
     const input = await body(c);
     const nextScope = scope(input?.scope);
-    if (!nextScope) return c.json({ error: 'A valid scope is required' }, 400);
+    if (!nextScope || typeof input?.version !== 'string') return c.json({ error: 'scope and version are required' }, 400);
     try {
-      const assertion = setUserAssertionScope(c.req.param('id'), nextScope);
-      return c.json({ assertion: assertionView(assertion) });
+      return runSqliteWriteTransaction(() => {
+        const current = getUserAssertion(c.req.param('id'));
+        if (!current) return c.json({ error: 'Assertion not found' }, 404);
+        const currentScope = getAssertionSlot(current.slotId)?.scope;
+        if (memoryVersion({ assertion: current, scope: currentScope }) !== input.version) return c.json({ error: 'Memory changed; refresh before changing scope' }, 409);
+        const assertion = setUserAssertionScope(current.id, nextScope);
+        return c.json({ assertion: assertionView(assertion) });
+      });
     } catch (error) {
       return c.json({ error: errorMessage(error) }, 400);
     }
@@ -783,7 +792,21 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
   });
   authenticated.get('/api/knowledge-memory/:id', (c) => {
     const item = getKnowledgeItem(c.req.param('id'));
-    return item ? c.json({ item }) : c.json({ error: 'Knowledge item not found' }, 404);
+    return item ? c.json({ item: { ...item, version: memoryVersion(item) } }) : c.json({ error: 'Knowledge item not found' }, 404);
+  });
+  authenticated.patch('/api/knowledge-memory/:id/scope', write, async (c) => {
+    const input = await body(c);
+    const nextScope = scope(input?.scope);
+    if (!nextScope || typeof input?.version !== 'string') return c.json({ error: 'scope and version are required' }, 400);
+    try {
+      return runSqliteWriteTransaction(() => {
+        const current = getKnowledgeItem(c.req.param('id'));
+        if (!current) return c.json({ error: 'Knowledge item not found' }, 404);
+        if (memoryVersion(current) !== input.version) return c.json({ error: 'Memory changed; refresh before changing scope' }, 409);
+        const item = setKnowledgeScope(current.id, nextScope);
+        return c.json({ item: { ...item, version: memoryVersion(item) } });
+      });
+    } catch (error) { return c.json({ error: errorMessage(error) }, 400); }
   });
   authenticated.delete('/api/knowledge-memory/:id', write, (c) => {
     return deleteKnowledgeItem(c.req.param('id'))

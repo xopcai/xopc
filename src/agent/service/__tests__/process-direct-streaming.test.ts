@@ -119,11 +119,14 @@ describe('direct stream input visibility', () => {
     expect(mocks.run).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ requireVisibleReply: false }));
   });
 
-  it('requires a visible reply for a direct endpoint message', async () => {
+  it.each([
+    { type: 'endpoint' as const, endpointId: 'web-ui' },
+    { type: 'system' as const, source: 'cli' as const },
+  ])('requires a visible reply for direct user origin $type', async origin => {
     const { deps } = setup();
     for await (const _event of runProcessDirectStreaming(deps, {
       content: '你好', conversationId: 'agent:main:main', runId: 'endpoint-run',
-      origin: { type: 'endpoint', endpointId: 'web-ui' },
+      origin,
     })) { /* consume stream */ }
 
     expect(mocks.run).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ requireVisibleReply: true }));

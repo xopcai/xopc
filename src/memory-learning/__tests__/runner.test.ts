@@ -161,4 +161,63 @@ describe('learning worker integration', () => {
     expect(getSqliteDatabase().prepare('SELECT status FROM context_extraction_runs').get()).toEqual({ status: 'failed' });
   });
 
+  it.each([true, false])('bounds preference review and accepts only exact evidence aliases: supported=%s', async repaired => {
+    ensureSessionRecord(id, '/workspace', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' });
+    const text = '我长期偏好先给结论再列证据。请只回复收到。';
+    const row = appendTranscriptEntry(id, { role: 'user', content: text, timestamp: Date.now() });
+    appendTranscriptEntry(id, { role: 'assistant', content: '收到。', timestamp: Date.now() } as never);
+    const empty = JSON.stringify({ intent: 'none', assertions: [], targetAssertionIds: [] });
+    const accepted = JSON.stringify({ intent: 'user_assertion', targetAssertionIds: [], assertions: [{
+      action: 'create', subject: { type: 'user', id: 'self' }, predicate: 'preference.response.structure',
+      cardinality: 'single', scope: { type: 'global' }, kind: 'preference', value: 'conclusion first', normalizedValue: 'conclusion first',
+      statement: '先给结论再列证据。', authority: 'user_explicit', confidence: 0.95, inferredImportance: 0.7,
+      consequence: 'medium', actionability: 1, volatility: 'stable', sensitivity: 'normal', disclosurePolicy: 'referenceable',
+      temporalResolution: 'exact', evidence: [{ ref: 'source_1', quote: '我长期偏好先给结论再列证据' }], selfContained: true, unresolvedReferences: [],
+    }] });
+    prompt.mockResolvedValueOnce(empty).mockResolvedValueOnce(repaired ? accepted : accepted.replace('"source_1"', '"source_999"'));
+    const config = ConfigSchema.parse({}); enqueueConversationLearning(config, id, '/workspace', true);
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(prompt).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(prompt.mock.calls[1][0])).toContain('independently owned ongoing-preference');
+    expect(JSON.stringify(prompt.mock.calls[0][1])).toContain('[evidence_ref:source_1]');
+    expect(listUserAssertions()).toHaveLength(repaired ? 1 : 0);
+    if (repaired) {
+      expect(getSqliteDatabase().prepare("SELECT message_id FROM context_evidence WHERE evidence_id IN (SELECT evidence_id FROM user_assertion_evidence WHERE relation='supports')").all())
+        .toEqual([{ message_id: row.entry_id }]);
+      prompt.mockResolvedValue(empty);
+      enqueueConversationLearning(config, id, '/workspace', true);
+      await runPersistentLearningJob(claimLearningJob()!, () => config);
+      expect(prompt).toHaveBeenCalledTimes(3);
+      expect(listUserAssertions()).toHaveLength(1);
+    }
+  });
+
+  it.each([
+    ['这组解释里，我选带简短标题的版本，这样容易扫读。', '看另一组例子，我还是选带简短标题的解释，这样读起来更顺。', 2],
+    ['这组解释里，我选带简短标题的版本。', '这组解释里，我选带简短标题的版本。', 1],
+    ['今天临时我选带简短标题的版本。', '这次临时我选带简短标题的解释。', 1],
+  ])('only rechecks independent durable choice patterns: %s', async (first, second, calls) => {
+    ensureSessionRecord(id, '/workspace', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' });
+    for (const text of [first, second]) {
+      appendTranscriptEntry(id, { role: 'user', content: text, timestamp: Date.now() });
+      appendTranscriptEntry(id, { role: 'assistant', content: '收到。', timestamp: Date.now() } as never);
+    }
+    prompt.mockResolvedValue(JSON.stringify({ intent: 'none', assertions: [], targetAssertionIds: [] }));
+    const config = ConfigSchema.parse({}); enqueueConversationLearning(config, id, '/workspace', true);
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(prompt).toHaveBeenCalledTimes(calls);
+    expect(listUserAssertions()).toEqual([]);
+    if (calls === 2) expect(JSON.stringify(prompt.mock.calls[1][0])).toContain('user_observed');
+  });
+
+  it.each(['今天我喜欢短回答，不代表以后。', '请翻译客户原话：『我长期喜欢短回答』。', '好的，谢谢。'])('does not retry abstention for a non-durable source: %s', async text => {
+    ensureSessionRecord(id, '/workspace', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' });
+    appendTranscriptEntry(id, { role: 'user', content: text, timestamp: Date.now() });
+    appendTranscriptEntry(id, { role: 'assistant', content: '收到。', timestamp: Date.now() } as never);
+    prompt.mockResolvedValue(JSON.stringify({ intent: 'none', assertions: [], targetAssertionIds: [] }));
+    const config = ConfigSchema.parse({}); enqueueConversationLearning(config, id, '/workspace', true);
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(prompt).toHaveBeenCalledOnce(); expect(listUserAssertions()).toEqual([]);
+  });
+
 });

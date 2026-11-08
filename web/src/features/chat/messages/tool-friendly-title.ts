@@ -129,6 +129,7 @@ const BUILTIN_SEMANTICS: Readonly<Record<string, keyof ToolExecutionLabels['buil
   knowledge_write: 'memoryUpdate',
   user_context_get: 'memoryRead',
   user_context_update: 'memoryUpdate',
+  personal_memory: 'memoryUpdate',
   publish_artifacts: 'publish',
   update_plan: 'planning',
   read_media: 'mediaRead',

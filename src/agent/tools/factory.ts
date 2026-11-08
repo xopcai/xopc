@@ -1,6 +1,7 @@
 import { getPhoneRuntime, phoneExecutionContext } from '../../phone/runtime.js';
 import { createPhoneUseTool } from './phone-use-tool.js';
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
+import { createPersonalMemoryTool } from './personal-memory-tool.js';
 import { withCoreToolExposure } from './toolExposure.js';
 import { markCodemodeCoreRead } from './codemode-permissions.js';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
@@ -77,6 +78,7 @@ import {
   type MarketplaceSkillInstallToolOptions,
   type MarketplaceSkillInstallToolResult,
 } from './index.js';
+import { canRecallConversation, canRecallHistoryEntry } from '../../session/history-recall-policy.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalReadTool } from './personal-read-tool.js';
 import { createPersonalResultTool } from './personal-result-tool.js';
@@ -664,6 +666,11 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
+      ...(personalToolsConfigured ? [createPersonalMemoryTool({
+        getConversationId: currentConversationId,
+        getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
+        getConfig: () => this.deps.getConfig?.(), agentId: resolvedAgentId, workspaceId: workspace, getProjectId: currentProjectId,
+      })] : []),
       ...(personalToolsConfigured || allowed?.has('user_context_read') ? [createUserContextReadTool({
         getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
         agentId: resolvedAgentId,
@@ -758,6 +765,12 @@ export class AgentToolsFactory {
         ? [
             createSessionSearchTool({
               localOnly: personalToolsConfigured,
+              canRecallConversation: id => canRecallConversation(this.deps.getConfig?.(), {
+                agentId: resolvedAgentId, workspaceId: workspace, conversationId: currentConversationId() ?? '', projectId: currentProjectId(),
+              }, id),
+              canRecallEntry: (id, entryId, text) => canRecallHistoryEntry({
+                agentId: resolvedAgentId, workspaceId: workspace, conversationId: currentConversationId() ?? '', projectId: currentProjectId(),
+              }, id, entryId, text),
               getHistoryContext: () => ({ agentId: resolvedAgentId, workspaceId: workspace, conversationId: currentConversationId() ?? '', projectId: currentProjectId() }),
               getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
               getSessionStore: this.deps.getSessionStore,

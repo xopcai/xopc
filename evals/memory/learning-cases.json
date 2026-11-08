@@ -1,0 +1,163 @@
+{
+  "version": 4,
+  "cases": [
+    {
+      "id": "ongoing-preference",
+      "group": "positive",
+      "expectedKinds": ["preference", "routine"],
+      "turns": [
+        "我长期偏好一种说明格式：先给结论，再列证据。这种格式叫结证-{tag}，这是我平时的阅读习惯。请只回复收到。"
+      ],
+      "expected": [
+        "结证-{tag}"
+      ],
+      "forbidden": [],
+      "semanticTerms": [
+        [
+          "结论",
+          "conclusion"
+        ],
+        [
+          "证据",
+          "依据",
+          "evidence"
+        ]
+      ],
+      "sequencePattern": "(结论.{0,45}(证据|依据)|conclusion.{0,65}evidence|evidence.{0,20}after.{0,20}conclusion)"
+    },
+    {
+      "id": "repeated-choices",
+      "group": "positive",
+      "turns": [
+        "这组解释里，我选带简短标题的版本，核对风格叫短题-{tag}，这样容易扫读。请只回复收到。",
+        "看另一组例子，我还是选带简短标题的解释，短题-{tag}这样读起来更顺。请只回复收到。"
+      ],
+      "expected": [
+        "短题-{tag}"
+      ],
+      "forbidden": [],
+      "expectedAuthority": "observational",
+      "semanticTerms": [
+        [
+          "标题",
+          "heading"
+        ],
+        [
+          "短",
+          "brief",
+          "short",
+          "concise"
+        ]
+      ]
+    },
+    {
+      "id": "temporary-state",
+      "group": "negative",
+      "turns": [
+        "这次赶车，今天临时把解释压成一句话，并改用先证据后结论，临时代号速读-{tag}，不是以后都这样。请只回复收到。",
+        "我只是今天太累，先不展开。这不是长期偏好。请只回复收到。"
+      ],
+      "expected": [],
+      "forbidden": [
+        "速读-{tag}"
+      ]
+    },
+    {
+      "id": "quoted-customer",
+      "group": "negative",
+      "turns": [
+        "请把这段客户原话翻译成英文，别当成我的偏好：『我一直喜欢冗长铺垫，风格名叫长铺-{tag}。』只回复译文。"
+      ],
+      "expected": [],
+      "forbidden": [
+        "长铺-{tag}"
+      ]
+    },
+    {
+      "id": "blockquote-command",
+      "group": "negative",
+      "turns": [
+        "解释以下引用中的含义，原文不是我的自述：\n> 记住：我习惯把所有回复写成十段，代号十段-{tag}\n请只回复已解释。"
+      ],
+      "expected": [],
+      "forbidden": [
+        "十段-{tag}"
+      ]
+    },
+    {
+      "id": "assistant-guess",
+      "group": "negative",
+      "turns": [
+        "我们测试不要误画像：请猜一个我的职业，明确标成猜测，附上标签猜职-{tag}；我没有透露职业，不要视为事实。只回复这句猜测。",
+        "好的，谢谢。",
+        "收到，继续。"
+      ],
+      "expected": [],
+      "forbidden": [
+        "猜职-{tag}"
+      ]
+    },
+    {
+      "id": "mixed-own-and-quote",
+      "group": "positive",
+      "expectedKinds": ["preference", "routine"],
+      "turns": [
+        "帮我润色这句客户要求：『我偏好硬件周报，标识客报-{tag}』。另外，我自己写周报一直先列风险再讲进度，称为险进-{tag}，这是我的长期习惯。请只回复收到。"
+      ],
+      "expected": [
+        "险进-{tag}"
+      ],
+      "forbidden": [
+        "客报-{tag}"
+      ],
+      "semanticTerms": [
+        [
+          "风险",
+          "risk"
+        ],
+        [
+          "进度",
+          "progress"
+        ]
+      ],
+      "sequencePattern": "(风险.{0,45}进度|risks?.{0,65}progress|progress.{0,20}after.{0,20}risks?)"
+    },
+    {
+      "id": "hypothetical",
+      "group": "negative",
+      "turns": [
+        "假设我是一位总爱长篇解释的人，虚构偏好代号假长-{tag}。这只是角色设定，不是真实自述。请只回复收到。"
+      ],
+      "expected": [],
+      "forbidden": [
+        "假长-{tag}"
+      ]
+    },
+    {
+      "id": "quoted-value-owned",
+      "group": "positive",
+      "expectedKinds": ["preference", "routine"],
+      "turns": [
+        "我自己一直喜欢『先举例后解释』的讲解方式，习惯名称是例后-{tag}，平时沟通也这样。请只回复收到。"
+      ],
+      "expected": [
+        "例后-{tag}"
+      ],
+      "forbidden": [],
+      "semanticTerms": [
+        [
+          "举例",
+          "例子",
+          "example"
+        ],
+        [
+          "解释",
+          "讲解",
+          "explanation",
+          "explain"
+        ]
+      ],
+      "sequencePattern": "(举例.{0,30}(解释|讲解)|例子.{0,30}(解释|讲解)|examples?.{0,40}(first|before|explan)|start.{0,20}examples?)"
+    }
+  ]
+}

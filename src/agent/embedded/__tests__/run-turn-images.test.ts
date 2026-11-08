@@ -328,6 +328,40 @@ describe('runXopcEmbeddedTurn image input', () => {
     }), { triggerTurn: true });
   });
 
+  it.each([true, false])('bounds historical citation repair and reports its actual outcome: repaired=%s', async repaired => {
+    mocks.waitForIdle.mockImplementationOnce(async () => { mocks.lastText = '错误引用[H9]。'; })
+      .mockImplementationOnce(async () => { mocks.lastText = repaired ? '新的保护规则覆盖stable[H1]。' : '错误引用[H9]。'; });
+    const result = await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'run-recall-grounding',
+      userMessage: { role: 'user', content: '之前为什么改分支？', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any,
+      modelRef: 'openai/gpt-4o', tools: [],
+      systemPrompt: 'On-demand recall: completed\n[H1] recordedAt=2026-11-08 conversationId=id entryId=entry seq=1 owner said: "新的保护规则覆盖stable"',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    expect(result.ok).toBe(repaired);
+    if (!repaired) expect(result.errorMessage).toContain('citations could not be verified');
+    expect(mocks.customMessage).toHaveBeenCalledOnce();
+    expect(mocks.customMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: 'recall_grounding_correction', display: false }), { triggerTurn: true });
+  });
+
+  it.each([true, false])('bounds correction of implicit-learning save claims: repaired=%s', async repaired => {
+    const falseClaim = '已把这条偏好写进用户偏好里了。';
+    mocks.waitForIdle.mockImplementationOnce(async () => { mocks.lastText = falseClaim; })
+      .mockImplementationOnce(async () => { mocks.lastText = repaired ? '收到。' : falseClaim; });
+    const result = await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'run-memory-claim',
+      userMessage: { role: 'user', content: '我长期偏好先结论再证据。请只回复收到。', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any,
+      modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    expect(result.ok).toBe(repaired);
+    if (!repaired) expect(result.errorMessage).toContain('no verified receipt');
+    expect(mocks.customMessage).toHaveBeenCalledOnce();
+    expect(mocks.customMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: 'memory_claim_correction', display: false }), { triggerTurn: true });
+  });
+
   it('reports an error if the bounded retry is still silent', async () => {
     mocks.lastText = 'NO_REPLY';
     const result = await runXopcEmbeddedTurn({

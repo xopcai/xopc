@@ -6,6 +6,7 @@ export type AssertionStatus = 'candidate' | 'active' | 'needs_review' | 'conflic
 
 export type UserAssertion = {
   id: string;
+  version?: string;
   predicate: string;
   statement: string;
   kind: 'identity' | 'preference' | 'value' | 'routine' | 'capability' | 'relationship' | 'current_state' | 'derived_insight';
@@ -83,6 +84,7 @@ export type ActionRuleSuggestion = {
 
 export type KnowledgeItem = {
   id: string;
+  version?: string;
   content: string;
   recordClass: 'memory' | 'source_index';
   kind: 'work_thread' | 'project_fact' | 'workspace_fact' | 'decision' | 'task_lesson' | 'commitment' | 'open_question' | 'episode' | 'note';
@@ -201,9 +203,9 @@ export function setAssertionStatus(id: string, status: AssertionStatus): Promise
   });
 }
 
-export function setAssertionScope(id: string, scope: Scope): Promise<unknown> {
+export function setAssertionScope(id: string, scope: Scope, version?: string): Promise<unknown> {
   return fetchJson(apiUrl(`/api/user-model/assertions/${encodeURIComponent(id)}/scope`), {
-    method: 'PATCH', body: JSON.stringify({ scope }),
+    method: 'PATCH', body: JSON.stringify({ scope, version }),
   });
 }
 
@@ -309,4 +311,10 @@ export async function downloadUserModelExport(): Promise<void> {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+export function setKnowledgeScope(item: Pick<KnowledgeItem, 'id' | 'version'>, scope: Scope): Promise<unknown> {
+  return fetchJson(apiUrl(`/api/knowledge-memory/${encodeURIComponent(item.id)}/scope`), {
+    method: 'PATCH', body: JSON.stringify({ scope, version: item.version }),
+  });
 }

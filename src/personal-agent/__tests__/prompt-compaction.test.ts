@@ -15,12 +15,12 @@ describe('personal tool instruction projection', () => {
     expect(projected).toContain(custom);
     expect(projected).toContain('Keep reply preferences in the current conversation');
     expect(projected).toContain('Do not copy unrelated personal history or secrets');
-    for (const tool of ['personal_task', 'personal_result', 'personal_request', 'personal_attention', 'personal_preference']) expect(projected).not.toContain(tool);
+    for (const tool of ['personal_task', 'personal_result', 'personal_request', 'personal_attention', 'personal_preference', 'personal_memory']) expect(projected).not.toContain(tool);
     expect(full).toContain('personal_task');
   });
   it('preserves registered tools and does not reinterpret custom instructions', () => {
     const full = personalInstructions();
-    const all = ['personal_task','personal_result','personal_request','personal_capability','personal_preference','personal_attention'];
+    const all = ['personal_task','personal_result','personal_request','personal_capability','personal_preference','personal_attention','personal_memory'];
     expect(projectPersonalInstructions(full, all)).toBe(full);
     const custom = 'Quoted policy: personal_task(command="submit"). Keep this exact text.';
     expect(projectPersonalInstructions(custom, [])).toBe(custom);

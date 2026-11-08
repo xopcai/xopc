@@ -1,7 +1,7 @@
+import { getConversationRouting } from '../routing/session-key.js';
 import type { AssertionAllowedUse, UserAssertion } from './domain.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
-import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { getUnderstandingConsent } from '../user-context/sources/consent-repository.js';
 import { isOwnerIdentity } from '../user-context/identity-bindings.js';
 
@@ -36,8 +36,8 @@ export function canUseAssertion(
     if (assertion.createdBy === 'connector' && (!assertion.consentReceiptId || !evidence.length)) return false;
     for (const link of evidence) {
       if (link.conversation_id) {
-        const session = getSessionMetadata(link.conversation_id);
-        if (!session?.routing || session.routing.peerKind !== 'direct' || !isOwnerIdentity(session.routing)) return false;
+        const routing = getConversationRouting(link.conversation_id);
+        if (!routing || routing.peerKind !== 'direct' || !isOwnerIdentity(routing)) return false;
       }
       if (link.source_type === 'connector') {
         if (!link.source_item_id || !link.linked_hash || link.linked_hash !== link.content_hash) return false;
