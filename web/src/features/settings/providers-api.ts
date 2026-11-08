@@ -95,11 +95,9 @@ export function mergeProviderRows(
     configured: p.configured || configuredFromModels.has(p.id),
     apiKey:
       configKeys[p.id] ??
-      (p.activeKeySource === 'extension'
-        ? ''
-        : p.configured || configuredFromModels.has(p.id)
-          ? '••••••••••••'
-          : ''),
+      (['agent', 'gateway', 'models_json'].includes(p.activeKeySource ?? p.authMode ?? '')
+        ? '••••••••••••'
+        : ''),
   }));
 }
 
