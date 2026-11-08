@@ -1392,6 +1392,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 onSend={projectComposer.send}
                 composerMode={followUp.composerMode}
                 onRestoreEditor={followUp.restoreEditor}
+                onComposerHydrated={followUp.markComposerHydrated}
                 onReacquireEdit={handleReacquireEdit}
                 inputControl={followUp.control}
                 onResumeQueue={() => void followUp.resumeQueue().catch(() => {})}

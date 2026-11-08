@@ -78,6 +78,32 @@ describe('native voice lifecycle', () => {
     expect(await voice.transcribe('')).toBeUndefined(); expect(voice.state).toBe('ready');
     expect(voice.error).toBe('HTTP_503'); expect(mocks.request).toHaveBeenCalledOnce();
     expect(mocks.unlink).not.toHaveBeenCalled(); await voice.cancel(); expect(mocks.unlink).toHaveBeenCalledOnce();
+    expect(voice.error).toBe('');
+  });
+  it('expires transcription feedback while retaining the recording for retry', async () => {
+    await voice.start(context as never); await voice.stop();
+    mocks.request.mockResolvedValueOnce({ responseCode: 503, result: '{}' });
+    await voice.transcribe('');
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(voice.error).toBe(''); expect(voice.state).toBe('ready');
+    expect(mocks.unlink).not.toHaveBeenCalled();
+    expect(await voice.transcribe('zh')).toBe('A voice draft');
+  });
+  it('dismisses failed-send feedback without deleting audio or losing its retry', async () => {
+    await record();
+    await voice.send(async () => { throw new Error('OFFLINE'); });
+    voice.dismissError();
+    expect(voice.error).toBe(''); expect(voice.state).toBe('ready');
+    expect(mocks.unlink).not.toHaveBeenCalled();
+    expect(await voice.send(async () => true)).toBe(true);
+  });
+  it('clears permission feedback on cancel and never lets its timer affect a new recording', async () => {
+    mocks.permission.mockResolvedValueOnce({ authResults: [-1] });
+    await voice.start(context as never); await voice.cancel();
+    expect(voice.error).toBe('');
+    await voice.start(context as never);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(voice.state).toBe('recording'); expect(voice.error).toBe('');
   });
   async function record() { await voice.start(context as never); await vi.advanceTimersByTimeAsync(1000); await voice.stop(); }
   it('sends a voice attachment without transcription and deletes only after acceptance', async () => {

@@ -8,6 +8,7 @@ import { util } from '@kit.ArkTS';
 import { gatewaySession } from './gatewaySession';
 import { signedHttpRequest } from './requestProof';
 import { chatSpeechChunks, chatSpeechLanguage } from '../common/speechText';
+import { XopcTransientNotice } from '../common/transientNotice';
 
 interface XopcSpeechBody { text: string; language: string; }
 interface XopcSpeechHeaders { Authorization: string; 'Content-Type': string; }
@@ -17,6 +18,10 @@ export class XopcChatReadAloud {
   @Trace state: string = 'idle';
   @Trace sourceId: string = '';
   @Trace error: string = '';
+  private errorNotice: XopcTransientNotice = new XopcTransientNotice((message: string): void => { this.error = message; });
+  private noticesEnabled: boolean = true;
+
+  dismissError(): void { this.errorNotice.clear(); }
   @Trace position: number = 0;
   @Trace duration: number = 0;
   @Trace continuousConversationId: string = '';
@@ -38,12 +43,13 @@ export class XopcChatReadAloud {
   private backgroundRunning: boolean = false;
 
   async speak(context: common.Context, text: string, id: string, language: string): Promise<void> {
+    this.noticesEnabled = true;
     const cleanup = this.stop();
     const generation = this.generation;
     await cleanup;
     if (generation !== this.generation) return;
     this.context = context; this.chunks = chatSpeechChunks(text); this.chunkIndex = 0; this.sourceId = id;
-    this.language = chatSpeechLanguage(text, language); this.error = '';
+    this.language = chatSpeechLanguage(text, language);
     await this.startPlaybackSession(context, id, generation);
     if (generation !== this.generation) return;
     if (this.chunks.length) await this.next(generation);
@@ -177,14 +183,15 @@ export class XopcChatReadAloud {
   }
   private fail(error: Error, generation: number): void {
     if (generation !== this.generation) return;
-    this.error = error.message; this.stop();
+    this.stop(true);
+    if (this.noticesEnabled) this.errorNotice.show(error.message);
   }
   async toggle(): Promise<void> {
     const generation = this.generation;
     try { if (this.state === 'playing') await this.player?.pause(); else if (this.state === 'paused') await this.player?.play(); }
     catch (error) { this.fail(error as Error, generation); }
   }
-  seek(value: number): void { try { this.player?.seek(Math.max(0, Math.min(value, this.duration))); } catch (error) { this.error = (error as Error).message; } }
+  seek(value: number): void { try { this.player?.seek(Math.max(0, Math.min(value, this.duration))); } catch (error) { if (this.noticesEnabled) this.errorNotice.show((error as Error).message); } }
   private async releaseOutput(): Promise<void> {
     const player = this.player; const file = this.file; const path = this.path;
     this.player = undefined; this.file = undefined; this.path = '';
@@ -192,7 +199,8 @@ export class XopcChatReadAloud {
     if (file) { try { await fs.close(file); } catch (_) {} }
     if (path) { try { await fs.unlink(path); } catch (_) {} }
   }
-  async stop(): Promise<void> {
+  async stop(preserveError: boolean = false): Promise<void> {
+    if (!preserveError) this.dismissError();
     this.generation++; this.request?.destroy(); this.request = undefined;
     this.prefetchRequest?.destroy(); this.prefetchRequest = undefined;
     this.prefetchPromise = undefined; this.prefetchIndex = -1;
@@ -209,7 +217,7 @@ export class XopcChatReadAloud {
     }
     if (context && backgroundRunning) { try { await backgroundTaskManager.stopBackgroundRunning(context); } catch (_) {} }
   }
-  leaveForeground(): void { this.continuousConversationId = ''; }
+  leaveForeground(): void { this.continuousConversationId = ''; this.noticesEnabled = false; this.dismissError(); }
   disableContinuous(): void { this.continuousConversationId = ''; this.stop(); }
 }
 export const chatReadAloud: XopcChatReadAloud = new XopcChatReadAloud();

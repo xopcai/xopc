@@ -154,6 +154,8 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     expect(execute).toHaveBeenCalledTimes(4);
     expect(coordinator.snapshot(id).inputs).toMatchObject([{ content: 'Keep paused', status: 'queued' }]);
     expect((await controlPost(stop)).status).toBe(200);
+    expect((await controlPost({ ...stop, operationId: randomUUID(), action: 'resume', onlyIfEmpty: true,
+      expectedVersion: coordinator.snapshot(id).control.version })).status).toBe(409);
     expect((await controlPost({ ...stop, operationId: randomUUID(), action: 'resume' })).status).toBe(409);
     const single = { ...deferred, clientMessageId: randomUUID(), input: { content: 'Only this input' },
       execution: 'single', controlVersion: coordinator.snapshot(id).control.version };
@@ -168,6 +170,13 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(6));
     finish({ status: 'ok', summary: '' });
     await vi.waitFor(() => expect(coordinator.snapshot(id).activeRunId).toBeUndefined());
+    const emptyPause = { ...stop, operationId: randomUUID(), action: 'pause',
+      expectedVersion: coordinator.snapshot(id).control.version };
+    expect((await controlPost(emptyPause)).status).toBe(200);
+    const cleaned = await controlPost({ ...emptyPause, operationId: randomUUID(), action: 'resume', onlyIfEmpty: true,
+      expectedVersion: coordinator.snapshot(id).control.version });
+    expect(cleaned.status).toBe(200);
+    expect((await cleaned.json()).payload.control.paused).toBe(false);
     deleteSessionRecord(id);
     expect((await post(command)).status).toBe(410);
     expect((await fetch(receiptPath, { headers })).status).toBe(410);

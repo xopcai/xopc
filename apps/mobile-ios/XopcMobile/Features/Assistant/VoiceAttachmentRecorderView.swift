@@ -17,6 +17,8 @@ struct VoiceAttachmentRecorderView: View {
     @State private var previewPlayer: AVAudioPlayer?
     @State private var isPreviewPlaying = false
     @State private var previewResetTask: Task<Void, Never>?
+    @State private var transcriptionTask: Task<Void, Never>?
+    @State private var isVisible = false
 
     var body: some View {
         NavigationStack {
@@ -33,10 +35,7 @@ struct VoiceAttachmentRecorderView: View {
                     ProgressView("正在转为文字…")
                 }
                 if let transcriptionError {
-                    Text(transcriptionError)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
+                    TransientComposerFeedback(message: transcriptionError) { self.transcriptionError = nil }
                 }
                 if recorder.hasRecoverableInterruption {
                     Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
@@ -53,7 +52,7 @@ struct VoiceAttachmentRecorderView: View {
                         .buttonStyle(.bordered)
                         .disabled(isTranscribing)
                         Button("转为文字", systemImage: "text.cursor") {
-                            Task { await transcribe() }
+                            transcriptionTask = Task { await transcribe() }
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(isTranscribing)
@@ -87,7 +86,7 @@ struct VoiceAttachmentRecorderView: View {
                         .multilineTextAlignment(.center)
                     MicrophonePermissionSettingsButton()
                 } else if let error = recorder.errorMessage {
-                    Text(error).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
+                    TransientComposerFeedback(message: error) { recorder.dismissError() }
                 }
             }
             .padding()
@@ -99,7 +98,12 @@ struct VoiceAttachmentRecorderView: View {
                     Button("取消") { recorder.cancel(); dismiss() }
                 }
             }
-            .onDisappear { stopPreview(); recorder.cancel() }
+            .onAppear { isVisible = true }
+            .onDisappear {
+                isVisible = false
+                transcriptionTask?.cancel()
+                stopPreview(); recorder.cancel()
+            }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
                 recorder.handleAudioInterruption($0)
             }
@@ -113,6 +117,8 @@ struct VoiceAttachmentRecorderView: View {
     }
 
     private func togglePreview() {
+        transcriptionError = nil
+        recorder.dismissError()
         if isPreviewPlaying {
             stopPreview()
             return
@@ -164,19 +170,22 @@ struct VoiceAttachmentRecorderView: View {
     }
 
     @MainActor private func transcribe() async {
-        guard let recordedAudio, !isTranscribing else { return }
+        guard isVisible, !Task.isCancelled, let recordedAudio, !isTranscribing else { return }
         stopPreview()
         isTranscribing = true
         transcriptionError = nil
+        recorder.dismissError()
         defer { isTranscribing = false }
         do {
             let language = locale.language.languageCode?.identifier
             let text = try await GatewayClient(configuration: configuration)
                 .transcribeVoice(recordedAudio, language: language)
+            guard isVisible, !Task.isCancelled else { return }
             onTranscribed(text)
             dismiss()
         } catch is CancellationError {
         } catch {
+            guard isVisible, !Task.isCancelled else { return }
             transcriptionError = error.localizedDescription
         }
     }
@@ -195,6 +204,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
     private var fileURL: URL?
+    private var generation = 0
 
     var statusText: LocalizedStringResource {
         if isPaused {
@@ -206,8 +216,12 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         return "准备录音"
     }
 
-    func start() async {
-        let allowed = await AVAudioApplication.requestRecordPermission()
+    func start(requestPermission: () async -> Bool = { await AVAudioApplication.requestRecordPermission() }) async {
+        generation += 1
+        let current = generation
+        errorMessage = nil
+        let allowed = await requestPermission()
+        guard current == generation, !Task.isCancelled else { return }
         guard allowed else {
             isMicrophonePermissionDenied = true
             errorMessage = "未获得麦克风权限，请在系统设置中允许访问。"
@@ -251,6 +265,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
     }
 
     func togglePause() {
+        dismissError()
         guard let recorder else { return }
         if isPaused {
             recorder.record()
@@ -299,7 +314,12 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         )
     }
 
+    func dismissError() { errorMessage = nil }
+
     func cancel() {
+        generation += 1
+        dismissError()
+        isMicrophonePermissionDenied = false
         recorder?.stop()
         timer?.invalidate()
         if let fileURL {

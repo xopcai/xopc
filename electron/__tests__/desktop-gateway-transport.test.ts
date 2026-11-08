@@ -4,10 +4,13 @@ import { once } from 'node:events';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+import { Hono } from 'hono';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import { DesktopGatewayTransport } from '../gateway/desktop-transport.js';
+import { registerSideChatRoutes } from '../../src/gateway/hono/routes/side-chats.js';
+import type { AuthenticatedRouteDeps } from '../../src/gateway/hono/routes/deps.js';
 
 let root: string;
 let transport: DesktopGatewayTransport;
@@ -99,4 +102,60 @@ it('relays realtime and closes the old connection on Gateway switch', async () =
   expect((await response)[0].toString()).toBe('a:hello');
   const closed = once(ws, 'close'); transport.select(await backend('b')); await closed;
   expect((await fetch(transport.origin + '/api/config', { headers: { Cookie: cookie } })).status).toBe(401);
+});
+
+
+it('preserves client ownership through real side chat routes for create, reads, heartbeat and close', async () => {
+  const owner = 'side-chat-client';
+  const chat = { id: 'side-1' };
+  const operations: string[] = [];
+  const checkOwner = (id: string, clientId: string, operation: string) => {
+    expect(id).toBe(chat.id);
+    expect(clientId).toBe(owner);
+    operations.push(operation);
+    return chat;
+  };
+  const app = new Hono();
+  registerSideChatRoutes(app, {
+    chatRateLimitMiddleware: async (_c, next) => next(),
+    service: {
+      sideChats: {
+        create: async (input: { clientInstanceId: string }) => {
+          expect(input.clientInstanceId).toBe(owner);
+          operations.push('create');
+          return chat;
+        },
+        get: (id: string, clientId: string) => checkOwner(id, clientId, 'get'),
+        getMessages: (id: string, clientId: string) => { checkOwner(id, clientId, 'messages'); return []; },
+        heartbeat: (id: string, clientId: string) => checkOwner(id, clientId, 'heartbeat'),
+      },
+      sideChatRuns: { dispose: async (id: string, clientId: string) => { checkOwner(id, clientId, 'delete'); return true; } },
+    },
+  } as unknown as AuthenticatedRouteDeps);
+  const server = createServer(async (req, res) => {
+    if (req.url === '/api/browser-session') { res.setHeader('Content-Type', 'application/json'); res.end('{}'); return; }
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    const body = Buffer.concat(chunks);
+    const response = await app.fetch(new Request('http://localhost' + req.url, {
+      method: req.method, headers: req.headers as HeadersInit, ...(body.length ? { body } : {}),
+    }));
+    res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(await response.text());
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); servers.push(server);
+  transport.select({ origin: `http://127.0.0.1:${(server.address() as { port: number }).port}`, token: 'upstream', scope: 'side-chat' });
+  const cookie = await login();
+  for (const [method, path, body, status] of [
+    ['POST', '/api/sessions/parent/side-chats', JSON.stringify({ clientInstanceId: owner, selections: [] }), 201],
+    ['GET', '/api/side-chats/side-1', undefined, 200],
+    ['GET', '/api/side-chats/side-1/messages', undefined, 200],
+    ['POST', '/api/side-chats/side-1/heartbeat', undefined, 200],
+    ['DELETE', '/api/side-chats/side-1', undefined, 200],
+  ] as const) {
+    const response = await fetch(transport.origin + path, {
+      method, headers: { Cookie: cookie, 'Content-Type': 'application/json', 'x-xopc-client-instance-id': owner }, body,
+    });
+    expect(response.status).toBe(status);
+    expect(await response.json()).toMatchObject({ ok: true });
+  }
+  expect(operations).toEqual(['create', 'get', 'messages', 'heartbeat', 'delete']);
 });

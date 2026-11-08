@@ -41,10 +41,74 @@ beforeEach(async () => {
   });
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   await act(async () => root.render(<Harness />));
+  act(() => hook.markComposerHydrated());
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.clearAllMocks(); });
 
 describe('unified input editing', () => {
+  it('waits for persisted editor restoration before clearing an empty pause', async () => {
+    act(() => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<Harness />));
+    state = { ...state, revision: 1, activeRunId: undefined, inputs: [],
+      control: { ...state.control, paused: true, version: 1 } };
+    act(() => window.dispatchEvent(new CustomEvent('session-input-state', { detail: state })));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(hook.control.paused).toBe(true);
+    act(() => { hook.restoreEditor({ kind: 'editTurn', turnId: 'saved' }); hook.markComposerHydrated(); });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(hook.control.paused).toBe(true);
+    act(() => hook.cancelEditor());
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(hook.control.paused).toBe(false);
+  });
+
+  it('clears an idle empty pause on the server, including historical pauses', async () => {
+    state = { ...state, revision: 1, activeRunId: undefined, inputs: [],
+      control: { ...state.control, paused: true, version: 1 } };
+    act(() => window.dispatchEvent(new CustomEvent('session-input-state', { detail: state })));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(hook.control.paused).toBe(false);
+    const commands = vi.mocked(apiFetch).mock.calls.filter(([url]) => String(url).endsWith('/input-control'));
+    expect(commands).toHaveLength(1);
+    expect(JSON.parse(String(commands[0][1]?.body))).toMatchObject({ action: 'resume', onlyIfEmpty: true, expectedVersion: 1 });
+  });
+
+  it('keeps an empty queue paused while editing and releases it after cancelling', async () => {
+    await act(async () => { await hook.beginEditTurn('turn'); });
+    state = { ...state, revision: state.revision + 1, activeRunId: undefined, inputs: [] };
+    act(() => window.dispatchEvent(new CustomEvent('session-input-state', { detail: state })));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(hook.control.paused).toBe(true);
+    act(() => hook.cancelEditor());
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(hook.control.paused).toBe(false);
+  });
+
+  it('does not repeatedly retry or show agent errors when background cleanup conflicts', async () => {
+    const original = vi.mocked(apiFetch).getMockImplementation()!;
+    vi.mocked(apiFetch).mockImplementation(async (url, init) => String(url).endsWith('/input-control')
+      ? Response.json({ error: { message: 'Queue changed' } }, { status: 409 }) : original(url, init));
+    state = { ...state, revision: 1, activeRunId: undefined, inputs: [],
+      control: { ...state.control, paused: true, version: 1 } };
+    act(() => window.dispatchEvent(new CustomEvent('session-input-state', { detail: state })));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+    expect(hook.control.paused).toBe(true);
+    expect(vi.mocked(apiFetch).mock.calls.filter(([url]) => String(url).endsWith('/input-control'))).toHaveLength(1);
+    expect(showComposerNotification).not.toHaveBeenCalled();
+  });
+
+  it.each(['running', 'stopping', 'queued'] as const)('does not automatically resume a %s queue', async phase => {
+    state = { ...state, revision: 1, activeRunId: phase === 'queued' ? undefined : 'run',
+      inputs: phase === 'queued' ? state.inputs : [],
+      control: { ...state.control, paused: true, version: 1, phase: phase === 'queued' ? 'idle' : phase } };
+    act(() => window.dispatchEvent(new CustomEvent('session-input-state', { detail: state })));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(hook.control.paused).toBe(true);
+    expect(vi.mocked(apiFetch).mock.calls.filter(([url]) => String(url).endsWith('/input-control'))).toHaveLength(0);
+  });
+
   it('keeps turn and follow-up editing mutually exclusive', async () => {
     await act(async () => { expect(await hook.beginEditTurn('turn')).toBe(true); });
     expect(hook.composerMode.kind).toBe('editTurn');

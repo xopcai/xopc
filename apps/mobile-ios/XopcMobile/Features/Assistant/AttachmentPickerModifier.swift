@@ -20,6 +20,7 @@ enum AttachmentPolicy {
 }
 
 struct AttachmentPickerModifier: ViewModifier {
+    var scopeID = ""
     @Binding var attachments: [MessageAttachment]
     @Binding var errorMessage: String?
     @Binding var showingPhotoPicker: Bool
@@ -27,6 +28,8 @@ struct AttachmentPickerModifier: ViewModifier {
     @Binding var showingCameraPicker: Bool
 
     @State private var photoItems: [PhotosPickerItem] = []
+    @State private var photoImportTask: Task<Void, Never>?
+    @State private var photoImportGeneration = 0
 
     func body(content: Content) -> some View {
         content
@@ -52,13 +55,23 @@ struct AttachmentPickerModifier: ViewModifier {
                 .ignoresSafeArea()
             }
             .onChange(of: photoItems) {
+                photoImportTask?.cancel()
+                photoImportGeneration += 1
                 guard !photoItems.isEmpty else { return }
-                Task { await importPhotos(photoItems) }
+                let items = photoItems
+                let generation = photoImportGeneration
+                photoImportTask = Task { await importPhotos(items, generation: generation) }
             }
+            .onChange(of: scopeID) {
+                photoImportGeneration += 1
+                photoImportTask?.cancel(); photoItems = []; errorMessage = nil
+            }
+            .onDisappear { photoImportGeneration += 1; photoImportTask?.cancel() }
     }
 
     @MainActor
     private func importCameraImage(_ image: UIImage) {
+        errorMessage = nil
         guard let data = image.jpegData(compressionQuality: 0.86) else {
             errorMessage = "无法读取拍摄的照片"
             return
@@ -71,10 +84,12 @@ struct AttachmentPickerModifier: ViewModifier {
     }
 
     @MainActor
-    private func importPhotos(_ items: [PhotosPickerItem]) async {
+    private func importPhotos(_ items: [PhotosPickerItem], generation: Int) async {
+        guard !Task.isCancelled, generation == photoImportGeneration else { return }
         errorMessage = nil
-        defer { photoItems = [] }
+        defer { if generation == photoImportGeneration { photoItems = [] } }
         for (index, item) in items.enumerated() {
+            guard !Task.isCancelled, generation == photoImportGeneration else { return }
             guard attachments.count < AttachmentPolicy.maximumCount else {
                 errorMessage = "最多添加 \(AttachmentPolicy.maximumCount) 个附件"
                 return
@@ -83,6 +98,7 @@ struct AttachmentPickerModifier: ViewModifier {
                 guard let data = try await item.loadTransferable(type: Data.self) else {
                     throw AttachmentImportError.unreadable
                 }
+                guard !Task.isCancelled, generation == photoImportGeneration else { return }
                 let contentType = item.supportedContentTypes.first ?? .jpeg
                 try append(
                     data: data,
@@ -90,6 +106,7 @@ struct AttachmentPickerModifier: ViewModifier {
                     contentType: contentType
                 )
             } catch {
+                guard !Task.isCancelled, generation == photoImportGeneration else { return }
                 errorMessage = error.localizedDescription
             }
         }

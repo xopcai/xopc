@@ -94,7 +94,10 @@ struct AssistantView<Dock: View>: View {
                         .allowsHitTesting(false)
                 }
             VStack(spacing: 0) {
-                if readAloud.state != .idle {
+                if readAloud.state == .failed, let error = readAloud.errorMessage {
+                    TransientComposerFeedback(message: error) { readAloud.stop() }
+                        .padding(.horizontal, 20)
+                } else if readAloud.state != .idle {
                     readAloudBar
                 }
                 bottomDock(composer, isActionPanelExpanded)
@@ -166,6 +169,9 @@ struct AssistantView<Dock: View>: View {
                 }
             }
             .onChange(of: conversation?.id, initial: true) {
+                attachmentError = nil
+                showingVoiceRecorder = false
+                showingPhotoPicker = false; showingFilePicker = false; showingCameraPicker = false
                 readAloud.stop()
                 assistantAudio.stop()
                 executionPresentation = nil
@@ -181,8 +187,12 @@ struct AssistantView<Dock: View>: View {
                 restoreComposerDraft()
                 isActionPanelExpanded = false
             }
-            .onChange(of: configuration) { restoreComposerDraft() }
-            .onChange(of: draft) { scheduleComposerSave() }
+            .onChange(of: configuration) { attachmentError = nil; restoreComposerDraft() }
+            .onChange(of: draft) {
+                attachmentError = nil
+                if readAloud.state == .failed { readAloud.stop() }
+                scheduleComposerSave()
+            }
             .onChange(of: attachments) { scheduleComposerSave() }
             .onChange(of: references) { scheduleComposerSave() }
             .onChange(of: externalIntake?.id) { handleExternalIntake() }
@@ -191,6 +201,7 @@ struct AssistantView<Dock: View>: View {
             }
             .onAppear(perform: handleQuickChatHandoff)
             .onDisappear {
+                attachmentError = nil
                 saveComposerDraft()
                 state.pauseConversation()
                 readAloud.stop()
@@ -205,6 +216,7 @@ struct AssistantView<Dock: View>: View {
                 assistantAudio.observe(observation, configuration: configuration)
             }
             .modifier(AttachmentPickerModifier(
+                scopeID: "\(configuration.baseURL.absoluteString):\(configuration.localIdentity ?? ""):\(conversation?.id ?? "")",
                 attachments: $attachments,
                 errorMessage: $attachmentError,
                 showingPhotoPicker: $showingPhotoPicker,
@@ -679,7 +691,7 @@ struct AssistantView<Dock: View>: View {
             showingReferencePicker: $showingReferencePicker,
             referenceKind: $referenceKind,
             isActionPanelExpanded: $isActionPanelExpanded,
-            attachmentError: attachmentError,
+            attachmentError: $attachmentError,
             canReferenceFiles: conversation?.isDraft == false,
             canStartRealtimeVoice: conversation != nil && !startingVoice
                 && !state.isSending && realtimeVoiceCall.phase == .idle,

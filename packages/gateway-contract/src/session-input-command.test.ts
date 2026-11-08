@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { sessionInputCommandSchema, sessionCommandIdentity } from './session-input-command.js';
+import { sessionInputCommandSchema, sessionCommandIdentity, sessionInputControlCommandSchema } from './session-input-command.js';
 
 const start = {
   kind: 'start' as const, clientMessageId: 'message-1',
@@ -9,6 +9,12 @@ const start = {
 };
 
 describe('session input commands', () => {
+  it('allows conditional cleanup only for resume commands', () => {
+    const command = { operationId: 'cleanup', expectedTranscriptId: 'transcript', expectedVersion: 1,
+      action: 'resume', onlyIfEmpty: true };
+    expect(sessionInputControlCommandSchema.parse(command)).toEqual(command);
+    expect(sessionInputControlCommandSchema.safeParse({ ...command, action: 'stop' }).success).toBe(false);
+  });
   it('rejects old flat input and ambiguous first-input identity', () => {
     expect(sessionInputCommandSchema.safeParse({ content: 'hello', delivery: 'next', clientMessageId: '1' }).success).toBe(false);
     expect(sessionInputCommandSchema.safeParse({ ...start, expectedTranscriptId: 'invented' }).success).toBe(false);

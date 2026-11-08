@@ -40,6 +40,7 @@ export type ChatFollowUpClarifyApi = {
   beginEditTurn: (turnId: string, draft?: ComposerDraft) => Promise<boolean>;
   cancelEditor: () => void;
   restoreEditor: (mode: ComposerMode) => void;
+  markComposerHydrated: () => void;
   clarifyPrompt: ClarifyPromptState | null;
   clarifySubmitting: boolean;
   clarifySubmitError: string | null;
@@ -165,6 +166,10 @@ export function useChatFollowUpClarify(options: {
   const controlPendingRef = useRef(false);
   const editingFollowUpIdRef = useRef<string | null>(null);
   const revisionRef = useRef(-1);
+  const [queueEmpty, setQueueEmpty] = useState(false);
+  const emptyResumeAttemptRef = useRef<string | null>(null);
+  const [hydratedScope, setHydratedScope] = useState<typeof scopeRef.current | null>(null);
+  const markComposerHydrated = useCallback(() => setHydratedScope(scopeRef.current), []);
 
   clarifyPromptRef.current = clarifyPrompt;
   pendingFollowUpsRef.current = pendingFollowUps;
@@ -186,6 +191,7 @@ export function useChatFollowUpClarify(options: {
       preparation: state.preparation,
     });
     revisionRef.current = state.revision;
+    setQueueEmpty(!state.activeRunId && state.inputs.length === 0);
     pendingFollowUpsRef.current = rows;
     setPendingFollowUps(rows);
 
@@ -217,6 +223,8 @@ export function useChatFollowUpClarify(options: {
 
   useLayoutEffect(() => {
     revisionRef.current = -1;
+    setQueueEmpty(false);
+    emptyResumeAttemptRef.current = null;
     controlPendingRef.current = false;
     setControlPending(false);
     setSteeringFollowUpId(null);
@@ -367,7 +375,7 @@ export function useChatFollowUpClarify(options: {
     [applyState, captureScope, conversationIdRef],
   );
 
-  const changeControl = useCallback(async (action: SessionInputControlCommand['action'], target?: { inputId?: string; inputVersion?: number; turnId?: string }) => {
+  const changeControl = useCallback(async (action: SessionInputControlCommand['action'], target?: { inputId?: string; inputVersion?: number; turnId?: string; onlyIfEmpty?: true }) => {
     const key = conversationIdRef.current;
     if (!key || controlPendingRef.current) throw new Error('Wait for the current operation');
     const isCurrentScope = captureScope();
@@ -384,6 +392,7 @@ export function useChatFollowUpClarify(options: {
         assertScope();
       }
       if (!transcriptId) throw new Error('Input acceptance is awaiting confirmation');
+      if (target?.onlyIfEmpty && composerModeRef.current.kind !== 'compose') return;
       const command = { action, operationId: crypto.randomUUID(), expectedTranscriptId: transcriptId,
         expectedVersion: readInputControl(key).version, ...target };
       const result = await requestInputControl(key, command);
@@ -413,12 +422,27 @@ export function useChatFollowUpClarify(options: {
       if (!isCurrentScope()) throw error;
       await refreshState(key);
       if (!isCurrentScope()) throw error;
-      showComposerNotification('error', error instanceof Error ? error.message : String(error));
+      if (!target?.onlyIfEmpty) showComposerNotification('error', error instanceof Error ? error.message : String(error));
       throw error;
     } finally {
       if (isCurrentScope()) { controlPendingRef.current = false; setControlPending(false); }
     }
   }, [applyState, captureScope, conversationIdRef, refreshState]);
+
+  useEffect(() => {
+    if (!conversationId || !queueEmpty || !control.paused || control.phase !== 'idle'
+      || controlPending || composerMode.kind !== 'compose' || hydratedScope !== scopeRef.current) return;
+    const attempt = `${gatewayIdentity}:${conversationId}:${control.version}:${revisionRef.current}`;
+    if (emptyResumeAttemptRef.current === attempt) return;
+    // Let an in-flight edit command acquire its pause before background cleanup.
+    const timer = window.setTimeout(() => {
+      if (controlPendingRef.current || composerModeRef.current.kind !== 'compose') return;
+      emptyResumeAttemptRef.current = attempt;
+      void changeControl('resume', { onlyIfEmpty: true }).catch(() => {});
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [changeControl, composerMode.kind, control.paused, control.phase, control.version,
+    controlPending, conversationId, gatewayIdentity, hydratedScope, queueEmpty]);
 
   const stopSession = useCallback(() => changeControl('stop'), [changeControl]);
   const resumeQueue = useCallback(() => changeControl('resume'), [changeControl]);
@@ -582,7 +606,7 @@ export function useChatFollowUpClarify(options: {
     pendingFollowUps,
     pendingFollowUpsRef,
     steeringFollowUpId,
-    composerMode, control, controlPending, stopSession, resumeQueue, sendQueuedInput, beginEditTurn, cancelEditor: cancelEditFollowUp, restoreEditor: setComposerMode,
+    composerMode, control, controlPending, stopSession, resumeQueue, sendQueuedInput, beginEditTurn, cancelEditor: cancelEditFollowUp, restoreEditor: setComposerMode, markComposerHydrated,
     editingFollowUpId,
     addPendingFollowUp,
     beginEditFollowUp,

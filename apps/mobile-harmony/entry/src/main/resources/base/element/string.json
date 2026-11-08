@@ -1,5 +1,10 @@
 {
   "string": [
+    {"name":"voice_input_permission","value":"Allow microphone access in system settings to record a voice message."},
+    {"name":"voice_input_too_short","value":"Recording was too short. Hold to speak and try again."},
+    {"name":"voice_input_recording_failed","value":"Recording failed. Please try again."},
+    {"name":"voice_input_no_speech","value":"No speech was recognized. Your recording is retained; you can retry or cancel."},
+    {"name":"voice_input_playback_failed","value":"Audio could not be played. Your recording is retained."},
     {"name":"recording_outcome_save_failed_title","value":"Recording could not be saved"},
     {"name":"recording_outcome_save_failed_body","value":"No recoverable audio has been confirmed. Check microphone permission and available storage before recording again."},
     {"name":"recording_outcome_cancelled_title","value":"Processing stopped"},

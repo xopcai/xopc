@@ -8,6 +8,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { gatewaySession } from './gatewaySession';
 import { XopcHttpError } from './transport';
 import { XopcChatAttachment } from '../model/chat';
+import { XopcTransientNotice } from '../common/transientNotice';
 
 interface VoiceHeaders { Authorization: string; 'Content-Type': string; }
 interface VoicePayload { text: string; }
@@ -19,6 +20,9 @@ export class XopcVoiceCapture {
   @Trace seconds: number = 0;
   @Trace busy: boolean = false;
   @Trace error: string = '';
+  private errorNotice: XopcTransientNotice = new XopcTransientNotice((message: string): void => { this.error = message; });
+
+  dismissError(): void { this.errorNotice.clear(); }
   private recorder?: media.AVRecorder;
   private file?: fs.File;
   private path: string = '';
@@ -34,7 +38,7 @@ export class XopcVoiceCapture {
 
   async start(context: common.UIAbilityContext): Promise<void> {
     if (this.busy || this.state !== 'idle') return;
-    this.busy = true; this.error = ''; this.state = 'preparing';
+    this.busy = true; this.dismissError(); this.state = 'preparing';
     const generation = ++this.generation;
     this.operation = this.startCapture(context, generation);
     await this.operation;
@@ -52,7 +56,7 @@ export class XopcVoiceCapture {
       if (generation !== this.generation) return;
       this.recorder.on('error', (_error: BusinessError): void => {
         if (generation === this.generation) {
-          this.error = 'RECORDING_FAILED'; this.cancel();
+          this.cancel(true); this.errorNotice.show('RECORDING_FAILED');
         }
       });
       const config: media.AVRecorderConfig = {
@@ -74,7 +78,7 @@ export class XopcVoiceCapture {
       }, 250);
     } catch (error) {
       if (generation === this.generation) {
-        this.error = (error as Error).message; await this.cleanup(); this.state = 'idle';
+        this.errorNotice.show((error as Error).message); await this.cleanup(); this.state = 'idle';
       }
     } finally { if (generation === this.generation) this.busy = false; }
   }
@@ -96,14 +100,14 @@ export class XopcVoiceCapture {
       if (generation === this.generation) this.state = 'ready';
     } catch (error) {
       if (generation === this.generation) {
-        this.error = (error as Error).message; await this.cleanup(); this.state = 'idle';
+        this.errorNotice.show((error as Error).message); await this.cleanup(); this.state = 'idle';
       }
     } finally { if (generation === this.generation) this.busy = false; }
   }
 
   async transcribe(language: string): Promise<string | undefined> {
     if (this.busy || this.state !== 'ready') return undefined;
-    this.busy = true; this.error = ''; this.state = 'transcribing';
+    this.busy = true; this.dismissError(); this.state = 'transcribing';
     const generation = this.generation;
     let transcript: string | undefined = undefined;
     this.operation = this.uploadRecording(language, generation).then((text: string | undefined): void => { transcript = text; });
@@ -113,7 +117,7 @@ export class XopcVoiceCapture {
 
   async send(sendAttachment: (attachment: XopcChatAttachment) => Promise<boolean>): Promise<boolean> {
     if (this.busy || this.state !== 'ready') return false;
-    this.busy = true; this.error = '';
+    this.busy = true; this.dismissError();
     const generation = this.generation;
     let sent: boolean = false;
     this.operation = this.sendRecording(generation, sendAttachment).then((result: boolean): void => { sent = result; });
@@ -140,14 +144,14 @@ export class XopcVoiceCapture {
       if (sent) { await this.cleanup(); this.state = 'idle'; this.seconds = 0; }
       return sent;
     } catch (error) {
-      if (generation === this.generation) this.error = (error as Error).message;
+      if (generation === this.generation) this.errorNotice.show((error as Error).message);
       return false;
     } finally { if (generation === this.generation) this.busy = false; }
   }
 
   async play(): Promise<void> {
     if (this.busy || this.state !== 'ready') return;
-    this.busy = true; this.error = '';
+    this.busy = true; this.dismissError();
     this.operation = this.preparePlayback(this.generation);
     await this.operation;
   }
@@ -170,10 +174,10 @@ export class XopcVoiceCapture {
       this.timer = setTimeout((): void => { this.playbackError(); }, 10000);
       player.fdSrc = { fd: this.playbackFile.fd };
     } catch (error) {
-      if (generation === this.generation) { this.error = (error as Error).message; await this.stopPlayback(); }
+      if (generation === this.generation) { this.errorNotice.show((error as Error).message); await this.stopPlayback(); }
     }
   }
-  private playbackError(): void { this.error = 'PLAYBACK_FAILED'; this.stopPlayback(); }
+  private playbackError(): void { this.errorNotice.show('PLAYBACK_FAILED'); this.stopPlayback(); }
   async stopPlayback(): Promise<void> {
     this.clearTimer(); const generation = this.generation;
     this.busy = true; await this.releasePlayer();
@@ -215,7 +219,7 @@ export class XopcVoiceCapture {
       if (!text) throw new Error('EMPTY_TRANSCRIPTION');
       await this.cleanup(); this.state = 'idle'; return text;
     } catch (error) {
-      if (generation === this.generation) { this.error = (error as Error).message; this.state = 'ready'; }
+      if (generation === this.generation) { this.errorNotice.show((error as Error).message); this.state = 'ready'; }
       return undefined;
     } finally {
       this.request?.destroy(); this.request = undefined;
@@ -223,7 +227,8 @@ export class XopcVoiceCapture {
     }
   }
 
-  async cancel(): Promise<void> {
+  async cancel(preserveError: boolean = false): Promise<void> {
+    if (!preserveError) this.dismissError();
     if (this.cancellation) return this.cancellation;
     ++this.generation; this.busy = true; this.clearTimer();
     this.request?.destroy();

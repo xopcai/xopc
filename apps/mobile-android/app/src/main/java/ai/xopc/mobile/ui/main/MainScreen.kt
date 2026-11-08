@@ -406,6 +406,7 @@ fun MainScreen(
   onUndoDelete: () -> Unit = {},
   onQuickDraftChange: (String) -> Unit = {},
   onQuickSubmit: () -> Unit = {},
+  onDismissComposerErrors: (String?, String?, Boolean) -> Unit = { _, _, _ -> },
   onAddQuickAttachment: (String, Uri) -> Unit = { _, _ -> },
   onAddCapturedQuickAttachment: (String, Uri) -> Unit = { _, _ -> },
   onRemoveQuickAttachment: (String) -> Unit = {},
@@ -725,6 +726,7 @@ fun MainScreen(
     onDismissConversationShare = onDismissConversationShare,
     onScheduleDelete = onScheduleDelete, onUndoDelete = onUndoDelete,
     onQuickDraftChange = onQuickDraftChange, onQuickSubmit = onQuickSubmit,
+    onDismissComposerErrors = onDismissComposerErrors,
     onRemoveQuickAttachment = onRemoveQuickAttachment,
     onPreviewQuickImage = onPreviewQuickImage,
     onPreviewQuickFile = onPreviewQuickFile,
@@ -938,6 +940,7 @@ internal fun MainContent(
   onUndoDelete: () -> Unit = {},
   onQuickDraftChange: (String) -> Unit = {},
   onQuickSubmit: () -> Unit = {},
+  onDismissComposerErrors: (String?, String?, Boolean) -> Unit = { _, _, _ -> },
   onPickQuickAttachment: (String) -> Unit = {},
   onRemoveQuickAttachment: (String) -> Unit = {},
   onPreviewQuickImage: suspend (ChatAttachment) -> Bitmap? = { null },
@@ -1121,11 +1124,14 @@ internal fun MainContent(
   }
   var inputVoiceHeld by remember(inputVoice) { mutableStateOf(false) }
   var inputVoiceBusy by remember(inputVoice) { mutableStateOf(false) }
-  var inputVoiceError by remember(inputVoice) { mutableStateOf("") }
+  val inputVoiceNotice = remember(inputVoice) { TransientComposerNotice(voiceScope) }
+  val inputVoiceError = inputVoiceNotice.message
+  val currentInputVoice by rememberUpdatedState(inputVoice)
+  var permissionTarget by remember { mutableStateOf<VoiceMemoRecorder?>(null) }
   var inputVoiceDestination by remember(inputVoice) { mutableStateOf("send") }
   var inputVoiceRetryDestination by remember(inputVoice) { mutableStateOf("send") }
   var inputVoiceElapsed by remember(inputVoice) { mutableIntStateOf(0) }
-  DisposableEffect(inputVoice) { onDispose { inputVoice.cancel() } }
+  DisposableEffect(inputVoice) { onDispose { inputVoice.cancel(); inputVoiceNotice.clear() } }
   LaunchedEffect(inputVoiceHeld) {
     while (inputVoiceHeld) {
       inputVoiceElapsed = inputVoice.elapsedSeconds
@@ -1133,13 +1139,19 @@ internal fun MainContent(
     }
   }
   val inputVoicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val target = permissionTarget
+    permissionTarget = null
+    if (target !== inputVoice) return@rememberLauncherForActivityResult
     if (granted) inputVoiceMode = true
-    else inputVoiceError = inputVoicePermissionDeniedText
+    else inputVoiceNotice.show(inputVoicePermissionDeniedText)
   }
   val voiceFocusManager = LocalFocusManager.current
   DisposableEffect(lifecycleOwner, voiceCall, voiceMemo, inputVoice) {
     val observer = LifecycleEventObserver { _, event ->
       if (event == Lifecycle.Event.ON_STOP) {
+        permissionTarget = null; inputVoiceNotice.clear()
+        onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, false)
+        onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, true)
         if (voiceMemo.phase == "recording" || voiceMemo.phase == "paused")
           voiceMemo.stopRecording()
         if (voiceCall.phase != "idle") voiceCall.onBackground()
@@ -1302,7 +1314,7 @@ internal fun MainContent(
   }
   fun toggleInputVoice() {
     if (inputVoiceBusy || inputVoiceHeld || inputVoice.phase != "idle") return
-    inputVoiceError = ""
+    inputVoiceNotice.clear()
     if (inputVoiceMode) {
       restoreInputKeyboard = true
       inputVoiceMode = false
@@ -1313,7 +1325,7 @@ internal fun MainContent(
       voiceFocusManager.clearFocus(force = true)
       keyboardController?.hide()
       inputVoiceMode = true
-    } else inputVoicePermission.launch(Manifest.permission.RECORD_AUDIO)
+    } else { permissionTarget = inputVoice; inputVoicePermission.launch(Manifest.permission.RECORD_AUDIO) }
   }
   fun deliverInputVoice(destination: String) {
     if (inputVoiceBusy || inputVoice.phase != "ready") return
@@ -1321,6 +1333,7 @@ internal fun MainContent(
     val targetGatewayId = connection.profile?.gatewayId
     val targetConversationId = connection.selectedConversationId
     inputVoiceRetryDestination = destination
+    inputVoiceNotice.clear()
     inputVoiceBusy = true
     voiceScope.launch {
       try {
@@ -1348,21 +1361,22 @@ internal fun MainContent(
           else onSendQuickVoiceRecording(bytes, seconds)
         }
         inputVoice.cancel()
-        inputVoiceError = ""
+        inputVoiceNotice.clear()
       } catch (failure: Exception) {
         if (failure is CancellationException) throw failure
-        inputVoiceError = failure.message ?: voiceRecordError
+        if (currentInputVoice === inputVoice && inputVoice.phase == "ready")
+          inputVoiceNotice.show(failure.message ?: voiceRecordError)
       } finally { inputVoiceBusy = false }
     }
   }
   fun startInputVoice(): Boolean {
     if (inputVoiceBusy || inputVoice.phase != "idle" || connection.sending ||
       (selectedTab != HomeTab.Assistant && (connection.quickSending || connection.quickAttachmentLoading))) return false
-    inputVoiceError = ""; inputVoiceDestination = "send"; inputVoiceElapsed = 0
+    inputVoiceNotice.clear(); inputVoiceDestination = "send"; inputVoiceElapsed = 0
     inputVoice.start()
     inputVoiceHeld = inputVoice.phase == "recording"
     if (!inputVoiceHeld) {
-      inputVoiceError = inputVoice.error
+      inputVoiceNotice.show(inputVoice.error)
       inputVoice.cancel()
     }
     return inputVoiceHeld
@@ -1372,12 +1386,12 @@ internal fun MainContent(
     inputVoiceHeld = false
     inputVoiceDestination = "send"
     if (destination == "cancel" || inputVoice.elapsedMilliseconds < 380) {
-      inputVoice.cancel()
+      inputVoiceNotice.clear(); inputVoice.cancel()
       return
     }
     inputVoice.stopRecording()
     if (inputVoice.phase != "ready") {
-      inputVoiceError = inputVoice.error.ifBlank { voiceRecordError }
+      inputVoiceNotice.show(inputVoice.error.ifBlank { voiceRecordError })
       inputVoice.cancel()
       return
     }
@@ -1399,7 +1413,7 @@ internal fun MainContent(
   }
   LaunchedEffect(showBottomChrome) {
     if (!showBottomChrome) {
-      inputVoice.cancel(); inputVoiceHeld = false; inputVoiceMode = false
+      inputVoiceNotice.clear(); inputVoice.cancel(); inputVoiceHeld = false; inputVoiceMode = false
       assistantActionsOpen = false
       quickActionsOpen = false
       focusManager.clearFocus(force = true)
@@ -1451,6 +1465,8 @@ internal fun MainContent(
         if (selectedTab == HomeTab.Assistant) {
           MainBottomSurface("assistant-bottom-surface") {
             AssistantComposer(connection, assistantComposerValue, { value ->
+              inputVoiceNotice.clear()
+              onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, false)
               assistantComposerValue = value
               onDraftChange(value.text)
             }, assistantComposerFocus, assistantActionsOpen, { assistantActionsOpen = it },
@@ -1461,8 +1477,10 @@ internal fun MainContent(
               ::toggleInputVoice, onVoiceStart = ::startInputVoice, onVoiceMove = { dx, dy ->
                 inputVoiceDestination = voiceRecordingDestination(dx, dy, inputVoiceDestination)
               }, onVoiceFinish = ::finishInputVoice, onVoiceCancel = {
-                inputVoice.cancel(); inputVoiceError = ""; inputVoiceHeld = false
-              }, onVoiceRetry = { deliverInputVoice(inputVoiceRetryDestination) })
+                inputVoice.cancel(); inputVoiceNotice.clear(); inputVoiceHeld = false
+              }, onVoiceRetry = { deliverInputVoice(inputVoiceRetryDestination) },
+              onDismissVoiceError = inputVoiceNotice::clear,
+              onDismissError = { onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, false) })
             AnimatedVisibility(visible = assistantActionsOpen,
               enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
                 fadeIn(animationSpec = tween(220)),
@@ -1496,15 +1514,20 @@ internal fun MainContent(
           }
         } else if (showQuick) {
           MainBottomSurface("secondary-bottom-surface") {
-            QuickComposer(connection, selectedTab, onQuickDraftChange, onQuickSubmit,
+            QuickComposer(connection, selectedTab, { text ->
+              inputVoiceNotice.clear()
+              onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, true)
+              onQuickDraftChange(text)
+            }, onQuickSubmit,
               quickActionsOpen, { quickActionsOpen = it }, onRemoveQuickAttachment,
               onPreviewQuickImage, onPreviewQuickFile, quickComposerFocus,
               inputVoiceMode, inputVoiceBusy || inputVoiceHeld, inputVoice.phase, inputVoiceError,
-              ::toggleInputVoice, voicePad = { modifier ->
+              ::toggleInputVoice, inputVoiceNotice::clear,
+              { onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, true) }, voicePad = { modifier ->
                 VoiceInputPad(modifier, inputVoiceHeld, inputVoiceBusy, inputVoice.phase,
                   inputVoiceDestination, inputVoiceElapsed, ::startInputVoice,
                   { dx, dy -> inputVoiceDestination = voiceRecordingDestination(dx, dy, inputVoiceDestination) },
-                  ::finishInputVoice, { inputVoice.cancel(); inputVoiceError = ""; inputVoiceHeld = false },
+                  ::finishInputVoice, { inputVoice.cancel(); inputVoiceNotice.clear(); inputVoiceHeld = false },
                   { deliverInputVoice(inputVoiceRetryDestination) })
               })
             AnimatedVisibility(visible = quickActionsOpen,
@@ -2042,7 +2065,8 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   onPreviewImage: suspend (ChatAttachment) -> Bitmap?,
   onPreviewFile: suspend (ChatAttachment) -> ByteArray?, composerFocus: FocusRequester,
   voiceMode: Boolean, voiceBusy: Boolean, voicePhase: String, voiceError: String,
-  onVoiceToggle: () -> Unit, voicePad: @Composable (Modifier) -> Unit) {
+  onVoiceToggle: () -> Unit, onDismissVoiceError: () -> Unit, onDismissError: () -> Unit,
+  voicePad: @Composable (Modifier) -> Unit) {
   val actionsDescription = stringResource(if (actionsOpen) R.string.composer_close_actions else R.string.composer_add_actions)
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -2057,11 +2081,13 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   }
   val sendLabel = stringResource(R.string.quick_send)
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
-    if (voiceError.isNotBlank()) Text(voiceError, color = MaterialTheme.colorScheme.error,
-      modifier = Modifier.testTag("assistant-voice-error"))
-    if (connection.quickError) Text(stringResource(R.string.quick_send_error), color = MaterialTheme.colorScheme.error)
-    if (connection.quickAttachmentError) Text(stringResource(R.string.assistant_attachment_error),
-      color = MaterialTheme.colorScheme.error)
+    ComposerFeedback(voiceError, onDismissVoiceError, Modifier.testTag("assistant-voice-error"), autoDismiss = false)
+    val feedback = when {
+      connection.quickError -> stringResource(R.string.quick_send_error)
+      connection.quickAttachmentError -> stringResource(R.string.assistant_attachment_error)
+      else -> ""
+    }
+    ComposerFeedback(feedback, onDismissError, scopeKey = connection.profile?.gatewayId to connection.selectedConversationId)
     DraftAttachmentStrip(connection.quickAttachments, connection.profile?.gatewayId,
       "quick", !connection.quickSending && !connection.quickAttachmentLoading,
       onRemoveAttachment, onPreviewImage, onPreviewFile)
@@ -2129,7 +2155,8 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
   voiceError: String, voiceDestination: String, voiceSeconds: Int,
   onVoiceToggle: () -> Unit, onVoiceStart: () -> Boolean,
   onVoiceMove: (Float, Float) -> Unit, onVoiceFinish: (String) -> Unit,
-  onVoiceCancel: () -> Unit, onVoiceRetry: () -> Unit) {
+  onVoiceCancel: () -> Unit, onVoiceRetry: () -> Unit,
+  onDismissVoiceError: () -> Unit, onDismissError: () -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val expandedComposer = composerValue.text.isNotEmpty() || connection.draftRefs.isNotEmpty() ||
@@ -2143,19 +2170,20 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
     onActionsOpenChange(!actionsOpen)
   }
   Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-    if (connection.sendError) Text(
-      when {
-        connection.sendErrorDetail != null -> stringResource(R.string.assistant_send_rejected_detail,
-          connection.sendErrorDetail)
+    val feedback = when {
+      connection.sendError -> when {
+        connection.sendErrorDetail != null -> stringResource(R.string.assistant_send_rejected_detail, connection.sendErrorDetail)
         connection.sendRejected -> stringResource(R.string.assistant_send_rejected)
         else -> stringResource(R.string.assistant_send_error)
-      }, color = MaterialTheme.colorScheme.error)
-    if (connection.attachmentError) Text(stringResource(R.string.assistant_attachment_error),
-      color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("assistant-attachment-error"))
+      }
+      connection.attachmentError -> stringResource(R.string.assistant_attachment_error)
+      else -> ""
+    }
+    ComposerFeedback(feedback, onDismissError, Modifier.testTag("assistant-attachment-error"),
+      scopeKey = connection.profile?.gatewayId to connection.selectedConversationId)
     if (connection.attachmentLoading) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth()
       .testTag("assistant-attachment-loading"))
-    if (voiceError.isNotBlank()) Text(voiceError, color = MaterialTheme.colorScheme.error,
-      modifier = Modifier.testTag("assistant-voice-error"))
+    ComposerFeedback(voiceError, onDismissVoiceError, Modifier.testTag("assistant-voice-error"), autoDismiss = false)
     if (connection.pendingDeleteId == connection.selectedConversationId) {
       Text(stringResource(R.string.conversations_pending_delete), color = MaterialTheme.colorScheme.error)
     }
@@ -2712,7 +2740,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           Text(stringResource(R.string.progress_refresh))
         }
       }
-      if (reader.state.phase != "idle") Row(modifier = Modifier.fillMaxWidth()
+      if (reader.state.phase == "error") ComposerFeedback(
+        stringResource(R.string.assistant_speech_error), reader::stop,
+        Modifier.padding(top = if (statusIssue == null) chatTopInset + 76.dp else 0.dp)
+          .testTag("assistant-read-aloud-error"), scopeKey = reader)
+      else if (reader.state.phase != "idle") Row(modifier = Modifier.fillMaxWidth()
         .padding(top = if (statusIssue == null) chatTopInset + 76.dp else 0.dp)
         .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
         .padding(horizontal = 8.dp).testTag("assistant-read-aloud-controls"),

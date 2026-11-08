@@ -150,7 +150,7 @@ export const ChatComposer = memo(function ChatComposer({
   unboundDraftKey,
   getDraftHandoffTarget,
   editingUserTurnId,
-  composerMode, inputControl, onResumeQueue, onRestoreEditor, onReacquireEdit,
+  composerMode, inputControl, onResumeQueue, onRestoreEditor, onReacquireEdit, onComposerHydrated,
   onCancelUserMessageEdit,
 }: {
   personal?: boolean;
@@ -212,6 +212,7 @@ export const ChatComposer = memo(function ChatComposer({
   editingUserTurnId?: string | null;
   composerMode?: ComposerMode;
   onRestoreEditor?: (mode: ComposerMode) => void;
+  onComposerHydrated?: () => void;
   onReacquireEdit?: (draft: ComposerDraft) => void;
   inputControl?: SessionInputControlView;
   onResumeQueue?: () => void;
@@ -592,6 +593,7 @@ export const ChatComposer = memo(function ChatComposer({
     : currentMode.kind === 'editFollowUp' ? `input:${currentMode.inputId}` : 'compose';
   useLayoutEffect(() => { editDrafts.current.clear(); previousEditorKey.current = 'compose'; }, [draftScope]);
   usePersistedComposer(conversationId, editor, att, contextRefs, setContextRefs, {
+    ready: onComposerHydrated,
     snapshot: () => ({ mode: currentMode, drafts: Object.fromEntries(editDrafts.current) }),
     restore: saved => {
       editDrafts.current = new Map(Object.entries(saved.drafts));
@@ -786,9 +788,10 @@ export const ChatComposer = memo(function ChatComposer({
         <button type="button" disabled={disabled || sendDisabled} className="text-accent-fg disabled:opacity-40"
           onClick={() => onReacquireEdit?.({ text: editor.valueRef.current, attachments: att.wireAttachmentsPayload(), contextRefs: contextRefsRef.current })}>{m.chat.editPauseAgain}</button>
       </div>}
-      {inputControl?.paused && <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-2 text-xs text-fg-muted">
+      {inputControl?.paused && (pendingFollowUps.length > 0 || inputControl.phase === 'stopping' || currentMode.kind !== 'compose') && <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-2 text-xs text-fg-muted">
         <span>{inputControl.phase === 'stopping' ? m.chat.inputStopping
           : inputControl.reviewRequired ? m.chat.queueReviewRequired
+          : pendingFollowUps.length > 0 ? m.chat.queuePausedCount.replace('{count}', String(pendingFollowUps.length))
           : m.chat.queuePaused}</span>
         <button type="button" disabled={disabled || sendDisabled || Boolean(editingFollowUpId || editingUserTurnId) || inputControl.phase !== 'idle'}
           className="text-accent-fg disabled:opacity-40" onClick={onResumeQueue}>{m.chat.queueResume}</button>

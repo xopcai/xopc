@@ -4101,6 +4101,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  fun dismissComposerErrors(gatewayId: String?, conversationId: String?, quick: Boolean) {
+    mutableState.update { it.clearComposerFeedback(gatewayId, conversationId, quick) }
+  }
+
   fun changeQuickDraft(text: String) {
     if (text.length > 4_000 || mutableState.value.quickSending) return
     mutableState.update { it.copy(quickDraftText = text, quickError = false) }

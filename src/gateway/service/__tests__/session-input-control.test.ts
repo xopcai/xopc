@@ -35,6 +35,44 @@ beforeEach(() => {
 afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true }); });
 
 describe('durable session input control', () => {
+  it('releases a historical empty pause durably and replays the cleanup safely', () => {
+    acceptSessionInputControl(id, command('pause'));
+    const resume = { ...command('resume'), onlyIfEmpty: true as const };
+    acceptSessionInputControl(id, resume);
+    expect(readSessionInputControl(id)).toMatchObject({ paused: false, phase: 'idle' });
+    enqueue('new'); claimNextSessionInput(id, 'new-run');
+    expect(acceptSessionInputControl(id, resume)).toMatchObject({ replay: true });
+    expect(getSessionInputState(id).activeRunId).toBe('new-run');
+    closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(dir, 'xopc.db') });
+    expect(readSessionInputControl(id).paused).toBe(false);
+  });
+
+  it('does not release a pause if an input arrives after the empty snapshot', () => {
+    acceptSessionInputControl(id, command('pause'));
+    const resume = { ...command('resume'), onlyIfEmpty: true as const };
+    enqueue('arrived');
+    expect(() => acceptSessionInputControl(id, resume)).toThrow('no longer idle and empty');
+    expect(readSessionInputControl(id).paused).toBe(true);
+    expect(claimNextSessionInput(id, 'unwanted')).toBeUndefined();
+  });
+
+  it('keeps interrupted inputs paused for explicit review', () => {
+    enqueue('active'); claimNextSessionInput(id, 'run');
+    acceptSessionInputControl(id, command('stop'));
+    finishSessionInputRun(id, 'run', 'interrupted');
+    expect(() => acceptSessionInputControl(id, { ...command('resume'), onlyIfEmpty: true })).toThrow('no longer idle and empty');
+    expect(readSessionInputControl(id).paused).toBe(true);
+  });
+
+  it('does not release a stop fence before its run settles', () => {
+    enqueue('active'); claimNextSessionInput(id, 'run');
+    acceptSessionInputControl(id, command('stop'));
+    expect(() => acceptSessionInputControl(id, { ...command('resume'), onlyIfEmpty: true })).toThrow('no longer idle and empty');
+    finishSessionInputRun(id, 'run', 'failed', 'OAuth refresh failed');
+    acceptSessionInputControl(id, { ...command('resume'), onlyIfEmpty: true });
+    expect(readSessionInputControl(id)).toMatchObject({ paused: false, phase: 'idle' });
+  });
+
   it('fences the successor before aborting the active run and preserves the queue', async () => {
     let finish!: (value: { status: string; summary: string }) => void;
     const execute = vi.fn(async () => new Promise<{ status: string; summary: string }>(resolve => { finish = resolve; }));
