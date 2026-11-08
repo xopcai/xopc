@@ -21,7 +21,8 @@ export function isBillingErrorMessage(raw: string): boolean {
 
 export function isAuthErrorMessage(raw: string): boolean {
   const lower = raw.toLowerCase();
-  return lower.includes('401') || lower.includes('403') || lower.includes('unauthorized') || lower.includes('invalid api key');
+  return lower.includes('401') || lower.includes('403') || lower.includes('unauthorized') || lower.includes('invalid api key')
+    || lower.includes('invalid_grant') || lower.includes('invalid_api_key') || lower.includes('token has been revoked');
 }
 
 export function isFormatErrorMessage(raw: string): boolean {

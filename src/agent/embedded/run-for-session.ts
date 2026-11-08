@@ -362,6 +362,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       }
 
       if (isFallbackAttempt) {
+        params.onEvent?.({ type: 'progress', runId, stage: 'model_fallback',
+          message: 'Trying a configured fallback model' });
         log.info(
           {
             conversationId,

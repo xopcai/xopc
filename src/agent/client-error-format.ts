@@ -135,7 +135,7 @@ export function formatAgentRunErrorForClient(
   const kind = xopcPlatformLimit
     ? 'xopc_platform_limit'
     : xopcQuotaExhausted ? 'xopc_quota_exhausted'
-      : reason === 'unknown' && isTransientProviderErrorMessage(trimmed)
+      : (reason === 'unknown' || (reason === 'timeout' && /fetch failed|econnreset|enotfound|socket hang up|getaddrinfo/i.test(trimmed))) && isTransientProviderErrorMessage(trimmed)
         ? 'provider_connection_error' : reasonToKind(reason);
   const payload: AgentRunErrorPayload = {
     kind,

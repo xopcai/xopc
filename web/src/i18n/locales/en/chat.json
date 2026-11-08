@@ -1,5 +1,20 @@
 {
   "chat": {
+    "runRecovery": {
+      "retry": "Try again",
+      "models": "Model settings",
+      "copyDetails": "Copy diagnostics",
+      "copied": "Copied",
+      "copyFailed": "Could not copy. Select the details to copy them.",
+      "retrying": "Connection interrupted. Reconnecting…",
+      "attempt": "Attempt {{attempt}} of {{total}}",
+      "fallback": "Trying another configured model…",
+      "connecting": "Connecting…",
+      "reconnecting": "Connection lost. Reconnecting…",
+      "connectionFailed": "Unable to reconnect. Check your connection and try again.",
+      "reconnect": "Reconnect",
+      "details": "View details"
+    },
     "modelRequiredForResources": "Choose a configured model for this conversation, then try again.",
     "referenceFallback": "Reference",
     "reviewCard": {
@@ -773,8 +788,8 @@
     "agentRunErrorRateLimitTitle": "Rate limit exceeded",
     "agentRunErrorRateLimitBody": "Too many requests to the model provider. Wait a moment and try again.",
     "agentRunErrorTimeoutTitle": "Request timed out",
-    "agentRunErrorConnectionTitle": "Model connection interrupted",
-    "agentRunErrorConnectionBody": "The connection to the model provider failed. Check your network and provider availability. Review any completed tool actions before asking the assistant to continue.",
+    "agentRunErrorConnectionTitle": "Unable to reach the AI service",
+    "agentRunErrorConnectionBody": "This reply could not be completed. Try again later or check your model settings. Review any completed actions before continuing.",
     "agentRunErrorTimeoutBody": "The model provider did not respond in time. Check your network and try again.",
     "agentRunErrorBillingTitle": "Billing or quota issue",
     "agentRunErrorBillingBody": "The provider reported insufficient balance or quota. Check your account and try again.",

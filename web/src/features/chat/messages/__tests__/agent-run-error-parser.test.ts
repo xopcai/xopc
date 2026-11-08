@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseAgentRunError, toProviderSetupPayload } from '../agent-run-error-parser';
+import { parseAgentRunError, safeErrorDetail, toProviderSetupPayload } from '../agent-run-error-parser';
 
 describe('parseAgentRunError', () => {
+  it('distinguishes an OAuth transport failure from a rejected refresh token', () => {
+    expect(parseAgentRunError('OAuth refresh failed for openai: fetch failed')).toMatchObject({ code: 'provider_connection_error', provider: 'openai' });
+    expect(parseAgentRunError('OAuth refresh failed for openai: invalid_grant')).toMatchObject({ code: 'provider_auth_invalid' });
+  });
+  it('redacts credentials from diagnostics', () => {
+    const detail = safeErrorDetail('Authorization: Bearer secret-value access_token=access-secret&refresh_token=refresh-secret api_key="sk-private"');
+    expect(detail).not.toMatch(/secret-value|access-secret|refresh-secret|sk-private/);
+    expect(detail).toContain('[redacted]');
+  });
   it('preserves model connection failures without showing provider setup', () => {
     const parsed = parseAgentRunError(JSON.stringify({ kind: 'provider_connection_error',
       code: 'provider_connection_error', provider: 'xopc-cloud', message: 'Connection error.' }));

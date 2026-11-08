@@ -91,6 +91,11 @@ export interface RetryTransientTurnOptions {
   signal?: AbortSignal;
   conversationId: string;
   onRetry?: () => void;
+  onRetryScheduled?: (attempt: number, maxAttempts: number, delayMs: number) => void;
+  /** A request may throw before an assistant error message is emitted. */
+  initialError?: unknown;
+  /** Retry an unsubmitted request; callers must continue once input is appended. */
+  retryRequest?: () => Promise<void>;
   shouldRetry?: () => boolean;
   budget?: { continues: number };
   log: {
@@ -131,17 +136,20 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
   const maxContinues = options.maxContinues ?? 2;
   const baseDelayMs = Math.max(0, options.baseDelayMs ?? 1_000);
   const budget = options.budget ?? { continues: 0 };
+  let thrownError = options.initialError;
 
   while (budget.continues < maxContinues && options.shouldRetry?.() !== false) {
     const last = getLastAssistantMessage(agent.state.messages);
-    if (!last) {
+    if (!last && thrownError === undefined) {
       return;
     }
-    const sr = (last as { stopReason?: string }).stopReason;
-    if (sr !== 'error' && sr !== 'aborted') {
+    const sr = (last as { stopReason?: string } | undefined)?.stopReason;
+    if (thrownError === undefined && sr !== 'error' && sr !== 'aborted') {
       return;
     }
-    const errMsg = String((last as { errorMessage?: string }).errorMessage || '');
+    const errMsg = thrownError !== undefined
+      ? thrownError instanceof Error ? thrownError.message : String(thrownError)
+      : String((last as { errorMessage?: string }).errorMessage || '');
     const failureKind = sr === 'aborted' ? 'aborted' : classifyLlmFailure(errMsg);
     // An upstream abort is recoverable only when the host can prove the run is still live.
     const providerAborted = failureKind === 'aborted' && options.signal !== undefined && !options.signal.aborted;
@@ -150,6 +158,7 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
         { conversationId: options.conversationId, errorMessage: errMsg, failureKind },
         'Assistant turn ended with error (not retrying as transient)',
       );
+      if (thrownError !== undefined) throw thrownError;
       return;
     }
     const trimmed = stripTrailingErrorAssistantMessages(agent.state.messages);
@@ -160,6 +169,7 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
       options.log.warn({ conversationId: options.conversationId, errorMessage: errMsg, failureKind,
         phase: 'model_request_recovery', recoveryBlockedReason: 'unconfirmed_tool_outcome',
         continueAttempts: budget.continues }, 'Model recovery stopped because a tool outcome is unconfirmed');
+      if (thrownError !== undefined) throw thrownError;
       return;
     }
 
@@ -183,13 +193,21 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
       'LLM request failed with a transient network error; retrying the same turn. If this persists, check outbound HTTPS to the provider API and HTTP(S)_PROXY.',
     );
 
+    options.onRetryScheduled?.(continues, maxContinues, retryDelayMs);
     await waitForRetryDelay(retryDelayMs, options.signal);
     options.signal?.throwIfAborted();
     options.onRetry?.();
     agent.state.messages = trimmed;
-    await agent.continue();
-    await agent.waitForIdle();
+    thrownError = undefined;
+    try {
+      if (options.retryRequest) await options.retryRequest();
+      else await agent.continue();
+      await agent.waitForIdle();
+    } catch (error) {
+      thrownError = error;
+    }
   }
+  if (thrownError !== undefined) throw thrownError;
   const errorMessage = getAssistantTurnErrorMessage(agent);
   if (budget.continues >= maxContinues && errorMessage) {
     options.log.warn({ conversationId: options.conversationId, errorMessage,

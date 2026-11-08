@@ -997,30 +997,55 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           const connectionResume = getConnectionResumeInput(conversationId, runId) ?? getMcpSetupResumeInput(conversationId, runId);
           const clarificationResume = getClarificationResumeInput(conversationId, runId);
           const phoneResume = phoneResumeForRun(conversationId, runId);
-          if (phoneResume) {
-            await session.sendCustomMessage({ customType: 'phone_resume', content: userMessageToPromptText(userMessage), display: false }, { triggerTurn: true });
-          } else if (connectionResume) {
-            await session.sendCustomMessage({ customType: 'connection_resume', content: connectionResume.content, display: false }, { triggerTurn: true });
-          } else if (clarificationResume) {
-            await session.sendCustomMessage({ customType: 'clarification_resume', content: clarificationResume.content, display: false }, { triggerTurn: true });
-          } else if (params.recoveryMessage && !params.resumeLastUserMessage) {
-            if (!canResumeAfterModelFailure(session.agent.state.messages, ['acceptance_repair', 'model_failure'].includes(params.recoveryReason ?? '')
-              ? { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS } : undefined)) throw new Error('Cannot resume because a tool outcome is unconfirmed');
-            await session.sendCustomMessage({ customType: 'task_continuation', content: params.recoveryMessage, display: false }, { triggerTurn: true });
-          } else if (params.resumeLastUserMessage) {
-            await session.agent.continue();
-          } else {
-            const text = userMessageToPromptText(userMessage);
-            const images = params.images ?? [];
-            const input = params.voiceHistoryTokens && isXopcDatabaseOpen()
-              ? findSessionInputByRunId(conversationId, runId) : undefined;
-            if (isNaturalVoiceDelegation(input)) {
-              await session.sendCustomMessage({ customType: VOICE_AGENT_INSTRUCTION_TYPE, content: text, display: false }, { triggerTurn: true });
+          const onRetryScheduled = (attempt: number, maxAttempts: number) => onEvent?.({
+            type: 'progress', runId, stage: 'model_retry', message: 'Reconnecting to the AI service',
+            completed: attempt, total: maxAttempts,
+          });
+          const messagesBeforeRequest = new Set(session.agent.state.messages);
+          const initialRequest = async () => {
+            if (phoneResume) {
+              await session.sendCustomMessage({ customType: 'phone_resume', content: userMessageToPromptText(userMessage), display: false }, { triggerTurn: true });
+            } else if (connectionResume) {
+              await session.sendCustomMessage({ customType: 'connection_resume', content: connectionResume.content, display: false }, { triggerTurn: true });
+            } else if (clarificationResume) {
+              await session.sendCustomMessage({ customType: 'clarification_resume', content: clarificationResume.content, display: false }, { triggerTurn: true });
+            } else if (params.recoveryMessage && !params.resumeLastUserMessage) {
+              if (!canResumeAfterModelFailure(session.agent.state.messages, ['acceptance_repair', 'model_failure'].includes(params.recoveryReason ?? '')
+                ? { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS } : undefined)) throw new Error('Cannot resume because a tool outcome is unconfirmed');
+              await session.sendCustomMessage({ customType: 'task_continuation', content: params.recoveryMessage, display: false }, { triggerTurn: true });
+            } else if (params.resumeLastUserMessage) {
+              await session.agent.continue();
             } else {
-              await session.prompt(text, images.length > 0 ? { images } : undefined);
+              const text = userMessageToPromptText(userMessage);
+              const images = params.images ?? [];
+              const input = params.voiceHistoryTokens && isXopcDatabaseOpen()
+                ? findSessionInputByRunId(conversationId, runId) : undefined;
+              if (isNaturalVoiceDelegation(input)) {
+                await session.sendCustomMessage({ customType: VOICE_AGENT_INSTRUCTION_TYPE, content: text, display: false }, { triggerTurn: true });
+              } else {
+                await session.prompt(text, images.length > 0 ? { images } : undefined);
+              }
             }
+          };
+          try {
+            await initialRequest();
+            await session.agent.waitForIdle();
+          } catch (error) {
+            runAbortSignal.throwIfAborted();
+            await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
+              conversationId, log, signal: runAbortSignal, budget: requestRetryBudget,
+              initialError: error, onRetryScheduled,
+              retryRequest: async () => {
+                const submitted = params.resumeLastUserMessage || params.recoveryMessage || phoneResume || connectionResume || clarificationResume
+                  || session.agent.state.messages.some(message => message.role === 'user' && !messagesBeforeRequest.has(message));
+                // An OAuth preflight may fail before prompt() appends the input.
+                if (submitted) await session.agent.continue();
+                else await initialRequest();
+              },
+              shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped && !phoneStopped,
+              onRetry: () => { recoveringModel = true; recoveryMessages = [...session.agent.state.messages]; },
+            });
           }
-          await session.agent.waitForIdle();
           clarificationStopped ||= isClarificationSuspended(conversationId, runId);
           if (connectionStopped || clarificationStopped || phoneStopped) return;
           const recoverSettledTurn = async () => {
@@ -1030,6 +1055,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
               log,
               signal: runAbortSignal,
               budget: requestRetryBudget,
+              onRetryScheduled,
               shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped && !phoneStopped,
               onRetry: () => { recoveringModel = true; recoveryMessages = [...session.agent.state.messages]; },
             });
@@ -1049,6 +1075,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             if (recovered) await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
               conversationId, log, signal: runAbortSignal,
               budget: requestRetryBudget,
+              onRetryScheduled,
               shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped && !phoneStopped,
               onRetry: () => { recoveringModel = true; recoveryMessages = [...session.agent.state.messages]; },
             });

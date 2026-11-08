@@ -1,57 +1,39 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
+import { RefreshCw, WifiOff } from 'lucide-react';
 
 import { reconnectGatewayRealtime } from '@/features/gateway/gateway-realtime';
-import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
+import { safeErrorDetail } from '@/features/chat/messages/agent-run-error-parser';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useGatewayRealtimeStore } from '@/stores/gateway-realtime-store';
 
-/** Isolated from chat body — only re-renders when realtime state or locale changes. */
+/** Connection feedback belongs to the session; model failures belong to their turn. */
 export const ChatRealtimeStatus = memo(function ChatRealtimeStatus() {
   const language = useLocaleStore((s) => s.language);
-  const m = messages(language);
+  const t = messages(language).chat.runRecovery;
   const connectionState = useGatewayRealtimeStore((s) => s.connectionState);
   const error = useGatewayRealtimeStore((s) => s.error);
+  const [visible, setVisible] = useState(false);
+  const connecting = connectionState === 'connecting' || connectionState === 'reconnecting';
 
-  if (connectionState === 'idle') {
-    return null;
-  }
+  useEffect(() => {
+    if (!connecting) return;
+    const timer = window.setTimeout(() => setVisible(true), 1500);
+    return () => { window.clearTimeout(timer); setVisible(false); };
+  }, [connecting]);
 
-  if (connectionState === 'error' && error) {
-    return (
-      <div className="flex items-center gap-2 border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/50 dark:text-red-400">
-        <span className="min-w-0 flex-1 truncate">{error}</span>
-        <button
-          type="button"
-          className={cn(
-            'shrink-0 rounded-xl border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700',
-            'hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/70',
-            interaction.transition,
-            interaction.press,
-            interaction.focusRingPanel,
-          )}
-          onClick={() => reconnectGatewayRealtime()}
-        >
-          {m.connection.reconnect}
-        </button>
-      </div>
-    );
-  }
-
-  if (connectionState === 'connecting' || connectionState === 'reconnecting') {
-    return (
-      <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/50 dark:text-amber-200">
-        <span
-          className="inline-block size-3 animate-spin rounded-full border-2 border-amber-500 border-t-transparent"
-          aria-hidden
-        />
-        <span>
-          {connectionState === 'reconnecting' ? m.connection.reconnecting : m.connection.connecting}
-        </span>
-      </div>
-    );
-  }
-
-  return null;
+  if (connectionState !== 'error' && !(connecting && visible)) return null;
+  const failed = connectionState === 'error';
+  const Icon = failed ? WifiOff : RefreshCw;
+  return <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 border-b border-edge-subtle bg-surface-panel px-4 py-2 text-xs text-fg-muted">
+    <Icon className={`size-3.5 shrink-0 ${connecting ? 'motion-safe:animate-spin' : ''}`} aria-hidden />
+    <span className="min-w-0 flex-1">{failed ? t.connectionFailed : connectionState === 'connecting' ? t.connecting : t.reconnecting}</span>
+    {failed ? <>
+      <button type="button" className="min-h-9 rounded-md border border-edge px-3 text-xs text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => reconnectGatewayRealtime()}>{t.reconnect}</button>
+      {error ? <details className="w-full min-w-0">
+        <summary className="w-fit cursor-pointer rounded-md py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{t.details}</summary>
+        <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-surface-inset p-2">{safeErrorDetail(error)}</pre>
+      </details> : null}
+    </> : null}
+  </div>;
 });

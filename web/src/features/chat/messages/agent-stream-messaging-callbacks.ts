@@ -87,6 +87,9 @@ export function createAgentStreamMessagingCallbacks(opts: {
 
   const isCurrentRun = opts.isCurrentRun ?? (() => true);
   const store = () => useChatSessionStore.getState();
+  const clearRecoveryProgress = () => {
+    if (store().sessions[chatId]?.progress?.stage.startsWith('model_')) store().setSessionProgress(chatId, null);
+  };
 
   const reloadSessionSnapshot = () => {
     const request = { messages: store().sessions[chatId]?.messages };
@@ -161,6 +164,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       store().setSessionFlags(chatId, { streaming: true });
     },
     onToken: (delta, messageId, offset) => {
+      clearRecoveryProgress();
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
         appendTextDelta(msg.content, delta, messageId, {
@@ -180,6 +184,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       });
     },
     onThinking: (c, isDelta, messageId) => {
+      clearRecoveryProgress();
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
         if (!isDelta && c === '') startThinkingSegment(msg.content);
@@ -193,6 +198,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       });
     },
     onToolStart: (toolName, args, toolCallId, startedAt, activity, metadata) => {
+      clearRecoveryProgress();
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
         appendToolStart(msg.content, toolName, args, toolCallId, startedAt, activity, metadata);
@@ -333,7 +339,8 @@ export function createAgentStreamMessagingCallbacks(opts: {
         onBackgroundTerminal('error');
         return;
       }
-      store().clearStreamingState(chatId);
+      // Preserve partial output when the final failure arrives.
+      finalizeMessage(chatId, 'error');
       if (clearResumeRunIdOnVisibleError) {
         chatRunManager.setResumeRunId(chatId, null);
       }
