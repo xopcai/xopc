@@ -45,6 +45,11 @@ async function click(text: string) {
   const button = [...document.querySelectorAll('button')].find(b => b.textContent === text || b.getAttribute('aria-label') === text);
   expect(button, text).toBeDefined(); await act(async () => button!.click());
 }
+async function chooseAuth(method: 'oauth' | 'api-key') {
+  const option = document.querySelector<HTMLInputElement>(`input[type="radio"][value="${method}"]`);
+  expect(option).toBeTruthy();
+  await act(async () => option!.click());
+}
 async function fillKey(value: string) {
   if (!document.querySelector('#provider-setup-key')) await click('更换 API Key');
   const input = document.querySelector<HTMLInputElement>('#provider-setup-key')!;
@@ -66,7 +71,7 @@ it('keeps API key access available for services supporting both OAuth and keys',
   api.preview.mockResolvedValue(data);
   await act(async () => root.render(<Dialog.Root open><Dialog.Content><ProviderSetupPanel providerId="dual-auth" language="zh" onDone={done}
     row={{ id:'dual-auth', name:'Dual auth', category:'common', supportsOAuth:true, supportsApiKey:true, configured:false, apiKey:'' }} /></Dialog.Content></Dialog.Root>));
-  expect(document.body.textContent).toContain('Connect account');
+  expect(document.querySelector('input[type="radio"][value="oauth"]')).toBeTruthy();
   expect(document.querySelector('#provider-setup-key')).toBeTruthy();
   await fillKey('test-key');
   await click('连接并应用');
@@ -108,6 +113,7 @@ it('finishes connection-only setup immediately after OAuth without asking for a 
   api.preview.mockResolvedValue(data);
   await act(async () => root.render(<Dialog.Root open><Dialog.Content><ProviderSetupPanel providerId="openai" connectOnly language="zh" onDone={done} onApplied={applied}
     row={{ id: 'openai', name: 'OpenAI', category: 'common', supportsOAuth: true, supportsApiKey: true, configured: false, apiKey: '' }} /></Dialog.Content></Dialog.Root>));
+  await chooseAuth('oauth');
   await click('Connect account');
   expect(applied).toHaveBeenCalledOnce();
   expect(document.querySelector('[role="status"]')?.textContent).toContain('服务连接已保存');
@@ -121,12 +127,14 @@ it('keeps model choices after OAuth and hides the optional API key behind an exp
   api.preview.mockResolvedValueOnce({ ...data, configured: false }).mockResolvedValue(data);
   await act(async () => root.render(<Dialog.Root open><Dialog.Content><ProviderSetupPanel providerId="openai" language="zh" onDone={done} onApplied={applied}
     row={{ id: 'openai', name: 'OpenAI', category: 'common', supportsOAuth: true, supportsApiKey: true, configured: false, apiKey: '' }} /></Dialog.Content></Dialog.Root>));
+  await chooseAuth('oauth');
   await click('Connect account');
   expect(document.querySelector('[role="status"]')?.textContent).toContain('服务已连接');
   expect(document.querySelector('#provider-setup-key')).toBeNull();
   expect(document.body.textContent).toContain('模型用途');
   expect(applied).not.toHaveBeenCalled();
-  await click('更换 API Key'); expect(document.querySelector('#provider-setup-key')).toBeTruthy();
+  await chooseAuth('api-key');
+  await click('添加 API Key'); expect(document.querySelector('#provider-setup-key')).toBeTruthy();
   await click('取消更换'); expect(document.querySelector('#provider-setup-key')).toBeNull();
   await click('连接并应用'); expect(api.apply).toHaveBeenCalledOnce(); expect(api.key).not.toHaveBeenCalled();
 });
