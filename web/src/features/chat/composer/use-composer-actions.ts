@@ -207,7 +207,10 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getContextRefs,
   ]);
 
-  const flushSteeringDraft = useCallback(async (interrupt = options.personal ? true : undefined, delivery?: 'next' | 'steer') => {
+  const flushSteeringDraft = useCallback(async (
+    interrupt = options.personal ? false : undefined,
+    delivery: 'next' | 'steer' | undefined = options.personal ? 'steer' : undefined,
+  ) => {
     if (latestOptions.current.editingFollowUpId || latestOptions.current.editingUserTurnId) { send(); return; }
     if (!runBusy && pendingFollowUpsCount === 0) return;
     const draft = harvestDraft({
@@ -327,7 +330,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     const latest = latestOptions.current;
     if (!latest.runBusy || latest.blocked || latest.voiceActive || latest.steeringPending
       || latest.editingFollowUpId || latest.editingUserTurnId) return;
-    if (latest.pendingFollowUpsCount > 0) {
+    if (!latest.personal && latest.pendingFollowUpsCount > 0) {
       if (latest.firstPendingFollowUpId) latest.onSteerPendingFollowUp?.(latest.firstPendingFollowUpId);
       return;
     }

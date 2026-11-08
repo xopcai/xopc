@@ -710,8 +710,6 @@ export const ChatComposer = memo(function ChatComposer({
     : editingUserTurnId ? m.chat.userMessageReplaceSend : inputControl?.paused ? m.chat.sendThisMessage : m.chat.sendMessage };
   const hasDraft =
     Boolean(editor.value.trim()) || att.attachments.length > 0 || contextRefs.length > 0;
-  const steerDisabled = !runBusyState || Boolean(steeringFollowUpId) || inputControl?.phase === 'stopping'
-    || (!hasDraft && pendingFollowUps.length === 0);
   const showSteeringInterrupt = hasDraft && Boolean(onSteeringInterrupt);
   const hasFinePointer = useMediaQuery('(hover: hover) and (pointer: fine)');
   const contextualPlaceholder =
@@ -960,7 +958,7 @@ export const ChatComposer = memo(function ChatComposer({
               ?? placeholder ?? contextualPlaceholder ?? (runBusyState
                 ? editingFollowUpId
                   ? m.chat.inputPlaceholderSteeringEdit
-                  : personal ? m.chat.inputPlaceholderImmediate : m.chat.inputPlaceholderSteering
+                  : personal ? m.chat.inputPlaceholderPersonal : m.chat.inputPlaceholderSteering
                 : m.chat.inputPlaceholder)
             }
             onWireInput={onComposerWireInput}
@@ -981,12 +979,7 @@ export const ChatComposer = memo(function ChatComposer({
           chat={actionChat}
           onStartVoiceInput={voice.startVoiceInput}
           onSend={actions.send}
-          onQueue={onAddPendingFollowUp ? actions.send : undefined}
-          onDefer={onAddPendingFollowUp ? () => actions.flushSteeringDraft(false) : undefined}
           onAbort={onAbort}
-          onInterrupt={actions.interruptDraft}
-          onSteer={actions.steerCurrentReply}
-          steerDisabled={steerDisabled}
         /> : <ComposerToolbar
           disabled={disabled}
           sendDisabled={sendDisabled || editNeedsPause}

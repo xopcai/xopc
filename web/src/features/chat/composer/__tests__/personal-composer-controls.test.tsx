@@ -30,28 +30,18 @@ describe('Personal composer controls', () => {
     const props = { disabled: false, voiceActive: false, runBusy: true, hasDraft: true, chat,
       onSend: vi.fn(), onAbort: vi.fn() };
     act(() => root.render(mode === 'personal'
-      ? <PersonalComposerActions {...props} onStartVoiceInput={vi.fn()} onQueue={vi.fn()} onSteer={vi.fn()} />
+      ? <PersonalComposerActions {...props} onStartVoiceInput={vi.fn()} />
       : <ComposerRunControl {...props} showSteeringInterrupt={false} />));
     expect(container.querySelector(`button[aria-label="${chat.steerCurrentReply}"]`)).toBeNull();
     expect(container.querySelector(`button[aria-label="${chat.followUpQueueAdd}"]`)).toBeNull();
   });
 
-  it.each([false, true])('exposes the same steer action in the Personal menu without a draft (disabled=%s)', async steerDisabled => {
-    const onSteer = vi.fn();
-    act(() => root.render(<PersonalComposerActions disabled={false} voiceActive={false} runBusy hasDraft={false} chat={chat}
-      onSend={vi.fn()} onQueue={vi.fn()} onDefer={vi.fn()} onAbort={vi.fn()} onInterrupt={vi.fn()}
-      onStartVoiceInput={vi.fn()} onSteer={onSteer} steerDisabled={steerDisabled} />));
-    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.followUpQueueMore}"]`)!
-      .dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
-    const items = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]'));
-    const steerItem = items.find(item => item.textContent === chat.steerCurrentReply)!;
-    expect(steerItem.hasAttribute('data-disabled')).toBe(steerDisabled);
-    expect(items.find(item => item.textContent === chat.followUpQueueAdd)?.hasAttribute('data-disabled')).toBe(true);
-    expect(items.find(item => item.textContent === chat.steeringInterruptSend)?.hasAttribute('data-disabled')).toBe(true);
-    if (!steerDisabled) {
-      act(() => steerItem.click());
-      expect(onSteer).toHaveBeenCalledOnce();
-    }
+  it.each([false, true])('omits the personal run menu with hasDraft=%s', hasDraft => {
+    act(() => root.render(<PersonalComposerActions disabled={false} voiceActive={false} runBusy hasDraft={hasDraft} chat={chat}
+      onSend={vi.fn()} onAbort={vi.fn()} onStartVoiceInput={vi.fn()} />));
+    expect(container.querySelector(`button[aria-label="${chat.followUpQueueMore}"]`)).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(container.querySelectorAll('button')).toHaveLength(2);
   });
 
   it.each(['standard', 'personal'])('hides steer while idle in %s mode', mode => {
@@ -63,19 +53,18 @@ describe('Personal composer controls', () => {
     expect(container.querySelector(`button[aria-label="${chat.steerCurrentReply}"]`)).toBeNull();
   });
 
-  it('labels the personal default as stop and send and stops an empty active run', () => {
+  it('sends personal drafts during an active run and stops when the draft is empty', () => {
     const onSend = vi.fn();
-    const onQueue = vi.fn();
     const onAbort = vi.fn();
-    const common = { disabled: false, voiceActive: false, chat, onStartVoiceInput: vi.fn(), onSend, onQueue, onAbort, onInterrupt: vi.fn() };
+    const common = { disabled: false, voiceActive: false, chat, onStartVoiceInput: vi.fn(), onSend, onAbort };
 
     act(() => root.render(<PersonalComposerActions {...common} runBusy={false} hasDraft />));
     act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.sendMessage}"]`)?.click());
     expect(onSend).toHaveBeenCalledOnce();
 
     act(() => root.render(<PersonalComposerActions {...common} runBusy hasDraft />));
-    act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.steeringInterruptSend}"]`)?.click());
-    expect(onQueue).toHaveBeenCalledOnce();
+    act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.sendMessage}"]`)?.click());
+    expect(onSend).toHaveBeenCalledTimes(2);
 
     act(() => root.render(<PersonalComposerActions {...common} runBusy hasDraft={false} />));
     act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.abort}"]`)?.click());
