@@ -58,6 +58,7 @@ import { messages } from '@/i18n/messages';
 import { type DefaultModelTarget } from './default-model-candidates';
 import { DefaultModelSuccessStep } from './default-model-success-step';
 import { ProviderSetupPanel } from './provider-setup-panel';
+import { ProviderConnectionStatus, ProviderAuthMethodPicker } from './provider-auth-method';
 
 
 export interface ProviderManageDialogMessages {
@@ -172,6 +173,7 @@ export function ProviderManageDialog({
             />
           ) : (
             <ManageBuiltinProvider
+              key={providerId}
               providerId={providerId}
               builtinRows={builtinRows}
               allModels={allModels}
@@ -222,9 +224,13 @@ function ManageBuiltinProvider({
   const providerLabels = messages(language).providersSettings;
   const supportsApiKey = row?.supportsApiKey !== false;
   const supportsOAuth = row?.supportsOAuth === true;
+  const [authMethod, setAuthMethod] = useState<'api-key' | 'oauth'>(
+    row?.authMode === 'oauth' || !supportsApiKey ? 'oauth' : 'api-key',
+  );
   const isOAuthConnected = row?.authMode === 'oauth' && row.authStatus === 'connected';
   const canRemoveProviderCredential =
     row?.configured === true &&
+    row.authMode !== 'oauth' &&
     row.activeKeySource !== 'env' &&
     row.activeKeySource !== 'extension' &&
     row.activeKeySource !== 'models_json';
@@ -393,7 +399,7 @@ function ManageBuiltinProvider({
 
   return (
     <>
-      <div className="flex items-center justify-between border-b border-edge-subtle px-5 py-4">
+      <div className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-5 py-4">
         <Dialog.Title className="text-base font-semibold text-fg">
           {row?.name ?? providerId}
         </Dialog.Title>
@@ -407,24 +413,17 @@ function ManageBuiltinProvider({
         </Dialog.Close>
       </div>
 
-      <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
-        {onQuickSetup ? <Button variant="secondary" onClick={onQuickSetup}>{language === 'zh' ? '配置模型用途' : 'Configure model uses'}</Button> : null}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
         {enrichment?.description ? (
           <p className="text-sm text-fg-muted">{enrichment.description}</p>
         ) : null}
 
-        {row?.baseUrl ? (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-fg">{labels.apiUrlLabel}</span>
-            <code className="break-all rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 font-mono text-xs text-fg-muted">
-              {row.baseUrl}
-            </code>
-          </div>
-        ) : row?.category === 'extension' ? (
-          <p className="text-sm text-fg-muted">{labels.apiUrlExtensionHint}</p>
+        <ProviderConnectionStatus row={row} language={language} />
+        {supportsApiKey && supportsOAuth ? (
+          <ProviderAuthMethodPicker value={authMethod} onChange={setAuthMethod} language={language} disabled={oauthLoading || saving} />
         ) : null}
 
-        {supportsApiKey ? (
+        {supportsApiKey && authMethod === 'api-key' ? (
           <ProviderApiKeyField
             providerId={providerId}
             inputId="manage-api-key"
@@ -445,7 +444,7 @@ function ManageBuiltinProvider({
               loadFailed: labels.loadFailed,
             }}
           />
-        ) : row?.category === 'extension' ? (
+        ) : !supportsApiKey && row?.category === 'extension' ? (
           <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted">
             <p>{labels.extensionKeyHint}</p>
             {row?.extensionId ? (
@@ -462,13 +461,13 @@ function ManageBuiltinProvider({
           </div>
         ) : null}
 
-        {supportsOAuth ? (
+        {supportsOAuth && authMethod === 'oauth' ? (
           <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-fg">{providerLabels.oauth}</p>
                 <p className="mt-0.5 text-xs text-fg-muted">
-                  {isOAuthConnected ? providerLabels.sourceOauth : providerLabels.oauthHint}
+                  {isOAuthConnected ? (language === 'zh' ? '账号已连接' : 'Account connected') : row?.authMode === 'oauth' && row.authStatus === 'expired' ? (language === 'zh' ? '授权已过期，请重新登录' : 'Authorization expired. Sign in again.') : (language === 'zh' ? '通过浏览器授权连接账号' : 'Authorize your account in the browser')}
                 </p>
               </div>
               {isOAuthConnected ? (
@@ -533,6 +532,7 @@ function ManageBuiltinProvider({
                   value={codeInput}
                   onChange={(event) => setCodeInput(event.target.value)}
                   onKeyDown={(event) => event.key === 'Enter' && void submitCode()}
+                  aria-label={providerLabels.pasteRedirectUrl}
                   placeholder={providerLabels.pasteRedirectUrl}
                   className={cn(
                     'min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
@@ -547,7 +547,7 @@ function ManageBuiltinProvider({
           </div>
         ) : null}
 
-        {apiKeyLinks.length > 0 && supportsApiKey ? (
+        {apiKeyLinks.length > 0 && supportsApiKey && authMethod === 'api-key' ? (
           <div className="flex flex-wrap gap-2">
             {apiKeyLinks.map(({ kind, href }) => (
               <a
@@ -564,12 +564,23 @@ function ManageBuiltinProvider({
           </div>
         ) : null}
 
+        {authMethod === 'api-key' && row?.baseUrl ? (
+          <details className="rounded-lg border border-edge-subtle p-3">
+            <summary className="cursor-pointer text-sm font-medium text-fg">{language === 'zh' ? '高级设置' : 'Advanced settings'}</summary>
+            <div className="mt-3 flex flex-col gap-1.5">
+              <span className="text-xs text-fg-muted">{labels.apiUrlLabel}</span>
+              <code className="break-all font-mono text-xs text-fg-muted">{row.baseUrl}</code>
+            </div>
+          </details>
+        ) : row?.category === 'extension' ? <p className="text-xs text-fg-muted">{labels.apiUrlExtensionHint}</p> : null}
+
         {/* Models */}
         {providerModels.length > 0 ? (
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-fg">
-              {labels.modelsLabel} ({providerModels.length})
+              {language === 'zh' ? '模型目录' : 'Model catalog'} ({providerModels.length})
             </span>
+            <p className="text-xs text-fg-muted">{language === 'zh' ? '此服务的模型目录；实际访问权限取决于当前生效的凭据和账号。' : 'Models registered for this provider. Access depends on the active credentials and account.'}</p>
             <label className="mb-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" className="ui-checkbox" checked={computerOnly} onChange={event => setComputerOnly(event.target.checked)} />{language === 'zh' ? '仅电脑控制模型' : 'Computer Use only'}</label>
             <div className="max-h-40 overflow-y-auto rounded-lg border border-edge-subtle bg-surface-panel/40 p-2">
               <div className="flex flex-wrap gap-1.5">
@@ -589,12 +600,14 @@ function ManageBuiltinProvider({
           <p className="text-xs text-fg-subtle">{labels.noModels}</p>
         )}
 
+        {onQuickSetup ? <Button variant="secondary" disabled={dirty || oauthLoading || row?.authStatus !== 'connected'} onClick={onQuickSetup}>{language === 'zh' ? '配置模型用途' : 'Configure model uses'}</Button> : null}
+
         {error ? (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         ) : null}
       </div>
 
-      <div className="flex items-center justify-between border-t border-edge-subtle px-5 py-3">
+      <div className="flex shrink-0 items-center justify-between border-t border-edge-subtle px-5 py-3">
         {canRemoveProviderCredential ? (
           <Button
             type="button"
@@ -603,13 +616,13 @@ function ManageBuiltinProvider({
             onClick={() => setConfirmRemove(true)}
           >
             <Trash2 className="size-3.5" aria-hidden />
-            {labels.remove}
+            {language === 'zh' ? '移除 API Key' : 'Remove API key'}
           </Button>
         ) : (
           <span />
         )}
         <div className="flex items-center gap-2">
-          {supportsApiKey && dirty && !isMaskedKey(apiKey.trim()) ? (
+          {supportsApiKey && authMethod === 'api-key' && dirty && !isMaskedKey(apiKey.trim()) ? (
             <Button
               type="button"
               variant="primary"

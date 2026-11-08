@@ -17,6 +17,7 @@ import type { StoredLanguage } from '@/lib/storage';
 
 import { capabilityLabels } from './capability-navigation';
 import { serviceDisplayName } from './capability-presentation';
+import { ProviderAuthMethodPicker, type ProviderAuthMethod } from './provider-auth-method';
 import { OAuthProviderConnect } from './oauth-provider-connect';
 import { applyModelSetup, previewModelSetup } from './provider-setup-api';
 
@@ -37,6 +38,9 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
   const initialized = useRef(false);
   const [preview, setPreview] = useState<ModelSetupPreview | null>(null);
   const [request, setRequest] = useState<ModelSetupRequest>({ mode: targetUse ? 'replace' : 'fill', modelIds });
+  const [authMethod, setAuthMethod] = useState<ProviderAuthMethod | null>(null);
+  const [oauthPending, setOAuthPending] = useState(false);
+  const [oauthConnected, setOAuthConnected] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [editingKey, setEditingKey] = useState(false);
   const [credentialSaved, setCredentialSaved] = useState(false);
@@ -59,9 +63,21 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
     }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => { active = false; };
   }, [providerId, modelIds, targetUse, connectOnly, attempt]);
-  useEffect(() => { onPendingChange?.(busy); return () => onPendingChange?.(false); }, [busy, onPendingChange]);
+  useEffect(() => { onPendingChange?.(busy || oauthPending); return () => onPendingChange?.(false); }, [busy, oauthPending, onPendingChange]);
+  const supportsOAuth = row?.supportsOAuth ?? preview?.profile.credential === 'oauth';
+  const supportsApiKey = row?.supportsApiKey ?? preview?.profile.credential === 'api-key';
+  const selectedAuthMethod = authMethod ?? (row?.authMode === 'oauth' || !supportsApiKey ? 'oauth' : 'api-key');
+  const showApiKey = supportsApiKey && selectedAuthMethod === 'api-key';
+  const showOAuth = supportsOAuth && selectedAuthMethod === 'oauth';
+  const isOAuthConnected = oauthConnected || connected && (row ? row.authMode === 'oauth' && row.authStatus === 'connected' : preview?.profile.credential === 'oauth');
+  const replacingApiKey = row ? Boolean(row.apiKey) : preview?.profile.credential === 'api-key';
+  const authPicker = supportsApiKey && supportsOAuth && !existingConnection && !done ? <ProviderAuthMethodPicker
+    value={selectedAuthMethod} language={language} disabled={busy || oauthPending}
+    onChange={method => { setAuthMethod(method); setApiKey(''); setEditingKey(false); }}
+  /> : null;
   const handleOAuthConnected = () => {
     setConnected(true);
+    setOAuthConnected(true);
     setApiKey('');
     setEditingKey(false);
     if (connectOnly) {
@@ -114,14 +130,15 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
     const chosen = targetUse ? request.overrides?.[targetUse] ?? use?.recommended : undefined;
     const displayName = serviceDisplayName(providerId, title, zh);
     return <div className="space-y-6 p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="text-base font-semibold text-fg">{displayName}</h3><p className="mt-1 text-sm text-fg-muted">{targetUse ? `${zh ? '用于' : 'For '}${capabilityLabels[targetUse][zh ? 0 : 1]}` : ''}</p></div><Button variant="ghost" disabled={busy} onClick={onDone}>{zh ? '更换服务' : 'Change service'}</Button></div>
+      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="text-base font-semibold text-fg">{displayName}</h3><p className="mt-1 text-sm text-fg-muted">{targetUse ? `${zh ? '用于' : 'For '}${capabilityLabels[targetUse][zh ? 0 : 1]}` : ''}</p></div><Button variant="ghost" disabled={busy || oauthPending} onClick={onDone}>{zh ? '更换服务' : 'Change service'}</Button></div>
       {!preview && !error ? <Skeleton className="h-48 w-full rounded-xl" /> : null}
       {preview ? <>
-        {preview.profile.credential === 'oauth' && !connected ? <OAuthProviderConnect providerId={providerId} displayName={displayName} connected={connected} onConnected={handleOAuthConnected} /> : null}
-        {preview.profile.credential === 'oauth' && connected && !row?.supportsApiKey ? <p className="flex items-center gap-2 rounded-xl bg-surface-inset px-4 py-3 text-sm text-fg"><CheckCircle2 className="size-4 text-fg-muted" aria-hidden />{zh ? '使用已有连接' : 'Using the existing connection'}</p> : null}
-        {(preview.profile.credential === 'api-key' || (preview.profile.credential === 'oauth' && row?.supportsApiKey)) ? <div className="space-y-3">
-          {connected && !editingKey ? <div className="flex items-center justify-between gap-3 rounded-xl bg-surface-inset px-4 py-3"><p className="flex items-center gap-2 text-sm text-fg"><CheckCircle2 className="size-4 text-fg-muted" aria-hidden />{zh ? '使用已有连接' : 'Using the existing connection'}</p><Button variant="ghost" disabled={busy} onClick={() => setEditingKey(true)}>{zh ? '更换' : 'Change'}</Button></div> : <>
-            <div className="flex items-center justify-between gap-3"><label htmlFor="provider-setup-key" className="text-sm font-medium text-fg">{preview.profile.access === 'subscription' ? (zh ? '订阅 API Key' : 'Subscription API key') : 'API Key'}</label>{connected ? <Button variant="ghost" disabled={busy} onClick={() => { setEditingKey(false); setApiKey(''); }}>{zh ? '保留原 Key' : 'Keep saved key'}</Button> : null}</div>
+        {authPicker}
+        {showOAuth && !isOAuthConnected ? <OAuthProviderConnect providerId={providerId} displayName={displayName} connected={isOAuthConnected} onConnected={handleOAuthConnected} onPendingChange={setOAuthPending} /> : null}
+        {showOAuth && isOAuthConnected ? <p className="flex items-center gap-2 rounded-xl bg-surface-inset px-4 py-3 text-sm text-fg"><CheckCircle2 className="size-4 text-fg-muted" aria-hidden />{zh ? '使用已有连接' : 'Using the existing connection'}</p> : null}
+        {showApiKey ? <div className="space-y-3">
+          {connected && !editingKey ? <div className="flex items-center justify-between gap-3 rounded-xl bg-surface-inset px-4 py-3"><p className="flex items-center gap-2 text-sm text-fg"><CheckCircle2 className="size-4 text-fg-muted" aria-hidden />{zh ? '使用已有连接' : 'Using the existing connection'}</p><Button variant="ghost" disabled={busy} onClick={() => setEditingKey(true)}>{replacingApiKey ? (zh ? '更换' : 'Change') : (zh ? '添加 API Key' : 'Add API key')}</Button></div> : <>
+            <div className="flex items-center justify-between gap-3"><label htmlFor="provider-setup-key" className="text-sm font-medium text-fg">{preview.profile.access === 'subscription' ? (zh ? '订阅 API Key' : 'Subscription API key') : 'API Key'}</label>{connected ? <Button variant="ghost" disabled={busy} onClick={() => { setEditingKey(false); setApiKey(''); }}>{replacingApiKey ? (zh ? '保留原 Key' : 'Keep saved key') : (zh ? '保留当前连接' : 'Keep current connection')}</Button> : null}</div>
             <SecretInput id="provider-setup-key" disabled={busy} value={apiKey} onChange={setApiKey} placeholder={connected ? (zh ? '输入新的 API Key' : 'Enter a new API key') : (zh ? '粘贴 API Key' : 'Paste your API key')} labels={secretInputLabelsFromChannels(messages(language).providersSettings)} />
             {connected ? <p className="text-xs leading-relaxed text-fg-muted">{zh ? '此服务的其他已配置模型也会使用新的 Key。' : 'Other models configured with this service will also use the new key.'}</p> : null}
             {keyUrl ? <a className="inline-flex min-h-10 items-center text-sm text-accent-fg hover:underline" href={keyUrl} target="_blank" rel="noopener noreferrer">{zh ? '获取 API Key' : 'Get an API key'}</a> : null}
@@ -145,14 +162,15 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
       {!preview && !error ? <Skeleton className="h-64 w-full rounded-xl" /> : null}
       {preview ? <>
+        {authPicker}
         {!done && alternatives.length > 1 && onChooseProvider ? <div><label className="mb-2 block text-xs text-fg-muted">{zh ? '接入方式 / 地域' : 'Access method / region'}</label><Select value={providerId} disabled={busy} aria-label={zh ? '接入方式 / 地域' : 'Access method / region'} onChange={event => onChooseProvider(event.target.value)}>{alternatives.map(option => <SelectOption key={option.id} value={option.id}>{option.setupProfile?.name ?? option.name}</SelectOption>)}</Select></div> : null}
         {done ? <p role="status" className="flex items-center gap-2 text-sm text-fg"><CheckCircle2 className="size-4" />{connectOnly ? (zh ? '服务连接已保存' : 'Connection saved') : (zh ? '所选用途配置已保存' : 'Selected model uses saved')}</p> : <>
-          {preview.profile.credential === 'oauth' && !connected ? <OAuthProviderConnect providerId={providerId} displayName={title} connected={connected} onConnected={handleOAuthConnected} /> : null}
+          {showOAuth && !isOAuthConnected ? <OAuthProviderConnect providerId={providerId} displayName={title} connected={isOAuthConnected} onConnected={handleOAuthConnected} onPendingChange={setOAuthPending} /> : null}
           {connected && !editingKey ? <div role="status" className="flex items-center justify-between gap-3 rounded-xl bg-surface-inset px-4 py-3">
             <div className="flex min-w-0 items-start gap-2"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden /><div><p className="text-sm font-medium text-fg">{zh ? '服务已连接' : 'Service connected'}</p><p className="mt-1 text-sm text-fg-muted">{zh ? '可直接选择模型，无需重复填写凭据。' : 'Choose a model without entering credentials again.'}</p></div></div>
-            {!existingConnection && (preview.profile.credential === 'api-key' || row?.supportsApiKey) ? <Button variant="ghost" disabled={busy} onClick={() => setEditingKey(true)}>{zh ? '更换 API Key' : 'Change API key'}</Button> : null}
+            {!existingConnection && showApiKey ? <Button variant="ghost" disabled={busy} onClick={() => setEditingKey(true)}>{replacingApiKey ? (zh ? '更换 API Key' : 'Change API key') : (zh ? '添加 API Key' : 'Add API key')}</Button> : null}
           </div> : null}
-          {(preview.profile.credential === 'api-key' || (preview.profile.credential === 'oauth' && row?.supportsApiKey)) && !existingConnection && (!connected || editingKey) ? <div className="space-y-2">
+          {showApiKey && !existingConnection && (!connected || editingKey) ? <div className="space-y-2">
             <div className="flex items-center justify-between gap-3"><label htmlFor="provider-setup-key" className="text-sm font-medium text-fg">{preview.profile.access === 'subscription' ? (zh ? '套餐 API Key' : 'Plan API key') : 'API Key'}</label>{connected ? <Button variant="ghost" disabled={busy} onClick={() => { setEditingKey(false); setApiKey(''); }}>{zh ? '取消更换' : 'Cancel change'}</Button> : null}</div>
             <SecretInput id="provider-setup-key" disabled={busy} value={apiKey} onChange={setApiKey} placeholder={connected ? (zh ? '输入新的 API Key' : 'Enter a new API key') : 'API Key'} labels={secretInputLabelsFromChannels(messages(language).providersSettings)} />
             {keyUrl ? <a className="inline-flex min-h-8 items-center text-sm text-accent-fg hover:underline" href={keyUrl} target="_blank" rel="noopener noreferrer">{zh ? '获取对应接入方式的 Key' : 'Get a key for this access method'}</a> : null}
@@ -183,7 +201,7 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
       {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
     </div>
     <div className="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-5 py-4"><span className="text-xs text-fg-muted">{preview && !done && !connectOnly ? (zh ? `将配置 ${selected.length} 项` : `${selected.length} uses selected`) : ''}</span>
-      {done || (connectOnly && connected && !apiKey.trim() && !editingKey) ? <Button disabled={busy || !preview} onClick={() => { if (!done) onApplied?.(); onDone(); }}>{connectOnly ? (zh ? '返回选择模型' : 'Return to model selection') : (zh ? '完成' : 'Done')}</Button> : !preview && error ? <Button onClick={() => setAttempt(value => value + 1)}>{zh ? '重试' : 'Retry'}</Button> : <Button onClick={() => void save()} disabled={busy || !preview || (!connected && !apiKey.trim()) || (inline && !selected.some(id => request.overrides?.[id] || preview.uses.find(use => use.id === id)?.recommended))}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}{busy ? (zh ? '正在应用…' : 'Applying…') : selected.length ? (inline && targetUse ? `${zh ? '连接并用于' : 'Connect and use for '}${labels[targetUse][zh ? 0 : 1]}` : (zh ? '连接并应用' : 'Connect and apply')) : (zh ? '仅连接' : 'Connect only')}</Button>}
+      {done || (connectOnly && connected && !apiKey.trim() && !editingKey) ? <Button disabled={busy || oauthPending || !preview} onClick={() => { if (!done) onApplied?.(); onDone(); }}>{connectOnly ? (zh ? '返回选择模型' : 'Return to model selection') : (zh ? '完成' : 'Done')}</Button> : !preview && error ? <Button onClick={() => setAttempt(value => value + 1)}>{zh ? '重试' : 'Retry'}</Button> : <Button onClick={() => void save()} disabled={busy || oauthPending || !preview || (!connected && !apiKey.trim()) || (inline && !selected.some(id => request.overrides?.[id] || preview.uses.find(use => use.id === id)?.recommended))}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}{busy ? (zh ? '正在应用…' : 'Applying…') : selected.length ? (inline && targetUse ? `${zh ? '连接并用于' : 'Connect and use for '}${labels[targetUse][zh ? 0 : 1]}` : (zh ? '连接并应用' : 'Connect and apply')) : (zh ? '仅连接' : 'Connect only')}</Button>}
     </div>
   </>;
 }
