@@ -7,8 +7,12 @@ import {
 // from this file, so re-exporting from it created a circular cycle. Callers
 // (tui.ts, test files) import the manager directly from `./tui-keybindings-file.js`.
 
-/** App-level bindings wired by xopc TUI (subset of pi coding-agent). */
+/** Application bindings for the terminal work loop. */
 export type XopcTuiAppKeybinding =
+  | 'app.mode.cycle'
+  | 'app.response.copy'
+  | 'app.history.search'
+  | 'app.view.clear'
   | 'app.interrupt'
   | 'app.clear'
   | 'app.exit'
@@ -55,6 +59,10 @@ export type XopcTuiAppKeybinding =
 
 declare module '@earendil-works/pi-tui' {
   interface Keybindings {
+    'app.mode.cycle': true;
+    'app.response.copy': true;
+    'app.history.search': true;
+    'app.view.clear': true;
     'app.interrupt': true;
     'app.clear': true;
     'app.exit': true;
@@ -103,6 +111,10 @@ declare module '@earendil-works/pi-tui' {
 
 export const XOPC_TUI_KEYBINDINGS = {
   ...TUI_KEYBINDINGS,
+  'app.mode.cycle': { defaultKeys: 'shift+tab', description: 'Toggle Default / Plan mode' },
+  'app.response.copy': { defaultKeys: 'ctrl+o', description: 'Copy the last assistant response' },
+  'app.history.search': { defaultKeys: 'ctrl+r', description: 'Search submitted prompt history' },
+  'app.view.clear': { defaultKeys: 'ctrl+l', description: 'Clear the view, preserving conversation context' },
   'app.interrupt': { defaultKeys: 'escape', description: 'Abort run (or cancel overlay)' },
   'app.clear': { defaultKeys: 'ctrl+c', description: 'Clear input; repeat within 0.5s to exit' },
   'app.exit': { defaultKeys: 'ctrl+d', description: 'Exit when input empty' },
@@ -111,19 +123,19 @@ export const XOPC_TUI_KEYBINDINGS = {
     description: 'Suspend to shell (SIGTSTP)',
   },
   'app.thinking.cycle': {
-    defaultKeys: 'shift+tab',
-    description: 'Cycle /think level',
+    defaultKeys: [],
+    description: 'Cycle thinking level',
   },
   'app.model.cycleForward': {
-    defaultKeys: 'ctrl+p',
+    defaultKeys: [],
     description: 'Next model (/switch)',
   },
   'app.model.cycleBackward': {
-    defaultKeys: 'shift+ctrl+p',
+    defaultKeys: [],
     description: 'Previous model (/switch)',
   },
-  'app.model.select': { defaultKeys: 'ctrl+l', description: 'Model picker' },
-  'app.tools.expand': { defaultKeys: 'ctrl+o', description: 'Toggle tool output' },
+  'app.model.select': { defaultKeys: [], description: 'Model picker' },
+  'app.tools.expand': { defaultKeys: [], description: 'Toggle tool output' },
   'app.thinking.toggle': {
     defaultKeys: [],
     description: 'Toggle thinking block display',
@@ -262,8 +274,9 @@ export const XOPC_TUI_KEYBINDINGS = {
   },
 } as const satisfies KeybindingDefinitions;
 
-/** Order for `/hotkeys` and docs (pi-style UX). */
+/** Order for `/hotkeys` and documentation. */
 export const XOPC_TUI_HOTKEY_ORDER: XopcTuiAppKeybinding[] = [
+  'app.mode.cycle', 'app.response.copy', 'app.history.search', 'app.view.clear',
   'app.interrupt',
   'app.clear',
   'app.exit',

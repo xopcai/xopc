@@ -87,10 +87,10 @@ function AgentDefaultsEditor({
         </div>
       ) : null}
 
-      <SlidingTabList as="nav" className="grid grid-cols-3 gap-1 rounded-xl bg-surface-hover/20 p-1" aria-label={zh ? '默认配置分区' : 'Default configuration sections'} indicatorClassName="rounded-lg bg-surface-base shadow-surface">
+      <SlidingTabList as="nav" className="grid w-full max-w-md grid-cols-3 rounded-full bg-surface-hover/50 p-0.5" aria-label={zh ? '默认配置分区' : 'Default configuration sections'} indicatorClassName="rounded-full bg-surface-active">
         {tabs.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" aria-pressed={activePanel === id} onClick={() => setActivePanel(id)} className={cn('flex min-w-0 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', activePanel === id ? 'bg-surface-base text-fg shadow-surface' : 'text-fg-muted hover:bg-surface-hover hover:text-fg')}>
-            <Icon className={cn('size-4 shrink-0', activePanel === id ? 'text-accent' : 'text-fg-subtle')} />
+          <button key={id} type="button" aria-pressed={activePanel === id} onClick={() => setActivePanel(id)} className={cn('flex min-w-0 items-center justify-center gap-2 rounded-full px-4 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', activePanel === id ? 'bg-surface-active text-fg' : 'text-fg-muted hover:text-fg')}>
+            <Icon className={cn('size-4 shrink-0', activePanel === id ? 'text-fg' : 'text-fg-subtle')} />
             <span className="text-sm font-medium">{label}</span>
           </button>
         ))}

@@ -386,7 +386,6 @@ struct AssistantView<Dock: View>: View {
                         if let errorMessage = state.errorMessage {
                             ErrorBanner(message: errorMessage)
                         }
-                        clarificationCard
                         queueCard
                         personalConnectionCard
                         ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }) { message in
@@ -412,6 +411,7 @@ struct AssistantView<Dock: View>: View {
                                 }
                             }
                         }
+                        clarificationCard
                         if showsStagedProgress {
                             AssistantStagesView(progress: state.runProgress,
                                                 answerStarted: state.messages.contains {
@@ -458,6 +458,11 @@ struct AssistantView<Dock: View>: View {
                 .onChange(of: state.messages.last) {
                     updateReplySpace()
                     if followingBottom {
+                        scheduleBottomScroll(scroller)
+                    }
+                }
+                .onChange(of: state.clarification?.id) {
+                    if state.clarification != nil, followingBottom {
                         scheduleBottomScroll(scroller)
                     }
                 }
@@ -663,7 +668,7 @@ struct AssistantView<Dock: View>: View {
     private var composer: AssistantComposer {
         AssistantComposer(
             configuration: configuration,
-            focusAllowed: !showingPhone,
+            focusAllowed: !showingPhone && state.clarification?.kind != "approval",
             draft: $draft,
             attachments: $attachments,
             references: $references,

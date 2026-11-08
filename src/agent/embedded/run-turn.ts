@@ -1,3 +1,4 @@
+import { getSessionInteractionPolicy, PLAN_MODE_INSTRUCTIONS } from '../session/interaction-policy.js';
 import { getMcpSetupResumeInput } from '../mcp/continuation-input.js';
 import { isPhoneAssistanceSuspended, phoneAssistance, phoneResumeForRun } from '../../phone/assistance.js';
 import { isNestedCodemodePolicy } from './codemode-extension.js';
@@ -8,6 +9,7 @@ import { isComputerControlActive, isComputerLeaseTool, stopComputerControl } fro
 import { bindComputerAgentTurn, computerImagesForRequest, computerRequestFrameCleanup,
   endComputerAgentTurn, setComputerProgramAuthorization } from '../../computer/agent-context.js';
 import {
+  getActiveClarification,
   getClarificationResumeInput,
   getClarification,
   isClarificationSuspended,
@@ -56,6 +58,7 @@ import { restoreCurrentTurnImages } from './current-turn-images.js';
 import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './session-runner.js';
 import { externalPolicyContext, getXopcToolMetadata } from './tool-metadata.js';
 import { allowsExecutionTool, filterExecutionTools, resolveExecutionToolPolicy } from './execution-tool-policy.js';
+import { getExecutionAuthority } from '../../infra/execution-authority.js';
 import { configurationCapabilityCorrection } from './configuration-capability-correction.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
@@ -450,7 +453,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       executionToolPolicy,
       codemode: params.codemode,
       mcp: params.mcp,
-      systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
+      systemPrompt: [systemPrompt, rootInstructions, getSessionInteractionPolicy(toolPolicyConversationId).mode === 'plan' ? PLAN_MODE_INSTRUCTIONS : ''].filter(Boolean).join('\n\n'),
       thinkingLevel: configuredThinking ?? thinkingLevel ?? 'medium',
       transcriptRuntime,
     });
@@ -487,7 +490,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           conversationId,
           transcriptRuntime,
           policy: compactionPolicy,
-          systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
+          systemPrompt: [systemPrompt, rootInstructions, getSessionInteractionPolicy(toolPolicyConversationId).mode === 'plan' ? PLAN_MODE_INSTRUCTIONS : ''].filter(Boolean).join('\n\n'),
           abortSignal: signal ?? runAbortSignal,
           onEvent,
           providerRejected: recoverableLength,
@@ -766,17 +769,28 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     let phoneNotice: string | undefined;
     let connectionStopped = false;
     let clarificationStopped = false;
+    const pendingClarificationTools = new Map<string, { waitId?: string; kind?: string; reason: string }>();
+    const pauseForClarification = (toolCallId: string) => {
+      const wait = getActiveClarification(conversationId);
+      const reason = wait?.kind === 'approval' ? 'Approval required. This operation has not executed.' : 'User input required. This operation has not executed.';
+      pendingClarificationTools.set(toolCallId, { waitId: wait?.id, kind: wait?.kind, reason });
+      clarificationStopped = true;
+      return { block: true as const, terminate: true, reason };
+    };
     let sentVisibleMessage = false;
     params.turnPolicy?.reset();
     const nativeBeforeTool = session.agent.beforeToolCall;
     const nativeAfterTool = session.agent.afterToolCall;
     const computerProgramOperation = Symbol('computerProgramOperation');
     const hostBeforeTool: NonNullable<typeof nativeBeforeTool> = async (context, signal) => {
+      getExecutionAuthority()?.assertTool?.(context.toolCall.name, context.args);
       if (!allowsExecutionTool(executionToolPolicy, context.toolCall.name)) {
         return { block: true, reason: 'Tool is outside this execution scope.' };
       }
       const currentToolPolicy = resolveExecutionToolPolicy(toolPolicyConversationId);
-      if (currentToolPolicy.surface !== executionToolPolicy.surface
+      if (currentToolPolicy.revision !== executionToolPolicy.revision
+        || currentToolPolicy.readOnly !== executionToolPolicy.readOnly
+        || currentToolPolicy.surface !== executionToolPolicy.surface
         || currentToolPolicy.taskExecution !== executionToolPolicy.taskExecution) {
         policyStopped = true;
         policyStopReason = 'Execution identity changed during the run';
@@ -793,9 +807,10 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       if (phoneStopped) return { block: true, reason: 'Waiting for the user to finish operating the phone.', terminate: true };
       if (connectionStopped) return { block: true, reason: 'Waiting for the user to connect an app.', terminate: true };
-      if (clarificationStopped) return { block: true, reason: 'Waiting for the user to answer.', terminate: true };
+      if (clarificationStopped) return pauseForClarification(context.toolCall.id);
       const decision = await params.turnPolicy?.beforeToolCall(externalPolicyContext(context, tools), signal);
       if (decision?.block) {
+        if (isClarificationSuspended(conversationId, runId)) return pauseForClarification(context.toolCall.id);
         policyStopped ||= decision.terminate === true;
         if (decision.terminate) policyStopReason = decision.reason;
         return decision;
@@ -890,7 +905,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         lengthRecoveryExhausted = true;
         return { action: 'end' };
       }
-      policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
+      if (!clarificationStopped) policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
       policyCompleted ||= policyStopped && params.turnPolicy?.stopReason?.() === 'completed';
       if (policyStopped) policyStopReason ??= 'Agent execution policy stopped before completion';
       if (policyStopped || connectionStopped || clarificationStopped || phoneStopped) return { action: 'end' };
@@ -931,7 +946,27 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         if (event.toolName === 'send_message' && !event.isError) sentVisibleMessage = true;
       }
       onEvent?.({ ...event, runId });
-    }, params.onAgentEvent);
+    }, (event) => {
+      // pi skips afterToolCall for blocked calls. Normalize their public result and
+      // shared message before AgentSession appends it to the transcript.
+      if (event.type === 'tool_execution_end') {
+        const pending = pendingClarificationTools.get(event.toolCallId);
+        if (pending) {
+          event.isError = false;
+          event.result.content = [{ type: 'text', text: pending.reason }];
+          event.result.details = { status: 'waiting', kind: pending.kind, waitId: pending.waitId };
+        }
+      } else if ((event.type === 'message_start' || event.type === 'message_end') && event.message.role === 'toolResult') {
+        const pending = pendingClarificationTools.get(event.message.toolCallId);
+        if (pending) {
+          event.message.isError = false;
+          event.message.content = [{ type: 'text', text: pending.reason }];
+          event.message.details = { status: 'waiting', kind: pending.kind, waitId: pending.waitId };
+          if (event.type === 'message_end') pendingClarificationTools.delete(event.message.toolCallId);
+        }
+      }
+      params.onAgentEvent?.(event);
+    });
 
     const abortListener = () => {
       void session.abort();
@@ -1001,7 +1036,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
               conversationId,
               transcriptRuntime,
               policy: compactionPolicy,
-              systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
+              systemPrompt: [systemPrompt, rootInstructions, getSessionInteractionPolicy(toolPolicyConversationId).mode === 'plan' ? PLAN_MODE_INSTRUCTIONS : ''].filter(Boolean).join('\n\n'),
               abortSignal: runAbortSignal,
               onEvent,
               recoveryState,

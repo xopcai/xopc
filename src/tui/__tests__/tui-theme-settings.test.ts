@@ -24,7 +24,7 @@ describe('tui settings', () => {
       theme: 'auto',
       showThinking: false,
       toolsExpanded: false,
-      doubleEscapeAction: 'none',
+      doubleEscapeAction: 'fork',
       treeFilterMode: 'default',
       showTerminalProgress: false,
       showStartupHints: true,

@@ -20,6 +20,8 @@ type LocalShellDeps = {
   editor: Component;
   openOverlay: (component: Component) => void;
   closeOverlay: () => void;
+  beforeRun?: () => Promise<void>;
+  prepareCommand?: (command: string, cwd: string) => Promise<{ executable: string; args: string[]; shell: boolean }>;
   spawnCommand?: typeof spawn;
   getCwd?: () => string;
   env?: NodeJS.ProcessEnv;
@@ -128,6 +130,12 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       return;
     }
 
+    try { if (deps.beforeRun) await deps.beforeRun(); }
+    catch (error) {
+      deps.chatLog.addSystem(`Local shell blocked: ${error instanceof Error ? error.message : String(error)}`);
+      deps.tui.requestRender();
+      return;
+    }
     const allowed = await ensureLocalExecAllowed();
     if (!allowed) {
       return;
@@ -143,6 +151,10 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       return;
     }
 
+    let launch = { executable: cmd, args: [] as string[], shell: true };
+    try { if (deps.prepareCommand) launch = await deps.prepareCommand(cmd, cwd); }
+    catch (error) { deps.chatLog.addSystem(`Local shell blocked: ${error instanceof Error ? error.message : String(error)}`); deps.tui.requestRender(); return; }
+
     if (
       inheritStdio &&
       deps.runWithInheritedStdio &&
@@ -153,7 +165,7 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       try {
         await deps.runWithInheritedStdio(async () => {
           await new Promise<void>((resolve, reject) => {
-            const child = spawnCommand(cmd, {
+            const child = deps.prepareCommand ? spawnCommand(launch.executable, launch.args, { shell: launch.shell, cwd, env: { ...env, XOPC_SHELL: 'tui-local' }, stdio: 'inherit' }) : spawnCommand(cmd, {
               shell: true,
               cwd,
               env: { ...env, XOPC_SHELL: 'tui-local' },
@@ -198,7 +210,7 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
     deps.tui.requestRender();
 
     await new Promise<void>((resolve) => {
-      const child = spawnCommand(cmd, {
+      const child = deps.prepareCommand ? spawnCommand(launch.executable, launch.args, { shell: launch.shell, cwd, env: { ...env, XOPC_SHELL: 'tui-local' } }) : spawnCommand(cmd, {
         shell: true,
         cwd,
         env: { ...env, XOPC_SHELL: 'tui-local' },

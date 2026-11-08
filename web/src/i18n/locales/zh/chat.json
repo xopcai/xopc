@@ -349,6 +349,8 @@
       "manualSubjects": {"computer_use": "电脑操作", "browser_use": "浏览器操作", "phone_use": "手机操作", "xopc_use": "工作区操作", "web_search": "网页搜索"},
       "manualFor": "{{title}} · {{tool}}",
       "stepFailed": "未完成 · {{operation}}",
+      "waitingApproval": "等待批准",
+      "waitingInput": "等待你的回答",
       "builtins": {
         "codeExecution": { "running": "正在运行代码…", "completed": "运行代码" },
         "toolSearch": { "running": "正在查找可用工具…", "completed": "查找可用工具" },

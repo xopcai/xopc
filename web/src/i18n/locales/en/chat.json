@@ -349,6 +349,8 @@
       "manualSubjects": {"computer_use": "Computer control", "browser_use": "Browser control", "phone_use": "Phone control", "xopc_use": "Workspace actions", "web_search": "Web search"},
       "manualFor": "{{title}} · {{tool}}",
       "stepFailed": "Step failed · {{operation}}",
+      "waitingApproval": "Waiting for approval",
+      "waitingInput": "Waiting for your answer",
       "builtins": {
         "codeExecution": { "running": "Running code…", "completed": "Ran code" },
         "toolSearch": { "running": "Finding available tools…", "completed": "Found available tools" },

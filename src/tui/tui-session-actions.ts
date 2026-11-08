@@ -47,44 +47,58 @@ export function createSessionActions(context: SessionActionsContext) {
     onSessionInfoChange,
   } = context;
 
-  let refreshSessionInfoPromise: Promise<void> = Promise.resolve();
+  let generation = 0;
+  let historyRequest = 0;
+  let infoRequest = 0;
+  let pendingAbort: { runId: string; generation: number; promise: Promise<void> } | undefined;
   let lastHistoryKeys: string[] = [];
 
-  const runRefreshSessionInfo = async () => {
-    try {
-      state.sessionInfo = await client.getSessionInfo(state.currentConversationId);
-      if (state.sessionInfo.agentId) onAgentIdChange?.(state.sessionInfo.agentId);
-      onSessionInfoChange?.();
-      updateFooter();
-      tui.requestRender();
-    } catch {
-      // ignore
-    }
+  const captureSession = () => {
+    const conversationId = state.currentConversationId;
+    const version = generation;
+    return { conversationId, isCurrent: () => conversationId === state.currentConversationId && version === generation };
   };
 
   const refreshSessionInfo = async () => {
-    refreshSessionInfoPromise = refreshSessionInfoPromise.then(
-      runRefreshSessionInfo,
-      runRefreshSessionInfo,
-    );
-    await refreshSessionInfoPromise;
+    const session = captureSession();
+    const request = ++infoRequest;
+    try {
+      const info = await client.getSessionInfo(session.conversationId);
+      if (!session.isCurrent() || request !== infoRequest) return;
+      state.sessionInfo = { ...info, interactionPolicy: info.interactionPolicy ?? state.sessionInfo.interactionPolicy };
+      if (info.agentId) onAgentIdChange?.(info.agentId);
+      onSessionInfoChange?.();
+      updateFooter();
+      tui.requestRender();
+    } catch (error) {
+      if (!session.isCurrent() || request !== infoRequest) return;
+      chatLog.addStatus(`Session information unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      tui.requestRender();
+    }
   };
 
   const clearChatForSessionSwitch = () => {
+    generation++;
+    historyRequest++;
+    infoRequest++;
     chatLog.clearAll();
     clearSeenStreamEvents();
     sessionSnapshot?.clear();
     lastHistoryKeys = [];
     resetRunStatus(state);
+    state.sessionInfo = {};
     state.historyLoaded = false;
   };
 
   const loadHistory = async (opts?: { merge?: boolean }) => {
+    const session = captureSession();
+    const request = ++historyRequest;
     try {
       const { messages } = await client.loadHistory({
-        conversationId: state.currentConversationId,
+        conversationId: session.conversationId,
         limit: historyLimit,
       });
+      if (!session.isCurrent() || request !== historyRequest) return;
       sessionSnapshot?.replaceFromHistory(messages);
       const nextKeys = messages.map(historyMessageKey);
       const canAppend =
@@ -103,12 +117,15 @@ export function createSessionActions(context: SessionActionsContext) {
         appendHistoryToChatLog(chatLog, messages, state.toolsExpanded, state.showThinking);
       }
       lastHistoryKeys = nextKeys;
-    } catch {
-      // ignore; footer already hints on disconnect
-    } finally {
       state.historyLoaded = true;
-      await refreshSessionInfo();
-      tui.requestRender();
+    } catch (error) {
+      if (!session.isCurrent() || request !== historyRequest) return;
+      chatLog.addStatus(`History unavailable; showing the last loaded view. ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      if (session.isCurrent() && request === historyRequest) {
+        await refreshSessionInfo();
+        tui.requestRender();
+      }
     }
   };
 
@@ -120,14 +137,16 @@ export function createSessionActions(context: SessionActionsContext) {
     if (!client.loadHistoryWindow) {
       return false;
     }
+    const session = captureSession();
+    const request = ++historyRequest;
     try {
       const { messages } = await client.loadHistoryWindow({
-        conversationId: state.currentConversationId,
+        conversationId: session.conversationId,
         rowNumber: opts.rowNumber,
         before: opts.before,
         after: opts.after,
       });
-      if (messages.length === 0) {
+      if (!session.isCurrent() || request !== historyRequest || messages.length === 0) {
         return false;
       }
       sessionSnapshot?.replaceFromHistory(messages);
@@ -136,11 +155,16 @@ export function createSessionActions(context: SessionActionsContext) {
       lastHistoryKeys = messages.map(historyMessageKey);
       state.historyLoaded = true;
       return true;
-    } catch {
+    } catch (error) {
+      if (session.isCurrent() && request === historyRequest) {
+        chatLog.addStatus(`History window unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      }
       return false;
     } finally {
-      await refreshSessionInfo();
-      tui.requestRender();
+      if (session.isCurrent() && request === historyRequest) {
+        await refreshSessionInfo();
+        tui.requestRender();
+      }
     }
   };
 
@@ -155,29 +179,50 @@ export function createSessionActions(context: SessionActionsContext) {
     await loadHistory();
   };
 
-  const abortActive = async (opts?: { clearUi?: boolean }) => {
-    if (!state.activeRunId) {
-      return;
-    }
+  const abortActive = (opts?: { clearUi?: boolean }): Promise<void> => {
+    if (!state.activeRunId) return Promise.resolve();
+    if (pendingAbort?.runId === state.activeRunId && pendingAbort.generation === generation) return pendingAbort.promise;
+    const session = captureSession();
     const runId = state.activeRunId;
     markRunAborting(state, runId);
-    state.activeRunId = null;
-    if (opts?.clearUi !== false) {
-      chatLog.dropAssistant(runId);
-    }
-    setActivityStatus('idle');
-    markRunIdleAfterAbort(state);
+    setActivityStatus('aborting');
     tui.requestRender();
-    await client.abortChat({ conversationId: state.currentConversationId, runId }).catch(() => {});
+    const token = { runId, generation, promise: undefined as unknown as Promise<void> };
+    pendingAbort = token;
+    token.promise = (async () => {
+      try {
+        const result = await client.abortChat({ conversationId: session.conversationId, runId });
+        if (!session.isCurrent() || state.activeRunId !== runId) return;
+        if (!result.ok) throw new Error('The backend did not confirm that the run stopped.');
+        state.activeRunId = null;
+        if (opts?.clearUi !== false) chatLog.dropAssistant(runId);
+        markRunIdleAfterAbort(state);
+        setActivityStatus('idle');
+      } catch (error) {
+        if (!session.isCurrent() || state.activeRunId !== runId) return;
+        state.runStatus = { ...state.runStatus, phase: 'stalled', stalledAt: Date.now() };
+        setActivityStatus('stalled');
+        throw error;
+      } finally {
+        if (pendingAbort === token) pendingAbort = undefined;
+        if (session.isCurrent()) tui.requestRender();
+      }
+    })();
+    return token.promise;
   };
 
   const resetCurrentSession = async () => {
-    await client.resetSession(state.currentConversationId);
+    const session = captureSession();
+    await abortActive();
+    if (!session.isCurrent()) return;
+    await client.resetSession(session.conversationId);
+    if (!session.isCurrent()) return;
     clearChatForSessionSwitch();
     await loadHistory();
   };
 
   return {
+    sessionVersion: () => generation,
     refreshSessionInfo,
     loadHistory,
     loadHistoryWindow,

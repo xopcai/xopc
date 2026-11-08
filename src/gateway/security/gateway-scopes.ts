@@ -31,7 +31,7 @@ function methodScope(
 }
 
 export function requiredGatewayScope(method: string, path: string): GatewayScope | undefined {
-  if (/^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations)?$/.test(path)) return undefined;
+  if (/^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations|\/runs\/[^/]+\/events)?$/.test(path)) return undefined;
   // Authentication admits this surface; the dispatcher checks each capability's scopes.
   if (path === '/api/capabilities/operations' || path.startsWith('/api/capabilities/operations/')) return undefined;
   if (method === 'GET' && path === '/api/desktop-host/compatibility') return 'device.self';

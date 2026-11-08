@@ -31,7 +31,8 @@ actor RealtimeRunSocket {
         let socket = session.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
-        try await socket.send(.data(JSONEncoder().encode(helloFrame())))
+        guard let hello = try String(data: JSONEncoder().encode(helloFrame()), encoding: .utf8) else { throw GatewayClientError.invalidResponse }
+        try await socket.send(.string(hello))
 
         let heartbeat = Task { [weak self] in
             while !Task.isCancelled {
@@ -104,7 +105,8 @@ actor RealtimeRunSocket {
     private func sendPing() async throws {
         guard let socket else { return }
         let frame = RealtimeClientFrame(kind: "realtime.ping", payload: .ping)
-        try await socket.send(.data(JSONEncoder().encode(frame)))
+        guard let text = try String(data: JSONEncoder().encode(frame), encoding: .utf8) else { throw GatewayClientError.invalidResponse }
+        try await socket.send(.string(text))
     }
 
     private func helloFrame() -> RealtimeClientFrame {

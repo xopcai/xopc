@@ -1,6 +1,8 @@
 import type { Automation, AutomationProductEventRun, AutomationRun, AutomationRunEvent } from '../domain/types.js';
 import { AutomationSchema } from '../domain/validation.js';
-import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { afterSqliteCommit, getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { notifyAutomationRun } from '../run-changes.js';
+import type { LocalAppResourceScope } from '@xopcai/gateway-contract';
 
 const MAX_RUNS_PER_AUTOMATION = 2000;
 const TRIM_TO_RUNS = 1500;
@@ -128,6 +130,7 @@ export function listUnfinishedAutomationRuns(): AutomationRun[] {
 
 export function appendAutomationRunEvent(event: AutomationRunEvent): void {
   runSqliteWriteTransaction((db) => {
+    afterSqliteCommit(() => notifyAutomationRun(event.runId));
     db.prepare(
       `INSERT INTO automation_run_events (
         event_id, run_id, automation_id, type, message, data_json, created_at_ms
@@ -146,6 +149,7 @@ export function appendAutomationRunEvent(event: AutomationRunEvent): void {
 
 export function saveAutomationRun(run: AutomationRun): void {
   runSqliteWriteTransaction((db) => {
+    afterSqliteCommit(() => notifyAutomationRun(run.id));
     db.prepare(
       `INSERT OR REPLACE INTO automation_runs (
         run_id, automation_id, automation_name, status, trigger_snapshot_json,
@@ -231,6 +235,7 @@ export function getAutomationRun(runId: string): AutomationRun | null {
 }
 
 export interface AutomationRunListOptions {
+  localAppRestriction?: { extensionId: string; scope: LocalAppResourceScope };
   automationId?: string;
   projectId?: string;
   limit?: number;
@@ -241,6 +246,17 @@ export function listAutomationRuns(options?: AutomationRunListOptions): Automati
   const limit = Math.min(Math.max(options?.limit ?? 50, 1), 500);
   const clauses: string[] = [];
   const params: Array<string | number> = [];
+  if (options?.localAppRestriction) {
+    const { extensionId, scope } = options.localAppRestriction;
+    clauses.push("EXISTS (SELECT 1 FROM durable_state d WHERE d.namespace = 'local-app-automation-runs' AND d.scope = ? AND d.key = automation_runs.run_id)");
+    params.push(extensionId);
+    if (scope.mode === 'none') clauses.push('0');
+    if (scope.mode === 'selected') {
+      clauses.push(`EXISTS (SELECT 1 FROM automations a WHERE a.automation_id = automation_runs.automation_id
+        AND (a.automation_id IN (SELECT value FROM json_each(?)) OR a.project_id IN (SELECT value FROM json_each(?))))`);
+      params.push(JSON.stringify(scope.ids), JSON.stringify(scope.projectIds));
+    }
+  }
   if (options?.automationId) { clauses.push('automation_id = ?'); params.push(options.automationId); }
   if (options?.projectId) {
     clauses.push('EXISTS (SELECT 1 FROM automations a WHERE a.automation_id = automation_runs.automation_id AND a.project_id = ?)');

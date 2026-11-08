@@ -42,6 +42,14 @@ import { ChatPreviewService } from '../../chat-previews/index.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { listAutomationEvents } from '../../automations/events/index.js';
+import { AutomationService } from '../../automations/service/automation-service.js';
+import { saveAutomation } from '../../automations/storage/index.js';
+import { automationConfigurationDigest } from '../capabilities/automation-policy.js';
+import { LocalAppResourceScopesSchema } from '@xopcai/gateway-contract';
+import { DurableState } from '../../storage/sqlite/durable-state.js';
+import { saveAutomationRun } from '../../automations/storage/index.js';
+import { withLocalAppRunAuthority } from '../execution-authority.js';
+import { getExecutionAuthority } from '../../infra/execution-authority.js';
 
 describe('LocalAppService', () => {
   let config: Config;
@@ -76,6 +84,7 @@ describe('LocalAppService', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
@@ -122,6 +131,39 @@ describe('LocalAppService', () => {
       ],
     });
   }
+
+  it('enforces bounded runtime tools, conservative pricing reservations, revocation and active-run lifetime', async () => {
+    const created = service.create({ name: 'Bounded runtime', idea: 'Exercise host authority' });
+    acceptCurrentDraft(created.id); await service.install(created.id);
+    const automations = new AutomationService();
+    const automation = await automations.create({ name: 'Bounded agent', enabled: true, trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'Review' }, safety: { mode: 'auto_apply' }, delivery: { notificationPolicy: 'none', destinations: [] } });
+    const run = automations.queueRunAtomically(automation.id); saveAutomationRun({ ...run, status: 'running' });
+    const digest = service.getUiGrant(created.extensionId).manifestDigest!;
+    const authority = { model: true, tools: true, dataWrite: false, externalSend: false,
+      expiresAt: Date.now() + 3600000, maxRuns: 1, maxCostMicrousd: 110 };
+    const grant = service.grantUiPermissions(created.extensionId, digest, LocalAppResourceScopesSchema.parse({
+      automationsRun: { mode: 'selected', approvals: [{ id: automation.id, configurationDigest: automationConfigurationDigest(automation), authority }] },
+    }));
+    new DurableState('local-app-run-authority').set(run.id, { extensionId: created.extensionId, automationId: automation.id,
+      manifestDigest: digest, grantRevision: grant.grantRevision, releaseId: service.get(created.id)!.activeReleaseId,
+      configurationDigest: automationConfigurationDigest(automation), authority });
+    const configPath = join(paths.root, 'runtime-config.json'); writeFileSync(configPath, JSON.stringify(config)); vi.stubEnv('XOPC_CONFIG_PATH', configPath);
+    await withLocalAppRunAuthority(run.id, new AbortController().signal, async () => {
+      const execution = getExecutionAuthority()!;
+      expect(execution.allowsTool('read_file')).toBe(true);
+      expect(() => execution.assertTool?.('read_file', { path: 'SOUL.md' })).toThrow('outside this execution scope');
+      for (const tool of ['write_file', 'bash', 'exec_command', 'computer_use', 'xopc_use', 'tool_search']) expect(execution.allowsTool(tool)).toBe(false);
+      const model = { id: 'priced', provider: 'fixture', baseUrl: 'http://127.0.0.1', contextWindow: 100, maxTokens: 10,
+        cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } };
+      execution.reserveModel(model);
+      expect(() => execution.reserveModel(model)).toThrow('budget exhausted');
+      expect(() => execution.reserveModel({ ...model, provider: 'unknown', baseUrl: 'https://provider.invalid', cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } })).toThrow('known pricing');
+      service.revokeUiPermissions(created.extensionId, digest);
+      expect(() => execution.assertCurrent()).toThrow('revoked');
+    });
+    await automations.stop();
+  });
 
   function interrupted(appId: string) {
     const root = join(paths.root, 'local-apps', 'pending-releases');
@@ -682,14 +724,31 @@ describe('LocalAppService', () => {
     expect(() => service.getCapabilityAccess(created.extensionId, grant.manifestDigest!)).toThrow('not enabled and installed');
   });
 
+  it('rejects stale or fabricated automation configurations at permission approval time', async () => {
+    const created = service.create({ name: 'Automation authority', idea: 'Run a reviewed definition' });
+    acceptCurrentDraft(created.id); await service.install(created.id);
+    const digest = service.getUiGrant(created.extensionId).manifestDigest!;
+    const automation = await new AutomationService().create({ name: 'Reviewed', enabled: true,
+      trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Review' },
+      delivery: { notificationPolicy: 'none', destinations: [] } });
+    const scopes = LocalAppResourceScopesSchema.parse({ automationsRun: { mode: 'selected',
+      approvals: [{ id: automation.id, configurationDigest: automationConfigurationDigest(automation), authority: { model: true, expiresAt: Date.now() + 3600000, maxRuns: 1, maxCostMicrousd: 1000000 } }] } });
+    expect(service.grantUiPermissions(created.extensionId, digest, scopes).granted).toBe(true);
+    saveAutomation({ ...automation, action: { kind: 'agent', instruction: 'Different action' } });
+    expect(() => service.grantUiPermissions(created.extensionId, digest, scopes)).toThrow('Automation changed');
+    expect(() => service.grantUiPermissions(created.extensionId, digest, LocalAppResourceScopesSchema.parse({
+      automationsRun: { mode: 'selected', approvals: [{ id: 'invented', configurationDigest: 'a'.repeat(64) }] },
+    }))).toThrow('Automation changed');
+  });
+
   it('requires explicit data scope review and invalidates old authorization revisions', async () => {
     const created = service.create({ name: 'Scoped grant', idea: 'Keep data access bounded' });
     acceptCurrentDraft(created.id); await service.install(created.id);
     const digest = service.getUiGrant(created.extensionId).manifestDigest!;
     const first = service.grantUiPermissions(created.extensionId, digest);
     expect(first.resourceScopes).toEqual({ notesRead: { mode: 'none' }, notesWrite: { mode: 'none' }, tasksRead: { mode: 'none' },
-      tasksWrite: { mode: 'none' }, projectsRead: { mode: 'none' }, projectsWrite: { mode: 'none' }, filesRead: { mode: 'none' },
-      filesExport: false, filesImport: false, connectors: { mode: 'none' }, agentDelegate: false });
+      automationsRead: { mode: 'none' }, automationsRun: { mode: 'none' }, automationProposals: false, agentDelegate: false,
+      tasksWrite: { mode: 'none' }, projectsRead: { mode: 'none' }, projectsWrite: { mode: 'none' }, filesRead: { mode: 'none' }, filesExport: false, filesImport: false, connectors: { mode: 'none' } });
     const next = service.grantUiPermissions(created.extensionId, digest, {
       notesRead: { mode: 'workspace' }, notesWrite: { mode: 'none' }, tasksRead: { mode: 'none' },
     });

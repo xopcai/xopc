@@ -136,3 +136,11 @@ describe('TUI file autocomplete', () => {
     expect(applied.cursorCol).toBe('/skill:diagnose'.length);
   });
 });
+
+it('does not turn a removed command into a fuzzy match on Enter', async () => {
+  const provider = new ChainedAutocompleteProvider({
+    getSuggestions: async () => ({ prefix: '/models', items: [{ value: '/scoped-models', label: 'scoped-models' }] }),
+    applyCompletion: () => { throw new Error('A removed command must not be completed'); },
+  }, [], [], new Set(['scoped-models']), () => 'A', '/workspace');
+  expect(await provider.getSuggestions(['/models'], 0, 7, { signal: new AbortController().signal })).toBeNull();
+});

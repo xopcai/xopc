@@ -13,7 +13,6 @@ import {
   formatTuiModelsInfo,
   formatTuiSessionListInfo,
   formatTuiSessionInfo,
-  formatTuiSessionTreeInfo,
   formatTuiTranscriptTreeInfo,
   formatTuiTrustInfo,
   formatTuiUsageInfo,
@@ -28,13 +27,14 @@ it('exposes native usage and context commands', () => {
     expect(commands).toContain('usage');
     expect(commands).toContain('context');
     expect(commands).toContain('model');
-    expect(commands).toContain('clone');
+    expect(commands).toContain('fork');
+    expect(commands).not.toContain('clone');
     expect(commands).toContain('reasoning');
     expect(commands).toContain('verbose');
     expect(commands).toContain('config');
     expect(commands).toContain('export');
     expect(commands).toContain('import');
-    expect(commands).toContain('btw');
+    expect(commands).toContain('side');
     expect(commands).toContain('review');
     expect(commands).not.toContain('workflows');
     expect(commands).toContain('tree');
@@ -406,41 +406,6 @@ it('exposes native usage and context commands', () => {
     expect(text).toContain('openai/gpt-5');
     expect(text).toContain("6d9217fe-77c7-411d-8cc9-92aabe81a2d0");
     expect(text).toContain('Showing 1 of 2 sessions');
-  });
-
-  it('formats a grouped session tree', () => {
-    const now = Date.now();
-    const text = formatTuiSessionTreeInfo(
-      [
-        {
-          key: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
-          agentId: 'main', sourceChannel: 'cli',
-          displayName: 'Main',
-          updatedAt: now,
-          messageCount: 4,
-        },
-        {
-          key: "be248d51-6ecb-42cd-8a4a-c3e26464a824",
-          agentId: 'main', sourceChannel: 'telegram',
-          displayName: 'Alice fork',
-          updatedAt: now - 120_000,
-          messageCount: 2,
-          forkedFromConversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
-        },
-        {
-          key: 'plain-session',
-          updatedAt: now,
-        },
-      ],
-      { currentConversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0" },
-    );
-
-    expect(text).toContain('Session Tree');
-    expect(text).toContain('main/cli');
-    expect(text).toContain('* Main');
-    expect(text).toContain('main/telegram');
-    expect(text).toContain('forked from Main');
-    expect(text).toContain('unknown/chat');
   });
 
   it('formats a transcript tree', () => {

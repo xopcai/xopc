@@ -12,10 +12,29 @@ export type CreateExtensionClientOptions = {
 
 export function createExtensionClient(options?: CreateExtensionClientOptions): ExtensionClient {
   const transport = options?.transport ?? new Transport();
+  const runWatchers = new Map<string, { count: number; ready: Promise<unknown> }>();
 
   const client: ExtensionClient = {
     files: { pickAttachment: () => transport.request('files.pickAttachment') },
     requests: { async review(requestId) { await transport.request('apps.reviewRequest', { requestId }); } },
+    automation: {
+      async watchRun(runId, handler) {
+        const off = transport.on(`automation.run.${runId}`, handler);
+        let entry = runWatchers.get(runId);
+        if (!entry) { entry = { count: 0, ready: transport.request('automation.watchRun', { runId }) }; runWatchers.set(runId, entry); }
+        entry.count++;
+        try { await entry.ready; }
+        catch (error) { off(); if (--entry.count === 0 && runWatchers.get(runId) === entry) runWatchers.delete(runId); throw error; }
+        let stopped = false;
+        return () => {
+          if (stopped) return; stopped = true; off();
+          if (--entry.count === 0 && runWatchers.get(runId) === entry) {
+            runWatchers.delete(runId); void transport.request('automation.unwatchRun', { runId }).catch(() => {});
+          }
+        };
+      },
+      async reviewProposal(proposalId) { await transport.request('automation.reviewProposal', { proposalId }); },
+    },
     capability: {
       describe: id => transport.request('capability.describe', { id }),
       call: (id, call) => transport.request('capability.call', { id, call }),

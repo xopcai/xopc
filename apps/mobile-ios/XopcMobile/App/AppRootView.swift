@@ -79,6 +79,8 @@ struct AppRootView: View {
         })) {
             Button("关闭", role: .cancel) { messageLinks.errorMessage = nil }
         } message: { Text(messageLinks.errorMessage ?? "") }
+        // State initializers also run for discarded view values; refresh only the mounted view.
+        .task { await appState.refreshGatewayOnForeground() }
         .onChange(of: scenePhase) {
             if scenePhase == .active {
                 Task { await appState.refreshGatewayOnForeground() }

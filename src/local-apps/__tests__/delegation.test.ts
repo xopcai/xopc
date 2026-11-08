@@ -48,6 +48,25 @@ function fixture() {
 }
 
 describe('restricted Local App Agent delegation', () => {
+  it('returns validated JSON and honors a bounded larger output budget without adding tools', async () => {
+    const f = fixture();
+    complete.mockResolvedValueOnce({ content: [{ type: 'text', text: '{"items":[{"title":"Follow up"}]}' }], stopReason: 'stop' } as never);
+    expect(await f.call({ ...f.input, responseFormat: 'json', maxOutputTokens: 4096 })).toMatchObject({
+      data: { json: { items: [{ title: 'Follow up' }] }, finishReason: 'completed' },
+    });
+    expect(complete.mock.calls[0][2]).toMatchObject({ maxTokens: 4096, maxRetries: 0 });
+    expect(complete.mock.calls[0][1].systemPrompt).toContain('valid JSON');
+    expect(complete.mock.calls[0][1]).not.toHaveProperty('tools');
+    for (const [text, stopReason] of [['not JSON', 'stop'], ['{"partial":true}', 'length']] as const) {
+      complete.mockResolvedValueOnce({ content: [{ type: 'text', text }], stopReason } as never);
+      const key = crypto.randomUUID();
+      await expect(f.call({ ...f.input, responseFormat: 'json' }, key)).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+      const calls = complete.mock.calls.length;
+      await expect(f.call({ ...f.input, responseFormat: 'json' }, key)).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+      expect(complete).toHaveBeenCalledTimes(calls);
+    }
+    await expect(f.call({ ...f.input, maxOutputTokens: 4097 }, 'oversize')).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  });
   it('uses pinned production reads and one tool-less model request with only explicit context; replays once', async () => {
     const f = fixture();
     const result = await f.call();

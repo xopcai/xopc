@@ -123,6 +123,9 @@ For concurrent workspace builds, build the console into a separate output direct
 `XOPC_SMOKE_ARTIFACT_DIR` retains screenshots. [Restricted Agent delegation](./local-app-delegation.md)
 is available to explicitly authorized installed apps and is excluded from all preview modes.
 
+[Automation execution](./local-app-automations.md), including its read and run-management interfaces,
+is also excluded from every preview mode. Preview code should present an unavailable state.
+
 ## Installation and acceptance
 
 Automatic acceptance is advisory. A failed, missing or still-running acceptance result does not

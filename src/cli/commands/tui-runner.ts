@@ -3,7 +3,7 @@ import { detectMigrations } from '../../migrations/runner.js';
 import { bootstrapApplicationStateSync } from '../../bootstrap/application-state.js';
 import type { TuiOptions } from '../../tui/tui-types.js';
 
-export type TuiCliOptions = Record<string, string | boolean | undefined>;
+export type TuiCliOptions = Record<string, string | string[] | boolean | undefined>;
 
 export interface TuiLaunchOverrides {
   session?: string;
@@ -49,6 +49,7 @@ export function resolveTuiOptions(
     credential,
     session: overrides.session ?? (typeof options.session === 'string' ? options.session : undefined),
     agentId: typeof options.agent === 'string' ? options.agent : undefined,
+    images: Array.isArray(options.image) ? options.image : undefined,
     message: typeof options.message === 'string' ? options.message : undefined,
     workdir: typeof options.workdir === 'string' ? options.workdir : undefined,
     useStartupCwd: options.cwd !== false,

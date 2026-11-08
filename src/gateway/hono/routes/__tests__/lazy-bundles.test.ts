@@ -6,6 +6,16 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps TUI session controls without capturing neighboring routes', () => {
+    for (const path of ['/api/tui/manage', '/api/tui/side', '/api/tui/sessions/id/search', '/api/tui/sessions/id/jobs/job/resize', '/api/tui/sessions/id/subagents/child/steer', '/api/tui/sessions/id/subagents/child/resume', '/api/tui/sessions/id/subagents/child/transcript', '/api/tui/startup-resources', '/api/tui/diff', '/api/tui/capabilities/skills', '/api/tui/capabilities/mcp', '/api/tui/capabilities/plugins', '/api/tui/sessions/id/policy', '/api/tui/sessions/id/jobs',
+      '/api/tui/sessions/id/jobs/job', '/api/tui/sessions/id/jobs/job/stop', '/api/tui/sessions/id/jobs/job/stdin',
+      '/api/tui/sessions/id/subagents', '/api/tui/sessions/id/subagents/child', '/api/tui/sessions/id/subagents/child/stop']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('tui');
+    }
+    for (const path of ['/api/tui-other', '/api/tui/diff/extra', '/api/tui/sessions/id/policy/extra', '/api/tui/sessions/id/jobs/job/stop/extra']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('tui');
+    }
+  });
   it('routes app development handoffs without capturing previews or other app routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/local-apps/app/development-conversation')?.id).toBe('local-app-development');
     for (const path of ['/api/local-apps/app', '/api/local-apps/app/validate', '/api/local-apps/app/development-conversation/extra', '/api/local-apps/preview/token/draft/ui/index.html']) {
@@ -21,14 +31,15 @@ describe('lazy route bundles', () => {
     }
   });
   it('keeps Local App catalog, grants and resource options in their owning bundles', () => {
-    for (const path of ['/api/local-app-capabilities/catalog', '/api/local-app-capabilities/app', '/api/local-app-capabilities/app/xopc.notes.get/invocations']) {
+    for (const path of ['/api/local-app-capabilities/catalog', '/api/local-app-capabilities/app', '/api/local-app-capabilities/app/xopc.notes.get/invocations', '/api/local-app-capabilities/app/runs/run/events']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('local-app-capabilities');
     }
-    for (const path of ['/api/extensions/app/ui-grant', '/api/extensions/app/resource-options', '/api/extensions/app/access-audit', '/api/extensions/app/resource-requests/request', '/api/extensions/app/resource-requests/request/review']) {
+    for (const path of ['/api/extensions/app/ui-grant', '/api/extensions/app/resource-options', '/api/extensions/app/access-audit', '/api/extensions/app/automation-proposals/proposal', '/api/extensions/app/automation-proposals/proposal/review', '/api/extensions/app/resource-requests/request', '/api/extensions/app/resource-requests/request/review']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('auth-registry-extensions');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/local-app-capabilities/app/resource-requests/request')?.id).not.toBe('local-app-capabilities');
     expect(findAuthenticatedLazyRouteBundle('/api/local-app-capabilities/app/resource-options')?.id).not.toBe('local-app-capabilities');
+    expect(findAuthenticatedLazyRouteBundle('/api/local-app-capabilities/app/runs/run/events/extra')?.id).not.toBe('local-app-capabilities');
   });
   it('maps device host enrollment independently', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/hosts/enrollment')?.id).toBe('device-hosts');

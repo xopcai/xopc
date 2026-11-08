@@ -39,6 +39,14 @@ function title(
 }
 
 describe('getToolExecutionTitle', () => {
+  it.each(['en', 'zh'] as const)('does not claim a blocked operation executed while waiting in %s', language => {
+    const chat = messages(language).chat;
+    for (const name of ['exec_command', 'browser_use', 'computer_use']) {
+      expect(getPublicToolExecutionTitle({ name, result: { details: { status: 'waiting', kind: 'approval' } } },
+        'completed', chat.toolActivity, friendly(language), chat.stepsClusterIng)).toBe(chat.toolActivity.waitingApproval);
+    }
+  });
+
   it.each([
     ['project', 'list', 'Inspecting project…', 'Inspected project'],
     ['project', 'create_milestone', 'Creating milestone…', 'Created milestone'],
