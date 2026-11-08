@@ -221,31 +221,35 @@ private struct UserUnderstandingView: View {
         List {
             Picker("内容", selection: $section) {
                 Text("概览").tag(0)
-                Text("理解").tag(1)
+                Text("记住的你").tag(1)
             }
             .pickerStyle(.segmented)
             if section == 0 {
                 Section("基本信息") {
                     LabeledContent("称呼", value: summary.profile.callName ?? summary.suggestedCallName ?? "你")
-                    LabeledContent("角色", value: summary.profile.role ?? "未设置")
+                    if let role = summary.profile.role, !role.isEmpty {
+                        LabeledContent("角色", value: role)
+                    }
                     Button("编辑基本信息") { editingProfile = true }
                 }
-                Section("当前重点") {
-                    Text(summary.primaryFocus?.title ?? "尚未设置当前重点")
-                    if let outcome = summary.primaryFocus?.desiredOutcome {
-                        Text(outcome).foregroundStyle(.secondary)
+                Section {
+                    Text("记住你的偏好。记错了，随时改。")
+                        .foregroundStyle(.secondary)
+                    if summary.recent.isEmpty {
+                        Text("试着告诉 xopc「回答时先给结论」，让它记住你的偏好。")
                     }
+                    ForEach(summary.recent.prefix(3)) { item in
+                        memoryRow(item)
+                    }
+                    Button("查看全部记忆") { section = 1 }
+                } header: {
+                    Text("xopc 记住的你")
                 }
-                Section("理解") {
-                    LabeledContent("你告诉 xopc", value: "\(summary.counts.explicit)")
-                    LabeledContent("逐渐学到", value: "\(summary.counts.learned)")
-                    LabeledContent("待确认", value: "\(summary.counts.review)")
-                    Button("查看全部理解") { section = 1 }
-                }
-                Section("最近理解") {
-                    ForEach(summary.recent) { item in
-                        NavigationLink(item.statement) {
-                            UserAssertionDetailView(configuration: configuration, id: item.id)
+                if let focus = summary.primaryFocus {
+                    Section("最近在关注") {
+                        Text(focus.title)
+                        if let outcome = focus.desiredOutcome, !outcome.isEmpty {
+                            Text(outcome).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -259,32 +263,19 @@ private struct UserUnderstandingView: View {
             } else {
                 Picker("筛选", selection: $filter) {
                     Text("全部").tag("all")
-                    Text("你提供").tag("explicit")
-                    Text("逐渐学到").tag("learned")
+                    Text("你说过的").tag("explicit")
+                    Text("协作中发现").tag("learned")
                     Text("待确认").tag("review")
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
                 ForEach(assertions) { item in
-                    NavigationLink {
-                        UserAssertionDetailView(configuration: configuration, id: item.id) {
-                            Task {
-                                await refreshSummary()
-                                await loadAssertions()
-                            }
-                        }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.statement)
-                            Text(item.authority == "user_explicit" ? "你提供" : "逐渐学到")
-                                .mobileTextStyle(.caption).foregroundStyle(.secondary)
-                        }
-                    }
+                    memoryRow(item)
                 }
                 if let nextCursor {
                     Button("加载更多") { Task { await loadAssertions(cursor: nextCursor) } }
                 } else if assertions.isEmpty {
-                    ContentUnavailableView("暂无理解", systemImage: "text.bubble",
-                                           description: Text("你与 xopc 协作时，有用的偏好和信息会出现在这里。"))
+                    ContentUnavailableView("暂无相关记忆", systemImage: "text.bubble",
+                                           description: Text("试试其他筛选，或在聊天中告诉 xopc 你的偏好。"))
                 }
             }
             if error != nil {
@@ -293,7 +284,7 @@ private struct UserUnderstandingView: View {
         }
         .navigationTitle("关于你")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "搜索理解")
+        .searchable(text: $query, prompt: "搜索记忆")
         .task(id: "\(section):\(filter):\(query)") {
             guard section == 1 else { return }
             if !query.isEmpty {
@@ -303,11 +294,32 @@ private struct UserUnderstandingView: View {
                 await loadAssertions()
             }
         }
-        .refreshable { await loadAssertions() }
+        .refreshable {
+            await refreshSummary()
+            if section == 1 { await loadAssertions() }
+        }
         .sheet(isPresented: $editingProfile) {
             ProfileEditorView(configuration: configuration, profile: summary.profile) {
                 await refreshSummary()
             }
+        }
+    }
+
+    private func memoryRow(_ item: MobileUserAssertion) -> some View {
+        NavigationLink {
+            UserAssertionDetailView(configuration: configuration, id: item.id) {
+                Task {
+                    await refreshSummary()
+                    if section == 1 { await loadAssertions() }
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.statement).lineLimit(3)
+                Text(userMemorySource(item))
+                    .mobileTextStyle(.caption).foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
         }
     }
 
@@ -478,18 +490,26 @@ private struct UserAssertionDetailView: View {
     var body: some View {
         Form {
             if let item {
-                Section("xopc 的理解") {
+                Section("记住的内容") {
                     if editing {
                         TextEditor(text: $statement).frame(minHeight: 160)
                     } else {
                         Text(item.statement).mobileTextStyle(.sectionTitle)
                     }
                 }
-                Section("依据与范围") {
-                    LabeledContent("来源", value: item.sources?.compactMap(\.label).joined(separator: " · ") ?? "系统推断")
-                    LabeledContent("范围", value: item.scope?.type ?? "全局")
-                    if let confidence = item.confidence {
-                        LabeledContent("置信度", value: "\(Int(confidence * 100))%")
+                Section {
+                    Text(userMemorySource(item)).foregroundStyle(.secondary)
+                    DisclosureGroup("来源与使用") {
+                        if let sources = item.sources?.compactMap(\.label), !sources.isEmpty {
+                            Text(sources.joined(separator: " · "))
+                        } else {
+                            Text("暂无更详细的来源记录")
+                        }
+                        LabeledContent {
+                            Text(userMemoryScope(item.scope?.type))
+                        } label: {
+                            Text("在哪里使用")
+                        }
                     }
                 }
                 Section {
@@ -499,7 +519,7 @@ private struct UserAssertionDetailView: View {
                         Button("取消") { editing = false }
                     } else {
                         Button("编辑") { statement = item.statement; editing = true }
-                        Button("删除这条理解", role: .destructive) { showDelete = true }
+                        Button("删除这条记忆", role: .destructive) { showDelete = true }
                     }
                 }
             } else if error == nil {
@@ -509,9 +529,9 @@ private struct UserAssertionDetailView: View {
                 Text(error).foregroundStyle(.red)
             }
         }
-        .navigationTitle("理解详情")
+        .navigationTitle("记忆详情")
         .task { await load() }
-        .confirmationDialog("删除这条理解？", isPresented: $showDelete) {
+        .confirmationDialog("删除这条记忆？", isPresented: $showDelete) {
             Button("删除", role: .destructive) { Task { await remove() } }
         } message: { Text("原始对话和文件不会删除。") }
     }
@@ -536,6 +556,28 @@ private struct UserAssertionDetailView: View {
             onChanged()
             dismiss()
         } catch { self.error = error.localizedDescription }
+    }
+}
+
+private func userMemorySource(_ item: MobileUserAssertion) -> LocalizedStringKey {
+    if ["candidate", "needs_review", "conflicted"].contains(item.status) { return "待你确认" }
+    switch item.authority {
+    case "user_explicit": return "你说过的"
+    case "system_inferred": return "xopc 的推测"
+    case "external_untrusted": return "来自关联资料"
+    case "user_observed": return "协作中发现"
+    default: return "来源未记录"
+    }
+}
+
+private func userMemoryScope(_ scope: String?) -> LocalizedStringKey {
+    switch scope {
+    case "global": return "所有对话"
+    case "agent": return "当前助手"
+    case "project": return "当前项目"
+    case "workspace": return "当前工作区"
+    case "session": return "当前对话"
+    default: return "指定范围"
     }
 }
 

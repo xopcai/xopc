@@ -139,6 +139,37 @@ describe('UserModelPage summary navigation', () => {
     expect(container.textContent).not.toContain('Workspace uses pnpm.');
   });
 
+  it('shows remembered content on the overview and opens its actual category', async () => {
+    const summary = container.querySelector('section[aria-label="What xopc remembers about you"]');
+    expect(summary?.textContent).toContain('Prefers visual summaries.');
+    expect(summary?.textContent).toContain('Inferred by xopc');
+    expect(summary?.querySelector('details')?.open).toBe(false);
+    const category = summary?.querySelector<HTMLButtonElement>('[aria-label="Preferences and working rhythm: 1"]');
+    expect(category).not.toBeNull();
+    await act(async () => category?.click());
+    expect(container.querySelector('[data-testid="router-location"]')?.textContent)
+      .toBe('/user-model?tab=understanding&category=preferences');
+    expect(container.querySelector('[role="tabpanel"]')?.textContent).toContain('Prefers visual summaries.');
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="router-back"]')?.click());
+    expect(container.querySelector('#understanding-tab-overview')?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('searches personal details and lets the user recover from an empty result', async () => {
+    await act(async () => container.querySelector<HTMLButtonElement>('#understanding-tab-understanding')?.click());
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="Search memories"]');
+    expect(input).not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, 'unmatched');
+      input?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="router-location"]')?.textContent).toContain('search=unmatched');
+    expect(container.querySelector('[role="tabpanel"]')?.textContent).toContain('No matching details.');
+    const clear = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent === 'Clear filters');
+    await act(async () => clear?.click());
+    expect(container.querySelector('[role="tabpanel"]')?.textContent).toContain('Prefers visual summaries.');
+    expect(container.querySelector('[data-testid="router-location"]')?.textContent).not.toContain('search=');
+  });
+
 
   it('keeps personal understanding and work memory in independent primary views with browser history', async () => {
     const personal = container.querySelector<HTMLButtonElement>('#understanding-tab-understanding');

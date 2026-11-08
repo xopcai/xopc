@@ -88,7 +88,7 @@ function viewFromSearchParams(searchParams: URLSearchParams): View {
 
 const copy = {
   en: {
-    pageTitle: 'Me',
+    pageTitle: 'About you',
     overview: 'Overview',
     understanding: 'What xopc knows',
     privacy: 'Data & privacy',
@@ -139,8 +139,8 @@ const copy = {
     refreshing: 'Refreshing…',
     refreshComplete: 'Refreshed',
     refreshFailed: 'Refresh failed',
-    aboutYouTitle: 'A view you can correct',
-    aboutYouHint: 'Your identity, preferences, habits and collaboration style, grounded in what you tell xopc. Repeated choices may form tentative understanding. You can inspect, edit or delete each item.',
+    aboutYouTitle: 'What xopc remembers about you',
+    aboutYouHint: 'Review your background, preferences, and habits. Edit anything that no longer fits.',
     identity: 'Who you are',
     preferences: 'Preferences and working rhythm',
     relationships: 'People and relationships',
@@ -168,7 +168,7 @@ const copy = {
     actionFailed: 'The change could not be saved. Please try again.',
   },
   zh: {
-    pageTitle: '我的',
+    pageTitle: '关于你',
     overview: '总览',
     understanding: '对我的了解',
     privacy: '数据与隐私',
@@ -193,9 +193,9 @@ const copy = {
     explicitHint: '你明确表达的事实与偏好',
     learned: '协作中学到的',
     learnedHint: '从实际协作中形成的认识',
-    allUnderstanding: '全部理解',
+    allUnderstanding: '全部来源',
     understandingFilterHint: '按内容来源筛选这份理解。',
-    importantNow: '此刻重要',
+    importantNow: '你最近在关注什么',
     prioritySourceGoal: '来自你确认的当前目标',
     prioritySourceWork: '来自当前工作上下文',
     editPriority: '编辑',
@@ -219,14 +219,14 @@ const copy = {
     refreshing: '正在刷新…',
     refreshComplete: '已刷新',
     refreshFailed: '刷新失败',
-    aboutYouTitle: '一份可以共同修正的理解',
-    aboutYouHint: '基于你的表达，逐渐了解你的身份、偏好、习惯和协作方式。多次选择形成的理解会标为推测；每条都可以查看依据、修改或删除。',
-    identity: '关于你是谁',
-    preferences: '偏好与工作节奏',
+    aboutYouTitle: 'xopc 记住的你',
+    aboutYouHint: '在这里查看你的背景、偏好和习惯。有不准确或已经变化的内容，可以直接修改。',
+    identity: '你的背景与能力',
+    preferences: '偏好与习惯',
     relationships: '重要的人与关系',
-    currentState: '当前状态',
-    insights: '我形成的判断',
-    emptyGroup: '还没有形成可用的个人理解。明确表达的长期偏好会在协作中逐渐积累；项目事实和进展在「工作记忆」中查看。',
+    currentState: '最近的状态',
+    insights: '其他观察',
+    emptyGroup: '还没有记住关于你的信息。你可以在聊天中告诉 xopc 你的背景或偏好，例如「回答时先给结论」。',
     correct: '修正',
     save: '保存修正',
     cancel: '取消',
@@ -795,7 +795,10 @@ export function UserModelPage() {
   const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string>();
   const [profileOpen, setProfileOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
-  const [understandingFilter, setUnderstandingFilter] = useState<UnderstandingFilter>('all');
+  const sourceFilter = searchParams.get('source');
+  const understandingFilter: UnderstandingFilter = sourceFilter === 'explicit' || sourceFilter === 'learned' ? sourceFilter : 'all';
+  const personalQuery = searchParams.get('search') ?? '';
+  const understandingCategory = searchParams.get('category') ?? 'all';
   const [knowledgeKindFilter, setKnowledgeKindFilter] = useState<KnowledgeKindFilter>('all');
   const [refreshFeedback, setRefreshFeedback] = useState<RefreshFeedback>('idle');
   const refreshResetTimer = useRef<number | undefined>(undefined);
@@ -811,6 +814,15 @@ export function UserModelPage() {
       else next.set('tab', nextView);
       return next;
     });
+  };
+
+  const setUnderstandingParam = (key: string, value: string, replace = false) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (!value || value === 'all') next.delete(key);
+      else next.set(key, value);
+      return next;
+    }, { replace });
   };
 
   const refreshUserModel = useCallback(async () => {
@@ -992,9 +1004,21 @@ export function UserModelPage() {
     .sort((a, b) => b.recordedAt - a.recordedAt);
   const profile = profileFromResponse(data);
   const displayName = profile.callName || (language === 'zh' ? '你' : 'You');
-  const explicitCount = assertions.filter((item) => item.authority === 'user_explicit').length;
-  const learnedCount = assertions.length - explicitCount;
-  const filteredAssertions = assertions.filter((item) => {
+  const assertionCategories = [
+    { key: 'identity', title: t.identity, icon: UserRound, kinds: ['identity', 'capability'] },
+    { key: 'preferences', title: t.preferences, icon: Compass, kinds: ['preference', 'value', 'routine'] },
+    { key: 'relationships', title: t.relationships, icon: Handshake, kinds: ['relationship'] },
+    { key: 'current', title: t.currentState, icon: Clock3, kinds: ['current_state'] },
+    { key: 'insights', title: t.insights, icon: Sparkles, kinds: ['derived_insight'] },
+  ];
+  const selectedCategory = assertionCategories.find((group) => group.key === understandingCategory);
+  const matchingAssertions = assertions.filter((item) => (
+    (!selectedCategory || selectedCategory.kinds.includes(item.kind))
+    && (!personalQuery.trim() || item.statement.toLocaleLowerCase().includes(personalQuery.trim().toLocaleLowerCase()))
+  ));
+  const explicitCount = matchingAssertions.filter((item) => item.authority === 'user_explicit').length;
+  const learnedCount = matchingAssertions.length - explicitCount;
+  const filteredAssertions = matchingAssertions.filter((item) => {
     if (understandingFilter === 'explicit') return item.authority === 'user_explicit';
     if (understandingFilter === 'learned') return item.authority !== 'user_explicit';
     return true;
@@ -1017,40 +1041,12 @@ export function UserModelPage() {
   const searchedKnowledge = kindFilteredKnowledge.filter((item) => !normalizedQuery
     || item.content.toLocaleLowerCase().includes(normalizedQuery)
     || knowledgeKindLabel(item.kind, language).toLocaleLowerCase().includes(normalizedQuery));
-  const groupedAssertions = [
-    { key: 'identity', title: t.identity, icon: UserRound, items: filteredAssertions.filter((item) => item.kind === 'identity') },
-    { key: 'preferences', title: t.preferences, icon: Compass, items: filteredAssertions.filter((item) => ['preference', 'value', 'routine', 'capability'].includes(item.kind)) },
-    { key: 'relationships', title: t.relationships, icon: Handshake, items: filteredAssertions.filter((item) => item.kind === 'relationship') },
-    { key: 'current', title: t.currentState, icon: Clock3, items: filteredAssertions.filter((item) => item.kind === 'current_state') },
-    { key: 'insights', title: t.insights, icon: Sparkles, items: filteredAssertions.filter((item) => item.kind === 'derived_insight') },
-  ];
-  const visibleAssertionGroups = groupedAssertions.filter((group) => group.items.length > 0);
-  const understandingCategories = [
-    {
-      key: 'about', icon: UserRound,
-      label: language === 'zh' ? '关于我' : 'About me',
-      hint: language === 'zh' ? '身份、背景与能力' : 'Identity, background, and capabilities',
-      count: assertions.filter((item) => ['identity', 'capability'].includes(item.kind)).length,
-    },
-    {
-      key: 'preferences', icon: Compass,
-      label: language === 'zh' ? '偏好与习惯' : 'Preferences & habits',
-      hint: language === 'zh' ? '沟通方式与日常习惯' : 'Communication and routines',
-      count: assertions.filter((item) => ['preference', 'value', 'routine'].includes(item.kind)).length,
-    },
-    {
-      key: 'people', icon: Handshake,
-      label: language === 'zh' ? '重要的人' : 'Important people',
-      hint: language === 'zh' ? '与你有关的人和关系' : 'People and relationships',
-      count: assertions.filter((item) => item.kind === 'relationship').length,
-    },
-    {
-      key: 'goals', icon: Sparkles,
-      label: language === 'zh' ? '目标与计划' : 'Goals & plans',
-      hint: language === 'zh' ? '正在推进的长期目标' : 'Long-term outcomes in progress',
-      count: activeGoals.length,
-    },
-  ];
+  const visibleAssertionGroups = assertionCategories
+    .map((group) => ({ ...group, items: filteredAssertions.filter((item) => group.kinds.includes(item.kind)) }))
+    .filter((group) => group.items.length > 0);
+  const overviewAssertionGroups = assertionCategories
+    .map((group) => ({ ...group, items: assertions.filter((item) => group.kinds.includes(item.kind)) }))
+    .filter((group) => group.items.length > 0);
   const memoryCounts = knowledgeKindOrder
     .map((kind) => ({ kind, count: visibleKnowledge.filter((item) => item.kind === kind).length }))
     .filter((entry) => entry.count > 0);
@@ -1067,14 +1063,22 @@ export function UserModelPage() {
     }))
     .filter((group) => group.items.length > 0);
   const understandingFilterOptions: Array<{ id: UnderstandingFilter; label: string; count: number }> = [
-    { id: 'all', label: t.allUnderstanding, count: assertions.length },
+    { id: 'all', label: t.allUnderstanding, count: matchingAssertions.length },
     { id: 'explicit', label: t.explicit, count: explicitCount },
     { id: 'learned', label: t.learned, count: learnedCount },
   ];
 
-  const openUnderstanding = (filter: UnderstandingFilter) => {
-    setUnderstandingFilter(filter);
-    setView('understanding');
+  const openUnderstanding = (category = 'all') => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('tab', 'understanding');
+      next.delete('section');
+      next.delete('source');
+      next.delete('search');
+      if (category === 'all') next.delete('category');
+      else next.set('category', category);
+      return next;
+    });
   };
 
   const openKnowledge = (kind: KnowledgeKindFilter) => {
@@ -1097,23 +1101,25 @@ export function UserModelPage() {
       onCancel={() => { setEditingId(undefined); setDraft(''); }}
       onDelete={() => void act(item.id, () => deleteAssertion(item.id))}
       onCorrect={() => saveCorrection(item)}
-      onScopeChange={(scope) => void act(item.id, () => setAssertionScope(item.id, scope))}
+      onScopeChange={(scope) => void act(item.id, () => setAssertionScope(item.id, scope, item.version))}
     />
   );
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-4 pt-3 sm:space-y-8 sm:px-6 sm:pb-7 lg:px-8 lg:pb-10 lg:pt-4">
-      <LearningStatus language={language} />
+      <div className="hidden px-1 sm:block">
+        <p className="text-sm leading-6 text-fg-muted">{language === 'zh' ? '让 xopc 按你的习惯与你协作。记错了，随时改。' : 'Help xopc work your way. You can correct what it remembers at any time.'}</p>
+      </div>
       <PageTabs<PrimaryView>
         items={[
           { id: 'overview', label: t.overview, icon: Sparkles },
           {
             id: 'understanding',
-            label: <><span className="sm:hidden">{language === 'zh' ? '了解我' : 'About me'}</span><span className="hidden sm:inline">{t.understanding}</span></>,
+            label: <><span className="sm:hidden">{language === 'zh' ? '记住的你' : 'Memories'}</span><span className="hidden sm:inline">{t.understanding}</span></>,
             icon: UserRound,
             count: assertions.length,
           },
-          { id: 'work', label: <><span className="sm:hidden">{language === 'zh' ? '工作' : 'Work'}</span><span className="hidden sm:inline">{t.knowledge}</span></>, title: t.knowledge, icon: BriefcaseBusiness, count: visibleKnowledge.length },
+          { id: 'work', label: <><span className="sm:hidden">{language === 'zh' ? '工作记忆' : 'Work'}</span><span className="hidden sm:inline">{t.knowledge}</span></>, title: t.knowledge, icon: BriefcaseBusiness, count: visibleKnowledge.length },
           {
             id: 'privacy',
             label: <><span className="sm:hidden">{language === 'zh' ? '隐私' : 'Privacy'}</span><span className="hidden sm:inline">{t.privacy}</span></>,
@@ -1141,8 +1147,8 @@ export function UserModelPage() {
       ) : null}
 
       {view === 'overview' ? (
-        <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="space-y-8 sm:space-y-10">
-          <section data-testid="overview-hero" className="grid gap-5 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:gap-12">
+        <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="grid grid-cols-1 items-start gap-6 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+          <section data-testid="overview-hero" className="min-w-0 lg:col-start-1 lg:row-start-1">
             <div className="min-w-0 px-1 sm:py-2">
               <div className="flex items-center gap-3 sm:flex-wrap sm:gap-5">
                 <Loopi
@@ -1151,7 +1157,7 @@ export function UserModelPage() {
                 />
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
-                  <p className="mt-1 break-words text-sm text-fg-muted">{profile.role || t.notProvided}</p>
+                  <p className="mt-1 break-words text-sm text-fg-muted">{profile.role || (language === 'zh' ? '从你的背景和偏好开始了解你' : 'Your background and preferences, in one place')}</p>
                 </div>
                 <Button variant="ghost" className="size-11 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3" onClick={() => setProfileOpen(true)}>
                   <UserRoundPen className="size-4" aria-hidden="true" />
@@ -1160,10 +1166,10 @@ export function UserModelPage() {
               </div>
               <dl className="mt-6 hidden gap-x-8 gap-y-5 sm:grid sm:grid-cols-3">
                 {[
-                  { icon: Languages, label: t.locale, value: profile.locale ? localeLabel(profile.locale, language) : t.notProvided },
-                  { icon: MapPin, label: t.timezone, value: profile.timezone || t.notProvided },
-                  { icon: UserRound, label: t.pronouns, value: profile.pronouns || t.notProvided },
-                ].map(({ icon: Icon, label, value }) => (
+                  { icon: Languages, label: t.locale, value: profile.locale ? localeLabel(profile.locale, language) : '' },
+                  { icon: MapPin, label: t.timezone, value: profile.timezone },
+                  { icon: UserRound, label: t.pronouns, value: profile.pronouns },
+                ].filter(({ value }) => value).map(({ icon: Icon, label, value }) => (
                   <div key={label} className="min-w-0">
                     <dt className="flex items-center gap-1.5 text-xs text-fg-subtle"><Icon className="size-3.5" aria-hidden="true" />{label}</dt>
                     <dd className="mt-1.5 truncate text-sm font-medium text-fg">{value}</dd>
@@ -1171,10 +1177,65 @@ export function UserModelPage() {
                 ))}
               </dl>
             </div>
-            <aside data-testid="priority-panel" className="flex min-h-0 flex-col rounded-[1.4rem] bg-surface-panel p-5 shadow-surface sm:min-h-64 sm:p-6">
+
+          </section>
+
+          {reviewAssertions.length ? (
+            <section className="overflow-hidden rounded-2xl bg-accent-soft/70 shadow-surface lg:col-span-2" aria-label={language === 'zh' ? '需要你确认' : 'Needs your review'}>
+              <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-panel text-accent-fg"><Sparkles className="size-4" aria-hidden="true" /></span>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '这条理解准确吗？' : 'Needs your review'}</h2>
+                    <p className="mt-1 text-sm text-fg-muted">{language === 'zh' ? 'xopc 还不确定，想请你确认。' : 'xopc is unsure and would like your confirmation.'}</p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-surface-panel px-2.5 py-1 text-xs font-medium tabular-nums text-accent-fg">{reviewAssertions.length}</span>
+              </div>
+              <div className="border-t border-accent/10 bg-surface-panel px-5 py-4 sm:flex sm:items-center sm:gap-4 sm:px-6">
+                <p className="min-w-0 flex-1 text-sm leading-6 text-fg">{reviewAssertions[0].statement}</p>
+                <div className="mt-3 flex shrink-0 gap-2 sm:mt-0">
+                  <Button variant="ghost" className="min-h-11 flex-1 sm:flex-none" disabled={busy === reviewAssertions[0].id} onClick={() => void act(reviewAssertions[0].id, () => setAssertionStatus(reviewAssertions[0].id, 'rejected'))}>{language === 'zh' ? '不是' : 'No'}</Button>
+                  <Button variant="primary" className="min-h-11 flex-1 sm:flex-none" disabled={busy === reviewAssertions[0].id} onClick={() => void act(reviewAssertions[0].id, () => setAssertionStatus(reviewAssertions[0].id, 'active'))}>{language === 'zh' ? '是的' : 'That’s right'}</Button>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          <section aria-label={t.aboutYouTitle} className="space-y-3 sm:space-y-4 lg:col-span-2">
+            <header className="flex items-start justify-between gap-3 px-1">
+              <div>
+                <h2 className="text-base font-semibold text-fg">{language === 'zh' ? t.aboutYouTitle : 'What xopc knows about me'}</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted"><span className="sm:hidden">{language === 'zh' ? '记错了，随时改。' : 'You can correct anything.'}</span><span className="hidden sm:inline">{language === 'zh' ? '这些内容会帮助 xopc 更好地回应你。推测会单独标注。' : 'These details help shape xopc’s responses. Inferences are labeled.'}</span></p>
+              </div>
+              <Button variant="ghost" className="min-h-11 shrink-0" onClick={() => openUnderstanding()}>{t.seeAll}</Button>
+            </header>
+            {overviewAssertionGroups.length ? (
+              <div className="grid items-start gap-5 lg:grid-cols-2">
+                {overviewAssertionGroups.map(({ key, title, icon: Icon, items }) => (
+                  <section key={key} className="min-w-0 overflow-hidden rounded-2xl bg-surface-panel">
+                    <header className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
+                      <h3 className="flex items-center gap-2 text-sm font-medium text-fg-muted"><Icon className="size-4" aria-hidden="true" />{title}</h3>
+                      <Button variant="ghost" className="min-h-11 shrink-0 px-2 text-fg-muted" aria-label={`${title}: ${items.length}`} onClick={() => openUnderstanding(key)}>
+                        <span className="sm:hidden">{language === 'zh' ? `${items.length} 条` : items.length}</span><span className="hidden sm:inline">{language === 'zh' ? `查看全部 ${items.length} 条` : `View all ${items.length}`}</span><ChevronRight className="size-4" aria-hidden="true" />
+                      </Button>
+                    </header>
+                    {items.slice(0, 2).map(assertionRow)}
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-surface-panel px-5 py-6">
+                <p className="max-w-xl text-sm leading-7 text-fg-muted">{t.emptyGroup}</p>
+                <Button variant="secondary" className="mt-4" onClick={() => setProfileOpen(true)}>{t.editProfile}</Button>
+              </div>
+            )}
+          </section>
+
+                      <aside data-testid="priority-panel" className="flex min-h-0 flex-col rounded-[1.4rem] bg-surface-panel p-5 shadow-surface sm:p-6 lg:col-start-2 lg:row-start-1">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold tracking-wide text-fg-subtle">{t.importantNow}</p>
+                    <p className="text-sm font-semibold text-fg">{t.importantNow}</p>
                     {primaryPriority ? (
                       <p className="mt-1.5 flex items-center gap-1.5 text-xs text-fg-muted">
                         <BriefcaseBusiness className="size-3.5" aria-hidden="true" />
@@ -1195,66 +1256,22 @@ export function UserModelPage() {
                     {primaryPriority ? <p className="mt-auto flex items-center gap-1.5 pt-4 text-xs text-fg-subtle"><CalendarDays className="size-3.5" aria-hidden="true" />{validUntil(primaryPriority.validTo, language)}</p> : null}
                   </>
                 ) : (
-                  <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center text-sm text-fg-muted">
-                    <BriefcaseBusiness className="size-5 text-fg-subtle" />
+                  <div className="mt-2 space-y-4 text-sm leading-6 text-fg-muted">
+                    <p>{language === 'zh' ? '告诉 xopc 当前最重要的事，让协作更贴近你的目标。' : 'Tell xopc what matters most so it can keep your goals in mind.'}</p>
                     <Button variant="primary" onClick={() => setPriorityOpen(true)}>
                       <Plus className="size-4" aria-hidden="true" />{t.addPriority}
                     </Button>
                   </div>
                 )}
                 {otherGoals.length ? (
-                  <div className="mt-5 hidden border-t border-edge-subtle pt-4 sm:block">
+                  <div className="mt-5 border-t border-edge-subtle pt-4">
                     <p className="text-xs text-fg-subtle">{t.otherGoals}</p>
                     <div className="mt-2 space-y-2">{otherGoals.slice(0, 3).map((goal) => <p key={goal.id} className="text-sm text-fg">{goal.title}</p>)}</div>
                   </div>
                 ) : null}
             </aside>
-          </section>
 
-          {reviewAssertions.length ? (
-            <section className="overflow-hidden rounded-2xl bg-accent-soft/70 shadow-surface" aria-label={language === 'zh' ? '需要你确认' : 'Needs your review'}>
-              <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-panel text-accent-fg"><Sparkles className="size-4" aria-hidden="true" /></span>
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '需要你确认' : 'Needs your review'}</h2>
-                  </div>
-                </div>
-                <span className="rounded-full bg-surface-panel px-2.5 py-1 text-xs font-medium tabular-nums text-accent-fg">{reviewAssertions.length}</span>
-              </div>
-              <div className="border-t border-accent/10 bg-surface-panel px-5 py-4 sm:flex sm:items-center sm:gap-4 sm:px-6">
-                <p className="min-w-0 flex-1 text-sm leading-6 text-fg">{reviewAssertions[0].statement}</p>
-                <div className="mt-3 flex shrink-0 gap-2 sm:mt-0">
-                  <Button variant="ghost" className="min-h-11 flex-1 sm:flex-none" disabled={busy === reviewAssertions[0].id} onClick={() => void act(reviewAssertions[0].id, () => setAssertionStatus(reviewAssertions[0].id, 'rejected'))}>{language === 'zh' ? '不是' : 'No'}</Button>
-                  <Button variant="primary" className="min-h-11 flex-1 sm:flex-none" disabled={busy === reviewAssertions[0].id} onClick={() => void act(reviewAssertions[0].id, () => setAssertionStatus(reviewAssertions[0].id, 'active'))}>{language === 'zh' ? '是的' : 'That’s right'}</Button>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          <Section
-            title={language === 'zh' ? 'xopc 对我的了解' : 'What xopc knows about me'}
-            action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('understanding')}>{t.seeAll}</Button>}
-          >
-            <div className="grid sm:grid-cols-2">
-              {understandingCategories.map(({ key, icon: Icon, label, hint, count }) => (
-                <button
-                  key={key}
-                  type="button"
-                  className="group flex min-h-24 w-full items-center gap-4 border-t border-edge-subtle px-5 py-4 text-left first:border-t-0 hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:[&:nth-child(-n+2)]:border-t-0 sm:[&:nth-child(even)]:border-l"
-                  onClick={() => openUnderstanding('all')}
-                  aria-label={`${label}: ${count}`}
-                >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><Icon className="size-4.5" aria-hidden="true" /></span>
-                  <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{label}</span><span className="mt-0.5 block truncate text-xs text-fg-subtle">{hint}</span></span>
-                  <span className="text-sm tabular-nums text-fg-muted">{count}</span>
-                  <ChevronRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          <div className="grid items-start gap-8 lg:grid-cols-2">
+          <div className="grid items-start gap-6 sm:gap-8 lg:col-span-2 lg:grid-cols-2">
             <Section title={t.howWeWork} className="min-w-0">
               {collaborationRules.length || ruleSuggestions.length ? <>
                 {collaborationRules.slice(0, 3).map((rule) => (
@@ -1292,7 +1309,10 @@ export function UserModelPage() {
                       onClick={() => openKnowledge(kind)}
                       aria-label={`${knowledgeKindLabel(kind, language)}: ${count}`}
                     >
-                      <span><span className="block text-2xl font-semibold tabular-nums text-fg">{count}</span><span className="mt-1 block text-sm text-fg-muted">{knowledgeKindLabel(kind, language)}</span></span>
+                      <span className="min-w-0">
+                        <span className="block text-xs font-medium text-fg-muted">{knowledgeKindLabel(kind, language)} · {count} {t.items}</span>
+                        <span className="mt-2 block line-clamp-3 break-words text-sm leading-6 text-fg">{visibleKnowledge.find((item) => item.kind === kind)?.content}</span>
+                      </span>
                       <ChevronRight className="mt-1 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted motion-reduce:transform-none" aria-hidden="true" />
                     </button>
                   ))}
@@ -1304,22 +1324,35 @@ export function UserModelPage() {
       ) : null}
 
       {view === 'understanding' ? (
-        <div id="understanding-panel-understanding" role="tabpanel" aria-labelledby="understanding-tab-understanding" className="space-y-10">
+        <div id="understanding-panel-understanding" role="tabpanel" aria-labelledby="understanding-tab-understanding" className="mx-auto max-w-3xl space-y-7">
           <div className="px-1 pt-1">
             <div className="flex items-start gap-3">
               <Brain className="mt-0.5 size-5 shrink-0 text-accent-fg" aria-hidden="true" />
-              <div><h2 className="font-semibold text-fg">{t.aboutYouTitle}</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">{t.aboutYouHint}</p></div>
+              <div><h2 className="font-semibold text-fg">{t.aboutYouTitle}</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted"><span className="sm:hidden">{language === 'zh' ? '你的偏好与背景，都可以在这里修改。' : 'Review and edit your preferences here.'}</span><span className="hidden sm:inline">{t.aboutYouHint}</span></p></div>
             </div>
-            <SlidingTabList className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t.understandingFilterHint} indicatorClassName="rounded-full bg-surface-active">
+            <div className="mt-4 grid grid-cols-[minmax(0,1fr)_7rem] gap-2 sm:flex sm:gap-3">
+              <label className="relative block min-w-0 flex-1">
+                <span className="sr-only">{language === 'zh' ? '搜索关于你的信息' : 'Search what xopc knows'}</span>
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
+                <input type="search" value={personalQuery} onChange={(event) => setUnderstandingParam('search', event.target.value, true)} placeholder={language === 'zh' ? '搜索记忆' : 'Search memories'} className="min-h-11 w-full rounded-xl border border-edge bg-surface-panel pl-10 pr-3 text-base text-fg placeholder:text-fg-muted sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+              </label>
+              <Select aria-label={language === 'zh' ? '内容分类' : 'Category'} value={assertionCategories.some((group) => group.key === understandingCategory) ? understandingCategory : 'all'} onChange={(event) => setUnderstandingParam('category', event.target.value)} triggerClassName="min-h-11 w-full text-base sm:w-48 sm:text-sm">
+                <SelectOption value="all">{language === 'zh' ? '全部' : 'All'}</SelectOption>
+                {assertionCategories.map((group) => <SelectOption key={group.key} value={group.key}>{language === 'zh'
+                  ? ({ identity: '背景', preferences: '偏好', relationships: '关系', current: '近况', insights: '观察' } as Record<string, string>)[group.key]
+                  : ({ identity: 'Profile', preferences: 'Habits', relationships: 'People', current: 'Now', insights: 'Notes' } as Record<string, string>)[group.key]}</SelectOption>)}
+              </Select>
+            </div>
+            <SlidingTabList className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t.understandingFilterHint} indicatorClassName="rounded-full bg-surface-active">
               {understandingFilterOptions.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   aria-pressed={understandingFilter === option.id}
-                  className={`touch-target inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${understandingFilter === option.id ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`}
-                  onClick={() => setUnderstandingFilter(option.id)}
+                  className={`touch-target inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${understandingFilter === option.id ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`}
+                  onClick={() => setUnderstandingParam('source', option.id)}
                 >
-                  {option.label}<span className="tabular-nums text-fg-subtle">{option.count}</span>
+                  <span className="sm:hidden">{language === 'zh' ? ({ all: '全部', explicit: '你说过的', learned: '协作中发现' } as const)[option.id] : ({ all: 'All', explicit: 'You said', learned: 'Observed' } as const)[option.id]}</span><span className="hidden sm:inline">{option.label}</span><span className="hidden tabular-nums text-fg-muted sm:inline">{option.count}</span>
                 </button>
               ))}
             </SlidingTabList>
@@ -1330,13 +1363,15 @@ export function UserModelPage() {
             </Section>
           )) : (
             <div className="rounded-2xl bg-surface-panel">
-              <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>
+              <Empty icon={<Brain className="size-5" />}>{assertions.length ? (language === 'zh' ? '没有找到符合条件的内容，试试其他关键词或清除筛选。' : 'No matching details. Try another search or clear the filters.') : t.emptyGroup}</Empty>
+              {assertions.length ? <Button variant="ghost" className="mb-4 ml-4" onClick={() => openUnderstanding()}>{language === 'zh' ? '清除筛选' : 'Clear filters'}</Button> : null}
             </div>
           )}
         </div>
       ) : null}
       {view === 'work' ? (
         <div id="understanding-panel-work" role="tabpanel" aria-labelledby="understanding-tab-work" className="space-y-8">
+          <LearningStatus language={language} />
           <div className="px-1 pt-1">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="max-w-2xl">
