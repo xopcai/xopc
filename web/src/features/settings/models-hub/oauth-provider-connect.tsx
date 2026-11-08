@@ -19,11 +19,13 @@ export function OAuthProviderConnect({
   displayName,
   connected,
   onConnected,
+  onPendingChange,
 }: {
   providerId: string;
   displayName: string;
   connected: boolean;
   onConnected?: () => void;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const language = useLocaleStore((state) => state.language);
   const { mutate } = useSWRConfig();
@@ -39,6 +41,11 @@ export function OAuthProviderConnect({
     popupRef.current?.close();
     popupRef.current = null;
   }, []);
+
+  useEffect(() => {
+    onPendingChange?.(status === 'waiting');
+    return () => onPendingChange?.(false);
+  }, [status, onPendingChange]);
 
   const connect = async () => {
     cancelledRef.current = false;
