@@ -4,7 +4,7 @@ import { buildMemoryMutationView } from '../memory-activity';
 import type { ToolUseContent } from '../messages.types';
 
 const block = (details: Record<string, unknown>): ToolUseContent => ({ type: 'tool_use', id: 'save', name: 'personal_memory',
-  status: 'done', result: { details } } as ToolUseContent);
+  status: 'done', result: { details } });
 const receipt = { receiptId: 'committed', committedAt: 1, status: 'saved', command: 'remember', available: true,
   usable: true, scope: { type: 'project', id: 'p' } };
 
