@@ -1770,7 +1770,7 @@ function SidebarTaskListContent({
               : null}
             {renderRecentPeriod(sb.timelineToday, recentGroups.today)}
             {renderRecentPeriod(sb.timelineYesterday, recentGroups.yesterday)}
-            {recentGroups.older.length > 0 ? (
+            {recentGroups.older.length > 0 || recentHasMore ? (
               <div>
                 <button
                   type="button"
@@ -1781,17 +1781,21 @@ function SidebarTaskListContent({
                   <ChevronDown className={cn('size-3.5 transition-transform', !showOlder && '-rotate-90')} aria-hidden />
                   {sb.timelineOlder}
                 </button>
-                {showOlder ? renderRecentRows(recentGroups.older) : null}
+                {showOlder ? (
+                  <>
+                    {renderRecentRows(recentGroups.older)}
+                    {loadingRecentMore ? <SidebarSessionSkeletonRow /> : recentHasMore && !recentError ? (
+                      <button
+                        type="button"
+                        className="mx-2 rounded-lg px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        onClick={() => void setRecentSize(recentSize + 1)}
+                      >
+                        {sb.sessionFilters.more}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
-            ) : null}
-            {loadingRecentMore ? <SidebarSessionSkeletonRow /> : recentHasMore && !recentError ? (
-              <button
-                type="button"
-                className="mx-2 rounded-lg px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                onClick={() => void setRecentSize(recentSize + 1)}
-              >
-                {sb.sessionFilters.more}
-              </button>
             ) : null}
           </div>
         ) : (
