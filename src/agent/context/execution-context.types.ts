@@ -3,6 +3,7 @@ import type {
   KnowledgeReadPolicy,
   KnowledgeVisibilityContext,
 } from '../../knowledge-memory/index.js';
+import type { DeepRecallResult } from './deep-recall.js';
 import type { UserAssertion } from '../../user-model/domain.js';
 import type { MemorySearchResult } from '../memory/types.js';
 
@@ -44,6 +45,7 @@ export interface ExecutionPriority {
 
 export interface ExecutionContext {
   traceId: string;
+  recall?: DeepRecallResult;
   asOf: number;
   query: string;
   rules: ExecutionRule[];

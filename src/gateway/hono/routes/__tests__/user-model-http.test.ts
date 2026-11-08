@@ -69,6 +69,22 @@ describe('memory management through authenticated Gateway HTTP', () => {
     expect((await request('/api/knowledge-memory-other')).status).toBe(404);
   });
 
+  it('authenticates scope changes and rejects stale knowledge revisions through lazy routing', async () => {
+    const original = writeKnowledgeItem({ kind: 'decision', scope: { type: 'global' }, content: 'Use pnpm',
+      canonicalKey: 'scope-http', confidence: 1, importance: 0.7, originClass: 'owner' }).item!;
+    const path = `/api/knowledge-memory/${original.id}`;
+    const { item } = await (await request(path)).json();
+    expect(typeof item.version).toBe('string');
+    expect((await fetch(`${origin}${path}/scope`, { method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scope: { type: 'agent', id: 'coder' }, version: item.version }) })).status).toBe(401);
+    const change = await request(`${path}/scope`, 'PATCH', { scope: { type: 'agent', id: 'coder' }, version: item.version });
+    expect(change.status).toBe(200);
+    await expect(change.json()).resolves.toMatchObject({ item: { scope: { type: 'agent', id: 'coder' } } });
+    expect((await request(`${path}/scope`, 'PATCH', { scope: { type: 'global' }, version: item.version })).status).toBe(409);
+    expect((await request(`${path}/scope`, 'PATCH', { scope: { type: 'project' }, version: item.version })).status).toBe(400);
+    expect((await request('/api/knowledge-memory-other/id/scope', 'PATCH', {})).status).toBe(404);
+  });
+
   it('creates and edits a recent goal through the mobile user-model routes', async () => {
     const created = await request('/api/user-model/goals', 'POST', {
       title: 'Ship goal editing', desiredOutcome: 'Mobile users can keep their near-term goals accurate.',

@@ -560,7 +560,7 @@ async function* runProcessDirectStreamingInner(
                 abortSignal: signal,
                 sourceContexts,
                 presentation: input.presentation,
-                requireVisibleReply: input.origin.type === 'endpoint',
+                requireVisibleReply: input.origin.type === 'endpoint' || (input.origin.type === 'system' && input.origin.source === 'cli'),
                 runId: input.runId,
                 onEvent: (embeddedEvent) => {
                   const event = { ...embeddedEvent };

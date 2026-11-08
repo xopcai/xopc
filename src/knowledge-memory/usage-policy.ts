@@ -1,6 +1,6 @@
+import { getConversationRouting } from '../routing/session-key.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { getUnderstandingConsent } from '../user-context/sources/consent-repository.js';
-import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { isOwnerIdentity } from '../user-context/identity-bindings.js';
 import type { KnowledgeItem, KnowledgeReadPolicy, KnowledgeVisibilityContext } from './domain.js';
 
@@ -32,8 +32,8 @@ export function knowledgeExclusion(item: KnowledgeItem, context: KnowledgeVisibi
   if (item.verification === 'conflicted' || item.verification === 'tentative') return 'conflicted';
   if (item.sensitivity === 'secret' || item.sensitivity === 'regulated') return 'sensitive';
   if (item.originClass !== 'owner' && item.sourceConversationId) {
-    const session = getSessionMetadata(item.sourceConversationId);
-    if (!session?.routing || session.routing.peerKind !== 'direct' || !isOwnerIdentity(session.routing)) return 'source_revoked';
+    const routing = getConversationRouting(item.sourceConversationId);
+    if (!routing || routing.peerKind !== 'direct' || !isOwnerIdentity(routing)) return 'source_revoked';
   }
   const db = getSqliteDatabase();
   const links = db.prepare(`SELECT e.*, l.content_hash AS linked_hash, l.consent_receipt_id
@@ -46,8 +46,8 @@ export function knowledgeExclusion(item: KnowledgeItem, context: KnowledgeVisibi
   if (item.originClass === 'untrusted' && !links.length) return 'evidence_missing';
   for (const link of links) {
     if (link.conversation_id) {
-      const session = getSessionMetadata(link.conversation_id);
-      if (!session?.routing || session.routing.peerKind !== 'direct' || !isOwnerIdentity(session.routing)) return 'source_revoked';
+      const routing = getConversationRouting(link.conversation_id);
+      if (!routing || routing.peerKind !== 'direct' || !isOwnerIdentity(routing)) return 'source_revoked';
     }
     if (link.linked_hash && link.linked_hash !== link.content_hash) return 'source_changed';
     if (link.source_item_id) {

@@ -1,3 +1,4 @@
+import { isOwnerAuthoredSpan } from '../user-model/capture/evidence-policy.js';
 import { createHash } from 'node:crypto';
 
 import { projectUnadmittedForgottenFields } from './forgotten-history.js';
@@ -35,11 +36,16 @@ export function applyWorkCandidates(input: {
     const sources = candidate.evidence.map(claim => input.evidence.find(entry => entry.ref === claim.ref
       && entry.text.normalize('NFKC').includes(claim.quote.normalize('NFKC'))));
     if (sources.some(source => !source)) return reject('evidence_quote_mismatch');
+    if (/^(?:偏好|习惯|倾向|喜欢|长期偏好|prefers?\b|likes?\b|tends? to\b)/iu.test(candidate.statement)
+      || /(?:用户|主人|\b(?:the user|owner)\b).{0,35}(?:喜欢|偏好|习惯|职业|身份|(?:可能|也许)?.{0,2}是|prefer|likes|habit|profession|works? as|(?:is|might be|could be|may be)\b)/iu.test(candidate.statement)) {
+      return reject('personal_profile_requires_assertion');
+    }
     if (candidate.scope === 'project' && !input.projectId) return reject('missing_project_scope');
     const scope = candidate.scope === 'project' ? { type: 'project' as const, id: input.projectId! }
       : candidate.scope === 'workspace' ? { type: 'workspace' as const, id: input.workspaceId }
         : { type: 'session' as const, id: input.conversationId };
-    const independentSupport = sources.some(source => source?.role === 'user' || source?.role === 'toolResult');
+    const independentSupport = sources.some((source, index) => source?.role === 'toolResult'
+      || (source?.role === 'user' && isOwnerAuthoredSpan(source.text, candidate.evidence[index].quote)));
     const evidence = sources.map(source => {
       const contentHash = createHash('sha256').update(source!.text).digest('hex');
       const record = createContextEvidence({

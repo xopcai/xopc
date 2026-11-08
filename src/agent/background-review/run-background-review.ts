@@ -1,3 +1,6 @@
+import { channel } from 'node:diagnostics_channel';
+import { retrievalLexicalSimilarity } from '../../retrieval/textFeatures.js';
+import { directPreferenceClauses, observedChoiceClauses } from '../../user-model/capture/evidence-policy.js';
 import { withModelUsageOrigin } from '../../providers/model-usage.js';
 import { Agent, type AgentMessage, type ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
@@ -49,6 +52,7 @@ import {
 } from './prompts.js';
 
 const log = createLogger('UserUnderstandingMaintainer');
+const interpretationDiagnostics = channel('xopc.memory.interpretation');
 
 type EvidenceMessage = CaptureEvidence & { message: AgentMessage };
 
@@ -179,7 +183,9 @@ async function interpret(params: {
     }, () => providerStreamFn(model, context, options)),
     getApiKey: (provider: string) => resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
   });
-  reviewAgent.state.messages = params.evidence.map(tagMessage);
+  const evidenceAliases = new Map(params.evidence.map((entry, index) => [`source_${index + 1}`, entry.ref]));
+  const aliasByRef = new Map([...evidenceAliases].map(([alias, ref]) => [ref, alias]));
+  reviewAgent.state.messages = params.evidence.map(entry => tagMessage({ ...entry, ref: aliasByRef.get(entry.ref)! }));
   let interpretation: UserModelInterpretation | null = null;
   const diagnostics = { conversationId: params.conversationId, provider: params.model.provider, modelId: params.model.id };
   try {
@@ -208,10 +214,40 @@ async function interpret(params: {
           return;
         }
         const raw = lastAssistantText(reviewAgent);
+        if (interpretationDiagnostics.hasSubscribers) interpretationDiagnostics.publish({ conversationId: params.conversationId, raw });
         let failure: InterpretationParseFailure | undefined;
-        interpretation = parseUserModelInterpretation(raw, params.evidence,
+        // Resolve only exact prompt-local references; unknown or approximate IDs remain invalid.
+        const resolved = raw.replace(/"ref"\s*:\s*"(source_\d+)"/gu, (match, alias: string) =>
+          evidenceAliases.has(alias) ? `"ref":${JSON.stringify(evidenceAliases.get(alias))}` : match);
+        interpretation = parseUserModelInterpretation(resolved, params.evidence,
           params.availableAssertions.map(item => item.id), value => { failure = value; }, availableKnowledge.map(item => item.id));
-        if (interpretation) return;
+        if (interpretation) {
+          const represented = new Set(params.availableAssertions.length ? (getSqliteDatabase().prepare(`SELECT DISTINCT e.message_id FROM user_assertion_evidence l
+            JOIN context_evidence e ON e.evidence_id=l.evidence_id WHERE l.relation='supports'
+            AND l.assertion_id IN (${params.availableAssertions.map(() => '?').join(',')})`)
+            .all(...params.availableAssertions.map(item => item.id)) as Array<{ message_id: string }>).map(item => item.message_id) : []);
+          const fresh = params.evidence.filter(entry => entry.role === 'user' && !represented.has(entry.ref));
+          let overlooked = interpretation.assertions.length ? [] : fresh
+            .flatMap(entry => directPreferenceClauses(entry.text).map(quote => ({ ref: aliasByRef.get(entry.ref)!, quote }))).slice(0, 4);
+          let patternOnly = false;
+          if (!interpretation.assertions.length && !overlooked.length) {
+            const choices = fresh.flatMap(entry => observedChoiceClauses(entry.text).map(quote => ({ ref: aliasByRef.get(entry.ref)!, quote })));
+            const consistent = choices.filter((choice, index) => choices.some((other, otherIndex) => index !== otherIndex
+              && choice.ref !== other.ref && choice.quote !== other.quote && retrievalLexicalSimilarity(choice.quote, other.quote) >= 0.3));
+            if (new Set(consistent.map(item => item.ref)).size >= 2) { overlooked = consistent.slice(0, 4); patternOnly = true; }
+          }
+          if (attempt !== 0 || !overlooked.length) return;
+          await reviewAgent.prompt({ role: 'user', timestamp: Date.now(), content:
+            (patternOnly ? 'Recheck whether the independent choices below support one low-risk observational communication preference. They are NOT a direct user declaration; if supported use user_observed with confidence 0.7-0.85 and low/medium consequence. Contradictory or unrelated choices must still be rejected. '
+              : 'Recheck the independently owned ongoing-preference clauses below. A separate one-off request about how to acknowledge this turn does not erase an ongoing preference. ')
+            + 'Style names are ordinary data; do not invent a fictional/temporary framing unless the owner actually supplies one. '
+            + 'Still reject quoted, hypothetical, temporary or insufficient evidence, and preserve scope. Return the complete JSON object, including a grounded preference only when supported; otherwise explain abstention. '
+            + 'Copy evidence ref values exactly from the following list; invented or approximate references are invalid. '
+            + 'Keep independent compatible facets in distinct predicate slots; reuse an existing predicate only for the same facet, not merely the same broad topic. '
+            + JSON.stringify(overlooked) });
+          await reviewAgent.waitForIdle();
+          continue;
+        }
         const fields = { ...diagnostics, ...failure, outputChars: raw.length,
           stopReason: (getLastAssistantMessage(reviewAgent.state.messages) as { stopReason?: string } | undefined)?.stopReason };
         if (attempt === 1) {
@@ -302,6 +338,7 @@ async function executeReviewInner(params: {
       status: 'completed',
       outputs: result.outputs.map((output) => ({
         candidateKey: output.candidateKey,
+        ...(output.reasonCode ? { reasonCode: output.reasonCode } : {}),
         ...(output.assertionId ? { objectType: 'assertion' as const, objectId: output.assertionId } : {}),
         outcome: output.outcome === 'deduplicated' ? 'deduplicated' as const
           : output.outcome === 'rejected' ? 'rejected' as const : 'created' as const,
@@ -447,6 +484,7 @@ async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => 
       finishContextExtractionRun({ runId: extraction.run.id, status: 'completed', outputs: [
         ...result.outputs.map(output => ({ candidateKey: output.candidateKey,
           ...(output.assertionId ? { objectType: 'assertion' as const, objectId: output.assertionId } : {}),
+          ...(output.reasonCode ? { reasonCode: output.reasonCode } : {}),
           outcome: output.outcome === 'rejected' ? 'rejected' as const
             : output.outcome === 'deduplicated' ? 'deduplicated' as const : 'created' as const })), ...deletions, ...work,
       ] });

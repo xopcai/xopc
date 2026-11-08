@@ -94,6 +94,8 @@ import {
   isMemorySubsystemEnabled,
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
+import { getSessionConfig } from '../storage/sqlite/config-repository.js';
+import { createRecallQueryPlanner } from './context/deep-recall.js';
 import { ExecutionContextCoordinator, type ExecutionContextPlan } from './context/coordinator.js';
 import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
 import { evaluateToolGate } from './context/execution-context.js';
@@ -338,6 +340,9 @@ export class AgentManager implements AgentInstanceGateway {
       },
     });
     this.executionContext = new ExecutionContextCoordinator({
+      getSessionStore: this.config.getSessionStore ? () => this.config.getSessionStore!() : undefined,
+      planRecallQueries: id => createRecallQueryPlanner(this.config.getModelManager?.().getResolvedModelForSession(id)
+        ?? this.resolveModelStringToModel(this.pickDefaultModelRef()), this.config.config!),
       getConfig: () => this.config.config,
       getAccessForSession: (conversationId) => resolveUserContextSessionAccess(this.config.config, conversationId),
       getWorkspaceIdForSession: (sk) => this.getResolvedWorkspaceForSession(sk),
@@ -388,7 +393,9 @@ export class AgentManager implements AgentInstanceGateway {
     if (fromMap !== undefined) {
       return fromMap;
     }
-    return resolveEffectiveAgentProfileForSession(conversationId).resolvedWorkspacePath;
+    const persisted = getSessionConfig(conversationId)?.workingDirectoryOverride;
+    return persisted ? expandWorkspacePathString(persisted)
+      : resolveEffectiveAgentProfileForSession(conversationId).resolvedWorkspacePath;
   }
 
   private getWorkspaceRuntimeForSession(conversationId: string | undefined): WorkspaceRuntime {

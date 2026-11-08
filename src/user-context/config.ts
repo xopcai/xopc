@@ -175,12 +175,20 @@ export const KnowledgeMemoryConfigSchema = z
     allowExternalWrites: false,
   });
 
+const DeepRecallConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  timeoutMs: z.number().int().min(100).max(30_000).default(8_000),
+  maxSessions: z.number().int().min(1).max(200).default(60),
+  maxEvidence: z.number().int().min(2).max(12).default(6),
+}).strict().default({ enabled: true, timeoutMs: 8_000, maxSessions: 60, maxEvidence: 6 });
+
 export const ContextPlanningConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
     maxAssertions: z.number().int().min(1).max(100).default(20),
     maxKnowledge: z.number().int().min(0).max(100).default(12),
     maxChars: z.number().int().min(500).max(50_000).default(6_000),
+    deepRecall: DeepRecallConfigSchema,
     compaction: ContextCompactionPolicySchema,
   })
   .strict()
@@ -189,6 +197,7 @@ export const ContextPlanningConfigSchema = z
     maxAssertions: 20,
     maxKnowledge: 12,
     maxChars: 6_000,
+    deepRecall: DeepRecallConfigSchema.parse({}),
     compaction: DEFAULT_CONTEXT_COMPACTION_POLICY,
   });
 

@@ -1,6 +1,7 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
+import { memoryVersion } from '../../user-context/memory-version.js';
 import { projectForgottenEvidence } from '../../memory-learning/forgotten-history.js';
 
 import { retrievalLexicalSimilarity } from '../../retrieval/textFeatures.js';
@@ -77,6 +78,8 @@ export function createUserContextSearchTool(options: UserContextToolOptions): Ag
         .slice(0, input.maxResults ?? 12)
         .map(({ assertion, score }) => ({
           id: assertion.id,
+          scope: getAssertionSlot(assertion.slotId)?.scope,
+          version: memoryVersion({ assertion, scope: getAssertionSlot(assertion.slotId)?.scope }),
           kind: assertion.kind,
           statement: assertion.statement,
           status: assertion.status,
@@ -114,6 +117,7 @@ export function createUserContextGetTool(options: UserContextToolOptions): Agent
       }
       const result = {
         assertion,
+        version: memoryVersion({ assertion, scope: getAssertionSlot(assertion.slotId)?.scope }),
         slot: getAssertionSlot(assertion.slotId),
         sources: projectForgottenEvidence(listUserAssertionSources([assertion.id]).get(assertion.id) ?? [], {
           agentId: options.agentId, workspaceId: options.workspaceId, conversationId: options.getSessionId() ?? '', projectId: options.getProjectId?.(),

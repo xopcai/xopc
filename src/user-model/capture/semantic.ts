@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { assessAssertionSupport, assessOwnerSupport, hasOwnerMemoryDirective, supportsResponseApplicability } from './evidence-policy.js';
+
 import { WorkCandidateSchema, type WorkCandidate } from '../../memory-learning/work-candidate.js';
 
 import type { AssertionCandidate, AssertionAuthority } from '../domain.js';
@@ -24,6 +26,7 @@ export interface ParsedAssertionOperation extends AssertionCandidate {
   action: AssertionMaintenanceAction;
   targetAssertionId?: string;
   evidenceRefs: string[];
+  evidenceQuotes?: Array<{ ref: string; quote: string }>;
   temporalResolution: 'exact' | 'relative_resolved' | 'unresolved';
   originalTimePhrase?: string;
 }
@@ -36,6 +39,7 @@ export interface ParsedGoalCandidate {
   declaredImportance?: number;
   targetAt?: number;
   evidenceRefs: string[];
+  evidenceQuotes?: Array<{ ref: string; quote: string }>;
 }
 
 export interface ParsedCollaborationRuleCandidate {
@@ -46,6 +50,7 @@ export interface ParsedCollaborationRuleCandidate {
   conditions: Record<string, unknown>;
   statement: string;
   evidenceRefs: string[];
+  evidenceQuotes?: Array<{ ref: string; quote: string }>;
 }
 
 export interface UserModelInterpretation {
@@ -57,6 +62,7 @@ export interface UserModelInterpretation {
   collaborationRules?: ParsedCollaborationRuleCandidate[];
   targetAssertionIds: string[];
   abstentionReason?: string;
+  rejectedCandidates?: Array<{ candidateKey: string; reasonCode: string }>;
 }
 
 const ScopeSchema = z.object({
@@ -94,7 +100,8 @@ const AssertionOperationSchema = z.object({
   volatility: z.enum(['stable', 'slow', 'dynamic', 'event']),
   sensitivity: z.enum(['normal', 'personal', 'secret', 'regulated']),
   disclosurePolicy: z.enum(['silent', 'referenceable', 'ask_before_reference']),
-  applicability: z.record(z.string(), z.unknown()).default({}),
+  applicability: z.record(z.string(), z.unknown()).refine(supportsResponseApplicability,
+    { message: 'operation must be response (or an array containing only response), or omitted' }).default({}),
   validFrom: z.string().datetime({ offset: true }).optional(),
   validTo: z.string().datetime({ offset: true }).optional(),
   reviewAt: z.string().datetime({ offset: true }).optional(),
@@ -149,7 +156,7 @@ const InterpretationSchema = z.object({
   goals: z.array(GoalSchema).max(4).default([]),
   collaborationRules: z.array(CollaborationRuleSchema).max(4).default([]),
   targetAssertionIds: z.array(z.string().min(1)).max(8),
-  abstentionReason: z.string().max(500).optional(),
+  abstentionReason: z.string().transform(value => value.slice(0, 500)).optional(),
 }).strict();
 
 function extractJson(raw: string): unknown {
@@ -221,6 +228,11 @@ export function parseUserModelInterpretation(
     return null;
   }
   const parsed = result.data;
+  const rejectedCandidates: NonNullable<UserModelInterpretation['rejectedCandidates']> = [];
+  if (['forget', 'confirm', 'correct'].includes(parsed.intent)
+    && !evidence.some(source => source.role === 'user' && hasOwnerMemoryDirective(source.text, parsed.intent as 'forget' | 'confirm' | 'correct'))) {
+    parsed.intent = 'none'; parsed.targetAssertionIds = [];
+  }
   const evidenceByRef = new Map(evidence.map((item) => [item.ref, item]));
   const assertionIntents = new Set<UserModelCaptureIntent>(['remember', 'correct', 'confirm', 'user_assertion']);
   const allowed = new Set(allowedTargetIds);
@@ -228,13 +240,24 @@ export function parseUserModelInterpretation(
   {
     for (const item of parsed.assertions) {
       const intent = operationIntent(item.intent, parsed.intent);
-      if (!assertionIntents.has(intent)) continue;
+      if (!assertionIntents.has(intent)) {
+        rejectedCandidates.push({ candidateKey: `${item.scope.type}:${item.scope.id ?? ''}:${item.predicate}`, reasonCode: 'non_assertion_intent' });
+        continue;
+      }
       const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
-      if (!evidenceRefs) continue;
-      if (item.action === 'create' && (item.authority === 'user_observed' || item.authority === 'system_inferred')
-        && new Set(evidenceRefs.map(ref => comparable(evidenceByRef.get(ref)!.text))).size < 2) continue;
+      if (!evidenceRefs) {
+        rejectedCandidates.push({ candidateKey: `${item.scope.type}:${item.scope.id ?? ''}:${item.predicate}`, reasonCode: 'owner_quote_not_grounded' });
+        continue;
+      }
       if (item.action !== 'create' && (!item.targetAssertionId || !allowed.has(item.targetAssertionId))) continue;
       const observedAt = Math.max(...item.evidence.map((claim) => evidenceByRef.get(claim.ref)!.createdAt));
+      const support = assessAssertionSupport({ kind: item.kind, authority: effectiveAuthority(intent, item.authority),
+        volatility: item.volatility, validTo: item.temporalResolution === 'unresolved' ? undefined : parseTime(item.validTo),
+        observedAt, action: item.action, sources: item.evidence.map(claim => ({ ...evidenceByRef.get(claim.ref)!, quote: claim.quote })) });
+      if (!support.allowed) {
+        rejectedCandidates.push({ candidateKey: `${item.scope.type}:${item.scope.id ?? ''}:${item.predicate}`, reasonCode: support.reasonCode! });
+        continue;
+      }
       assertions.push({
         intent,
         action: item.action,
@@ -247,8 +270,8 @@ export function parseUserModelInterpretation(
         value: item.value,
         normalizedValue: item.normalizedValue,
         statement: item.statement,
-        authority: effectiveAuthority(intent, item.authority),
-        confidence: item.confidence,
+        authority: support.authority,
+        confidence: support.authority === 'user_observed' || support.authority === 'system_inferred' ? Math.min(0.85, item.confidence) : item.confidence,
         ...(item.declaredImportance === undefined ? {} : { declaredImportance: item.declaredImportance }),
         inferredImportance: item.inferredImportance,
         consequence: item.consequence,
@@ -267,6 +290,7 @@ export function parseUserModelInterpretation(
         observedAt,
         createdBy: 'runtime',
         evidenceRefs,
+        evidenceQuotes: item.evidence,
       });
     }
   }
@@ -275,7 +299,8 @@ export function parseUserModelInterpretation(
     const intent = operationIntent(item.intent, parsed.intent);
     if (!structuredIntents.has(intent)) return [];
     const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
-    if (!evidenceRefs) return [];
+    if (!evidenceRefs || !item.evidence.every(claim => assessOwnerSupport({ text: evidenceByRef.get(claim.ref)!.text, quote: claim.quote,
+      kind: item.targetAt ? 'current_state' : undefined, validTo: item.targetAt ? parseTime(item.targetAt) : undefined, observedAt: evidenceByRef.get(claim.ref)!.createdAt }).allowed)) return [];
     return [{
       intent,
       title: item.title,
@@ -284,13 +309,15 @@ export function parseUserModelInterpretation(
       ...(item.declaredImportance === undefined ? {} : { declaredImportance: item.declaredImportance }),
       ...(item.targetAt === undefined ? {} : { targetAt: parseTime(item.targetAt) }),
       evidenceRefs,
+      evidenceQuotes: item.evidence,
     }];
   });
   const collaborationRules = parsed.collaborationRules.flatMap((item) => {
     const intent = operationIntent(item.intent, parsed.intent);
     if (!structuredIntents.has(intent)) return [];
     const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
-    if (!evidenceRefs || item.scope.type === 'agent') return [];
+    if (!evidenceRefs || item.scope.type === 'agent' || !item.evidence.every(claim => assessOwnerSupport({
+      text: evidenceByRef.get(claim.ref)!.text, quote: claim.quote, kind: 'preference' }).allowed)) return [];
     return [{
       intent,
       category: item.category,
@@ -299,9 +326,11 @@ export function parseUserModelInterpretation(
       conditions: item.conditions,
       statement: item.statement,
       evidenceRefs,
+      evidenceQuotes: item.evidence,
     }];
   });
   return {
+    rejectedCandidates,
     knowledge: parsed.knowledge,
     knowledgeDeletions: parsed.knowledgeDeletions.flatMap(item => {
       const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);

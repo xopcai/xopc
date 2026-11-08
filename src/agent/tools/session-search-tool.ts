@@ -10,6 +10,7 @@ import { createLogger } from '../../utils/logger.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import { projectUnadmittedForgottenFields, forgottenHistoryEntries, FORGOTTEN_HISTORY_EXCERPT } from '../../memory-learning/forgotten-history.js';
 import type { CaptureScopeContext } from '../../user-model/capture/executor.js';
+import { stripRuntimeContextFromUserMessage } from '../../session/user-message-display.js';
 import { sessionSearchTerms } from '../../storage/sqlite/fts.js';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
 
@@ -144,6 +145,8 @@ export interface SessionSearchToolDeps {
   getPrimaryModel: () => Model<Api>;
   getCurrentConversationId?: () => string | undefined;
   canAccess?: () => boolean;
+  canRecallConversation?: (conversationId: string) => boolean;
+  canRecallEntry?: (conversationId: string, entryId: string, content: string) => boolean;
   localOnly?: boolean;
   getHistoryContext?: () => CaptureScopeContext;
   getCurrentUserText?: () => string | undefined;
@@ -161,7 +164,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
     name: 'session_search',
     label: 'Session search',
     description: deps.localOnly
-      ? 'Search other chats locally and return short matching transcript excerpts. Omit query to list recent chats. No model or network calls.'
+      ? 'Search chats in the current agent, workspace and project scope and return short matching transcript excerpts. Omit query to list recent allowed chats. No model or network calls. Switch project context to search a different project.'
       : 'Search other chat sessions by keywords and get short summaries, or omit `query` to list recent sessions (no LLM cost). Uses the same session store as the gateway. Narrow with roleFilter if needed.',
     parameters: deps.localOnly ? Type.Object({ ...SessionSearchSchema.properties,
       query: Type.Optional(Type.String({ maxLength: 500, description: 'Keywords for other chats; omit to list recent chats.' })),
@@ -203,7 +206,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
             sortBy: 'updatedAt',
             sortOrder: 'desc',
           });
-          const items = listed.items.slice(0, limit).map((s) => ({
+          const items = listed.items.filter(item => !deps.canRecallConversation || deps.canRecallConversation(item.key)).slice(0, limit).map((s) => ({
             key: s.key,
             name: projectTitle(s.key, s.name),
             updatedAt: s.updatedAt,
@@ -216,7 +219,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
               {
                 type: 'text',
                 text: JSON.stringify(
-                  { success: true, mode: 'recent', results: items, total: listed.total },
+                  { success: true, mode: 'recent', results: items, total: deps.canRecallConversation ? items.length : listed.total },
                   null,
                   2,
                 ),
@@ -232,7 +235,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
           sortBy: 'updatedAt',
           sortOrder: 'desc',
         });
-        let matches = listed.items.map((item) => ({ key: item.key, score: 1 }));
+        let matches = listed.items.filter(item => !deps.canRecallConversation || deps.canRecallConversation(item.key)).map((item) => ({ key: item.key, score: 1 }));
 
         const exclude = p.excludeConversationId?.trim() || deps.getCurrentConversationId?.() || '';
         if (exclude) {
@@ -245,9 +248,10 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
             conversationId: key,
             name: projectTitle(key, listed.items.find(item => item.key === key)?.name),
             excerpts: store.recallSession(key, query, { limit: 2, matchMode: 'keyword' })
-              .filter(match => !p.roleFilter || match.role === p.roleFilter)
+              .filter(match => (!p.roleFilter || match.role === p.roleFilter)
+                && (!deps.canRecallEntry || deps.canRecallEntry(key, match.entryId, match.content)))
               .map(match => {
-                const content = (protectedEntries.has(`${key}:*`) || protectedEntries.has(`${key}:${match.entryId}`)) ? FORGOTTEN_HISTORY_EXCERPT : deps.getHistoryContext ? projectUnadmittedForgottenFields(match.content, deps.getHistoryContext(), deps.getCurrentUserText?.()) : match.content;
+                const content = stripRuntimeContextFromUserMessage((protectedEntries.has(`${key}:*`) || protectedEntries.has(`${key}:${match.entryId}`)) ? FORGOTTEN_HISTORY_EXCERPT : deps.getHistoryContext ? projectUnadmittedForgottenFields(match.content, deps.getHistoryContext(), deps.getCurrentUserText?.()) : match.content);
                 const positions = sessionSearchTerms(query).map(term => content.toLowerCase().indexOf(term.toLowerCase())).filter(at => at >= 0);
                 const at = positions.length ? Math.min(...positions) : 0;
                 const start = Math.max(0, at - 200);
@@ -256,7 +260,8 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
                   truncated: start > 0 || content.length > start + 800 };
               }),
           }));
-          const payload = { success: true, mode: 'keyword', query, results, truncated: false };
+          const payload = { success: true, mode: 'keyword', query, results, truncated: false,
+            ...(deps.canRecallConversation ? { historyScope: 'current_agent_workspace_project' } : {}) };
           while (JSON.stringify(payload).length > LOCAL_READ_MAX_CHARS && results.length) {
             payload.truncated = true;
             if (results.length > 1) results.pop();
@@ -276,6 +281,12 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
           top.map(async ({ key, score }) => {
             if ([...protectedEntries].some(entry => entry.startsWith(`${key}:`))) {
               return { conversationId: key, score, summary: FORGOTTEN_HISTORY_EXCERPT };
+            }
+            if (deps.canRecallEntry) {
+              const excerpts = store.recallSession(key, query, { limit: 8, matchMode: 'keyword' })
+                .filter(match => (!p.roleFilter || match.role === p.roleFilter) && deps.canRecallEntry!(key, match.entryId, match.content));
+              const messages = excerpts.map(match => ({ role: match.role as 'user', content: deps.getHistoryContext ? projectUnadmittedForgottenFields(stripRuntimeContextFromUserMessage(match.content), deps.getHistoryContext(), deps.getCurrentUserText?.()) : stripRuntimeContextFromUserMessage(match.content), timestamp: match.createdAt }));
+              return { conversationId: key, score, summary: await summarizeSession(messages, query, deps, signal, { summarizingConversationId: key }) };
             }
             let messages = await store.load(key);
             if (deps.getHistoryContext) messages = projectUnadmittedForgottenFields(messages, deps.getHistoryContext(), deps.getCurrentUserText?.());

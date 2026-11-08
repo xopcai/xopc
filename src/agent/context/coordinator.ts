@@ -3,9 +3,13 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import type { KnowledgeReadPolicy } from '../../knowledge-memory/index.js';
 import type { MemorySearchResult } from '../memory/types.js';
+import { deepenExecutionContext, type RecallQueryPlanner } from './deep-recall.js';
+import type { SessionStore } from '../../session/store.js';
 import { assembleTaskContext } from '../../tasks/task-context-assembler.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { recordExecutionContext } from './audit.js';
+import { forgottenHistoryEntries, projectUnadmittedForgottenFields } from '../../memory-learning/forgotten-history.js';
+import { stripRuntimeContextFromUserMessage } from '../../session/user-message-display.js';
 import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import {
   buildExecutionContext,
@@ -24,6 +28,8 @@ export interface ExecutionContextPlan {
 
 export interface ExecutionContextCoordinatorOptions {
   getConfig: () => Config | undefined;
+  getSessionStore?: () => SessionStore;
+  planRecallQueries?: (conversationId: string) => RecallQueryPlanner;
   getAccessForSession: (conversationId: string) => {
     userModel: boolean;
     knowledge: boolean;
@@ -80,13 +86,15 @@ export class ExecutionContextCoordinator {
 
     await this.options.ensureMemoryReady(conversationId);
 
-    const query = extractAgentUserPlainText(userMessage);
-    const recent = this.queriesBySession.get(conversationId) ?? [];
-    const task = assembleTaskContext(conversationId, query.length < 60 ? [...recent, query].join('\n') : query);
-    this.queriesBySession.set(conversationId, [...recent, query.slice(0, 1000)].slice(-2));
+    const query = stripRuntimeContextFromUserMessage(extractAgentUserPlainText(userMessage));
     const agentId = extractProfileAgentId(conversationId);
     const workspaceId = this.options.getWorkspaceIdForSession(conversationId);
     const projectId = this.options.getProjectIdForSession(conversationId);
+    const scope = { agentId, workspaceId, projectId, conversationId };
+    const recent = forgottenHistoryEntries(scope, query).has(`${conversationId}:*`) ? []
+      : projectUnadmittedForgottenFields(this.queriesBySession.get(conversationId) ?? [], scope, query);
+    const task = assembleTaskContext(conversationId, query.length < 60 ? [...recent, query].join('\n') : query);
+    this.queriesBySession.set(conversationId, [...recent, query.slice(0, 1000)].slice(-2));
     const maxKnowledge = Math.min(config.userContext.contextPlanning.maxKnowledge, task.allocation.maxResults);
     const strategy = config.userContext.knowledgeMemory.searchStrategy;
     const canSearchExternal = access.knowledge
@@ -109,7 +117,7 @@ export class ExecutionContextCoordinator {
         ? Math.min(Math.ceil(maxKnowledge / 2), externalResults.length)
         : 0;
     const localBudget = strategy === 'external-only' ? 0 : maxKnowledge - externalReserved;
-    const context = buildExecutionContext({
+    let context = buildExecutionContext({
       query: task.retrievalQuery,
       agentId,
       workspaceId,
@@ -121,6 +129,13 @@ export class ExecutionContextCoordinator {
       includeKnowledge: access.knowledge && strategy !== 'external-only',
       knowledgePolicy: access.knowledgePolicy,
     });
+    if (this.options.getSessionStore && this.options.planRecallQueries) {
+      context = await deepenExecutionContext({ config, context, request: {
+        query, agentId, workspaceId, projectId, conversationId,
+        maxAssertions: Math.min(config.userContext.contextPlanning.maxAssertions, task.allocation.maxResults),
+        maxKnowledge: localBudget, knowledgePolicy: access.knowledgePolicy,
+      }, recent, store: this.options.getSessionStore(), planQueries: (q, history, signal) => this.options.planRecallQueries!(conversationId)(q, history, signal) });
+    }
     const remainingKnowledge = Math.max(0, maxKnowledge - context.knowledge.length);
     context.externalKnowledge = externalResults.slice(0, remainingKnowledge);
     this.currentBySession.set(conversationId, context);
@@ -129,7 +144,7 @@ export class ExecutionContextCoordinator {
     const rendered = fitted.rendered;
     const contextItemCount = fitted.context.rules.length + fitted.context.assertions.length
       + fitted.context.goals.length + fitted.context.priorities.length + fitted.context.knowledge.length
-      + fitted.context.externalKnowledge.length;
+      + fitted.context.externalKnowledge.length + (fitted.context.recall?.evidence.length ?? 0);
     recordExecutionContext(context, {
       turnId,
       conversationId: conversationId,
