@@ -1087,7 +1087,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.115;
+				MARKETING_VERSION = 0.0.116;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.xopc.xopc;
 				PROVISIONING_PROFILE_SPECIFIER = "$(XOPC_MAIN_PROFILE_UUID)";
 				SDKROOT = iphoneos;
@@ -1246,7 +1246,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.115;
+				MARKETING_VERSION = 0.0.116;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.xopc.xopc;
 				PROVISIONING_PROFILE_SPECIFIER = "$(XOPC_MAIN_PROFILE_UUID)";
 				SDKROOT = iphoneos;
@@ -1267,7 +1267,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.0.115;
+				MARKETING_VERSION = 0.0.116;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.xopc.xopc.share;
 				PROVISIONING_PROFILE_SPECIFIER = "$(XOPC_SHARE_PROFILE_UUID)";
 				SDKROOT = iphoneos;
@@ -1289,7 +1289,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.0.115;
+				MARKETING_VERSION = 0.0.116;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.xopc.xopc.share;
 				PROVISIONING_PROFILE_SPECIFIER = "$(XOPC_SHARE_PROFILE_UUID)";
 				SDKROOT = iphoneos;
