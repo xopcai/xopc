@@ -4,7 +4,6 @@ import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalProfile
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,13 +41,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlin.math.roundToInt
 import java.time.DateTimeException
 import java.time.ZoneId
 
@@ -112,8 +109,6 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
       AssertionDetail(state, onRetryDetail, onSaveStatement, onDeleteAssertion,
         onStartChat, chatBusy)
     } else {
-      Image(painterResource(R.drawable.brand_mark), contentDescription = null,
-        modifier = Modifier.size(64.dp).align(Alignment.CenterHorizontally))
       Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("overview" to R.string.about_you_overview,
@@ -236,28 +231,22 @@ private fun AboutOverview(summary: PersonalSummary?, onOpenList: () -> Unit,
       if (!summary?.role.isNullOrBlank()) Text(summary.role,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    AboutCard {
+    AboutLabel(stringResource(R.string.personal_recent))
+    if (summary?.recent.isNullOrEmpty()) {
+      AboutCard { Text(stringResource(R.string.about_you_empty_all),
+        style = MaterialTheme.typography.bodyMedium) }
+    } else {
+      summary.recent.take(3).forEach { AssertionRow(it, onOpenDetail) }
+    }
+    TextButton(onClick = onOpenList, modifier = Modifier.fillMaxWidth().testTag("about-you-counts")) {
+      Text(stringResource(R.string.about_you_view_all))
+    }
+    if (!summary?.focusTitle.isNullOrBlank()) AboutCard {
       AboutLabel(stringResource(R.string.about_you_focus))
-      Text(summary?.focusTitle.orEmpty().ifBlank { stringResource(R.string.about_you_no_focus) })
-      if (!summary?.focusOutcome.isNullOrBlank()) Text(summary.focusOutcome,
-        style = MaterialTheme.typography.bodySmall,
+      Text(summary.focusTitle, style = MaterialTheme.typography.bodyLarge)
+      if (summary.focusOutcome.isNotBlank()) Text(summary.focusOutcome,
+        style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    Card(onClick = onOpenList, modifier = Modifier.fillMaxWidth().testTag("about-you-counts"),
-      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-      shape = RoundedCornerShape(18.dp)) {
-      Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AboutLabel(stringResource(R.string.personal_understanding))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-          AboutCount(summary?.counts?.explicit ?: 0, stringResource(R.string.personal_explicit))
-          AboutCount(summary?.counts?.learned ?: 0, stringResource(R.string.personal_learned))
-          AboutCount(summary?.counts?.review ?: 0, stringResource(R.string.personal_review))
-        }
-      }
-    }
-    summary?.recent?.takeIf { it.isNotEmpty() }?.let { recent ->
-      AboutLabel(stringResource(R.string.personal_recent))
-      recent.forEach { AssertionRow(it, onOpenDetail) }
     }
     summary?.rules?.takeIf { it.isNotEmpty() }?.let { rules ->
       AboutLabel(stringResource(R.string.personal_rules))
@@ -316,10 +305,9 @@ private fun AssertionRow(item: PersonalAssertion, onOpenDetail: (String) -> Unit
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     shape = RoundedCornerShape(16.dp)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      Text(item.statement, maxLines = 3, overflow = TextOverflow.Ellipsis)
-      Text(stringResource(if (item.status == "needs_review" || item.status == "conflicted")
-        R.string.personal_review else if (item.authority == "user_explicit")
-        R.string.personal_explicit else R.string.personal_learned),
+      Text(item.statement, style = MaterialTheme.typography.bodyLarge,
+        maxLines = 3, overflow = TextOverflow.Ellipsis)
+      Text(assertionSourceLabel(item),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -334,6 +322,7 @@ private fun AssertionDetail(state: PersonalUiState, onRetry: () -> Unit,
   var editing by rememberSaveable(state.selectedAssertionId) { mutableStateOf(false) }
   var draft by rememberSaveable(state.selectedAssertionId) { mutableStateOf(item?.statement.orEmpty()) }
   var confirmDelete by rememberSaveable(state.selectedAssertionId) { mutableStateOf(false) }
+  var sourcesOpen by rememberSaveable(state.selectedAssertionId) { mutableStateOf(false) }
   var saveStartedRevision by rememberSaveable(state.selectedAssertionId) {
     mutableStateOf(state.assertionSavedRevision)
   }
@@ -361,12 +350,23 @@ private fun AssertionDetail(state: PersonalUiState, onRetry: () -> Unit,
             modifier = Modifier.testTag("about-you-detail-statement"))
         }
         AboutCard {
-          AboutLabel(stringResource(R.string.about_you_metadata))
-          AboutDetailRow(stringResource(R.string.about_you_source), item.sources.joinToString(" · ")
-            .ifBlank { stringResource(R.string.about_you_system_inference) })
-          AboutDetailRow(stringResource(R.string.about_you_scope), item.scope)
-          AboutDetailRow(stringResource(R.string.about_you_confidence),
-            "${(item.confidence * 100).roundToInt()}%")
+          Text(assertionSourceLabel(item), style = MaterialTheme.typography.bodyMedium)
+          TextButton(onClick = { sourcesOpen = !sourcesOpen },
+            modifier = Modifier.testTag("about-you-sources-toggle")) {
+            Text(stringResource(R.string.about_you_metadata))
+          }
+          if (sourcesOpen) {
+          if (item.sources.isNotEmpty()) AboutDetailRow(stringResource(R.string.about_you_source),
+            item.sources.joinToString(" · "))
+          AboutDetailRow(stringResource(R.string.about_you_scope), stringResource(when (item.scope) {
+            "global" -> R.string.about_you_scope_global
+            "agent" -> R.string.about_you_scope_agent
+            "project" -> R.string.about_you_scope_project
+            "workspace" -> R.string.about_you_scope_workspace
+            "session" -> R.string.about_you_scope_session
+            else -> R.string.about_you_scope_other
+          }))
+          }
         }
       }
       if (state.assertionSaveError) Text(stringResource(R.string.about_you_change_error),
@@ -426,13 +426,14 @@ private fun AssertionDetail(state: PersonalUiState, onRetry: () -> Unit,
     color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-@Composable private fun AboutCount(count: Int, label: String) {
-  Column {
-    Text(count.toString(), style = MaterialTheme.typography.headlineMedium,
-      fontWeight = FontWeight.Bold)
-    AboutLabel(label)
-  }
-}
+@Composable
+private fun assertionSourceLabel(item: PersonalAssertion): String = stringResource(when {
+  item.status in listOf("candidate", "needs_review", "conflicted") -> R.string.personal_review
+  item.authority == "user_explicit" -> R.string.personal_explicit
+  item.authority == "system_inferred" -> R.string.about_you_system_inference
+  item.authority == "external_untrusted" -> R.string.about_you_connected
+  else -> R.string.personal_learned
+})
 
 @Composable private fun AboutCard(content: @Composable () -> Unit) {
   Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(

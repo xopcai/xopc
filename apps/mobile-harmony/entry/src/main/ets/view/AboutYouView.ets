@@ -16,6 +16,7 @@ export struct XopcAboutYouView {
   @Local searchOpen: boolean = false;
   @Local editProfileOpen: boolean = false;
   @Local editingStatement: boolean = false;
+  @Local sourcesOpen: boolean = false;
   @Local callName: string = '';
   @Local role: string = '';
   @Local pronouns: string = '';
@@ -132,6 +133,7 @@ export struct XopcAboutYouView {
   private openItem(item: XopcUnderstandingItem): void {
     this.statement = item.statement;
     this.editingStatement = false;
+    this.sourcesOpen = false;
     this.model.open(item.id);
   }
 
@@ -151,8 +153,25 @@ export struct XopcAboutYouView {
     });
   }
 
+  private sourceLabel(item: XopcUnderstandingItem): Resource {
+    if (['candidate', 'needs_review', 'conflicted'].includes(item.status)) return $r('app.string.about_you_needs_review');
+    if (item.authority === 'user_explicit') return $r('app.string.about_you_explicit');
+    if (item.authority === 'system_inferred') return $r('app.string.about_you_system_inference');
+    if (item.authority === 'external_untrusted') return $r('app.string.about_you_connected');
+    return $r('app.string.about_you_learned');
+  }
+
+  private scopeLabel(scope: string): Resource {
+    if (scope === 'global') return $r('app.string.about_you_scope_global');
+    if (scope === 'agent') return $r('app.string.about_you_scope_agent');
+    if (scope === 'project') return $r('app.string.about_you_scope_project');
+    if (scope === 'workspace') return $r('app.string.about_you_scope_workspace');
+    if (scope === 'session') return $r('app.string.about_you_scope_session');
+    return $r('app.string.about_you_scope_other');
+  }
+
   private sourceText(item: XopcUnderstandingItem): string {
-    if (!item.sources.length) return this.text($r('app.string.about_you_system_inference'));
+    if (!item.sources.length) return this.text(this.sourceLabel(item));
     return item.sources.map((source): string => source.label ?? this.text($r('app.string.about_you_system_inference'))).join(' · ');
   }
 
@@ -218,7 +237,10 @@ export struct XopcAboutYouView {
       Text($r('app.string.about_you_subtitle')).fontSize(14).lineHeight(20).fontColor(this.colors.secondary).width('100%')
       Column({ space: 10 }) {
         Row() {
-          this.cardTitle($r('app.string.about_you_basics'))
+          XopcLoopi({ extent: 40, activePage: this.pageVisible && !this.editProfileOpen && !this.searchOpen,
+            mood: this.model.error ? 'care' : this.model.loading || this.model.saving ? 'work' : 'listen' })
+            .id('about-you-loopi')
+          Text($r('app.string.about_you_basics')).fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
           Button($r('app.string.edit')).fontSize(13).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
             .onClick((): void => { this.openProfileEditor(); })
         }.width('100%')
@@ -229,31 +251,29 @@ export struct XopcAboutYouView {
         }
       }.width('100%').padding(18).borderRadius(18).backgroundColor(this.colors.panel).margin({ top: 18 })
 
-      Column({ space: 10 }) {
-        this.cardTitle($r('app.string.about_you_focus'))
-        Text(this.model.summary?.primaryFocus?.title ?? $r('app.string.about_you_no_focus'))
-          .fontSize(16).lineHeight(23).fontColor(this.colors.foreground).width('100%')
-        if (this.model.summary?.primaryFocus?.desiredOutcome) {
-          Text(this.model.summary?.primaryFocus?.desiredOutcome ?? '').fontSize(13).lineHeight(19)
-            .fontColor(this.colors.secondary).width('100%')
-        }
-      }.width('100%').padding(18).borderRadius(18).backgroundColor(this.colors.panel).margin({ top: 12 })
-
-      Column({ space: 14 }) {
-        this.cardTitle($r('app.string.about_you_understanding'))
-        Row() {
-          this.countCell(this.model.summary?.counts.explicit ?? 0, $r('app.string.about_you_explicit'), false)
-          this.countCell(this.model.summary?.counts.learned ?? 0, $r('app.string.about_you_learned'), false)
-          this.countCell(this.model.summary?.counts.review ?? 0, $r('app.string.about_you_needs_review'), true)
-        }.width('100%')
-      }.width('100%').padding(18).borderRadius(18).backgroundColor(this.colors.panel).margin({ top: 12 })
-        .onClick((): void => { this.section = 1; this.model.load('all'); })
-
+      XopcSectionLabel({ heading: $r('app.string.about_you_recent') })
       if ((this.model.summary?.recent.length ?? 0) > 0) {
-        XopcSectionLabel({ heading: $r('app.string.about_you_recent') })
-        ForEach(this.model.summary?.recent ?? [], (item: XopcUnderstandingItem) => {
+        ForEach(this.model.summary?.recent.slice(0, 3) ?? [], (item: XopcUnderstandingItem) => {
           this.understandingRow(item)
         }, (item: XopcUnderstandingItem): string => item.id)
+      } else {
+        Text($r('app.string.about_you_empty_all_help')).fontSize(15).lineHeight(23)
+          .fontColor(this.colors.secondary).width('100%').padding(16)
+          .backgroundColor(this.colors.panel).borderRadius(16)
+      }
+      Button($r('app.string.about_you_view_all')).width('100%').height(48)
+        .fontSize(15).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
+        .onClick((): void => { this.section = 1; this.model.load('all'); })
+      if (this.model.summary?.primaryFocus?.title) {
+        Column({ space: 10 }) {
+          this.cardTitle($r('app.string.about_you_focus'))
+          Text(this.model.summary?.primaryFocus?.title ?? '').fontSize(16).lineHeight(24)
+            .fontColor(this.colors.foreground).width('100%')
+          if (this.model.summary?.primaryFocus?.desiredOutcome) {
+            Text(this.model.summary?.primaryFocus?.desiredOutcome ?? '').fontSize(14).lineHeight(21)
+              .fontColor(this.colors.secondary).width('100%')
+          }
+        }.width('100%').padding(18).borderRadius(18).backgroundColor(this.colors.panel).margin({ top: 12 })
       }
       if ((this.model.summary?.rules.length ?? 0) > 0) {
         XopcSectionLabel({ heading: $r('app.string.about_you_rules') })
@@ -281,17 +301,9 @@ export struct XopcAboutYouView {
   }
 
   @Builder
-  private countCell(value: number, label: ResourceStr, accent: boolean) {
-    Column({ space: 4 }) {
-      Text(value.toString()).fontSize(25).fontWeight(FontWeight.Bold).fontColor(accent && value > 0 ? this.colors.accent : this.colors.foreground)
-      Text(label).fontSize(11).fontColor(this.colors.secondary).maxLines(2)
-    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
   private filterButton(value: string, label: ResourceStr) {
     Button(label).fontSize(13).fontColor(this.model.filter === value ? this.colors.accent : this.colors.secondary)
-      .height(36).padding({ left: 14, right: 14 }).borderRadius(18)
+      .height(44).padding({ left: 14, right: 14 }).borderRadius(18)
       .backgroundColor(this.model.filter === value ? this.colors.accentSoft : this.colors.panel)
       .onClick((): void => { this.model.load(value); })
   }
@@ -301,10 +313,9 @@ export struct XopcAboutYouView {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
         Column({ space: 5 }) {
-          Text(item.statement).fontSize(15).lineHeight(21).fontColor(this.colors.foreground).maxLines(3)
+          Text(item.statement).fontSize(16).lineHeight(24).fontColor(this.colors.foreground).maxLines(3)
             .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-          Text(item.status === 'needs_review' || item.status === 'conflicted' ? $r('app.string.about_you_needs_review') :
-            item.authority === 'user_explicit' ? $r('app.string.about_you_explicit') : $r('app.string.about_you_learned'))
+          Text(this.sourceLabel(item))
             .fontSize(12).fontColor(item.status === 'needs_review' || item.status === 'conflicted' ? this.colors.accent : this.colors.secondary).width('100%')
           if (this.model.query.trim()) {
             Text(this.sourceText(item)).fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
@@ -398,11 +409,15 @@ export struct XopcAboutYouView {
           }.width('100%').padding(20).borderRadius(18).backgroundColor(this.colors.panel)
 
           Column({ space: 16 }) {
-            Text($r('app.string.about_you_metadata')).fontSize(13).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.secondary).width('100%')
-            this.detailRow($r('app.string.about_you_source'), this.sourceText(item))
-            this.detailRow($r('app.string.about_you_scope'), item.scope.type)
-            this.detailRow($r('app.string.about_you_confidence'), Math.round(item.confidence * 100).toString() + '%')
+            Text(this.sourceLabel(item)).fontSize(14).fontColor(this.colors.secondary).width('100%')
+            Button($r('app.string.about_you_metadata')).fontSize(15).height(44).width('100%')
+              .fontColor(this.colors.accent).backgroundColor(Color.Transparent)
+              .accessibilityText($r('app.string.about_you_metadata'))
+              .onClick((): void => { this.sourcesOpen = !this.sourcesOpen; })
+            if (this.sourcesOpen) {
+              this.detailRow($r('app.string.about_you_source'), this.sourceText(item))
+              this.detailRow($r('app.string.about_you_scope'), this.text(this.scopeLabel(item.scope.type)))
+            }
           }.width('100%').padding(20).borderRadius(18).backgroundColor(this.colors.panel)
         }.width('100%').constraintSize({ minHeight: '100%' })
           .padding({ left: 20, right: 20, top: 4, bottom: 16 }).alignItems(HorizontalAlign.Start)
@@ -535,15 +550,12 @@ export struct XopcAboutYouView {
       else {
         Column() {
           this.mainHeader()
-          XopcLoopi({ extent: 64, activePage: this.pageVisible && !this.editProfileOpen && !this.searchOpen,
-            mood: this.model.error ? 'care' : this.model.loading || this.model.saving ? 'work' : 'listen' })
-            .id('about-you-loopi').margin({ bottom: 8 })
           Row() {
-            Button($r('app.string.about_you_overview')).layoutWeight(1).height(36).fontSize(13)
+            Button($r('app.string.about_you_overview')).layoutWeight(1).height(44).fontSize(14)
               .fontColor(this.section === 0 ? this.colors.foreground : this.colors.secondary)
               .backgroundColor(this.section === 0 ? this.colors.panel : Color.Transparent)
               .onClick((): void => { this.closeSearch(); this.section = 0; })
-            Button($r('app.string.about_you_understanding')).layoutWeight(1).height(36).fontSize(13)
+            Button($r('app.string.about_you_understanding')).layoutWeight(1).height(44).fontSize(14)
               .fontColor(this.section === 1 ? this.colors.foreground : this.colors.secondary)
               .backgroundColor(this.section === 1 ? this.colors.panel : Color.Transparent)
               .onClick((): void => { this.section = 1; if (!this.model.items.length) this.model.load('all'); })

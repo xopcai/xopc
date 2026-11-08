@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
@@ -11,13 +11,13 @@ function authorityLabel(item: UserAssertion, language: UnderstandingLanguage): s
     ? {
         user_explicit: '你告诉我的',
         user_observed: '从协作中观察到',
-        system_inferred: '我形成的判断',
+        system_inferred: 'xopc 的推测',
         external_untrusted: '来自连接的信息',
       }
     : {
         user_explicit: 'You told me',
         user_observed: 'Observed while working together',
-        system_inferred: 'My current read',
+        system_inferred: 'Inferred by xopc',
         external_untrusted: 'From connected information',
       };
   return labels[item.authority];
@@ -74,6 +74,7 @@ export function UnderstandingRow({
   onScopeChange?: (scope: UserAssertion['scope']) => void;
 }) {
   const inputId = useId();
+  const [expanded, setExpanded] = useState(false);
   const zh = language === 'zh';
   const confidence = confidenceLabel(item, language);
   const sourceLabels = [...new Set(item.sources?.map((source) => source.label).filter(Boolean))];
@@ -97,30 +98,32 @@ export function UnderstandingRow({
           </div>
         </div>
       ) : (
-        <div className="flex items-start gap-2 sm:gap-4">
-          <div className="min-w-0 flex-1 pt-1.5">
-            <p className="whitespace-pre-wrap break-words text-base leading-7 text-fg">{item.statement}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-fg-muted">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 sm:flex sm:gap-4">
+          <div className="contents min-w-0 flex-1 pt-1.5 sm:block">
+            <p className="col-span-2 whitespace-pre-wrap break-words text-base leading-7 text-fg">{!expanded && item.statement.length > 240 ? `${item.statement.slice(0, 240)}…` : item.statement}</p>
+            {item.statement.length > 240 ? <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className="col-span-2 mt-1 min-h-11 rounded-md text-left text-sm text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{expanded ? (zh ? '收起全文' : 'Show less') : (zh ? '展开全文' : 'Read more')}</button> : null}
+            <div className="col-start-1 mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-fg-muted">
               <span>{authorityLabel(item, language)}</span>
               {item.usable === false ? <span>{zh ? '暂不使用' : 'Not in use'}</span> : null}
               {item.validTo ? <span>{timeHorizon(item, language)}</span> : null}
               {item.authority !== 'user_explicit' && item.confidence < 0.65 ? <span>{confidence}</span> : null}
               <details className="open:basis-full">
-                <summary className="w-fit cursor-pointer rounded-md py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '查看依据' : 'View sources'}</summary>
+                <summary className="flex min-h-11 w-fit cursor-pointer items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><span className="sm:hidden">{zh ? '查看来源' : 'Sources'}</span><span className="hidden sm:inline">{zh ? '来源与使用方式' : 'Sources & use'}</span></summary>
                 <div className="my-2 space-y-1 border-l-2 border-edge pl-3 text-sm leading-6">
-                  <p>{item.usable ? (zh ? '按需用于当前协作' : 'Used when relevant') : (zh ? '暂不使用，后台继续复核' : 'Not in use; reviewed automatically')}</p>
-                  <p>{timeHorizon(item, language)} · {scopeLabel(item.scope, language)}{confidence ? ` · ${confidence}` : ''}</p>
-                  <p>{zh ? '最近观察：' : 'Last observed: '}{formatUnderstandingDate(item.observedAt, language)}</p>
-                  <p>{zh ? '模型层：' : 'Model layer: '}{zh
-                    ? ({ fact: '事实', pattern: '模式', interpretation: '解释' } as const)[item.layer]
-                    : item.layer} · {zh ? `${item.independentSourceCount} 个独立来源` : `${item.independentSourceCount} independent sources`}</p>
+                  <p>{item.usable === false ? (zh ? '目前不会用于回答。' : 'Currently not used in responses.') : (zh ? '回答相关问题时，xopc 会参考这条信息。' : 'xopc can refer to this when answering related questions.')}</p>
+                  <p>{zh ? '适用范围：' : 'Applies to: '}{scopeLabel(item.scope, language)}</p>
+                  {item.validTo ? <p>{timeHorizon(item, language)}</p> : null}
+                  {confidence ? <p>{zh ? '确定程度：' : 'Confidence: '}{confidence}</p> : null}
+                  <p>{zh ? '最近记录：' : 'Last noted: '}{formatUnderstandingDate(item.observedAt, language)}</p>
                   {sourceLabels.length ? sourceLabels.map((label) => <p className="break-words" key={label}>{label}</p>) : <p>{zh ? '暂无更详细的来源记录' : 'No further source details available'}</p>}
-                  <Button variant="ghost" className="-ml-2 px-2" disabled={busy} onClick={onEdit}>{editLabel}</Button>
                 </div>
               </details>
             </div>
           </div>
-          <MemoryActions language={language} busy={busy} statement={item.statement} scope={item.scope} onEdit={onEdit} onDelete={onDelete} onScopeChange={onScopeChange} />
+          <div className="flex shrink-0 items-center">
+            <Button variant="ghost" className="min-h-11 min-w-11 px-2" disabled={busy} onClick={onEdit}>{editLabel}</Button>
+            <MemoryActions language={language} busy={busy} statement={item.statement} scope={item.scope} onEdit={onEdit} onDelete={onDelete} onScopeChange={onScopeChange} />
+          </div>
         </div>
       )}
     </article>
