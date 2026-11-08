@@ -225,7 +225,7 @@ export class LocalAppStore {
     if (row.app_id && !policy) return null;
     return {
       grantRevision: policy?.grantRevision,
-      resourceScopes: policy?.resourceScopes,
+      resourceScopes: LocalAppResourceScopesSchema.parse(policy?.resourceScopes ?? {}),
       granted: true,
       extensionId: row.extension_id,
       appId: row.app_id ?? undefined,

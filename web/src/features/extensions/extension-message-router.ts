@@ -12,10 +12,13 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { buildThemeInfo } from './theme-bridge';
+import type { AttachmentPrompt, AttachmentSelection } from './attachment-picker';
 
 export type MethodHandler = (extensionId: string, params: unknown) => Promise<unknown>;
 
 const METHOD_PERMISSION_MAP: Record<string, string | null> = {
+  'apps.reviewRequest': null,
+  'files.pickAttachment': 'capability:xopc.files.read',
   'ui.navigate': null,
   'ui.reviewPermissions': null,
   'agent.sendMessage': 'agent.send',
@@ -60,6 +63,7 @@ export class ExtensionMessageRouter {
   private releaseBindings = new Map<string, { digest: string; grantRevision?: string; previewSessionId?: string; localApp: boolean; baseUrl: string; namespace: string | undefined }>();
   private requestBudgets = new Map<string, { start: number; count: number; pending: number }>();
   private delegationControllers = new Map<string, AbortController>();
+  private attachmentRequests = new Set<string>();
   private unsubscribeGateway: () => void;
   private eventSubscribers = new Map<string, Set<(e: { event: string; data?: unknown }) => void>>();
   /** extensionId → conversationIds subscribed for agent stream forwarding */
@@ -204,6 +208,46 @@ export class ExtensionMessageRouter {
     const controller = this.delegationControllers.get(extensionId);
     if (!controller) throw new Error('Delegation frame unavailable');
     return controller.signal;
+  }
+
+  async pickAttachment(extensionId: string): Promise<AttachmentSelection> {
+    if (this.isPreview(extensionId)) throw new Error('Attachment selection is unavailable in previews');
+    const manifestDigest = this.getReleaseDigest(extensionId), grantRevision = this.getGrantRevision(extensionId);
+    const signal = this.delegationSignal(extensionId);
+    const verify = async () => {
+      signal.throwIfAborted();
+      const [access, review] = await Promise.all([
+        fetchJson<{ capabilities: Array<{ id: string }> }>(apiUrl(`/api/local-app-capabilities/${encodeURIComponent(extensionId)}?manifestDigest=${manifestDigest}&grantRevision=${grantRevision ?? ''}`), { signal, cache: 'no-store' }),
+        fetchJson<{ grant: { granted: boolean; grantRevision?: string; resourceScopes?: { filesImport?: boolean } } }>(apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/ui-grant`), { signal, cache: 'no-store' }),
+      ]);
+      signal.throwIfAborted();
+      if (!review.grant.granted || review.grant.grantRevision !== grantRevision || !review.grant.resourceScopes?.filesImport
+        || !access.capabilities.some(item => item.id === 'xopc.files.read') || this.getReleaseDigest(extensionId) !== manifestDigest) throw new Error('Attachment import has not been approved');
+    };
+    await verify();
+    if (this.attachmentRequests.has(extensionId)) throw new Error('Close the existing attachment chooser first');
+    this.attachmentRequests.add(extensionId);
+    return new Promise<AttachmentSelection>((resolve, reject) => {
+      let done = false;
+      const cleanup = () => { clearTimeout(timer); signal.removeEventListener('abort', aborted); this.attachmentRequests.delete(extensionId); };
+      const fail = (error: unknown) => { if (done) return; done = true; cleanup(); reject(error); };
+      const aborted = () => fail(new Error('Attachment selection authorization ended'));
+      const timer = setTimeout(() => fail(new Error('Attachment selection expired')), 120000);
+      signal.addEventListener('abort', aborted, { once: true });
+      if (signal.aborted) { aborted(); return; }
+      const prompt: AttachmentPrompt = { extensionId, finish: async selection => {
+        if (done) throw new Error('Attachment chooser ended');
+        if (!selection) { fail(new Error('Attachment selection canceled')); return; }
+        try {
+          const file = z.strictObject({ name: z.string().min(1).max(255).regex(/^[^/\\]+$/), mimeType: z.string().max(200),
+            size: z.number().int().min(0).max(512 * 1024), encoding: z.literal('base64'), content: z.string().max(750000) }).parse(selection);
+          if (atob(file.content).length !== file.size) throw new Error('Attachment size changed');
+          await verify(); if (done) throw new Error('Attachment chooser ended');
+          done = true; cleanup(); resolve(file);
+        } catch (error) { fail(error); throw error; }
+      } };
+      window.dispatchEvent(new CustomEvent('extension-pick-attachment', { detail: prompt }));
+    });
   }
 
   storageHeaders(extensionId: string): Record<string, string> {
@@ -426,6 +470,16 @@ export class ExtensionMessageRouter {
 }
 
 export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
+  router.registerMethod('apps.reviewRequest', async (extensionId, params) => {
+    if (router.isPreview(extensionId)) throw new Error('Resource review is unavailable in previews');
+    router.getReleaseDigest(extensionId);
+    const { requestId } = z.strictObject({ requestId: z.uuid() }).parse(params);
+    window.dispatchEvent(new CustomEvent('extension-review-resource-request', { detail: { extensionId, requestId } }));
+    return { opened: true };
+  });
+  router.registerMethod('files.pickAttachment', async (extensionId, params) => {
+    z.strictObject({}).parse(params ?? {}); return router.pickAttachment(extensionId);
+  });
   const describeInput = z.strictObject({ id: ExtensionCapabilityBindingSchema.shape.id });
   const callInput = describeInput.extend({ call: CapabilityCallSchema });
   router.registerMethod('capability.describe', async (extensionId, params) => {
@@ -446,7 +500,7 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
     const grantRevision = router.getGrantRevision(extensionId);
     return fetchJson(apiUrl(`/api/local-app-capabilities/${encodeURIComponent(extensionId)}/${encodeURIComponent(id)}/invocations`), {
       method: 'POST', body: JSON.stringify({ manifestDigest, grantRevision, call }),
-      ...(id === 'xopc.agent.delegate' ? { signal: router.delegationSignal(extensionId) } : {}),
+      ...(id === 'xopc.agent.delegate' || id.startsWith('xopc.connectors.') || id.startsWith('xopc.files.') ? { signal: router.delegationSignal(extensionId) } : {}),
     });
   });
   router.registerMethod('theme.get', async () =>

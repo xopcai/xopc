@@ -25,11 +25,13 @@ export class Transport {
   private disposed = false;
   private readonly timeout: number;
   private readonly delegationTimeout: number;
+  private readonly interactionTimeout: number;
   private requestCounter = 0;
 
   constructor(options?: TransportOptions) {
     this.timeout = options?.timeout ?? 10_000;
     this.delegationTimeout = options?.timeout ?? 35_000;
+    this.interactionTimeout = options?.timeout ?? 125_000;
     this.initPromise = new Promise<HostInit>((resolve) => {
       this.initResolve = resolve;
     });
@@ -64,8 +66,9 @@ export class Transport {
       throw new Error('Transport disposed');
     }
     const requestId = this.nextRequestId();
-    const timeout = method === 'capability.call' && params && typeof params === 'object'
-      && 'id' in params && params.id === 'xopc.agent.delegate' ? this.delegationTimeout : this.timeout;
+    const timeout = method === 'files.pickAttachment' ? this.interactionTimeout
+      : method === 'capability.call' && params && typeof params === 'object' && 'id' in params
+        && typeof params.id === 'string' && (params.id === 'xopc.agent.delegate' || params.id.startsWith('xopc.connectors.')) ? this.delegationTimeout : this.timeout;
     const message: ExtensionRequest = {
       source: 'xopc-extension',
       extensionId: this.extensionId,

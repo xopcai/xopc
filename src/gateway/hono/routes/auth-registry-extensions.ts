@@ -21,6 +21,11 @@ import { CapabilityError } from '../../../capabilities/runtime/errors.js';
 import { bodyLimit } from 'hono/body-limit';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { listLocalAppAccess, recordLocalAppAccess } from '../../../local-apps/access-audit.js';
+import { z } from 'zod';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { localAppDelegationCaller } from '../../security/local-app-delegation-access.js';
+import { assertResourceRequest, localAppConnectorOptions, readAppResourceRequest, resolveAppResourceRequest } from '../../../local-apps/p1-services.js';
+import { getGatewayFileSpaceService } from '../../file-space-service.js';
 
 const EXTENSION_ASSET_CSP =
   "default-src 'self'; " +
@@ -339,10 +344,34 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     return c.json({ grant: service.localApps.getUiGrant(c.req.param('id')) });
   });
 
-  authenticated.get('/api/extensions/:id/resource-options', c => {
+  authenticated.get('/api/extensions/:id/resource-requests/:requestId', c => {
+    try {
+      const request = readAppResourceRequest(c.req.param('id'), c.req.param('requestId'));
+      if (request.status === 'pending') assertResourceRequest(service.localApps, request);
+      return c.json({ request });
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+  authenticated.post('/api/extensions/:id/resource-requests/:requestId/review', async c => {
+    try {
+      const decision = z.strictObject({ digest: z.string().regex(/^[a-f0-9]{64}$/), approve: z.boolean() }).parse(await c.req.json());
+      const caller = localAppDelegationCaller(capabilityHttpContext(c), getGatewayPrincipal(c), () => service.getResolvedAuth());
+      return c.json(await resolveAppResourceRequest({ getConfig: () => service.currentConfig as import('../../../config/schema.js').Config,
+        getFiles: () => getGatewayFileSpaceService(service) }, service.localApps, c.req.param('id'), c.req.param('requestId'), decision.digest, decision.approve, caller));
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+  authenticated.get('/api/extensions/:id/resource-options', async c => {
     const kind = c.req.query('kind');
-    if (!['notes', 'tasks', 'projects'].includes(kind ?? '')) return c.json({ error: 'Invalid resource kind' }, 400);
+    if (!['notes', 'tasks', 'projects', 'files', 'connectors'].includes(kind ?? '')) return c.json({ error: 'Invalid resource kind' }, 400);
     const search = (c.req.query('search') ?? '').slice(0, 200);
+    if (kind === 'files') {
+      const items = (await getGatewayFileSpaceService(service).recent(100)).filter(file => file.kind === 'file'
+        && file.size <= 512 * 1024 && !file.relativePath.split('/').some(part => part.startsWith('.'))
+        && `${file.name} ${file.relativePath}`.toLowerCase().includes(search.toLowerCase()))
+        .map(file => ({ id: file.id, title: `${file.name} · ${file.relativePath}` }));
+      return c.json({ items });
+    }
+    if (kind === 'connectors') return c.json({ items: (await localAppConnectorOptions({ getConfig: () => service.currentConfig as import('../../../config/schema.js').Config,
+      getFiles: () => getGatewayFileSpaceService(service) })).filter(item => item.title.toLowerCase().includes(search.toLowerCase())) });
     const table = kind === 'notes' ? 'notes' : kind === 'tasks' ? 'tasks' : 'projects';
     const column = kind === 'notes' ? 'note_id' : kind === 'tasks' ? 'task_id' : 'project_id';
     const title = kind === 'projects' ? 'name' : 'title';
@@ -360,9 +389,11 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     if (service.localApps.getUiGrant(c.req.param('id')).manifestDigest !== body.manifestDigest) {
       return c.json({ error: 'Extension release changed; review permissions again' }, 409);
     }
-    const grant = service.localApps.grantUiPermissions(c.req.param('id'), body.manifestDigest, body.resourceScopes);
-    recordLocalAppAccess(c.req.param('id'), { principalId: capabilityHttpContext(c).principalId, action: 'grant', status: 'succeeded', grantRevision: grant.grantRevision });
-    return c.json({ grant });
+    try {
+      const grant = service.localApps.grantUiPermissions(c.req.param('id'), body.manifestDigest, body.resourceScopes);
+      recordLocalAppAccess(c.req.param('id'), { principalId: capabilityHttpContext(c).principalId, action: 'grant', status: 'succeeded', grantRevision: grant.grantRevision });
+      return c.json({ grant });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.delete('/api/extensions/:id/ui-grant', async c => {

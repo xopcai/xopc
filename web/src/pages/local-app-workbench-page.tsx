@@ -643,7 +643,7 @@ export function LocalAppWorkbenchPage() {
               <Dialog.Title className="text-base font-semibold text-fg">{zh ? '选择本次只读预览的数据' : 'Choose data for this read-only preview'}</Dialog.Title>
               <Dialog.Description className="mt-2 text-sm text-fg-muted">{zh ? '仅授权当前草稿，15 分钟后过期。源码变化或停止预览后授权失效；自动验收不会使用这些真实数据。' : 'Applies to this draft for 15 minutes. Editing the source or stopping preview revokes access. Acceptance never uses this live data.'}</Dialog.Description>
               <div className="min-h-0 flex-1 overflow-y-auto"><LocalAppResourceFields extensionId={app.extensionId}
-                permissions={(validation?.permissions ?? app.permissions).filter(permission => /capability:xopc.(notes|tasks).(get|list)$/.test(permission))}
+                permissions={(validation?.permissions ?? app.permissions).filter(permission => /^capability:xopc\.(notes|tasks|projects)\.(get|list|list_milestones|list_updates)$/.test(permission))}
                 value={readonlyScopes} onChange={setReadonlyScopes} zh={zh} /></div>
               <div className="mt-4 flex justify-end gap-2"><Dialog.Close asChild><Button>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close>
                 <Button variant="primary" disabled={readonlyReviewHash !== validation?.sourceHash || readonlyReviewIdentity !== previewIdentity} onClick={() => { setPreviewScopes(readonlyScopes); setReadonlySourceHash(readonlyReviewHash); setReadonlyIdentity(readonlyReviewIdentity); setReadonlyRunKey(value => value + 1); setPreviewMode('readonly'); setReadonlyReview(false); }}>{zh ? '启动只读预览' : 'Start read-only preview'}</Button></div>

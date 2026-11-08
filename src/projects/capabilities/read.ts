@@ -2,6 +2,7 @@ import { ProductReadContracts } from '@xopcai/gateway-contract';
 
 import { CapabilityError, defineReadCapability, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import type { ProjectService } from '../project-service.js';
+import { LocalAppProjectOutputSchema, LocalAppProjectListSchema, LocalAppMilestonesSchema, LocalAppUpdatesSchema } from '../../local-apps/capabilities/projections.js';
 
 export function registerProjectReadCapabilities(dispatcher: CapabilityDispatcher, projects: ProjectService): void {
   const requireProject = (id: string) => {
@@ -12,6 +13,10 @@ export function registerProjectReadCapabilities(dispatcher: CapabilityDispatcher
   const policy = { majorVersion: 1, effect: 'read' as const, surfaces: ['http', 'agent', 'cli'] as const, scopes: ['workspace.read'] as const };
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.projects.get', description: 'Read a project and its domain details.',
+    surfaces: ['http', 'agent', 'cli', 'extension'], extensionOutput: LocalAppProjectOutputSchema,
+    extensionExecute({ id }) {
+      const project = requireProject(id); return { ok: true, project };
+    },
     ...ProductReadContracts['xopc.projects.get'],
     execute({ id }) {
       const project = projects.getWithDetails(id);
@@ -21,14 +26,18 @@ export function registerProjectReadCapabilities(dispatcher: CapabilityDispatcher
   }));
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.projects.list', description: 'List projects with filters and pagination.',
+    surfaces: ['http', 'agent', 'cli', 'extension'], extensionOutput: LocalAppProjectListSchema,
     ...ProductReadContracts['xopc.projects.list'],
-    execute(input) {
-      const result = projects.list(input);
+    execute(input, context) {
+      const result = projects.list({ ...input, ...(context.localApp ? {
+        resourceRestriction: { extensionId: context.localApp.extensionId, scope: context.localApp.resourceScopes.projectsRead },
+      } : {}) });
       return { ok: true as const, ...result, items: result.items.map(project => ({ ...project })) };
     },
   }));
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.projects.list_milestones', description: 'List project milestones.',
+    surfaces: ['http', 'agent', 'cli', 'extension'], extensionOutput: LocalAppMilestonesSchema,
     ...ProductReadContracts['xopc.projects.list_milestones'],
     execute({ id }) {
       requireProject(id);
@@ -37,6 +46,7 @@ export function registerProjectReadCapabilities(dispatcher: CapabilityDispatcher
   }));
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.projects.list_updates', description: 'List project progress updates.',
+    surfaces: ['http', 'agent', 'cli', 'extension'], extensionOutput: LocalAppUpdatesSchema,
     ...ProductReadContracts['xopc.projects.list_updates'],
     execute({ id, limit }) {
       requireProject(id);

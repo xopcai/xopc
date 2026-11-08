@@ -12,7 +12,7 @@ export { CapabilityError } from './errors.js';
 export interface CapabilityContext {
   /** Host-owned Local App identity and data policy, shared by UI and Agent invocation. */
   localApp?: { extensionId: string; resourceScopes: import('@xopcai/gateway-contract').LocalAppResourceScopes;
-    bindings?: import('@xopcai/gateway-contract').ExtensionCapabilityBinding[]; releaseId?: string; grantRevision?: string };
+    bindings?: import('@xopcai/gateway-contract').ExtensionCapabilityBinding[]; releaseId?: string; grantRevision?: string; manifestDigest?: string };
   principalId: string;
   surface: CapabilitySurface;
   scopes: readonly GatewayScope[];

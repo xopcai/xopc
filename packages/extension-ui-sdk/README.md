@@ -127,3 +127,15 @@ external writes are not exposed by these bindings.
 Release validation and installation reject stale host contract digests; refresh
 the binding and repeat acceptance before publishing. Rollback verifies the stored
 artifact source hash and contract compatibility without reversing business data.
+
+### Scoped projects, tasks, connectors and files
+
+The `capability` namespace also exposes approved project metadata/progress, backlog task capture/editing, selected-file reads and installed connector actions. Declare each pinned contract in the manifest and request its resource scope in the host permission review. New scopes default to denied. Task capture does not start execution.
+
+```ts
+const attachment = await client.files.pickAttachment(); // Separate import grant + user choice, max 512 KiB.
+// For a request returned by xopc.files.propose_export or xopc.connectors.propose_write:
+await client.requests.review(request.id); // Opens host review; does not approve or execute by itself.
+```
+
+Connector grants bind the exact action, account, connection and contract revision. Writes always require individual host review. Exports are browser downloads after host approval. See [Local Apps P1](../../docs/local-app-p1.md) for limits and execution boundaries.

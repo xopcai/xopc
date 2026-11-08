@@ -687,7 +687,9 @@ describe('LocalAppService', () => {
     acceptCurrentDraft(created.id); await service.install(created.id);
     const digest = service.getUiGrant(created.extensionId).manifestDigest!;
     const first = service.grantUiPermissions(created.extensionId, digest);
-    expect(first.resourceScopes).toEqual({ notesRead: { mode: 'none' }, notesWrite: { mode: 'none' }, tasksRead: { mode: 'none' }, agentDelegate: false });
+    expect(first.resourceScopes).toEqual({ notesRead: { mode: 'none' }, notesWrite: { mode: 'none' }, tasksRead: { mode: 'none' },
+      tasksWrite: { mode: 'none' }, projectsRead: { mode: 'none' }, projectsWrite: { mode: 'none' }, filesRead: { mode: 'none' },
+      filesExport: false, filesImport: false, connectors: { mode: 'none' }, agentDelegate: false });
     const next = service.grantUiPermissions(created.extensionId, digest, {
       notesRead: { mode: 'workspace' }, notesWrite: { mode: 'none' }, tasksRead: { mode: 'none' },
     });
