@@ -34,7 +34,7 @@ function enqueueWrite(scope: string, write: () => Promise<void>): Promise<void> 
 
 export function usePersistedComposer(id: string | null | undefined, editor: UseComposerEditorReturn,
   attachments: UseComposerAttachmentsReturn, refs: ComposerContextRef[], setRefs: (refs: ComposerContextRef[]) => void,
-  editSession?: { snapshot: () => SavedEditSession; restore: (saved: SavedEditSession) => void },
+  editSession?: { snapshot: () => SavedEditSession; restore: (saved: SavedEditSession) => void; ready?: () => void },
   unboundDraftKey?: string, getDraftHandoffTarget?: () => string | undefined): void {
   const editorIdentity = editModeIdentity(editSession?.snapshot().mode);
   const identity = useGatewayStore(state => state.conversationId);
@@ -86,6 +86,7 @@ export function usePersistedComposer(id: string | null | undefined, editor: UseC
       .finally(() => {
         if (active.current !== entry) return;
         entry.ready = loaded;
+        if (loaded) current.current.editSession?.ready?.();
         setHydration(value => value + 1);
       });
     return () => { if (active.current === entry) active.current = undefined; };

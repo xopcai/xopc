@@ -101,7 +101,11 @@ function attachmentNames(message: Message): string {
 
 function sideChatErrorMessage(cause: unknown, m: SideChatMessages): string {
   const code = (cause as { body?: { code?: unknown } } | null)?.body?.code;
-  if (code === 'INVALID_REQUEST') return m.errorInvalidRequest;
+  if (code === 'INVALID_REQUEST') {
+    const detail = (cause as { body?: { error?: unknown } })?.body?.error;
+    if (detail === 'clientInstanceId is required') return m.errorClientIdentity;
+    return typeof detail === 'string' && detail.trim() ? `${m.errorInvalidRequest} ${detail}` : m.errorInvalidRequest;
+  }
   if (code === 'NOT_FOUND') return m.errorNotFound;
   if (code === 'CONFLICT') return m.errorConflict;
   if (code === 'LIMIT_REACHED') return m.errorLimitReached;
@@ -197,22 +201,31 @@ export function SideChatColumn({ parentConversationId, embedded = false, visible
   }, [addTab, claimPendingCreate, embedded, finishCreate, m, parentConversationId, pendingCreate, setOpen]);
 
   const [closing, setClosing] = useState(false);
+  const [closeFailedId, setCloseFailedId] = useState<string | null>(null);
+  const removeClosedTab = useCallback((id: string) => {
+    removeTab(id);
+    setCloseFailedId(null);
+    setCreateError(null);
+    setPendingCloseId(null);
+    useRightWorkspaceStore.getState().setNotice(parentConversationId, '');
+  }, [parentConversationId, removeTab]);
   const closeTab = useCallback(async (id: string) => {
     const promoted = useSideChatStore.getState().tabs.find((tab) => tab.id === id)?.promotedConversationId;
     setClosing(true);
     try {
       if (!promoted) await deleteSideChat(id);
-      removeTab(id);
-      setPendingCloseId(null);
+      removeClosedTab(id);
     } catch (error) {
       const status = (error as { status?: number })?.status;
-      if (status === 404 || status === 410) { removeTab(id); setPendingCloseId(null); }
+      if (status === 404 || status === 410) removeClosedTab(id);
       else {
+        setPendingCloseId(null);
+        setCloseFailedId(id);
         setCreateError(sideChatErrorMessage(error, m));
         if (embedded) useRightWorkspaceStore.getState().setNotice(parentConversationId, sideChatErrorMessage(error, m));
       }
     } finally { setClosing(false); }
-  }, [embedded, m, parentConversationId, removeTab]);
+  }, [embedded, m, parentConversationId, removeClosedTab]);
 
   const requestCloseTab = useCallback((id: string) => {
     const state = useSideChatStore.getState();
@@ -315,6 +328,13 @@ export function SideChatColumn({ parentConversationId, embedded = false, visible
       </div>
       {createError && (activeTab || embedded) ? <div className="shrink-0 border-b border-edge px-4 py-2 text-xs text-fg-muted" role="status">
         <p>{createError}</p>
+        {closeFailedId ? <div className="mt-2">
+          <p>{m.closeFailedDescription}</p>
+          <Button type="button" variant="ghost" disabled={closing} onClick={() => void closeTab(closeFailedId)}>{m.retryClose}</Button>
+          <Button type="button" variant="ghost" disabled={closing} onClick={() => {
+            removeClosedTab(closeFailedId);
+          }}>{m.closeLocalTab}</Button>
+        </div> : null}
         {allTabs.filter((tab) => !tab.ended).map((tab) => <button key={tab.id} type="button" className="mr-2 mt-1 rounded border border-edge px-2 py-1" onClick={() => {
           setActive(tab.id);
           window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { conversationId: tab.parentConversationId } }));
@@ -401,6 +421,8 @@ export function SideChatConversation({
   const [ended, setEnded] = useState<SideChatTab['ended']>(() => useSideChatStore.getState().tabs.find((tab) => tab.id === sideChatId)?.ended);
   const [loading, setLoading] = useState(!ended);
   const [connectionLost, setConnectionLost] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const connectionUnavailable = connectionLost || connectionError !== null;
   const [extending, setExtending] = useState(false);
   const [recreating, setRecreating] = useState(false);
   const [promoting, setPromoting] = useState(false);
@@ -445,7 +467,7 @@ export function SideChatConversation({
   const editor = useComposerEditor({
     receiveExternalFill: false,
     conversationId: sideChatId,
-    disabled: !visible || Boolean(ended) || connectionLost,
+    disabled: !visible || Boolean(ended) || connectionUnavailable,
     initialValue: draftText,
     onValueChange: setDraftText,
     autoFocusKey: visible ? sideChatId : null,
@@ -485,6 +507,7 @@ export function SideChatConversation({
     setNotice('');
     setError(null);
     setConnectionLost(false);
+    setConnectionError(null);
     setLoading(false);
     setMessages((current) => buildSideChatReading(current).messages);
     useSideChatStore.getState().markEnded(sideChatId, reason);
@@ -499,10 +522,12 @@ export function SideChatConversation({
     } else if (failure.status === 404 || failure.body?.code === 'NOT_FOUND') {
       finish('unavailable');
     } else {
-      setConnectionLost(true);
+      const retryable = failure.status === undefined || failure.status >= 500 || failure.status === 408 || failure.status === 429;
+      setConnectionLost(retryable);
+      setConnectionError(retryable ? null : sideChatErrorMessage(cause, sideChatMessages));
     }
     setLoading(false);
-  }, [finish, isCurrent]);
+  }, [finish, isCurrent, sideChatMessages]);
 
   const applyView = useCallback((sideChat: SideChatView) => {
     if (!isCurrent() || endedRef.current) return;
@@ -511,6 +536,7 @@ export function SideChatConversation({
     lastViewAt.current = receivedAt;
     setView(sideChat);
     setConnectionLost(false);
+    setConnectionError(null);
     if (sideChat.serverNow) setClockOffset(Date.parse(sideChat.serverNow) - Date.now());
     setNow(Date.now());
     setRunning(sideChat.status !== 'idle');
@@ -586,7 +612,7 @@ export function SideChatConversation({
   }, [clarify, connectionLost, messages, runId, sideChatId, visible]);
 
   const remainingMs = view?.expiresAt ? Date.parse(view.expiresAt) - (now + clockOffset) : Infinity;
-  const warning = !ended && !connectionLost && remainingMs <= 5 * 60_000;
+  const warning = !ended && !connectionUnavailable && remainingMs <= 5 * 60_000;
   const extend = async () => {
     if (extending || endedRef.current) return;
     setExtending(true);
@@ -675,7 +701,7 @@ export function SideChatConversation({
   const submitDraft = () => {
     const content = draftText.trim();
     const wireAttachments = attachments.wireAttachmentsPayload();
-    if ((!content && wireAttachments.length === 0) || running || submittingRef.current || endedRef.current || connectionLost) return;
+    if ((!content && wireAttachments.length === 0) || running || submittingRef.current || endedRef.current || connectionUnavailable) return;
     if (textBytes(content) > SIDE_CHAT_DRAFT_BYTES) { setError(sideChatMessages.draftTooLong); return; }
     const sentDraft = {
       text: draftText,
@@ -903,7 +929,7 @@ export function SideChatConversation({
           />
         </div>
       ) : null}
-      {error ? <p className="border-t border-edge px-4 py-2 text-xs text-red-600 dark:text-red-400">{error}</p> : null}
+      {connectionError || error ? <p role="alert" className="border-t border-edge px-4 py-2 text-xs text-red-600 dark:text-red-400">{connectionError ?? error}</p> : null}
       {ended === 'promoted' && promotedConversationId ? (
         <div className="shrink-0 border-t border-edge p-3">
           <div className="rounded-xl border border-edge bg-surface-panel p-4">
@@ -979,7 +1005,7 @@ export function SideChatConversation({
           <div className={view?.context.selections.length ? 'px-3 sm:px-4' : 'px-3 pt-1 sm:px-4'}>
             <ChatComposerInput
               editorRef={editor.editorRef}
-              disabled={connectionLost}
+              disabled={connectionUnavailable}
               placeholder={m.chat.typeMessage}
               onWireInput={(wire, caret) => {
                 const next = limitSideChatDraft(wire);
@@ -996,7 +1022,7 @@ export function SideChatConversation({
           </div>
           <ComposerToolbarRow>
             <ComposerAttachButton
-              disabled={connectionLost}
+              disabled={connectionUnavailable}
               runBusy={running}
               attachmentCount={attachments.attachments.length}
               maxAttachments={MAX_CHAT_ATTACHMENTS}
@@ -1009,7 +1035,7 @@ export function SideChatConversation({
               className="h-8 shrink-0 px-2 text-xs"
               aria-label={sideChatMessages.saveAsChat}
               title={running ? sideChatMessages.saveBusy : sideChatMessages.saveAsChat}
-              disabled={promoting || running || connectionLost || messages.length === 0}
+              disabled={promoting || running || connectionUnavailable || messages.length === 0}
               onClick={requestSaveAsChat}
             >
               <Save className="size-3.5" />
@@ -1020,16 +1046,16 @@ export function SideChatConversation({
                 <ComposerModelConfigControl
                   chat={m.chat}
                   sessionModel={view.config.modelRef}
-                  modelDisabled={connectionLost}
+                  modelDisabled={connectionUnavailable}
                   onModelChange={(modelRef, thinkingLevel) => saveModelConfig({ modelRef, thinkingLevel })}
                   thinkingLevel={view.config.thinkingLevel}
-                  thinkingDisabled={connectionLost}
+                  thinkingDisabled={connectionUnavailable}
                   onThinkingChange={(thinkingLevel) => saveModelConfig({ thinkingLevel })}
                 />
               ) : null}
             </div>
             <ComposerRunControl
-              disabled={connectionLost || textBytes(draftText) > SIDE_CHAT_DRAFT_BYTES}
+              disabled={connectionUnavailable || textBytes(draftText) > SIDE_CHAT_DRAFT_BYTES}
               voiceActive={false}
               runBusy={running}
               hasDraft={Boolean(draftText.trim()) || attachments.attachments.length > 0}

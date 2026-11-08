@@ -1,5 +1,10 @@
 {
   "string": [
+    {"name":"voice_input_permission","value":"请在系统设置中允许麦克风访问后，再录制语音。"},
+    {"name":"voice_input_too_short","value":"录音时间太短，请按住说话后重试。"},
+    {"name":"voice_input_recording_failed","value":"录音失败，请重新尝试。"},
+    {"name":"voice_input_no_speech","value":"未识别到语音，录音已保留，可以重试或取消。"},
+    {"name":"voice_input_playback_failed","value":"暂时无法播放，录音已保留。"},
     {"name":"recording_outcome_save_failed_title","value":"录音未能保存"},
     {"name":"recording_outcome_save_failed_body","value":"尚未确认可恢复的原音。请检查麦克风权限和可用存储空间后重新录制。"},
     {"name":"recording_outcome_cancelled_title","value":"已停止整理"},

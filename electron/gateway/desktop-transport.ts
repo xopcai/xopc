@@ -101,7 +101,7 @@ export class DesktopGatewayTransport {
       req.once('aborted', abort); res.once('close', abort);
       try {
         const headers: Record<string, string> = { Authorization: `Bearer ${target.token}`, Origin: target.origin, 'Accept-Encoding': 'identity' };
-        for (const name of ['content-type', 'content-length', 'range', 'if-match', 'if-none-match', 'last-event-id', 'accept']) {
+        for (const name of ['content-type', 'content-length', 'range', 'if-match', 'if-none-match', 'last-event-id', 'accept', 'x-xopc-client-instance-id']) {
           const value = req.headers[name]; if (typeof value === 'string' && !(browserSession && name === 'content-length')) headers[name] = value;
         }
         const url = new URL(browserSession ? '/api/browser-session' : req.url, target.origin);

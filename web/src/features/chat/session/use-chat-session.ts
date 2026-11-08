@@ -479,7 +479,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     },
     followUp: {
       composerMode: fq.composerMode, control: fq.control, controlPending: fq.controlPending,
-      beginEditTurn: fq.beginEditTurn, cancelEditor: fq.cancelEditor, restoreEditor: fq.restoreEditor, resumeQueue: fq.resumeQueue, sendQueuedInput: fq.sendQueuedInput,
+      beginEditTurn: fq.beginEditTurn, cancelEditor: fq.cancelEditor, restoreEditor: fq.restoreEditor, markComposerHydrated: fq.markComposerHydrated, resumeQueue: fq.resumeQueue, sendQueuedInput: fq.sendQueuedInput,
       addPendingFollowUp: fq.addPendingFollowUp,
       pendingFollowUps: fq.pendingFollowUps,
       editingFollowUpId: fq.editingFollowUpId,

@@ -736,4 +736,81 @@ describe('SideChatConversation composer', () => {
     expect(container.textContent).toContain('offline');
   });
 
+
+  it.each([
+    ['clientInstanceId is required', '侧边对话缺少客户端标识，请更新桌面端后重试。'],
+    ['selections must be an array', '侧边对话请求无效。 selections must be an array'],
+  ])('shows the request failure instead of reconnecting: %s', async (detail, expected) => {
+    useLocaleStore.setState({ language: 'zh' });
+    vi.mocked(getSideChat).mockRejectedValueOnce(Object.assign(new Error(detail), {
+      status: 400, body: { code: 'INVALID_REQUEST', error: detail },
+    }));
+    await renderConversation();
+    expect(container.textContent).toContain(expected);
+    expect(container.textContent).not.toContain('连接暂时中断');
+    expect(container.querySelector('[contenteditable="true"]')).toBeNull();
+    await act(async () => { window.dispatchEvent(new Event('pageshow')); });
+    expect(container.textContent).not.toContain(expected);
+  });
+
+  it('still reconnects after a transport failure and clears the notice after recovery', async () => {
+    vi.mocked(getSideChat).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await renderConversation();
+    expect(container.textContent).toContain('Connection interrupted');
+    await act(async () => { window.dispatchEvent(new Event('pageshow')); });
+    expect(container.textContent).not.toContain('Connection interrupted');
+  });
+
+  it('lets the user close a local tab after deletion fails without discarding the draft first', async () => {
+    useSideChatStore.getState().addTab({ id: 'side-1', parentConversationId: 'parent', title: 'Side chat', runId: 'run-1' });
+    useSideChatStore.getState().setDraftText('side-1', 'keep me');
+    deleteSideChat.mockRejectedValueOnce(Object.assign(new Error('clientInstanceId is required'), {
+      status: 400, body: { code: 'INVALID_REQUEST', error: 'clientInstanceId is required' },
+    }));
+    await act(async () => root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" embedded /></MemoryRouter>));
+    await act(async () => window.dispatchEvent(new CustomEvent('workspace-close-sidechat', { detail: 'side-1' })));
+    const confirm = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Close side chat' || button.textContent === 'Stop and close');
+    expect(confirm).toBeDefined();
+    await act(async () => confirm?.click());
+    expect(useSideChatStore.getState().drafts['side-1'].text).toBe('keep me');
+    expect(container.textContent).toContain('Operations on the server may continue.');
+    const closeLocal = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Close tab only');
+    expect(closeLocal).toBeDefined();
+    await act(async () => closeLocal?.click());
+    expect(useSideChatStore.getState().tabs).toHaveLength(0);
+    expect(useSideChatStore.getState().drafts['side-1']).toBeUndefined();
+    expect(useRightWorkspaceStore.getState().panes.parent.tabs.some(tab => tab.id === 'side:side-1')).toBe(false);
+    expect(deleteSideChat).toHaveBeenCalledTimes(1);
+    expect(useRightWorkspaceStore.getState().notices.parent).toBeFalsy();
+  });
+
+  it('retries closing after a delete failure', async () => {
+    useSideChatStore.getState().addTab({ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' });
+    localStorage.setItem('xopc:side-chat-close-confirm-disabled:v1', 'true');
+    deleteSideChat.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" embedded /></MemoryRouter>));
+    await act(async () => window.dispatchEvent(new CustomEvent('workspace-close-sidechat', { detail: 'side-1' })));
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Retry closing');
+    expect(retry).toBeDefined();
+    await act(async () => retry?.click());
+    expect(deleteSideChat).toHaveBeenCalledTimes(2);
+    expect(useSideChatStore.getState().tabs).toHaveLength(0);
+    expect(container.textContent).not.toContain('offline');
+  });
+
+
+  it.each([404, 410])('clears the close error when retry finds the side chat already gone (%s)', async status => {
+    useSideChatStore.getState().addTab({ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' });
+    localStorage.setItem('xopc:side-chat-close-confirm-disabled:v1', 'true');
+    deleteSideChat.mockRejectedValueOnce(new Error('offline'));
+    deleteSideChat.mockRejectedValueOnce(Object.assign(new Error('gone'), { status }));
+    await act(async () => root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" embedded /></MemoryRouter>));
+    await act(async () => window.dispatchEvent(new CustomEvent('workspace-close-sidechat', { detail: 'side-1' })));
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Retry closing');
+    await act(async () => retry?.click());
+    expect(useSideChatStore.getState().tabs).toHaveLength(0);
+    expect(container.textContent).not.toContain('offline');
+    expect(useRightWorkspaceStore.getState().notices.parent).toBeFalsy();
+  });
+
 });

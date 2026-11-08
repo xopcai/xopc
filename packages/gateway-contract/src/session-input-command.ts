@@ -115,6 +115,9 @@ export const sessionInputControlCommandSchema = z.strictObject({
   inputId: z.string().min(1).optional(),
   inputVersion: z.number().int().positive().optional(),
   turnId: z.string().min(1).optional(),
+  onlyIfEmpty: z.literal(true).optional(),
+}).refine(value => !value.onlyIfEmpty || value.action === 'resume', {
+  message: 'Only an empty-queue resume can be conditional', path: ['onlyIfEmpty'],
 });
 export type SessionInputControlCommand = z.infer<typeof sessionInputControlCommandSchema>;
 export interface SessionInputControlView {

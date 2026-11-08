@@ -62,6 +62,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onDismissConversationShare = gateway::dismissConversationShare,
             onScheduleDelete = gateway::scheduleDelete, onUndoDelete = gateway::undoDelete,
             onQuickDraftChange = gateway::changeQuickDraft, onQuickSubmit = gateway::submitQuickDraft,
+            onDismissComposerErrors = gateway::dismissComposerErrors,
             onAddQuickAttachment = gateway::addQuickAttachment,
             onAddCapturedQuickAttachment = gateway::addCapturedQuickAttachment,
             onRemoveQuickAttachment = gateway::removeQuickAttachment,

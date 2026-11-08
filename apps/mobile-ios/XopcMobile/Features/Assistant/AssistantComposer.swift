@@ -20,7 +20,7 @@ struct AssistantComposer: View {
     @Binding var referenceKind: ContextReferenceKind
     @Binding var isActionPanelExpanded: Bool
 
-    let attachmentError: String?
+    @Binding var attachmentError: String?
     let canReferenceFiles: Bool
     let canStartRealtimeVoice: Bool
     let isRunActive: Bool
@@ -58,9 +58,7 @@ struct AssistantComposer: View {
                 attachmentStrip
             }
             if let attachmentError {
-                Text(attachmentError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                TransientComposerFeedback(message: attachmentError) { self.attachmentError = nil }
                     .accessibilityLabel(AppLocalization.resolve("附件错误：\(attachmentError)", locale: locale))
             }
             if isRunActive, hasPayload {

@@ -35,6 +35,12 @@ export function acceptSessionInputControl(conversationId: string, command: Sessi
     if (readCurrentTranscriptId(db, conversationId) !== command.expectedTranscriptId) throw new SessionInputControlConflict('Conversation transcript changed');
     const state = readSessionInputControl(conversationId);
     if (state.version !== command.expectedVersion) throw new SessionInputControlConflict('Queue control changed');
+    if (command.onlyIfEmpty && (command.action !== 'resume' || state.phase !== 'idle'
+      || db.prepare(`SELECT 1 FROM session_inputs WHERE conversation_id = ?
+        AND status IN ('queued','running','injecting','interrupted') LIMIT 1`).get(conversationId)
+      || db.prepare('SELECT 1 FROM session_input_control WHERE conversation_id = ? AND permitted_input_id IS NOT NULL').get(conversationId))) {
+      throw new SessionInputControlConflict('Queue is no longer idle and empty');
+    }
     if ((command.action === 'resume' || command.action === 'send' || command.action === 'steer') && state.phase === 'stopping') throw new SessionInputControlConflict('Wait for stopping to finish');
     if ((command.action === 'send' || command.action === 'steer') && !command.inputId) throw new SessionInputControlConflict('Select an input');
     if (command.action === 'send' && state.phase !== 'idle') throw new SessionInputControlConflict('Wait for the active input to finish');

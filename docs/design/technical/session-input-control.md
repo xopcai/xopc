@@ -6,15 +6,18 @@ Abort, turn replacement and follow-up editing share a server-owned input control
 
 - Stop pauses the conversation queue durably before cancelling its active execution. Pending messages remain in their original order. The UI stays in “Stopping” until execution has settled.
 - Editing the latest user turn stops execution and pauses the queue. Replacing it authorizes only the replacement input. Existing follow-ups stay paused and require review.
-- Editing a queued follow-up pauses consumption without stopping the active reply. Saving updates the same input, with optimistic version checks. Cancelling restores the ordinary unsent draft and leaves the queue paused.
+- Editing a queued follow-up pauses consumption without stopping the active reply. Saving updates the same input, with optimistic version checks. Cancelling restores the ordinary unsent draft and leaves pending inputs paused; an idle empty queue is released.
 - Enter and the primary button share submit precedence: save follow-up, replace turn, queue during execution, otherwise send. Queue length never overrides an editor's target.
 - “Send this message” authorizes one input while leaving the rest paused. “Resume queue” independently enables ordered consumption; it does not submit editor text.
+- When the console observes an idle conversation with no pending inputs and no active editor, it releases the persisted pause. Empty queues do not show a pause banner. Editing keeps its pause until the editor closes; queued or interrupted inputs still require explicit review and resume.
 - Editing targets are mutually exclusive. Failed saves and target consumption preserve the editor and its draft. Explicit conversion to a new message is available. Drafts, editor identity and drafts belonging to other edit targets persist in the existing scoped composer store.
 - Steering operates on the original queued input and its captured run. It never clones a queue row. Uncertain delivery is retained without automatic replay; explicit retry is a separate user action.
 
 ## Control protocol
 
 `POST /api/sessions/:conversationId/input-control` accepts an operation ID, transcript ID, expected control version, action (`stop`, `pause`, `resume`, `send`, `steer`) and optional input identity/version or turn identity.
+
+Automatic empty-queue resumes include `onlyIfEmpty: true`. The server checks idle execution, pending inputs (including interrupted and system inputs), and single-input permissions in the control transaction. A concurrent enqueue or control change rejects the resume, preserving the pause. The console attempts cleanup once per observed revision without surfacing background conflicts as agent failures; reopening a conversation also reconciles historical empty pauses.
 
 `input-state` includes `control: { paused, version, phase, reviewRequired }`. REST responses and realtime snapshots use the same projection. The UI retains the operation ID for retries within an attempt; stop requests are retried only against their captured execution. An old completed stop cannot recapture a new run.
 

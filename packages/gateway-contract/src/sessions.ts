@@ -56,6 +56,7 @@ export interface SessionListItem {
   title?: string;
   displayName?: string;
   messageCount: number;
+  usage?: SessionAiUsageSummary;
   updatedAt: string;
   sourceChannel?: string;
   status?: SessionStatus;

@@ -42,7 +42,30 @@ describe('chat read aloud lifecycle', () => {
     mock.createPlayer.mockResolvedValue(player); mock.open.mockResolvedValue({ fd: 3 }); mock.request.mockResolvedValue({ responseCode: 200, result: new ArrayBuffer(8) });
     mock.createSession.mockResolvedValue(session); mock.getWantAgent.mockResolvedValue({}); mock.startBackground.mockResolvedValue(undefined); mock.stopBackground.mockResolvedValue(undefined);
   });
-  afterEach(async () => { await reader.stop(); });
+  afterEach(async () => { await reader.stop(); vi.useRealTimers(); });
+  it('expires failed playback feedback and clears it immediately on stop', async () => {
+    vi.useFakeTimers();
+    mock.request.mockResolvedValueOnce({ responseCode: 503, result: new ArrayBuffer(8) });
+    await reader.speak(context, 'Hello', 'one', 'en');
+    expect(reader.error).toBe('SPEECH_HTTP_503');
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(reader.error).toBe(''); expect(reader.state).toBe('idle');
+    mock.request.mockResolvedValueOnce({ responseCode: 503, result: new ArrayBuffer(8) });
+    await reader.speak(context, 'Again', 'two', 'en');
+    await reader.stop();
+    expect(reader.error).toBe(''); expect(vi.getTimerCount()).toBe(0);
+  });
+  it('suppresses a late background failure after leaving the conversation', async () => {
+    await reader.speak(context, 'Hello', 'one', 'en');
+    reader.leaveForeground();
+    events.get('error')?.(new Error('PLAYBACK_FAILED'));
+    expect(reader.error).toBe(''); expect(reader.state).toBe('idle');
+    mock.request.mockResolvedValueOnce({ responseCode: 503, result: new ArrayBuffer(8) });
+    await reader.speak(context, 'New conversation', 'two', 'en');
+    expect(reader.error).toBe('SPEECH_HTTP_503');
+    reader.leaveForeground();
+    expect(reader.error).toBe('');
+  });
   it('uses authenticated bounded TTS, handles play/pause and removes only its own cache file', async () => {
     await reader.speak(context, 'Hello', 'row-1', 'en');
     expect(mock.createSession).toHaveBeenCalledWith(context, 'xopc-chat-read-aloud', 'audio');
