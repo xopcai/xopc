@@ -1,19 +1,25 @@
 import type { TurnOutcome } from '@xopcai/gateway-contract';
+import { useContext } from 'react';
 import { Check, ChevronRight, CircleAlert, CircleX, ListChecks } from 'lucide-react';
 
 import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleDetailClassName } from './assistant-capsule';
 
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { AgentRunErrorBanner } from './agent-run-error-banner';
+import { RunFeedbackContext } from './run-feedback-context';
 
 export function TurnOutcomeDetails({ outcome }: { outcome: TurnOutcome }) {
   const language = useLocaleStore((state) => state.language);
   const t = messages(language).chat.turnOutcome;
+  const feedback = useContext(RunFeedbackContext);
+  const latest = Boolean(feedback.turnId && feedback.turnId === outcome.turnId);
+  const failure = outcome.status === 'failed' && !(latest && feedback.running)
+    ? <AgentRunErrorBanner errorText={(latest && feedback.error) || outcome.summary || t.statusFailed}
+      onRetry={latest ? feedback.onRetry : undefined} /> : null;
   const hasChanges = Boolean(outcome.changeSet);
   const hasEvidence = outcome.evidence.length > 0;
-  if (!hasChanges && !hasEvidence) return outcome.status === 'failed'
-    ? <p role="alert" className="text-sm text-danger">{outcome.summary || t.statusFailed}</p>
-    : null;
+  if (!hasChanges && !hasEvidence) return failure;
 
   const passed = outcome.evidence.filter((item) => item.status === 'passed').length;
   const failed = outcome.evidence.filter((item) => item.status === 'failed').length;
@@ -37,6 +43,8 @@ export function TurnOutcomeDetails({ outcome }: { outcome: TurnOutcome }) {
   ].filter(Boolean).join(' · ');
 
   return (
+    <>
+    {failure}
     <details className="group mt-2 min-w-0 max-w-full text-sm">
       <summary className={`${assistantCapsuleClassName} cursor-pointer list-none`} title={`${statusLabel} · ${summary}`}>
         <AssistantCapsuleContent
@@ -121,5 +129,6 @@ export function TurnOutcomeDetails({ outcome }: { outcome: TurnOutcome }) {
         ) : null}
       </div>
     </details>
+    </>
   );
 }

@@ -181,6 +181,8 @@ describe('task model recovery over the real execution chain', () => {
     expect(await readFile(join(root, 'effects.log'), 'utf8')).toBe('commit\n');
     expect(events.at(-1)).toMatchObject({ type: 'run_end', payload: { status: 'success' } });
     expect(events.some(event => event.type === 'error')).toBe(false);
+    expect(events).toContainEqual(expect.objectContaining({ type: 'progress',
+      payload: expect.objectContaining({ stage: 'model_retry', completed: 1, total: 2 }) }));
     const history = await store.loadTranscriptRows(conversationId);
     expect(history.filter(row => 'role' in row && row.role === 'user')).toHaveLength(1);
     expect(history.some(row => 'type' in row && row.type === 'custom' && row.customType === 'coding_verification')).toBe(true);
@@ -192,6 +194,7 @@ describe('task model recovery over the real execution chain', () => {
     expect(result.status).toBe('error');expect(effects).toBe(1);expect(requests).toHaveLength(2);
     expect(await readFile(join(root, 'effects.log'), 'utf8')).toBe('commit\n');
     expect(events.at(-1)).toMatchObject({ type: 'run_end', payload: { status: 'error' } });
+    expect(events.filter(event => event.type === 'progress' && event.payload.stage === 'model_retry')).toHaveLength(0);
   }, 15_000);
 
   it('does not retry or switch models after cancellation', async () => {

@@ -1160,16 +1160,6 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                   {session.loadingMore ? (
                     <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
                   ) : null}
-                  {stream.error ? (
-                    <div
-                      className={cn(
-                        'sticky z-20 shrink-0 bg-transparent pe-2',
-                        compactWelcomeLayout ? '-top-5' : '-top-4',
-                      )}
-                    >
-                      <AgentRunErrorBanner errorText={stream.error} />
-                    </div>
-                  ) : null}
                   {automationSetup && !automationWorkspace && chatConversationId ? <AutomationConfigurationPanel conversationId={chatConversationId} language={language} running={stream.streaming || stream.sending} /> : null}
                   {automationSetup && !automationWorkspace && msgSlice.items.length > 0 ? <Link className="mb-4 inline-block rounded-md px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover" to="/automations">{language === 'zh' ? '← 定时任务' : '← Scheduled tasks'}</Link> : null}
                   {!embedded && taskId ? (
@@ -1200,6 +1190,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                     streaming={stream.streaming}
                     sending={stream.sending}
                     progress={stream.progress}
+                    runError={stream.error}
                     reasoningLevel={session.reasoningLevel}
                     showAssistantWorkLog
                     registerListContentRef={registerListContentRef}

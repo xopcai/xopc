@@ -9,8 +9,8 @@ import { AgentRunErrorBanner } from '../agent-run-error-banner';
 import { useLocaleStore } from '@/stores/locale-store';
 
 it.each([
-  ['en', 'Model connection interrupted', 'Review any completed tool actions'],
-  ['zh', '模型连接中断', '请先确认执行结果'],
+  ['en', 'Unable to reach the AI service', 'Review any completed actions'],
+  ['zh', '暂时无法连接 AI 服务', '请先确认结果'],
 ] as const)('explains provider connection errors in %s', (language, title, guidance) => {
   const originalLanguage = useLocaleStore.getState().language;
   const originalActEnvironment = (globalThis as any).IS_REACT_ACT_ENVIRONMENT;

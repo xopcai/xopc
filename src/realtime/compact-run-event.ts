@@ -20,6 +20,10 @@ export function compactRunEvent(message: RealtimeDelivery): RealtimeDelivery | n
           ? { deliveries: event.payload.deliveries } : {}) };
       break;
     case 'progress':
+      if (event.payload.stage === 'model_retry' || event.payload.stage === 'model_fallback') {
+        payload = { stage: event.payload.stage, message: '', completed: event.payload.completed, total: event.payload.total };
+        break;
+      }
       if (!event.payload.petFeedback.publicSummary) return null;
       payload = { message: conciseProgress(event.payload.petFeedback.publicSummary) };
       break;

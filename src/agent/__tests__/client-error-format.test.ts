@@ -6,6 +6,12 @@ import {
 } from '../client-error-format.js';
 
 describe('formatAgentRunErrorForClient', () => {
+  it('distinguishes OAuth transport failure from a rejected authorization', () => {
+    expect(JSON.parse(formatAgentRunErrorForClient('OAuth refresh failed for openai: fetch failed')))
+      .toMatchObject({ code: 'provider_connection_error' });
+    expect(JSON.parse(formatAgentRunErrorForClient('OAuth refresh failed for openai: invalid_grant')))
+      .toMatchObject({ code: 'provider_auth_invalid' });
+  });
   it('identifies model connection failures and preserves diagnostic context', () => {
     expect(JSON.parse(formatAgentRunErrorForClient('Connection error.', {
       provider: 'xopc-cloud', modelRef: 'xopc-cloud/openai-codex/gpt-6.1-sol',

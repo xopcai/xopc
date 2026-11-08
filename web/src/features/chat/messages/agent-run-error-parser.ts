@@ -25,6 +25,14 @@ export type AgentRunErrorPayload = {
 
 const PLAIN_TEXT_API_KEY_RE = /^No API key found for (\S+)/i;
 
+/** Keep credentials out of user-visible diagnostics and copied reports. */
+export function safeErrorDetail(message: string): string {
+  return message
+    .replace(/\bBearer\s+[^\s"',;]+/gi, 'Bearer [redacted]')
+    .replace(/\bsk-[a-zA-Z0-9_-]+/g, '[redacted]')
+    .replace(/((?:access_token|refresh_token|api_key|client_secret|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+/gi, '$1[redacted]');
+}
+
 function parseStructuredJson(text: string): AgentRunErrorPayload | null {
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
@@ -78,6 +86,16 @@ export function parseAgentRunError(text: string): AgentRunErrorPayload | null {
       message: trimmed,
     };
   }
+
+  const provider = /OAuth refresh failed for ([\w-]+)/i.exec(trimmed)?.[1];
+  const code = /invalid_grant|invalid.api.key|unauthorized|token.*revoked|\b401\b/i.test(trimmed)
+    ? 'provider_auth_invalid'
+    : /insufficient_quota|billing|credit.balance|payment.required/i.test(trimmed) ? 'billing'
+      : /429|rate.limit|too many requests/i.test(trimmed) ? 'rate_limit'
+        : /timed?\s*out|timeout|\b408\b|\b504\b/i.test(trimmed) ? 'timeout'
+          : /fetch failed|connection error|econn|network|socket|\b50[023]\b|service unavailable/i.test(trimmed)
+            ? 'provider_connection_error' : undefined;
+  if (code) return { kind: code, code, provider, message: trimmed };
 
   if (trimmed === 'Assistant turn failed' || trimmed.startsWith('Error: ')) {
     return {

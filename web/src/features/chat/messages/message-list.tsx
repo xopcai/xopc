@@ -20,6 +20,9 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { VirtualMessageRows, type MessageRowDescriptor } from './virtual-message-rows';
 import { hasVisibleMessageRow } from './message-row-visibility';
+import { AgentRunErrorBanner } from './agent-run-error-banner';
+import { RunFeedbackContext } from './run-feedback-context';
+import { RunRecoveryStatus } from './run-recovery-status';
 
 export interface ChatTimelineEntry { id: string; timestamp: number; content: ReactNode }
 
@@ -36,6 +39,7 @@ export const MessageList = memo(function MessageList({
   streaming,
   sending = false,
   progress,
+  runError,
   reasoningLevel,
   registerListContentRef,
   onPickWelcomePrompt,
@@ -70,6 +74,7 @@ export const MessageList = memo(function MessageList({
   streaming: boolean;
   sending?: boolean;
   progress: ProgressState | null;
+  runError?: string | null;
   reasoningLevel: ReasoningLevel;
   scrollRef?: RefObject<HTMLDivElement | null>;
   /** Measured transcript root in the shared scroll viewport. */
@@ -102,7 +107,7 @@ export const MessageList = memo(function MessageList({
 
   const [virtualized] = useState(Boolean(scrollRef && list.length >= 300));
 
-  const showWelcome = list.length === 0 && timelineEntries.length === 0 && !streaming && !sending;
+  const showWelcome = list.length === 0 && timelineEntries.length === 0 && !streaming && !sending && !runError;
 
   if (showWelcome) {
     if (welcomeOverlay) {
@@ -125,6 +130,15 @@ export const MessageList = memo(function MessageList({
 
   const now = Date.now();
   const lastUserIndex = list.findLastIndex((message) => message.role === 'user');
+  const currentRound = list.slice(lastUserIndex + 1);
+  const currentOutcome = currentRound.findLast(message => message.outcome)?.outcome;
+  const running = streaming || sending;
+  const retry = !running && onRetryUserMessageRound && lastUserIndex >= 0
+    && Boolean(list[lastUserIndex].turnId || (list[lastUserIndex].deliveryStatus === 'failed' && list[lastUserIndex].clientSubmissionId))
+    && !currentRound.some(message => message.content.some(part => part.type === 'tool_use'))
+    ? () => onRetryUserMessageRound(lastUserIndex) : undefined;
+  const feedback = { turnId: currentOutcome?.turnId, running, error: runError, onRetry: retry };
+  const recovering = running && (progress?.stage === 'model_retry' || progress?.stage === 'model_fallback');
 
   const isStreamingRow = (msg: Message, index: number) => Boolean(
     (streaming || sending || msg.pendingResponseStatus) && index === list.length - 1 && msg.role === 'assistant',
@@ -209,7 +223,7 @@ export const MessageList = memo(function MessageList({
           workspaceConversationId={workspaceConversationId}
           projectId={projectId}
           isStreaming={isStreamRow}
-          progress={isStreamRow ? progress : null}
+          progress={isStreamRow && !recovering ? progress : null}
           reasoningLevel={reasoningLevel}
           messageIndex={index}
           onDeleteRound={onDeleteRound}
@@ -238,6 +252,9 @@ export const MessageList = memo(function MessageList({
   };
   const footer = (
     <div className={cn(virtualized ? 'pt-8' : 'contents')}>
+      {recovering ? <RunRecoveryStatus progress={progress} /> : null}
+      {!running && runError && currentOutcome?.status !== 'failed'
+        ? <AgentRunErrorBanner errorText={runError} onRetry={retry} /> : null}
       {trailingContent}
       {/* Reduced-motion duration overrides must not animate the spacer's height. */}
       {replySpaceRef && <div ref={replySpaceRef} className={cn(!virtualized && '-mt-8', 'shrink-0 transition-none')}
@@ -245,6 +262,7 @@ export const MessageList = memo(function MessageList({
     </div>
   );
   return (
+    <RunFeedbackContext value={feedback}>
     <InlinePreviewSchedulerProvider>
       <div ref={registerListContentRef} className={cn('w-full min-w-0 pb-8', !virtualized && 'flex flex-col gap-8')}
         data-chat-virtualized={virtualized || undefined}>
@@ -252,5 +270,6 @@ export const MessageList = memo(function MessageList({
           renderRow={renderRow} footer={footer} /> : <>{rows.map(row => renderRow(row.index))}{footer}</>}
       </div>
     </InlinePreviewSchedulerProvider>
+    </RunFeedbackContext>
   );
 });

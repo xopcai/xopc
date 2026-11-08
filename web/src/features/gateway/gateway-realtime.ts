@@ -45,6 +45,7 @@ export function startGatewayRealtime(): () => void {
   const id = resolveClientId();
   const kind = window.electronAPI ? 'desktop' as const : 'web' as const;
   const client = new RealtimeClient({
+    maxReconnectAttempts: 5,
     clientId: id,
     clientKind: kind,
     getWebSocketUrl: websocketUrl,

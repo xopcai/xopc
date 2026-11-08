@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertCircle, Clock, KeyRound, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,10 +7,9 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
   parseAgentRunError,
-  toProviderSetupPayload,
+  safeErrorDetail,
   type AgentRunErrorPayload,
 } from '@/features/chat/messages/agent-run-error-parser';
-import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
 
 type ErrorCopy = { title: string; body: string; cta?: string; deepLink?: string };
 
@@ -24,7 +23,7 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
           payload.provider ?? m.agentRunErrorUnknownProvider,
         ),
         cta: m.providerSetupRequiredCta,
-        deepLink: '/settings/capabilities/models',
+        deepLink: payload.deepLink ?? '/settings/capabilities/models',
       };
     case 'provider_auth_invalid':
       return {
@@ -34,7 +33,7 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
           payload.provider ?? m.agentRunErrorUnknownProvider,
         ),
         cta: m.agentRunErrorCtaProviders,
-        deepLink: '/settings/capabilities/models',
+        deepLink: payload.deepLink ?? '/settings/capabilities/models',
       };
     case 'rate_limit':
       return { title: m.agentRunErrorRateLimitTitle, body: m.agentRunErrorRateLimitBody };
@@ -88,57 +87,20 @@ function ErrorIcon({ code }: { code: string }) {
   }
 }
 
-function toneForCode(code: string): 'amber' | 'red' {
-  if (
-    code === 'provider_setup_required' ||
-    code === 'provider_auth_invalid' ||
-    code === 'rate_limit' ||
-    code === 'timeout' ||
-    code === 'billing' ||
-    code === 'model_quota_exhausted' ||
-    code === 'platform_token_limit_exceeded' ||
-    code === 'session_not_found'
-  ) {
-    return 'amber';
-  }
-  return 'red';
-}
-
-function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
+function AgentRunErrorCard({ payload, onRetry }: { payload: AgentRunErrorPayload; onRetry?: () => void }) {
   const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language).chat;
+  const [copyStatus, setCopyStatus] = useState('');
   const copy = resolveErrorCopy(payload, m);
-  const tone = toneForCode(payload.code);
-
-  const shellClass =
-    tone === 'amber'
-      ? 'border-amber-300/60 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-950'
-      : 'border-red-300/60 bg-red-50 dark:border-red-500/30 dark:bg-red-950';
-  const iconShellClass =
-    tone === 'amber'
-      ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
-      : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300';
-  const titleClass =
-    tone === 'amber'
-      ? 'text-amber-900 dark:text-amber-100'
-      : 'text-red-900 dark:text-red-100';
-  const bodyClass =
-    tone === 'amber'
-      ? 'text-amber-900/85 dark:text-amber-100/80'
-      : 'text-red-900/85 dark:text-red-100/80';
-  const detailClass =
-    tone === 'amber'
-      ? 'text-amber-800/80 hover:text-amber-900 dark:text-amber-200/80 dark:hover:text-amber-100'
-      : 'text-red-800/80 hover:text-red-900 dark:text-red-200/80 dark:hover:text-red-100';
-  const detailPreClass =
-    tone === 'amber'
-      ? 'bg-amber-100/60 text-amber-900 dark:bg-amber-500/15 dark:text-amber-100'
-      : 'bg-red-100/60 text-red-900 dark:bg-red-500/15 dark:text-red-100';
-  const ctaClass =
-    tone === 'amber'
-      ? 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400'
-      : 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:text-red-950 dark:hover:bg-red-400';
+  const shellClass = 'border-edge bg-surface-panel';
+  const iconShellClass = 'bg-surface-inset text-warning';
+  const titleClass = 'text-fg';
+  const bodyClass = 'text-fg-muted';
+  const detailClass = 'text-fg-muted hover:text-fg';
+  const detailPreClass = 'bg-surface-inset text-fg-muted';
+  const ctaClass = 'bg-accent text-on-accent hover:bg-accent-hover';
+  const recoverable = ['provider_connection_error', 'timeout', 'rate_limit', 'unknown', 'send_failed'].includes(payload.code);
   const quotaExhausted = payload.code === 'model_quota_exhausted';
   const openConsole = (path: string) => window.open(
     `https://console.xopc.ai${path}`,
@@ -164,7 +126,18 @@ function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
           <p className={cn('mt-1 text-xs leading-relaxed', bodyClass)}>{copy.body}</p>
         </div>
       </div>
-      {quotaExhausted ? (
+      {recoverable ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {onRetry ? (
+          <button type="button" className={cn('min-h-9 rounded-md px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', ctaClass)} onClick={onRetry}>
+            {m.runRecovery.retry}
+          </button>
+          ) : null}
+          <button type="button" className="min-h-9 rounded-md px-3 text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => navigate('/settings/capabilities/models')}>
+            {m.runRecovery.models}
+          </button>
+        </div>
+      ) : quotaExhausted ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button type="button" className={cn('inline-flex h-8 items-center rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', ctaClass)} onClick={() => openConsole('/models/credits/purchase')}>
             {m.xopcQuotaPurchaseCta}
@@ -202,8 +175,17 @@ function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
               detailPreClass,
             )}
           >
-            {payload.message}
+            {safeErrorDetail(payload.message)}
           </pre>
+          <button type="button" className="mt-1 min-h-9 rounded-md px-2 text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(safeErrorDetail(payload.message));
+              setCopyStatus(m.runRecovery.copied);
+            } catch { setCopyStatus(m.runRecovery.copyFailed); }
+          }}>
+            {m.runRecovery.copyDetails}
+          </button>
+          <span role="status" aria-live="polite" className="ml-2 text-fg-muted">{copyStatus}</span>
         </details>
       ) : null}
     </section>
@@ -211,23 +193,15 @@ function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
 }
 
 /** Unified agent-run error banner with i18n and actionable cards. */
-export function AgentRunErrorBanner({ errorText }: { errorText: string }) {
+export function AgentRunErrorBanner({ errorText, onRetry }: { errorText: string; onRetry?: () => void }) {
   const payload = useMemo(() => parseAgentRunError(errorText), [errorText]);
 
   if (!payload) return null;
 
-  const providerPayload = toProviderSetupPayload(payload);
-  if (providerPayload) {
-    return (
-      <div className="mb-4">
-        <ProviderSetupRequiredCard payload={providerPayload} />
-      </div>
-    );
-  }
 
   return (
     <div className="mb-4">
-      <AgentRunErrorCard payload={payload} />
+      <AgentRunErrorCard payload={payload} onRetry={onRetry} />
     </div>
   );
 }

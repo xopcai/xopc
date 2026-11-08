@@ -14,6 +14,51 @@ import {
 describe('llm-turn-retry', () => {
   afterEach(() => vi.useRealTimers());
 
+  it('announces recovery before backoff and continues the same turn after OAuth transport failures', async () => {
+    vi.useFakeTimers();
+    const user = { role: 'user', content: 'Continue', timestamp: 1 };
+    const failure = { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'OAuth refresh failed for openai: fetch failed' };
+    const agent = { state: { messages: [user, failure] },
+      continue: vi.fn(async () => { agent.state.messages.push({ role: 'assistant', content: [], stopReason: 'stop' } as any); }),
+      waitForIdle: vi.fn() } as any;
+    const scheduled = vi.fn();
+    const pending = maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test',
+      log: { warn: vi.fn() }, onRetryScheduled: scheduled });
+    expect(scheduled).toHaveBeenCalledWith(1, 2, 1000);
+    expect(agent.continue).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    await pending;
+    expect(agent.continue).toHaveBeenCalledTimes(1);
+    expect(agent.state.messages.filter((m: any) => m.role === 'user')).toEqual([user]);
+  });
+
+  it('bounds thrown transport failures and does not retry invalid authorization', async () => {
+    const failure = new Error('OAuth refresh failed for openai: fetch failed');
+    const agent = { state: { messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] },
+      continue: vi.fn(async () => { throw failure; }), waitForIdle: vi.fn() } as any;
+    const scheduled = vi.fn();
+    await expect(maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test',
+      log: { warn: vi.fn() }, baseDelayMs: 0, initialError: failure, onRetryScheduled: scheduled })).rejects.toBe(failure);
+    expect(agent.continue).toHaveBeenCalledTimes(2);
+    agent.continue.mockClear();
+    await expect(maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test',
+      log: { warn: vi.fn() }, initialError: new Error('invalid_grant: fetch failed') })).rejects.toThrow('invalid_grant');
+    expect(agent.continue).not.toHaveBeenCalled();
+  });
+
+  it('retries an unsubmitted preflight through its caller without continuing an older input', async () => {
+    const agent = { state: { messages: [] }, continue: vi.fn(), waitForIdle: vi.fn() } as any;
+    const retryRequest = vi.fn(async () => {
+      agent.state.messages.push({ role: 'user', content: 'New input', timestamp: 1 });
+      agent.state.messages.push({ role: 'assistant', content: [], stopReason: 'stop' });
+    });
+    await maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test', log: { warn: vi.fn() },
+      baseDelayMs: 0, initialError: new Error('fetch failed'), retryRequest });
+    expect(retryRequest).toHaveBeenCalledTimes(1);
+    expect(agent.continue).not.toHaveBeenCalled();
+    expect(agent.state.messages.filter((message: any) => message.role === 'user')).toHaveLength(1);
+  });
+
   it('renews retries after model progress but bounds consecutive failures', async () => {
     const failure = { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'Connection error.' };
     const budget = { continues: 2 };

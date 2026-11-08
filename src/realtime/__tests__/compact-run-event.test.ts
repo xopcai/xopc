@@ -4,6 +4,12 @@ import { compactRunEvent } from '../compact-run-event.js';
 import { ChatStreamMapper } from '../../gateway/chat-stream/mapper.js';
 
 describe('compact run transport', () => {
+  it('preserves recovery state and real attempt counts in compact replay', () => {
+    const mapper = new ChatStreamMapper({ runId: 'r', conversationId: 'c', channel: 'webchat' });
+    const event = mapper.map({ type: 'progress', stage: 'model_retry', message: 'Reconnecting', completed: 1, total: 2 })[0];
+    expect(compactRunEvent(new RealtimeBroker().publish('run:r', event.type, event)))
+      .toMatchObject({ payload: { data: { payload: { stage: 'model_retry', completed: 1, total: 2 } } } });
+  });
   it('filters both live and replay frames without changing sequence or full subscribers', () => {
     const broker = new RealtimeBroker();
     const events = ['run_start', 'thinking_delta', 'tool_start', 'tool_update', 'assistant_delta', 'run_end'];

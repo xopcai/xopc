@@ -42,7 +42,7 @@ export type EmbeddedStreamEvent =
       isError: boolean;
       durationMs?: number;
     }
-  | { type: 'progress'; runId?: string; stage: string; message: string }
+  | { type: 'progress'; runId?: string; stage: string; message: string; completed?: number; total?: number }
   | { type: 'error'; runId?: string; content: string }
   | { type: 'turn_outcome'; runId?: string; outcome: TurnOutcome }
   | {
