@@ -205,6 +205,7 @@ export class AgentService {
   /** Gateway: notify UI after direct `SessionStore.updateMetadata` (no SessionManager emit). */
   private onSessionMetadataUpdated?: (conversationId: string, patch?: { name?: string }) => void;
   private onSessionTranscriptUpdated?: (conversationId: string) => void;
+  private stopSessionTranscriptUpdates?: () => void;
 
   private effectiveAppConfig(): Config | undefined {
     const base = this.config.config;
@@ -228,7 +229,7 @@ export class AgentService {
     log.debug('Command system initialized');
 
     this.sessionStore = config.sessionStore ?? this.createSessionStore();
-    onSessionTranscriptUpdate((update) => {
+    this.stopSessionTranscriptUpdates = onSessionTranscriptUpdate((update) => {
       void this.sessionStore.syncEmbeddedTranscriptUpdate(update).catch((err) => {
         log.warn(
           { err, conversationId: update.conversationId },
@@ -1140,6 +1141,8 @@ export class AgentService {
   }
 
   private dispose(): void {
+    this.stopSessionTranscriptUpdates?.();
+    this.stopSessionTranscriptUpdates = undefined;
     this.sessionStore.idleCompaction.dispose();
     this.sessionTracker.dispose();
     this.sessionState.disposeAll();

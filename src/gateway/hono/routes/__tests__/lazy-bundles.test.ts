@@ -263,6 +263,7 @@ describe('lazy route bundles', () => {
       '/api/user-model/assertions/id/scope',
       '/api/knowledge-memory/id',
       '/api/knowledge-memory/id/review',
+      '/api/knowledge-memory/id/scope',
       '/api/knowledge-memory/id/evidence',
       '/api/memory-learning/status',
       '/api/memory-learning/jobs/id',

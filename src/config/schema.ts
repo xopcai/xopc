@@ -1206,6 +1206,7 @@ export const ConfigSchema = z.object({
       maxAssertions: 20,
       maxKnowledge: 12,
       maxChars: 6_000,
+      deepRecall: { enabled: true, timeoutMs: 8_000, maxSessions: 60, maxEvidence: 6 },
       compaction: DEFAULT_CONTEXT_COMPACTION_POLICY,
     },
     homeIntelligence: {

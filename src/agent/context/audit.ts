@@ -49,6 +49,7 @@ export function recordExecutionContext(
   for (const item of selected.externalKnowledge) {
     included.add(`knowledge:external:${item.citation.providerId}:${item.record.id}`);
   }
+  for (const item of selected.recall?.evidence ?? []) included.add(`knowledge:history:${item.conversationId}:${item.entryId}`);
   const items: ExecutionContextAudit['items'] = [
     ...context.rules.map((item) => ({
       objectType: 'rule' as const,
@@ -83,6 +84,12 @@ export function recordExecutionContext(
       reasons: ['task_relevant_knowledge'],
       included: included.has(`knowledge:${item.id}`),
     })),
+    ...(context.recall?.evidence ?? []).map(item => ({
+      objectType: 'knowledge' as const,
+      objectId: `history:${item.conversationId}:${item.entryId}`,
+      reasons: ['historical_quote', `citation:${item.id}`, `recorded_at:${item.observedAt}`],
+      included: included.has(`knowledge:history:${item.conversationId}:${item.entryId}`),
+    })),
     ...context.externalKnowledge.map((item) => ({
       objectType: 'knowledge' as const,
       objectId: `external:${item.citation.providerId}:${item.record.id}`,
@@ -104,6 +111,13 @@ export function recordExecutionContext(
     includedPriorities: selected.priorities.length,
     includedKnowledge: selected.knowledge.length + selected.externalKnowledge.length,
     includedExternalKnowledge: selected.externalKnowledge.length,
+    recallModelCalls: context.recall?.modelCalls ?? 0,
+    recallQueryCount: context.recall?.queries.length ?? 0,
+    recallSearchedSessions: context.recall?.searchedSessions ?? 0,
+    recallFailed: Number(context.recall?.status === 'failed'),
+    recallEvidence: context.recall?.evidence.length ?? 0,
+    includedRecallEvidence: selected.recall?.evidence.length ?? 0,
+    recallTruncated: Number(context.recall?.truncated || selected.recall?.truncated || false),
     renderedChars: input.renderedChars,
   };
   runSqliteWriteTransaction((db) => {

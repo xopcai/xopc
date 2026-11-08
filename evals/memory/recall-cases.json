@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "sources": [
+    { "id": "production", "text": "请仅在当前项目记住：不可直接修改生产环境，所有变更必须经过评审和灰度。核对标识为审灰-{tag}。" },
+    { "id": "branch-original", "text": "请仅在当前项目记住：星桥项目在2026年11月1日决定从release-{tag}分支发布，原因是当时只有它通过兼容测试。" },
+    { "id": "branch-revised", "text": "纠正星桥项目的发布分支：从2026年11月4日起改用stable-{tag}，旧release-{tag}不再使用。更改原因是新保护规则只覆盖stable分支；请仅在当前项目保存。" },
+    { "id": "approval-original", "text": "请仅在当前项目记住：星桥项目2026年11月1日的上线批准人是何青，交接凭据为轮值-{tag}。" },
+    { "id": "approval-revised", "text": "纠正星桥项目上线批准人：从2026年11月6日起改为林澈，因为何青转入轮岗培训。交接凭据仍为轮值-{tag}，仅适用于当前项目。" }
+  ],
+  "cases": [
+    { "id": "zh-paraphrase", "group": "paraphrase", "question": "我们对线上操作有什么约束？请根据保存的约定回答。", "queries": ["生产 变更 评审 灰度"], "expectedSources": ["production"], "answerIncludes": ["评审", "灰度"], "answerExcludes": [] },
+    { "id": "zh-paraphrase-release", "group": "paraphrase", "question": "这个项目现在从哪条代码线交付？只按已有约定回答。", "queries": ["发布 分支 stable"], "expectedSources": ["branch-revised"], "answerIncludes": ["stable-{tag}"], "answerExcludes": [] },
+    { "id": "revision-current", "group": "temporal", "question": "星桥项目现在使用什么发布分支？别把此前的版本当成当前约定。", "queries": ["星桥 发布 分支"], "expectedSources": ["branch-revised"], "answerIncludes": ["stable-{tag}"], "answerExcludes": [] },
+    { "id": "revision-before", "group": "temporal", "question": "截至2026年11月2日，星桥项目当时决定使用什么发布分支？请按当时的决定回答。", "queries": ["星桥 发布 分支 11月1日"], "expectedSources": ["branch-original"], "answerIncludes": ["release-{tag}"], "answerExcludes": [] },
+    { "id": "revision-why", "group": "cross-session", "question": "星桥项目最初为什么选那条发布分支，后来又为什么换了？请区分前后原因并给出来源。", "queries": ["星桥 发布 兼容 保护"], "expectedSources": ["branch-original", "branch-revised"], "answerIncludes": ["兼容", "保护", "release-{tag}", "stable-{tag}"], "answerExcludes": [] },
+    { "id": "follow-up", "group": "cross-session", "question": "那后来是哪一天换的？为什么？请根据刚才说的发布决定继续核对。", "recent": ["星桥项目最初为什么选那条发布分支，后来又为什么换了？"], "queries": ["星桥 发布 分支 保护"], "expectedSources": ["branch-revised"], "answerIncludes": ["11月4日", "保护"], "answerExcludes": [] },
+    { "id": "approval-before", "group": "temporal", "question": "星桥项目在2026年11月3日由谁批准上线？请查当时记录，不要用现在的人替代。", "queries": ["星桥 上线 批准 何青"], "expectedSources": ["approval-original"], "answerIncludes": ["何青"], "answerExcludes": [] },
+    { "id": "approval-chain", "group": "cross-session", "question": "星桥项目的上线拍板人前后怎么变了，变动原因是什么？请追读其他会话里的原话。", "queries": ["星桥 上线 批准 轮岗"], "expectedSources": ["approval-original", "approval-revised"], "answerIncludes": ["何青", "林澈", "轮岗"], "answerExcludes": [] },
+    { "id": "missing-evidence", "group": "abstention", "question": "星桥项目上次为什么换了数据库？只按实际记录回答，没有依据就说明不知道。", "queries": ["星桥 数据库 更换"], "expectedSources": [], "answerIncludes": [], "answerExcludes": ["因为成本", "因为性能"] }
+  ]
+}

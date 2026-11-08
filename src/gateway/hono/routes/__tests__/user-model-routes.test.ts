@@ -171,10 +171,11 @@ describe('user model routes', () => {
       action: 'created', assertion: { authority: 'user_explicit', status: 'active' },
     });
 
+    const currentView = await (await app.request(`/api/user-model/assertions/${assertionResult.assertion.id}`)).json();
     const scopeResponse = await app.request(`/api/user-model/assertions/${assertionResult.assertion.id}/scope`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ scope: { type: 'agent', id: 'main' } }),
+      body: JSON.stringify({ scope: { type: 'agent', id: 'main' }, version: currentView.assertion.version }),
     });
     expect(scopeResponse.status).toBe(200);
     await expect(scopeResponse.json()).resolves.toMatchObject({

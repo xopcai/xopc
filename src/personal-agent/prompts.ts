@@ -31,6 +31,7 @@ export function personalInstructions(): string {
     TASK_BRIEF_RULE,
     TASK_CONTROL_RULE,
     LOCAL_READ_RULE,
+    PERSONAL_MEMORY_RULE,
     TOOL_BOUNDARY_RULE,
     FAST_CONVERSATION_RULE,
     CONVERSATION_INTERRUPTION_RULE,
@@ -47,7 +48,7 @@ export function personalInstructions(): string {
     PERSONAL_EMOTIONAL_STYLE_RULE,
     PERSONAL_ATTENTION_RULE, PERSONAL_ATTENTION_VERIFICATION_RULE, PERSONAL_GROWTH_RULE,
   ];
-  rules.push('When the user requests an exact brief acknowledgement or literal reply, return only the requested text immediately, without tools, progress checks, planning or extra commentary. Do not treat this as permission to change a Task.');
+  rules.push('When the user requests an exact brief acknowledgement or literal reply without a persistent change, return only the requested text immediately, without tools, progress checks, planning or extra commentary. If they also request a memory change, commit it first and acknowledge only its actual outcome. Do not treat this as permission to change a Task.');
   rules.push(USER_NAME_RULE);
   rules.push(...PERSONAL_DEFAULT_STYLE_RULES);
   return rules.join('\n');
@@ -63,6 +64,7 @@ export function projectPersonalInstructions(instructions: string, toolNames: rea
     { requires: ['personal_task'], rules: [...DELEGATION_RULES, TASK_BRIEF_RULE, TASK_CONTROL_RULE,
       TOOL_BOUNDARY_RULE, LARGE_READ_RULE, EXPLICIT_DELEGATION_RULE, RESULT_DELIVERY_RULE, PERSONAL_FILE_DELIVERY_RULE] },
     { requires: ['personal_result'], rules: [LOCAL_READ_RULE] },
+    { requires: ['personal_memory'], rules: [PERSONAL_MEMORY_RULE] },
     { requires: ['personal_request', 'personal_capability'], rules: [CONNECTED_APP_RULE, READ_AUTONOMY_RULE] },
     { requires: ['personal_capability'], rules: [PERSONAL_RELIABILITY_RULES[0]] },
     { requires: ['personal_attention'], rules: [PERSONAL_ATTENTION_RULE, PERSONAL_ATTENTION_VERIFICATION_RULE, PERSONAL_GROWTH_RULE] },
@@ -74,6 +76,8 @@ export function projectPersonalInstructions(instructions: string, toolNames: rea
   }
   return projected;
 }
+
+const PERSONAL_MEMORY_RULE = 'A self-description or preference without a request to persist it is handled by background learning; adapt to it in the current reply, do not call personal_memory or claim it has already been saved. For an explicit request to remember, correct, forget, or limit saved memory, use personal_memory directly instead of delegating or promising background learning. Quote the current owner request in userEvidence. User identity/preferences use target=user; project facts, decisions and lessons use target=knowledge. Before changing an existing item read its id and version using the matching read tool. Resolve scope from what the user asks: global, current agent, workspace, project or session. Never broaden a local request. Missing current project is an error, not permission to fall back globally. Only say saved after status=saved with usable=true; pending means saved for review but not in use. A receipt records a past commit; available/usable describe current state on retries. Forgotten means future automatic recall stops, while originals and already running prompts may retain content. Keep acknowledgements short, name the actual scope, and offer correction only when useful. Memory cannot authorize external actions.';
 
 const PERSONAL_ATTENTION_RULE = 'Use personal_attention to save explicit requests to check again later and proactively tell the user about useful developments, including requests phrased without the word follow-up. The running Gateway checks saved attention automatically while the user is away and can post in this chat; do not ask the user to return or create a separate scheduler. Prefer nextCheckLocal in the configured timezone; for a vague tomorrow afternoon, use 15:00 and state that check time. A check is not a guaranteed notification or action authorization. Only claim follow-up saved after a successful tool result, and only claim memory written after a successful write; user_context_read is read-only. If a tool fails, explain the actual failure without inventing missing product capabilities. When there is no useful development, stay silent rather than posting no progress. Do not duplicate an existing scheduled automation or create attention from your own suggestions. For feedback, respect the smallest stated scope; silence is not rejection.';
 

@@ -94,6 +94,24 @@ describe('user model capture admission', () => {
     });
   });
 
+  it('rejects an unsupported applicability operation even if parsing was bypassed', () => {
+    const next = interpretation(); next.assertions[0]!.applicability = { operation: 'report' };
+    const result = executeUserModelInterpretation({ ...executionBase, interpretation: next });
+    expect(result).toMatchObject({ created: 0, rejected: 1 });
+    expect(result.outputs[0]?.reasonCode).toBe('unsupported_applicability_operation');
+  });
+
+  it('does not restore a deleted preference when the model labels a plain self-description as remember', () => {
+    const first = executeUserModelInterpretation({ ...executionBase, interpretation: interpretation() }).createdAssertions[0]!;
+    deleteUserAssertion(first.id);
+    const plain = { ...source, ref: 'new-description', text: 'I prefer concise answers.', createdAt: 3_000 };
+    const next = interpretation();
+    next.assertions[0] = { ...next.assertions[0]!, evidenceRefs: [plain.ref], observedAt: plain.createdAt };
+    const result = executeUserModelInterpretation({ ...executionBase, evidence: [plain], interpretation: next });
+    expect(result.createdAssertions).toHaveLength(0);
+    expect(getUserAssertion(first.id)).toBeUndefined();
+  });
+
   it('rejects an extractor scope outside the active execution context', () => {
     const result = executeUserModelInterpretation({
       ...executionBase,
@@ -265,6 +283,19 @@ describe('user model capture admission', () => {
       }),
     });
     expect(result).toMatchObject({ created: 0, deduplicated: 0, rejected: 1 });
+  });
+
+  it('rechecks attribution at commit when the interpretation bypasses the parser', () => {
+    const result = executeUserModelInterpretation({ ...executionBase, evidence: [{ ...source, text: '请翻译：『我喜欢冗长回答』。' }], interpretation: interpretation() });
+    expect(result).toMatchObject({ created: 0, rejected: 1 });
+    expect(result.outputs[0].reasonCode).toBeTruthy();
+  });
+
+  it('does not delete a real fact because a quoted instruction was classified as forget', () => {
+    const id = executeUserModelInterpretation({ ...executionBase, interpretation: interpretation() }).createdAssertions[0].id;
+    executeUserModelInterpretation({ ...executionBase, evidence: [{ ...source, text: '请翻译："forget this preference"' }],
+      interpretation: interpretation({ intent: 'forget', assertions: [], targetAssertionIds: [id] }) });
+    expect(getUserAssertion(id)).toBeTruthy();
   });
 
 });

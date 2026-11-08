@@ -58,6 +58,7 @@ import {
   fetchUserModel,
   reviewKnowledgeItem,
   setAssertionScope,
+  setKnowledgeScope,
   setAssertionStatus,
   setRuleStatus,
   updateMemorySettings,
@@ -717,6 +718,7 @@ function KnowledgeRow({
   onCancel,
   onReview,
   onDelete,
+  onScopeChange,
 }: {
   item: KnowledgeItem;
   language: Language;
@@ -728,6 +730,7 @@ function KnowledgeRow({
   onDraftChange: (value: string) => void;
   onEdit: () => void;
   onCancel: () => void;
+  onScopeChange: (scope: KnowledgeItem['scope']) => void;
   onReview: (action: 'edit_and_approve', content?: string) => void;
   onDelete: () => void;
 }) {
@@ -769,7 +772,7 @@ function KnowledgeRow({
               <ChevronDown className={`size-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
             </Button>
           ) : null}
-          <MemoryActions language={language} busy={busy} statement={item.content} onEdit={onEdit} onDelete={onDelete} />
+          <MemoryActions language={language} busy={busy} statement={item.content} scope={item.scope} onScopeChange={onScopeChange} onEdit={onEdit} onDelete={onDelete} />
         </div>
       </div>
       )}
@@ -1435,6 +1438,7 @@ export function UserModelPage() {
                         onEdit={() => { setEditingId(`knowledge:${item.id}`); setDraft(item.content); }}
                         onCancel={() => { setEditingId(undefined); setDraft(''); }}
                         onDelete={() => void act(item.id, () => deleteKnowledge(item.id))}
+                        onScopeChange={(scope) => void act(item.id, () => setKnowledgeScope(item, scope))}
                     onReview={(action, content) => void act(item.id, async () => {
                           await reviewKnowledgeItem(item, action, content);
                           setEditingId(undefined);

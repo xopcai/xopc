@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { assessAssertionSupport, assessOwnerSupport, hasOwnerMemoryDirective, supportsResponseApplicability } from './evidence-policy.js';
+
 import { createContextEvidence } from '../../storage/sqlite/context-evidence-repository.js';
 import {
   createCollaborationRule,
@@ -48,6 +50,7 @@ export interface UserModelCaptureResult {
     candidateKey: string;
     assertionId?: string;
     outcome: 'created' | 'deduplicated' | 'superseded' | 'conflicted' | 'rejected';
+    reasonCode?: string;
   }>;
 }
 
@@ -89,9 +92,14 @@ export function executeUserModelInterpretation(input: {
   allowRestoreDeleted?: boolean;
 }): UserModelCaptureResult {
   const result = emptyUserModelCaptureResult();
+  for (const rejected of input.interpretation.rejectedCandidates ?? []) {
+    result.proposed++; result.rejected++; result.outputs.push({ ...rejected, outcome: 'rejected' });
+  }
+  const commandAllowed = (command: 'forget' | 'confirm' | 'correct') => input.evidence.some(source => source.role === 'user' && hasOwnerMemoryDirective(source.text, command));
   const targets = input.interpretation.targetAssertionIds.flatMap((id) => getUserAssertion(id) ?? []);
 
   if (input.interpretation.intent === 'forget') {
+    if (!commandAllowed('forget')) return result;
     for (const target of targets) {
       deleteUserAssertion(target.id);
       result.outputs.push({
@@ -103,7 +111,7 @@ export function executeUserModelInterpretation(input: {
     }
     return result;
   }
-  if (input.interpretation.intent === 'confirm' && input.policy.write !== 'deny') {
+  if (input.interpretation.intent === 'confirm' && commandAllowed('confirm') && input.policy.write !== 'deny') {
     for (const target of targets) {
       const confirmed = setAssertionStatus(target.id, 'active', {
         actor: 'user',
@@ -124,7 +132,7 @@ export function executeUserModelInterpretation(input: {
     }
   }
   if (input.interpretation.intent === 'correct'
-    && targets.length && input.interpretation.assertions.length === 0) {
+    && commandAllowed('correct') && targets.length && input.interpretation.assertions.length === 0) {
     for (const target of targets) {
       setAssertionStatus(target.id, 'needs_review', {
         actor: 'user',
@@ -166,10 +174,29 @@ export function executeUserModelInterpretation(input: {
 
   const latestUserRef = input.evidence.filter((item) => item.role === 'user')
     .sort((a, b) => b.createdAt - a.createdAt)[0]?.ref;
-  for (const source of input.interpretation.assertions) {
+  for (const original of input.interpretation.assertions) {
+    if (!supportsResponseApplicability(original.applicability)) {
+      result.proposed++; result.rejected++;
+      result.outputs.push({ candidateKey: candidateKey(original.predicate, original.scope.type, original.scope.id), outcome: 'rejected', reasonCode: 'unsupported_applicability_operation' });
+      continue;
+    }
+    const support = assessAssertionSupport({ ...original, sources: original.evidenceRefs.flatMap(ref => {
+      const evidence = evidenceByRef.get(ref);
+      if (!evidence) return [];
+      return [{ ...evidence, quote: original.evidenceQuotes?.find(claim => claim.ref === ref)?.quote ?? evidence.text }];
+    }) });
+    if (!support.allowed) {
+      result.proposed++; result.rejected++; result.outputs.push({ candidateKey: candidateKey(original.predicate, original.scope.type, original.scope.id), outcome: 'rejected', reasonCode: support.reasonCode });
+      continue;
+    }
+    const source = { ...original, authority: support.authority,
+      confidence: ['user_observed', 'system_inferred'].includes(support.authority) ? Math.min(0.85, original.confidence) : original.confidence };
+
     result.proposed += 1;
     const key = candidateKey(source.predicate, source.scope.type, source.scope.id);
-    const sourceExplicitCommand = ['remember', 'correct'].includes(source.intent ?? input.interpretation.intent);
+    const command = source.intent ?? input.interpretation.intent;
+    const sourceExplicitCommand = (command === 'remember' || command === 'correct') && source.evidenceRefs.some(ref =>
+      hasOwnerMemoryDirective(evidenceByRef.get(ref)?.text ?? '', command));
     const sensitive = source.sensitivity !== 'normal';
     if (input.policy.write === 'deny'
       || (sensitive && (source.authority !== 'user_explicit' || input.policy.sensitiveWrite === 'deny'))
@@ -269,10 +296,16 @@ export function executeUserModelInterpretation(input: {
     else result.created += 1;
   }
 
+  const structuredSupported = (source: { evidenceRefs: string[]; evidenceQuotes?: Array<{ ref: string; quote: string }>; targetAt?: number }, kind?: 'preference') =>
+    source.evidenceRefs.length > 0 && source.evidenceRefs.every(ref => {
+      const evidence = evidenceByRef.get(ref);
+      return evidence?.role === 'user' && assessOwnerSupport({ text: evidence.text, quote: source.evidenceQuotes?.find(claim => claim.ref === ref)?.quote ?? evidence.text,
+        kind: kind ?? (source.targetAt ? 'current_state' : undefined), validTo: source.targetAt, observedAt: evidence.createdAt }).allowed;
+    });
   for (const source of goals) {
     result.proposed += 1;
     const key = candidateKey(`goal:${source.title.toLocaleLowerCase()}`, source.scope.type, source.scope.id);
-    if (input.policy.write === 'deny'
+    if (input.policy.write === 'deny' || !structuredSupported(source)
       || !scopeAllowed(source.scope.type, source.scope.id, input.scopeContext)) {
       result.rejected += 1;
       result.outputs.push({ candidateKey: key, outcome: 'rejected' });
@@ -287,7 +320,8 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: key, outcome: 'deduplicated' });
       continue;
     }
-    const active = ['remember', 'correct'].includes(source.intent ?? input.interpretation.intent);
+    const intent = source.intent ?? input.interpretation.intent;
+    const active = (intent === 'remember' || intent === 'correct') && source.evidenceRefs.some(ref => hasOwnerMemoryDirective(evidenceByRef.get(ref)?.text ?? '', intent));
     const goal = createUserGoal({
       title: source.title,
       desiredOutcome: source.desiredOutcome,
@@ -307,7 +341,7 @@ export function executeUserModelInterpretation(input: {
   for (const source of collaborationRules) {
     result.proposed += 1;
     const key = candidateKey(`rule:${source.category}:${source.statement.toLocaleLowerCase()}`, source.scope.type, source.scope.id);
-    if (input.policy.write === 'deny'
+    if (input.policy.write === 'deny' || !structuredSupported(source, 'preference')
       || !scopeAllowed(source.scope.type, source.scope.id, input.scopeContext)
       || source.scope.type === 'agent') {
       result.rejected += 1;
@@ -323,7 +357,8 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: key, outcome: 'deduplicated' });
       continue;
     }
-    const active = ['remember', 'correct'].includes(source.intent ?? input.interpretation.intent);
+    const intent = source.intent ?? input.interpretation.intent;
+    const active = (intent === 'remember' || intent === 'correct') && source.evidenceRefs.some(ref => hasOwnerMemoryDirective(evidenceByRef.get(ref)?.text ?? '', intent));
     const rule = createCollaborationRule({
       category: source.category,
       priority: source.priority,

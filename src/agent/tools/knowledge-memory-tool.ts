@@ -2,6 +2,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { inferMemorySensitivity } from '../memory/sensitivity.js';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
+import { memoryVersion } from '../../user-context/memory-version.js';
 import { projectForgottenEvidence } from '../../memory-learning/forgotten-history.js';
 
 import {
@@ -68,7 +69,7 @@ export function createKnowledgeSearchTool(options: KnowledgeToolOptions): AgentT
         context: visibility(options),
         policy: options.getReadPolicy(),
         limit: input.maxResults ?? 12,
-      }).map(item => ({ ...item, source: projectForgottenEvidence(item.source, visibility(options), options.getCurrentUserText?.(), [item.sourceConversationId, item.sourceTurnId].filter((ref): ref is string => !!ref)) }));
+      }).map(item => ({ ...item, version: memoryVersion(item), source: projectForgottenEvidence(item.source, visibility(options), options.getCurrentUserText?.(), [item.sourceConversationId, item.sourceTurnId].filter((ref): ref is string => !!ref)) }));
       return { content: [{ type: 'text', text: JSON.stringify({ results }, null, 2) }], details: { results } };
     },
   } as AgentTool;
@@ -90,7 +91,7 @@ export function createKnowledgeGetTool(options: KnowledgeToolOptions): AgentTool
       const visible = item && canUseKnowledge(item, visibility(options), options.getReadPolicy());
       const projected = visible && { ...item, source: projectForgottenEvidence(item.source, visibility(options), options.getCurrentUserText?.(), [item.sourceConversationId, item.sourceTurnId].filter((ref): ref is string => !!ref)) };
       return visible
-        ? { content: [{ type: 'text', text: JSON.stringify(projected, null, 2) }], details: { item: projected, complete: true } }
+        ? { content: [{ type: 'text', text: JSON.stringify({ ...projected, version: memoryVersion(item) }, null, 2) }], details: { item: projected, version: memoryVersion(item), complete: true } }
         : { content: [{ type: 'text', text: `Knowledge item not found: ${id}` }], details: { id, error: 'knowledge_not_found' } };
     },
   } as AgentTool;

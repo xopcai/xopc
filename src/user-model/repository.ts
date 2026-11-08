@@ -731,6 +731,10 @@ export function setUserAssertionScope(
         nextScope.type, nextScopeId, slot.id) as { slot_id: string } | undefined;
     if (conflict) throw new Error('An understanding with this scope already exists.');
 
+    for (const assertion of listSlotAssertions(slot.id)) {
+      suppressMemory(db, assertionFingerprints({ ...assertion, ...slot, principalId: slot.principalId }), Date.now());
+    }
+    restoreMemory(db, assertionFingerprints({ ...current, ...slot, scope: nextScope, principalId: slot.principalId }));
     db.prepare('UPDATE user_assertion_slots SET scope_type = ?, scope_id = ? WHERE slot_id = ?')
       .run(nextScope.type, nextScopeId, slot.id);
     return getUserAssertion(assertionId)!;
