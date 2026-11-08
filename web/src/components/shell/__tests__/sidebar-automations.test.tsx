@@ -101,7 +101,7 @@ it('expands executions below the configuration chat and opens the selected run',
 });
 
 
-it('keeps the recent timeline independent of project previews and lists pinned chats once in each view', async () => {
+it.each([true, false])('keeps pagination inside the older group (older chats already loaded: %s)', async (hasLoadedOlder) => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   const today = new Date();
   const yesterday = new Date(today);
@@ -124,8 +124,8 @@ it('keeps the recent timeline independent of project previews and lists pinned c
     pinned: [pinned], layouts: {}, childrenByConversationId: {},
   });
   vi.mocked(listSessions).mockImplementation(async (query) => query?.offset === 0
-    ? { items: [standalone, pinned, recentProjectChat], total: 4, limit: 20, offset: 0, hasMore: true }
-    : { items: [earlier], total: 4, limit: 20, offset: 20, hasMore: false });
+    ? { items: [standalone, pinned, recentProjectChat, ...(hasLoadedOlder ? [session('existing-older', 'Existing older chat', older)] : [])], total: 5, limit: 20, offset: 0, hasMore: true }
+    : { items: [earlier], total: 5, limit: 20, offset: 20, hasMore: false });
 
   container = document.createElement('div');
   document.body.append(container);
@@ -146,11 +146,19 @@ it('keeps the recent timeline independent of project previews and lists pinned c
   expect(container.querySelector('section[aria-label="Pinned"] a')?.getAttribute('title')).toContain('First project');
   expect(container.querySelector('input[type="search"]')).toBeNull();
 
+  expect(container.querySelector('a[href="/chat/existing-older"]')).toBeNull();
+  const hasLoadMore = () => [...container.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Load more');
+  expect(hasLoadMore()).toBe(false);
+  await click('Older');
+  expect(hasLoadMore()).toBe(true);
+  await click('Older');
+  expect(hasLoadMore()).toBe(false);
+  await click('Older');
   await click('Load more');
   expect(listSessions).toHaveBeenCalledWith(expect.objectContaining({ offset: 20 }));
-  expect(container.querySelector('a[href="/chat/earlier"]')).toBeNull();
-  await click('Older');
+  if (hasLoadedOlder) expect(container.querySelector('a[href="/chat/existing-older"]')).not.toBeNull();
   expect(container.querySelector('a[href="/chat/earlier"]')).not.toBeNull();
+  expect(hasLoadMore()).toBe(false);
 
   await click('Projects');
   const createProject = container.querySelector('button[aria-label="Create project"]');
