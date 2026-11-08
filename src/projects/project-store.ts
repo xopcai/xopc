@@ -343,6 +343,14 @@ export class ProjectStore {
   list(query: ProjectListQuery = {}): ProjectListResult {
     const conditions: string[] = [];
     const params: Array<string | number> = [];
+    if (query.resourceRestriction) {
+      const scope = query.resourceRestriction.scope;
+      if (scope.mode === 'none') conditions.push('0');
+      if (scope.mode === 'selected') {
+        conditions.push('p.project_id IN (SELECT value FROM json_each(?))');
+        params.push(JSON.stringify([...scope.ids, ...scope.projectIds]));
+      }
+    }
     const search = query.search?.trim();
     const ftsQuery = search ? escapeFts5Query(search) : '';
     if (query.status) {
@@ -350,7 +358,10 @@ export class ProjectStore {
       conditions.push(`p.status IN (${statuses.map(() => '?').join(', ')})`);
       params.push(...statuses);
     }
-    if (ftsQuery) {
+    if (search && query.resourceRestriction) {
+      conditions.push("instr(lower(p.name || ' ' || coalesce(p.description, '') || ' ' || coalesce(p.outcome, '')), lower(?)) > 0");
+      params.push(search);
+    } else if (ftsQuery) {
       conditions.push(`p.project_id IN (SELECT project_id FROM projects_fts WHERE projects_fts MATCH ?)`);
       params.push(ftsQuery);
     }

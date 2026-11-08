@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { ExtensionCapabilityBindingsSchema, extensionCapabilityPermissions } from './extension-capabilities.js';
+import { ExtensionCapabilityBindingsSchema, extensionCapabilityPermissions, LocalAppResourceScopesSchema } from './extension-capabilities.js';
 
 const binding = { id: 'xopc.notes.get', majorVersion: 1, descriptorDigest: 'a'.repeat(64) };
 describe('extension capability bindings', () => {
+  it('denies new P1 resources for existing grants and rejects workspace-wide file or connector access', () => {
+    expect(LocalAppResourceScopesSchema.parse({})).toMatchObject({
+      tasksWrite: { mode: 'none' }, projectsRead: { mode: 'none' }, projectsWrite: { mode: 'none' },
+      filesRead: { mode: 'none' }, filesImport: false, filesExport: false, connectors: { mode: 'none' },
+    });
+    expect(LocalAppResourceScopesSchema.safeParse({ filesRead: { mode: 'workspace' } }).success).toBe(false);
+    expect(LocalAppResourceScopesSchema.safeParse({ connectors: { mode: 'workspace' } }).success).toBe(false);
+  });
   it('preserves exact host contracts and derives visible permission labels', () => {
     const parsed = ExtensionCapabilityBindingsSchema.parse([binding]);
     expect(parsed).toEqual([binding]);

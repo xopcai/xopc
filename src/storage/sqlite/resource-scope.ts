@@ -17,8 +17,8 @@ export function resourceScopePredicate(kind: 'note' | 'task', restriction: Resou
     ? `EXISTS (SELECT 1 FROM object_links l JOIN projects p ON p.project_id = l.to_id WHERE l.from_kind = 'note' AND l.from_id = ${column}
         AND l.to_kind = 'project' AND l.relation = 'belongs_to' AND l.to_id IN (SELECT value FROM json_each(?)))`
     : 'tasks.project_id IN (SELECT value FROM json_each(?))');
-  if (kind === 'note' && scope.includeCreated) {
-    clauses.push(`EXISTS (SELECT 1 FROM durable_state d WHERE d.namespace = 'local-app-owned-notes'
+  if (scope.includeCreated) {
+    clauses.push(`EXISTS (SELECT 1 FROM durable_state d WHERE d.namespace = '${kind === 'note' ? 'local-app-owned-notes' : 'local-app-owned-tasks'}'
       AND d.scope = ? AND d.key = ${column})`);
     params.push(extensionId);
   }

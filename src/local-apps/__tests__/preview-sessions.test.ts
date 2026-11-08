@@ -8,6 +8,7 @@ import { LocalAppResourceScopesSchema, type CapabilityCall } from '@xopcai/gatew
 import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { ProjectService } from '../../projects/project-service.js';
 import { NotesService } from '../../notes/service.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import { CapabilityError, type CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
@@ -30,7 +31,10 @@ function fixture() {
   const notes = new NotesService();
   const note = notes.createNoteAtomically({ title: 'Live note', markdown: 'production secret', capturedVia: { channel: 'web' } });
   const denied = notes.createNoteAtomically({ title: 'Private', markdown: 'unapproved', capturedVia: { channel: 'web' } });
-  const dispatcher = createProductDispatcher(() => notes);
+  const projects = new ProjectService();
+  const project = projects.create({ name: 'Approved project', instructions: 'HIDDEN PROJECT INSTRUCTIONS' });
+  const privateProject = projects.create({ name: 'Private project' });
+  const dispatcher = createProductDispatcher(() => notes, { getProjects: () => projects });
   const bindings = dispatcher.list({ ...caller, surface: 'extension' }).map(({ id, majorVersion, descriptorDigest }) => ({ id, majorVersion, descriptorDigest }));
   mkdirSync(join(directory, '.xopc'));
   writeFileSync(join(directory, '.xopc', 'fixtures.json'), JSON.stringify({ schemaVersion: 1,
@@ -44,7 +48,7 @@ function fixture() {
   });
   const fingerprint = () => ['notes', 'notes_fts', 'tasks', 'capability_operations', 'capability_invocations', 'domain_outbox']
     .map(table => getSqliteDatabase().prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
-  return { notes, note, denied, dispatcher, call, fingerprint, change: () => { current = 'b'.repeat(64); } };
+  return { notes, note, denied, projects, project, privateProject, dispatcher, call, fingerprint, change: () => { current = 'b'.repeat(64); } };
 }
 
 describe('Local App preview isolation', () => {
@@ -128,4 +132,33 @@ describe('Local App preview isolation', () => {
     vi.spyOn(f.notes, 'listNotes').mockImplementation(async query => { const result = await list(query); previews.remove(session.id, caller); return result; });
     await expect(previews.call(session.id, 'xopc.notes.list', f.call('xopc.notes.list'), caller, f.dispatcher)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
+});
+
+it('previews approved real project metadata, milestones and progress without exposing other projects or writes', async () => {
+  const f = fixture();
+  f.projects.createMilestone(f.project.id, { title: 'Approved milestone' });
+  f.projects.createUpdate(f.project.id, { summary: 'Approved progress', health: 'on_track', actor: { kind: 'system' } });
+  f.projects.createMilestone(f.privateProject.id, { title: 'Private milestone' });
+  const session = await previews.create('app', { sourceHash: hash, mode: 'readonly', resourceScopes: {
+    projectsRead: { mode: 'selected', ids: [f.project.id] },
+  } }, caller);
+  const described = previews.describe(session.id, caller, f.dispatcher);
+  expect(described.capabilities.map(item => item.id)).toEqual(expect.arrayContaining([
+    'xopc.projects.get', 'xopc.projects.list', 'xopc.projects.list_milestones', 'xopc.projects.list_updates',
+  ]));
+  expect(described.capabilities.some(item => item.effect !== 'read')).toBe(false);
+  expect(await previews.call(session.id, 'xopc.projects.list', f.call('xopc.projects.list'), caller, f.dispatcher))
+    .toMatchObject({ data: { total: 1, items: [{ id: f.project.id }] } });
+  const detail = await previews.call(session.id, 'xopc.projects.get', f.call('xopc.projects.get', { id: f.project.id }), caller, f.dispatcher);
+  expect(detail).not.toHaveProperty('data.project.instructions');
+  expect(await previews.call(session.id, 'xopc.projects.list_milestones', f.call('xopc.projects.list_milestones', { id: f.project.id }), caller, f.dispatcher))
+    .toMatchObject({ data: { items: [{ title: 'Approved milestone' }] } });
+  expect(await previews.call(session.id, 'xopc.projects.list_updates', f.call('xopc.projects.list_updates', { id: f.project.id }), caller, f.dispatcher))
+    .toMatchObject({ data: { items: [{ summary: 'Approved progress' }] } });
+  for (const id of ['xopc.projects.get', 'xopc.projects.list_milestones', 'xopc.projects.list_updates']) {
+    await expect(previews.call(session.id, id, f.call(id, { id: f.privateProject.id }), caller, f.dispatcher)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  }
+  await expect(previews.call(session.id, 'xopc.projects.update', f.call('xopc.projects.update', { id: f.project.id, expectedVersion: f.project.version, patch: { name: 'Forbidden' } }), caller, f.dispatcher))
+    .rejects.toMatchObject({ code: 'FORBIDDEN' });
+  expect(f.projects.get(f.project.id)?.name).toBe('Approved project');
 });

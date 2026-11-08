@@ -5,6 +5,7 @@ import { rmSync } from 'node:fs';
 import { openXopcDatabase, closeXopcDatabase, upsertNoteRecord } from '../storage/sqlite/index.js';
 import { NotesService } from '../notes/service.js';
 import { TaskRepository } from '../tasks/task-repository.js';
+import { ProjectService } from '../projects/project-service.js';
 import { createProductDispatcher } from '../capabilities/runtime/product.js';
 import { CapabilityError, type CapabilityContext } from '../capabilities/runtime/dispatcher.js';
 import { CapabilityCallSchema, ExtensionCapabilityBindingsSchema, LocalAppResourceScopesSchema } from '@xopcai/gateway-contract';
@@ -15,6 +16,7 @@ class PreviewNotesService extends NotesService {
   // Receipts and outbox records stay in the isolated database; do not dispatch production effects.
   override flushCommittedEffects(): void {}
 }
+class PreviewProjectService extends ProjectService { override flushCommittedEffects(): void {} }
 
 if (process.send && process.env.XOPC_LOCAL_APP_PREVIEW_WORKER === '1') {
   const directory = process.env.XOPC_STATE_DIR!;
@@ -40,11 +42,13 @@ if (process.send && process.env.XOPC_LOCAL_APP_PREVIEW_WORKER === '1') {
           createdAt: now, updatedAt: now, localVersion: 1, remoteVersion: 1, capturedVia: { channel: 'web' } });
         for (const task of fixtures.tasks) new TaskRepository().create({ ...task, objective: task.title });
         const notes = new PreviewNotesService();
-        dispatcher = createProductDispatcher(() => notes);
+        const projects = new PreviewProjectService(); projects.create({ name: 'Example project' });
+        dispatcher = createProductDispatcher(() => notes, { getProjects: () => projects });
         context = { principalId: 'isolated-preview', surface: 'extension', scopes: ['gateway.admin'],
           allowedCapabilities: bindings.map(binding => binding.id), authorize: (id, input) => localAppResourceAllowed('isolated-preview', context.localApp!.resourceScopes, id, input),
           localApp: { extensionId: 'isolated-preview', resourceScopes: LocalAppResourceScopesSchema.parse({
             notesRead: { mode: 'workspace' }, notesWrite: { mode: 'workspace' }, tasksRead: { mode: 'workspace' },
+            tasksWrite: { mode: 'workspace' }, projectsRead: { mode: 'workspace' }, projectsWrite: { mode: 'workspace' },
           }) } };
         initialized = true;
         process.send?.({ requestId: message.requestId, data: { ready: true } });

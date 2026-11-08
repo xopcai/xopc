@@ -46,6 +46,7 @@ export interface ProjectWithDetails extends Project {
 }
 
 export interface ProjectListQuery {
+  resourceRestriction?: import('../storage/sqlite/resource-scope.js').ResourceRestriction;
   status?: ProjectStatus | ProjectStatus[];
   search?: string;
   sortBy?: 'updatedAt' | 'createdAt' | 'name';

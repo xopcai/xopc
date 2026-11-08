@@ -26,7 +26,7 @@ export function localAppCapabilities(apps: Pick<LocalAppService, 'getCapabilityA
     let activeInput: { id: string; input: unknown } | undefined;
     return { ...caller, surface: 'extension',
       localApp: { extensionId, resourceScopes: access.resourceScopes, bindings: access.bindings,
-        releaseId: access.releaseId, grantRevision: access.grantRevision },
+        releaseId: access.releaseId, grantRevision: access.grantRevision, manifestDigest },
       allowedCapabilities: access.bindings.map(binding => binding.id).filter(id => !caller.allowedCapabilities || caller.allowedCapabilities.includes(id)),
       assertCurrent: () => {
         caller.assertCurrent?.(); current();

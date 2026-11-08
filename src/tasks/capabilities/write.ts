@@ -11,6 +11,8 @@ import { TaskSignalService } from '../task-signal-service.js';
 import { TaskRepository } from '../task-repository.js';
 import { resolveResponseLanguageForSession } from '../../agent/prompt/response-language.js';
 import { resolveTaskLocale } from '../task-language.js';
+import { LocalAppTaskMutationSchema } from '../../local-apps/capabilities/projections.js';
+import { DurableState } from '../../storage/sqlite/durable-state.js';
 
 const modelSchema = TaskDetailResponseSchema.pick({ task: true, operationalState: true, attention: true, allowedCommands: true, allocation: true });
 export const TaskMutationOutputSchema = z.discriminatedUnion('ok', [
@@ -29,7 +31,7 @@ export interface TaskWriteCapabilityDeps {
 export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, deps: TaskWriteCapabilityDeps): void {
   dispatcher.register(defineAtomicCapability({
     id: 'xopc.tasks.create', majorVersion: 1, description: 'Create a task and atomically persist its operation receipt.',
-    effect: 'local-write', surfaces: ['http', 'agent'], scopes: ['tasks.write'],
+    effect: 'local-write', surfaces: ['http', 'agent', 'extension'], scopes: ['tasks.write'], extensionOutput: LocalAppTaskMutationSchema,
     input: TaskCreateRequestSchema.omit({ idempotencyKey: true }), output: TaskMutationOutputSchema,
     execute(input, context) {
       if (input.activation.mode !== 'capture' && !deps.wake) throw new CapabilityError('UNAVAILABLE', 'Task execution service is unavailable');
@@ -53,7 +55,9 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
         : language === 'zh-CN' ? 'zh' : 'en');
       // Preserve the domain's established idempotency identity across upgrades.
       const request = { ...input, locale, originConversationId, delegateAgentId: input.activation.mode === 'allocate' ? undefined : agentId, activation, idempotencyKey: context.idempotencyKey };
-      return deps.createTask ? deps.createTask(request, context.actor) : new TaskApplicationService().create(request, context.actor);
+      const result = deps.createTask ? deps.createTask(request, context.actor) : new TaskApplicationService().create(request, context.actor);
+      if (result.ok && context.localApp) new DurableState('local-app-owned-tasks', context.localApp.extensionId).set(result.model.task.id, { createdAt: Date.now() });
+      return result;
     },
     afterCommit(result) { if (result.ok) deps.wake?.(Boolean(result.runId || result.model.allocation)); },
   }));

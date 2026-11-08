@@ -113,3 +113,43 @@ describe('extension capability bridge', () => {
     useGatewayStore.setState({ conversationId: previous });
   });
 });
+describe('Local App attachment import', () => {
+  function attachmentSetup(importAllowed = true) {
+    const result = setup(['capability:xopc.files.read']);
+    result.router.registerIframe('trusted', document.querySelector('iframe')!, ['capability:xopc.files.read'], 'b'.repeat(64), 'grant', true);
+    mocks.fetch.mockImplementation(async (url: string) => url.includes('/ui-grant')
+      ? { grant: { granted: true, grantRevision: 'grant', resourceScopes: { filesImport: importAllowed } } }
+      : { capabilities: [{ id: 'xopc.files.read' }] });
+    return result;
+  }
+  it('does not open a chooser without the independent import grant', async () => {
+    const { router } = attachmentSetup(false), chooser = vi.fn();
+    window.addEventListener('extension-pick-attachment', chooser);
+    cleanups.push(() => window.removeEventListener('extension-pick-attachment', chooser));
+    await expect(router.pickAttachment('trusted')).rejects.toThrow('not been approved');
+    expect(chooser).not.toHaveBeenCalled();
+  });
+  it('rechecks authority before returning selected bytes', async () => {
+    const { router } = attachmentSetup();
+    let prompt!: { finish: (selection?: unknown) => Promise<void> };
+    const chooser = (event: Event) => { prompt = (event as CustomEvent).detail; };
+    window.addEventListener('extension-pick-attachment', chooser);
+    cleanups.push(() => window.removeEventListener('extension-pick-attachment', chooser));
+    const pending = router.pickAttachment('trusted');
+    const rejected = expect(pending).rejects.toThrow('not been approved');
+    await vi.waitFor(() => expect(prompt).toBeDefined());
+    mocks.fetch.mockResolvedValue({ grant: { granted: false }, capabilities: [] });
+    await expect(prompt.finish({ name: 'chosen.txt', mimeType: 'text/plain', size: 1, encoding: 'base64', content: 'eA==' })).rejects.toThrow('not been approved');
+    await rejected;
+  });
+  it('ends an open chooser when its iframe is removed', async () => {
+    const { router } = attachmentSetup();
+    const chooser = vi.fn();
+    window.addEventListener('extension-pick-attachment', chooser);
+    cleanups.push(() => window.removeEventListener('extension-pick-attachment', chooser));
+    const pending = router.pickAttachment('trusted');
+    const rejected = expect(pending).rejects.toThrow('authorization ended');
+    await vi.waitFor(() => expect(chooser).toHaveBeenCalledOnce());
+    router.unregisterIframe('trusted'); await rejected;
+  });
+});

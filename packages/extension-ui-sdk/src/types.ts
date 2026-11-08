@@ -64,6 +64,10 @@ export type ExtensionToHostMessage = ExtensionRequest | ExtensionEventMessage;
 export type StreamHandler = (payload: unknown) => void;
 
 export interface ExtensionClient {
+  files: {
+    pickAttachment(): Promise<{ name: string; mimeType: string; size: number; encoding: 'base64'; content: string }>;
+  };
+  requests: { review(requestId: string): Promise<void> };
   capability: {
     describe(id: string): Promise<CapabilityDescriptor>;
     call(id: string, call: CapabilityCall): Promise<{ status: 'succeeded'; releaseId: string; data: unknown }>;
